@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test'
 import Type from 'typebox'
 import { defineManifest, ok, type SystemError, type Component, type ComponentFactory, type InstanceRef } from '../src'
 import { Contexts } from '../src/contexts'
-import { echoFactory, rootRef } from './fixtures'
+import { echoFactory, fired, rootRef } from './fixtures'
 
 const flush = () => new Promise(r => setTimeout(r))
 const setup = () => {
@@ -87,7 +87,7 @@ test('route cycle ends in loop error', async () => {
       }),
       create: ctx => ({
         manifest: f.manifest, dispose: async () => {},
-        onAction: async (sctx, inv) => { depths.push(inv.stack.length); await sctx.emit('fired', { text: 'x' }); return ok(null) },
+        onAction: async (sctx, inv) => { depths.push(inv.stack.length); await sctx.emit(fired, { text: 'x' }); return ok(null) },
       } as Component),
     }
     return f

@@ -10,8 +10,8 @@ export function policy(inner: Context, store: PolicyStore, self: InstanceRef): P
   return {
     capabilities: () => ({ ...inner.capabilities(), events: store.events, actions: store.actions }),
     emit: (event, payload, scope) =>
-      allows(store.events, { instance: self, event }, sameEvent)
-        ? inner.emit(event, payload, scope) : Promise.resolve(notAllowed(`event ${event} denied by policy`)),
+      allows(store.events, { instance: self, event: event.name }, sameEvent)
+        ? inner.emit(event, payload, scope) : Promise.resolve(notAllowed(`event ${event.name} denied by policy`)),
     call: (target, action, input, scope) =>
       allows(store.actions, { instance: target, action }, sameAction)
         ? inner.call(target, action, input, scope) : Promise.resolve(notAllowed(`action ${action} denied by policy`)),

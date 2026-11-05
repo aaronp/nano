@@ -20,9 +20,20 @@
         "@types/bun": "latest",
       },
     },
+    "packages/widgets": {
+      "name": "@composable/widgets",
+      "version": "0.1.0",
+      "dependencies": {
+        "@composable/sdk": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+    },
   },
   "packages": {
     "@composable/sdk": ["@composable/sdk@workspace:packages/sdk"],
+
+    "@composable/widgets": ["@composable/widgets@workspace:packages/widgets"],
 
     "@lit-labs/ssr-dom-shim": ["@lit-labs/ssr-dom-shim@1.6.0", "", {}, "sha512-VHb0ALPMTlgKjM6yIxxoQNnpKyUKLD04VzeQdsiXkMqkvYlAHxq9glGLmgbb889/1GsohSOAjvQYoiBppXFqrQ=="],
 

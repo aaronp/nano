@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test'
 import { Contexts } from '../src/contexts'
 import type { PolicyStore } from '../src/contexts'
 import type { InstanceRef } from '../src'
-import { echoFactory, rootRef } from './fixtures'
+import { echoFactory, fired, rootRef } from './fixtures'
 
 const flush = () => new Promise(r => setTimeout(r, 20))
 const ref = (instance: string): InstanceRef => ({ namespace: ['root'], instance })
@@ -15,7 +15,7 @@ test('denied emit returns not-allowed and is not delivered', async () => {
   const store: PolicyStore = { events: { type: 'deny', values: [{ instance: ref('a'), event: 'fired' }] }, actions: { type: 'all' } }
   await b.register(fa, 'a', c => Contexts.policy(c, store, ref('a'))); await b.register(fr, 'r')
   route(b, 'a', 'r')
-  expect((await fa.state.ctx!.emit('fired', { text: 'x' })).type).toBe('not-allowed')
+  expect((await fa.state.ctx!.emit(fired, { text: 'x' })).type).toBe('not-allowed')
   await flush()
   expect(fr.received.length).toBe(0)
 })
@@ -30,10 +30,10 @@ test('setPolicy on shared store affects all wrapped instances', async () => {
   void pa
   const deny = { type: 'deny' as const, values: [{ instance: ref('a'), event: 'fired' }] }
   ;(fb.state.ctx as any).setPolicy({ events: deny })
-  expect((await fa.state.ctx!.emit('fired', { text: '1' })).type).toBe('not-allowed')
-  expect((await fb.state.ctx!.emit('fired', { text: '2' })).type).toBe('success')
+  expect((await fa.state.ctx!.emit(fired, { text: '1' })).type).toBe('not-allowed')
+  expect((await fb.state.ctx!.emit(fired, { text: '2' })).type).toBe('success')
   ;(fa.state.ctx as any).setPolicy({ events: { type: 'all' } })
-  expect((await fa.state.ctx!.emit('fired', { text: '3' })).type).toBe('success')
+  expect((await fa.state.ctx!.emit(fired, { text: '3' })).type).toBe('success')
   await flush()
   expect(fr.received.map(i => (i.input as any).text).sort()).toEqual(['2', '3'])
 })
@@ -61,10 +61,10 @@ test('filter predicate add/remove toggles delivery', async () => {
   await b.register(fa, 'a', c => (f = Contexts.filter(c))); await b.register(fr, 'r'); route(b, 'a', 'r')
   const no = () => false
   f.addPredicate(no)
-  const r = await fa.state.ctx!.emit('fired', { text: 'x' })
+  const r = await fa.state.ctx!.emit(fired, { text: 'x' })
   expect(r).toEqual({ type: 'not-allowed', reason: 'filtered' })
   f.removePredicate(no)
-  expect((await fa.state.ctx!.emit('fired', { text: 'y' })).type).toBe('success')
+  expect((await fa.state.ctx!.emit(fired, { text: 'y' })).type).toBe('success')
   await flush()
   expect(fr.received.length).toBe(1)
 })

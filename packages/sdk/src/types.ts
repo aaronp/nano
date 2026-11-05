@@ -123,19 +123,26 @@ export type Result<T> =
 export type Scope = { stack: Invocation[] }
 export type Context = {
   capabilities(): Capabilities
-  emit(event: string, payload: unknown, scope?: Scope): Promise<Result<void>>
+  emit<S extends TSchema>(event: { name: string; schema: S }, payload: Static<S>, scope?: Scope): Promise<Result<void>>
   call(target: InstanceRef, action: string, input: unknown, scope?: Scope): Promise<Result<unknown>>
 }
-export type Component = {
-  manifest: Manifest
-  onAction(ctx: Context, inv: Invocation): Promise<Result<unknown>>
-  mount?(el: HTMLElement): void | Promise<void>
-  dispose(): Promise<void>
-  environment?(): Environment
-}
+/** Receives actions. Emitting is the other half (a source), done through `Context.emit`. */
+export type DataSink = { onAction(ctx: Context, inv: Invocation): Promise<Result<unknown>> }
+export type Component = DataSink & { manifest: Manifest; dispose?(): void | Promise<void> }
+export type UIComponent = Component & { mount(el: HTMLElement): void }
 export type ComponentFactory = {
   manifest: Manifest
   create(ctx: Context, self: Instance): Component | Promise<Component>
+}
+
+/** Qualified as `ns/name` so widgets from different authors rarely clash when composed. */
+export const Events = {
+  create: <S extends TSchema = TSchema>(ns: string, name: string, schema: S = Type.Unknown() as unknown as S) =>
+    ({ name: `${ns}/${name}`, schema }),
+}
+export const Actions = {
+  declare: <I extends TSchema, O extends TSchema | undefined = undefined>(ns: string, name: string, input: I, output?: O) =>
+    ({ name: `${ns}/${name}`, input, ...(output ? { output } : {}) }) as { name: string; input: I; output?: O },
 }
 
 export const defineManifest = <const M extends Manifest>(m: M): M => m

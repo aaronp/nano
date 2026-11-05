@@ -3,9 +3,11 @@ import { defineManifest, ok, type Context, type Invocation, type InstanceRef, ty
 
 export const rootRef: InstanceRef = { namespace: [], instance: 'root' }
 
+export const fired = { name: 'fired', schema: Type.Object({ text: Type.String() }) }
+
 export const echoManifest = (author: string, id: string) => defineManifest({
   id: { author, id }, version: '0.1.0',
-  emits: [{ name: 'fired', schema: Type.Object({ text: Type.String() }) }],
+  emits: [fired],
   consumes: [{ name: 'log', input: Type.Unknown() }],
 })
 

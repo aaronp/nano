@@ -12,7 +12,7 @@ export function filter(inner: Context, pred?: Predicate): FilterContext {
   return {
     capabilities: () => inner.capabilities(),
     emit: (event, payload, scope) =>
-      pass({ kind: 'emit', event, payload }) ? inner.emit(event, payload, scope) : Promise.resolve(notAllowed('filtered')),
+      pass({ kind: 'emit', event: event.name, payload }) ? inner.emit(event, payload, scope) : Promise.resolve(notAllowed('filtered')),
     call: (target, action, input, scope) =>
       pass({ kind: 'call', target, action, input }) ? inner.call(target, action, input, scope) : Promise.resolve(notAllowed('filtered')),
     addPredicate: p => { preds.add(p) },

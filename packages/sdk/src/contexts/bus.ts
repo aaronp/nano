@@ -1,7 +1,7 @@
 import Value from 'typebox/value'
 import {
   fail, ok, sameInstance,
-  type ActionRef, type Component, type ComponentFactory, type Context, type EventRef, type Instance,
+  type ActionRef, type Component, type ComponentFactory, type Context, type Environment, type EventRef, type Instance,
   type InstanceRef, type Invocation, type Result, type Scope, type SystemError,
 } from '../types'
 
@@ -13,7 +13,11 @@ export interface BusContext extends Context {
   route(r: Route): void
   unroute(r: Route): void
   instances(): Instance[]
+  component(ref: InstanceRef): Component | undefined
 }
+
+/** Components that host their own bus report their subtree here (see Components.compose). */
+export const environments = new WeakMap<Component, () => Environment>()
 
 type Entry = { instance: Instance; component: Component; ctx: Context; dead: boolean }
 type BusInternals = {
@@ -82,11 +86,11 @@ export function bus(opts: {
     capabilities: () => ({
       environment: {
         type: 'node', instance: opts.self,
-        children: entries.map(e => e.component.environment?.() ?? { type: 'leaf' as const, instance: e.instance }),
+        children: entries.map(e => environments.get(e.component)?.() ?? { type: 'leaf' as const, instance: e.instance }),
       },
       events: { type: 'all' }, actions: { type: 'all' },
     }),
-    emit: (event, payload, scope) => self.emitFrom(opts.self, event, payload, scope),
+    emit: (event, payload, scope) => self.emitFrom(opts.self, event.name, payload, scope),
     call: (target, action, input, scope) => self.callFrom(opts.self, target, action, input, scope),
 
     async callFrom(from, target, action, input, scope) {
@@ -137,11 +141,12 @@ export function bus(opts: {
       const [e] = entries.splice(i, 1)
       e.dead = true; reserved.delete(ref.instance)
       routes = routes.filter(r => !sameInstance(r.from.instance, ref) && !sameInstance(r.to.instance, ref))
-      await e.component.dispose()
+      await e.component.dispose?.()
     },
     route(r) { if (!routes.some(x => sameRoute(x, r))) routes.push(r) },
     unroute(r) { routes = routes.filter(x => !sameRoute(x, r)) },
     instances: () => entries.map(e => e.instance),
+    component: ref => find(ref)?.component,
   }
   return self
 }
@@ -152,7 +157,7 @@ export function child(b: BusContext, self: Instance, alive: () => boolean = () =
   const inner = b as BusContext & BusInternals
   return {
     capabilities: () => b.capabilities(),
-    emit: async (event, payload, scope) => alive() ? inner.emitFrom(self, event, payload, scope) : gone(self),
+    emit: async (event, payload, scope) => alive() ? inner.emitFrom(self, event.name, payload, scope) : gone(self),
     call: async (target, action, input, scope) => alive() ? inner.callFrom(self, target, action, input, scope) : gone(self),
   }
 }
