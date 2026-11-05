@@ -1,9 +1,9 @@
-import type { Static, TSchema } from 'typebox'
+import type { Static, TFunction, TSchema } from 'typebox'
 import { bus, environments } from './contexts/bus'
 import {
   fail, ok, sameInstance,
   type Action, type Component, type ComponentFactory, type ComponentId, type Context, type Event,
-  type Invocation, type Manifest, type Result, type SystemError,
+  type InstanceRef, type Invocation, type Manifest, type Output, type Result, type SystemError,
 } from './types'
 
 type Meta = { id: ComponentId; version: string }
@@ -142,4 +142,37 @@ function composite<const C extends Record<string, Factory>>(opts: Meta & {
   }
 }
 
-export const Components = { declare, compose: composite }
+/** An operation: a function of one (object) argument. `Type.Function([Type.Object({...})], Type.String())`. */
+type Op = TFunction<[TSchema], TSchema>
+type Impl<A extends Record<string, Op>> =
+  { [K in keyof A]: (input: Static<A[K]['parameters'][0]>) => Static<A[K]['returnType']> | Promise<Static<A[K]['returnType']>> }
+type LiftedActions<A extends Record<string, Op>> = { [K in keyof A]: Action<A[K]['parameters'][0], A[K]['returnType']> }
+
+/**
+ * Lift plain functions into a component: `api` is the interface (one function schema per operation), `impl`
+ * the functions. Each becomes an action named after its key; input and output are validated by the bus.
+ */
+function lift<const A extends Record<string, Op>>(id: ComponentId, version: string, api: A, impl: Impl<A>) {
+  const C = Components.declare(id, version)
+  const actions = {} as Record<string, Action>
+  for (const [name, fn] of Object.entries(api)) {
+    if (fn?.type !== 'function' || fn.parameters?.length !== 1 || !fn.returnType)
+      throw new Error(`lift ${id.author}/${id.id}: ${name} must be Type.Function([input], output)`)
+    if (typeof impl[name] !== 'function') throw new Error(`lift ${id.author}/${id.id}: no implementation for ${name}`)
+    actions[name] = C.action(name, (fn as { description?: string }).description ?? name, fn.parameters[0], fn.returnType)
+  }
+  const factory = C.define({
+    state: () => impl,
+    actions: Object.entries(actions).map(([name, a]) =>
+      [a, async (input: unknown) => ok(await (impl as Record<string, (i: unknown) => unknown>)[name](input))] as const) as never,
+  })
+  return Object.assign(factory, { actions: actions as LiftedActions<A> })
+}
+
+/** A typed proxy over `ctx.call`: `client(ctx, inst, myThing.actions).repeat({ y: 'ab', times: 3 })`. Never throws. */
+function client<const A extends Record<string, Action>>(ctx: Context, target: InstanceRef, actions: A) {
+  return Object.fromEntries(Object.entries(actions).map(([k, a]) => [k, (input: unknown) => ctx.call(target, a, input as never)])) as
+    { [K in keyof A]: (input: Static<A[K]['input']>) => Promise<Result<Output<A[K]>>> }
+}
+
+export const Components = { declare, compose: composite, lift, client }
