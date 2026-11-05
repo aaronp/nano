@@ -16,7 +16,10 @@ export interface BusContext extends Context {
 }
 
 type Entry = { instance: Instance; component: Component; ctx: Context; dead: boolean }
-type BusInternals = { emitFrom(from: Instance, event: string, payload: unknown, scope?: Scope): Promise<Result<void>> }
+type BusInternals = {
+  emitFrom(from: Instance, event: string, payload: unknown, scope?: Scope): Promise<Result<void>>
+  callFrom(from: Instance, target: InstanceRef, action: string, input: unknown, scope?: Scope): Promise<Result<unknown>>
+}
 
 const sameRoute = (a: Route, b: Route) =>
   sameInstance(a.from.instance, b.from.instance) && a.from.event === b.from.event &&
@@ -33,41 +36,77 @@ export function bus(opts: {
   // A throwing observer must never escape emit.
   const reportError = (e: SystemError, inv: Invocation) => { try { opts.onDeliveryError?.(e, inv) } catch {} }
 
-  const deliver = (inv: Invocation) => {
-    const err = (code: SystemError['code'], message: string) => reportError({ code, message }, inv)
-    const target = find(inv.target)
-    if (!target) return err('unknown-target', `no instance ${inv.target.instance}`)
-    const def = target.instance.manifest.consumes.find(a => a.name === inv.action)
-    if (!def) return err('unknown-action', `no action ${inv.action}`)
-    if (!Value.Check(def.input, inv.input)) return err('validation', `payload invalid for ${inv.action}`)
+  // Failures produced by the bus itself (vs. returned by a handler); only these reach onDeliveryError.
+  const own = new WeakSet<object>()
+  const bad = (code: SystemError['code'], message: string) => { const r = fail(code, message); own.add(r); return r }
+  const childNs = [...opts.self.namespace, opts.self.instance]
+  const maxDepth = opts.maxDepth ?? 16
+
+  // Awaited delivery. `hop` = host to hand a deeper target to (input is validated by the final target).
+  const invoke = async (inv: Invocation, hop?: InstanceRef): Promise<Result<unknown>> => {
+    const target = find(hop ?? inv.target)
+    if (!target) return bad('unknown-target', `no instance ${(hop ?? inv.target).instance}`)
+    const def = hop ? undefined : target.instance.manifest.consumes.find(a => a.name === inv.action)
+    if (!hop) {
+      if (!def) return bad('unknown-action', `no action ${inv.action}`)
+      if (!Value.Check(def.input, inv.input)) return bad('validation', `payload invalid for ${inv.action}`)
+    }
     const scope = { stack: [...inv.stack, inv] }
     const scopedCtx: Context = {
       capabilities: () => target.ctx.capabilities(),
       emit: (e, p) => target.ctx.emit(e, p, scope),
       call: (t, a, i) => target.ctx.call(t, a, i, scope),
     }
-    // Deliver without awaiting; sync throws and rejections both become 'handler'.
-    Promise.resolve().then(() => {
-      if (find(inv.target) !== target) { err('unknown-target', `instance ${inv.target.instance} was unregistered`); return }
-      return target.component.onAction(scopedCtx, inv)
-    })
-      .catch(e => err('handler', String(e?.message ?? e)))
+    try {
+      await Promise.resolve() // let the caller finish before the handler runs
+      if (find(hop ?? inv.target) !== target) return bad('unknown-target', `instance ${target.instance.instance} was unregistered`)
+      const r = await target.component.onAction(scopedCtx, inv)
+      if (def?.output && r.type === 'success' && !Value.Check(def.output, r.data))
+        return bad('validation', `output invalid for ${inv.action}`)
+      return r
+    } catch (e: any) { return bad('handler', String(e?.message ?? e)) }
+  }
+  // Fire-and-forget (emit): bus-originated failures go to onDeliveryError.
+  const deliver = (inv: Invocation) => {
+    void invoke(inv).then(r => { if (r.type === 'error' && own.has(r)) reportError(r.error, inv) })
+  }
+  const loopGuard = (inv: Invocation) => {
+    if (inv.stack.length < maxDepth) return undefined
+    const r = bad('loop', `depth ${inv.stack.length} reached max ${maxDepth}`)
+    if (r.type === 'error') reportError(r.error, inv)
+    return r
   }
 
   const self: BusContext & BusInternals = {
     self: opts.self,
     capabilities: () => ({
-      environment: { type: 'leaf', instance: opts.self },
+      environment: {
+        type: 'node', instance: opts.self,
+        children: entries.map(e => e.component.environment?.() ?? { type: 'leaf' as const, instance: e.instance }),
+      },
       events: { type: 'all' }, actions: { type: 'all' },
     }),
     emit: (event, payload, scope) => self.emitFrom(opts.self, event, payload, scope),
-    // ponytail: call routing arrives in Task 3.
-    call: async (target, action) => fail('unknown-target', `call not implemented: ${target.instance}.${action}`),
+    call: (target, action, input, scope) => self.callFrom(opts.self, target, action, input, scope),
+
+    async callFrom(from, target, action, input, scope) {
+      const inv: Invocation = { id: crypto.randomUUID(), from, target, action, input, stack: scope?.stack ?? [] }
+      const loop = loopGuard(inv)
+      if (loop) return loop
+      const t = target.namespace
+      const under = t.length >= childNs.length && childNs.every((n, i) => n === t[i])
+      if (under && t.length === childNs.length) return invoke(inv)
+      if (under) return invoke(inv, { namespace: childNs, instance: t[childNs.length] })
+      if (opts.parent) return opts.parent.call(target, action, input, scope)
+      return fail('unknown-target', `no route to ${target.instance}`)
+    },
 
     async emitFrom(from, event, payload, scope) {
       const def = from.manifest.emits.find(e => e.name === event)
       if (!def) return fail('validation', `unknown event ${event}`)
       if (!Value.Check(def.schema, payload)) return fail('validation', `payload invalid for ${event}`)
+      const guard = loopGuard({ id: crypto.randomUUID(), from, target: from, action: event, input: payload, stack: scope?.stack ?? [] })
+      if (guard) return guard
       for (const r of routes) {
         if (r.from.event !== event || !sameInstance(r.from.instance, from)) continue
         deliver({
@@ -114,6 +153,6 @@ export function child(b: BusContext, self: Instance, alive: () => boolean = () =
   return {
     capabilities: () => b.capabilities(),
     emit: async (event, payload, scope) => alive() ? inner.emitFrom(self, event, payload, scope) : gone(self),
-    call: async (target, action, input, scope) => alive() ? b.call(target, action, input, scope) : gone(self),
+    call: async (target, action, input, scope) => alive() ? inner.callFrom(self, target, action, input, scope) : gone(self),
   }
 }
