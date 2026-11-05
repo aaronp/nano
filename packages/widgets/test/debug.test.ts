@@ -3,7 +3,7 @@ import { Contexts, defineManifest, type Created } from '@composable/sdk'
 import { debug, onEvent, setInput, submitted } from '../src'
 
 test('debug widget runs headless: set-input, submit, table records the sender; on-event stays internal', async () => {
-  const root = Contexts.bus({ self: { namespace: [], instance: 'root', manifest: defineManifest({ id: { author: 't', id: 'r' }, version: '0', emits: [], consumes: [] }) } })
+  const root = Contexts.registry({ self: { namespace: [], instance: 'root', manifest: defineManifest({ id: { author: 't', id: 'r' }, version: '0', emits: [], consumes: [] }) } })
   const inst = await root.register(debug, 'debug')
   const { input, table } = (root.component(inst) as Created<typeof debug>).children
   await root.call(inst, setInput, 'hello')

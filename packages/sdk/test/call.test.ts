@@ -1,13 +1,13 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
-import { defineManifest, ok, type SystemError, type Component, type ComponentFactory, type InstanceRef } from '../src'
+import { defineManifest, ok, type SystemError, type Component, type ComponentFactory, type Context, type InstanceRef } from '../src'
 import { Contexts } from '../src/contexts'
 import { act, echoFactory, fired, rootRef } from './fixtures'
 
 const flush = () => new Promise(r => setTimeout(r))
 const setup = () => {
   const errors: SystemError[] = []
-  const bus = Contexts.bus({ self: { ...rootRef, manifest: echoFactory('x', 'root').manifest }, onDeliveryError: e => errors.push(e) })
+  const bus = Contexts.registry({ self: { ...rootRef, manifest: echoFactory('x', 'root').manifest }, onDeliveryError: e => errors.push(e) })
   return { bus, errors }
 }
 const ref = (instance: string): InstanceRef => ({ namespace: ['root'], instance })
@@ -33,7 +33,7 @@ test('call with invalid input returns validation; unknown action returns unknown
   const fa = echoFactory('x', 'e')
   const strict: ComponentFactory = {
     manifest: defineManifest({ id: { author: 'x', id: 's' }, version: '0', emits: [], consumes: [{ name: 'go', input: Type.Object({ n: Type.Number() }) }] }),
-    create: () => ({ manifest: strict.manifest, onAction: async () => ok(1), dispose: async () => {} }),
+    create: () => ({ onAction: async () => ok(1), dispose: async () => {} }),
   }
   await bus.register(fa, 'a'); await bus.register(strict, 's')
   const r = await fa.state.ctx!.call(ref('s'), act('go'), { n: 'x' })
@@ -48,7 +48,7 @@ test('call validates output, and maps throwing handlers to handler error', async
   const mk = (h: () => Promise<any>): ComponentFactory => {
     const f: ComponentFactory = {
       manifest: defineManifest({ id: { author: 'x', id: 'o' }, version: '0', emits: [], consumes: [{ name: 'go', input: Type.Unknown(), output: Type.Number() }] }),
-      create: () => ({ manifest: f.manifest, onAction: h, dispose: async () => {} }),
+      create: () => ({ onAction: h, dispose: async () => {} }),
     }
     return f
   }
@@ -59,25 +59,23 @@ test('call validates output, and maps throwing handlers to handler error', async
   expect(r2.type === 'error' && r2.error.code).toBe('handler')
 })
 
-test('deeper target is delivered to the host instance with the full target; no parent forwards to parent', async () => {
+test('a deep target is looked up directly; a missing one is unknown-target', async () => {
   const { bus } = setup()
   const fa = echoFactory('x', 'e'), fh = echoFactory('x', 'e')
-  await bus.register(fa, 'a'); await bus.register(fh, 'h')
+  await bus.register(fa, 'a')
   const deep: InstanceRef = { namespace: ['root', 'h'], instance: 'inner' }
-  await fa.state.ctx!.call(deep, act('whatever'), { q: 1 })
-  expect(fh.received[0].target).toEqual(deep); expect(fh.received[0].action).toBe('whatever')
+  const host: ComponentFactory = { manifest: fh.manifest, create: async (_c, _s, h) => { await h.register(fh, 'inner'); return { onAction: async () => ok(null) } } }
+  await bus.register(host, 'h')
+  expect(await fa.state.ctx!.call(deep, act('log'), { q: 1 })).toEqual(ok({ q: 1 }))
+  expect(fh.received[0].target).toEqual(deep)
   const r = await fa.state.ctx!.call({ namespace: ['root', 'missing'], instance: 'i' }, act('log'), {})
   expect(r.type === 'error' && r.error.code).toBe('unknown-target')
-  // parent forwarding
-  const seen: unknown[] = []
-  const parent = { capabilities: () => bus.capabilities(), emit: bus.emit, call: async (t: InstanceRef, a: { name: string }) => { seen.push([t, a.name]); return ok('p' as any) } }
-  const inner = Contexts.bus({ self: { namespace: ['root'], instance: 'h', manifest: fh.manifest }, parent })
-  expect(await inner.call(ref('a'), act('log'), {})).toEqual(ok('p')); expect(seen.length).toBe(1)
 })
 
 test('route cycle ends in loop error', async () => {
   const { bus, errors } = setup()
   const depths: number[] = []
+  const ctxs: Context[] = []
   const mk = (): ComponentFactory => {
     const f: ComponentFactory = {
       manifest: defineManifest({
@@ -85,8 +83,8 @@ test('route cycle ends in loop error', async () => {
         emits: [{ name: 'fired', schema: Type.Object({ text: Type.String() }) }],
         consumes: [{ name: 'log', input: Type.Unknown() }],
       }),
-      create: ctx => ({
-        manifest: f.manifest, dispose: async () => {},
+      create: ctx => (ctxs.push(ctx), {
+        dispose: async () => {},
         onAction: async (sctx, inv) => { depths.push(inv.stack.length); await sctx.emit(fired, { text: 'x' }); return ok(null) },
       } as Component),
     }
@@ -97,7 +95,7 @@ test('route cycle ends in loop error', async () => {
   bus.route({ from: { instance: ref('a'), event: 'fired' }, to: { instance: ref('b'), action: 'log' } })
   bus.route({ from: { instance: ref('b'), event: 'fired' }, to: { instance: ref('a'), action: 'log' } })
   const t = Date.now()
-  await bus.emitFrom(bus.instances()[0], 'fired', { text: 'go' })
+  await ctxs[0].emit(fired, { text: 'go' })
   for (let i = 0; i < 50 && !errors.some(e => e.code === 'loop'); i++) await flush()
   expect(errors.some(e => e.code === 'loop')).toBe(true)
   expect(Math.max(...depths)).toBeLessThanOrEqual(16)

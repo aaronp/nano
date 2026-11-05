@@ -1,9 +1,8 @@
 import type { Static, TFunction, TSchema } from 'typebox'
-import { bus, environments } from './contexts/bus'
 import {
-  fail, ok, sameInstance,
+  fail, ok,
   type Action, type Component, type ComponentFactory, type ComponentId, type Context, type Event,
-  type InstanceRef, type Invocation, type Manifest, type Output, type Result, type SystemError,
+  type InstanceRef, type Invocation, type Manifest, type Output, type Result,
 } from './types'
 
 type Meta = { id: ComponentId; version: string }
@@ -18,7 +17,7 @@ export type Model<S> = Component & {
 }
 /** A factory whose `create` result type is known, so composites and views get typed children. */
 export type Factory<C extends Component = Component> = ComponentFactory & { create(...a: Parameters<ComponentFactory['create']>): Promise<C> }
-/** The component a factory creates: `bus.component(ref) as Created<typeof myWidget>`. */
+/** The component a factory creates: `registry.component(ref) as Created<typeof myWidget>`. */
 export type Created<F extends Factory> = Awaited<ReturnType<F['create']>>
 
 /**
@@ -78,66 +77,58 @@ function compose(meta: Meta, ...ms: Manifest[]): Manifest {
 }
 export const Manifests = { compose }
 
-export type CompositeRoute = { from: [child: string, event: Event]; to: [child: string, action: Action] }
-export type Composite<C extends Record<string, Factory>> = Component & {
-  children: { [K in keyof C]: Created<C[K]> }
+/** A child event or action, bound to the child's name: `input(submitted)`. */
+export type Bound<D extends Event | Action> = { child: string; def: D }
+/** What `use` returns: call it with one of the child's events or actions to bind it for `route`. */
+export type Handle<F extends Factory = Factory> = (<D extends Event | Action>(def: D) => Bound<D>) & { child: string; factory: F }
+export type Builder = {
+  /** Add a child. `wrap` derives its context: everything it emits or calls goes through it first. */
+  use<F extends Factory>(name: string, factory: F, wrap?: (ctx: Context) => Context): Handle<F>
+  route(from: Bound<Event>, to: Bound<Action>): void
+  /** Which child events and actions make up the composite's manifest (default: all of them). */
+  expose(...defs: (Event | Action)[]): void
 }
+export type Composite<R extends Record<string, Handle>> = Component & { children: { [K in keyof R]: Created<R[K]['factory']> } }
 
 /**
- * One component from named children on a private bus. Actions addressed to it go to the child that consumes
- * them (keeping the original sender); routes wire children together; exposed child events bubble out.
- * `expose` (default: everything) picks which child events and actions make up the composite's manifest.
- * Everything is checked here, so a wiring mistake fails when the widget is built.
+ * One component from named children, built once when defined; every mistake throws here, not at runtime.
+ * Children live under the composite's path in the same registry. Exposed actions are delegated to the child that
+ * consumes them; exposed child events are re-emitted as the composite's own. Return the handles to get typed `children`.
  */
-function composite<const C extends Record<string, Factory>>(opts: Meta & {
-  children: C
-  routes?: CompositeRoute[]
-  expose?: (Event | Action)[]
-  onDeliveryError?: (e: SystemError, inv: Invocation) => void
-}): Factory<Composite<C>> {
-  const { children, routes = [] } = opts
-  const all = compose(opts, ...Object.values(children).map(f => f.manifest))
-  const has = (child: string, list: 'emits' | 'consumes', name: string) =>
-    children[child]?.manifest[list].some(d => d.name === name)
-  for (const { from, to } of routes) {
-    if (!has(from[0], 'emits', from[1].name)) throw new Error(`route: child "${from[0]}" does not emit ${from[1].name}`)
-    if (!has(to[0], 'consumes', to[1].name)) throw new Error(`route: child "${to[0]}" does not consume ${to[1].name}`)
-  }
-  const shown = opts.expose && new Set(opts.expose.map(d => d.name))
-  for (const n of shown ?? []) if (![...all.emits, ...all.consumes].some(d => d.name === n)) throw new Error(`expose: no child has ${n}`)
-  const manifest: Manifest = shown
-    ? { ...all, emits: all.emits.filter(e => shown.has(e.name)), consumes: all.consumes.filter(a => shown.has(a.name)) }
-    : all
-  const owner = new Map(Object.entries(children).flatMap(([n, f]) => f.manifest.consumes.map(a => [a.name, n])))
-  const bubbles = new Set(manifest.emits.map(e => e.name))
+function composite<const R extends Record<string, Handle>>(meta: Meta, build: (c: Builder) => R): Factory<Composite<R>> {
+  const uses: { name: string; factory: Factory; wrap?: (ctx: Context) => Context }[] = []
+  const routes: [Bound<Event>, Bound<Action>][] = []
+  let shown: (Event | Action)[] | undefined
+  const factoryOf = (child: string) => uses.find(u => u.name === child)!.factory
+  const children = build({
+    use(name, factory, wrap) {
+      if (uses.some(u => u.name === name)) throw new Error(`duplicate child "${name}"`)
+      uses.push({ name, factory, wrap })
+      return Object.assign(<D extends Event | Action>(def: D) => ({ child: name, def }), { child: name, factory })
+    },
+    route(from, to) {
+      if (!factoryOf(from.child).manifest.emits.some(e => e.name === from.def.name)) throw new Error(`route: child "${from.child}" does not emit ${from.def.name}`)
+      if (!factoryOf(to.child).manifest.consumes.some(a => a.name === to.def.name)) throw new Error(`route: child "${to.child}" does not consume ${to.def.name}`)
+      routes.push([from, to])
+    },
+    expose(...defs) { shown = [...(shown ?? []), ...defs] },
+  })
+  const emits = uses.flatMap(u => u.factory.manifest.emits), consumes = uses.flatMap(u => u.factory.manifest.consumes)
+  for (const d of shown ?? []) if (![...emits, ...consumes].some(x => x.name === d.name)) throw new Error(`expose: no child has ${d.name}`)
+  const pick = (d: { name: string }) => !shown || shown.some(s => s.name === d.name)
+  const manifest = compose(meta, { ...meta, emits: emits.filter(pick), consumes: consumes.filter(pick) })
+  const owner = new Map(uses.flatMap(u => u.factory.manifest.consumes.filter(pick).map(a => [a.name, u.name])))
 
   return {
     manifest,
-    async create(ctx, self) {
-      // ponytail: inner delivery errors default to console; thread the host's handler through Context if one is needed.
-      const inner = bus({ self, parent: ctx, onDeliveryError: opts.onDeliveryError ?? ((e, inv) => console.error(e, inv)) })
-      const ref = (name: string) => ({ namespace: [...self.namespace, self.instance], instance: name })
-      const bubble = (c: Context): Context => ({
-        ...c,
-        emit: async (e, p, s) => {
-          const r = await c.emit(e, p, s)
-          return r.type === 'success' && bubbles.has(e.name) ? ctx.emit(e, p, s) : r
-        },
-      })
-      try { for (const [name, f] of Object.entries(children)) await inner.register(f, name, bubble) }
-      catch (e) { for (const i of inner.instances()) await inner.unregister(i); throw e }
-      for (const { from, to } of routes)
-        inner.route({ from: { instance: ref(from[0]), event: from[1].name }, to: { instance: ref(to[0]), action: to[1].name } })
-
-      const component: Composite<C> = {
-        children: Object.fromEntries(Object.keys(children).map(n => [n, inner.component(ref(n))])) as Composite<C>['children'],
-        // Addressed to us: delegate by action name. Addressed deeper (a hop): pass it down. Either way keep the sender.
-        onAction: (_c, inv) => inner.callFrom(inv.from,
-          sameInstance(inv.target, self) ? ref(owner.get(inv.action)!) : inv.target, inv.action, inv.input, { stack: [...inv.stack, inv] }),
-        dispose: async () => { for (const i of inner.instances()) await inner.unregister(i) },
+    async create(_ctx, self, host) {
+      const ref = (child: string) => ({ namespace: [...self.namespace, self.instance], instance: child })
+      for (const u of uses) await host.register(u.factory, u.name, u.wrap)
+      for (const [f, t] of routes) host.route({ from: { instance: ref(f.child), event: f.def.name }, to: { instance: ref(t.child), action: t.def.name } })
+      return {
+        children: Object.fromEntries(Object.entries(children).map(([k, h]) => [k, host.component(ref(h.child))])) as Composite<R>['children'],
+        onAction: (c, inv) => c.call(ref(owner.get(inv.action)!), { name: inv.action } as Action, inv.input as never),
       }
-      environments.set(component, () => inner.capabilities().environment)
-      return component
     },
   }
 }
@@ -150,7 +141,7 @@ type LiftedActions<A extends Record<string, Op>> = { [K in keyof A]: Action<A[K]
 
 /**
  * Lift plain functions into a component: `api` is the interface (one function schema per operation), `impl`
- * the functions. Each becomes an action named after its key; input and output are validated by the bus.
+ * the functions. Each becomes an action named after its key; input and output are validated by the registry.
  */
 function lift<const A extends Record<string, Op>>(id: ComponentId, version: string, api: A, impl: Impl<A>) {
   const C = Components.declare(id, version)

@@ -3,9 +3,10 @@ import { eventsTable, onEvent } from './events-table'
 import { setInput, submitted, textEmit } from './text-emit'
 
 /** A text input whose submissions are listed in a table. Only the input's API is exposed. */
-export const debug = Components.compose({
-  id: { author: 'composable', id: 'debug' }, version: '0.1.0',
-  children: { input: textEmit, table: eventsTable },
-  routes: [{ from: ['input', submitted], to: ['table', onEvent] }],
-  expose: [setInput, submitted],
+export const debug = Components.compose({ id: { author: 'composable', id: 'debug' }, version: '0.1.0' }, c => {
+  const input = c.use('input', textEmit)
+  const table = c.use('table', eventsTable)
+  c.route(input(submitted), table(onEvent))
+  c.expose(setInput, submitted)
+  return { input, table }
 })

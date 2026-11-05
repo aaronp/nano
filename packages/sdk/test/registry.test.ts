@@ -7,7 +7,7 @@ import { echoFactory, fired, rootRef } from './fixtures'
 const flush = () => new Promise(r => setTimeout(r))
 const setup = () => {
   const errors: SystemError[] = []
-  const bus = Contexts.bus({ self: { ...rootRef, manifest: echoFactory('x', 'root').manifest }, onDeliveryError: e => errors.push(e) })
+  const bus = Contexts.registry({ self: { ...rootRef, manifest: echoFactory('x', 'root').manifest }, onDeliveryError: e => errors.push(e) })
   return { bus, errors }
 }
 const ref = (instance: string): InstanceRef => ({ namespace: ['root'], instance })
@@ -49,7 +49,7 @@ test('emit of unknown event or bad payload returns error code validation', async
 const consumer = (onAction: Component['onAction'] = async () => ok(null)): ComponentFactory => {
   const manifest = defineManifest({ id: { author: 'x', id: 'n' }, version: '0.1.0', emits: [],
     consumes: [{ name: 'log', input: Type.Object({ n: Type.Number() }) }] })
-  return { manifest, create: () => ({ manifest, onAction, dispose: async () => {} }) }
+  return { manifest, create: () => ({ onAction, dispose: async () => {} }) }
 }
 
 test('delivery payload invalid for target input is not delivered', async () => {
@@ -67,7 +67,7 @@ test('delivery payload invalid for target input is not delivered', async () => {
 test('throwing receiver does not block other receivers', async () => {
   const { bus, errors } = setup()
   const fa = echoFactory('x', 'e'), good = echoFactory('x', 'e')
-  const bad: ComponentFactory = { manifest: fa.manifest, create: () => ({ manifest: fa.manifest, onAction: async () => { throw new Error('boom') }, dispose: async () => {} }) }
+  const bad: ComponentFactory = { manifest: fa.manifest, create: () => ({ onAction: async () => { throw new Error('boom') }, dispose: async () => {} }) }
   await bus.register(fa, 'a'); await bus.register(bad, 'bad'); await bus.register(good, 'good')
   route(bus, 'a', 'bad'); route(bus, 'a', 'good')
   await fa.state.ctx!.emit(fired, { text: 'hi' })
@@ -79,7 +79,7 @@ test('throwing receiver does not block other receivers', async () => {
 test('synchronously throwing receiver does not block other receivers', async () => {
   const { bus, errors } = setup()
   const fa = echoFactory('x', 'e'), good = echoFactory('x', 'e')
-  const bad: ComponentFactory = { manifest: fa.manifest, create: () => ({ manifest: fa.manifest, dispose: async () => {},
+  const bad: ComponentFactory = { manifest: fa.manifest, create: () => ({ dispose: async () => {},
     onAction: (() => { throw new Error('sync boom') }) as Component['onAction'] }) }
   await bus.register(fa, 'a'); await bus.register(bad, 'bad'); await bus.register(good, 'good')
   route(bus, 'a', 'bad'); route(bus, 'a', 'good')
@@ -149,7 +149,7 @@ test('zombie ctx of an unregistered instance cannot emit, even after the name is
 })
 
 test('throwing onDeliveryError does not escape emit', async () => {
-  const bus = Contexts.bus({ self: { ...rootRef, manifest: echoFactory('x', 'root').manifest }, onDeliveryError: () => { throw new Error('observer') } })
+  const bus = Contexts.registry({ self: { ...rootRef, manifest: echoFactory('x', 'root').manifest }, onDeliveryError: () => { throw new Error('observer') } })
   const fa = echoFactory('x', 'e')
   await bus.register(fa, 'a')
   bus.route({ from: { instance: ref('a'), event: 'fired' }, to: { instance: ref('ghost'), action: 'log' } })
@@ -168,7 +168,7 @@ test('invocation scoped ctx extends stack', async () => {
   const { bus } = setup()
   const fa = echoFactory('x', 'e'), fc = echoFactory('x', 'e'), fb = echoFactory('x', 'e')
   const b: ComponentFactory = { manifest: fb.manifest, create: () => {
-    return { manifest: fb.manifest, dispose: async () => {}, onAction: async (sctx) => { await flush(); await sctx.emit(fired, { text: 'again' }); return ok(null) } }
+    return { dispose: async () => {}, onAction: async (sctx) => { await flush(); await sctx.emit(fired, { text: 'again' }); return ok(null) } }
   } }
   await bus.register(fa, 'a'); await bus.register(b, 'b'); await bus.register(fc, 'c')
   route(bus, 'a', 'b'); route(bus, 'b', 'c')

@@ -4,7 +4,7 @@ import { debug, setInput } from '.'
 import { defineElements } from './views'
 
 defineElements()
-const root = Contexts.bus({
+const root = Contexts.registry({
   self: { namespace: [], instance: 'root', manifest: defineManifest({ id: { author: 'composable', id: 'page' }, version: '0.1.0', emits: [], consumes: [] }) },
   onDeliveryError: e => console.error(e),
 })

@@ -1,11 +1,6 @@
-import { bus, child } from './bus'
-import { policy } from './policy'
-import { filter } from './filter'
-import { debounce } from './debounce'
-import { trace } from './trace'
-import { expose, elide, mapEnv } from './env'
-export type { Route, BusContext } from './bus'
-export type { PolicyStore, PolicyContext } from './policy'
-export type { Predicate, FilterContext } from './filter'
-export type { TraceEntry } from './trace'
-export const Contexts = { bus, child, policy, filter, debounce, trace, expose, elide, mapEnv }
+import { registry } from './registry'
+import { elide, policy } from './policy'
+export type { Registry } from './registry'
+export type { PolicyStore } from './policy'
+export { Emits, Calls } from './wrappers'
+export const Contexts = { registry, policy, elide }

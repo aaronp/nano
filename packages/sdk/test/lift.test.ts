@@ -13,7 +13,7 @@ const myThing = Components.lift({ author: 'acme', id: 'my-thing' }, '0.1.0', MyT
   repeat: ({ y, times }) => y.repeat(times),
   slow: async () => 42,
 })
-const root = () => Contexts.bus({ self: { ...rootRef, manifest: defineManifest({ id: { author: 't', id: 'r' }, version: '0', emits: [], consumes: [] }) } })
+const root = () => Contexts.registry({ self: { ...rootRef, manifest: defineManifest({ id: { author: 't', id: 'r' }, version: '0', emits: [], consumes: [] }) } })
 
 test('lift: one action per function, named from the id, described, with object input', () => {
   expect(myThing.manifest.consumes.map(a => [a.name, a.description])).toEqual([

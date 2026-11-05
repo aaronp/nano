@@ -122,25 +122,48 @@ export type Result<T> =
   | { type: 'error'; error: SystemError }
 
 // TS-only: functions are not schemas.
-/** `from`: the original sender of a call leaving a nested bus. Only honoured for an instance inside the caller's own subtree. */
-export type Scope = { stack: Invocation[]; from?: Instance }
+export type Scope = { stack: Invocation[] }
+/** Intents: what a component asks its context to do. Wrappers (`withEmit` / `withCall`) see and transform these. */
+export type Emitted = { event: Event; payload: unknown; scope: Scope }
+export type Called = { target: InstanceRef; action: Action; input: unknown; scope: Scope }
+export type EmitFn = (e: Emitted) => Promise<Result<void>>
+export type CallFn = (c: Called) => Promise<Result<unknown>>
+
 /** Typed views of EventDef / ActionDef: the schema types flow into emit, call and handlers. */
 export type Event<S extends TSchema = TSchema> = { name: string; schema: S; description?: string }
 export type Action<I extends TSchema = TSchema, O extends TSchema | undefined = TSchema | undefined> =
   { name: string; input: I; output?: O; description?: string }
 export type Output<A extends Action> = A extends Action<any, infer O> ? (O extends TSchema ? Static<O> : unknown) : unknown
 
-export type Context = {
+/**
+ * What a component acts through. Authors use the typed `emit` / `call`; a parent derives a child's context with
+ * `withEmit` / `withCall` / `withCapabilities`, each wrapper getting the intent and `next`. The last wrapper added
+ * runs first, so a child's own wrappers run before the ones its parent gave it.
+ */
+export interface Context {
+  readonly self: Instance
   capabilities(): Capabilities
-  emit<E extends Event>(event: E, payload: Static<E['schema']>, scope?: Scope): Promise<Result<void>>
-  call<A extends Action>(target: InstanceRef, action: A, input: Static<A['input']>, scope?: Scope): Promise<Result<Output<A>>>
+  emit<E extends Event>(event: E, payload: Static<E['schema']>): Promise<Result<void>>
+  call<A extends Action>(target: InstanceRef, action: A, input: Static<A['input']>): Promise<Result<Output<A>>>
+  withEmit(fn: (e: Emitted, next: EmitFn) => Promise<Result<void>>): Context
+  withCall(fn: (c: Called, next: CallFn) => Promise<Result<unknown>>): Context
+  withCapabilities(fn: (c: Capabilities) => Capabilities): Context
 }
+
 /** Receives actions. Emitting is the other half (a source), done through `Context.emit`. */
 export type DataSink = { onAction(ctx: Context, inv: Invocation): Promise<Result<unknown>> }
 export type Component = DataSink & { dispose?(): void | Promise<void> }
+
+export type Route = { from: EventRef; to: ActionRef }
+/** What a container may do with its own subtree: add children under itself and wire them. */
+export type Host = {
+  register(factory: ComponentFactory, name: string, wrap?: (c: Context) => Context): Promise<Instance>
+  route(r: Route): void
+  component(ref: InstanceRef): Component | undefined
+}
 export type ComponentFactory = {
   manifest: Manifest
-  create(ctx: Context, self: Instance): Component | Promise<Component>
+  create(ctx: Context, self: Instance, host: Host): Component | Promise<Component>
 }
 
 export const defineManifest = <const M extends Manifest>(m: M): M => m
