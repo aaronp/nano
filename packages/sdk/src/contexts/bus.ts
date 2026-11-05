@@ -101,7 +101,7 @@ export function bus(opts: {
       const under = t.length >= childNs.length && childNs.every((n, i) => n === t[i])
       if (under && t.length === childNs.length) return invoke(inv)
       if (under) return invoke(inv, { namespace: childNs, instance: t[childNs.length] })
-      if (opts.parent) return opts.parent.call(target, { name: action } as Action, input, scope)
+      if (opts.parent) return opts.parent.call(target, { name: action } as Action, input, { stack: scope?.stack ?? [], from })
       return fail('unknown-target', `no route to ${target.instance}`)
     },
 
@@ -153,11 +153,17 @@ export function bus(opts: {
 
 const gone = (self: Instance) => fail('unknown-target', `instance ${self.instance} is unregistered`)
 
+// A claimed sender must live under `self`: a host may speak for its descendants, never for a sibling.
+const within = (self: Instance, from: Instance) =>
+  [...self.namespace, self.instance].every((n, i) => from.namespace[i] === n)
+
 export function child(b: BusContext, self: Instance, alive: () => boolean = () => true): Context {
   const inner = b as BusContext & BusInternals
   return {
     capabilities: () => b.capabilities(),
     emit: async (event, payload, scope) => alive() ? inner.emitFrom(self, event.name, payload, scope) : gone(self),
-    call: async (target, action, input, scope) => alive() ? (inner.callFrom(self, target, action.name, input, scope) as Promise<Result<any>>) : gone(self),
+    call: async (target, action, input, scope) => alive()
+      ? (inner.callFrom(scope?.from && within(self, scope.from) ? scope.from : self, target, action.name, input, scope) as Promise<Result<any>>)
+      : gone(self),
   }
 }

@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
 import { Components, Contexts, Manifests, defineManifest, fail, ok, type Created, type Factory, type Invocation, type SystemError } from '../src'
-import { rootRef } from './fixtures'
+import { act, echoFactory, rootRef } from './fixtures'
 
 const flush = () => new Promise(r => setTimeout(r, 0))
 
@@ -126,4 +126,23 @@ test('a failing child cleans up the ones already created', async () => {
   const c = Components.compose({ id: { author: 't', id: 'c' }, version: '0', children: { a: ok1, b: boom } })
   await expect(root().register(c, 'c')).rejects.toThrow('boom')
   expect(disposed).toBe(1)
+})
+
+test('a call leaving a composite keeps the inner sender; a forged sender is ignored', async () => {
+  heard.length = 0
+  const P = Components.declare({ author: 't', id: 'pinger' }, '0')
+  const ping = P.action('ping', 'Call out to the root listener', Type.Null())
+  const outsider = { namespace: ['root'], instance: 'l' }
+  const pinger = P.define({ state: () => null, actions: [[ping, (_i, { ctx }) => ctx.call(outsider, hear, 'from inside')]] })
+  const b = root()
+  await b.register(listener, 'l')
+  const box = await b.register(Components.compose({ id: { author: 't', id: 'box' }, version: '0', children: { p: pinger } }), 'box')
+  expect((await b.call(box, ping, null)).type).toBe('success')
+  expect(heard.at(-1)).toEqual({ s: 'from inside', from: 'p' })
+
+  // Forgery: a leaf claims a sibling as sender; the bus ignores it.
+  const fa = echoFactory('t', 'a'), fb = echoFactory('t', 'b')
+  await b.register(fa, 'a'); const sib = await b.register(fb, 'b')
+  await fa.state.ctx!.call(sib, act('log'), {}, { stack: [], from: sib })
+  expect(fb.received.at(-1)!.from.instance).toBe('a')
 })

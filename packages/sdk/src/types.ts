@@ -122,7 +122,8 @@ export type Result<T> =
   | { type: 'error'; error: SystemError }
 
 // TS-only: functions are not schemas.
-export type Scope = { stack: Invocation[] }
+/** `from`: the original sender of a call leaving a nested bus. Only honoured for an instance inside the caller's own subtree. */
+export type Scope = { stack: Invocation[]; from?: Instance }
 /** Typed views of EventDef / ActionDef: the schema types flow into emit, call and handlers. */
 export type Event<S extends TSchema = TSchema> = { name: string; schema: S; description?: string }
 export type Action<I extends TSchema = TSchema, O extends TSchema | undefined = TSchema | undefined> =
