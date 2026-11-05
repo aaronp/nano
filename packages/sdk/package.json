@@ -1,0 +1,8 @@
+{
+  "name": "@composable/sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./lit": "./src/lit.ts" },
+  "dependencies": { "typebox": "^1.4.0", "lit": "^3.0.0" },
+  "devDependencies": { "@types/bun": "latest" }
+}
