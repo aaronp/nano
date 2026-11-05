@@ -12,15 +12,17 @@ export const ComponentId = Type.Object({
 export type ComponentId = Static<typeof ComponentId>
 
 export const EventDef = Type.Object({
-  name: Type.String({ description: 'Event name, local to the component.', examples: ['clicked'] }),
+  name: Type.String({ description: 'Qualified event name, `author/component/event`.', examples: ['acme/button/clicked'] }),
   schema: AnySchema,
+  description: Type.Optional(Type.String({ description: 'What the event means, for people choosing what to allow.' })),
 }, { title: 'EventDef', description: 'An event a component can emit, with the schema of its payload.' })
 export type EventDef = Static<typeof EventDef>
 
 export const ActionDef = Type.Object({
-  name: Type.String({ description: 'Action name, local to the component.', examples: ['log'] }),
+  name: Type.String({ description: 'Qualified action name, `author/component/action`.', examples: ['acme/logger/log'] }),
   input: AnySchema,
   output: Type.Optional(AnySchema),
+  description: Type.Optional(Type.String({ description: 'What the action does, for people choosing what to allow.' })),
 }, { title: 'ActionDef', description: 'An action a component can handle, with input and optional output schemas.' })
 export type ActionDef = Static<typeof ActionDef>
 
@@ -121,28 +123,23 @@ export type Result<T> =
 
 // TS-only: functions are not schemas.
 export type Scope = { stack: Invocation[] }
+/** Typed views of EventDef / ActionDef: the schema types flow into emit, call and handlers. */
+export type Event<S extends TSchema = TSchema> = { name: string; schema: S; description?: string }
+export type Action<I extends TSchema = TSchema, O extends TSchema | undefined = TSchema | undefined> =
+  { name: string; input: I; output?: O; description?: string }
+export type Output<A extends Action> = A extends Action<any, infer O> ? (O extends TSchema ? Static<O> : unknown) : unknown
+
 export type Context = {
   capabilities(): Capabilities
-  emit<S extends TSchema>(event: { name: string; schema: S }, payload: Static<S>, scope?: Scope): Promise<Result<void>>
-  call(target: InstanceRef, action: string, input: unknown, scope?: Scope): Promise<Result<unknown>>
+  emit<E extends Event>(event: E, payload: Static<E['schema']>, scope?: Scope): Promise<Result<void>>
+  call<A extends Action>(target: InstanceRef, action: A, input: Static<A['input']>, scope?: Scope): Promise<Result<Output<A>>>
 }
 /** Receives actions. Emitting is the other half (a source), done through `Context.emit`. */
 export type DataSink = { onAction(ctx: Context, inv: Invocation): Promise<Result<unknown>> }
-export type Component = DataSink & { manifest: Manifest; dispose?(): void | Promise<void> }
-export type UIComponent = Component & { mount(el: HTMLElement): void }
+export type Component = DataSink & { dispose?(): void | Promise<void> }
 export type ComponentFactory = {
   manifest: Manifest
   create(ctx: Context, self: Instance): Component | Promise<Component>
-}
-
-/** Qualified as `ns/name` so widgets from different authors rarely clash when composed. */
-export const Events = {
-  create: <S extends TSchema = TSchema>(ns: string, name: string, schema: S = Type.Unknown() as unknown as S) =>
-    ({ name: `${ns}/${name}`, schema }),
-}
-export const Actions = {
-  declare: <I extends TSchema, O extends TSchema | undefined = undefined>(ns: string, name: string, input: I, output?: O) =>
-    ({ name: `${ns}/${name}`, input, ...(output ? { output } : {}) }) as { name: string; input: I; output?: O },
 }
 
 export const defineManifest = <const M extends Manifest>(m: M): M => m

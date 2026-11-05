@@ -1,7 +1,7 @@
 import Value from 'typebox/value'
 import {
   fail, ok, sameInstance,
-  type ActionRef, type Component, type ComponentFactory, type Context, type Environment, type EventRef, type Instance,
+  type Action, type ActionRef, type Component, type ComponentFactory, type Context, type Environment, type EventRef, type Instance,
   type InstanceRef, type Invocation, type Result, type Scope, type SystemError,
 } from '../types'
 
@@ -91,7 +91,7 @@ export function bus(opts: {
       events: { type: 'all' }, actions: { type: 'all' },
     }),
     emit: (event, payload, scope) => self.emitFrom(opts.self, event.name, payload, scope),
-    call: (target, action, input, scope) => self.callFrom(opts.self, target, action, input, scope),
+    call: (target, action, input, scope) => self.callFrom(opts.self, target, action.name, input, scope) as Promise<Result<any>>,
 
     async callFrom(from, target, action, input, scope) {
       const inv: Invocation = { id: crypto.randomUUID(), from, target, action, input, stack: scope?.stack ?? [] }
@@ -101,7 +101,7 @@ export function bus(opts: {
       const under = t.length >= childNs.length && childNs.every((n, i) => n === t[i])
       if (under && t.length === childNs.length) return invoke(inv)
       if (under) return invoke(inv, { namespace: childNs, instance: t[childNs.length] })
-      if (opts.parent) return opts.parent.call(target, action, input, scope)
+      if (opts.parent) return opts.parent.call(target, { name: action } as Action, input, scope)
       return fail('unknown-target', `no route to ${target.instance}`)
     },
 
@@ -158,6 +158,6 @@ export function child(b: BusContext, self: Instance, alive: () => boolean = () =
   return {
     capabilities: () => b.capabilities(),
     emit: async (event, payload, scope) => alive() ? inner.emitFrom(self, event.name, payload, scope) : gone(self),
-    call: async (target, action, input, scope) => alive() ? inner.callFrom(self, target, action, input, scope) : gone(self),
+    call: async (target, action, input, scope) => alive() ? (inner.callFrom(self, target, action.name, input, scope) as Promise<Result<any>>) : gone(self),
   }
 }

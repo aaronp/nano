@@ -3,6 +3,8 @@ import { defineManifest, ok, type Context, type Invocation, type InstanceRef, ty
 
 export const rootRef: InstanceRef = { namespace: [], instance: 'root' }
 
+/** An untyped action reference by name, for tests that address actions directly. */
+export const act = (name: string) => ({ name, input: Type.Unknown() })
 export const fired = { name: 'fired', schema: Type.Object({ text: Type.String() }) }
 
 export const echoManifest = (author: string, id: string) => defineManifest({
@@ -20,7 +22,6 @@ export const echoFactory = (author: string, id: string) => {
     create(ctx) {
       state.ctx = ctx
       const c: Component = {
-        manifest: factory.manifest,
         onAction: async (_c, inv) => { received.push(inv); return ok(inv.input) },
         dispose: async () => { state.disposed++ },
       }

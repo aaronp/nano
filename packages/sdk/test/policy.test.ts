@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test'
 import { Contexts } from '../src/contexts'
 import type { PolicyStore } from '../src/contexts'
 import type { InstanceRef } from '../src'
-import { echoFactory, fired, rootRef } from './fixtures'
+import { act, echoFactory, fired, rootRef } from './fixtures'
 
 const flush = () => new Promise(r => setTimeout(r, 20))
 const ref = (instance: string): InstanceRef => ({ namespace: ['root'], instance })
@@ -42,7 +42,7 @@ test('denied call returns not-allowed', async () => {
   const b = setup(), fa = echoFactory('x', 'e'), fb = echoFactory('x', 'e')
   const store: PolicyStore = { events: { type: 'all' }, actions: { type: 'allow', values: [] } }
   await b.register(fa, 'a', c => Contexts.policy(c, store, ref('a'))); await b.register(fb, 'b')
-  expect((await fa.state.ctx!.call(ref('b'), 'log', 1)).type).toBe('not-allowed')
+  expect((await fa.state.ctx!.call(ref('b'), act('log'), 1)).type).toBe('not-allowed')
   expect(fb.received.length).toBe(0)
 })
 
