@@ -1,0 +1,77 @@
+// fixed when someone authors a widget. The author keeps id's unique within their 'author' namespace
+type WidgetId   = { author: string; id: string };
+
+
+type EventType = Type.Object({ id: Type.String(), event : Type.Any({ description: "The typebox of an event schema" }) }) }
+
+type ActionType = Type.Object({ name: Type.String(), eventType : EventType }) }
+
+
+// the widget manifest
+type Manifest {
+  id : WidgetId,
+  emits : Type.Array(EventType),
+  consumes : Type.Array(ActionType)
+}
+
+type EventSet = Type.Array(EventType)
+type ActionSet = Type.Array(ActionType)
+
+type Allow<T> = { type : "allow", values: T[] }
+type Deny<T> = { type : "deny", values: T[] }
+
+type Policy<T> = Allow<T> | Deny<T> | { type : "all" }
+
+type Capabilities {
+    actions : Policy<ActionSet>
+    events : Policy<EventSet>
+}
+
+// these types elided
+type Error = SystemError { ...} | NotAllowed
+type Success = { type  : 'success', data : any}
+
+type EmitResult = Error | Success
+
+type CallResult = Error | Success
+
+// the Id when a widget is placed in a host container
+type Instance   = { namespace: string; instance : string, manifest : Manifest };
+
+type Environment {
+    instances : Instance[]
+}
+
+type Invocation = { from : Instance, input : any }
+type Stack = Invocation[]
+
+type WidgetContext {
+    // allows a widget to know what actions or events it can emit or send
+    // so that it can disable buttons, not bother with expensive tasks, etc
+    checkCapabilities(m : Manifest) : Capabilities
+
+    // fire and forget
+    emit(action : ActionType, event : any) : Promise<EmitResult>
+
+    // communicate synchronously with another widget - the platform creates an Invocation
+    call(instance : Instance, input : any) : Promise<CallResult>
+}
+
+
+
+
+type Widget {
+  // the 'sync' interface
+  onAction(context : WidgetContext, command : Invocation) : CallResult
+}
+
+
+// our base widget type other widgets 
+type WidgetFactory {
+    manifest : Manifest
+
+    create(context : WidgetContext) : Widget
+}
+
+
+
