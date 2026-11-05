@@ -9,7 +9,7 @@ export const echoManifest = (author: string, id: string) => defineManifest({
   consumes: [{ name: 'log', input: Type.Unknown() }],
 })
 
-/** Records every received invocation; `log` returns its input. `ctxs`/`disposed` are exposed for tests. */
+/** Records every received invocation; `log` returns its input. `state.ctx`/`state.disposed` are exposed for tests. */
 export const echoFactory = (author: string, id: string) => {
   const received: Invocation[] = []
   const state = { ctx: undefined as Context | undefined, disposed: 0 }

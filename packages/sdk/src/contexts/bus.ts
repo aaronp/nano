@@ -15,7 +15,7 @@ export interface BusContext extends Context {
   instances(): Instance[]
 }
 
-type Entry = { instance: Instance; component: Component; ctx: Context }
+type Entry = { instance: Instance; component: Component; ctx: Context; dead: boolean }
 type BusInternals = { emitFrom(from: Instance, event: string, payload: unknown, scope?: Scope): Promise<Result<void>> }
 
 const sameRoute = (a: Route, b: Route) =>
@@ -29,7 +29,9 @@ export function bus(opts: {
   const entries: Entry[] = []
   let routes: Route[] = []
   const find = (ref: InstanceRef) => entries.find(e => sameInstance(e.instance, ref))
-  const reportError = (e: SystemError, inv: Invocation) => opts.onDeliveryError?.(e, inv)
+  const reserved = new Set<string>()
+  // A throwing observer must never escape emit.
+  const reportError = (e: SystemError, inv: Invocation) => { try { opts.onDeliveryError?.(e, inv) } catch {} }
 
   const deliver = (inv: Invocation) => {
     const err = (code: SystemError['code'], message: string) => reportError({ code, message }, inv)
@@ -45,7 +47,10 @@ export function bus(opts: {
       call: (t, a, i) => target.ctx.call(t, a, i, scope),
     }
     // Deliver without awaiting; sync throws and rejections both become 'handler'.
-    Promise.resolve().then(() => target.component.onAction(scopedCtx, inv))
+    Promise.resolve().then(() => {
+      if (find(inv.target) !== target) { err('unknown-target', `instance ${inv.target.instance} was unregistered`); return }
+      return target.component.onAction(scopedCtx, inv)
+    })
       .catch(e => err('handler', String(e?.message ?? e)))
   }
 
@@ -74,19 +79,24 @@ export function bus(opts: {
     },
 
     async register(factory, instance, wrap) {
-      if (entries.some(e => e.instance.instance === instance)) throw new Error(`duplicate instance ${instance}`)
-      const inst: Instance = {
-        namespace: [...opts.self.namespace, opts.self.instance], instance, manifest: factory.manifest,
-      }
-      const ctx = (wrap ?? (c => c))(child(self, inst))
-      const component = await factory.create(ctx, inst)
-      entries.push({ instance: inst, component, ctx })
-      return inst
+      if (reserved.has(instance)) throw new Error(`duplicate instance ${instance}`)
+      reserved.add(instance)
+      try {
+        const inst: Instance = {
+          namespace: [...opts.self.namespace, opts.self.instance], instance, manifest: factory.manifest,
+        }
+        let entry: Entry | undefined
+        const ctx = (wrap ?? (c => c))(child(self, inst, () => !!entry && !entry.dead))
+        const component = await factory.create(ctx, inst)
+        entries.push(entry = { instance: inst, component, ctx, dead: false })
+        return inst
+      } catch (e) { reserved.delete(instance); throw e }
     },
     async unregister(ref) {
       const i = entries.findIndex(e => sameInstance(e.instance, ref))
       if (i < 0) return
       const [e] = entries.splice(i, 1)
+      e.dead = true; reserved.delete(ref.instance)
       routes = routes.filter(r => !sameInstance(r.from.instance, ref) && !sameInstance(r.to.instance, ref))
       await e.component.dispose()
     },
@@ -97,11 +107,13 @@ export function bus(opts: {
   return self
 }
 
-export function child(b: BusContext, self: Instance): Context {
+const gone = (self: Instance) => fail('unknown-target', `instance ${self.instance} is unregistered`)
+
+export function child(b: BusContext, self: Instance, alive: () => boolean = () => true): Context {
   const inner = b as BusContext & BusInternals
   return {
     capabilities: () => b.capabilities(),
-    emit: (event, payload, scope) => inner.emitFrom(self, event, payload, scope),
-    call: (target, action, input, scope) => b.call(target, action, input, scope),
+    emit: async (event, payload, scope) => alive() ? inner.emitFrom(self, event, payload, scope) : gone(self),
+    call: async (target, action, input, scope) => alive() ? b.call(target, action, input, scope) : gone(self),
   }
 }
