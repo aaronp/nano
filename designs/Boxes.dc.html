@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Box layout renderer</title>
+<script src="./vendor/react.js"></script>
+<script src="./vendor/react-dom.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;600&amp;family=Architects+Daughter&amp;family=Caveat:wght@700&amp;family=Syne:wght@700;800&amp;family=DM+Sans:wght@400;700&amp;family=JetBrains+Mono:wght@400;600&amp;family=Pixelify+Sans:wght@600&amp;family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,800&amp;family=Nunito:wght@400;800&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position: relative; width: {{frameW}}px; height: {{frameH}}px; overflow: hidden; font-family: {{font}}; color: {{fg}}; {{pageBg}}">
+
+  <sc-for list="{{boxes}}" as="x" hint-placeholder-count="6">
+    <div onDragOver="{{x.allowDrop}}" onDrop="{{x.drop}}" style="position: absolute; left: {{x.l}}px; top: {{x.t}}px; width: {{x.w}}px; height: {{x.h}}px; box-sizing: border-box; z-index: {{x.z}}; padding: {{x.padPx}}px; overflow: {{x.ov}}; {{x.skin}}">
+      <sc-if value="{{x.selectable}}" hint-placeholder-val="{{ false }}">
+        <button type="button" onClick="{{x.select}}" aria-label="Select box {{x.name}}" style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0; padding: 0; background: transparent; cursor: pointer"></button>
+      </sc-if>
+      <sc-if value="{{x.showSim}}" hint-placeholder-val="{{ false }}">
+        <div aria-hidden="true" style="position: relative; pointer-events: none; width: {{x.simW}}; height: {{x.simH}}; box-sizing: border-box; background: repeating-linear-gradient(135deg, #DCE1EA 0 8px, #E8ECF2 8px 16px); border: 1px solid #C3CAD6; display: flex; align-items: flex-start; justify-content: flex-start">
+          <span style="margin: 4px; padding: 1px 5px; border-radius: 3px; background: rgba(255,255,255,0.85); color: #3F4655; font-family: 'Geist Mono', monospace; font-size: 10px">content {{x.simLabel}}</span>
+        </div>
+      </sc-if>
+      <sc-if value="{{x.hasWidget}}" hint-placeholder-val="{{ false }}">
+        <dc-import name="Slot" cell="{{x.cell}}" hint-size="100%,100%"></dc-import>
+      </sc-if>
+      <sc-if value="{{x.showPlaceholder}}" hint-placeholder-val="{{ false }}">
+        <button type="button" onClick="{{x.place}}" onDragOver="{{x.allowDrop}}" onDrop="{{x.drop}}" style="width: 100%; height: 100%; min-height: 40px; box-sizing: border-box; border: {{x.phBorder}}; border-radius: 6px; background: {{x.phBg}}; color: #3A46B8; font: 600 13px 'Geist', sans-serif; cursor: pointer">{{x.phText}}</button>
+      </sc-if>
+      <sc-if value="{{x.showBus}}" hint-placeholder-val="{{ false }}">
+        <div style="position: relative; pointer-events: none; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; font-family: 'Geist', sans-serif">
+          <strong style="font-size: 13px; color: #2A2E37">{{x.kindName}}</strong>
+          <span style="display: flex; flex-wrap: wrap; gap: 4px">
+            <sc-for list="{{x.pub}}" as="tp" hint-placeholder-count="1"><span style="padding: 2px 7px; border-radius: 999px; background: #E3E6FF; color: #26307F; font-family: 'Geist Mono', monospace; font-size: 11px">↑ {{tp.topic}}</span></sc-for>
+            <sc-for list="{{x.sub}}" as="tp" hint-placeholder-count="1"><span style="padding: 2px 7px; border-radius: 999px; background: #FFEED6; color: #6B4100; font-family: 'Geist Mono', monospace; font-size: 11px">↓ {{tp.topic}}</span></sc-for>
+          </span>
+        </div>
+      </sc-if>
+      <sc-if value="{{x.showEmptyBus}}" hint-placeholder-val="{{ false }}">
+        <span style="position: relative; pointer-events: none; color: #6B7280; font: 12px 'Geist', sans-serif">empty box</span>
+      </sc-if>
+    </div>
+  </sc-for>
+
+  <sc-if value="{{showFold}}" hint-placeholder-val="{{ false }}">
+    <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: {{foldY}}px; z-index: 90; border-top: 2px dashed #E5484D; pointer-events: none">
+      <span style="position: absolute; right: 6px; top: 2px; padding: 1px 6px; border-radius: 3px; background: #E5484D; color: #FFFFFF; font: 11px 'Geist', sans-serif">screen bottom · page scrolls below</span>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{showEdge}}" hint-placeholder-val="{{ false }}">
+    <div aria-hidden="true" style="position: absolute; top: 0; bottom: 0; left: {{edgeX}}px; z-index: 90; border-left: 2px dashed #E5484D; pointer-events: none">
+      <span style="position: absolute; left: 4px; top: 6px; padding: 1px 6px; border-radius: 3px; background: #E5484D; color: #FFFFFF; font: 11px 'Geist', sans-serif; white-space: nowrap">screen edge · this page scrolls sideways</span>
+    </div>
+  </sc-if>
+
+  <sc-for list="{{dividers}}" as="d" hint-placeholder-count="3">
+    <button type="button" aria-label="Drag to resize" title="Drag to resize" onPointerDown="{{d.down}}" onPointerMove="{{d.move}}" onPointerUp="{{d.up}}" onPointerCancel="{{d.up}}" style="position: absolute; left: {{d.l}}px; top: {{d.t}}px; width: {{d.w}}px; height: {{d.h}}px; z-index: 95; padding: 0; border: 0; background: transparent; cursor: {{d.cursor}}; touch-action: none; display: flex; align-items: center; justify-content: center">
+      <span aria-hidden="true" style="width: {{d.gripW}}; height: {{d.gripH}}; border-radius: 999px; background: {{d.gripBg}}"></span>
+    </button>
+  </sc-for>
+
+  <sc-for list="{{chips}}" as="c" hint-placeholder-count="5">
+    <button type="button" draggable="{{c.draggable}}" onDragStart="{{c.dragStart}}" onDragEnd="{{c.dragEnd}}" onClick="{{c.select}}" title="{{c.title}}" style="position: absolute; {{c.pos}}; z-index: 100; display: flex; align-items: center; gap: 4px; max-width: {{c.maxW}}px; padding: 1px 6px; border: 0; border-radius: 4px; background: {{c.bg}}; color: #FFFFFF; font: 500 11px 'Geist', sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: {{c.cursor}}">
+      <sc-if value="{{c.draggable}}" hint-placeholder-val="{{ true }}"><svg width="9" height="11" viewBox="0 0 9 11" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1"></circle><circle cx="7" cy="2" r="1"></circle><circle cx="2" cy="5.5" r="1"></circle><circle cx="7" cy="5.5" r="1"></circle><circle cx="2" cy="9" r="1"></circle><circle cx="7" cy="9" r="1"></circle></svg></sc-if>
+      <span style="overflow: hidden; text-overflow: ellipsis">{{c.label}}</span>
+      <sc-if value="{{c.hasNote}}" hint-placeholder-val="{{ false }}"><span style="padding: 0 4px; border-radius: 3px; background: {{c.noteBg}}; color: #1A1B20">{{c.note}}</span></sc-if>
+    </button>
+  </sc-for>
+
+  <sc-if value="{{showToolbar}}" hint-placeholder-val="{{ false }}">
+    <div role="toolbar" aria-label="Box actions" style="position: absolute; left: {{tb.l}}px; top: {{tb.t}}px; z-index: 110; display: flex; gap: 2px; padding: 3px; border-radius: 7px; background: #17181C; box-shadow: 0 6px 16px rgba(0,0,0,0.25)">
+      <button type="button" onClick="{{tb.splitRow}}" title="Split left / right" aria-label="Split left and right" style="height: 26px; padding: 0 7px; border: 0; border-radius: 5px; background: transparent; color: #ECEEF2; font: 12px 'Geist', sans-serif; cursor: pointer; display: flex; align-items: center; gap: 4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M12 4v16"></path></svg>Split</button>
+      <button type="button" onClick="{{tb.splitCol}}" title="Split top / bottom" aria-label="Split top and bottom" style="height: 26px; padding: 0 7px; border: 0; border-radius: 5px; background: transparent; color: #ECEEF2; font: 12px 'Geist', sans-serif; cursor: pointer; display: flex; align-items: center; gap: 4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 12h18"></path></svg>Split</button>
+      <sc-if value="{{tb.hasParent}}" hint-placeholder-val="{{ true }}"><button type="button" onClick="{{tb.parent}}" title="Select the container around this box" aria-label="Select parent" style="height: 26px; padding: 0 7px; border: 0; border-radius: 5px; background: transparent; color: #ECEEF2; font: 12px 'Geist', sans-serif; cursor: pointer">↖ Parent</button></sc-if>
+      <sc-if value="{{tb.hasParent}}" hint-placeholder-val="{{ true }}"><button type="button" onClick="{{tb.remove}}" title="Delete box" aria-label="Delete box" style="width: 26px; height: 26px; border: 0; border-radius: 5px; background: transparent; color: #FFB4B9; cursor: pointer">✕</button></sc-if>
+    </div>
+  </sc-if>
+
+  <sc-for list="{{zones}}" as="zn" hint-placeholder-count="0">
+    <div onDragOver="{{zn.over}}" onDragEnter="{{zn.over}}" onDragLeave="{{zn.leave}}" onDrop="{{zn.drop}}" style="position: absolute; left: {{zn.l}}px; top: {{zn.t}}px; width: {{zn.w}}px; height: {{zn.h}}px; z-index: 120; box-sizing: border-box; border: {{zn.border}}; background: {{zn.bg}}; display: flex; align-items: center; justify-content: center; color: #26307F; font: 600 11px 'Geist', sans-serif">{{zn.label}}</div>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"b":{"editor":null},"$preview":{"width":896,"height":560}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { drag: null, moving: null, hoverZone: null };
+  }
+
+  /* ================= visual styles (tokens only) ================= */
+
+  static styles() {
+    const W1 = '255px 15px 225px 15px / 15px 225px 15px 255px';
+    const W2 = '15px 255px 15px 225px / 225px 15px 255px 15px';
+    const slot = (o) => Object.assign({ accent: '#3D4FD8', quoteBg: 'rgba(0,0,0,0.05)', bullet: '•', h1: '22px', h2: '17px', size: '14px', pad: '0', border: '0', radius: '0', bg: 'transparent', shadow: 'none' }, o);
+    return {
+      wire: {
+        label: 'Neutral', pageBg: 'background:#FFFFFF', font: "'Geist', sans-serif", fg: '#16181D',
+        surfaces: {
+          none: { css: '', fg: '#16181D' },
+          base: { css: 'background:#FFFFFF;border:1px solid #D5D9E2;border-radius:4px', fg: '#16181D' },
+          raised: { css: 'background:#F4F5F8;border:1px solid #D5D9E2;border-radius:4px', fg: '#16181D' },
+          accent: { css: 'background:#EEF0FF;border:1px solid #C9CEF5;border-radius:4px', fg: '#16181D' },
+          inverse: { css: 'background:#2A2E37;border-radius:4px', fg: '#FFFFFF' }
+        },
+        roles: {}, leafDefault: 'base',
+        slot: slot({ body: "'Geist', sans-serif", display: "'Geist', sans-serif" })
+      },
+      enterprise: {
+        label: 'Enterprise', pageBg: 'background:#F3F5F8', font: "'IBM Plex Sans', sans-serif", fg: '#14212F',
+        surfaces: {
+          none: { css: '', fg: '#14212F' },
+          base: { css: 'background:#FFFFFF;border:1px solid #D5DBE3;border-radius:6px;box-shadow:0 1px 2px rgba(20,33,47,0.06)', fg: '#14212F' },
+          raised: { css: 'background:#FFFFFF;border:1px solid #D5DBE3', fg: '#14212F' },
+          accent: { css: 'background:#E6EFFA;border:1px solid #B9D0EE;border-radius:6px', fg: '#0B3F86' },
+          inverse: { css: 'background:#0F2A4A', fg: '#FFFFFF' }
+        },
+        roles: { header: 'inverse', nav: 'raised', aside: 'raised', footer: 'raised', main: 'base' }, leafDefault: 'base',
+        slot: slot({ accent: '#0B63CE', quoteBg: '#EEF3F9', body: "'IBM Plex Sans', sans-serif", display: "'IBM Plex Sans', sans-serif" })
+      },
+      sketch: {
+        label: 'Sketch', pageBg: 'background-color:#FFFFFF;background-image:radial-gradient(#D9D9D9 1px, transparent 1px);background-size:22px 22px', font: "'Architects Daughter', cursive", fg: '#1E1E1E',
+        surfaces: {
+          none: { css: '', fg: '#1E1E1E' },
+          base: { css: 'background:#FFFFFF;border:2px solid #1E1E1E;border-radius:' + W1, fg: '#1E1E1E' },
+          raised: { css: 'background:#FFF3BF;border:2px solid #1E1E1E;border-radius:' + W2, fg: '#1E1E1E' },
+          accent: { css: 'background:#D0EBFF;border:2px solid #1E1E1E;border-radius:' + W1, fg: '#1E1E1E' },
+          inverse: { css: 'background:#1E1E1E;border-radius:' + W2, fg: '#FFFFFF' }
+        },
+        roles: { header: 'base', nav: 'raised', aside: 'raised', footer: 'base', main: 'base' }, leafDefault: 'base',
+        slot: slot({ accent: '#1971C2', quoteBg: '#FFF3BF', bullet: '–', body: "'Architects Daughter', cursive", display: "'Caveat', cursive", h1: '34px', h2: '26px', size: '16px' })
+      },
+      sections: {
+        label: 'Sections', pageBg: 'background:#F4F6F5', font: "'DM Sans', sans-serif", fg: '#101418',
+        surfaces: {
+          none: { css: '', fg: '#101418' },
+          base: { css: 'background:#FFFFFF;border-radius:14px;box-shadow:0 10px 30px rgba(16,20,24,0.08)', fg: '#101418' },
+          raised: { css: 'background:#DDEDEA;border-radius:14px', fg: '#101418' },
+          accent: { css: 'background:#FF5A36;border-radius:14px', fg: '#101418' },
+          inverse: { css: 'background:#101418', fg: '#FFFFFF' }
+        },
+        roles: { header: 'inverse', nav: 'raised', aside: 'accent', footer: 'inverse', main: 'base' }, leafDefault: 'base',
+        slot: slot({ accent: '#C2391A', quoteBg: 'rgba(16,20,24,0.06)', bullet: '→', body: "'DM Sans', sans-serif", display: "'Syne', sans-serif", h1: '28px', h2: '20px', size: '15px' })
+      },
+      terminal: {
+        label: 'Terminal', pageBg: 'background:#0E1110', font: "'JetBrains Mono', monospace", fg: '#D4DCD3',
+        surfaces: {
+          none: { css: '', fg: '#D4DCD3' },
+          base: { css: 'border:1px solid #33413A', fg: '#D4DCD3' },
+          raised: { css: 'background:#141A17;border:1px solid #33413A', fg: '#D4DCD3' },
+          accent: { css: 'border:1px solid #7EE787', fg: '#7EE787' },
+          inverse: { css: 'background:#7EE787', fg: '#0E1110' }
+        },
+        roles: { header: 'accent', nav: 'raised', aside: 'raised', footer: 'inverse', main: 'base' }, leafDefault: 'base',
+        slot: slot({ accent: '#7EE787', quoteBg: '#18201C', bullet: '*', body: "'JetBrains Mono', monospace", display: "'JetBrains Mono', monospace", h1: '18px', h2: '15px', size: '13px' })
+      },
+      retro: {
+        label: 'Retro', pageBg: 'background:#2A7F7F', font: 'Verdana, Tahoma, sans-serif', fg: '#000000',
+        surfaces: {
+          none: { css: '', fg: '#000000' },
+          base: { css: 'background:#C3C3C3;border:2px solid;border-color:#FFFFFF #404040 #404040 #FFFFFF;box-shadow:inset -1px -1px 0 #808080', fg: '#000000' },
+          raised: { css: 'background:#FFFFFF;border:2px solid;border-color:#808080 #FFFFFF #FFFFFF #808080', fg: '#000000' },
+          accent: { css: 'background:#FFFFE1;border:1px solid #000000', fg: '#000000' },
+          inverse: { css: 'background:#00007B;border:2px solid;border-color:#FFFFFF #404040 #404040 #FFFFFF', fg: '#FFFFFF' }
+        },
+        roles: { header: 'inverse', nav: 'base', aside: 'base', footer: 'base', main: 'raised' }, leafDefault: 'raised',
+        slot: slot({ accent: '#000080', quoteBg: '#FFFFE1', bullet: '■', body: 'Verdana, Tahoma, sans-serif', display: "'Pixelify Sans', sans-serif", h1: '22px', h2: '17px', size: '13px' })
+      },
+      fun: {
+        label: 'Fun', pageBg: 'background:#E9E3FF', font: "'Bricolage Grotesque', sans-serif", fg: '#111111',
+        surfaces: {
+          none: { css: '', fg: '#111111' },
+          base: { css: 'background:#FFFFFF;border:3px solid #111111;border-radius:18px;box-shadow:6px 6px 0 #111111', fg: '#111111' },
+          raised: { css: 'background:#8BE3BE;border:3px solid #111111;border-radius:18px;box-shadow:6px 6px 0 #111111', fg: '#111111' },
+          accent: { css: 'background:#FFD84D;border:3px solid #111111;border-radius:18px;box-shadow:6px 6px 0 #111111', fg: '#111111' },
+          inverse: { css: 'background:#111111;border-radius:18px', fg: '#FFD84D' }
+        },
+        roles: { header: 'accent', nav: 'raised', aside: 'raised', footer: 'inverse', main: 'base' }, leafDefault: 'base',
+        slot: slot({ accent: '#111111', quoteBg: 'rgba(255,255,255,0.6)', bullet: '→', body: "'Bricolage Grotesque', sans-serif", display: "'Bricolage Grotesque', sans-serif", h1: '32px', h2: '24px', size: '16px' })
+      },
+      cells: {
+        label: 'Cells', pageBg: 'background-color:#FFFBF7;background-image:radial-gradient(#E3D6CA 1.2px, transparent 1.2px);background-size:26px 26px', font: "'Nunito', sans-serif", fg: '#3A2414',
+        surfaces: {
+          none: { css: '', fg: '#3A2414' },
+          base: { css: 'background:#FDF0E1;border:2.5px solid #B5651D;border-radius:48px;box-shadow:0 0 36px rgba(240,150,70,0.4), inset 0 0 24px rgba(240,150,70,0.25)', fg: '#3A2414' },
+          raised: { css: 'background:#FFF7EF;border:2px solid #D9935A;border-radius:48px', fg: '#3A2414' },
+          accent: { css: 'background:#F8D2AA;border:2.5px solid #B5651D;border-radius:48px', fg: '#3A2414' },
+          inverse: { css: 'background:#B5651D;border-radius:48px', fg: '#FFFFFF' }
+        },
+        roles: { header: 'raised', nav: 'raised', aside: 'raised', footer: 'raised', main: 'base' }, leafDefault: 'base',
+        slot: slot({ accent: '#B5651D', quoteBg: 'rgba(255,255,255,0.6)', body: "'Nunito', sans-serif", display: "'Nunito', sans-serif", h1: '20px', h2: '16px', size: '14px' })
+      }
+    };
+  }
+
+  static density(name) {
+    const d = { compact: { gap: 4, pad: 4 }, tight: { gap: 8, pad: 8 }, comfortable: { gap: 16, pad: 16 }, spacious: { gap: 32, pad: 24 } }[name];
+    if (!d) throw new Error('bug: unknown density ' + name);
+    return d;
+  }
+
+  /* ================= pure layout engine ================= */
+
+  static layout(tree, page, viewport, content, mode, widgets) {
+    const D = Component.density(page.density);
+    const stack = viewport.w < 600 && page.phoneStack;
+    const padOf = (n, isRoot) => (n.pad !== null && n.pad !== undefined ? n.pad : (isRoot ? page.padding : (n.type === 'leaf' ? D.pad : 0)));
+    const gapOf = (n) => (n.gap !== null && n.gap !== undefined ? n.gap : D.gap);
+    const dirOf = (n) => (stack && n.dir === 'row' ? 'column' : n.dir);
+    const contentOf = (n) => {
+      if (mode === 'layout') return { w: content.w === null ? 0 : content.w, h: content.h };
+      if (!n.widget) return { w: 0, h: 64 };
+      const w = widgets[n.widget];
+      if (!w) throw new Error('bug: box ' + n.id + ' points at missing widget ' + n.widget);
+      const lines = w.source ? w.source.split('\n').filter((l) => l.trim() !== '').length : 3;
+      return { w: 0, h: 24 + lines * 28 };
+    };
+    const intrinsic = (n, axis, isRoot) => {
+      const p = padOf(n, isRoot), m = n.margin || 0;
+      if (n.type === 'leaf') { const c = contentOf(n); return (axis === 'w' ? c.w : c.h) + 2 * p + 2 * m; }
+      const main = dirOf(n) === 'row' ? 'w' : 'h';
+      const ks = n.children.map((k) => (axis === main && k.size.mode === 'fixed' && !(stack && n.dir === 'row') ? k.size.value + 2 * (k.margin || 0) : intrinsic(k, axis, false)));
+      const g = gapOf(n);
+      return (axis === main ? ks.reduce((a, b) => a + b, 0) + g * Math.max(0, ks.length - 1) : Math.max.apply(null, ks.concat([0]))) + 2 * p + 2 * m;
+    };
+    const childMain = (parent, c, main) => {
+      if (stack && parent.dir === 'row') {
+        if (c.size.mode === 'fixed') return Math.max(c.size.value, intrinsic(c, main, false));
+        return Math.max(intrinsic(c, main, false), 160);
+      }
+      if (c.size.mode === 'fixed') return c.size.value;
+      if (c.size.mode === 'auto') return intrinsic(c, main, false);
+      if (c.size.mode === 'fill') return null;
+      throw new Error('bug: unknown size mode ' + c.size.mode);
+    };
+    const out = { boxes: [], dividers: [], parents: {} };
+    const place = (n, x, y, w, h, depth, parentId, isRoot) => {
+      const m = n.margin || 0;
+      const bx = x + m, by = y + m, bw = Math.max(0, w - 2 * m), bh = Math.max(0, h - 2 * m);
+      const p = padOf(n, isRoot);
+      out.parents[n.id] = parentId;
+      const rec = { node: n, x: bx, y: by, w: bw, h: bh, depth, pad: p, overflowing: false, isRoot };
+      out.boxes.push(rec);
+      if (n.type === 'leaf') {
+        const c = contentOf(n);
+        rec.overW = c.w > bw - 2 * p + 0.5;
+        rec.overH = c.h > bh - 2 * p + 0.5;
+        return;
+      }
+      if (n.type !== 'split') throw new Error('bug: unknown box type ' + n.type);
+      const dir = dirOf(n), main = dir === 'row' ? 'w' : 'h', g = gapOf(n);
+      const cx = bx + p, cy = by + p, cw = Math.max(0, bw - 2 * p), ch = Math.max(0, bh - 2 * p);
+      const avail = (dir === 'row' ? cw : ch) - g * Math.max(0, n.children.length - 1);
+      const sizes = n.children.map((c) => childMain(n, c, main));
+      const fixedSum = sizes.reduce((a, s) => a + (s === null ? 0 : s), 0);
+      const weights = n.children.map((c, i) => (sizes[i] === null ? (c.size.value || 1) : 0));
+      const W = weights.reduce((a, b) => a + b, 0);
+      const rem = avail - fixedSum;
+      const final = sizes.map((s, i) => (s !== null ? s : (rem > 0 && W > 0 ? rem * weights[i] / W : 0)));
+      rec.overflowing = final.reduce((a, b) => a + b, 0) > avail + 0.5;
+      let cur = dir === 'row' ? cx : cy;
+      n.children.forEach((c, i) => {
+        const s = final[i];
+        if (dir === 'row') place(c, cur, cy, s, ch, depth + 1, n.id, false);
+        else place(c, cx, cur, cw, s, depth + 1, n.id, false);
+        if (i < n.children.length - 1) {
+          out.dividers.push({
+            splitId: n.id, index: i, dir, pa: final[i], pb: final[i + 1],
+            pos: cur + s + g / 2, crossStart: dir === 'row' ? cy : cx, crossLen: dir === 'row' ? ch : cw
+          });
+        }
+        cur += s + g;
+      });
+    };
+    const m0 = page.margin;
+    const rootW = viewport.w - 2 * m0;
+    const fitH = viewport.h - 2 * m0;
+    const rootH = page.mode === 'document' ? Math.max(fitH, intrinsic(tree, 'h', true)) : fitH;
+    if (page.mode !== 'document' && page.mode !== 'app') throw new Error('bug: unknown page mode ' + page.mode);
+    place(tree, m0, m0, rootW, rootH, 0, null, true);
+    out.height = rootH + 2 * m0;
+    return out;
+  }
+
+  static sizeLabel(n) {
+    if (n.size.mode === 'fill') return n.size.value === 1 ? 'fill' : 'fill ×' + n.size.value;
+    if (n.size.mode === 'fixed') return n.size.value + 'px';
+    return 'fit';
+  }
+
+  static isInside(tree, ancestorId, id) {
+    const find = (n) => (n.id === ancestorId ? n : (n.children || []).map(find).find(Boolean) || null);
+    const anc = find(tree);
+    if (!anc) return false;
+    const has = (n) => n.id === id || (n.children || []).some(has);
+    return has(anc);
+  }
+
+  /* ================= standalone demo ================= */
+
+  static demo() {
+    const leaf = (id, name, role, size, widget) => ({ id, name, role, type: 'leaf', size, pad: null, margin: 0, overflow: 'scroll', pin: 'none', widget: widget || null });
+    const noop = () => {};
+    return {
+      tree: {
+        id: 'root', name: 'Page', role: 'none', type: 'split', dir: 'column', size: { mode: 'fill', value: 1 }, pad: null, gap: null, margin: 0, overflow: 'scroll', pin: 'none',
+        children: [
+          leaf('header', 'Header', 'header', { mode: 'fixed', value: 64 }),
+          {
+            id: 'middle', name: 'Middle', role: 'none', type: 'split', dir: 'row', size: { mode: 'fill', value: 1 }, pad: null, gap: null, margin: 0, overflow: 'scroll', pin: 'none',
+            children: [leaf('nav', 'Nav', 'nav', { mode: 'fixed', value: 240 }), leaf('content', 'Content', 'main', { mode: 'fill', value: 1 }, 'w1')]
+          },
+          leaf('footer', 'Footer', 'footer', { mode: 'fixed', value: 48 })
+        ]
+      },
+      page: { mode: 'app', density: 'comfortable', margin: 0, padding: 16, phoneStack: true },
+      viewport: { id: 'desktop', w: 1280, h: 800 },
+      scale: 0.7,
+      mode: 'layout', editing: true, styleId: 'enterprise', selectedId: 'content', armed: false,
+      content: { w: null, h: 240 },
+      widgets: { w1: { kind: 'markdown', kindName: 'Markdown', source: '# Welcome\nThis box holds a **Markdown** widget.', pub: ['content:rendered'], sub: ['theme:changed'] } },
+      looks: {},
+      on: { select: noop, resizeLive: noop, resizeEnd: noop, move: noop, action: noop, place: noop }
+    };
+  }
+
+  /* ================= render ================= */
+
+  renderVals() {
+    const b = this.props.b ?? Component.demo();
+    const S = Component.styles();
+    const isLayout = b.mode === 'layout', isWidgets = b.mode === 'widgets', isStyle = b.mode === 'style', isActions = b.mode === 'actions';
+    if (!isLayout && !isWidgets && !isStyle && !isActions) throw new Error('bug: unknown boxes mode ' + b.mode);
+    const st = isStyle ? S[b.styleId] : S.wire;
+    if (!st) throw new Error('bug: unknown style ' + b.styleId);
+    const sc = b.scale;
+    const L = Component.layout(b.tree, b.page, b.viewport, b.content, b.mode, b.widgets);
+    /* The real page can be wider than the screen (fixed sizes that don't fit, wide margins): grow the frame and mark the screen edge. */
+    const right = L.boxes.reduce((mx, r) => Math.max(mx, r.x + r.w + (r.node.margin || 0)), 0) + b.page.margin;
+    const pageW = Math.max(b.viewport.w, right);
+    const frameW = Math.round(pageW * sc);
+    const frameH = Math.round(L.height * sc);
+    const px = (v) => Math.round(v * sc * 10) / 10;
+    const moving = this.state.moving;
+    const showChrome = b.editing;
+
+    const boxes = L.boxes.map((r) => {
+      const n = r.node;
+      const isLeaf = n.type === 'leaf';
+      const selected = b.selectedId === n.id && showChrome;
+      let skin;
+      if (isLayout || isActions) {
+        if (isLeaf) skin = 'background:' + (isActions && !n.widget ? '#F7F8FA' : '#EEF1F6') + ';border:1.5px solid #9AA3B5;border-radius:3px';
+        else skin = r.isRoot ? 'background:#FFFFFF' : 'background:rgba(91,104,232,0.035);border:1px dashed ' + (r.overflowing ? '#E5484D' : '#AEB5C2') + ';border-radius:3px';
+      } else {
+        const look = (b.looks && b.looks[n.id]) || 'auto';
+        const surfName = look !== 'auto' ? look : (st.roles[n.role] || (isLeaf ? st.leafDefault : 'none'));
+        const surf = st.surfaces[surfName];
+        if (!surf) throw new Error('bug: unknown surface ' + surfName);
+        skin = surf.css + ';color:' + surf.fg;
+        r.fg = surf.fg;
+      }
+      if (selected) skin += ';outline:2px solid #5B68E8;outline-offset:-1px';
+      const w = n.widget ? b.widgets[n.widget] : null;
+      if (n.widget && !w) throw new Error('bug: box ' + n.id + ' points at missing widget ' + n.widget);
+      const ovCss = isLeaf ? { scroll: 'auto', clip: 'hidden', visible: 'visible' }[n.overflow] : 'visible';
+      if (isLeaf && !ovCss) throw new Error('bug: unknown overflow ' + n.overflow + ' on box ' + n.id);
+      const armed = !!b.armed;
+      return {
+        id: n.id, name: n.name,
+        l: px(r.x), t: px(r.y), w: px(r.w), h: px(r.h), z: r.depth + 1,
+        padPx: isLeaf ? px(r.pad) : 0,
+        ov: isLeaf ? ovCss : 'visible',
+        skin,
+        selectable: isLeaf && showChrome && (isLayout || isActions),
+        select: () => b.on.select(n.id),
+        showSim: isLeaf && isLayout,
+        simW: b.content.w === null ? '100%' : px(b.content.w) + 'px',
+        simH: px(b.content.h) + 'px',
+        simLabel: (b.content.w === null ? 'fill' : b.content.w) + ' × ' + b.content.h,
+        hasWidget: isLeaf && !!w && (isWidgets || isStyle),
+        cell: w ? { kind: w.kind, kindName: w.kindName, source: w.source, isFilled: true, editing: false, selected: false, minHpx: '0px', t: Object.assign({}, st.slot, { fg: r.fg || st.fg }) } : null,
+        showPlaceholder: isLeaf && !w && showChrome && (isWidgets || isStyle),
+        phText: armed ? 'Place here' : '+ Add widget',
+        phBorder: armed ? '2px solid #5B68E8' : '1.5px dashed #8C95E8',
+        phBg: armed ? 'rgba(91,104,232,0.14)' : 'rgba(255,255,255,0.6)',
+        place: () => b.on.place(n.id),
+        allowDrop: (e) => { if (isLeaf && !w && (isWidgets || isStyle) && e && e.preventDefault) e.preventDefault(); },
+        drop: (e) => { if (!(isLeaf && !w && (isWidgets || isStyle))) return; if (e && e.preventDefault) e.preventDefault(); b.on.place(n.id); },
+        showBus: isLeaf && isActions && !!w,
+        showEmptyBus: isLeaf && isActions && !w,
+        kindName: w ? w.kindName : '',
+        pub: w ? w.pub.map((t) => ({ topic: t })) : [],
+        sub: w ? w.sub.map((t) => ({ topic: t })) : []
+      };
+    });
+
+    const chips = !showChrome ? [] : L.boxes.filter((r) => !r.isRoot && (r.node.type === 'leaf' || isLayout)).map((r) => {
+      const n = r.node;
+      const isLeaf = n.type === 'leaf';
+      let note = '';
+      let noteBg = '#F5B65B';
+      if (isLayout && isLeaf && (r.overW || r.overH)) {
+        note = n.overflow === 'scroll' ? 'scrolls' : n.overflow === 'clip' ? 'clipped' : 'spills';
+        noteBg = n.overflow === 'visible' ? '#FFB4B9' : '#F5B65B';
+      }
+      if (isLayout && !isLeaf && r.overflowing) { note = 'too full'; noteBg = '#FFB4B9'; }
+      const sel = b.selectedId === n.id;
+      const label = isLayout
+        ? (isLeaf ? n.name + ' · ' + Component.sizeLabel(n) : (n.dir === 'row' ? '⇆ ' : '⇅ ') + n.name + ' · ' + Component.sizeLabel(n))
+        : n.name;
+      const pos = isLeaf
+        ? 'left:' + (px(r.x) + 3) + 'px;top:' + (px(r.y) + 3) + 'px'
+        : 'right:' + Math.max(0, frameW - (px(r.x) + px(r.w)) + 3) + 'px;top:' + (px(r.y) + 3) + 'px';
+      return {
+        label, pos, note, hasNote: note !== '', noteBg,
+        maxW: Math.max(60, px(r.w) - 6),
+        title: isLayout ? 'Drag to move · click to select' : 'Select',
+        bg: sel ? '#5B68E8' : (isLeaf ? '#2A2E37' : '#6B7280'),
+        cursor: isLayout ? 'grab' : 'pointer',
+        draggable: isLayout,
+        select: () => b.on.select(n.id),
+        dragStart: (e) => { if (!isLayout) return; if (e && e.dataTransfer) e.dataTransfer.setData('text/plain', n.id); this.setState({ moving: n.id }); },
+        dragEnd: () => this.setState({ moving: null, hoverZone: null })
+      };
+    });
+
+    const dividers = !(isLayout && showChrome) ? [] : L.dividers.map((d) => {
+      const isRow = d.dir === 'row';
+      const key = d.splitId + ':' + d.index;
+      const active = this.state.drag && this.state.drag.key === key;
+      return {
+        l: isRow ? px(d.pos) - 5 : px(d.crossStart), t: isRow ? px(d.crossStart) : px(d.pos) - 5,
+        w: isRow ? 10 : px(d.crossLen), h: isRow ? px(d.crossLen) : 10,
+        cursor: isRow ? 'col-resize' : 'row-resize',
+        gripW: isRow ? '4px' : '36px', gripH: isRow ? '36px' : '4px',
+        gripBg: active ? '#5B68E8' : 'rgba(91,104,232,0.55)',
+        down: (e) => {
+          if (e && e.currentTarget && e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
+          this.setState({ drag: { key, splitId: d.splitId, index: d.index, pa: d.pa, pb: d.pb, dir: d.dir, x0: e.clientX, y0: e.clientY } });
+        },
+        move: (e) => {
+          const g = this.state.drag;
+          if (!g || g.key !== key) return;
+          const delta = ((g.dir === 'row' ? e.clientX - g.x0 : e.clientY - g.y0)) / sc;
+          b.on.resizeLive({ splitId: g.splitId, index: g.index, pa: g.pa, pb: g.pb, d: delta });
+        },
+        up: () => {
+          if (!this.state.drag || this.state.drag.key !== key) return;
+          this.setState({ drag: null });
+          b.on.resizeEnd();
+        }
+      };
+    });
+
+    let tb = {};
+    let showToolbar = false;
+    if (isLayout && showChrome && b.selectedId) {
+      const r = L.boxes.find((x) => x.node.id === b.selectedId);
+      if (r) {
+        showToolbar = true;
+        const below = px(r.y) + px(r.h) + 34 < frameH;
+        tb = {
+          l: Math.min(px(r.x) + 3, Math.max(0, frameW - 290)),
+          t: below ? px(r.y) + px(r.h) - 34 : Math.max(0, px(r.y) + 24),
+          hasParent: !r.isRoot,
+          splitRow: () => b.on.action(r.node.id, 'splitRow'),
+          splitCol: () => b.on.action(r.node.id, 'splitCol'),
+          parent: () => b.on.action(r.node.id, 'parent'),
+          remove: () => b.on.action(r.node.id, 'delete')
+        };
+      }
+    }
+
+    const zones = [];
+    if (moving && isLayout) {
+      L.boxes.forEach((r) => {
+        const n = r.node;
+        const blocked = Component.isInside(b.tree, moving, n.id);
+        if (blocked) return;
+        const X = px(r.x), Y = px(r.y), Wd = px(r.w), H = px(r.h);
+        const mk = (zone, l, t, w, h, label) => {
+          const key = n.id + ':' + zone;
+          const hot = this.state.hoverZone === key;
+          zones.push({
+            l, t, w, h, label: hot ? label : '',
+            border: hot ? '2px solid #5B68E8' : '1px dashed rgba(91,104,232,0.35)',
+            bg: hot ? 'rgba(91,104,232,0.25)' : 'transparent',
+            over: (e) => { if (e && e.preventDefault) e.preventDefault(); if (this.state.hoverZone !== key) this.setState({ hoverZone: key }); },
+            leave: () => { if (this.state.hoverZone === key) this.setState({ hoverZone: null }); },
+            drop: (e) => {
+              if (e && e.preventDefault) e.preventDefault();
+              const src = this.state.moving;
+              this.setState({ moving: null, hoverZone: null });
+              b.on.move(src, n.id, zone);
+            }
+          });
+        };
+        if (n.type === 'leaf') {
+          mk('left', X, Y, Wd * 0.25, H, '◀ before');
+          mk('right', X + Wd * 0.75, Y, Wd * 0.25, H, 'after ▶');
+          mk('top', X + Wd * 0.25, Y, Wd * 0.5, H * 0.25, '▲ above');
+          mk('bottom', X + Wd * 0.25, Y + H * 0.75, Wd * 0.5, H * 0.25, '▼ below');
+          mk('center', X + Wd * 0.25, Y + H * 0.25, Wd * 0.5, H * 0.5, '⇄ swap');
+        } else if (r.isRoot) {
+          mk('top', X, Y, Wd, 14, '▲ page top');
+          mk('bottom', X, Y + H - 14, Wd, 14, '▼ page bottom');
+          mk('left', X, Y + 14, 14, H - 28, '◀');
+          mk('right', X + Wd - 14, Y + 14, 14, H - 28, '▶');
+        }
+      });
+    }
+
+    return {
+      frameW, frameH, boxes, chips, dividers, zones,
+      showToolbar, tb,
+      showEdge: right > b.viewport.w + 0.5,
+      edgeX: px(b.viewport.w),
+      showFold: L.height > b.viewport.h + 0.5,
+      foldY: px(b.viewport.h),
+      pageBg: isLayout || isActions ? 'background:#F7F8FA' : st.pageBg,
+      font: st.font, fg: st.fg
+    };
+  }
+}
+</script>
+</body>
+</html>
