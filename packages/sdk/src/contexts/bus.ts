@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from 'node:async_hooks'
 import Value from 'typebox/value'
 import {
   fail, ok, sameInstance,
@@ -16,12 +15,8 @@ export interface BusContext extends Context {
   instances(): Instance[]
 }
 
-type Entry = { instance: Instance; component: Component & { dispose?(): void | Promise<void> } }
+type Entry = { instance: Instance; component: Component; ctx: Context }
 type BusInternals = { emitFrom(from: Instance, event: string, payload: unknown, scope?: Scope): Promise<Result<void>> }
-
-// Component.onAction receives only the invocation, so the scope (stack) a handler's
-// emits/calls inherit travels via async context: set around each delivery, read in child.emit.
-const current = new AsyncLocalStorage<{ owner: InstanceRef; stack: Invocation[] }>()
 
 const sameRoute = (a: Route, b: Route) =>
   sameInstance(a.from.instance, b.from.instance) && a.from.event === b.from.event &&
@@ -43,9 +38,14 @@ export function bus(opts: {
     const def = target.instance.manifest.consumes.find(a => a.name === inv.action)
     if (!def) return err('unknown-action', `no action ${inv.action}`)
     if (!Value.Check(def.input, inv.input)) return err('validation', `payload invalid for ${inv.action}`)
-    const store = { owner: inv.target, stack: [...inv.stack, inv] }
+    const scope = { stack: [...inv.stack, inv] }
+    const scopedCtx: Context = {
+      capabilities: () => target.ctx.capabilities(),
+      emit: (e, p) => target.ctx.emit(e, p, scope),
+      call: (t, a, i) => target.ctx.call(t, a, i, scope),
+    }
     // Deliver without awaiting; sync throws and rejections both become 'handler'.
-    Promise.resolve().then(() => current.run(store, () => target.component.onAction(inv)))
+    Promise.resolve().then(() => target.component.onAction(scopedCtx, inv))
       .catch(e => err('handler', String(e?.message ?? e)))
   }
 
@@ -80,7 +80,7 @@ export function bus(opts: {
       }
       const ctx = (wrap ?? (c => c))(child(self, inst))
       const component = await factory.create(ctx, inst)
-      entries.push({ instance: inst, component })
+      entries.push({ instance: inst, component, ctx })
       return inst
     },
     async unregister(ref) {
@@ -88,7 +88,7 @@ export function bus(opts: {
       if (i < 0) return
       const [e] = entries.splice(i, 1)
       routes = routes.filter(r => !sameInstance(r.from.instance, ref) && !sameInstance(r.to.instance, ref))
-      await e.component.dispose?.()
+      await e.component.dispose()
     },
     route(r) { if (!routes.some(x => sameRoute(x, r))) routes.push(r) },
     unroute(r) { routes = routes.filter(x => !sameRoute(x, r)) },
@@ -99,14 +99,9 @@ export function bus(opts: {
 
 export function child(b: BusContext, self: Instance): Context {
   const inner = b as BusContext & BusInternals
-  // Explicit scope wins; otherwise inherit the stack of the delivery this code is running inside.
-  const scopeOf = (s?: Scope) => s ?? (() => {
-    const cur = current.getStore()
-    return cur && sameInstance(cur.owner, self) ? { stack: cur.stack } : undefined
-  })()
   return {
     capabilities: () => b.capabilities(),
-    emit: (event, payload, scope) => inner.emitFrom(self, event, payload, scopeOf(scope)),
-    call: (target, action, input, scope) => b.call(target, action, input, scopeOf(scope)),
+    emit: (event, payload, scope) => inner.emitFrom(self, event, payload, scope),
+    call: (target, action, input, scope) => b.call(target, action, input, scope),
   }
 }

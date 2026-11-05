@@ -17,10 +17,10 @@ export const echoFactory = (author: string, id: string) => {
     manifest: echoManifest(author, id),
     create(ctx) {
       state.ctx = ctx
-      const c: Component & { dispose(): void } = {
+      const c: Component = {
         manifest: factory.manifest,
-        onAction: async inv => { received.push(inv); return ok(inv.input) },
-        dispose() { state.disposed++ },
+        onAction: async (_c, inv) => { received.push(inv); return ok(inv.input) },
+        dispose: async () => { state.disposed++ },
       }
       return c
     },

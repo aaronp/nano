@@ -128,8 +128,9 @@ export type Context = {
 }
 export type Component = {
   manifest: Manifest
-  onAction(inv: Invocation): Promise<Result<unknown>>
+  onAction(ctx: Context, inv: Invocation): Promise<Result<unknown>>
   mount?(el: HTMLElement): void | Promise<void>
+  dispose(): Promise<void>
   environment?(): Environment
 }
 export type ComponentFactory = {

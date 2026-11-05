@@ -48,7 +48,7 @@ test('emit of unknown event or bad payload returns error code validation', async
 const consumer = (onAction: Component['onAction'] = async () => ok(null)): ComponentFactory => {
   const manifest = defineManifest({ id: { author: 'x', id: 'n' }, version: '0.1.0', emits: [],
     consumes: [{ name: 'log', input: Type.Object({ n: Type.Number() }) }] })
-  return { manifest, create: () => ({ manifest, onAction }) }
+  return { manifest, create: () => ({ manifest, onAction, dispose: async () => {} }) }
 }
 
 test('delivery payload invalid for target input is not delivered', async () => {
@@ -66,7 +66,7 @@ test('delivery payload invalid for target input is not delivered', async () => {
 test('throwing receiver does not block other receivers', async () => {
   const { bus, errors } = setup()
   const fa = echoFactory('x', 'e'), good = echoFactory('x', 'e')
-  const bad: ComponentFactory = { manifest: fa.manifest, create: () => ({ manifest: fa.manifest, onAction: async () => { throw new Error('boom') } }) }
+  const bad: ComponentFactory = { manifest: fa.manifest, create: () => ({ manifest: fa.manifest, onAction: async () => { throw new Error('boom') }, dispose: async () => {} }) }
   await bus.register(fa, 'a'); await bus.register(bad, 'bad'); await bus.register(good, 'good')
   route(bus, 'a', 'bad'); route(bus, 'a', 'good')
   await fa.state.ctx!.emit('fired', { text: 'hi' })
@@ -101,10 +101,8 @@ test('re-register after unregister delivers exactly once', async () => {
 test('invocation scoped ctx extends stack', async () => {
   const { bus } = setup()
   const fa = echoFactory('x', 'e'), fc = echoFactory('x', 'e'), fb = echoFactory('x', 'e')
-  let bctx: any
-  const b: ComponentFactory = { manifest: fb.manifest, create: ctx => {
-    bctx = ctx
-    return { manifest: fb.manifest, onAction: async () => { await flush(); await bctx.emit('fired', { text: 'again' }); return ok(null) } }
+  const b: ComponentFactory = { manifest: fb.manifest, create: () => {
+    return { manifest: fb.manifest, dispose: async () => {}, onAction: async (sctx) => { await flush(); await sctx.emit('fired', { text: 'again' }); return ok(null) } }
   } }
   await bus.register(fa, 'a'); await bus.register(b, 'b'); await bus.register(fc, 'c')
   route(bus, 'a', 'b'); route(bus, 'b', 'c')
