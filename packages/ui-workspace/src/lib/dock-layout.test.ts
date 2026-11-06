@@ -1,0 +1,24 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { countPanels, initialLayout, panelIds, readWidgetId } from './dock-layout.ts';
+
+const e = (id: string) => ({ id, title: id.toUpperCase() });
+
+test('starting layouts follow the arrangement', () => {
+  const one = initialLayout([e('notes')], 'grid');
+  assert.equal(one.root.type, 'component');
+  const tabs = initialLayout([e('a'), e('b')], 'stack');
+  assert.equal(tabs.root.type, 'stack');
+  const grid = initialLayout([e('a'), e('b'), e('c')], 'grid');
+  assert.equal(grid.root.type, 'row');
+  assert.deepEqual(panelIds(grid.root), ['a', 'b', 'c']);
+  assert.equal(countPanels(grid.root), 3);
+  assert.throws(() => initialLayout([], 'row'), /at least one panel/);
+});
+
+test('panel state is strict so corrupt saved layouts fail loudly', () => {
+  assert.equal(readWidgetId({ widget: 'chart' }), 'chart');
+  assert.throws(() => readWidgetId({ widget: '<b>' }), /must be/);
+  assert.throws(() => readWidgetId(null), /must be/);
+  assert.throws(() => panelIds({ type: 'row', content: [{ type: 'component', componentState: {} }] }), /must be/);
+});

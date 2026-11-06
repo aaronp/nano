@@ -1,0 +1,12 @@
+/**
+ * Entry point. The theme is applied first (boot-theme), then components register and upgrade the page.
+ * The workspace registers last so the drawer's "add widget" links exist when it wires them up.
+ */
+import './boot-theme.ts';
+import './composable.ts';
+import './components/app-shell.ts';
+import './components/split-pane.ts';
+import './components/theme-picker.ts';
+import './widgets/widgets.ts';
+import './widgets/notes-panel.ts';
+import './components/workspace-dock.ts';

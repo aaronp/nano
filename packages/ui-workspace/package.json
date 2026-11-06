@@ -1,0 +1,20 @@
+{
+  "name": "@composable/ui-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Host site: the workspace shell starter, hosting @composable components at build time (in markup) and at runtime (in the dock).",
+  "scripts": {
+    "build": "bun build src/main.ts --outfile public/main.js --format esm --minify --sourcemap=linked --loader .css:text",
+    "dev": "bun build src/main.ts --outfile public/main.js --format esm --sourcemap=linked --loader .css:text --watch",
+    "serve": "bunx serve public"
+  },
+  "dependencies": {
+    "@composable/sdk": "workspace:*",
+    "@composable/ui": "workspace:*",
+    "@composable/widgets": "workspace:*",
+    "golden-layout": "^2.6.0",
+    "lit": "^3.3.3",
+    "typebox": "^1.4.0"
+  }
+}
