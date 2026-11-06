@@ -1,12 +1,12 @@
-import { Contexts, type Factory } from '@composable/sdk'
+import { Scopes, type ComponentFactory } from '@composable/sdk'
 import { mount } from '@composable/ui'
 import { chart, count, counter, debug, log, mapIn, mapped, mapper, push, setInput, setValue, slider, valueChanged } from '.'
 import { defineElements } from './views'
 
 defineElements()
-const scope = Contexts.scope({ onError: (e, info) => console.error(e, info) })
+const scope = Scopes.create({ onError: (e, info) => console.error(e, info) })
 const page = scope.context('page')
-const place = async (name: string, factory: Factory, tag: string) =>
+const place = async (name: string, factory: ComponentFactory, tag: string) =>
   mount(await scope.add(name, factory), tag, document.getElementById(name)!)
 
 await place('log', log, 'flow-log')           // first, so it shows everything that follows

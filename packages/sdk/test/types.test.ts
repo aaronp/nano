@@ -1,10 +1,10 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
 import Value from 'typebox/value'
-import { defineManifest, ComponentId, Instance, Manifest, OpDef } from '../src'
+import { ComponentId, Instance, Manifest, OpDef } from '../src'
 
 test('manifest round-trips through structuredClone and still validates payloads', () => {
-  const m = defineManifest({ id: { author: 'acme', id: 'x' }, ops: [{ name: 'fired', output: Type.Object({ text: Type.String() }) }] })
+  const m: Manifest = { id: { author: 'acme', id: 'x' }, ops: [{ name: 'fired', output: Type.Object({ text: Type.String() }) }] }
   expect(Value.Check(Manifest, m)).toBe(true)
   const cloned = structuredClone(JSON.parse(JSON.stringify(m)))
   expect(Value.Check(cloned.ops[0].output, { text: 'a' })).toBe(true)

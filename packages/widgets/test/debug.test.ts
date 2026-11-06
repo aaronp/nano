@@ -1,9 +1,9 @@
 import { test, expect } from 'bun:test'
-import { Contexts } from '@composable/sdk'
+import { Scopes } from '@composable/sdk'
 import { debug, onEvent, setInput, submitted } from '../src'
 
 test('debug widget runs headless: set-input, submit, table records the sender; on-event stays internal', async () => {
-  const scope = Contexts.scope(), page = scope.context('page')
+  const scope = Scopes.create(), page = scope.context('page')
   const { input, table } = (await scope.add('debug', debug)).children
   await page.call('debug', setInput, 'hello')
   expect(input.state.value).toBe('hello')

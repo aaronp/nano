@@ -1,9 +1,9 @@
 import { test, expect } from 'bun:test'
-import { Contexts } from '@composable/sdk'
+import { Scopes } from '@composable/sdk'
 import { chart, count, counter, log, mapIn, mapped, mapper, push, setValue, slider, valueChanged } from '../src'
 
-test('slider → doubler → chart and slider → counter (routed); log sees every publication with its origin', async () => {
-  const scope = Contexts.scope({ onError: e => { throw e } }), page = scope.context('page')
+test('slider → doubler → chart and slider → counter (routed); log sees every publication, grouped by correlation', async () => {
+  const scope = Scopes.create({ onError: e => { throw e } }), page = scope.context('page')
   const l = await scope.add('log', log)
   await scope.add('slider', slider)
   const d = await scope.add('doubler', mapper({ label: 'x2', fn: x => x * 2 }))
@@ -20,9 +20,14 @@ test('slider → doubler → chart and slider → counter (routed); log sees eve
   expect(c.state.points).toEqual([20, 40, 60])
   expect(k.state.n).toBe(3)
   const rows = l.state.rows.slice().reverse()
-  expect(rows.map(r => `${r.from}:${r.op}:${JSON.stringify(r.payload)}<-${r.origin}@${r.depth}`)).toEqual([
-    'slider:value-changed:10<-page@2', 'doubler:mapped:20<-page@4',
-    'slider:value-changed:20<-page@2', 'doubler:mapped:40<-page@4', 'counter:reached:2<-page@4',
-    'slider:value-changed:30<-page@2', 'doubler:mapped:60<-page@4',
+  expect(rows.map(r => `${r.from}:${r.op}:${JSON.stringify(r.payload)}`)).toEqual([
+    'slider:value-changed:10', 'doubler:mapped:20',
+    'slider:value-changed:20', 'doubler:mapped:40', 'counter:reached:2',
+    'slider:value-changed:30', 'doubler:mapped:60',
+  ])
+  // Each page call is one trigger: everything it caused shares its correlation.
+  const by = Object.groupBy(rows, r => r.correlation)
+  expect(Object.values(by).map(g => g!.map(r => r.op))).toEqual([
+    ['value-changed', 'mapped'], ['value-changed', 'mapped', 'reached'], ['value-changed', 'mapped'],
   ])
 })

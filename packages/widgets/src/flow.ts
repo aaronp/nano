@@ -1,5 +1,5 @@
 import Type from 'typebox'
-import { Components, roleOf, type Op } from '@composable/sdk'
+import { Components, roleOf } from '@composable/sdk'
 
 // ---- slider: publishes its value; set-value moves it ----
 const S = Components.declare({ author: 'composable', id: 'slider' })
@@ -37,19 +37,18 @@ export const chart = Ch.define({
 })
 
 // ---- log: an observer; watches the instances and subscribes to every publication they declare ----
-export type LogRow = { at: string; from: string; op: string; payload: unknown; origin: string; depth: number }
+export type LogRow = { at: string; from: string; op: string; payload: unknown; correlation: string }
 const L = Components.declare({ author: 'composable', id: 'log' })
 export const log = L.define({
   state: () => ({ rows: [] as LogRow[] }),
-  setup: ({ state, ctx, changed }) => {
+  setup: ({ state, appContext: ctx, changed }) => {
     const offs = new Map<string, () => void>()
     const unwatch = ctx.watch(list => {
       for (const op of list.flatMap(i => i.manifest.ops).filter(o => roleOf(o) === 'publication')) {
         if (offs.has(op.name)) continue
-        offs.set(op.name, ctx.subscribe(undefined, op as Op, (payload, d) => {
+        offs.set(op.name, ctx.subscribe(op, (payload, d) => {
           state.rows = [{
-            at: new Date().toLocaleTimeString(), from: d.from, op: op.name.split('/').pop()!, payload,
-            origin: d.stack[0].from, depth: d.stack.length,
+            at: new Date().toLocaleTimeString(), from: d.from, op: op.name.split('/').pop()!, payload, correlation: d.correlation,
           }, ...state.rows].slice(0, 30)
           changed()
         }))

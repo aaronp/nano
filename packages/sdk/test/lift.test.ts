@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
-import { Components, Contexts } from '../src'
+import { Components, Scopes } from '../src'
 
 const MyThing = {
   echo: Type.Function([Type.Object({ x: Type.String() })], Type.String(), { description: 'Return x' }),
@@ -12,7 +12,7 @@ const myThing = Components.lift({ author: 'acme', id: 'my-thing' }, MyThing, {
   repeat: ({ y, times }) => y.repeat(times),
   slow: async () => 42,
 })
-const root = () => { const s = Contexts.scope(); return Object.assign(s, { page: s.context('page') }) }
+const root = () => { const s = Scopes.create(); return Object.assign(s, { page: s.context('page') }) }
 
 test('lift: one action per function, named from the id, described, with object input', () => {
   expect(myThing.manifest.ops.map(a => [a.name, a.description])).toEqual([

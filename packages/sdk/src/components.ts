@@ -1,25 +1,21 @@
 import type { Static, TFunction, TSchema } from 'typebox'
-import { scoped, stackOf } from './context'
-import { scope, type ErrorInfo } from './contexts/scope'
+import { Scopes, type ErrorInfo } from './contexts/scope'
 import {
-  fail, ok, roleOf,
-  type Component, type ComponentFactory, type ComponentId, type Context, type Input, type Invocation,
-  type Manifest, type Op, type Output, type Result, type SystemError,
+  fail, ok, roleOf, routeProblem,
+  type Component, type ComponentFactory, type ComponentId, type Context, type Created, type Input, type Invocation,
+  type Manifest, type Op, type Output, type Publication, type Result, type SystemError,
 } from './types'
 
 type Handler<P extends Op, S> =
-  (input: Input<P>, on: { state: S; ctx: Context; inv: Invocation }) => Result<unknown> | void | Promise<Result<unknown> | void>
+  (input: Input<P>, h: { state: S; ctx: Context; inv: Invocation }) => Result<Output<P>> | void | Promise<Result<Output<P>> | void>
 
 /** A component made by `declare(...).define`: its state, a publish for UI-originated publications, and change notification. */
 export type Model<S> = Component & {
   state: S
+  /** Publish from the UI: each call starts a new correlation (it is a new trigger). */
   publish: Context['publish']
   onChange(fn: () => void): () => void
 }
-/** A factory whose `create` result type is known, so composites and views get typed children. */
-export type Factory<C extends Component = Component> = ComponentFactory & { create(ctx: Context): Promise<C> }
-/** The component a factory creates (what `scope.add` resolves to). */
-export type Created<F extends Factory> = Awaited<ReturnType<F['create']>>
 
 /**
  * Start a component. Ops are named `author/id/name` from its id, and `define` derives the manifest from them,
@@ -36,37 +32,37 @@ function declare(id: ComponentId) {
       const op = { name: `${ns}/${name}`, description, ...shape }; ops.push(op); return op
     },
     /**
-     * `handlers`: one per op that has an input (it may arrive by call or be fed from a publication). Handlers get
-     * the per-call ctx (keeps the stack). `setup` runs once when created (subscribe, watch, start timers); call
-     * `changed()` after mutating state outside a handler so views re-render. Whatever it returns runs on dispose.
+     * `handlers`: one per op that has an input (it may arrive by call or be fed from a publication); a handler's
+     * `ctx` carries the correlation of what invoked it. `setup` runs once when created: use `mountContext` to react
+     * to the mount, and keep `appContext` (each of its operations is a new trigger). Call `changed()` after
+     * mutating state outside a handler so views re-render. What `setup` returns runs on dispose.
      */
     define<S, const H extends readonly Op[] = []>(opts: {
       state: () => S
       handlers?: { [K in keyof H]: readonly [H[K], Handler<H[K], S>] }
-      setup?: (on: { state: S; ctx: Context; changed: () => void }) => void | (() => void)
-      dispose?: (state: S) => void | Promise<void>
-    }): Factory<Model<S>> {
+      setup?: (m: { state: S; mountContext: Context; appContext: Context; changed: () => void }) => void | (() => void)
+    }): ComponentFactory<Model<S>> {
       const handlers = new Map((opts.handlers ?? []).map(([op, h]) => [op.name, h as Handler<Op, S>]))
-      for (const op of ops) if (op.input && !handlers.has(op.name)) throw new Error(`${ns}: no handler for ${op.name}`)
-      const manifest: Manifest = { id, ops }
+      const manifest: Manifest = { id, ops: [...ops] }
+      for (const op of manifest.ops) if (op.input && !handlers.has(op.name)) throw new Error(`${ns}: no handler for ${op.name}`)
       return {
         manifest,
-        async create(ctx) {
+        async create({ mountContext, appContext }) {
           const state = opts.state(), listeners = new Set<() => void>()
           const changed = () => listeners.forEach(f => f())
-          const cleanup = opts.setup?.({ state, ctx, changed })
+          const cleanup = opts.setup?.({ state, mountContext, appContext, changed })
           return {
             state,
             onChange: fn => (listeners.add(fn), () => listeners.delete(fn)),
-            publish: async (op, p) => { const r = await ctx.publish(op, p); changed(); return r },
-            async onAction(c, inv) {
+            publish: async (op, p) => { const r = await appContext.publish(op, p); changed(); return r },
+            async onAction(ctx, inv) {
               const h = handlers.get(inv.op)
               if (!h) return fail('unknown-action', `no handler for ${inv.op}`)
-              const r = await h(inv.input as never, { state, ctx: c, inv })
+              const r = await h(inv.input as never, { state, ctx, inv })
               changed()
               return r ?? ok(undefined)
             },
-            dispose: async () => { cleanup?.(); await opts.dispose?.(state) },
+            dispose: () => cleanup?.(),
           }
         },
       }
@@ -86,13 +82,13 @@ export const Manifests = { compose }
 /** A child op, bound to the child's name: `input(submitted)`. */
 export type Bound<P extends Op = Op> = { child: string; op: P }
 /** What `use` returns: call it with one of the child's ops to bind it for `route`. */
-export type Handle<F extends Factory = Factory> = (<P extends Op>(op: P) => Bound<P>) & { child: string; factory: F }
+export type Handle<F extends ComponentFactory<any> = ComponentFactory<any>> = (<P extends Op>(op: P) => Bound<P>) & { child: string; factory: F }
 export type Builder = {
   /**
    * Add a child. `wrap` derives its context (everything it publishes, calls or subscribes to goes through it
    * first); `outer` is the composite's own context, for passing things through to the outside.
    */
-  use<F extends Factory>(name: string, factory: F, wrap?: (ctx: Context, outer: Context) => Context): Handle<F>
+  use<F extends ComponentFactory<any>>(name: string, factory: F, wrap?: (ctx: Context, outer: Context) => Context): Handle<F>
   /** Feed one child's publication into another child's op. */
   route(from: Bound, to: Bound): void
   /** Which child ops make up the composite's manifest (default: all of them). */
@@ -103,16 +99,16 @@ export type Composite<R extends Record<string, Handle>> = Component & { children
 /**
  * One component from named children, built once when defined; every mistake throws here, not at runtime.
  * Children live in the composite's own scope, invisible from outside. Exposed ops with an input are delegated to
- * the child that has them; exposed publications are re-published as the composite's own. Return the handles to
- * get typed `children`. Errors inside go to `onError` (default: console).
+ * the child that has them; exposed publications are re-published as the composite's own. Correlation carries
+ * across the boundary both ways. Return the handles to get typed `children`. Errors inside go to `onError`.
  */
 function composite<const R extends Record<string, Handle>>(
   meta: { id: ComponentId; onError?: (e: SystemError, info: ErrorInfo) => void }, build: (c: Builder) => R,
-): Factory<Composite<R>> {
-  const uses: { name: string; factory: Factory; wrap?: (ctx: Context, outer: Context) => Context }[] = []
+): ComponentFactory<Composite<R>> {
+  const uses: { name: string; factory: ComponentFactory<any>; wrap?: (ctx: Context, outer: Context) => Context }[] = []
   const routes: [Bound, Bound][] = []
   let shown: Op[] | undefined
-  const opOf = (b: Bound) => uses.find(u => u.name === b.child)!.factory.manifest.ops.find(o => o.name === b.op.name)
+  const manifestOf = (child: string) => uses.find(u => u.name === child)?.factory.manifest
   const children = build({
     use(name, factory, wrap) {
       if (uses.some(u => u.name === name)) throw new Error(`duplicate child "${name}"`)
@@ -120,9 +116,8 @@ function composite<const R extends Record<string, Handle>>(
       return Object.assign(<P extends Op>(op: P) => ({ child: name, op }), { child: name, factory })
     },
     route(from, to) {
-      const f = opOf(from), t = opOf(to)
-      if (!f || roleOf(f) !== 'publication') throw new Error(`route: child "${from.child}" does not publish ${from.op.name}`)
-      if (!t?.input) throw new Error(`route: child "${to.child}" has no op ${to.op.name} taking input`)
+      const problem = routeProblem(manifestOf(from.child), from.op, manifestOf(to.child), to.op, { from: from.child, to: to.child })
+      if (problem) throw new Error(`route: ${problem}`)
       routes.push([from, to])
     },
     expose(...ops) { shown = [...(shown ?? []), ...ops] },
@@ -131,23 +126,26 @@ function composite<const R extends Record<string, Handle>>(
   for (const o of shown ?? []) if (!all.some(x => x.name === o.name)) throw new Error(`expose: no child has ${o.name}`)
   const pick = (o: Op) => !shown || shown.some(s => s.name === o.name)
   const manifest = compose(meta.id, { id: meta.id, ops: all.filter(pick) })
-  const owner = new Map(uses.flatMap(u => u.factory.manifest.ops.filter(o => o.input && pick(o)).map(o => [o.name, u.name])))
+  const owner = new Map(uses.flatMap(u => u.factory.manifest.ops.filter(o => o.input && pick(o)).map(o => [o.name, { child: u.name, op: o }])))
 
   return {
     manifest,
-    async create(outer) {
-      const inner = scope({ onError: meta.onError ?? ((e, info) => console.error(e, info)) })
+    async create({ mountContext, appContext: outer }) {
+      const inner = Scopes.create({ onError: meta.onError ?? ((e, info) => console.error(e, info)) })
       try {
-        for (const u of uses) await inner.add(u.name, u.factory, u.wrap && (c => u.wrap!(c, outer)))
+        for (const u of uses) await inner.add(u.name, u.factory, { wrap: u.wrap && (c => u.wrap!(c, outer)), correlation: mountContext.correlation })
       } catch (err) { await inner.clear(); throw err }
       for (const [f, t] of routes) inner.route(f.child, f.op, t.child, t.op)
-      // The composite inside its own scope: re-publishes exposed child publications outside, keeping their stack.
+      // The composite inside its own scope: re-publishes exposed child publications outside, same correlation.
       const host = inner.context(outer.self)
       for (const u of uses) for (const op of u.factory.manifest.ops.filter(o => roleOf(o) === 'publication' && pick(o)))
-        host.subscribe(u.name, op as Op, (p, d) => scoped(outer, d.stack).publish(op as Op, p))
+        host.subscribe(op, (p, d) => outer.within(d.correlation).publish(op as Publication, p as never), { from: u.name })
       return {
         children: Object.fromEntries(Object.entries(children).map(([k, h]) => [k, inner.component(h.child)])) as Composite<R>['children'],
-        onAction: (c, inv) => scoped(host, stackOf(c)).call(owner.get(inv.op)!, { name: inv.op, input: {} as TSchema }, inv.input as never),
+        onAction: (_c, inv) => {
+          const o = owner.get(inv.op)!
+          return host.within(inv.correlation).call(o.child, o.op as Op<TSchema>, inv.input as never)
+        },
         dispose: () => inner.clear(),
       }
     },
@@ -182,7 +180,7 @@ function lift<const A extends Record<string, Fn>>(id: ComponentId, api: A, impl:
 }
 
 /** A typed proxy over `ctx.call`: `client(ctx, 'thing', myThing.ops).repeat({ y: 'ab', times: 3 })`. Never throws. */
-function client<const A extends Record<string, Op>>(ctx: Context, target: string, ops: A) {
+function client<const A extends Record<string, Op<TSchema, TSchema | undefined>>>(ctx: Context, target: string, ops: A) {
   return Object.fromEntries(Object.entries(ops).map(([k, op]) => [k, (input: unknown) => ctx.call(target, op, input as never)])) as
     { [K in keyof A]: (input: Input<A[K]>) => Promise<Result<Output<A[K]>>> }
 }

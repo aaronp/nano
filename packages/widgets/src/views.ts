@@ -68,9 +68,9 @@ export class ChartView extends View<Created<typeof chart>> {
 export class LogView extends View<Created<typeof log>> {
   render() {
     return html`<table>
-      <thead><tr><th>Time</th><th>From</th><th>Op</th><th>Payload</th><th>Origin</th><th>Depth</th></tr></thead>
+      <thead><tr><th>Time</th><th>From</th><th>Op</th><th>Payload</th><th>Correlation</th></tr></thead>
       <tbody>${this.component.state.rows.map(r => html`<tr>
-        <td>${r.at}</td><td>${r.from}</td><td><code>${r.op}</code></td><td><code>${JSON.stringify(r.payload)}</code></td><td>${r.origin}</td><td>${r.depth}</td>
+        <td>${r.at}</td><td>${r.from}</td><td><code>${r.op}</code></td><td><code>${JSON.stringify(r.payload)}</code></td><td><code>${r.correlation}</code></td>
       </tr>`)}</tbody>
     </table>`
   }
