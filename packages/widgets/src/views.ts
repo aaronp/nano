@@ -22,10 +22,14 @@ export class EventsTableView extends View<Created<typeof eventsTable>> {
   }
 }
 
+/** Renders its children's views from their classes, so it works whatever tags the host registered them under. */
 export class DebugView extends View<Created<typeof debug>> {
+  #input = new TextEmitView()
+  #table = new EventsTableView()
   render() {
     const { input, table } = this.component.children
-    return html`<text-emit .component=${input}></text-emit><events-table .component=${table}></events-table>`
+    this.#input.component = input; this.#table.component = table
+    return html`${this.#input}${this.#table}`
   }
 }
 
@@ -76,14 +80,15 @@ export class LogView extends View<Created<typeof log>> {
   }
 }
 
-/** Register the views under their default tags. Call once; hosts that want other tags define the classes themselves. */
-export const defineElements = () => {
-  customElements.define('text-emit', TextEmitView)
-  customElements.define('events-table', EventsTableView)
-  customElements.define('debug-panel', DebugView)
-  customElements.define('flow-slider', SliderView)
-  customElements.define('flow-mapper', MapperView)
-  customElements.define('flow-counter', CounterView)
-  customElements.define('flow-chart', ChartView)
-  customElements.define('flow-log', LogView)
+export const views = {
+  'text-emit': TextEmitView, 'events-table': EventsTableView, 'debug-panel': DebugView,
+  'flow-slider': SliderView, 'flow-mapper': MapperView, 'flow-counter': CounterView, 'flow-chart': ChartView, 'flow-log': LogView,
+}
+
+/**
+ * Register the views as `${prefix}<name>` (e.g. 'acme-text-emit'). Already-registered tags are left alone, so
+ * calling twice is safe; a second copy of this package can live alongside under its own prefix.
+ */
+export const defineElements = (prefix = '') => {
+  for (const [name, view] of Object.entries(views)) if (!customElements.get(prefix + name)) customElements.define(prefix + name, view)
 }

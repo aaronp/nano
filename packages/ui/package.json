@@ -2,6 +2,14 @@
   "name": "@composable/ui",
   "version": "0.1.0",
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": { "@composable/sdk": "workspace:*", "lit": "^3.0.0" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "@composable/sdk": "workspace:*",
+    "lit": "^3.0.0"
+  },
+  "scripts": {
+    "build": "bun ../../scripts/build-package.ts ."
+  }
 }
