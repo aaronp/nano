@@ -19,12 +19,12 @@
 <body>
   <main>
     <div class="flow">
-      <section><h2>slider <small>source</small></h2><div id="slider"></div></section>
-      <section><h2>doubler <small>subscribes → mapped</small></h2><div id="doubler"></div></section>
-      <section><h2>counter <small>subscribes → reached</small></h2><div id="counter"></div></section>
-      <section><h2>chart <small>sink, routed from doubler</small></h2><div id="chart"></div></section>
+      <section><h2>slider <small>publishes value-changed</small></h2><div id="slider"></div></section>
+      <section><h2>doubler <small>in → mapped</small></h2><div id="doubler"></div></section>
+      <section><h2>counter <small>count → reached</small></h2><div id="counter"></div></section>
+      <section><h2>chart <small>push ← doubler</small></h2><div id="chart"></div></section>
     </div>
-    <section><h2>log <small>watches and subscribes to everything</small></h2><div id="log"></div></section>
+    <section><h2>log <small>subscribes to every publication</small></h2><div id="log"></div></section>
     <section><h2>debug <small>composite</small></h2><p><button id="hello">Call set-input from the page</button></p><div id="debug"></div></section>
   </main>
   <script type="module" src="./src/main.ts"></script>

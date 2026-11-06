@@ -6,7 +6,7 @@ import { submitted, valueChanged, type chart, type counter, type debug, type eve
 export class TextEmitView extends View<Created<typeof textEmit>> {
   render() {
     const c = this.component
-    return html`<form @submit=${(e: Event) => { e.preventDefault(); void c.emit(submitted, c.state.value) }}>
+    return html`<form @submit=${(e: Event) => { e.preventDefault(); void c.publish(submitted, c.state.value) }}>
       <input aria-label="Message" .value=${c.state.value} @input=${(e: Event) => { c.state.value = (e.target as HTMLInputElement).value }}>
       <button>Send</button>
     </form>`
@@ -34,7 +34,7 @@ export class SliderView extends View<Created<typeof slider>> {
     const c = this.component
     return html`<label>Value <output>${c.state.value}</output>
       <input type="range" min="0" max="100" .value=${String(c.state.value)}
-        @input=${(e: Event) => { c.state.value = Number((e.target as HTMLInputElement).value); void c.emit(valueChanged, c.state.value) }}>
+        @input=${(e: Event) => { c.state.value = Number((e.target as HTMLInputElement).value); void c.publish(valueChanged, c.state.value) }}>
     </label>`
   }
 }
@@ -50,7 +50,7 @@ export class MapperView extends View<Created<ReturnType<typeof mapper>>> {
 export class CounterView extends View<Created<ReturnType<typeof counter>>> {
   render() {
     const s = this.component.state
-    return html`<p class="big">${s.n}</p><small>emits <code>reached</code> every ${s.every}</small>`
+    return html`<p class="big">${s.n}</p><small>publishes <code>reached</code> every ${s.every}</small>`
   }
 }
 
@@ -68,9 +68,9 @@ export class ChartView extends View<Created<typeof chart>> {
 export class LogView extends View<Created<typeof log>> {
   render() {
     return html`<table>
-      <thead><tr><th>Time</th><th>From</th><th>Event</th><th>Payload</th><th>Origin</th><th>Depth</th></tr></thead>
+      <thead><tr><th>Time</th><th>From</th><th>Op</th><th>Payload</th><th>Origin</th><th>Depth</th></tr></thead>
       <tbody>${this.component.state.rows.map(r => html`<tr>
-        <td>${r.at}</td><td>${r.from}</td><td><code>${r.event}</code></td><td><code>${JSON.stringify(r.payload)}</code></td><td>${r.origin}</td><td>${r.depth}</td>
+        <td>${r.at}</td><td>${r.from}</td><td><code>${r.op}</code></td><td><code>${JSON.stringify(r.payload)}</code></td><td>${r.origin}</td><td>${r.depth}</td>
       </tr>`)}</tbody>
     </table>`
   }

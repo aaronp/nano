@@ -11,27 +11,21 @@ export const ComponentId = Type.Object({
 }, { title: 'ComponentId', description: 'Identity of a component type (not of a running instance).' })
 export type ComponentId = Static<typeof ComponentId>
 
-export const EventDef = Type.Object({
-  name: Type.String({ description: 'Qualified event name, `author/component/event`.', examples: ['acme/button/clicked'] }),
-  schema: AnySchema,
-  description: Type.Optional(Type.String({ description: 'What the event means, for people choosing what to allow.' })),
-}, { title: 'EventDef', description: 'An event a component can emit, with the schema of its payload.' })
-export type EventDef = Static<typeof EventDef>
-
-export const ActionDef = Type.Object({
-  name: Type.String({ description: 'Qualified action name, `author/component/action`.', examples: ['acme/logger/log'] }),
-  input: AnySchema,
+export const OpDef = Type.Object({
+  name: Type.String({ description: 'Qualified name, `author/component/op`.', examples: ['acme/chart/push'] }),
+  description: Type.Optional(Type.String({ description: 'What it does or means, for people choosing what to allow.' })),
+  input: Type.Optional(AnySchema),
   output: Type.Optional(AnySchema),
-  description: Type.Optional(Type.String({ description: 'What the action does, for people choosing what to allow.' })),
-}, { title: 'ActionDef', description: 'An action a component can handle, with input and optional output schemas.' })
-export type ActionDef = Static<typeof ActionDef>
+}, {
+  title: 'OpDef',
+  description: 'An operation. Input and output: an action. Output only: a publication. Input only: a subscription.',
+})
+export type OpDef = Static<typeof OpDef>
 
 export const Manifest = Type.Object({
   id: ComponentId,
-  version: Type.String({ description: 'Semantic version of the component.', examples: ['0.1.0'] }),
-  emits: Type.Array(EventDef, { description: 'Events this component may emit.' }),
-  consumes: Type.Array(ActionDef, { description: 'Actions this component handles.' }),
-}, { title: 'Manifest', description: 'Declares what a component emits and consumes.' })
+  ops: Type.Array(OpDef, { description: 'Everything this component handles, publishes or can consume.' }),
+}, { title: 'Manifest', description: 'Declares a component\'s operations.' })
 export type Manifest = Static<typeof Manifest>
 
 export const Instance = Type.Object({
@@ -54,46 +48,49 @@ export type Result<T> =
   | { type: 'not-allowed'; reason: string }
   | { type: 'error'; error: SystemError }
 
-/** One step of a causal chain: who sent which event or action. `stack` lists these, oldest (the origin) first. */
+/** One step of a causal chain: who published or called which op. `stack` lists these, oldest (the origin) first. */
 export type Frame = { from: string; name: string }
-export type Invocation = { id: string; from: string; target: string; action: string; input: unknown; stack: Frame[] }
-/** What a subscriber learns about an event besides its payload; `ctx` is the subscriber's, carrying the stack. */
-export type Delivery = { from: string; event: string; stack: Frame[]; ctx: Context }
+export type Invocation = { id: string; from: string; target: string; op: string; input: unknown; stack: Frame[] }
+/** What a subscriber learns besides the payload; `ctx` is the subscriber's own, carrying the stack. */
+export type Delivery = { from: string; op: string; stack: Frame[]; ctx: Context }
 
-/** Typed views of EventDef / ActionDef: the schema types flow into emit, call, on and handlers. */
-export type Event<S extends TSchema = TSchema> = { name: string; schema: S; description?: string }
-export type Action<I extends TSchema = TSchema, O extends TSchema | undefined = TSchema | undefined> =
-  { name: string; input: I; output?: O; description?: string }
-export type Output<A extends Action> = A extends Action<any, infer O> ? (O extends TSchema ? Static<O> : unknown) : unknown
+/** A typed OpDef: the schema types flow into publish, subscribe, call and handlers. */
+export type Op<I extends TSchema | undefined = TSchema | undefined, O extends TSchema | undefined = TSchema | undefined> =
+  { name: string; description?: string; input?: I; output?: O }
+export type Input<P extends Op> = P extends Op<infer I, any> ? (I extends TSchema ? Static<I> : never) : never
+export type Output<P extends Op> = P extends Op<any, infer O> ? (O extends TSchema ? Static<O> : unknown) : unknown
+export type Role = 'action' | 'publication' | 'subscription'
+export const roleOf = (op: OpDef): Role => op.input ? (op.output ? 'action' : 'subscription') : 'publication'
 
 /** Intents: what a context is asked to do. `with*` wrappers see and transform these. */
-export type Emitted = { event: Event; payload: unknown; stack: Frame[] }
-export type Called = { target: string; action: Action; input: unknown; stack: Frame[] }
-export type Subscribed = { event: Event; from?: string; fn: (payload: unknown, d: Delivery) => unknown }
-export type EmitFn = (e: Emitted) => Promise<Result<void>>
+export type Published = { op: Op; payload: unknown; stack: Frame[] }
+export type Called = { target: string; op: Op; input: unknown; stack: Frame[] }
+export type Subscribed = { from?: string; op: Op; fn: (payload: unknown, d: Delivery) => unknown }
+export type PublishFn = (p: Published) => Promise<Result<void>>
 export type CallFn = (c: Called) => Promise<Result<unknown>>
-export type OnFn = (s: Subscribed) => () => void
+export type SubscribeFn = (s: Subscribed) => () => void
 
 /**
- * What a component acts through: a bus (`emit` / `on`), the instances it can see, and `call`.
+ * What a component acts through: its manifest, the instances it can see, and publish / subscribe / call.
  * A parent derives a child's context with the `with*` wrappers; the last added runs first.
  */
 export interface Context {
   readonly self: string
-  emit<E extends Event>(event: E, payload: Static<E['schema']>): Promise<Result<void>>
-  /** Listen for `event` (from anyone, or only `opts.from`). Delivery is synchronous; returns unsubscribe. */
-  on<E extends Event>(event: E, fn: (payload: Static<E['schema']>, d: Delivery) => unknown, opts?: { from?: string }): () => void
-  call<A extends Action>(target: string, action: A, input: Static<A['input']>): Promise<Result<Output<A>>>
+  readonly manifest: Manifest
+  publish<P extends Op>(op: P, payload: Output<P>): Promise<Result<void>>
+  /** Receive `op`'s publications from `from` (undefined: from anyone). Synchronous delivery; returns unsubscribe. */
+  subscribe<P extends Op>(from: string | undefined, op: P, fn: (payload: Output<P>, d: Delivery) => unknown): () => void
+  call<P extends Op>(target: string, op: P, input: Input<P>): Promise<Result<Output<P>>>
   instances(): Instance[]
   /** Called now and whenever instances are added or removed. */
   watch(fn: (instances: Instance[]) => void): () => void
-  withEmit(fn: (e: Emitted, next: EmitFn) => Promise<Result<void>>): Context
+  withPublish(fn: (p: Published, next: PublishFn) => Promise<Result<void>>): Context
   withCall(fn: (c: Called, next: CallFn) => Promise<Result<unknown>>): Context
-  withOn(fn: (s: Subscribed, next: OnFn) => () => void): Context
+  withSubscribe(fn: (s: Subscribed, next: SubscribeFn) => () => void): Context
   withInstances(fn: (list: Instance[]) => Instance[]): Context
 }
 
-/** Receives actions. Emitting is the other half (a source), done through `Context.emit`. */
+/** Handles every op that has an input, whether it arrives by `call` or is fed from a publication. */
 export type DataSink = { onAction(ctx: Context, inv: Invocation): Promise<Result<unknown>> }
 export type Component = DataSink & { dispose?(): void | Promise<void> }
 export type ComponentFactory = {

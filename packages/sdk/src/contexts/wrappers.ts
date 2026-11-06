@@ -1,26 +1,26 @@
-import { notAllowed, ok, type CallFn, type Called, type EmitFn, type Emitted, type OnFn, type Result, type Subscribed } from '../types'
+import { notAllowed, ok, type CallFn, type Called, type PublishFn, type Published, type Result, type SubscribeFn, type Subscribed } from '../types'
 
-type EmitWrap = (e: Emitted, next: EmitFn) => Promise<Result<void>>
+type PublishWrap = (p: Published, next: PublishFn) => Promise<Result<void>>
 type CallWrap = (c: Called, next: CallFn) => Promise<Result<unknown>>
-type OnWrap = (s: Subscribed, next: OnFn) => () => void
+type SubscribeWrap = (s: Subscribed, next: SubscribeFn) => () => void
 // A throwing predicate counts as false; a throwing sink is ignored.
 const test = <T>(p: (x: T) => boolean, x: T) => { try { return p(x) } catch { return false } }
 const quietly = (f: () => void) => { try { f() } catch {} }
 
-/** Wrappers for `ctx.withEmit(...)`. */
-export const Emits = {
-  map: (f: (e: Emitted) => Emitted): EmitWrap => (e, next) => next(f(e)),
-  filter: (p: (e: Emitted) => boolean): EmitWrap => (e, next) => test(p, e) ? next(e) : Promise.resolve(notAllowed('filtered')),
-  trace: (sink: (e: Emitted, r: Result<void>) => void): EmitWrap => async (e, next) => {
+/** Wrappers for `ctx.withPublish(...)`. */
+export const Publications = {
+  map: (f: (e: Published) => Published): PublishWrap => (e, next) => next(f(e)),
+  filter: (p: (e: Published) => boolean): PublishWrap => (e, next) => test(p, e) ? next(e) : Promise.resolve(notAllowed('filtered')),
+  trace: (sink: (e: Published, r: Result<void>) => void): PublishWrap => async (e, next) => {
     const r = await next(e); quietly(() => sink(e, r)); return r
   },
-  /** Only the last emit of each event within `ms` goes out; callers get success immediately. */
-  debounce: (ms: number): EmitWrap => {
+  /** Only the last publication of each op within `ms` goes out; callers get success immediately. */
+  debounce: (ms: number): PublishWrap => {
     // ponytail: pending timers are not cleared on dispose; add teardown if contexts get a dispose hook.
     const timers = new Map<string, ReturnType<typeof setTimeout>>()
     return async (e, next) => {
-      clearTimeout(timers.get(e.event.name))
-      timers.set(e.event.name, setTimeout(() => { timers.delete(e.event.name); void next(e) }, ms))
+      clearTimeout(timers.get(e.op.name))
+      timers.set(e.op.name, setTimeout(() => { timers.delete(e.op.name); void next(e) }, ms))
       return ok(undefined)
     }
   },
@@ -35,7 +35,7 @@ export const Calls = {
   },
 }
 
-/** Wrappers for `ctx.withOn(...)`: decide what a component may listen to. */
+/** Wrappers for `ctx.withSubscribe(...)`: decide what a component may listen to. */
 export const Subscriptions = {
-  filter: (p: (s: Subscribed) => boolean): OnWrap => (s, next) => test(p, s) ? next(s) : () => {},
+  filter: (p: (s: Subscribed) => boolean): SubscribeWrap => (s, next) => test(p, s) ? next(s) : () => {},
 }

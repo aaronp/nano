@@ -1,58 +1,54 @@
 import Type from 'typebox'
-import { Components, type Event } from '@composable/sdk'
+import { Components, roleOf, type Op } from '@composable/sdk'
 
-// ---- slider: a source (and a sink: set-value moves it) ----
-const S = Components.declare({ author: 'composable', id: 'slider' }, '0.1.0')
-export const valueChanged = S.event('value-changed', 'The slider moved to a new value', Type.Number({ minimum: 0, maximum: 100 }))
-export const setValue = S.action('set-value', 'Move the slider', Type.Number({ minimum: 0, maximum: 100 }))
+// ---- slider: publishes its value; set-value moves it ----
+const S = Components.declare({ author: 'composable', id: 'slider' })
+export const valueChanged = S.op('value-changed', 'The slider moved to a new value', { output: Type.Number({ minimum: 0, maximum: 100 }) })
+export const setValue = S.op('set-value', 'Move the slider', { input: Type.Number({ minimum: 0, maximum: 100 }) })
 export const slider = S.define({
   state: () => ({ value: 50 }),
-  actions: [[setValue, (v, { state, ctx }) => { state.value = v; return ctx.emit(valueChanged, v) }]],
+  handlers: [[setValue, (v, { state, ctx }) => { state.value = v; return ctx.publish(valueChanged, v) }]],
 })
 
-// ---- mapper: listens for an event (from anyone), emits fn(value) ----
-const M = Components.declare({ author: 'composable', id: 'mapper' }, '0.1.0')
-export const mapped = M.event('mapped', 'The input after the mapping function', Type.Number())
-export const mapper = (opts: { label: string; from: Event; fn: (x: number) => number }) => M.define({
+// ---- mapper: consumes a number, publishes fn(number) ----
+const M = Components.declare({ author: 'composable', id: 'mapper' })
+export const mapIn = M.op('in', 'A number to map', { input: Type.Number() })
+export const mapped = M.op('mapped', 'The input after the mapping function', { output: Type.Number() })
+export const mapper = (opts: { label: string; fn: (x: number) => number }) => M.define({
   state: () => ({ label: opts.label, input: undefined as number | undefined, output: undefined as number | undefined }),
-  setup: ({ state, ctx, changed }) => ctx.on(opts.from, (x, d) => {
-    state.input = x as number; state.output = opts.fn(state.input); changed()
-    void d.ctx.emit(mapped, state.output)
-  }),
+  handlers: [[mapIn, (x, { state, ctx }) => { state.input = x; state.output = opts.fn(x); return ctx.publish(mapped, state.output) }]],
 })
 
-// ---- counter: every N events, emits its own ----
-const C = Components.declare({ author: 'composable', id: 'counter' }, '0.1.0')
-export const reached = C.event('reached', 'The count reached a multiple of N', Type.Integer())
-export const counter = (opts: { every: number; from: Event }) => C.define({
+// ---- counter: counts what it consumes; every N, publishes ----
+const C = Components.declare({ author: 'composable', id: 'counter' })
+export const count = C.op('count', 'Anything to count', { input: Type.Unknown() })
+export const reached = C.op('reached', 'The count reached a multiple of N', { output: Type.Integer() })
+export const counter = (opts: { every: number }) => C.define({
   state: () => ({ n: 0, every: opts.every }),
-  setup: ({ state, ctx, changed }) => ctx.on(opts.from, (_x, d) => {
-    if (++state.n % state.every === 0) void d.ctx.emit(reached, state.n)
-    changed()
-  }),
+  handlers: [[count, (_x, { state, ctx }) => { if (++state.n % state.every === 0) return ctx.publish(reached, state.n) }]],
 })
 
-// ---- chart: a sink, fed by a route into its declared action ----
-const Ch = Components.declare({ author: 'composable', id: 'chart' }, '0.1.0')
-export const push = Ch.action('push', 'Add a point to the chart', Type.Number())
+// ---- chart: consumes points ----
+const Ch = Components.declare({ author: 'composable', id: 'chart' })
+export const push = Ch.op('push', 'Add a point to the chart', { input: Type.Number() })
 export const chart = Ch.define({
   state: () => ({ points: [] as number[] }),
-  actions: [[push, (v, { state }) => { state.points = [...state.points, v].slice(-60) }]],
+  handlers: [[push, (v, { state }) => { state.points = [...state.points, v].slice(-60) }]],
 })
 
-// ---- log: watches the environment and listens to every event any instance declares ----
-export type LogRow = { at: string; from: string; event: string; payload: unknown; origin: string; depth: number }
-const L = Components.declare({ author: 'composable', id: 'log' }, '0.1.0')
+// ---- log: an observer; watches the instances and subscribes to every publication they declare ----
+export type LogRow = { at: string; from: string; op: string; payload: unknown; origin: string; depth: number }
+const L = Components.declare({ author: 'composable', id: 'log' })
 export const log = L.define({
   state: () => ({ rows: [] as LogRow[] }),
   setup: ({ state, ctx, changed }) => {
     const offs = new Map<string, () => void>()
     const unwatch = ctx.watch(list => {
-      for (const e of list.flatMap(i => i.manifest.emits)) {
-        if (offs.has(e.name)) continue
-        offs.set(e.name, ctx.on(e as Event, (payload, d) => {
+      for (const op of list.flatMap(i => i.manifest.ops).filter(o => roleOf(o) === 'publication')) {
+        if (offs.has(op.name)) continue
+        offs.set(op.name, ctx.subscribe(undefined, op as Op, (payload, d) => {
           state.rows = [{
-            at: new Date().toLocaleTimeString(), from: d.from, event: e.name.split('/').pop()!, payload,
+            at: new Date().toLocaleTimeString(), from: d.from, op: op.name.split('/').pop()!, payload,
             origin: d.stack[0].from, depth: d.stack.length,
           }, ...state.rows].slice(0, 30)
           changed()

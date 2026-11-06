@@ -7,9 +7,9 @@ test('debug widget runs headless: set-input, submit, table records the sender; o
   const { input, table } = (await scope.add('debug', debug)).children
   await page.call('debug', setInput, 'hello')
   expect(input.state.value).toBe('hello')
-  await input.emit(submitted, input.state.value)
+  await input.publish(submitted, input.state.value)
   await new Promise(r => setTimeout(r, 0))
   expect(table.state.rows.map(r => [r.from, r.data])).toEqual([['input', 'hello']])
-  expect(debug.manifest.consumes.map(a => a.name)).toEqual([setInput.name])
+  expect(debug.manifest.ops.map(o => o.name)).toEqual([submitted.name, setInput.name])
   expect((await page.call('debug', onEvent, 'x')).type).toBe('error')
 })
