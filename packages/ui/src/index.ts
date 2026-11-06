@@ -20,3 +20,5 @@ export class View<C extends Component = Component> extends LitElement {
 /** Append a view of `component` to `el`: `view` is a registered tag or the view's (registered) class. */
 export const mount = (component: Component, view: string | CustomElementConstructor, el: Element) =>
   el.appendChild(Object.assign(typeof view === 'string' ? document.createElement(view) : new view(), { component }))
+
+export { tokens, t, base, applyTheme, themes, type Theme, type Token } from './theme'

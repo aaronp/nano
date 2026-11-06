@@ -1,9 +1,13 @@
 import { Scopes, type ComponentFactory } from '@composable/sdk'
-import { mount } from '@composable/ui'
+import { applyTheme, mount, themes } from '@composable/ui'
 import { chart, count, counter, debug, log, mapIn, mapped, mapper, push, setInput, setValue, slider, valueChanged } from '.'
 import { defineElements } from './views'
 
 defineElements()
+const pick = document.querySelector<HTMLSelectElement>('#theme')!
+const theme = (name: keyof typeof themes) => { pick.value = name; applyTheme(document.documentElement, themes[name]) }
+theme(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+pick.addEventListener('change', () => theme(pick.value as keyof typeof themes))
 const scope = Scopes.create({ onError: (e, info) => console.error(e, info) })
 const page = scope.context('page')
 const place = async (name: string, factory: ComponentFactory, tag: string) =>
