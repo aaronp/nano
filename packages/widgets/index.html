@@ -3,12 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Widgets debug</title>
-  <style>body { font: 14px system-ui, sans-serif; margin: 2rem; } main { display: grid; gap: 1rem; max-width: 40rem; }</style>
+  <title>Widget flow demo</title>
+  <style>
+    :root { --bg: #fafaf9; --card: #fff; --ink: #1c1917; --muted: #78716c; --line: #e7e5e4; --accent: #2563eb; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #1c1917; --card: #292524; --ink: #f5f5f4; --muted: #a8a29e; --line: #44403c; --accent: #60a5fa; } }
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 0; padding: 1.5rem 1rem; background: var(--bg); color: var(--ink); }
+    main { max-width: 64rem; margin: 0 auto; display: grid; gap: 1rem; }
+    .flow { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+    section { background: var(--card); border: 1px solid var(--line); border-radius: .5rem; padding: .75rem 1rem; min-width: 0; overflow-x: auto; }
+    h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 .5rem; }
+    h2 small { text-transform: none; letter-spacing: 0; }
+    flow-chart { color: var(--accent); }
+  </style>
 </head>
 <body>
-  <p><button id="hello">Call set-input from the page</button></p>
-  <main></main>
+  <main>
+    <div class="flow">
+      <section><h2>slider <small>source</small></h2><div id="slider"></div></section>
+      <section><h2>doubler <small>subscribes → mapped</small></h2><div id="doubler"></div></section>
+      <section><h2>counter <small>subscribes → reached</small></h2><div id="counter"></div></section>
+      <section><h2>chart <small>sink, routed from doubler</small></h2><div id="chart"></div></section>
+    </div>
+    <section><h2>log <small>watches and subscribes to everything</small></h2><div id="log"></div></section>
+    <section><h2>debug <small>composite</small></h2><p><button id="hello">Call set-input from the page</button></p><div id="debug"></div></section>
+  </main>
   <script type="module" src="./src/main.ts"></script>
 </body>
 </html>

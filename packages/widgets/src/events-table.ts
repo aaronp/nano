@@ -6,5 +6,5 @@ export const onEvent = C.action('on-event', 'Add a row recording the payload and
 
 export const eventsTable = C.define({
   state: () => ({ rows: [] as { at: string; from: string; data: unknown }[] }),
-  actions: [[onEvent, (data, { state, inv }) => { state.rows.push({ at: new Date().toLocaleTimeString(), from: inv.from.instance, data }) }]],
+  actions: [[onEvent, (data, { state, inv }) => { state.rows.push({ at: new Date().toLocaleTimeString(), from: inv.from, data }) }]],
 })

@@ -1,9 +1,9 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
-import { Components, Contexts, Emits, Manifests, defineManifest, fail, ok, type Action, type Context, type Created, type Event, type Factory, type Invocation, type SystemError } from '../src'
-import { rootRef } from './fixtures'
+import { Calls, Components, Contexts, Emits, Manifests, fail, ok, type Action, type Context, type Event, type Factory } from '../src'
 
 const flush = () => new Promise(r => setTimeout(r, 0))
+const meta = (id: string) => ({ id: { author: 't', id }, version: '0' })
 
 const S = Components.declare({ author: 't', id: 'speaker' }, '0')
 const said = S.event('said', 'Something was said', Type.String())
@@ -16,31 +16,25 @@ const speaker = S.define({
 const L = Components.declare({ author: 't', id: 'listener' }, '0')
 const hear = L.action('hear', 'Record something heard', Type.String())
 const add = L.action('add', 'Add two numbers', Type.Object({ a: Type.Number(), b: Type.Number() }), Type.Number())
-const heard: { s: string; from: string }[] = []
-const listener = L.define({
-  state: () => null,
-  actions: [
-    [hear, (s, { inv }) => { heard.push({ s, from: inv.from.instance }) }],
-    [add, ({ a, b }) => a + b > 100 ? fail('handler', 'too big') : ok(a + b)],
-  ],
-})
-
-const root = () => {
-  const errors: SystemError[] = []
-  const b = Contexts.registry({
-    self: { ...rootRef, manifest: defineManifest({ id: { author: 't', id: 'root' }, version: '0', emits: [], consumes: [] }) },
-    onDeliveryError: e => errors.push(e),
+const listener = () => {
+  const heard: { s: string; from: string; origin: string }[] = []
+  const f = L.define({
+    state: () => heard,
+    actions: [
+      [hear, (s, { inv }) => { heard.push({ s, from: inv.from, origin: inv.stack[0]?.from ?? inv.from }) }],
+      [add, ({ a, b }) => a + b > 100 ? fail('handler', 'too big') : ok(a + b)],
+    ],
   })
-  return Object.assign(b, { errors })
+  return Object.assign(f, { heard })
 }
-const pair = (opts: { expose?: (Event | Action)[]; wrapS?: (c: Context) => Context } = {}) =>
-  Components.compose({ id: { author: 't', id: 'pair' }, version: '0' }, c => {
-    const s = c.use('s', speaker, opts.wrapS), l = c.use('l', listener)
-    c.route(s(said), l(hear))
+
+const pair = (l = listener(), opts: { expose?: (Event | Action)[]; wrapS?: (c: Context, outer: Context) => Context } = {}) =>
+  Components.compose(meta('pair'), c => {
+    const s = c.use('s', speaker, opts.wrapS), li = c.use('l', l)
+    c.route(s(said), li(hear))
     if (opts.expose) c.expose(...opts.expose)
-    return { s, l }
+    return { s, l: li }
   })
-const meta = (id: string) => ({ id: { author: 't', id }, version: '0' })
 
 test('declare names from the id and derives the manifest; define requires every handler', () => {
   expect(speaker.manifest).toMatchObject({ emits: [{ name: 't/speaker/said', description: 'Something was said' }], consumes: [{ name: 't/speaker/say' }] })
@@ -49,133 +43,134 @@ test('declare names from the id and derives the manifest; define requires every 
   expect(() => X.define({ state: () => 0, actions: [] })).toThrow('no handler for t/x/a')
 })
 
-test('handlers return a Result (typed call output) or nothing', async () => {
-  const b = root()
-  const l = await b.register(listener, 'l')
-  const r = await b.call(l, add, { a: 1, b: 2 })
+test('handlers return a Result (typed call output) or nothing; the model notifies and emits', async () => {
+  const s = Contexts.scope(), page = s.context('page')
+  const l = listener(); await s.add('l', l)
+  const r = await page.call('l', add, { a: 1, b: 2 })
   expect(r).toEqual(ok(3))
-  if (r.type === 'success') { const n: number = r.data; expect(n).toBe(3) }
-  expect((await b.call(l, add, { a: 100, b: 2 })).type).toBe('error')
-  expect(await b.call(l, hear, 'x')).toEqual(ok(undefined))
-})
+  expect((await page.call('l', add, { a: 100, b: 2 })).type).toBe('error')
+  expect(await page.call('l', hear, 'x')).toEqual(ok(undefined))
 
-test('model notifies on change and emits UI-originated events', async () => {
-  const b = root()
-  const s = await b.register(speaker, 's')
-  const model = b.component(s) as Created<typeof speaker>
+  const model = await s.add('s', speaker)
   let changes = 0
   const off = model.onChange(() => changes++)
-  await b.call(s, say, 'a')
-  expect(model.state.count).toBe(1)
+  await page.call('s', say, 'a')
   expect((await model.emit(said, 'b')).type).toBe('success')
-  off(); await b.call(s, say, 'c')
-  expect(changes).toBe(2)
+  off(); await page.call('s', say, 'c')
+  expect([model.state.count, changes]).toEqual([2, 2])
+})
+
+test('setup runs on create; what it returns runs on dispose', async () => {
+  const log: string[] = []
+  const D = Components.declare({ author: 't', id: 'd' }, '0')
+  const d = D.define({ state: () => null, setup: () => { log.push('setup'); return () => log.push('cleanup') }, dispose: () => { log.push('dispose') } })
+  const s = Contexts.scope()
+  await s.add('d', d); await s.remove('d')
+  expect(log).toEqual(['setup', 'cleanup', 'dispose'])
 })
 
 test('compose rejects mistakes at build time', () => {
   expect(() => Components.compose(meta('c'), c => ({ a: c.use('a', speaker), b: c.use('b', speaker) }))).toThrow('duplicate names t/speaker/said, t/speaker/say')
-  expect(() => Components.compose(meta('c'), c => ({ a: c.use('a', speaker), b: c.use('a', listener) }))).toThrow('duplicate child "a"')
-  expect(() => Components.compose(meta('c'), c => { const l = c.use('l', listener); c.route(l(said), l(hear)); return {} })).toThrow('child "l" does not emit')
+  expect(() => Components.compose(meta('c'), c => ({ a: c.use('a', speaker), b: c.use('a', listener()) }))).toThrow('duplicate child "a"')
+  expect(() => Components.compose(meta('c'), c => { const l = c.use('l', listener()); c.route(l(said), l(hear)); return {} })).toThrow('child "l" does not emit')
   expect(() => Components.compose(meta('c'), c => { const s = c.use('s', speaker); c.route(s(said), s(hear)); return {} })).toThrow('child "s" does not consume')
-  expect(() => pair({ expose: [{ name: 'zz', input: Type.Null() }] })).toThrow('expose: no child has zz')
-  expect(Manifests.compose(meta('m'), speaker.manifest, listener.manifest).consumes.length).toBe(3)
+  expect(() => pair(listener(), { expose: [{ name: 'zz', input: Type.Null() }] })).toThrow('expose: no child has zz')
+  expect(Manifests.compose(meta('m'), speaker.manifest, listener().manifest).consumes.length).toBe(3)
 })
 
-test('two copies of one widget compose when their clashing names are not exposed', async () => {
+test('a composite is just an instance: delegates, routes inside, re-emits exposed events, hides its insides', async () => {
+  const outer = Contexts.scope(), page = outer.context('page')
+  const l = listener()
+  const p = await outer.add('pair', pair(l))
+  const outside: { s: string; from: string; origin: string }[] = []
+  page.on(said, (s, d) => { outside.push({ s, from: d.from, origin: d.stack[0].from }) })
+
+  expect((await page.call('pair', say, 'hi')).type).toBe('success')
+  await flush()
+  expect(l.heard).toEqual([{ s: 'hi', from: 's', origin: 'page' }])   // inside: routed from the child; origin kept
+  expect(outside).toEqual([{ s: 'hi', from: 'pair', origin: 'page' }]) // outside: the composite emitted it
+
+  await page.call('pair', hear, 'delegated')
+  expect(l.heard.at(-1)).toEqual({ s: 'delegated', from: 'pair', origin: 'page' })
+
+  expect(page.instances().map(i => i.name)).toEqual(['pair'])           // children are not visible outside
+  expect((await page.call('s', say, 'x')).type).toBe('error')
+  expect(p.children.s.state.count).toBe(1)
+  await outer.remove('pair')
+  expect((await p.children.s.emit(said, 'late')).type).toBe('error')
+})
+
+test('expose hides internal wiring; two copies of one widget compose when their names are not exposed', async () => {
+  const p = pair(listener(), { expose: [say] })
+  expect(p.manifest.emits).toEqual([])
+  expect(p.manifest.consumes.map(a => a.name)).toEqual(['t/speaker/say'])
+  const s = Contexts.scope(), page = s.context('page')
+  await s.add('pair', p)
+  expect((await page.call('pair', hear, 'x')).type).toBe('error')
+
+  const l = listener()
   const twin = Components.compose(meta('twin'), c => {
-    const a = c.use('a', speaker), b = c.use('b', speaker), l = c.use('l', listener)
-    c.route(a(said), l(hear)); c.route(b(said), l(hear))
+    const a = c.use('a', speaker), b = c.use('b', speaker), li = c.use('l', l)
+    c.route(a(said), li(hear)); c.route(b(said), li(hear))
     c.expose(hear)
     return { a, b }
   })
-  heard.length = 0
-  const r = root(), inst = await r.register(twin, 'twin')
-  await r.call({ namespace: ['root', 'twin'], instance: 'b' }, say, 'from b')
-  await flush()
-  expect(heard).toEqual([{ s: 'from b', from: 'b' }])
-  expect((r.component(inst) as Created<typeof twin>).children.b.state.count).toBe(1)
-})
-
-test('composite delegates, routes internally, bubbles exposed events, reports environment, disposes', async () => {
-  heard.length = 0
-  const b = root()
-  const p = await b.register(pair(), 'pair')
-  const outside: Invocation[] = []
-  const out: Factory = { manifest: listener.manifest, create: async () => ({ onAction: async (_c, inv) => (outside.push(inv), ok(null)) }) }
-  await b.register(out, 'out')
-  b.route({ from: { instance: p, event: said.name }, to: { instance: { namespace: ['root'], instance: 'out' }, action: hear.name } })
-
-  expect((await b.call(p, say, 'hi')).type).toBe('success')
-  await flush()
-  expect(heard).toEqual([{ s: 'hi', from: 's' }])     // internal route
-  expect(outside.map(i => [i.input, i.from.instance])).toEqual([['hi', 'pair']])   // bubbled: the composite emits it
-
-  await b.call(p, hear, 'delegated')                    // sender is the composite; the caller is in the stack
-  expect(heard.at(-1)).toEqual({ s: 'delegated', from: 'pair' })
-  await b.call({ namespace: ['root', 'pair'], instance: 'l' }, hear, 'direct')
-  expect(heard.at(-1)).toEqual({ s: 'direct', from: 'root' })
-
-  const env = b.capabilities().environment
-  const node = env.type === 'node' ? env.children[0] : undefined
-  expect(node?.type === 'node' && node.children.map(c => c.instance.instance)).toEqual(['s', 'l'])
-
-  const c = b.component(p) as Created<ReturnType<typeof pair>>
-  expect(c.children.s.state.count).toBe(1)
-  await b.unregister(p)
-  expect(b.instances().map(i => i.instance)).toEqual(['out'])
-  expect((await c.children.s.emit(said, 'late')).type).toBe('error')
-  expect(b.errors).toEqual([])
-})
-
-test('expose hides internal wiring', async () => {
-  const p = pair({ expose: [say] })
-  expect(p.manifest.emits).toEqual([])
-  expect(p.manifest.consumes.map(a => a.name)).toEqual(['t/speaker/say'])
-  const b = root()
-  const inst = await b.register(p, 'pair')
-  expect((await b.call(inst, hear, 'x')).type).toBe('error')
+  const t = await s.add('twin', twin)
+  await t.children.b.emit(said, 'from b'); await flush()
+  expect(l.heard).toEqual([{ s: 'from b', from: 'b', origin: 'b' }])
 })
 
 test('a failing child cleans up the ones already created', async () => {
   let disposed = 0
   const D = Components.declare({ author: 't', id: 'd' }, '0')
-  const ok1 = D.define({ state: () => 0, actions: [], dispose: () => { disposed++ } })
+  const ok1 = D.define({ state: () => 0, dispose: () => { disposed++ } })
   const boom: Factory = { manifest: { id: { author: 't', id: 'boom' }, version: '0', emits: [], consumes: [] }, create: async () => { throw new Error('boom') } }
-  const c = Components.compose(meta('c'), c => ({ a: c.use('a', ok1), b: c.use('b', boom) }))
-  const r = root()
-  await expect(r.register(c, 'c')).rejects.toThrow('boom')
+  const s = Contexts.scope()
+  await expect(s.add('c', Components.compose(meta('c'), c => ({ a: c.use('a', ok1), b: c.use('b', boom) })))).rejects.toThrow('boom')
   expect(disposed).toBe(1)
-  expect(r.instances()).toEqual([])
+  expect(s.component('c')).toBeUndefined()
 })
 
-test('a call leaving a composite comes from the inner child', async () => {
-  heard.length = 0
+test('use(..., wrap): the parent derives a child context, and can pass calls through to the outside', async () => {
+  const outer = Contexts.scope(), page = outer.context('page')
+  const l = listener()
+  await outer.add('out', l)                                            // a sibling of the composite, outside it
+  const seen: string[] = []
+  page.on(said, s => { seen.push(s) })
   const P = Components.declare({ author: 't', id: 'pinger' }, '0')
-  const ping = P.action('ping', 'Call out to the root listener', Type.Null())
-  const pinger = P.define({ state: () => null, actions: [[ping, (_i, { ctx }) => ctx.call({ namespace: ['root'], instance: 'l' }, hear, 'from inside')]] })
-  const b = root()
-  await b.register(listener, 'l')
-  const box = await b.register(Components.compose(meta('box'), c => { c.use('p', pinger); return {} }), 'box')
-  expect((await b.call(box, ping, null)).type).toBe('success')
-  expect(heard.at(-1)).toEqual({ s: 'from inside', from: 'p' })
+  const ping = P.action('ping', 'Call out', Type.String())
+  const pinger = P.define({ state: () => null, actions: [[ping, (s, { ctx }) => ctx.call('out', hear, s)]] })
+
+  const box = Components.compose(meta('box'), c => {
+    c.use('s', speaker, ctx => ctx
+      .withEmit(Emits.filter(e => e.payload !== 'SECRET'))
+      .withEmit(Emits.map(e => ({ ...e, payload: String(e.payload).toUpperCase() }))))
+    // pass-through: calls to 'out' go to the composite's own (outer) context
+    c.use('p', pinger, (ctx, o) => ctx.withCall((call, next) => call.target === 'out' ? o.call(call.target, call.action, call.input as never) : next(call)))
+    return {}
+  })
+  await outer.add('box', box)
+  await page.call('box', say, 'hi')
+  expect((await page.call('box', say, 'secret')).type).toBe('not-allowed')   // speaker returns its (filtered) emit
+  expect(seen).toEqual(['HI'])
+  expect((await page.call('box', ping, 'through')).type).toBe('success')
+  expect(l.heard.at(-1)).toMatchObject({ s: 'through', from: 'box' })
 })
 
-test('use(..., wrap): the parent derives a child context; routing and bubbling both see the result', async () => {
-  heard.length = 0
-  const b = root()
-  const seen: unknown[] = []
-  const out: Factory = { manifest: listener.manifest, create: async () => ({ onAction: async (_c, inv) => (seen.push(inv.input), ok(null)) }) }
-  const loud = pair({
-    wrapS: c => c
-      .withEmit(Emits.filter(e => e.payload !== 'SECRET'))
-      .withEmit(Emits.map(e => ({ ...e, payload: String(e.payload).toUpperCase() }))),
+test('a policy is just a wrapping container: a narrower manifest and a filtered context', async () => {
+  const s = Contexts.scope(), page = s.context('page')
+  await s.add('target', listener())
+  const P = Components.declare({ author: 't', id: 'caller' }, '0')
+  const go = P.action('go', 'Call target.add', Type.Number())
+  const other = P.action('other', 'Not exposed', Type.Null())
+  const caller = P.define({ state: () => null, actions: [[go, (n, { ctx }) => ctx.call('target', add, { a: n, b: n })], [other, () => {}]] })
+  const sandboxed = Components.compose(meta('sandboxed'), c => {
+    c.use('inner', caller, ctx => ctx.withCall(Calls.filter(() => false)))
+    c.expose(go)
+    return {}
   })
-  const p = await b.register(loud, 'pair')
-  await b.register(out, 'out')
-  b.route({ from: { instance: p, event: said.name }, to: { instance: { namespace: ['root'], instance: 'out' }, action: hear.name } })
-  await b.call(p, say, 'hi')
-  expect((await b.call(p, say, 'secret')).type).toBe('not-allowed')   // speaker returns its (filtered) emit result
-  await flush()
-  expect(heard.map(h => h.s)).toEqual(['HI'])
-  expect(seen).toEqual(['HI'])
+  await s.add('sb', sandboxed)
+  expect(sandboxed.manifest.consumes.map(a => a.name)).toEqual(['t/caller/go'])
+  expect((await page.call('sb', go, 1)).type).toBe('not-allowed')
+  expect((await page.call('sb', other, null)).type).toBe('error')
 })

@@ -1,7 +1,8 @@
-import { notAllowed, ok, type CallFn, type Called, type EmitFn, type Emitted, type Result } from '../types'
+import { notAllowed, ok, type CallFn, type Called, type EmitFn, type Emitted, type OnFn, type Result, type Subscribed } from '../types'
 
 type EmitWrap = (e: Emitted, next: EmitFn) => Promise<Result<void>>
 type CallWrap = (c: Called, next: CallFn) => Promise<Result<unknown>>
+type OnWrap = (s: Subscribed, next: OnFn) => () => void
 // A throwing predicate counts as false; a throwing sink is ignored.
 const test = <T>(p: (x: T) => boolean, x: T) => { try { return p(x) } catch { return false } }
 const quietly = (f: () => void) => { try { f() } catch {} }
@@ -32,4 +33,9 @@ export const Calls = {
   trace: (sink: (c: Called, r: Result<unknown>) => void): CallWrap => async (c, next) => {
     const r = await next(c); quietly(() => sink(c, r)); return r
   },
+}
+
+/** Wrappers for `ctx.withOn(...)`: decide what a component may listen to. */
+export const Subscriptions = {
+  filter: (p: (s: Subscribed) => boolean): OnWrap => (s, next) => test(p, s) ? next(s) : () => {},
 }

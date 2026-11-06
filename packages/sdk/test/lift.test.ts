@@ -1,7 +1,6 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
-import { Components, Contexts, defineManifest, type Created } from '../src'
-import { rootRef } from './fixtures'
+import { Components, Contexts } from '../src'
 
 const MyThing = {
   echo: Type.Function([Type.Object({ x: Type.String() })], Type.String(), { description: 'Return x' }),
@@ -13,7 +12,7 @@ const myThing = Components.lift({ author: 'acme', id: 'my-thing' }, '0.1.0', MyT
   repeat: ({ y, times }) => y.repeat(times),
   slow: async () => 42,
 })
-const root = () => Contexts.registry({ self: { ...rootRef, manifest: defineManifest({ id: { author: 't', id: 'r' }, version: '0', emits: [], consumes: [] }) } })
+const root = () => { const s = Contexts.scope(); return Object.assign(s, { page: s.context('page') }) }
 
 test('lift: one action per function, named from the id, described, with object input', () => {
   expect(myThing.manifest.consumes.map(a => [a.name, a.description])).toEqual([
@@ -23,21 +22,23 @@ test('lift: one action per function, named from the id, described, with object i
 
 test('client: typed calls, validated input and output, async impls, never throws', async () => {
   const b = root()
-  const thing = Components.client(b, await b.register(myThing, 'thing'), myThing.actions)
+  await b.add('thing', myThing)
+  const thing = Components.client(b.page, 'thing', myThing.actions)
   const r = await thing.repeat({ y: 'ab', times: 3 })
   expect(r).toEqual({ type: 'success', data: 'ababab' })
   if (r.type === 'success') { const s: string = r.data; void s }
   expect(await thing.slow({})).toEqual({ type: 'success', data: 42 })
   const bad = await thing.repeat({ y: 'ab', times: -1 })
   expect(bad.type === 'error' && bad.error.code).toBe('validation')
-  const missing = Components.client(b, { namespace: ['root'], instance: 'nope' }, myThing.actions)
+  const missing = Components.client(b.page, 'nope', myThing.actions)
   expect((await missing.echo({ x: '' })).type).toBe('error')
 })
 
 test('output is validated too', async () => {
   const liar = Components.lift({ author: 't', id: 'liar' }, '0', { n: Type.Function([Type.Object({})], Type.Number()) }, { n: () => 'nope' as unknown as number })
   const b = root()
-  const r = await Components.client(b, await b.register(liar, 'l'), liar.actions).n({})
+  await b.add('l', liar)
+  const r = await Components.client(b.page, 'l', liar.actions).n({})
   expect(r.type === 'error' && r.error.message).toBe('output invalid for t/liar/n')
 })
 
@@ -50,10 +51,10 @@ test('lift rejects malformed interfaces and missing implementations', () => {
 
 test('client works with declare-made actions and the model holds the impl', async () => {
   const b = root()
-  const inst = await b.register(myThing, 'thing')
-  expect((b.component(inst) as Created<typeof myThing>).state.echo({ x: 'direct' })).toBe('direct')
+  const model = await b.add('thing', myThing)
+  expect(model.state.echo({ x: 'direct' })).toBe('direct')
   // @ts-expect-error input is typed from the interface
-  void Components.client(b, inst, myThing.actions).echo({ x: 1 })
+  void Components.client(b.page, 'thing', myThing.actions).echo({ x: 1 })
 })
 
 test('implementations are typed from the interface', () => {
