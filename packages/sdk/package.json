@@ -6,6 +6,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@noble/hashes": "^2.0.1",
+    "json-canonicalize": "2.0.0",
     "typebox": "^1.4.0"
   },
   "scripts": {
