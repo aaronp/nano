@@ -94,7 +94,7 @@ test('route: validated when made; feeds the op with the publisher as sender and 
   const a = x(), b = x()
   await s.add('a', a); await s.add('b', b)
   expect(() => s.route('a', fired, 'missing', log)).toThrow('route: no instance "missing"')
-  expect(() => s.route('a', log, 'b', log)).toThrow('"a" does not publish')
+  expect(() => s.route('a', { name: 't/x/nope', output: Type.Unknown() }, 'b', log)).toThrow('"a" has no op t/x/nope giving output')
   expect(() => s.route('a', fired, 'b', fired)).toThrow('"b" has no op')
   const unroute = s.route('a', fired, 'b', log)
   await a.ctx().publish(fired, { text: 'hi' }); await flush()
@@ -261,4 +261,27 @@ test('types: handlers must return their op\'s output; only publications can be p
     void ctx.publish(sub, 1)
   }
   void check
+})
+
+test('an action\'s outcome is a source: routed and subscribed like a publication; scope.routes() shows what is wired', async () => {
+  // setup: a's `typed` action feeds b's `log`
+  const { s, page } = setup()
+  const a = x(), b = x()
+  await s.add('a', a); await s.add('b', b)
+  const off = s.route('a', typed, 'b', log)
+  const seen: unknown[] = []
+  page.subscribe(typed, (n, d) => { seen.push([n, d.from]) })
+  // call out our method under test: a plain call of the action
+  const r = await page.call('a', typed, { n: 7 })
+  await flush()
+  // the caller still gets the result, and the outcome reached the route and the subscriber, same correlation
+  expect(r).toEqual(ok(7))
+  expect(b.got.map(g => [g.input, g.from])).toEqual([[7, 'a']])
+  expect(seen).toEqual([[7, 'a']])
+  expect(s.routes()).toEqual([{ from: 'a', output: typed.name, to: 'b', op: log.name }])
+  // failed calls have no outcome
+  await page.call('a', typed, { n: -1 }); await flush()
+  expect(b.got.length).toBe(1)
+  off()
+  expect(s.routes()).toEqual([])
 })

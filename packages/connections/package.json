@@ -1,0 +1,9 @@
+{
+  "name": "@composable/connections",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Connections between component instances as data (pub/sub connections and workflows), a pure plan, and an orchestrator that keeps a scope wired to match.",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "build": "bun ../../scripts/build-package.ts ." },
+  "peerDependencies": { "@composable/sdk": "workspace:*", "typebox": "^1.4.0" }
+}

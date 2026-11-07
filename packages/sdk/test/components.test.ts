@@ -72,7 +72,7 @@ test('setup runs on create; what it returns runs on dispose', async () => {
 test('compose rejects mistakes at build time', () => {
   expect(() => Components.compose(meta('c'), c => ({ a: c.use('a', speaker), b: c.use('b', speaker) }))).toThrow('duplicate names t/speaker/said, t/speaker/say')
   expect(() => Components.compose(meta('c'), c => ({ a: c.use('a', speaker), b: c.use('a', listener()) }))).toThrow('duplicate child "a"')
-  expect(() => Components.compose(meta('c'), c => { const l = c.use('l', listener()); c.route(l(said), l(hear)); return {} })).toThrow('"l" does not publish')
+  expect(() => Components.compose(meta('c'), c => { const l = c.use('l', listener()); c.route(l(said), l(hear)); return {} })).toThrow('"l" has no op t/speaker/said giving output')
   expect(() => Components.compose(meta('c'), c => { const s = c.use('s', speaker); c.route(s(said), s(hear)); return {} })).toThrow('"s" has no op')
   expect(() => pair(listener(), { expose: [{ name: 'zz', input: Type.Null() }] })).toThrow('expose: no child has zz')
   expect(Manifests.compose(meta('m').id, speaker.manifest, listener().manifest).ops.length).toBe(4)

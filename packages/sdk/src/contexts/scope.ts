@@ -12,6 +12,7 @@ export type Trace = {
   correlation: string; from: string; to?: string; op: string; data?: unknown; reason?: string; at: number
 }
 export type ErrorInfo = { from: string; op: string; correlation: string }
+export type RouteInfo = { from: string; output: string; to: string; op: string }
 
 /** A set of named instances sharing one bus. A container makes its own scope for its children. */
 export type Scope = {
@@ -19,8 +20,10 @@ export type Scope = {
   add<F extends ComponentFactory<any>>(name: string, factory: F, opts?: { wrap?: (c: Context) => Context; correlation?: string }): Promise<Created<F>>
   remove(name: string): Promise<void>
   component(name: string): Component | undefined
-  /** Feed `from`'s publication into `to`'s op. Throws if either side doesn't fit; returns unroute. */
-  route(from: string, publication: Op, to: string, op: Op): () => void
+  /** Feed `from`'s output (a publication, or an action's outcome) into `to`'s op. Throws if either side doesn't fit; returns unroute. */
+  route(from: string, output: Op, to: string, op: Op): () => void
+  /** The routes in place right now. */
+  routes(): RouteInfo[]
   /** A context for a party that is not a component, e.g. the page. Give it a manifest to let it publish. */
   context(name: string, manifest?: Manifest): Context
   /** Every publish, call, delivery and drop, as it happens. */
@@ -40,7 +43,7 @@ type Watch = { owner?: Entry; notify: () => void }
  * operations per correlation (loops), and a backstop on operations per burst (until the event loop is idle).
  */
 function create(opts: { budget?: number; burst?: number; onError?: (e: SystemError, info: ErrorInfo) => void } = {}): Scope {
-  const entries = new Map<string, Entry>(), parties = new Set<string>()
+  const entries = new Map<string, Entry>(), parties = new Set<string>(), routes = new Set<RouteInfo>()
   const subs = new Set<Sub>(), watchers = new Set<Watch>(), observers = new Set<(t: Trace) => void>(), muted = new Set<string>()
   const budget = opts.budget ?? 1000, burstMax = opts.burst ?? 100_000
   const prefix = Math.random().toString(36).slice(2, 8)
@@ -88,16 +91,21 @@ function create(opts: { budget?: number; burst?: number; onError?: (e: SystemErr
     if (!Value.Check(def.output!, p.payload)) return fail('validation', `payload invalid for ${name}`)
     const refused = admit({ kind: 'publish', correlation: p.correlation, from, op: name, data: p.payload })
     if (refused) return refused
+    deliver(from, name, p.payload, p.correlation)
+    return ok(undefined)
+  }
+
+  /** Hand `from`'s output of op `name` (a publication, or an action's outcome) to everyone subscribed to it. */
+  function deliver(from: string, name: string, payload: unknown, correlation: string) {
     dispatch(() => {
       for (const s of [...subs]) {
         if (s.op.name !== name || (s.from && s.from !== from) || !subs.has(s) || !present(s.owner)) continue
-        if (admit({ kind: 'deliver', correlation: p.correlation, from, to: s.who, op: name })) continue
-        const info = { from, op: name, correlation: p.correlation }
+        if (admit({ kind: 'deliver', correlation, from, to: s.who, op: name })) continue
+        const info = { from, op: name, correlation }
         const oops = (err: any) => report({ code: 'handler', message: String(err?.message ?? err) }, info)
-        try { void Promise.resolve(s.fn(p.payload, { from, op: name, correlation: p.correlation })).catch(oops) } catch (err) { oops(err) }
+        try { void Promise.resolve(s.fn(payload, { from, op: name, correlation })).catch(oops) } catch (err) { oops(err) }
       }
     })
-    return ok(undefined)
   }
 
   async function call(from: string, c: Called): Promise<Result<unknown>> {
@@ -110,10 +118,12 @@ function create(opts: { budget?: number; burst?: number; onError?: (e: SystemErr
     if (!def?.input) return fail('unknown-action', `${c.target} has no op ${name} taking input`)
     if (!Value.Check(def.input, c.input)) return fail('validation', `input invalid for ${name}`)
     try {
-      const r = await e.component.onAction(e.app.within(c.correlation), { from, target: c.target, op: name, input: c.input, correlation: c.correlation })
+      const r = await e.component.onAction(e.app.within(c.correlation), { from, target: c.target, op: name, input: c.input, correlation: c.correlation, via: c.via })
       if (r.type !== 'success') return r
       if (!def.output) return ok(undefined)
-      return Value.Check(def.output, r.data) ? r : fail('validation', `output invalid for ${name}`)
+      if (!Value.Check(def.output, r.data)) return fail('validation', `output invalid for ${name}`)
+      deliver(c.target, name, r.data, c.correlation) // an action's outcome is a source too
+      return r
     } catch (err: any) { return fail('handler', String(err?.message ?? err)) }
   }
 
@@ -163,12 +173,14 @@ function create(opts: { budget?: number; burst?: number; onError?: (e: SystemErr
       if (problem) throw new Error(`route: ${problem}`)
       const sub: Sub = {
         op: publication, from, who: to,
-        fn: (payload, d) => call(from, { target: to, op, input: payload, correlation: d.correlation })
+        fn: (payload, d) => call(from, { target: to, op, input: payload, correlation: d.correlation, via: publication.name })
           .then(r => { if (r.type === 'error') report(r.error, { from, op: op.name, correlation: d.correlation }) }),
       }
-      subs.add(sub)
-      return () => { subs.delete(sub) }
+      const info: RouteInfo = { from, output: publication.name, to, op: op.name }
+      subs.add(sub); routes.add(info)
+      return () => { subs.delete(sub); routes.delete(info) }
     },
+    routes: () => [...routes],
     context(name, manifest = { id: { author: '', id: name }, ops: [] }) {
       if (entries.has(name)) throw new Error(`"${name}" is an instance; a party cannot take its name`)
       parties.add(name)

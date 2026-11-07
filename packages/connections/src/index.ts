@@ -1,0 +1,147 @@
+/**
+ * Connections between component instances, as data you can save and share, kept separate from the components
+ * themselves and from creating instances:
+ *   - a Connection is pub/sub intent: whatever its source selects feeds whatever its target selects (fanning out);
+ *   - a Workflow is a chain: each step's outcome feeds the next step's op, active only while the whole chain is viable.
+ * `plan` (pure) turns intents plus the instances present into the routes they want and a status per intent;
+ * an orchestrator keeps a scope's routes matching the plan as instances come and go.
+ */
+import { canonicalType, typeHash, type ComponentId, type Instance, type Op, type Scope } from '@composable/sdk'
+
+// ---------------------------------------------------------------- data
+
+/** Which instances. */
+export type InstanceSel = { by: 'name'; name: string } | { by: 'component'; id: ComponentId } | { by: 'any' }
+/** Which of a source's outputs (publications and action outcomes). */
+export type OutputSel = { by: 'name'; name: string } | { by: 'type'; type: string } | { by: 'outputs' }
+
+export type Connection = {
+  kind: 'connection'; id: string; enabled?: boolean
+  from: { select: InstanceSel; output: OutputSel }
+  to: { select: InstanceSel; op: string }
+}
+/** A chain: step 0's output feeds step 1's op, whose outcome feeds step 2's, and so on. */
+export type Workflow = { kind: 'workflow'; id: string; enabled?: boolean; steps: { select: InstanceSel; op: string }[] }
+export type Intent = Connection | Workflow
+
+// ---------------------------------------------------------------- plan
+
+export type Problem =
+  | { kind: 'no-match'; at: string }                                    // the selector matches no instance
+  | { kind: 'ambiguous'; at: string; instances: string[] }              // a workflow step matches several
+  | { kind: 'no-op'; at: string; op: string }                           // the instance has no such op (with the needed input/output)
+  | { kind: 'type-mismatch'; at: string; output: string; input: string } // type SAIDs that do not fit
+export type Status = { enabled: boolean; viable: boolean; routes: number; problems: Problem[] }
+export type PlannedRoute = { intent: string; from: string; output: Op; to: string; op: Op }
+export type Plan = { routes: PlannedRoute[]; status: Record<string, Status> }
+
+const matches = (sel: InstanceSel, i: Instance) =>
+  sel.by === 'any' ? true
+    : sel.by === 'name' ? i.name === sel.name
+      : sel.by === 'component' ? i.manifest.id.author === sel.id.author && i.manifest.id.id === sel.id.id
+        : (() => { throw new Error(`unknown selector ${JSON.stringify(sel)}`) })()
+
+/** An input of `{}` (Unknown / Any) takes anything; otherwise the type SAIDs must be equal. */
+export const fits = (output: Op, op: Op) =>
+  !!output.output && !!op.input && (Object.keys(canonicalType(op.input) as object).length === 0 || typeHash(output.output) === typeHash(op.input))
+
+const mismatch = (at: string, output: Op, op: Op): Problem =>
+  ({ kind: 'type-mismatch', at, output: typeHash(output.output!), input: typeHash(op.input!) })
+
+function planConnection(c: Connection, instances: Instance[]): { routes: PlannedRoute[]; problems: Problem[] } {
+  const sources = instances.filter(i => matches(c.from.select, i)), targets = instances.filter(i => matches(c.to.select, i))
+  const problems: Problem[] = []
+  if (!sources.length) problems.push({ kind: 'no-match', at: 'from' })
+  if (!targets.length) problems.push({ kind: 'no-match', at: 'to' })
+  const routes: PlannedRoute[] = []
+  for (const t of targets) {
+    const op = t.manifest.ops.find(o => o.name === c.to.op && o.input)
+    if (!op) { problems.push({ kind: 'no-op', at: `to ${t.name}`, op: c.to.op }); continue }
+    for (const s of sources) {
+      if (s.name === t.name) continue // never feed an instance its own output
+      const outs = s.manifest.ops.filter(o => o.output && (
+        c.from.output.by === 'outputs' || (c.from.output.by === 'name' ? o.name === c.from.output.name : typeHash(o.output!) === c.from.output.type)))
+      if (c.from.output.by === 'name' && !outs.length) problems.push({ kind: 'no-op', at: `from ${s.name}`, op: c.from.output.name })
+      for (const out of outs) {
+        if (fits(out, op)) routes.push({ intent: c.id, from: s.name, output: out, to: t.name, op })
+        else if (c.from.output.by === 'name') problems.push(mismatch(`${s.name} → ${t.name}`, out, op))
+      }
+    }
+  }
+  return { routes, problems }
+}
+
+function planWorkflow(w: Workflow, instances: Instance[]): { routes: PlannedRoute[]; problems: Problem[] } {
+  const problems: Problem[] = []
+  const steps = w.steps.map((step, i) => {
+    const found = instances.filter(x => matches(step.select, x))
+    if (!found.length) { problems.push({ kind: 'no-match', at: `step ${i}` }); return undefined }
+    if (found.length > 1) { problems.push({ kind: 'ambiguous', at: `step ${i}`, instances: found.map(x => x.name) }); return undefined }
+    const op = found[0].manifest.ops.find(o => o.name === step.op && (i === 0 || o.input) && (i === w.steps.length - 1 || o.output))
+    if (!op) { problems.push({ kind: 'no-op', at: `step ${i}`, op: step.op }); return undefined }
+    return { instance: found[0].name, op }
+  })
+  const routes: PlannedRoute[] = []
+  for (let i = 0; i + 1 < steps.length; i++) {
+    const a = steps[i], b = steps[i + 1]
+    if (!a || !b) continue
+    if (fits(a.op, b.op)) routes.push({ intent: w.id, from: a.instance, output: a.op, to: b.instance, op: b.op })
+    else problems.push(mismatch(`step ${i} → ${i + 1}`, a.op, b.op))
+  }
+  return { routes: problems.length ? [] : routes, problems }
+}
+
+/** The routes `intents` want given the instances present, and a status per intent. Pure. */
+export function plan(intents: readonly Intent[], instances: readonly Instance[]): Plan {
+  const out: Plan = { routes: [], status: {} }
+  for (const it of intents) {
+    const enabled = it.enabled !== false
+    const r = it.kind === 'connection' ? planConnection(it, [...instances])
+      : it.kind === 'workflow' ? planWorkflow(it, [...instances])
+        : (() => { throw new Error(`unknown intent ${JSON.stringify(it)}`) })()
+    out.status[it.id] = { enabled, viable: r.routes.length > 0, routes: r.routes.length, problems: r.problems }
+    if (enabled) out.routes.push(...r.routes)
+  }
+  return out
+}
+
+// ---------------------------------------------------------------- orchestrator
+
+export type Orchestrator = {
+  /** The status of each intent as of the last change. */
+  status(): Record<string, Status>
+  onStatus(fn: (s: Record<string, Status>) => void): () => void
+  /** Replace the intents (e.g. a loaded document, or one switched on or off). */
+  set(intents: readonly Intent[]): void
+  /** Remove every route this orchestrator made, and stop following changes. */
+  stop(): void
+}
+
+/**
+ * Keep `scope` wired to match `intents`: re-plans whenever instances come or go, and adds or removes only the
+ * routes it made itself. It never creates or removes instances.
+ */
+function create(scope: Scope, intents: readonly Intent[], name = 'orchestrator'): Orchestrator {
+  const ctx = scope.context(name)
+  const mine = new Map<string, () => void>()
+  const listeners = new Set<(s: Record<string, Status>) => void>()
+  let current = intents, status: Record<string, Status> = {}
+  const key = (r: PlannedRoute) => `${r.from}\u0000${r.output.name}\u0000${r.to}\u0000${r.op.name}`
+  const apply = () => {
+    const p = plan(current, ctx.instances())
+    const want = new Map(p.routes.map(r => [key(r), r]))
+    for (const [k, off] of mine) if (!want.has(k)) { off(); mine.delete(k) }
+    for (const [k, r] of want) if (!mine.has(k)) mine.set(k, scope.route(r.from, r.output, r.to, r.op))
+    status = p.status
+    for (const fn of listeners) try { fn(status) } catch {}
+  }
+  const unwatch = ctx.watch(apply)
+  return {
+    status: () => status,
+    onStatus(fn) { listeners.add(fn); return () => { listeners.delete(fn) } },
+    set(next) { current = next; apply() },
+    stop() { unwatch(); for (const off of mine.values()) off(); mine.clear() },
+  }
+}
+
+export const Orchestrators = { create }

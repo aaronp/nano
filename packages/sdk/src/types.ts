@@ -63,14 +63,15 @@ export const roleOf = (op: Op): Role => op.input ? (op.output ? 'action' : 'subs
  * Correlation: every trigger (bootstrap, a host call, a UI publish, a mount) starts one; everything done in
  * response carries it. Components never handle it; contexts carry it for them.
  */
-export type Invocation = { from: string; target: string; op: string; input: unknown; correlation: string }
+/** `via`: for a routed call, the output op (publication or action outcome) of `from` that fed it. */
+export type Invocation = { from: string; target: string; op: string; input: unknown; correlation: string; via?: string }
 export type Delivered = { from: string; op: string; correlation: string }
 /** What a subscriber learns besides the payload; `ctx` is its own context, carrying the publication's correlation. */
 export type Delivery = Delivered & { ctx: Context }
 
 /** Intents: what a context is asked to do. `with*` wrappers see and transform these. */
 export type Published = { op: Op; payload: unknown; correlation: string }
-export type Called = { target: string; op: Op; input: unknown; correlation: string }
+export type Called = { target: string; op: Op; input: unknown; correlation: string; via?: string }
 export type Subscribed = { op: Op; from?: string; fn: (payload: unknown, d: Delivered) => unknown }
 export type PublishFn = (p: Published) => Promise<Result<void>>
 export type CallFn = (c: Called) => Promise<Result<unknown>>
@@ -111,12 +112,12 @@ export type ComponentFactory<C extends Component = Component> = {
 /** The component a factory creates (what `scope.add` resolves to). */
 export type Created<F extends ComponentFactory<any>> = Awaited<ReturnType<F['create']>>
 
-/** Why `from`'s `publication` cannot feed `to`'s `op`, or undefined if it can. */
-export const routeProblem = (from: Manifest | undefined, publication: Op, to: Manifest | undefined, op: Op, names = { from: 'source', to: 'target' }) => {
-  const p = from?.ops.find(o => o.name === publication.name), t = to?.ops.find(o => o.name === op.name)
+/** Why `from`'s `output` (publication or action outcome) cannot feed `to`'s `op`, or undefined if it can. */
+export const routeProblem = (from: Manifest | undefined, output: Op, to: Manifest | undefined, op: Op, names = { from: 'source', to: 'target' }) => {
+  const p = from?.ops.find(o => o.name === output.name), t = to?.ops.find(o => o.name === op.name)
   if (!from) return `no instance "${names.from}"`
   if (!to) return `no instance "${names.to}"`
-  if (!p || roleOf(p) !== 'publication') return `"${names.from}" does not publish ${publication.name}`
+  if (!p?.output) return `"${names.from}" has no op ${output.name} giving output`
   if (!t?.input) return `"${names.to}" has no op ${op.name} taking input`
 }
 

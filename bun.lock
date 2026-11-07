@@ -9,6 +9,14 @@
         "typescript": "^7.0.2",
       },
     },
+    "packages/connections": {
+      "name": "@composable/connections",
+      "version": "0.1.0",
+      "peerDependencies": {
+        "@composable/sdk": "workspace:*",
+        "typebox": "^1.4.0",
+      },
+    },
     "packages/sdk": {
       "name": "@composable/sdk",
       "version": "0.1.0",
@@ -54,6 +62,8 @@
     },
   },
   "packages": {
+    "@composable/connections": ["@composable/connections@workspace:packages/connections"],
+
     "@composable/sdk": ["@composable/sdk@workspace:packages/sdk"],
 
     "@composable/ui": ["@composable/ui@workspace:packages/ui"],
