@@ -40,15 +40,16 @@ export const editorDocument = C.define({
       if (r.type !== 'success') return r
       const { types, components, connections } = r.data
       state.loading = true
-      for (const c of [
-        () => system.call('types', TypeEditorOps.setTypes, types),
-        () => system.call('list', ComponentListOps.setDrafts, components),
-        () => system.call('board', ConnectionEditorOps.setConnections, connections),
-      ]) {
-        const x = await c()
-        if (x.type !== 'success') { state.loading = false; await changed(state, system); return x }
-      }
-      state.loading = false
+      try {
+        for (const c of [
+          () => system.call('types', TypeEditorOps.setTypes, types),
+          () => system.call('list', ComponentListOps.setDrafts, components),
+          () => system.call('board', ConnectionEditorOps.setConnections, connections),
+        ]) {
+          const x = await c()
+          if (x.type !== 'success') { state.loading = false; await changed(state, system); return x }
+        }
+      } finally { state.loading = false }  // never left silent, even if a call throws
       state.doc = { types, components, connections }
       await changed(state, system, true)
       return ok(state.doc)
