@@ -9,6 +9,20 @@
         "typescript": "^7.0.2",
       },
     },
+    "packages/connection-designer": {
+      "name": "@composable/connection-designer",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+      "peerDependencies": {
+        "@composable/connections": "workspace:*",
+        "@composable/sdk": "workspace:*",
+        "@composable/ui": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+    },
     "packages/connections": {
       "name": "@composable/connections",
       "version": "0.1.0",
@@ -42,6 +56,8 @@
       "name": "@composable/ui-workspace",
       "version": "0.1.0",
       "dependencies": {
+        "@composable/connection-designer": "workspace:*",
+        "@composable/connections": "workspace:*",
         "@composable/sdk": "workspace:*",
         "@composable/ui": "workspace:*",
         "@composable/widgets": "workspace:*",
@@ -62,6 +78,8 @@
     },
   },
   "packages": {
+    "@composable/connection-designer": ["@composable/connection-designer@workspace:packages/connection-designer"],
+
     "@composable/connections": ["@composable/connections@workspace:packages/connections"],
 
     "@composable/sdk": ["@composable/sdk@workspace:packages/sdk"],

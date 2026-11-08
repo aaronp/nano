@@ -1,0 +1,16 @@
+{
+  "name": "@composable/connection-designer",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A puzzle-style designer for declarative connections: components' ops as pieces, joined into workflows.",
+  "exports": { ".": "./src/index.ts", "./model": "./src/model.ts" },
+  "scripts": { "build": "bun ../../scripts/build-package.ts ." },
+  "peerDependencies": {
+    "@composable/connections": "workspace:*",
+    "@composable/sdk": "workspace:*",
+    "@composable/ui": "workspace:*",
+    "lit": "^3.0.0",
+    "typebox": "^1.4.0"
+  },
+  "devDependencies": { "@happy-dom/global-registrator": "^21.0.4" }
+}

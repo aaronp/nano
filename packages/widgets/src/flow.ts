@@ -1,22 +1,21 @@
 import Type from 'typebox'
-import { Components, roleOf } from '@composable/sdk'
+import { Components, ok } from '@composable/sdk'
 
 // ---- slider: publishes its value; set-value moves it ----
 const S = Components.declare({ author: 'composable', id: 'slider' })
-export const valueChanged = S.op('value-changed', 'The slider moved to a new value', { output: Type.Number({ minimum: 0, maximum: 100 }) })
+export const valueChanged = S.op('value-changed', 'The slider moved to a new value', { output: Type.Number() })
 export const setValue = S.op('set-value', 'Move the slider', { input: Type.Number({ minimum: 0, maximum: 100 }) })
 export const slider = S.define({
   state: () => ({ value: 50 }),
   handlers: [[setValue, (v, { state, ctx }) => { state.value = v; return ctx.publish(valueChanged, v) }]],
 })
 
-// ---- mapper: consumes a number, publishes fn(number) ----
+// ---- mapper: an action, number → fn(number); its outcome feeds whatever it is wired to ----
 const M = Components.declare({ author: 'composable', id: 'mapper' })
-export const mapIn = M.op('in', 'A number to map', { input: Type.Number() })
-export const mapped = M.op('mapped', 'The input after the mapping function', { output: Type.Number() })
+export const mapNumber = M.op('map', 'Map a number with the mapping function', { input: Type.Number(), output: Type.Number() })
 export const mapper = (opts: { label: string; fn: (x: number) => number }) => M.define({
   state: () => ({ label: opts.label, input: undefined as number | undefined, output: undefined as number | undefined }),
-  handlers: [[mapIn, (x, { state, ctx }) => { state.input = x; state.output = opts.fn(x); return ctx.publish(mapped, state.output) }]],
+  handlers: [[mapNumber, (x, { state }) => { state.input = x; state.output = opts.fn(x); return ok(state.output) }]],
 })
 
 // ---- counter: counts what it consumes; every N, publishes ----
@@ -36,7 +35,7 @@ export const chart = Ch.define({
   handlers: [[push, (v, { state }) => { state.points = [...state.points, v].slice(-60) }]],
 })
 
-// ---- log: an observer; watches the instances and subscribes to every publication they declare ----
+// ---- log: an observer; watches the instances and subscribes to every output they declare (publications and action outcomes) ----
 export type LogRow = { at: string; from: string; op: string; payload: unknown; correlation: string }
 const L = Components.declare({ author: 'composable', id: 'log' })
 export const log = L.define({
@@ -44,7 +43,7 @@ export const log = L.define({
   setup: ({ state, appContext: ctx, changed }) => {
     const offs = new Map<string, () => void>()
     const unwatch = ctx.watch(list => {
-      for (const op of list.flatMap(i => i.manifest.ops).filter(o => roleOf(o) === 'publication')) {
+      for (const op of list.flatMap(i => i.manifest.ops).filter(o => o.output)) {
         if (offs.has(op.name)) continue
         offs.set(op.name, ctx.subscribe(op, (payload, d) => {
           state.rows = [{

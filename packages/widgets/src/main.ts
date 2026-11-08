@@ -1,6 +1,6 @@
 import { Scopes, type ComponentFactory } from '@composable/sdk'
 import { applyTheme, mount, themes } from '@composable/ui'
-import { chart, count, counter, debug, log, mapIn, mapped, mapper, push, setInput, setValue, slider, valueChanged } from '.'
+import { chart, count, counter, debug, log, mapNumber, mapper, push, setInput, setValue, slider, valueChanged } from '.'
 import { defineElements } from './views'
 
 defineElements()
@@ -19,9 +19,9 @@ await place('doubler', mapper({ label: 'x × 2', fn: x => x * 2 }), 'flow-mapper
 await place('counter', counter({ every: 5 }), 'flow-counter')
 await place('chart', chart, 'flow-chart')
 // The wiring: publications into subscriptions.
-scope.route('slider', valueChanged, 'doubler', mapIn)
+scope.route('slider', valueChanged, 'doubler', mapNumber)
 scope.route('slider', valueChanged, 'counter', count)
-scope.route('doubler', mapped, 'chart', push)
+scope.route('doubler', mapNumber, 'chart', push)   // the action's outcome
 void page.call('slider', setValue, 50)
 
 await place('debug', debug, 'debug-panel')

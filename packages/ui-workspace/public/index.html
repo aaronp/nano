@@ -16,6 +16,7 @@
 
   <!-- Navigation: one link per <app-route> below, in order. -->
   <a slot="nav" href="#/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/></svg>Overview</a>
+  <a slot="nav" href="#/connections"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6v5H4zM14 13h6v5h-6zM10 8.5h2a2 2 0 0 1 2 2V15.5"/></svg>Connections</a>
   <a slot="nav" href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspace</a>
   <!-- Workspace widgets: click to add a panel, or drag one into the layout. data-widget matches a <template> below. -->
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="notes" title="Click to add, or drag into the workspace">+ Notes</a>
@@ -26,6 +27,7 @@
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-slider" title="Click to add, or drag into the workspace">+ Slider (composable)</a>
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-debug" title="Click to add, or drag into the workspace">+ Debug (composable)</a>
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-log" title="Click to add, or drag into the workspace">+ Log (composable)</a>
+  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-designer" title="Click to add, or drag into the workspace">+ Connections (designer)</a>
   <a slot="nav" href="#/inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 13h5l2 3h4l2-3h5"/></svg>Inbox</a>
   <a slot="nav" href="#/settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Settings</a>
   <div slot="drawer-footer" class="drawer-foot">[Company] · v0.1</div>
@@ -78,7 +80,24 @@
       <template data-widget="c-slider" data-title="Slider (composable)"><flow-slider></flow-slider></template>
       <template data-widget="c-debug" data-title="Debug (composable)"><debug-panel></debug-panel></template>
       <template data-widget="c-log" data-title="Log (composable)"><flow-log></flow-log></template>
+      <template data-widget="c-designer" data-title="Connections (designer)"><connection-designer></connection-designer></template>
     </workspace-dock>
+  </app-route>
+
+  <!-- Connections: a puzzle designer for declarative connections between the composable widgets below.
+       Join pieces into a workflow, switch on Live, then move the slider. -->
+  <app-route path="/connections">
+    <header class="page-head">
+      <h1>Connections</h1>
+      <p>Drag pieces from the palette into a row to make a workflow (e.g. slider → doubler <em>in</em> → chart <em>push</em>), or add a fan-out connection (every output → log). Switch on <b>Live</b>, then move the slider.</p>
+    </header>
+    <section class="panel"><connection-designer storage-key="ui-workspace.connections"></connection-designer></section>
+    <div class="cards composable-row">
+      <section class="panel"><h2>Slider</h2><flow-slider name="c-slider"></flow-slider></section>
+      <section class="panel"><h2>Doubler</h2><flow-mapper name="c-doubler"></flow-mapper></section>
+      <section class="panel"><h2>Chart</h2><flow-chart name="c-chart"></flow-chart></section>
+      <section class="panel"><h2>Log</h2><flow-log name="c-log"></flow-log></section>
+    </div>
   </app-route>
 
   <app-route path="/settings">
