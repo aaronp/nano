@@ -17,6 +17,7 @@
       },
       "peerDependencies": {
         "@composable/connections": "workspace:*",
+        "@composable/puzzle-editor": "workspace:*",
         "@composable/sdk": "workspace:*",
         "@composable/ui": "workspace:*",
         "lit": "^3.0.0",

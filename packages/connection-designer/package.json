@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "type": "module",
   "description": "A puzzle-style designer for declarative connections: components' ops as pieces, joined into workflows.",
-  "exports": { ".": "./src/index.ts", "./model": "./src/model.ts" },
+  "exports": { ".": "./src/index.ts" },
   "scripts": { "build": "bun ../../scripts/build-package.ts ." },
   "peerDependencies": {
     "@composable/connections": "workspace:*",
+    "@composable/puzzle-editor": "workspace:*",
     "@composable/sdk": "workspace:*",
     "@composable/ui": "workspace:*",
     "lit": "^3.0.0",

@@ -76,15 +76,15 @@ export function partners(entries: readonly PaletteEntry[], piece: PieceSpec) {
 
 export type Cell = { c: number; r: number }
 export type Step = Workflow['steps'][number]
-export type Doc = { intents: Intent[]; layout: Record<string, Cell> }
+export type Connections = { intents: Intent[]; layout: Record<string, Cell> }
 export type BoardPiece = { workflow: string; index: number; cell: Cell; step: Step }
 
-export const emptyDoc = (): Doc => ({ intents: [], layout: {} })
-export const workflows = (doc: Doc) => doc.intents.filter((i): i is Workflow => i.kind === 'workflow')
-export const connections = (doc: Doc) => doc.intents.filter((i): i is Connection => i.kind === 'connection')
+export const emptyConnections = (): Connections => ({ intents: [], layout: {} })
+export const workflows = (doc: Connections) => doc.intents.filter((i): i is Workflow => i.kind === 'workflow')
+export const connections = (doc: Connections) => doc.intents.filter((i): i is Connection => i.kind === 'connection')
 
 /** Where each workflow starts; ones without a layout (e.g. loaded from bare intents) go on rows of their own. */
-export function cellsOf(doc: Doc): Record<string, Cell> {
+export function cellsOf(doc: Connections): Record<string, Cell> {
   const out = { ...doc.layout }
   let r = Math.max(-1, ...Object.values(out).map(c => c.r))
   for (const w of workflows(doc)) if (!out[w.id]) out[w.id] = { c: 0, r: ++r }
@@ -92,14 +92,14 @@ export function cellsOf(doc: Doc): Record<string, Cell> {
 }
 
 /** Every piece on the board, from the workflows and their layout. */
-export function board(doc: Doc): BoardPiece[] {
+export function board(doc: Connections): BoardPiece[] {
   const cells = cellsOf(doc)
   return workflows(doc).flatMap(w => w.steps.map((step, index) =>
     ({ workflow: w.id, index, cell: { c: cells[w.id].c + index, r: cells[w.id].r }, step })))
 }
 
-const at = (doc: Doc, cell: Cell) => board(doc).find(p => p.cell.c === cell.c && p.cell.r === cell.r)
-const replace = (doc: Doc, id: string, next: Intent[]): Intent[] =>
+const at = (doc: Connections, cell: Cell) => board(doc).find(p => p.cell.c === cell.c && p.cell.r === cell.r)
+const replace = (doc: Connections, id: string, next: Intent[]): Intent[] =>
   doc.intents.flatMap(i => i.id === id ? next : [i])
 
 /**
@@ -107,7 +107,7 @@ const replace = (doc: Doc, id: string, next: Intent[]): Intent[] =>
  * between two it merges them; otherwise it starts a workflow `newId`. Joins are made whatever the types: `plan`
  * reports a mismatch.
  */
-export function place(doc: Doc, step: Step, cell: Cell, newId: string): Doc {
+export function place(doc: Connections, step: Step, cell: Cell, newId: string): Connections {
   if (at(doc, cell)) return doc
   const cells = cellsOf(doc)
   const left = at(doc, { c: cell.c - 1, r: cell.r }), right = at(doc, { c: cell.c + 1, r: cell.r })
@@ -129,7 +129,7 @@ export function place(doc: Doc, step: Step, cell: Cell, newId: string): Doc {
 }
 
 /** Take a piece off the board: its workflow splits around it (the right part becomes workflow `newId`). */
-export function take(doc: Doc, workflow: string, index: number, newId: string): Doc {
+export function take(doc: Connections, workflow: string, index: number, newId: string): Connections {
   const w = workflows(doc).find(x => x.id === workflow)
   if (!w || !w.steps[index]) return doc
   const cells = cellsOf(doc), start = cells[workflow]
@@ -146,25 +146,25 @@ export function take(doc: Doc, workflow: string, index: number, newId: string): 
 }
 
 /** Move a piece to another empty cell: take it off, then place it. */
-export const move = (doc: Doc, workflow: string, index: number, cell: Cell, newIds: [string, string]): Doc => {
+export const move = (doc: Connections, workflow: string, index: number, cell: Cell, newIds: [string, string]): Connections => {
   const step = workflows(doc).find(w => w.id === workflow)?.steps[index]
   if (!step || at(doc, cell)) return doc
   return place(take(doc, workflow, index, newIds[0]), step, cell, newIds[1])
 }
 
 /** Change which instances a piece means (e.g. pin it to one instance when its component has several). */
-export const pin = (doc: Doc, workflow: string, index: number, select: InstanceSel): Doc => ({
+export const pin = (doc: Connections, workflow: string, index: number, select: InstanceSel): Connections => ({
   ...doc,
   intents: doc.intents.map(i => i.kind === 'workflow' && i.id === workflow
     ? { ...i, steps: i.steps.map((s, j) => j === index ? { ...s, select } : s) } : i),
 })
 
 /** Switch an intent on or off. */
-export const toggle = (doc: Doc, id: string, enabled: boolean): Doc =>
+export const toggle = (doc: Connections, id: string, enabled: boolean): Connections =>
   ({ ...doc, intents: doc.intents.map(i => i.id === id ? { ...i, enabled } : i) })
 
-export const addConnection = (doc: Doc, c: Connection): Doc => ({ ...doc, intents: [...doc.intents, c] })
-export const remove = (doc: Doc, id: string): Doc => {
+export const addConnection = (doc: Connections, c: Connection): Connections => ({ ...doc, intents: [...doc.intents, c] })
+export const remove = (doc: Connections, id: string): Connections => {
   const layout = { ...doc.layout }; delete layout[id]
   return { intents: doc.intents.filter(i => i.id !== id), layout }
 }

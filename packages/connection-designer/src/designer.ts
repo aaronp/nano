@@ -12,10 +12,9 @@ import { LitElement, css, html, nothing, svg } from 'lit'
 import { fail, unwrap, type Instance, type SystemRuntime } from '@composable/sdk'
 import { Orchestrators, plan, type Connection, type InstanceSel, type Orchestrator, type Plan, type Problem } from '@composable/connections'
 import { base, requestSystem, t } from '@composable/ui'
-import {
-  addConnection, board, componentKey, connections, emptyDoc, joins, look, move, palette, partners, pin, place, remove,
-  stepFor, take, toggle, workflows, type BoardPiece, type Doc, type PaletteEntry, type PieceSpec, type TypeInfo,
-} from './model'
+import { board as bm } from '@composable/puzzle-editor/model'
+const { addConnection, board, componentKey, connections, emptyConnections, joins, look, move, palette, partners, pin, place, remove, stepFor, take, toggle, workflows } = bm
+type BoardPiece = bm.BoardPiece; type Connections = bm.Connections; type PaletteEntry = bm.PaletteEntry; type PieceSpec = bm.PieceSpec; type TypeInfo = bm.TypeInfo
 
 const W = 150, H = 60, D = 14, CELL_W = W, CELL_H = 92, COLS = 8, ROWS = 6
 let seq = 0
@@ -48,7 +47,7 @@ export class ConnectionDesigner extends LitElement {
   declare system?: SystemRuntime
   declare storageKey?: string
   #instances: Instance[] = []
-  #doc: Doc = emptyDoc()
+  #doc: Connections = emptyConnections()
   #live = false
   #drag?: Drag
   #json = ''
@@ -77,16 +76,16 @@ export class ConnectionDesigner extends LitElement {
   }
 
   // ---- document
-  #set(doc: Doc) {
+  #set(doc: Connections) {
     this.#doc = doc
     this.#json = ''
     if (this.storageKey) try { localStorage.setItem(this.storageKey, JSON.stringify(doc)) } catch {}
     if (this.#live) this.#orch?.set(doc.intents)
     this.requestUpdate()
   }
-  #load(): Doc | undefined {
+  #load(): Connections | undefined {
     if (!this.storageKey) return undefined
-    try { const s = localStorage.getItem(this.storageKey); return s ? JSON.parse(s) as Doc : undefined } catch { return undefined }
+    try { const s = localStorage.getItem(this.storageKey); return s ? JSON.parse(s) as Connections : undefined } catch { return undefined }
   }
   #setLive(on: boolean) {
     this.#live = on
@@ -168,7 +167,7 @@ export class ConnectionDesigner extends LitElement {
         <div class="row">
           <button @click=${() => this.#loadJson()}>Load</button>
           <button @click=${() => navigator.clipboard?.writeText(JSON.stringify(this.#doc, null, 2))}>Copy</button>
-          <button @click=${() => this.#set(emptyDoc())}>Clear</button>
+          <button @click=${() => this.#set(emptyConnections())}>Clear</button>
         </div>
         ${this.#jsonError ? html`<p class="problem">${this.#jsonError}</p>` : nothing}
       </aside>`

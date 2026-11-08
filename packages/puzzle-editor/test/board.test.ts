@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test'
 import Type from 'typebox'
 import { Components, ok, typeHash } from '@composable/sdk'
 import { plan } from '@composable/connections'
-import { board, emptyDoc, look, move, palette, partners, pin, place, take, toggle, workflows, stepFor, type Doc } from '../src/model'
+import { board, emptyConnections, look, move, palette, partners, pin, place, take, toggle, workflows, stepFor, type Connections } from '../src/model/board'
 
 const Address = Type.Object({ street: Type.String(), city: Type.String(), country: Type.String() }, { $id: 'geo.Address' })
 const Jurisdiction = Type.Object({ city: Type.String(), country: Type.String() }, { $id: 'geo.Jurisdiction' })
@@ -46,7 +46,7 @@ test('partners: what a picked-up piece could join (exact SAID, or an input that 
 test('edits: place, join, merge and split keep the board and the workflow intents the same thing', () => {
   // setup: one piece per component, by component
   const p = palette(instances), piece = (key: string) => { const e = p.find(x => x.key === key)!; return stepFor(e, e.pieces[0]) }
-  let doc: Doc = emptyDoc()
+  let doc: Connections = emptyConnections()
   // call out our methods under test: crm at (0,0), tax at (2,0) are separate; the map between merges them
   doc = place(doc, piece('t/crm'), { c: 0, r: 0 }, 'w1')
   doc = place(doc, piece('t/tax'), { c: 2, r: 0 }, 'w2')
@@ -71,7 +71,7 @@ test('edits: place, join, merge and split keep the board and the workflow intent
 
 test('edits: pin a piece to one instance; switch a workflow off; the document is plain JSON', () => {
   const p = palette([...instances, { id: 'map2', manifest: map.manifest }]), e = (k: string) => p.find(x => x.key === k)!
-  let doc = place(place(place(emptyDoc(), stepFor(e('t/crm'), e('t/crm').pieces[0]), { c: 0, r: 0 }, 'w'),
+  let doc = place(place(place(emptyConnections(), stepFor(e('t/crm'), e('t/crm').pieces[0]), { c: 0, r: 0 }, 'w'),
     stepFor(e('t/map'), e('t/map').pieces[0]), { c: 1, r: 0 }, 'x'), stepFor(e('t/tax'), e('t/tax').pieces[0]), { c: 2, r: 0 }, 'y')
   const all = [...instances, { id: 'map2', manifest: map.manifest }]
   expect(plan(doc.intents, all).status.w.problems).toEqual([{ kind: 'ambiguous', at: 'step 1', instances: ['map', 'map2'] }])
@@ -91,7 +91,7 @@ test('look: deterministic per SAID, different for different types, plain for "an
 })
 
 test('typeName shows constraints, so types that differ only by them read differently', async () => {
-  const { typeName } = await import('../src/model')
+  const { typeName } = await import('../src/model/board')
   expect(typeName(Type.Number())).toBe('number')
   expect(typeName(Type.Number({ minimum: 0, maximum: 100 }))).toBe('number 0..100')
   expect(typeName(Type.String({ pattern: '^a' }))).toBe('string (pattern)')
