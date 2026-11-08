@@ -18,27 +18,46 @@ export const DocumentOps = {
 }
 const o = DocumentOps
 
-const changed = (doc: EditorDoc, system: SystemInstance) => system.notify(o.modelUpdated, doc)
+type State = { doc: EditorDoc; saved: string; loading: boolean }
 
-/** Holds the latest of each part. `load` reaches the editors by their names in the puzzle-editor's System. */
+/** Publish the doc, unless a load is under way or nothing saved has changed (so an autosave saves only real edits). */
+const changed = async (state: State, system: SystemInstance, force = false) => {
+  const now = JSON.stringify(state.doc)
+  if (state.loading || (!force && now === state.saved)) return
+  state.saved = now
+  await system.notify(o.modelUpdated, state.doc)
+}
+
+/**
+ * Holds the latest of each part. `load` reaches the editors by their names in the puzzle-editor's System; while it
+ * runs the parts arrive silently, and it publishes the whole doc once at the end.
+ */
 export const editorDocument = C.define({
-  state: (): { doc: EditorDoc } => ({ doc: emptyEditorDoc() }),
+  state: (): State => ({ doc: emptyEditorDoc(), saved: JSON.stringify(emptyEditorDoc()), loading: false }),
   handlers: [
-    [o.load, async (input, { system }) => {
+    [o.load, async (input, { state, system }) => {
       const r = checkDoc(input)
       if (r.type !== 'success') return r
+      const { types, components, connections } = r.data
+      state.loading = true
       for (const c of [
-        () => system.call('types', TypeEditorOps.setTypes, r.data.types),
-        () => system.call('list', ComponentListOps.setDrafts, r.data.components),
-        () => system.call('board', ConnectionEditorOps.setConnections, r.data.connections),
-      ]) { const x = await c(); if (x.type !== 'success') return x }
-      return ok(r.data)
+        () => system.call('types', TypeEditorOps.setTypes, types),
+        () => system.call('list', ComponentListOps.setDrafts, components),
+        () => system.call('board', ConnectionEditorOps.setConnections, connections),
+      ]) {
+        const x = await c()
+        if (x.type !== 'success') { state.loading = false; await changed(state, system); return x }
+      }
+      state.loading = false
+      state.doc = { types, components, connections }
+      await changed(state, system, true)
+      return ok(state.doc)
     }],
     // live types come from the System, so they are not saved
     [o.typesIn, async ({ types }, { state, system }) => {
-      state.doc = { ...state.doc, types: types.filter(t => t.kind !== 'live') }; await changed(state.doc, system)
+      state.doc = { ...state.doc, types: types.filter(t => t.kind !== 'live') }; await changed(state, system)
     }],
-    [o.draftsIn, async (components, { state, system }) => { state.doc = { ...state.doc, components }; await changed(state.doc, system) }],
-    [o.connectionsIn, async (connections, { state, system }) => { state.doc = { ...state.doc, connections }; await changed(state.doc, system) }],
+    [o.draftsIn, async (components, { state, system }) => { state.doc = { ...state.doc, components }; await changed(state, system) }],
+    [o.connectionsIn, async (connections, { state, system }) => { state.doc = { ...state.doc, connections }; await changed(state, system) }],
   ],
 })

@@ -53,8 +53,12 @@ test('Live gates intents-updated; switching off sends []', async () => {
   await page.call('editor', ConnectionEditorOps.setLive, true)
   await board.call('board', ConnectionEditorOps.place, { component: { author: 't', id: 'tax' }, op: rate.name, cell: { c: 2, r: 0 } })
   expect(sent.length).toBe(2)                                      // on switching on, and after the edit
+  await page.call('editor', ConnectionEditorOps.setLive, true)    // already on: nothing resent
+  expect(sent.length).toBe(2)
   await page.call('editor', ConnectionEditorOps.setLive, false)
   expect(sent.at(-1)).toEqual([])
+  await page.call('editor', ConnectionEditorOps.setLive, false)   // already off: no second []
+  expect(sent.length).toBe(3)
 })
 
 test('live types: each distinct named schema once, by SAID, and they reach the type editor read-only', async () => {
@@ -77,4 +81,66 @@ test('draft edits reach model-updated through drafts-updated; a failed edit chan
   expect(await inner('list').call('list', ComponentListOps.addDraft, { id })).toMatchObject({ type: 'error', error: { code: 'validation' } })
   expect(docs.length).toBe(n)
   expect(ed.children.list.state.drafts).toEqual([{ id, ops: [] }])
+})
+
+const crmAt = (c: number) => ({ component: { author: 't', id: 'crm' }, op: updated.name, cell: { c, r: 0 } })
+const modelOut = (page: Awaited<ReturnType<typeof editorIn>>['page']) => {
+  const docs: EditorDoc[] = []
+  page.subscribe(DocumentOps.modelUpdated, d => { docs.push(d) }, { from: 'editor' })
+  return docs
+}
+
+test('each load publishes the whole doc exactly once', async () => {
+  const { page } = await editorIn()
+  const docs = modelOut(page)
+  const full: EditorDoc = {
+    ...emptyEditorDoc(),
+    components: [{ id: { author: 'me', id: 'geo' }, ops: [{ name: 'go', input: { type: 'string', array: false } }] }],
+    connections: { intents: [{ kind: 'workflow', id: 'w', steps: [{ select: { by: 'any' }, op: 'x' }] }], layout: { w: { c: 0, r: 0 } } },
+  }
+  expect((await page.call('editor', DocumentOps.load, full)).type).toBe('success'); await flush()
+  expect(docs).toEqual([full])
+  expect((await page.call('editor', DocumentOps.load, emptyEditorDoc())).type).toBe('success'); await flush()
+  expect(docs).toEqual([full, emptyEditorDoc()])
+})
+
+test('model-updated only when the saved doc changes: a new instance outside sends nothing', async () => {
+  const { s, page } = await editorIn()
+  unwrap(s.register('system', Systems.component(s).create() as never))
+  unwrap(s.subscribe({ source: 'system', op: Systems.ops.changed.name, listener: 'editor', target: ComponentListOps.setInstances.name }))
+  await page.call('editor', DocumentOps.load, emptyEditorDoc()); await flush()
+  const docs = modelOut(page)
+  unwrap(s.register('map', mapper.create())); await flush()
+  expect(docs).toEqual([])
+})
+
+test('a rejected board edit fails, changes nothing and sends no intents', async () => {
+  const { page, ed } = await editorIn()
+  const sent: unknown[][] = []
+  page.subscribe(ConnectionEditorOps.intentsUpdated, i => { sent.push(i) }, { from: 'editor' })
+  const board = ed.children.board.systems[0]
+  await board.call('board', ConnectionEditorOps.place, crmAt(0))
+  await page.call('editor', ConnectionEditorOps.setLive, true)
+  const before = JSON.stringify(ed.children.board.state.connections), n = sent.length
+  expect(await board.call('board', ConnectionEditorOps.place, crmAt(0))).toMatchObject({ type: 'error', error: { code: 'validation', message: 'place rejected' } })
+  await flush()
+  expect(sent.length).toBe(n)
+  expect(JSON.stringify(ed.children.board.state.connections)).toBe(before)
+})
+
+test('the insides are hidden: a child op that is not exposed is unknown on the editor', async () => {
+  const { page } = await editorIn()
+  expect(await page.call('editor', TypeEditorOps.addRecord, { id: 'a', name: 'A' })).toMatchObject({ type: 'error', error: { code: 'unknown-action' } })
+})
+
+test('a failed type edit returns its error and publishes nothing', async () => {
+  const { page, inner } = await editorIn()
+  await page.call('editor', DocumentOps.load, emptyEditorDoc())
+  await inner('types').call('types', TypeEditorOps.addRecord, { id: 'a', name: 'A' })
+  await inner('types').call('types', TypeEditorOps.addField, { record: 'a', name: 's', ref: { type: 'string', array: false } })
+  await flush()
+  const docs = modelOut(page)
+  expect(await inner('types').call('types', TypeEditorOps.remove, { id: 'string' })).toMatchObject({ type: 'error', error: { code: 'validation' } })
+  await flush()
+  expect(docs).toEqual([])
 })

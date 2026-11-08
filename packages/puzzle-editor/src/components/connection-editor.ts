@@ -1,5 +1,5 @@
 import Type from 'typebox'
-import { ComponentId, Components, Instance, ok, type SystemInstance } from '@composable/sdk'
+import { ComponentId, Components, Instance, fail, ok, type SystemInstance } from '@composable/sdk'
 import { plan, type Connection, type InstanceSel, type Status } from '@composable/connections'
 import { board, type ComponentEntry } from '../model'
 import type { TypesUpdated } from './type-editor'
@@ -35,7 +35,9 @@ type State = {
 }
 
 const replan = (s: State) => { s.status = plan(s.connections.intents, s.instances).status }
-const set = async (s: State, system: SystemInstance, connections: board.Connections) => {
+/** `rejected`: the edit's name, for place/take/move, which refuse by returning the same doc. */
+const set = async (s: State, system: SystemInstance, connections: board.Connections, rejected?: string) => {
+  if (rejected && connections === s.connections) return fail('validation', `${rejected} rejected`)
   s.connections = connections
   replan(s)
   await system.notify(o.connectionsUpdated, connections)
@@ -52,13 +54,14 @@ export const connectionEditor = C.define({
     [o.setInstances, (instances, { state }) => { state.instances = instances; replan(state) }],
     [o.setLooks, (looks, { state }) => { state.looks = looks }],
     [o.setLive, async (on, { state, system }) => {
+      if (on === state.live) return
       state.live = on
       await system.notify(o.intentsUpdated, on ? state.connections.intents : [])
     }],
     [o.place, ({ component, op, cell }, { state, system }) =>
-      set(state, system, board.place(state.connections, { select: { by: 'component', id: component }, op }, cell, id()))],
-    [o.take, ({ workflow, index }, { state, system }) => set(state, system, board.take(state.connections, workflow, index, id()))],
-    [o.move, ({ workflow, index, cell }, { state, system }) => set(state, system, board.move(state.connections, workflow, index, cell, [id(), id()]))],
+      set(state, system, board.place(state.connections, { select: { by: 'component', id: component }, op }, cell, id()), 'place')],
+    [o.take, ({ workflow, index }, { state, system }) => set(state, system, board.take(state.connections, workflow, index, id()), 'take')],
+    [o.move, ({ workflow, index, cell }, { state, system }) => set(state, system, board.move(state.connections, workflow, index, cell, [id(), id()]), 'move')],
     [o.pin, ({ workflow, index, select }, { state, system }) => set(state, system, board.pin(state.connections, workflow, index, select))],
     [o.toggle, ({ id, enabled }, { state, system }) => set(state, system, board.toggle(state.connections, id, enabled))],
     [o.addRule, ({ connection }, { state, system }) => set(state, system, board.addConnection(state.connections, connection))],
