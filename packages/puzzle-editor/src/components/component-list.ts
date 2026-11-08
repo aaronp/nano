@@ -19,8 +19,8 @@ export const ComponentListOps = {
   addDraft: C.op('add-draft', 'Add an empty draft component', { input: Type.Object({ id: ComponentId }), output: Drafts }),
   addOp: C.op('add-op', 'Add an op to a draft', { input: Type.Object(OpOf), output: Drafts }),
   removeOp: C.op('remove-op', 'Remove an op from a draft', { input: Type.Object(OpOf), output: Drafts }),
-  setOpTypes: C.op('set-op-types', 'Set a draft op\'s input and output types', {
-    input: Type.Object({ ...OpOf, input: Type.Optional(Ref), output: Type.Optional(Ref) }), output: Drafts,
+  setOpTypes: C.op('set-op-types', 'Set a draft op\'s input and output types (null clears one, absent leaves it)', {
+    input: Type.Object({ ...OpOf, input: Type.Optional(Type.Union([Ref, Type.Null()])), output: Type.Optional(Type.Union([Ref, Type.Null()])) }), output: Drafts,
   }),
   removeDraft: C.op('remove-draft', 'Delete a draft component', { input: Type.Object({ component: ComponentId }), output: Drafts }),
   componentsUpdated: C.op('components-updated', 'Live and draft components, with their manifests', { output: any<ComponentEntry[]>() }),
@@ -58,7 +58,9 @@ export const componentList = C.define({
     [o.addOp, ({ component, name }, { state, system }) => edit(addOp(state.drafts, component, name), state, system)],
     [o.removeOp, ({ component, name }, { state, system }) => edit(removeOp(state.drafts, component, name), state, system)],
     [o.setOpTypes, ({ component, name, input, output }, { state, system }) =>
-      edit(setOpTypes(state.drafts, component, name, { ...(input ? { input } : {}), ...(output ? { output } : {}) }), state, system)],
+      edit(setOpTypes(state.drafts, component, name, {
+      ...(input !== undefined ? { input: input ?? undefined } : {}), ...(output !== undefined ? { output: output ?? undefined } : {}),
+    }), state, system)],
     [o.removeDraft, ({ component }, { state, system }) => edit(removeDraft(state.drafts, component), state, system)],
   ],
 })

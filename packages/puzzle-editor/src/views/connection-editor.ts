@@ -4,6 +4,7 @@
  * switch. It reads the component's state and acts only by calling its ops.
  */
 import { css, html, nothing } from 'lit'
+import { live } from 'lit/directives/live.js'
 import type { TSchema } from 'typebox'
 import type { Created, Input, Instance, Op, Result } from '@composable/sdk'
 import type { Connection, InstanceSel, Problem } from '@composable/connections'
@@ -37,7 +38,9 @@ export class ConnectionEditorView extends View<Created<typeof connectionEditor>>
   /** Call one of the component's own ops through its handle; a failed Result shows as text. */
   async #act<P extends Op<TSchema, TSchema | undefined>>(op: P, input: Input<P>) {
     const h = this.component.systems[0]
-    const r: Result<unknown> = h ? await h.call(h.instanceId, op, input) : { type: 'error', error: { code: 'unavailable', message: 'not in a System' } }
+    let r: Result<unknown>
+    try { r = h ? await h.call(h.instanceId, op, input) : { type: 'error', error: { code: 'unavailable', message: 'not in a System' } } }
+    catch (e) { r = { type: 'error', error: { code: 'handler', message: String((e as Error)?.message ?? e) } } }
     this.#error = r.type === 'success' ? '' : r.type === 'error' ? r.error.message : r.reason
     this.requestUpdate()
   }
@@ -77,7 +80,7 @@ export class ConnectionEditorView extends View<Created<typeof connectionEditor>>
   }
 
   override render() {
-    const { connections, status, live } = this.component.state
+    const { connections, status, live: liveOn } = this.component.state
     const entries = this.#entries()
     const names = new Map(entries.flatMap(e => e.pieces.flatMap(p => [p.input, p.output])).filter((x): x is TypeInfo => !!x).map(x => [x.hash, x.name]))
     const fit = this.#drag ? new Set(partners(entries, this.#drag.piece).map(p => `${p.key}|${p.op}`)) : undefined
@@ -103,11 +106,11 @@ export class ConnectionEditorView extends View<Created<typeof connectionEditor>>
         ${placed.map(b => this.#boardPiece(b, entries, fit))}
       </main>
       <aside class="side">
-        <h3>Intents <label class="live"><input type="checkbox" .checked=${live} @change=${(e: Event) => void this.#act(O.setLive, (e.target as HTMLInputElement).checked)}> Live</label></h3>
+        <h3>Intents <label class="live"><input type="checkbox" .checked=${live(liveOn)} @change=${(e: Event) => void this.#act(O.setLive, (e.target as HTMLInputElement).checked)}> Live</label></h3>
         ${this.#error ? html`<p class="problem error">${this.#error}</p>` : nothing}
         ${connections.intents.map(i => html`
           <div class="intent ${status[i.id]?.viable ? 'viable' : 'not'}" data-intent=${i.id}>
-            <label><input type="checkbox" .checked=${i.enabled !== false} @change=${(e: Event) => void this.#act(O.toggle, { id: i.id, enabled: (e.target as HTMLInputElement).checked })}>
+            <label><input type="checkbox" .checked=${live(i.enabled !== false)} @change=${(e: Event) => void this.#act(O.toggle, { id: i.id, enabled: (e.target as HTMLInputElement).checked })}>
               <b>${i.kind === 'workflow' ? `workflow ${i.id}` : `connection ${i.id}`}</b></label>
             <button class="x" title="Remove" @click=${() => void this.#act(O.remove, { id: i.id })}>×</button>
             <div class="status">${status[i.id]?.viable ? `viable · ${status[i.id]!.routes} route(s)` : 'not viable'}</div>

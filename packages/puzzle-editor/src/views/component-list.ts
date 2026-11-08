@@ -17,7 +17,9 @@ export class ComponentListView extends View<Created<typeof componentList>> {
 
   async #act<P extends Op<TSchema, TSchema | undefined>>(op: P, input: Input<P>) {
     const h = this.component.systems[0]
-    const r: Result<unknown> = h ? await h.call(h.instanceId, op, input) : { type: 'error', error: { code: 'unavailable', message: 'not in a System' } }
+    let r: Result<unknown>
+    try { r = h ? await h.call(h.instanceId, op, input) : { type: 'error', error: { code: 'unavailable', message: 'not in a System' } } }
+    catch (e) { r = { type: 'error', error: { code: 'handler', message: String((e as Error)?.message ?? e) } } }
     this.#error = r.type === 'success' ? '' : r.type === 'error' ? r.error.message : r.reason
     if (r.type === 'success') this.#adding = undefined
     this.requestUpdate()
@@ -35,10 +37,10 @@ export class ComponentListView extends View<Created<typeof componentList>> {
   /** A type picker plus an array switch for one end of an op. */
   #picker(c: { author: string; id: string }, op: DraftOp, end: 'input' | 'output') {
     const ref = op[end]
-    const set = (r: TypeRef) => void this.#act(O.setOpTypes, { component: c, name: op.name, [end]: r })
+    const set = (r: TypeRef | null) => void this.#act(O.setOpTypes, { component: c, name: op.name, [end]: r })
     return html`<label>${end}
-      <select class=${end} @change=${(e: Event) => { const v = (e.target as HTMLSelectElement).value; if (v) set({ type: v, array: ref?.array ?? false }) }}>
-        <option value="" ?selected=${!ref} disabled>(none)</option>
+      <select class=${end} @change=${(e: Event) => { const v = (e.target as HTMLSelectElement).value; set(v ? { type: v, array: ref?.array ?? false } : null) }}>
+        <option value="" ?selected=${!ref}>(none)</option>
         ${this.component.state.types.map(ty => html`<option value=${ty.id} ?selected=${ref?.type === ty.id}>${nameOf(ty)}</option>`)}
       </select></label>
       <label><input type="checkbox" class="${end}-array" .checked=${ref?.array ?? false} ?disabled=${!ref}

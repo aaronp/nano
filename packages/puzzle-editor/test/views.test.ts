@@ -5,9 +5,9 @@ import { ConnectionEditorOps } from '../src'
 import { iconFor, tilePath } from '../src/views/tiles'
 import { PRESETS } from '../src/model'
 import { click, clickLive, dragRow, hosted, select, type } from './dom-helpers'
-import { flush } from './fixtures'
+import { flush, updated } from './fixtures'
 
-const made = (s: { snapshot(): { subscriptions: { listener: string; target?: string }[] } }) =>
+const made = (s: { snapshot(): { subscriptions: { source: string; listener: string; target?: string }[] } }) =>
   s.snapshot().subscriptions.filter(x => x.listener !== 'orchestrator' && x.target)
 
 test('the palette lists the components and their pieces', async () => {
@@ -48,8 +48,11 @@ test('switching Live off removes the links a linked orchestrator made', async ()
   const id = el.getAttribute('name')!
   unwrap(s.subscribe({ source: id, op: ConnectionEditorOps.intentsUpdated.name, listener: 'orchestrator', target: OrchestratorOps.setIntents.name }))
   await dragRow(el, ['t/crm', 't/map', 't/tax'])
+  expect(made(s)).toEqual([])
   await clickLive(el, true); await flush()
-  expect(made(s)).toHaveLength(2)
+  expect(made(s).map(x => `${(x as any).source}→${x.listener}`)).toEqual(['crm→map', 'map→tax'])
+  await (s.component('crm') as any).notify(updated, { city: 'Leeds', country: 'UK', street: '1 Park Row' }); await flush()
+  expect((s.component('tax') as any).state).toEqual([{ city: 'leeds', country: 'UK' }])
   await clickLive(el, false); await flush()
   expect(made(s)).toHaveLength(0)
 })
@@ -63,6 +66,8 @@ test('the component list adds a draft with an op and its types, marked draft', a
   expect(el.shadowRoot!.querySelector('[data-component="me/people"]')!.classList.contains('draft')).toBe(true)
   await click(el, '[data-op="create"] .input-array')
   expect(model.state.drafts[0].ops[0].input).toEqual({ type: 'string', array: true })
+  await select(el, '[data-op="create"] .input', '')
+  expect(model.state.drafts[0].ops[0].input).toBeUndefined()
 })
 
 test('the component list shows a duplicate element as an error', async () => {
