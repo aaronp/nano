@@ -77,4 +77,4 @@ export class PuzzleEditorView extends View<Created<typeof puzzleEditor>> {
 }
 
 /** Register as `<${tag}>` (default `puzzle-editor`); a no-op if taken. */
-export const definePuzzleEditor = (tag = 'puzzle-editor') => { if (!customElements.get(tag)) customElements.define(tag, PuzzleEditorView) }
+export const definePuzzleEditor = (tag = 'puzzle-editor') => { if (!customElements.get(tag)) customElements.define(tag, class extends PuzzleEditorView {}) }  // a subclass per tag, so several prefixes can coexist

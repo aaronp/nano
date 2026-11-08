@@ -78,7 +78,7 @@ export class TypeEditorView extends View<Created<typeof typeEditor>> {
       ${this.#errors.map(e => html`<div class="problem">${e}</div>`)}
       ${this.#mode === 'code' ? html`
         <div class="code-bar"><button class="revert" @click=${() => { this.#code = undefined; this.#errors = []; this.requestUpdate() }}>Revert</button>
-          <button class="apply primary" @click=${async () => { if (await this.#act(O.setCode, { source: this.#code ?? printTypes(this.component.state.types) })) this.#code = undefined }}>Apply</button></div>
+          <button class="apply primary" @click=${async () => { if (await this.#act(O.setCode, { source: this.#code ?? printTypes(this.component.state.types) })) { this.#code = undefined; this.requestUpdate() } }}>Apply</button></div>
         <textarea class="code" aria-label="TypeScript types" spellcheck="false" .value=${live(code)} @input=${(e: Event) => { this.#code = (e.target as HTMLTextAreaElement).value }}></textarea>
         <p class="muted">Fields take a named type, <code>T[]</code> or <code>Array&lt;T&gt;</code>. <code>type X = Y</code> makes X a brand of Y. Removing a type that something uses is refused.</p>`
         : html`
@@ -278,4 +278,4 @@ export class TypeEditorView extends View<Created<typeof typeEditor>> {
 }
 
 /** Register as `<${tag}>` (default `type-editor`); a no-op if taken. */
-export const defineTypeEditor = (tag = 'type-editor') => { if (!customElements.get(tag)) customElements.define(tag, TypeEditorView) }
+export const defineTypeEditor = (tag = 'type-editor') => { if (!customElements.get(tag)) customElements.define(tag, class extends TypeEditorView {}) }  // a subclass per tag, so several prefixes can coexist

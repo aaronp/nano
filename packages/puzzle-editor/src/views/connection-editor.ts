@@ -224,4 +224,4 @@ export class ConnectionEditorView extends View<Created<typeof connectionEditor>>
 }
 
 /** Register as `<${tag}>` (default `connection-editor`); a no-op if taken. */
-export const defineConnectionEditor = (tag = 'connection-editor') => { if (!customElements.get(tag)) customElements.define(tag, ConnectionEditorView) }
+export const defineConnectionEditor = (tag = 'connection-editor') => { if (!customElements.get(tag)) customElements.define(tag, class extends ConnectionEditorView {}) }  // a subclass per tag, so several prefixes can coexist

@@ -3,6 +3,7 @@ import { unwrap } from '@composable/sdk'
 import { OrchestratorOps, Orchestrators } from '@composable/connections'
 import { ConnectionEditorOps } from '../src'
 import { iconFor, tilePath } from '../src/views/tiles'
+import { defineEditor } from '../src/views'
 import { PRESETS, presetShape, type EditorType } from '../src/model'
 import { click, clickLive, dragRow, hosted, select, type } from './dom-helpers'
 import { flush, updated } from './fixtures'
@@ -105,4 +106,13 @@ test('<puzzle-editor>: both tabs and the board in one System; Show model shows t
   expect(el.shadowRoot!.querySelector('.status-line')!.textContent).toBe('0 placed · 0 connections · 0 problems')
   await click(el, '.show-model'); expect(JSON.parse(el.shadowRoot!.querySelector('.model pre')!.textContent!)).toMatchObject({ types: expect.any(Array) })
   await click(el, '.clear-all'); expect(el.shadowRoot!.querySelector('.problem')).toBeNull()
+})
+
+test('a successful code apply shows the printed source; two prefixes can be defined', async () => {
+  const { el, model } = await hosted('type-editor')
+  await click(el, '.tab-code'); await type(el, 'textarea.code', 'type   B = string; // brand'); await click(el, '.apply')
+  expect(model.state.types.some((t: EditorType) => t.kind === 'brand' && t.name === 'B')).toBe(true)
+  expect((el.shadowRoot!.querySelector('textarea.code') as HTMLTextAreaElement).value).toContain('type B = string; // brand')
+  defineEditor('alt-')
+  expect(customElements.get('alt-puzzle-editor')).toBeDefined()
 })

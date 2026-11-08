@@ -87,4 +87,4 @@ export class ComponentListView extends View<Created<typeof componentList>> {
 }
 
 /** Register as `<${tag}>` (default `component-list`); a no-op if taken. */
-export const defineComponentList = (tag = 'component-list') => { if (!customElements.get(tag)) customElements.define(tag, ComponentListView) }
+export const defineComponentList = (tag = 'component-list') => { if (!customElements.get(tag)) customElements.define(tag, class extends ComponentListView {}) }  // a subclass per tag, so several prefixes can coexist
