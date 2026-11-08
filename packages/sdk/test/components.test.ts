@@ -1,5 +1,6 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
+import type { TSchema } from 'typebox'
 import { unwrap, Calls, Components, Manifests, Notifications, Systems, fail, ok, type ComponentFactory, type Op, type SystemInstance, type SystemRuntime } from '../src'
 
 const flush = () => new Promise(r => setTimeout(r, 0))
@@ -185,4 +186,32 @@ test('a policy is just a wrapping container: a narrower manifest and a filtered 
   expect(sandboxed.manifest.ops.map(o => o.name)).toEqual(['t/caller/go'])
   expect((await page.call('sb', go, 1)).type).toBe('not-allowed')
   expect((await page.call('sb', other, null)).type).toBe('error')
+})
+
+test('pipe exposes a chain as one action: A → B → C, failing fast, same correlation', async () => {
+  const s = Systems.create(), page = unwrap(s.register('page', Components.party()))
+  const D = Components.declare({ author: 't', id: 'double' })
+  const dbl = D.op('double', 'n * 2', { input: Type.Number(), output: Type.Number() })
+  const double = D.define({ state: () => null, handlers: [[dbl, n => n > 100 ? fail('handler', 'too big') : ok(n * 2)]] })
+  const P = Components.declare({ author: 't', id: 'print' })
+  const show = P.op('show', 'n → text', { input: Type.Number(), output: Type.String() })
+  const print = P.define({ state: () => null, handlers: [[show, n => ok(`= ${n}`)]] })
+  let quad!: Op
+  const box = Components.compose(meta('box'), c => {
+    const a = c.use('a', double), b = c.use('b', double), p = c.use('p', print)
+    quad = c.pipe('quad', 'n * 4, as text', [a(dbl), b(dbl), p(show)])
+    return {}
+  })
+  expect(box.manifest.ops.find(o => o.name === 't/box/quad')).toMatchObject({ input: Type.Number(), output: Type.String() })
+  await add(s, 'box', box)
+  expect(await page.call('box', quad as Op<TSchema>, 5)).toEqual(ok('= 20'))
+  const r = await page.call('box', quad as Op<TSchema>, 60)          // second step fails: 120 > 100
+  expect(r.type === 'error' && r.error.code).toBe('handler')
+})
+
+test('pipe is checked at build time', () => {
+  expect(() => Components.compose(meta('c'), c => { const s = c.use('s', speaker); const l = c.use('l', listener()); c.pipe('p', 'p', [l(hear), s(say)]); return {} }))
+    .toThrow('pipe p: step 0 (l t/listener/hear) gives no output')
+  expect(() => Components.compose(meta('c'), c => { const l = c.use('l', listener()); c.pipe('p', 'p', [l(add2), l(hear)]); return {} }))
+    .toThrow('pipe p: step 0 output does not fit step 1 input')
 })
