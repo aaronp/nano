@@ -78,7 +78,6 @@ const panel = Components.compose({ id: { author: 'acme', id: 'panel' } }, c => {
 })
 ```
 
-`c.pipe(name, description, steps)` makes a chain one action; a composite that declares pipes and calls no `expose()` offers only its pipe ops (no child ops, no forwarded child sources), and `expose()` adds child ops on top.
 A composite owns a System of its own; only exposed ops are visible outside. Wrappers (`withNotify`, `withCall`,
 `withSubscribe`) intercept a handle: that is how muting, filtering or a policy is built, outside the core.
 
