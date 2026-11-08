@@ -1,9 +1,9 @@
 import { test, expect } from 'bun:test'
-import { Components, Systems } from '@composable/sdk'
+import { unwrap, Components, Systems } from '@composable/sdk'
 import { debug, onEvent, setInput, submitted } from '../src'
 
 test('debug widget runs headless: set-input, submit, table records the sender; on-event stays internal', async () => {
-  const scope = Systems.create(), page = scope.register('page', Components.party())
+  const scope = Systems.create(), page = unwrap(scope.register('page', Components.party()))
   const d = await debug.create(); scope.register('debug', d)
   const { input, table } = d.children
   await page.call('debug', setInput, 'hello')

@@ -8,7 +8,7 @@
  */
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
-import { Components, Systems, ok } from '@composable/sdk'
+import { unwrap, Components, Systems, ok } from '@composable/sdk'
 import { Binders, Orchestrators, plan, type Intent } from '../src'
 const links = (s: { snapshot(): { subscriptions: { source: string; listener: string; target?: string }[] } }) => s.snapshot().subscriptions.filter(x => x.target)
 
@@ -44,7 +44,7 @@ test('lift two CRUD libraries, map between them with a runtime component that ne
   }]] })
 
   // a system whose catalog can make all four, and a chain people.create → map.to-user → users.create
-  const scope = Systems.create({ onError: e => { throw e } }), page = scope.register('page', Components.party())
+  const scope = Systems.create({ onError: e => { throw e } }), page = unwrap(scope.register('page', Components.party()))
   scope.register('system', Systems.component(scope, { catalog: [people, users, dob, map] }).create() as never)
   const make = (author: string, id: string, name: string) => page.call('system', Systems.ops.create, { component: { author, id }, name })
   for (const [a, i, n] of [['lib', 'people', 'people'], ['app', 'person-to-user', 'map'], ['lib', 'users', 'users']]) await make(a, i, n)

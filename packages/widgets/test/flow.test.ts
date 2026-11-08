@@ -1,9 +1,9 @@
 import { test, expect } from 'bun:test'
-import { Components, Systems } from '@composable/sdk'
+import { unwrap, Components, Systems } from '@composable/sdk'
 import { chart, count, counter, log, mapNumber, mapper, push, setValue, slider, valueChanged } from '../src'
 
 test('slider → doubler → chart and slider → counter (routed); log sees every publication, grouped by correlation', async () => {
-  const scope = Systems.create({ onError: e => { throw e } }), page = scope.register('page', Components.party())
+  const scope = Systems.create({ onError: e => { throw e } }), page = unwrap(scope.register('page', Components.party()))
   const add = async <F extends { create(): any }>(id: string, f: F) => { const c = await f.create(); scope.register(id, c); return c as Awaited<ReturnType<F['create']>> }
   const l = await add('log', log)
   await add('slider', slider)

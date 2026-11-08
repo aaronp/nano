@@ -43,7 +43,7 @@ export function systemComponent(runtime: SystemRuntime, opts: { catalog?: readon
   const catalog = opts.catalog ?? [], o = SystemOps
   const opOf = (inst: string, op: string) => runtime.snapshot().instances.find(i => i.id === inst)?.manifest.ops.find(x => x.name === op)
   const factory = S.define({
-    state: () => ({ links: new Map<string, string>(), unbinds: new Map<string, () => void>(), made: new Map<string, Component>() }),
+    state: () => ({ links: new Map<string, string>(), made: new Map<string, Component>() }),
     handlers: [
       [o.instances, () => ok(runtime.snapshot().instances)],
       [o.definitions, () => ok(catalog.map(f => f.manifest))],
@@ -51,12 +51,14 @@ export function systemComponent(runtime: SystemRuntime, opts: { catalog?: readon
         const f = catalog.find(x => same(x.manifest.id, component))
         if (!f) return fail('unknown-target', `${component.author}/${component.id} is not in this System's catalog`)
         const c = await f.create()
-        runtime.register(name, c)
+        const r = runtime.register(name, c)
+        if (r.type !== 'success') { await c.dispose?.(); return r }
         state.made.set(name, c)
         return ok({ name })
       }],
       [o.remove, async ({ name }, { state }) => {
-        runtime.unregister(name)
+        const r = runtime.unregister(name)
+        if (r.type !== 'success') return r
         await state.made.get(name)?.dispose?.(); state.made.delete(name)
       }],
       [o.connect, (l, { state }) => {
@@ -68,18 +70,15 @@ export function systemComponent(runtime: SystemRuntime, opts: { catalog?: readon
       [o.disconnect, (l, { state }) => {
         const sid = state.links.get(key(l))
         if (!sid) return fail('unknown-target', 'no such link made through this System component')
-        runtime.unsubscribe(sid); state.links.delete(key(l))
+        state.links.delete(key(l)); return runtime.unsubscribe(sid)
       }],
       [o.links, () => ok(links(runtime))],
       [o.bind, (b, { state }) => {
-        const op = opOf(b.to, b.op)
-        if (!op) return fail('unknown-action', `no ${b.to} ${b.op}`)
-        try { state.unbinds.set(`${b.from}\u0000${b.dependency}`, runtime.bind(b.from, b.dependency, b.to, op as Op)) } catch (e: any) { return fail('validation', String(e?.message ?? e)) }
+        if (!opOf(b.to, b.op)) return fail('unknown-action', `no ${b.to} ${b.op}`)
+        const r = runtime.bind(b.from, b.dependency, b.to, b.op)
+        if (r.type !== 'success') return r
       }],
-      [o.unbind, (b, { state }) => {
-        const k = `${b.from}\u0000${b.dependency}`
-        state.unbinds.get(k)?.(); state.unbinds.delete(k)
-      }],
+      [o.unbind, b => { const r = runtime.unbind(b.from, b.dependency); if (r.type === 'error') return r }],
       [o.bindings, () => ok(runtime.bindings())],
     ],
   })

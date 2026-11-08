@@ -9,7 +9,7 @@
  * changes. Attributes: `storage-key` (optional).
  */
 import { LitElement, css, html, nothing, svg } from 'lit'
-import { fail, type Instance, type SystemRuntime } from '@composable/sdk'
+import { fail, unwrap, type Instance, type SystemRuntime } from '@composable/sdk'
 import { Orchestrators, plan, type Connection, type InstanceSel, type Orchestrator, type Plan, type Problem } from '@composable/connections'
 import { base, requestSystem, t } from '@composable/ui'
 import {
@@ -70,8 +70,8 @@ export class ConnectionDesigner extends LitElement {
     if (!sys) return
     const id = `connection-designer-${(++seq).toString(36)}`
     const refresh = () => { this.#instances = sys.snapshot().instances; this.requestUpdate() }
-    sys.register(id, { manifest: { id: { author: 'composable', id: 'connection-designer' }, ops: [] },
-      onAction: async () => fail('unknown-action', 'the designer takes no calls'), onSystemUpdated: refresh })
+    unwrap(sys.register(id, { manifest: { id: { author: 'composable', id: 'connection-designer' }, ops: [] },
+      onAction: async () => fail('unknown-action', 'the designer takes no calls'), onSystemUpdated: refresh }))
     refresh()
     this.#unwatch = () => sys.unregister(id)
   }

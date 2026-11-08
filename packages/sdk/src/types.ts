@@ -155,5 +155,10 @@ export const routeProblem = (from: Manifest | undefined, output: Op, to: Manifes
 }
 
 export const ok = <T>(data: T): Result<T> => ({ type: 'success', data })
+/** The data of a success; throws the failure's message otherwise. For hosts and tests where failure is a bug. */
+export const unwrap = <T>(r: Result<T>): T => {
+  if (r.type === 'success') return r.data
+  throw new Error(r.type === 'error' ? r.error.message : r.reason)
+}
 export const notAllowed = (reason: string): Result<never> => ({ type: 'not-allowed', reason })
 export const fail = (code: SystemErrorCode, message: string): Result<never> => ({ type: 'error', error: { code, message } })

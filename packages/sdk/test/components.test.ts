@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
-import { Calls, Components, Manifests, Notifications, Systems, fail, ok, type ComponentFactory, type Op, type SystemInstance, type SystemRuntime } from '../src'
+import { unwrap, Calls, Components, Manifests, Notifications, Systems, fail, ok, type ComponentFactory, type Op, type SystemInstance, type SystemRuntime } from '../src'
 
 const flush = () => new Promise(r => setTimeout(r, 0))
 const meta = (id: string) => ({ id: { author: 't', id } })
@@ -50,7 +50,7 @@ test('declare names from the id and derives the manifest; define requires every 
 })
 
 test('a defined component: handlers return a Result or nothing; the model notifies (all its Systems) and reports changes', async () => {
-  const s = Systems.create(), page = s.register('page', Components.party())
+  const s = Systems.create(), page = unwrap(s.register('page', Components.party()))
   await add(s, 'l', listener())
   expect(await page.call('l', add2, { a: 1, b: 2 })).toEqual(ok(3))
   expect((await page.call('l', add2, { a: 100, b: 2 })).type).toBe('error')
@@ -88,7 +88,7 @@ test('compose rejects mistakes at build time', () => {
 })
 
 test('a composite owns a System: delegates, routes inside, re-notifies exposed sources outside, hides its insides', async () => {
-  const outer = Systems.create(), page = outer.register('page', Components.party())
+  const outer = Systems.create(), page = unwrap(outer.register('page', Components.party()))
   const l = listener()
   const p = await add(outer, 'pair', pair(l))
   const outside: { s: string; from: string; correlation: string }[] = []
@@ -107,7 +107,7 @@ test('a composite owns a System: delegates, routes inside, re-notifies exposed s
 test('expose hides internal wiring; two copies of one widget compose when their names are not exposed', async () => {
   const p = pair(listener(), { expose: [say] })
   expect(p.manifest.ops.map(o => o.name)).toEqual(['t/speaker/say'])
-  const s = Systems.create(), page = s.register('page', Components.party())
+  const s = Systems.create(), page = unwrap(s.register('page', Components.party()))
   await add(s, 'pair', p)
   expect((await page.call('pair', hear, 'x')).type).toBe('error')
   const l = listener()
@@ -145,7 +145,7 @@ test('a route the inner System refuses at create time rejects create and dispose
 })
 
 test('use(..., wrap): the parent derives a child handle, and can pass calls through to its own System', async () => {
-  const outer = Systems.create(), page = outer.register('page', Components.party())
+  const outer = Systems.create(), page = unwrap(outer.register('page', Components.party()))
   const l = listener()
   await add(outer, 'out', l)
   const seen: string[] = []
@@ -170,7 +170,7 @@ test('use(..., wrap): the parent derives a child handle, and can pass calls thro
 })
 
 test('a policy is just a wrapping container: a narrower manifest and a filtered handle', async () => {
-  const s = Systems.create(), page = s.register('page', Components.party())
+  const s = Systems.create(), page = unwrap(s.register('page', Components.party()))
   await add(s, 'target', listener())
   const P = Components.declare({ author: 't', id: 'caller' })
   const go = P.op('go', 'Call target.add', { input: Type.Number() })

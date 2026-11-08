@@ -33,14 +33,15 @@ export type SystemRuntime = {
   /** The System's data now: instances, and the manifest of each component type present. */
   snapshot(): System
   /** Register an existing instance under `id`; returns its handle in this System (the registrant may act as it). */
-  register(id: InstanceId, component: Component, opts?: { wrap?: (h: SystemInstance) => SystemInstance }): SystemInstance
-  unregister(id: InstanceId): void
+  register(id: InstanceId, component: Component, opts?: { wrap?: (h: SystemInstance) => SystemInstance }): Result<SystemInstance>
+  unregister(id: InstanceId): Result<void>
   component(id: InstanceId): Component | undefined
   /** A link: `listener`'s `target` op is called with `source`'s output `op` (a notification, or an action's outcome). */
   subscribe(s: { source: InstanceId | '*'; op: string; listener: InstanceId; target: string }): Result<Subscription>
   unsubscribe(id: string): Result<void>
-  /** Serve `from`'s dependency with `to`'s op (which must have the dependency's shape). Returns unbind. */
-  bind(from: InstanceId, dependency: string, to: InstanceId, op: Op): () => void
+  /** Serve `from`'s dependency with `to`'s op `op` (by name; it must have the dependency's shape). */
+  bind(from: InstanceId, dependency: string, to: InstanceId, op: string): Result<Binding>
+  unbind(from: InstanceId, dependency: string): Result<void>
   bindings(): Binding[]
   observe(fn: (t: Trace) => void): () => void
   /** The deltas registered components get, for the System's owner (e.g. a System component registered elsewhere). */
@@ -180,7 +181,7 @@ function create(opts: { id?: string; budget?: number; burst?: number; onError?: 
     id,
     snapshot,
     register(iid, component, o = {}) {
-      if (entries.has(iid)) throw new Error(`${id} already has an instance ${iid}`)
+      if (entries.has(iid)) return fail('validation', `${id} already has an instance ${iid}`)
       const types = manifests().length
       let entry: Entry | undefined
       const base = (o.wrap ?? (h => h))(handle(coreFor(iid, () => entries.get(iid) === entry ? entry : undefined)))
@@ -189,11 +190,11 @@ function create(opts: { id?: string; budget?: number; burst?: number; onError?: 
       quiet(() => component.onAddedToSystem?.(base))
       tell(iid, { type: 'added', instances: [entry.instance] })
       if (manifests().length !== types) tell(undefined, { type: 'manifest', manifest: manifests() })
-      return base
+      return ok(base)
     },
     unregister(iid) {
       const e = entries.get(iid)
-      if (!e) return
+      if (!e) return fail('unknown-target', `${iid} is not registered in ${id}`)
       const types = manifests().length
       entries.delete(iid)
       const closing = [...subs.values()].filter(r => r.sub.listener === iid || r.sub.source === iid).map(r => r.sub)
@@ -203,6 +204,7 @@ function create(opts: { id?: string; budget?: number; burst?: number; onError?: 
       if (closing.length) tell(undefined, { type: 'subscription-closed', subscriptions: closing })
       tell(undefined, { type: 'removed', instances: [e.instance] })
       if (manifests().length !== types) tell(undefined, { type: 'manifest', manifest: manifests() })
+      return ok(undefined)
     },
     component: iid => entries.get(iid)?.component,
     subscribe({ source, op: name, listener, target }) {
@@ -227,12 +229,15 @@ function create(opts: { id?: string; budget?: number; burst?: number; onError?: 
     },
     bind(from, dependency, to, op) {
       const dep = entries.get(from)?.instance.manifest.dependencies?.find(d => d.name === dependency)
-      const target = entries.get(to)?.instance.manifest.ops.find(o => o.name === op.name)
-      if (!dep) throw new Error(`bind: ${from} has no dependency ${dependency}`)
-      if (!target || shape(target) !== shape(dep.op)) throw new Error(`bind: ${to}'s ${op.name} does not have the shape ${dependency} needs`)
-      const key = `${from}\u0000${dependency}`, b: Binding = { from, dependency, to, op: op.name }
-      bindings.set(key, b)
-      return () => { if (bindings.get(key) === b) bindings.delete(key) }
+      const target = entries.get(to)?.instance.manifest.ops.find(o => o.name === op)
+      if (!dep) return fail('validation', `bind: ${from} has no dependency ${dependency}`)
+      if (!target || shape(target) !== shape(dep.op)) return fail('validation', `bind: ${to}'s ${op} does not have the shape ${dependency} needs`)
+      const b: Binding = { from, dependency, to, op }
+      bindings.set(`${from}\u0000${dependency}`, b)
+      return ok(b)
+    },
+    unbind(from, dependency) {
+      return bindings.delete(`${from}\u0000${dependency}`) ? ok(undefined) : fail('unknown-target', `${from}'s dependency ${dependency} is not bound in ${id}`)
     },
     bindings: () => [...bindings.values()],
     observe(fn) { observers.add(fn); return () => { observers.delete(fn) } },

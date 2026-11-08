@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
-import { Components, Systems, ok, type Instance } from '../src'
+import { unwrap, Components, Systems, ok, type Instance } from '../src'
 
 const flush = () => new Promise(r => setTimeout(r, 0))
 const sys = Systems.ops
@@ -14,7 +14,7 @@ const keeper = () => { const kept: number[] = []; return Object.assign(K.define(
 
 /** A runtime with its System component registered as 'system', and a page handle. */
 const world = (catalog: { manifest: any; create(): any }[] = []) => {
-  const rt = Systems.create(), page = rt.register('page', Components.party())
+  const rt = Systems.create(), page = unwrap(rt.register('page', Components.party()))
   rt.register('system', Systems.component(rt, { catalog }).create() as never)
   return { rt, page }
 }
@@ -76,7 +76,7 @@ test('sandboxes are isolated; a System of Systems exposes an inner System in an 
   expect(await ids(a)).toEqual(['page', 'system', 'numbers'])
   expect(await ids(b)).toEqual(['page', 'system'])
   // the inner System, seen from the outer one through a System component registered there
-  const outer = Systems.create(), page = outer.register('page', Components.party())
+  const outer = Systems.create(), page = unwrap(outer.register('page', Components.party()))
   outer.register('inner', Systems.component(a.rt).create() as never)
   const r = await page.call('inner', sys.instances, null)
   expect(r.type === 'success' && r.data.map((i: Instance) => i.id)).toEqual(['page', 'system', 'numbers'])

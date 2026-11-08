@@ -1,7 +1,7 @@
 import type { Static, TFunction, TSchema } from 'typebox'
 import { Systems, type ErrorInfo } from './system'
 import {
-  fail, ok, roleOf, routeProblem,
+  fail, ok, roleOf, routeProblem, unwrap,
   type Component, type ComponentFactory, type ComponentId, type Created, type Dependency, type Input, type Invocation,
   type Manifest, type Op, type Output, type Result, type Source, type SystemDelta, type SystemError, type SystemInstance,
 } from './types'
@@ -175,14 +175,15 @@ function composite<const R extends Record<string, Handle>>(
       try {
         for (const u of uses) {
           made[u.name] = await u.factory.create()
-          inner.register(u.name, made[u.name], { wrap: u.wrap && (h => u.wrap!(h, () => outer[0])) })
+          const r = inner.register(u.name, made[u.name], { wrap: u.wrap && (h => u.wrap!(h, () => outer[0])) })
+          if (r.type !== 'success') throw new Error(`use ${u.name}: ${r.type === 'error' ? r.error.message : r.reason}`)
         }
         for (const [f, t] of routes) {
           const r = inner.subscribe({ source: f.child, op: f.op.name, listener: t.child, target: t.op.name })
           if (r.type === 'error') throw new Error(`route: ${r.error.message}`)
         }
       } catch (err) { for (const c of Object.values(made)) await c.dispose?.(); throw err }
-      const self = inner.register('..', { manifest: { id: meta.id, ops: [] }, onAction: async () => fail('unknown-action', 'the composite takes no calls from inside') })
+      const self = unwrap(inner.register('..', { manifest: { id: meta.id, ops: [] }, onAction: async () => fail('unknown-action', 'the composite takes no calls from inside') }))
       for (const u of uses) for (const op of u.factory.manifest.ops.filter(o => roleOf(o) === 'source' && pick(o)))
         self.subscribe(op, (p, d) => { for (const o of outer) void o.within(d.correlation).notify(op as Source, p as never) }, { from: u.name })
       return {

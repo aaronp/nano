@@ -72,7 +72,8 @@ export class View<C extends Component = Component> extends LitElement {
     Promise.resolve(factory.create()).then(
       c => {
         if (this.#placed !== p) return void c.dispose?.()       // removed while being created
-        system.register(p.name, c)
+        const r = system.register(p.name, c)
+        if (r.type !== 'success') { void c.dispose?.(); throw new Error(r.type === 'error' ? r.error.message : r.reason) }
         p.component = c
         this.component = c as C
       },

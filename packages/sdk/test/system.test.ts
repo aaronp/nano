@@ -1,12 +1,12 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
-import { Calls, Components, Notifications, Subscriptions, Systems, fail, ok, type SystemDelta, type SystemError, type SystemInstance, type Trace } from '../src'
+import { unwrap, Calls, Components, Notifications, Subscriptions, Systems, fail, ok, type SystemDelta, type SystemError, type SystemInstance, type Trace } from '../src'
 
 const flush = (ms = 0) => new Promise(r => setTimeout(r, ms))
 const setup = (opts: { budget?: number; burst?: number; id?: string } = {}) => {
   const errors: SystemError[] = []
   const s = Systems.create({ ...opts, onError: e => errors.push(e) })
-  return { s, errors, page: s.register('page', Components.party()) }
+  return { s, errors, page: unwrap(s.register('page', Components.party())) }
 }
 
 // A test component: notifies `fired`, echoes `log`, checks `typed`; records what reached it and its deltas.
@@ -45,7 +45,7 @@ test('register: the newcomer gets its handle first, the others get "added", and 
   expect(b.deltas).toEqual(['removed:a'])  // b is still there: type x remains
   s.unregister('b')
   expect(a.systems).toEqual([])            // unregistering never disposes; the owner does
-  expect(() => s.register('page', x())).toThrow('already has an instance page')
+  expect(JSON.stringify(s.register('page', x()))).toContain('already has an instance page')
 })
 
 test('one instance in two Systems is a bridge: it chooses where to notify, and is callable from both', async () => {
@@ -78,7 +78,7 @@ test('notify delivers synchronously in subscription order; nested notifications 
 test('correlation: a kept handle starts one per operation; handler and delivery handles carry theirs', async () => {
   const { s } = setup()
   const a = x(), b = x()
-  const ha = s.register('a', a), hb = s.register('b', b)
+  const ha = unwrap(s.register('a', a)), hb = unwrap(s.register('b', b))
   const seen: string[] = []
   hb.subscribe(fired, (_p, d) => { seen.push(d.correlation); void d.handle.call('a', log, 'reply') }, { from: 'a' })
   await ha.notify(fired, { text: '1' }); await ha.notify(fired, { text: '2' }); await flush()
@@ -102,7 +102,7 @@ test('validation: undeclared op, bad payload, a party without ops; call input an
   expect(await code(page.call('nope', log, 1))).toBe('unknown-target')
   expect(await code(page.call('a', { name: 'zz', input: Type.Unknown() }, 1))).toBe('unknown-action')
   // a party given a source op can notify it
-  const host = s.register('host', Components.party({ author: 't', id: 'host' }, [fired]))
+  const host = unwrap(s.register('host', Components.party({ author: 't', id: 'host' }, [fired])))
   expect((await host.notify(fired, { text: 'from host' })).type).toBe('success')
 })
 
@@ -138,27 +138,27 @@ test('bind / use: a dependency is served by whatever it is bound to; unbound is 
   const unbound = await page.call('greeter', greet, 'ada')
   expect(unbound.type === 'error' && unbound.error.code).toBe('unavailable')
   s.register('x', x())
-  expect(() => s.bind('greeter', 'upper', 'x', typed)).toThrow('does not have the shape')
-  const unbind = s.bind('greeter', 'upper', 'up', up)
+  expect(JSON.stringify(s.bind('greeter', 'upper', 'x', typed.name))).toContain('does not have the shape')
+  expect(s.bind('greeter', 'upper', 'up', up.name).type).toBe('success')
   expect(await page.call('greeter', greet, 'ada')).toEqual(ok('HELLO ADA'))
   expect(s.bindings()).toEqual([{ from: 'greeter', dependency: 'upper', to: 'up', op: up.name }])
-  unbind()
+  expect(s.unbind('greeter', 'upper').type).toBe('success')
   expect((await page.call('greeter', greet, 'ada')).type).toBe('error')
-  s.bind('greeter', 'upper', 'up', up); s.unregister('up')
+  s.bind('greeter', 'upper', 'up', up.name); s.unregister('up')
   expect(s.bindings()).toEqual([])
 })
 
 test('loops: over budget per correlation (even through async wrappers), and the burst backstop', async () => {
   const { s, errors } = setup({ budget: 50 })
   const a = x(), b = x()
-  const ha = s.register('a', a, { wrap: h => h.withNotify((n, next) => next(n)) }), hb = s.register('b', b)
+  const ha = unwrap(s.register('a', a, { wrap: h => h.withNotify((n, next) => next(n)) })), hb = unwrap(s.register('b', b))
   ha.subscribe(fired, (p, d) => d.handle.notify(fired, p), { from: 'b' })
   hb.subscribe(fired, (p, d) => d.handle.notify(fired, p), { from: 'a' })
   await ha.notify(fired, { text: 'ping' })
   for (let i = 0; i < 100; i++) await flush()
   expect(errors.map(e => e.code)).toEqual(['loop'])
   const t2 = setup({ burst: 200 })
-  const c = x(); const hc = t2.s.register('c', c)
+  const c = x(); const hc = unwrap(t2.s.register('c', c))
   hc.subscribe(fired, p => { void hc.notify(fired, p) }, { from: 'c' })   // a kept handle: a new correlation each hop
   await hc.notify(fired, { text: 'spin' })
   expect(t2.errors.map(e => e.message)).toEqual(['more than 200 operations before the event loop was idle'])
@@ -167,7 +167,7 @@ test('loops: over budget per correlation (even through async wrappers), and the 
 test('unregister: its handles go dead, its subscriptions, links and bindings go, even if the id is reused', async () => {
   const { s, page } = setup()
   const a = x(), b = x()
-  const ha = s.register('a', a); s.register('b', b)
+  const ha = unwrap(s.register('a', a)); s.register('b', b)
   s.subscribe({ source: 'a', op: fired.name, listener: 'b', target: log.name })
   s.unregister('a')
   expect((await ha.notify(fired, { text: 'x' })).type).toBe('error')
@@ -270,4 +270,25 @@ test('subscribe validates: unknown instances or ops that do not fit are errors, 
   expect(s.subscribe({ source: 'a', op: fired.name, listener: 'nope', target: log.name }).type).toBe('error')
   expect(s.subscribe({ source: 'a', op: log.name + 'x', listener: 'b', target: log.name }).type).toBe('error')
   expect(s.subscribe({ source: 'a', op: fired.name, listener: 'b', target: fired.name }).type).toBe('error')
+})
+
+test('the runtime answers with results, not exceptions', () => {
+  const { s } = setup()
+  expect(s.register('page', x()).type).toBe('error')                       // duplicate
+  expect(s.unregister('nope').type).toBe('error')
+  expect(s.bind('page', 'nope', 'page', 'x').type).toBe('error')
+  expect(s.unbind('page', 'nope').type).toBe('error')
+})
+
+test('Systems.restrict: a holder may only act for itself', () => {
+  const { s } = setup()
+  s.register('a', x()); s.register('b', x()); s.register('c', x())
+  const asB = Systems.restrict(s, 'b')
+  expect(asB.subscribe({ source: 'a', op: fired.name, listener: 'b', target: log.name }).type).toBe('success')
+  expect(asB.subscribe({ source: 'a', op: fired.name, listener: 'c', target: log.name })).toEqual({ type: 'not-allowed', reason: 'b may only act for itself' })
+  const theirs = unwrap(s.subscribe({ source: 'a', op: fired.name, listener: 'c', target: log.name }))
+  expect(asB.unsubscribe(theirs.id).type).toBe('not-allowed')
+  expect(asB.register('d', x()).type).toBe('not-allowed')
+  expect(asB.component('a')).toBeUndefined()
+  expect(asB.snapshot().instances.length).toBe(s.snapshot().instances.length)   // reading is allowed
 })

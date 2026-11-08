@@ -177,7 +177,7 @@ function firstProvider(system: SystemRuntime, id = 'binder'): () => void {
     for (const i of all) for (const d of i.manifest.dependencies ?? []) {
       if (bound.has(`${i.id}\u0000${d.name}`)) continue
       const p = providerOf(d, all, i.id)
-      if (p) try { system.bind(i.id, d.name, p.instance, p.op) } catch {}
+      if (p) system.bind(i.id, d.name, p.instance, p.op.name)
     }
   }
   system.register(id, policyComponent('binder', apply))

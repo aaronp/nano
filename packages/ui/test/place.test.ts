@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
-import { Components, Systems } from '@composable/sdk'
+import { unwrap, Components, Systems } from '@composable/sdk'
 import { View, provideSystem, requestSystem } from '../src'
 
 const tick = () => new Promise(r => setTimeout(r, 5))
@@ -16,7 +16,7 @@ customElements.define('t-counter', CounterView)
 const host = () => {
   const scope = Systems.create(), el = document.createElement('div')
   provideSystem(el, scope); document.body.append(el)
-  return { scope, el, page: scope.register('page', Components.party()) }
+  return { scope, el, page: unwrap(scope.register('page', Components.party())) }
 }
 
 test('requestSystem finds the nearest provider, or nothing', () => {
