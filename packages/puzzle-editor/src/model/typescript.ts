@@ -1,4 +1,4 @@
-import { nameOf, type EditorType, type TypeRef } from './types'
+import { nameOf, schemaOf, type EditorType, type TypeRef } from './types'
 
 type Decl =
   | { name: string; line: number; kind: 'record'; fields: { name: string; ref: { name: string; array: boolean }; line: number }[] }
@@ -76,19 +76,23 @@ const parseDecls = (source: string, builtinNames: string[]): { decls: Decl[]; er
   const known = [...builtinNames, ...decls.map(d => d.name)]
   for (const d of decls) {
     if (d.kind === 'brand' && !known.includes(d.of)) errors.push(`Line ${d.line}: unknown type ${d.of}`)
-    if (d.kind === 'record') for (const f of d.fields) if (!known.includes(f.ref.name)) errors.push(`Line ${f.line}: unknown type ${f.ref.name}`)
+    if (d.kind === 'record') for (const [i, f] of d.fields.entries()) {
+      if (!known.includes(f.ref.name)) errors.push(`Line ${f.line}: unknown type ${f.ref.name}`)
+      if (d.fields.findIndex(g => g.name === f.name) < i) errors.push(`Line ${f.line}: ${d.name}.${f.name} is defined twice`)
+    }
   }
   return { decls, errors }
 }
 
 export const parseTypes = (source: string, current: EditorType[], newId: () => string):
   { ok: true; types: EditorType[] } | { ok: false; errors: string[] } => {
-  const prims = current.filter(t => t.kind === 'primitive')
-  const { decls, errors } = parseDecls(source, prims.map(t => t.name))
+  // built-ins and live types are not in the source but may be named by it
+  const fixed = current.filter(t => t.kind === 'primitive' || t.kind === 'live')
+  const { decls, errors } = parseDecls(source, fixed.map(nameOf))
   if (errors.length) return { ok: false, errors }
   const edited = current.filter(t => t.kind === 'record' || t.kind === 'brand')
   const old = new Map(edited.map(t => [t.name, t]))
-  const idOf = new Map<string, string>(prims.map(t => [t.name, t.id]))
+  const idOf = new Map<string, string>(fixed.map(t => [nameOf(t), t.id]))
   for (const d of decls) idOf.set(d.name, old.get(d.name)?.id ?? newId())
   const build = (d: Decl): EditorType => {
     const prev = old.get(d.name)
@@ -100,5 +104,7 @@ export const parseTypes = (source: string, current: EditorType[], newId: () => s
   const byName = new Map(decls.map(d => [d.name, d]))
   const kept = current.flatMap(t => t.kind === 'record' || t.kind === 'brand' ? (byName.has(t.name) ? [build(byName.get(t.name)!)] : []) : [t])
   // a removed type can't still be used: every kept record/brand names its refs in the source, so unknown names already errored
-  return { ok: true, types: [...kept, ...decls.filter(d => !old.has(d.name)).map(build)] }
+  const types = [...kept, ...decls.filter(d => !old.has(d.name)).map(build)]
+  for (const d of decls) { const r = schemaOf(idOf.get(d.name)!, types); if (r.type === 'error') errors.push(`Line ${d.line}: ${d.name} — ${r.error.message}`) }
+  return errors.length ? { ok: false, errors } : { ok: true, types }
 }

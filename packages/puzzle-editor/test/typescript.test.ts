@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { unwrap } from '@composable/sdk'
-import { addBrand, addField, addRecord, builtins } from '../src/model/types'
+import Type from 'typebox'
+import { addBrand, addField, addRecord, builtins, liveTypes } from '../src/model/types'
 import { parseTypes, printTypes } from '../src/model/typescript'
 
 test('print and parse round-trip records, arrays and brands, keeping ids', () => {
@@ -26,4 +27,14 @@ test('new types get new ids, missing ones are removed, garbage never throws', ()
   const r = parseTypes('type B = number; // brand', t, () => 'n1')
   expect(r.ok && r.types.map(x => x.id)).toEqual(['string', 'number', 'boolean', 'n1'])
   expect(parseTypes('}{ @@ ;;', t, () => 'n').ok).toBe(false)
+})
+
+test('live types can be named and round-trip; loops and duplicate fields are line errors', () => {
+  const live = liveTypes([{ id: 'x', manifest: { id: { author: 't', id: 'x' }, ops: [{ name: 't/x/a', input: Type.Object({ v: Type.Number() }, { $id: 'Point' }) }] } }])
+  let t = unwrap(addRecord([...builtins(), ...live], 'r', 'Route'))
+  t = unwrap(addField(t, 'r', 'at', { type: live[0]!.id, array: true }))
+  expect(parseTypes(printTypes(t), t, () => 'n')).toEqual({ ok: true, types: t })
+  expect(parseTypes('type A = B; // brand\ntype B = A; // brand', builtins(), () => crypto.randomUUID()).ok).toBe(false)
+  expect(parseTypes('type A = A; // brand', builtins(), () => 'a').ok).toBe(false)
+  expect(parseTypes('type A = {\n  x: string;\n  x: number;\n}', builtins(), () => 'a')).toEqual({ ok: false, errors: ['Line 3: A.x is defined twice'] })
 })
