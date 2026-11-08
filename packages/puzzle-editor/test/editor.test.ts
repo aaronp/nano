@@ -1,0 +1,80 @@
+import { expect, test } from 'bun:test'
+import { Components, Systems, unwrap, type Instance } from '@composable/sdk'
+import type { Status } from '@composable/connections'
+import { ComponentListOps, ConnectionEditorOps, DocumentOps, TypeEditorOps, emptyEditorDoc, liveTypes, puzzleEditor, type EditorDoc, type EditorType } from '../src'
+import { crm, flush, mapper, rate, tax, toJ, updated } from './fixtures'
+
+const editorIn = async () => {
+  const s = Systems.create(), page = unwrap(s.register('page', Components.party()))
+  const ed = await puzzleEditor.create(); unwrap(s.register('editor', ed))
+  const inner = (c: keyof typeof ed.children) => ed.children[c].systems[0]
+  return { s, page, ed, inner }
+}
+
+test('the editor is a System: load in, edits flow between children, model-updated out, insides hidden', async () => {
+  const { page, ed, inner } = await editorIn()
+  const docs: EditorDoc[] = []
+  page.subscribe(DocumentOps.modelUpdated, d => { docs.push(d) }, { from: 'editor' })
+  expect(page.system.instances.map(i => i.id)).toEqual(['page', 'editor'])
+  expect((await page.call('editor', DocumentOps.load, emptyEditorDoc())).type).toBe('success')
+  await inner('types').call('types', TypeEditorOps.addRecord, { id: 'a', name: 'Address' })
+  expect(ed.children.list.state.types.map((t: EditorType) => t.id)).toContain('a')   // routed types-updated → set-types
+  expect(docs.at(-1)!.types.map(t => t.id)).toContain('a')
+})
+
+test('load rejects a malformed doc and keeps state', async () => {
+  const { page, ed } = await editorIn()
+  await page.call('editor', DocumentOps.load, emptyEditorDoc())
+  const before = JSON.stringify(ed.children.types.state.types)
+  expect(await page.call('editor', DocumentOps.load, { types: [] } as never)).toMatchObject({ type: 'error', error: { code: 'validation' } })
+  expect(JSON.stringify(ed.children.types.state.types)).toBe(before)
+})
+
+test('set-instances is linked once and reaches both children; status is planned locally', async () => {
+  const { s, ed } = await editorIn()
+  unwrap(s.register('system', Systems.component(s).create() as never))
+  unwrap(s.subscribe({ source: 'system', op: Systems.ops.changed.name, listener: 'editor', target: ComponentListOps.setInstances.name }))
+  for (const [n, f] of [['crm', crm], ['map', mapper], ['tax', tax]] as const) unwrap(s.register(n, f.create()))
+  await flush()
+  expect(ed.children.board.state.instances.map((i: Instance) => i.id)).toContain('map')
+  await ed.children.board.systems[0].call('board', ConnectionEditorOps.place, { component: { author: 't', id: 'crm' }, op: updated.name, cell: { c: 0, r: 0 } })
+  await ed.children.board.systems[0].call('board', ConnectionEditorOps.place, { component: { author: 't', id: 'map' }, op: toJ.name, cell: { c: 1, r: 0 } })
+  await ed.children.board.systems[0].call('board', ConnectionEditorOps.place, { component: { author: 't', id: 'tax' }, op: rate.name, cell: { c: 2, r: 0 } })
+  expect(Object.values(ed.children.board.state.status as Record<string, Status>)[0]).toMatchObject({ viable: true, routes: 2 })
+})
+
+test('Live gates intents-updated; switching off sends []', async () => {
+  const { page, ed } = await editorIn()
+  const sent: unknown[][] = []
+  page.subscribe(ConnectionEditorOps.intentsUpdated, i => { sent.push(i) }, { from: 'editor' })
+  const board = ed.children.board.systems[0]
+  await board.call('board', ConnectionEditorOps.place, { component: { author: 't', id: 'crm' }, op: updated.name, cell: { c: 0, r: 0 } })
+  expect(sent).toEqual([])
+  await page.call('editor', ConnectionEditorOps.setLive, true)
+  await board.call('board', ConnectionEditorOps.place, { component: { author: 't', id: 'tax' }, op: rate.name, cell: { c: 2, r: 0 } })
+  expect(sent.length).toBe(2)                                      // on switching on, and after the edit
+  await page.call('editor', ConnectionEditorOps.setLive, false)
+  expect(sent.at(-1)).toEqual([])
+})
+
+test('live types: each distinct named schema once, by SAID, and they reach the type editor read-only', async () => {
+  const inst = (id: string, f: { manifest: Instance['manifest'] }) => ({ id, manifest: f.manifest })
+  // Address appears on crm and map, Jurisdiction on map and tax: two live types
+  expect(liveTypes([inst('crm', crm), inst('map', mapper), inst('tax', tax)]).map(t => t.kind === 'live' && (t.schema as { $id?: string }).$id)).toEqual(['geo.Address', 'geo.Jurisdiction'])
+  const { page, ed } = await editorIn()
+  await page.call('editor', ComponentListOps.setInstances, [inst('crm', crm), inst('map', mapper)])
+  expect(ed.children.types.state.types.filter((t: EditorType) => t.kind === 'live').length).toBe(2)
+})
+
+test('draft edits reach model-updated through drafts-updated; a failed edit changes nothing', async () => {
+  const { page, ed, inner } = await editorIn()
+  const docs: EditorDoc[] = []
+  page.subscribe(DocumentOps.modelUpdated, d => { docs.push(d) }, { from: 'editor' })
+  const id = { author: 'me', id: 'geo' }
+  expect((await inner('list').call('list', ComponentListOps.addDraft, { id })).type).toBe('success')
+  expect(docs.at(-1)!.components).toEqual([{ id, ops: [] }])
+  const n = docs.length
+  expect(await inner('list').call('list', ComponentListOps.addDraft, { id })).toMatchObject({ type: 'error', error: { code: 'validation' } })
+  expect(docs.length).toBe(n)
+  expect(ed.children.list.state.drafts).toEqual([{ id, ops: [] }])
+})
