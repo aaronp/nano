@@ -10,6 +10,7 @@ import { test, expect } from 'bun:test'
 import Type from 'typebox'
 import { Components, Systems, ok } from '@composable/sdk'
 import { Binders, Orchestrators, plan, type Intent } from '../src'
+const links = (s: { snapshot(): { subscriptions: { source: string; listener: string; target?: string }[] } }) => s.snapshot().subscriptions.filter(x => x.target)
 
 // ---- two plain libraries, as they might already exist
 type PersonT = { name: string; age: number }
@@ -74,5 +75,5 @@ test('lift two CRUD libraries, map between them with a runtime component that ne
   await page.call('system', Systems.ops.remove, { name: 'dob' })
   expect(scope.bindings()).toEqual([])
   expect(o.status()['person-to-user'].problems).toEqual([{ kind: 'unavailable', at: 'step 1', needs: ['enrich'] }])
-  expect(scope.links()).toEqual([])
+  expect(links(scope)).toEqual([])
 })

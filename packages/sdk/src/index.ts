@@ -1,6 +1,6 @@
 export * from './types'
 export { Components, Manifests, type Bound, type Builder, type Composite, type Deps, type Handle, type Model } from './components'
-export { Systems as SystemRuntimes, type Binding, type ErrorInfo, type Link, type SystemRuntime, type Trace } from './system'
+export { Systems as SystemRuntimes, type Binding, type ErrorInfo, type SystemRuntime, type Trace } from './system'
 export { systemComponent, SystemOps } from './system-component'
 export { Notifications, Calls, Subscriptions } from './wrappers'
 export { missing, providerOf } from './deps'

@@ -2,6 +2,7 @@ import { test, expect } from 'bun:test'
 import Type from 'typebox'
 import { Components, Systems, ok, typeHash } from '@composable/sdk'
 import { Orchestrators, plan, type Intent } from '../src'
+const links = (s: { snapshot(): { subscriptions: { source: string; listener: string; target?: string }[] } }) => s.snapshot().subscriptions.filter(x => x.target)
 
 const flush = () => new Promise(r => setTimeout(r, 0))
 const Address = Type.Object({ street: Type.String(), city: Type.String(), country: Type.String() }, { $id: 'geo.Address' })
@@ -74,12 +75,12 @@ test('orchestrator: wires and unwires as instances come and go; the chain runs e
   const statuses: boolean[] = []
   o.onStatus(s => statuses.push(s['address-to-tax'].viable))
   expect(o.status()['address-to-tax'].viable).toBe(false)
-  expect(scope.links()).toEqual([])
+  expect(links(scope)).toEqual([])
 
   // a map instance appears: the workflow becomes viable and is wired
   await add('map', mapper)
   expect(o.status()['address-to-tax'].viable).toBe(true)
-  expect(scope.links().map(r => `${r.from}→${r.to}`)).toEqual(['crm→map', 'map→tax'])
+  expect(links(scope).map(r => `${r.source}→${r.listener}`)).toEqual(['crm→map', 'map→tax'])
 
   // a logger appears: everything that gives output is logged too
   await add('log', l)
@@ -91,16 +92,16 @@ test('orchestrator: wires and unwires as instances come and go; the chain runs e
   // the map goes away: the chain stops, its routes are removed, the logger's stay for what is left
   scope.unregister('map')
   expect(o.status()['address-to-tax'].viable).toBe(false)
-  expect(scope.links().map(r => `${r.from}→${r.to}`)).toEqual(['crm→log'])
+  expect(links(scope).map(r => `${r.source}→${r.listener}`)).toEqual(['crm→log'])
   expect(statuses).toContain(true); expect(statuses.at(-1)).toBe(false)
 
   // switching the logger off removes its routes; stop removes everything the orchestrator made
   o.set([workflow, { ...logEverything, enabled: false }])
-  expect(scope.links()).toEqual([])
+  expect(links(scope)).toEqual([])
   await add('map2', mapper)
-  expect(scope.links().length).toBe(2)
+  expect(links(scope).length).toBe(2)
   o.stop()
-  expect(scope.links()).toEqual([])
+  expect(links(scope)).toEqual([])
 })
 
 test('intents are plain JSON: they round-trip and plan the same', () => {

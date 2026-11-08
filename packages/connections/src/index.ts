@@ -134,18 +134,22 @@ const policyComponent = (id: string, apply: () => void): Component => ({
  * adds or removes only the links it made. It never creates instances.
  */
 function create(system: SystemRuntime, intents: readonly Intent[], id = 'orchestrator'): Orchestrator {
-  const mine = new Map<string, () => void>()
+  const mine = new Map<string, string>() // route key -> subscription id
   const listeners = new Set<(s: Record<string, Status>) => void>()
-  let current = intents, status: Record<string, Status> = {}, stopped = false
+  let current = intents, status: Record<string, Status> = {}, stopped = false, applying = false
   const key = (r: PlannedRoute) => `${r.from}\u0000${r.output.name}\u0000${r.to}\u0000${r.op.name}`
   const apply = () => {
-    if (stopped) return
+    if (stopped || applying) return // our own subscribe/unsubscribe deltas come back here
+    applying = true
+    try { reconcile() } finally { applying = false }
+    for (const fn of listeners) try { fn(status) } catch {}
+  }
+  const reconcile = () => {
     const p = plan(current, system.snapshot().instances)
     const want = new Map(p.routes.map(r => [key(r), r]))
-    for (const [k, off] of mine) if (!want.has(k)) { off(); mine.delete(k) }
-    for (const [k, r] of want) if (!mine.has(k)) try { mine.set(k, system.connect(r.from, r.output, r.to, r.op)) } catch {}
+    for (const [k, sid] of mine) if (!want.has(k)) { system.unsubscribe(sid); mine.delete(k) }
+    for (const [k, r] of want) if (!mine.has(k)) { const s = system.subscribe({ source: r.from, op: r.output.name, listener: r.to, target: r.op.name }); if (s.type === 'success') mine.set(k, s.data.id) }
     status = p.status
-    for (const fn of listeners) try { fn(status) } catch {}
   }
   system.register(id, policyComponent('orchestrator', apply))
   apply()
@@ -153,7 +157,7 @@ function create(system: SystemRuntime, intents: readonly Intent[], id = 'orchest
     status: () => status,
     onStatus(fn) { listeners.add(fn); return () => { listeners.delete(fn) } },
     set(next) { current = next; apply() },
-    stop() { stopped = true; system.unregister(id); for (const off of mine.values()) off(); mine.clear() },
+    stop() { stopped = true; system.unregister(id); for (const sid of mine.values()) system.unsubscribe(sid); mine.clear() },
   }
 }
 

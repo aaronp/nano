@@ -33,6 +33,9 @@ export const SystemOps = {
 }
 
 const key = (l: { from: string; output: string; to: string; op: string }) => [l.from, l.output, l.to, l.op].join('\u0000')
+/** The subscriptions that are links, in the Link shape. */
+const links = (rt: SystemRuntime) => rt.snapshot().subscriptions.flatMap(s =>
+  s.target ? [{ from: s.source, output: s.op, to: s.listener, op: s.target }] : [])
 const same = (a: ComponentId, b: ComponentId) => a.author === b.author && a.id === b.id
 
 /** A System component over `runtime`. `catalog`: the components its `create` op can make. */
@@ -40,7 +43,7 @@ export function systemComponent(runtime: SystemRuntime, opts: { catalog?: readon
   const catalog = opts.catalog ?? [], o = SystemOps
   const opOf = (inst: string, op: string) => runtime.snapshot().instances.find(i => i.id === inst)?.manifest.ops.find(x => x.name === op)
   const factory = S.define({
-    state: () => ({ links: new Map<string, () => void>(), unbinds: new Map<string, () => void>(), made: new Map<string, Component>() }),
+    state: () => ({ links: new Map<string, string>(), unbinds: new Map<string, () => void>(), made: new Map<string, Component>() }),
     handlers: [
       [o.instances, () => ok(runtime.snapshot().instances)],
       [o.definitions, () => ok(catalog.map(f => f.manifest))],
@@ -58,16 +61,16 @@ export function systemComponent(runtime: SystemRuntime, opts: { catalog?: readon
       }],
       [o.connect, (l, { state }) => {
         if (state.links.has(key(l))) return
-        const out = opOf(l.from, l.output), into = opOf(l.to, l.op)
-        if (!out || !into) return fail('unknown-action', `no ${!out ? `${l.from} ${l.output}` : `${l.to} ${l.op}`}`)
-        try { state.links.set(key(l), runtime.connect(l.from, out as Op, l.to, into as Op)) } catch (e: any) { return fail('validation', String(e?.message ?? e)) }
+        const r = runtime.subscribe({ source: l.from, op: l.output, listener: l.to, target: l.op })
+        if (r.type !== 'success') return r
+        state.links.set(key(l), r.data.id)
       }],
       [o.disconnect, (l, { state }) => {
-        const off = state.links.get(key(l))
-        if (!off) return fail('unknown-target', 'no such link made through this System component')
-        off(); state.links.delete(key(l))
+        const sid = state.links.get(key(l))
+        if (!sid) return fail('unknown-target', 'no such link made through this System component')
+        runtime.unsubscribe(sid); state.links.delete(key(l))
       }],
-      [o.links, () => ok(runtime.links())],
+      [o.links, () => ok(links(runtime))],
       [o.bind, (b, { state }) => {
         const op = opOf(b.to, b.op)
         if (!op) return fail('unknown-action', `no ${b.to} ${b.op}`)
@@ -87,8 +90,8 @@ export function systemComponent(runtime: SystemRuntime, opts: { catalog?: readon
       let lastLinks = ''
       const announce = () => {
         void m.notify(o.changed, runtime.snapshot().instances)
-        const links = runtime.links(), now = JSON.stringify(links)
-        if (now !== lastLinks) { lastLinks = now; void m.notify(o.linksChanged, links) }
+        const current = links(runtime), now = JSON.stringify(current)
+        if (now !== lastLinks) { lastLinks = now; void m.notify(o.linksChanged, current) }
       }
       const offUpdates = runtime.updates(announce)
       // Link changes made through this component are announced right away.

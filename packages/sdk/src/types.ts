@@ -75,13 +75,20 @@ export const roleOf = (op: Op): Role => op.input ? (op.output ? 'action' : 'sink
 
 // ---------------------------------------------------------------- systems
 
-/** A System's data: its instances, and the manifest of each component type present (one per type). */
-export type System = { id: string; manifest: Manifest[]; instances: Instance[] }
+/**
+ * A subscription: `listener` hears `source`'s (or anyone's, `'*'`) output `op`. With a `target`, it is a link: the
+ * listener's `target` op is called with the output. Without, the listener handles it itself (`handle.subscribe`).
+ */
+export type Subscription = { id: string; source: InstanceId | '*'; op: string; listener: InstanceId; target?: string }
+/** A System's data: its instances, subscriptions, and the manifest of each component type present (one per type). */
+export type System = { id: string; manifest: Manifest[]; instances: Instance[]; subscriptions: Subscription[] }
 /** What changed in a System. `manifest` only when the set of component types present changes. */
 export type SystemDelta =
   | { type: 'added'; instances: Instance[] }
   | { type: 'removed'; instances: Instance[] }
   | { type: 'manifest'; manifest: Manifest[] }
+  | { type: 'subscription-opened'; subscriptions: Subscription[] }
+  | { type: 'subscription-closed'; subscriptions: Subscription[] }
 
 /**
  * Correlation: every trigger (a call or notify through a handle that carries none) starts one; everything done in

@@ -3,6 +3,7 @@ import Type from 'typebox'
 import { Components, Systems, ok } from '@composable/sdk'
 import { provideSystem } from '@composable/ui'
 import { defineDesigner, type ConnectionDesigner } from '../src'
+const links = (s: { snapshot(): { subscriptions: { source: string; listener: string; target?: string }[] } }) => s.snapshot().subscriptions.filter(x => x.target)
 
 const tick = (ms = 5) => new Promise(r => setTimeout(r, ms))
 const Address = Type.Object({ city: Type.String(), country: Type.String(), street: Type.String() }, { $id: 'geo.Address' })
@@ -50,11 +51,11 @@ test('dragging pieces into a row makes a viable workflow; Live wires the scope a
   // one workflow, every seam fits, status viable
   expect([...root.querySelectorAll('.placed .seam')].map(s => s.className)).toEqual(['seam ok', 'seam ok'])
   expect(root.querySelector('.intent .status')!.textContent).toContain('viable · 2 route(s)')
-  expect(scope.links()).toEqual([])
+  expect(links(scope)).toEqual([])
   // switch on: the orchestrator wires it, and an address flows through to tax
   const live = root.querySelector('.live input') as HTMLInputElement
   live.checked = true; live.dispatchEvent(new Event('change'))
-  expect(scope.links().map(r => `${r.from}→${r.to}`)).toEqual(['crm→map', 'map→tax'])
+  expect(links(scope).map(r => `${r.source}→${r.listener}`)).toEqual(['crm→map', 'map→tax'])
   await c.notify(updated, { city: 'Leeds', country: 'UK', street: '1 Park Row' }); await tick()
   expect(seen).toEqual([{ city: 'Leeds', country: 'UK' }])
 })

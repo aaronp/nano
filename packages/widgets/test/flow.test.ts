@@ -10,9 +10,11 @@ test('slider → doubler → chart and slider → counter (routed); log sees eve
   const d = await add('doubler', mapper({ label: 'x2', fn: x => x * 2 }))
   const k = await add('counter', counter({ every: 2 }))
   const c = await add('chart', chart)
-  scope.connect('slider', valueChanged, 'doubler', mapNumber)
-  scope.connect('slider', valueChanged, 'counter', count)
-  scope.connect('doubler', mapNumber, 'chart', push)
+  const wire = (source: string, op: { name: string }, listener: string, target: { name: string }) =>
+    scope.subscribe({ source, op: op.name, listener, target: target.name })
+  wire('slider', valueChanged, 'doubler', mapNumber)
+  wire('slider', valueChanged, 'counter', count)
+  wire('doubler', mapNumber, 'chart', push)
 
   for (const v of [10, 20, 30]) await page.call('slider', setValue, v)
   for (let i = 0; i < 5; i++) await new Promise(r => setTimeout(r, 0))

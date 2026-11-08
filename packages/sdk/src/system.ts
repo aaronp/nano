@@ -16,7 +16,7 @@ import { typeHash } from './typehash'
 import {
   fail, ok, routeProblem,
   type Called, type Component, type Instance, type InstanceId, type Manifest, type Notified, type Op, type Result,
-  type Subscribed, type System, type SystemDelta, type SystemError, type SystemInstance,
+  type Subscribed, type Subscription, type System, type SystemDelta, type SystemError, type SystemInstance,
 } from './types'
 
 /** One observed operation. `drop` means it was refused (a loop); `reason` says why. */
@@ -25,8 +25,6 @@ export type Trace = {
   correlation: string; from: InstanceId; to?: InstanceId; op: string; data?: unknown; reason?: string; at: number
 }
 export type ErrorInfo = { from: InstanceId; op: string; correlation: string }
-/** A link: `from`'s output (a notification, or an action's outcome) feeds `to`'s op. */
-export type Link = { from: InstanceId; output: string; to: InstanceId; op: string }
 /** A binding: `from`'s dependency `dependency` is served by `to`'s op. */
 export type Binding = { from: InstanceId; dependency: string; to: InstanceId; op: string }
 
@@ -38,9 +36,9 @@ export type SystemRuntime = {
   register(id: InstanceId, component: Component, opts?: { wrap?: (h: SystemInstance) => SystemInstance }): SystemInstance
   unregister(id: InstanceId): void
   component(id: InstanceId): Component | undefined
-  /** Feed `from`'s output into `to`'s op; throws if either side doesn't fit. Returns the disconnect function. */
-  connect(from: InstanceId, output: Op, to: InstanceId, op: Op): () => void
-  links(): Link[]
+  /** A link: `listener`'s `target` op is called with `source`'s output `op` (a notification, or an action's outcome). */
+  subscribe(s: { source: InstanceId | '*'; op: string; listener: InstanceId; target: string }): Result<Subscription>
+  unsubscribe(id: string): Result<void>
   /** Serve `from`'s dependency with `to`'s op (which must have the dependency's shape). Returns unbind. */
   bind(from: InstanceId, dependency: string, to: InstanceId, op: Op): () => void
   bindings(): Binding[]
@@ -51,6 +49,7 @@ export type SystemRuntime = {
 
 type Entry = { instance: Instance; component: Component; base: SystemInstance }
 type Sub = Subscribed & { owner: InstanceId }
+type Rec = { sub: Subscription; entry: Sub }
 const shape = (o: Op) => `${o.input ? typeHash(o.input) : '-'}>${o.output ? typeHash(o.output) : '-'}`
 const quiet = (f: () => void) => { try { f() } catch {} }
 let systems = 0
@@ -58,11 +57,11 @@ let systems = 0
 function create(opts: { id?: string; budget?: number; burst?: number; onError?: (e: SystemError, info: ErrorInfo) => void } = {}): SystemRuntime {
   const id = opts.id ?? `system-${++systems}`
   const entries = new Map<InstanceId, Entry>()
-  const subs = new Set<Sub>(), observers = new Set<(t: Trace) => void>(), watchers = new Set<(d: SystemDelta) => void>()
-  const links = new Map<Link, () => void>(), bindings = new Map<string, Binding>()
+  const subs = new Map<string, Rec>(), observers = new Set<(t: Trace) => void>(), watchers = new Set<(d: SystemDelta) => void>()
+  const bindings = new Map<string, Binding>()
   const budget = opts.budget ?? 1000, burstMax = opts.burst ?? 100_000
   const prefix = `${id}-${Math.random().toString(36).slice(2, 6)}`
-  let seq = 0, burst = 0
+  let seq = 0, burst = 0, subSeq = 0
   const fresh = () => `${prefix}-${++seq}`
   const report = (e: SystemError, info: ErrorInfo) => quiet(() => opts.onError?.(e, info))
   const instances = (): Instance[] => [...entries.values()].map(e => e.instance)
@@ -71,7 +70,7 @@ function create(opts: { id?: string; budget?: number; burst?: number; onError?: 
     for (const e of entries.values()) by.set(`${e.instance.manifest.id.author}/${e.instance.manifest.id.id}`, e.instance.manifest)
     return [...by.values()]
   }
-  const snapshot = (): System => ({ id, manifest: manifests(), instances: instances() })
+  const snapshot = (): System => ({ id, manifest: manifests(), instances: instances(), subscriptions: [...subs.values()].map(r => r.sub) })
   const tell = (except: InstanceId | undefined, delta: SystemDelta) => {
     for (const e of [...entries.values()]) if (e.instance.id !== except) quiet(() => e.component.onSystemUpdated?.(id, delta))
     for (const w of [...watchers]) quiet(() => w(delta))
@@ -104,8 +103,9 @@ function create(opts: { id?: string; budget?: number; burst?: number; onError?: 
   /** Hand `from`'s output of op `name` (a notification, or an action's outcome) to everyone subscribed to it. */
   function deliver(from: InstanceId, name: string, payload: unknown, correlation: string) {
     dispatch(() => {
-      for (const s of [...subs]) {
-        if (s.op.name !== name || (s.from && s.from !== from) || !subs.has(s) || !entries.has(s.owner)) continue
+      for (const rec of [...subs.values()]) {
+        const s = rec.entry
+        if (s.op.name !== name || (s.from && s.from !== from) || subs.get(rec.sub.id) !== rec || !entries.has(s.owner)) continue
         if (admit({ kind: 'deliver', correlation, from, to: s.owner, op: name })) continue
         const info = { from, op: name, correlation }
         const oops = (err: any) => report({ code: 'handler', message: String(err?.message ?? err) }, info)
@@ -144,6 +144,19 @@ function create(opts: { id?: string; budget?: number; burst?: number; onError?: 
     } catch (err: any) { return fail('handler', String(err?.message ?? err)) }
   }
 
+  const open = (sub: Omit<Subscription, 'id'>, entry: Sub): Rec => {
+    const rec = { sub: { id: `${id}:s${++subSeq}`, ...sub }, entry }
+    subs.set(rec.sub.id, rec)
+    tell(undefined, { type: 'subscription-opened', subscriptions: [rec.sub] })
+    return rec
+  }
+  /** Drop subscriptions by id (those still open), as one delta. */
+  const close = (ids: string[]) => {
+    const gone = ids.flatMap(i => subs.get(i) ? [subs.get(i)!.sub] : [])
+    for (const g of gone) subs.delete(g.id)
+    if (gone.length) tell(undefined, { type: 'subscription-closed', subscriptions: gone })
+  }
+
   const gone = (who: InstanceId) => fail('unknown-target', `${who} is not registered in ${id}`)
   const coreFor = (who: InstanceId, entry: () => Entry | undefined): Core => ({
     instanceId: who, system: snapshot, fresh,
@@ -151,7 +164,8 @@ function create(opts: { id?: string; budget?: number; burst?: number; onError?: 
     call: c => entry() ? call(who, c) : Promise.resolve(gone(who)),
     subscribe: s => {
       if (!entry()) return () => {}
-      const sub: Sub = { ...s, owner: who }; subs.add(sub); return () => { subs.delete(sub) }
+      const rec = open({ source: s.from ?? '*', op: s.op.name, listener: who }, { ...s, owner: who })
+      return () => close([rec.sub.id])
     },
     use: (name, input, correlation) => {
       const b = bindings.get(`${who}\u0000${name}`)
@@ -182,28 +196,35 @@ function create(opts: { id?: string; budget?: number; burst?: number; onError?: 
       if (!e) return
       const types = manifests().length
       entries.delete(iid)
-      for (const s of subs) if (s.owner === iid) subs.delete(s)
-      for (const [l, off] of links) if (l.from === iid || l.to === iid) { off(); links.delete(l) }
+      const closing = [...subs.values()].filter(r => r.sub.listener === iid || r.sub.source === iid).map(r => r.sub)
+      for (const c of closing) subs.delete(c.id)
       for (const [k, b] of bindings) if (b.from === iid || b.to === iid) bindings.delete(k)
       quiet(() => e.component.onRemovedFromSystem?.(id))
+      if (closing.length) tell(undefined, { type: 'subscription-closed', subscriptions: closing })
       tell(undefined, { type: 'removed', instances: [e.instance] })
       if (manifests().length !== types) tell(undefined, { type: 'manifest', manifest: manifests() })
     },
     component: iid => entries.get(iid)?.component,
-    connect(from, output, to, op) {
-      const problem = routeProblem(entries.get(from)?.instance.manifest, output, entries.get(to)?.instance.manifest, op, { from, to })
-      if (problem) throw new Error(`connect: ${problem}`)
-      const sub: Sub = {
-        op: output, from, owner: to,
-        fn: (payload, d) => call(from, { target: to, op, input: payload, correlation: d.correlation, via: output.name })
-          .then(r => { if (r.type === 'error') report(r.error, { from, op: op.name, correlation: d.correlation }) }),
+    subscribe({ source, op: name, listener, target }) {
+      const from = source === '*' ? undefined : entries.get(source)?.instance.manifest
+      const to = entries.get(listener)?.instance.manifest
+      const op = to?.ops.find(o => o.name === target)
+      // '*' has no source manifest: check only the listener side.
+      const problem = source === '*'
+        ? (!to ? `no instance "${listener}"` : !op?.input ? `"${listener}" has no op ${target} taking input` : undefined)
+        : routeProblem(from, { name } as Op, to, { name: target } as Op, { from: source, to: listener })
+      if (problem) return fail('validation', `subscribe: ${problem}`)
+      const entry: Sub = {
+        op: { name } as Op, from: source === '*' ? undefined : source, owner: listener,
+        fn: (payload, d) => call(d.from, { target: listener, op: op!, input: payload, correlation: d.correlation, via: name })
+          .then(r => { if (r.type === 'error') report(r.error, { from: d.from, op: target, correlation: d.correlation }) }),
       }
-      const link: Link = { from, output: output.name, to, op: op.name }
-      const off = () => { subs.delete(sub); links.delete(link) }
-      subs.add(sub); links.set(link, off)
-      return off
+      return ok(open({ source, op: name, listener, target }, entry).sub)
     },
-    links: () => [...links.keys()],
+    unsubscribe(sid) {
+      if (!subs.has(sid)) return fail('unknown-target', `no subscription ${sid} in ${id}`)
+      close([sid]); return ok(undefined)
+    },
     bind(from, dependency, to, op) {
       const dep = entries.get(from)?.instance.manifest.dependencies?.find(d => d.name === dependency)
       const target = entries.get(to)?.instance.manifest.ops.find(o => o.name === op.name)

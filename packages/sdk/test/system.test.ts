@@ -28,7 +28,9 @@ const x = () => {
   const c = f.create()
   return Object.assign(c, { got, deltas, h: (sys: string) => c.systems.find(s => s.system.id === sys)! })
 }
-const describe = (d: SystemDelta) => d.type === 'manifest' ? `manifest:${d.manifest.map(m => m.id.id).join(',')}` : `${d.type}:${d.instances.map(i => i.id).join(',')}`
+const describe = (d: SystemDelta) => d.type === 'manifest' ? `manifest:${d.manifest.map(m => m.id.id).join(',')}`
+  : d.type === 'subscription-opened' || d.type === 'subscription-closed' ? `${d.type}:${d.subscriptions.map(s => s.listener).join(',')}`
+  : `${d.type}:${d.instances.map(i => i.id).join(',')}`
 
 test('register: the newcomer gets its handle first, the others get "added", and "manifest" when a type appears', () => {
   const { s } = setup({ id: 's1' })
@@ -104,18 +106,18 @@ test('validation: undeclared op, bad payload, a party without ops; call input an
   expect((await host.notify(fired, { text: 'from host' })).type).toBe('success')
 })
 
-test('connect: an output (notification or action outcome) feeds an op, with via and the same correlation; links lists them', async () => {
+test('subscribe (a link): an output (notification or action outcome) feeds an op, with via and the same correlation', async () => {
   const { s, page, errors } = setup()
   const a = x(), b = x()
   s.register('a', a); s.register('b', b)
-  expect(() => s.connect('a', fired, 'missing', log)).toThrow('connect: no instance "missing"')
-  const off = s.connect('a', fired, 'b', log)
-  s.connect('a', typed, 'b', log)                                   // an action's outcome
+  const link = (op: string) => s.subscribe({ source: 'a', op, listener: 'b', target: log.name })
+  const first = link(fired.name)
+  link(typed.name)                                                  // an action's outcome
   await a.notify(fired, { text: 'hi' }); await page.call('a', typed, { n: 7 }); await flush()
   expect(b.got.map(g => [g.input, g.from])).toEqual([[{ text: 'hi' }, 'a'], [7, 'a']])
-  expect(s.links().map(l => l.output.split('/').pop())).toEqual(['fired', 'typed'])
-  off()
-  expect(s.links().length).toBe(1)
+  expect(s.snapshot().subscriptions.map(l => l.op.split('/').pop())).toEqual(['fired', 'typed'])
+  expect(first.type === 'success' && s.unsubscribe(first.data.id)).toEqual(ok(undefined))
+  expect(s.snapshot().subscriptions.length).toBe(1)
   expect(errors).toEqual([])
 })
 
@@ -166,10 +168,10 @@ test('unregister: its handles go dead, its subscriptions, links and bindings go,
   const { s, page } = setup()
   const a = x(), b = x()
   const ha = s.register('a', a); s.register('b', b)
-  s.connect('a', fired, 'b', log)
+  s.subscribe({ source: 'a', op: fired.name, listener: 'b', target: log.name })
   s.unregister('a')
   expect((await ha.notify(fired, { text: 'x' })).type).toBe('error')
-  expect(s.links()).toEqual([])
+  expect(s.snapshot().subscriptions).toEqual([])
   s.register('a', x())
   expect((await ha.notify(fired, { text: 'x' })).type).toBe('error')
   expect(page.system.instances.map(i => i.id)).toEqual(['page', 'b', 'a'])
@@ -181,7 +183,7 @@ test('observe traces every operation; muting is not built in, it is a wrapper yo
   let muted = false
   const mute = (h: SystemInstance) => h.withNotify((n, next) => muted ? Promise.resolve({ type: 'not-allowed', reason: 'muted' }) : next(n))
   s.register('a', a, { wrap: mute }); s.register('b', b)
-  s.connect('a', fired, 'b', log)
+  s.subscribe({ source: 'a', op: fired.name, listener: 'b', target: log.name })
   const traces: Trace[] = []
   s.observe(t => traces.push(t))
   await a.notify(fired, { text: 'hi' }); await flush()
@@ -231,4 +233,41 @@ test('types: handlers must return their op\'s output; only sources can be notifi
     void h.notify(sink, 1)
   }
   void check
+})
+
+test('subscriptions are data: both kinds listed, opened and closed as deltas for everyone', async () => {
+  const { s, page } = setup({ id: 's1' })
+  const a = x(), b = x(), watcher = x()
+  s.register('a', a); s.register('b', b); s.register('w', watcher)
+  const r = s.subscribe({ source: 'a', op: fired.name, listener: 'b', target: log.name })
+  expect(r).toEqual(ok({ id: 's1:s1', source: 'a', op: fired.name, listener: 'b', target: log.name }))
+  const off = page.subscribe(fired, () => {}, { from: 'a' })
+  expect(s.snapshot().subscriptions.map(x => [x.listener, x.target])).toEqual([['b', log.name], ['page', undefined]])
+  expect(watcher.deltas).toContain(`subscription-opened:b`)   // describe() prints listeners for subscription deltas
+  off()
+  expect(watcher.deltas.at(-1)).toBe('subscription-closed:page')
+  await a.notify(fired, { text: 'hi' }); await flush()
+  expect(b.got.map(g => g.input)).toEqual([{ text: 'hi' }])
+  expect(s.unsubscribe('s1:s1')).toEqual(ok(undefined))
+  expect(s.unsubscribe('nope').type).toBe('error')
+})
+
+test('unregistering an instance closes all its subscriptions, as listener and as source, in one delta', () => {
+  const { s } = setup({ id: 's1' })
+  const a = x(), b = x(), c = x(), watcher = x()
+  s.register('a', a); s.register('b', b); s.register('c', c); s.register('w', watcher)
+  s.subscribe({ source: 'a', op: fired.name, listener: 'b', target: log.name })
+  s.subscribe({ source: 'b', op: fired.name, listener: 'c', target: log.name })
+  s.subscribe({ source: '*', op: fired.name, listener: 'c', target: log.name })
+  s.unregister('b')
+  expect(watcher.deltas.filter(d => d.startsWith('subscription-closed'))).toEqual(['subscription-closed:b,c'])
+  expect(s.snapshot().subscriptions.map(x => `${x.source}->${x.listener}`)).toEqual(['*->c'])
+})
+
+test('subscribe validates: unknown instances or ops that do not fit are errors, not throws', () => {
+  const { s } = setup()
+  s.register('a', x()); s.register('b', x())
+  expect(s.subscribe({ source: 'a', op: fired.name, listener: 'nope', target: log.name }).type).toBe('error')
+  expect(s.subscribe({ source: 'a', op: log.name + 'x', listener: 'b', target: log.name }).type).toBe('error')
+  expect(s.subscribe({ source: 'a', op: fired.name, listener: 'b', target: fired.name }).type).toBe('error')
 })

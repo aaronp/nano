@@ -22,9 +22,11 @@ await place('doubler', mapper({ label: 'x × 2', fn: x => x * 2 }), 'flow-mapper
 await place('counter', counter({ every: 5 }), 'flow-counter')
 await place('chart', chart, 'flow-chart')
 // The wiring: publications into subscriptions.
-scope.connect('slider', valueChanged, 'doubler', mapNumber)
-scope.connect('slider', valueChanged, 'counter', count)
-scope.connect('doubler', mapNumber, 'chart', push)   // the action's outcome
+const wire = (source: string, op: { name: string }, listener: string, target: { name: string }) =>
+  scope.subscribe({ source, op: op.name, listener, target: target.name })
+wire('slider', valueChanged, 'doubler', mapNumber)
+wire('slider', valueChanged, 'counter', count)
+wire('doubler', mapNumber, 'chart', push)   // the action's outcome
 void page.call('slider', setValue, 50)
 
 await place('debug', debug, 'debug-panel')
