@@ -14,18 +14,26 @@ const schemaFor = (ref: TypeRef, types: EditorType[]): Result<TSchema> => {
   return r.type === 'success' && ref.array ? ok(Type.Array(r.data)) : r
 }
 
+const msg = (r: Result<unknown>) => r.type === 'error' ? r.error.message : r.type === 'not-allowed' ? r.reason : ''
+
+const opManifest = (d: DraftComponent, o: DraftOp, types: EditorType[]): Result<Manifest['ops'][number]> => {
+  const op: Manifest['ops'][number] = { name: `${label(d.id)}/${o.name}` }
+  if (o.description) op.description = o.description
+  for (const k of ['input', 'output'] as const) {
+    if (!o[k]) continue
+    const r = schemaFor(o[k], types)
+    if (r.type !== 'success') return fail('validation', `${op.name} ${k}: ${msg(r)}`)
+    op[k] = r.data
+  }
+  return ok(op)
+}
+
 export function draftManifest(d: DraftComponent, types: EditorType[]): Result<Manifest> {
   const ops: Manifest['ops'] = []
   for (const o of d.ops) {
-    const op: Manifest['ops'][number] = { name: `${label(d.id)}/${o.name}` }
-    if (o.description) op.description = o.description
-    for (const k of ['input', 'output'] as const) {
-      if (!o[k]) continue
-      const r = schemaFor(o[k], types)
-      if (r.type !== 'success') return r
-      op[k] = r.data
-    }
-    ops.push(op)
+    const r = opManifest(d, o, types)
+    if (r.type !== 'success') return r
+    ops.push(r.data)
   }
   return ok({ id: d.id, ops })
 }
@@ -54,17 +62,23 @@ export const setOpTypes = (drafts: Drafts, id: ComponentId, name: string, types:
     ? ok({ ...d, ops: d.ops.map(o => o.name === name ? { ...o, ...types } : o) })
     : fail('validation', `${label(id)} has no op ${name}`))
 
-export type ComponentEntry = { manifest: Manifest; draft: boolean; implemented: boolean }
+export type ComponentEntry = { manifest: Manifest; draft: boolean; implemented: boolean; problem?: string }
 
-/** Live components (one per id) first, then drafts with no live twin. A draft whose types do not resolve is left out. */
+/** Live components (one per id) first, then drafts with no live twin. A draft whose types do not resolve is kept, with only its good ops and a `problem`. */
 export function componentsOf(drafts: Drafts, types: EditorType[], instances: Instance[]): ComponentEntry[] {
   const live = new Map<string, Manifest>()
   for (const i of instances) if (!live.has(label(i.manifest.id))) live.set(label(i.manifest.id), i.manifest)
   const out: ComponentEntry[] = [...live.values()].map(manifest => ({ manifest, draft: drafts.some(d => same(d.id, manifest.id)), implemented: true }))
   for (const d of drafts) {
     if (live.has(label(d.id))) continue
-    const m = draftManifest(d, types)
-    if (m.type === 'success') out.push({ manifest: m.data, draft: true, implemented: false })
+    const ops: Manifest['ops'] = []
+    let problem: string | undefined
+    for (const o of d.ops) {
+      const r = opManifest(d, o, types)
+      if (r.type === 'success') ops.push(r.data)
+      else problem ??= msg(r)
+    }
+    out.push({ manifest: { id: d.id, ops }, draft: true, implemented: false, ...(problem ? { problem } : {}) })
   }
   return out
 }
