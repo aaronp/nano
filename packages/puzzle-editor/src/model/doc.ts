@@ -23,9 +23,14 @@ export function checkDoc(d: unknown): Result<EditorDoc> {
   if (!Array.isArray(types)) return bad('types must be an array')
   if (!Array.isArray(components)) return bad('components must be an array')
   if (!isObj(connections) || !Array.isArray(connections.intents) || !isObj(connections.layout)) return bad('connections must have intents and layout')
+  const ids = new Set<string>()
   for (const [i, t] of types.entries()) {
-    if (!isObj(t) || typeof t.id !== 'string' || typeof t.kind !== 'string') return bad(`type ${i} is malformed`)
-    if (t.kind !== 'live' && typeof t.name !== 'string') return bad(`type ${t.id} has no name`)
+    if (!isObj(t) || typeof t.id !== 'string' || typeof t.name !== 'string') return bad(`type ${i} is malformed`)
+    if (ids.has(t.id)) return bad(`type id ${t.id} is used twice`)
+    ids.add(t.id)
+    // a saved doc holds built-ins and drafts only; live types come from the System
+    if (t.kind === 'primitive') { if (!['string', 'number', 'boolean'].includes(t.name)) return bad(`unknown primitive ${t.name}`) }
+    else if (t.kind !== 'record' && t.kind !== 'brand') return bad(`${t.name} has unknown kind ${String(t.kind)}`)
     if (t.kind === 'record') {
       if (!Array.isArray(t.fields)) return bad(`${t.name} has no fields array`)
       for (const [j, f] of t.fields.entries())
