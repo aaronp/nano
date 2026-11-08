@@ -152,3 +152,16 @@ test('the orchestrator can be driven by a link: set-intents', async () => {
   await page.notify(intentsOut, []); await flush()
   expect(scope.snapshot().subscriptions.filter(s => s.listener !== 'orchestrator')).toEqual([])
 })
+
+test('malformed intents are refused with no instances present, and the previous intents stay', () => {
+  const scope = Systems.create()
+  const o = unwrap(Orchestrators.create(scope, [workflow]))
+  const bad = [
+    { kind: 'connection', id: 'c', from: { output: { by: 'outputs' } }, to: { select: { by: 'any' }, op: 'x' } },
+    { kind: 'connection', id: 'c', from: { select: { by: 'bogus' }, output: { by: 'outputs' } }, to: { select: { by: 'any' }, op: 'x' } },
+    { kind: 'workflow', id: 'w', steps: [{ op: 'x' }] },
+  ]
+  for (const b of bad) expect(o.set([b as never]).type).toBe('error')
+  for (const [n, f] of [['crm', crm], ['map', mapper], ['tax', tax()]] as const) unwrap(scope.register(n, f.create()))
+  expect(scope.snapshot().subscriptions.filter(s => s.listener !== 'orchestrator').map(s => `${s.source}→${s.listener}`)).toEqual(['crm→map', 'map→tax'])
+})

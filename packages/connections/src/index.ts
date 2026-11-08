@@ -111,6 +111,53 @@ export function plan(intents: readonly Intent[], instances: readonly Instance[])
   return out
 }
 
+// ---------------------------------------------------------------- check
+
+const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x)
+/** The first structural problem with a selector, if any. */
+function badSel(x: unknown, at: string): string | undefined {
+  if (!isObj(x)) return `${at} is not an object`
+  if (x.by === 'any') return
+  if (x.by === 'name') return typeof x.name === 'string' ? undefined : `${at}.name is not a string`
+  if (x.by === 'component') return isObj(x.id) && typeof x.id.author === 'string' && typeof x.id.id === 'string' ? undefined : `${at}.id is not {author, id}`
+  return `${at}.by is unknown`
+}
+function badOut(x: unknown, at: string): string | undefined {
+  if (!isObj(x)) return `${at} is not an object`
+  if (x.by === 'outputs') return
+  if (x.by === 'name') return typeof x.name === 'string' ? undefined : `${at}.name is not a string`
+  if (x.by === 'type') return typeof x.type === 'string' ? undefined : `${at}.type is not a string`
+  return `${at}.by is unknown`
+}
+function badIntent(x: unknown, at: string): string | undefined {
+  if (!isObj(x)) return `${at} is not an object`
+  if (typeof x.id !== 'string') return `${at}.id is not a string`
+  if (x.enabled !== undefined && typeof x.enabled !== 'boolean') return `${at}.enabled is not a boolean`
+  if (x.kind === 'connection') {
+    const { from, to } = x
+    if (!isObj(from)) return `${at}.from is not an object`
+    if (!isObj(to)) return `${at}.to is not an object`
+    return badSel(from.select, `${at}.from.select`) ?? badOut(from.output, `${at}.from.output`)
+      ?? badSel(to.select, `${at}.to.select`) ?? (typeof to.op === 'string' ? undefined : `${at}.to.op is not a string`)
+  }
+  if (x.kind === 'workflow') {
+    if (!Array.isArray(x.steps)) return `${at}.steps is not an array`
+    for (const [i, st] of x.steps.entries()) {
+      if (!isObj(st)) return `${at}.steps[${i}] is not an object`
+      const p = badSel(st.select, `${at}.steps[${i}].select`) ?? (typeof st.op === 'string' ? undefined : `${at}.steps[${i}].op is not a string`)
+      if (p) return p
+    }
+    return
+  }
+  return `${at}.kind is neither connection nor workflow`
+}
+/** Untrusted data in, a typed Intent[] out. Never throws. */
+export function checkIntents(x: unknown): Result<Intent[]> {
+  if (!Array.isArray(x)) return fail('validation', 'intents is not an array')
+  for (const [i, it] of x.entries()) { const p = badIntent(it, `intents[${i}]`); if (p) return fail('validation', p) }
+  return ok(x as Intent[])
+}
+
 // ---------------------------------------------------------------- orchestrator
 
 /** The orchestrator's own op: a link from anything that publishes an `Unknown[]` of intents can drive `set`. */
@@ -122,8 +169,8 @@ export type Orchestrator = {
   /** The status of each intent as of the last change. */
   status(): Record<string, Status>
   onStatus(fn: (s: Record<string, Status>) => void): () => void
-  /** Replace the intents (e.g. a loaded document, or one switched on or off). */
-  set(intents: readonly Intent[]): void
+  /** Replace the intents (e.g. a loaded document, or one switched on or off); malformed ones are refused and the old stay. */
+  set(intents: readonly Intent[]): Result<void>
   /** Remove every route this orchestrator made, and stop following changes. */
   stop(): void
 }
@@ -158,14 +205,15 @@ function create(system: SystemRuntime, intents: readonly Intent[], id = 'orchest
     for (const [k, r] of want) if (!mine.has(k)) { const s = system.subscribe({ source: r.from, op: r.output.name, listener: r.to, target: r.op.name }); if (s.type === 'success') mine.set(k, s.data.id) }
     status = p.status
   }
-  /** Intents arriving as data are untrusted: a dry plan (pure) rejects what would make `plan` throw. */
-  const replace = (next: readonly unknown[]): Result<void> => {
-    try { plan(next as Intent[], system.snapshot().instances) } catch (e) { return fail('validation', `bad intents: ${e instanceof Error ? e.message : String(e)}`) }
-    current = next as Intent[]; apply(); return ok(undefined)
+  /** The one path for new intents: check, then replace and apply. */
+  const replace = (next: unknown): Result<void> => {
+    const c = checkIntents(next)
+    if (c.type !== 'success') return c
+    current = c.data; apply(); return ok(undefined)
   }
   const reg = system.register(id, {
     manifest: { id: { author: 'composable', id: 'orchestrator' }, ops: [OrchestratorOps.setIntents] },
-    onAction: async (_s, inv) => inv.op === OrchestratorOps.setIntents.name ? replace(inv.input as unknown[]) : fail('unknown-action', `${id} takes no such call`),
+    onAction: async (_s, inv) => inv.op === OrchestratorOps.setIntents.name ? replace(inv.input) : fail('unknown-action', `${id} takes no such call`),
     onSystemUpdated: () => apply(),
   })
   if (reg.type !== 'success') return reg
@@ -173,7 +221,7 @@ function create(system: SystemRuntime, intents: readonly Intent[], id = 'orchest
   return ok({
     status: () => status,
     onStatus(fn) { listeners.add(fn); return () => { listeners.delete(fn) } },
-    set(next) { current = next; apply() },
+    set: replace,
     stop() { stopped = true; system.unregister(id); for (const sid of mine.values()) system.unsubscribe(sid); mine.clear() },
   })
 }
