@@ -9,8 +9,10 @@ import type { SystemRuntime } from './system'
 import { ComponentId, Instance, Manifest, fail, ok, type Component, type ComponentFactory, type Op } from './types'
 
 const S = Components.declare({ author: 'composable', id: 'system' })
-const Link = Type.Object({ from: Type.String(), output: Type.String(), to: Type.String(), op: Type.String() },
-  { $id: 'composable.Link', description: 'A live connection: from\'s output (a notification or an action\'s outcome) feeds to\'s op.' })
+const NewSubscription = Type.Object({ source: Type.String(), op: Type.String(), listener: Type.String(), target: Type.Optional(Type.String()) },
+  { $id: 'composable.NewSubscription', description: 'listener hears source\'s (or anyone\'s, \'*\') output op; with a target, it feeds the listener\'s target op.' })
+const Sub = Type.Object({ id: Type.String(), source: Type.String(), op: Type.String(), listener: Type.String(), target: Type.Optional(Type.String()) },
+  { $id: 'composable.Subscription' })
 const Binding = Type.Object({ from: Type.String(), dependency: Type.String(), to: Type.String(), op: Type.String() },
   { $id: 'composable.Binding', description: 'from\'s dependency is served by to\'s op.' })
 const Instances = Type.Array(Instance)
@@ -23,19 +25,15 @@ export const SystemOps = {
     input: Type.Object({ component: ComponentId, name: Type.String() }), output: Type.Object({ name: Type.String() }),
   }),
   remove: S.op('remove', 'Unregister an instance (disposing it if this System created it)', { input: Type.Object({ name: Type.String() }) }),
-  connect: S.op('connect', 'Feed one instance\'s output into another\'s op', { input: Link }),
-  disconnect: S.op('disconnect', 'Remove a link made with connect', { input: Link }),
-  links: S.op('links', 'The links in place', { input: Type.Null(), output: Type.Array(Link) }),
-  linksChanged: S.op('links-changed', 'Published whenever a link is made or removed', { output: Type.Array(Link) }),
+  subscribe: S.op('subscribe', 'Open a subscription: listener hears source\'s output op (a link when it has a target)', { input: NewSubscription, output: Sub }),
+  unsubscribe: S.op('unsubscribe', 'Close a subscription', { input: Type.Object({ id: Type.String() }) }),
+  subscriptions: S.op('subscriptions', 'The subscriptions in place', { input: Type.Null(), output: Type.Array(Sub) }),
+  subscriptionsChanged: S.op('subscriptions-changed', 'Published whenever a subscription is opened or closed', { output: Type.Array(Sub) }),
   bind: S.op('bind', 'Serve one instance\'s dependency with another\'s op', { input: Binding }),
   unbind: S.op('unbind', 'Remove a binding', { input: Type.Object({ from: Type.String(), dependency: Type.String() }) }),
   bindings: S.op('bindings', 'The bindings in place', { input: Type.Null(), output: Type.Array(Binding) }),
 }
 
-const key = (l: { from: string; output: string; to: string; op: string }) => [l.from, l.output, l.to, l.op].join('\u0000')
-/** The subscriptions that are links, in the Link shape. */
-const links = (rt: SystemRuntime) => rt.snapshot().subscriptions.flatMap(s =>
-  s.target ? [{ from: s.source, output: s.op, to: s.listener, op: s.target }] : [])
 const same = (a: ComponentId, b: ComponentId) => a.author === b.author && a.id === b.id
 
 /** A System component over `runtime`. `catalog`: the components its `create` op can make. */
@@ -43,7 +41,7 @@ export function systemComponent(runtime: SystemRuntime, opts: { catalog?: readon
   const catalog = opts.catalog ?? [], o = SystemOps
   const opOf = (inst: string, op: string) => runtime.snapshot().instances.find(i => i.id === inst)?.manifest.ops.find(x => x.name === op)
   const factory = S.define({
-    state: () => ({ links: new Map<string, string>(), made: new Map<string, Component>() }),
+    state: () => ({ made: new Map<string, Component>() }),
     handlers: [
       [o.instances, () => ok(runtime.snapshot().instances)],
       [o.definitions, () => ok(catalog.map(f => f.manifest))],
@@ -61,18 +59,9 @@ export function systemComponent(runtime: SystemRuntime, opts: { catalog?: readon
         if (r.type !== 'success') return r
         await state.made.get(name)?.dispose?.(); state.made.delete(name)
       }],
-      [o.connect, (l, { state }) => {
-        if (state.links.has(key(l))) return
-        const r = runtime.subscribe({ source: l.from, op: l.output, listener: l.to, target: l.op })
-        if (r.type !== 'success') return r
-        state.links.set(key(l), r.data.id)
-      }],
-      [o.disconnect, (l, { state }) => {
-        const sid = state.links.get(key(l))
-        if (!sid) return fail('unknown-target', 'no such link made through this System component')
-        state.links.delete(key(l)); return runtime.unsubscribe(sid)
-      }],
-      [o.links, () => ok(links(runtime))],
+      [o.subscribe, s => runtime.subscribe(s as never)],
+      [o.unsubscribe, ({ id }) => runtime.unsubscribe(id)],
+      [o.subscriptions, () => ok(runtime.snapshot().subscriptions)],
       [o.bind, (b, { state }) => {
         if (!opOf(b.to, b.op)) return fail('unknown-action', `no ${b.to} ${b.op}`)
         const r = runtime.bind(b.from, b.dependency, b.to, b.op)
@@ -86,20 +75,10 @@ export function systemComponent(runtime: SystemRuntime, opts: { catalog?: readon
     manifest: factory.manifest,
     create() {
       const m = factory.create()
-      let lastLinks = ''
-      const announce = () => {
-        void m.notify(o.changed, runtime.snapshot().instances)
-        const current = links(runtime), now = JSON.stringify(current)
-        if (now !== lastLinks) { lastLinks = now; void m.notify(o.linksChanged, current) }
-      }
-      const offUpdates = runtime.updates(announce)
-      // Link changes made through this component are announced right away.
-      const onAction = m.onAction.bind(m)
-      m.onAction = async (s, inv) => {
-        const r = await onAction(s, inv)
-        if (inv.op === o.connect.name || inv.op === o.disconnect.name) announce()
-        return r
-      }
+      const offUpdates = runtime.updates(d => {
+        if (d.type === 'added' || d.type === 'removed') void m.notify(o.changed, runtime.snapshot().instances)
+        else if (d.type === 'subscription-opened' || d.type === 'subscription-closed') void m.notify(o.subscriptionsChanged, runtime.snapshot().subscriptions)
+      })
       const dispose = m.dispose?.bind(m)
       m.dispose = async () => { offUpdates(); await dispose?.() }
       return m

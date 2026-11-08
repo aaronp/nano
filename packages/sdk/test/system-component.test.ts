@@ -38,24 +38,23 @@ test('instances, changed, definitions, create from the catalog, remove', async (
   expect(seen.at(-1)).toEqual(['page', 'system', 'numbers'])
 })
 
-test('connect, disconnect and links by name, with links-changed; bind and unbind dependencies', async () => {
+test('subscribe, unsubscribe and subscriptions by op, announced on every change (whoever made it)', async () => {
   const { rt, page } = world()
-  const k = keeper()
-  const n = numbers.create()
-  rt.register('numbers', n); rt.register('keeper', k.create() as never)
-  const kept = () => (rt.component('keeper') as unknown as { state: number[] }).state
-  const counts: number[] = []
-  page.subscribe(sys.linksChanged, l => { counts.push(l.length) }, { from: 'system' })
-  const link = { from: 'numbers', output: emitted.name, to: 'keeper', op: keep.name }
-  expect((await page.call('system', sys.connect, link)).type).toBe('success')
-  await n.notify(emitted, 7); await flush()
-  expect(kept()).toEqual([7])
-  expect(await page.call('system', sys.links, null)).toEqual(ok([link]))
-  await page.call('system', sys.disconnect, link)
-  await n.notify(emitted, 8); await flush()
-  expect(kept()).toEqual([7])
-  expect(counts).toEqual([1, 0])
+  const n = numbers.create(); rt.register('numbers', n); rt.register('keeper', keeper().create() as never)
+  const seen: number[] = []
+  page.subscribe(sys.subscriptionsChanged, l => { seen.push(l.filter(x => x.target).length) }, { from: 'system' })
+  const made = unwrap(await page.call('system', sys.subscribe, { source: 'numbers', op: emitted.name, listener: 'keeper', target: keep.name }))
+  rt.register('k2', keeper().create() as never)
+  unwrap(rt.subscribe({ source: 'numbers', op: emitted.name, listener: 'k2', target: keep.name }))   // on the runtime directly
+  const listed = unwrap(await page.call('system', sys.subscriptions, null))
+  expect(listed.filter(x => x.target).length).toBe(2)
+  await page.call('system', sys.unsubscribe, { id: made.id })
+  await flush()
+  expect(seen).toEqual([0, 1, 2, 1])   // the page's own listening, then made via the op, made on the runtime, removed: all announced
+})
 
+test('bind and unbind dependencies', async () => {
+  const { rt, page } = world()
   // dependencies: bind a greeter's `upper` to a library op of the same shape
   const G = Components.declare({ author: 't', id: 'greeter' })
   G.dependency('upper', 'uppercase', { op: { name: 'u', input: Type.String(), output: Type.String() } })
