@@ -177,8 +177,11 @@ function composite<const R extends Record<string, Handle>>(
           made[u.name] = await u.factory.create()
           inner.register(u.name, made[u.name], { wrap: u.wrap && (h => u.wrap!(h, () => outer[0])) })
         }
+        for (const [f, t] of routes) {
+          const r = inner.subscribe({ source: f.child, op: f.op.name, listener: t.child, target: t.op.name })
+          if (r.type === 'error') throw new Error(`route: ${r.error.message}`)
+        }
       } catch (err) { for (const c of Object.values(made)) await c.dispose?.(); throw err }
-      for (const [f, t] of routes) inner.subscribe({ source: f.child, op: f.op.name, listener: t.child, target: t.op.name })
       const self = inner.register('..', { manifest: { id: meta.id, ops: [] }, onAction: async () => fail('unknown-action', 'the composite takes no calls from inside') })
       for (const u of uses) for (const op of u.factory.manifest.ops.filter(o => roleOf(o) === 'source' && pick(o)))
         self.subscribe(op, (p, d) => { for (const o of outer) void o.within(d.correlation).notify(op as Source, p as never) }, { from: u.name })

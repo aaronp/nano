@@ -104,6 +104,23 @@ test('orchestrator: wires and unwires as instances come and go; the chain runs e
   expect(links(scope)).toEqual([])
 })
 
+test('orchestrator: a change made while it is wiring still triggers a re-plan', async () => {
+  const scope = Systems.create({ onError: e => { throw e } })
+  for (const [id, f] of [['crm', crm], ['tax', tax()], ['log', logger()], ['m1', mapper], ['m2', mapper]] as const) scope.register(id, f.create())
+  // once armed, reacts to the orchestrator's next subscription by removing m2, which makes the workflow unambiguous
+  let armed = false
+  scope.register('meddler', {
+    manifest: { id: { author: 't', id: 'meddler' }, ops: [] },
+    onAction: async () => ({ type: 'error', error: { code: 'unknown-action', message: 'none' } }),
+    onSystemUpdated: (_s, d) => { if (armed && d.type === 'subscription-opened') { armed = false; scope.unregister('m2') } },
+  })
+  Orchestrators.create(scope, [logEverything, workflow])
+  expect(links(scope).map(r => r.listener)).not.toContain('tax')   // two maps: ambiguous, not wired
+  armed = true
+  scope.register('crm2', crm.create())   // a new source: the orchestrator subscribes it to the log, and the meddler reacts
+  expect(links(scope).map(r => `${r.source}→${r.listener}`)).toContain('m1→tax')
+})
+
 test('intents are plain JSON: they round-trip and plan the same', () => {
   const inst = (id: string, f: { manifest: any }) => ({ id, manifest: f.manifest })
   const instances = [inst('crm', crm), inst('m', mapper), inst('tax', tax())]

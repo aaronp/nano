@@ -136,12 +136,13 @@ const policyComponent = (id: string, apply: () => void): Component => ({
 function create(system: SystemRuntime, intents: readonly Intent[], id = 'orchestrator'): Orchestrator {
   const mine = new Map<string, string>() // route key -> subscription id
   const listeners = new Set<(s: Record<string, Status>) => void>()
-  let current = intents, status: Record<string, Status> = {}, stopped = false, applying = false
+  let current = intents, status: Record<string, Status> = {}, stopped = false, applying = false, dirty = false
   const key = (r: PlannedRoute) => `${r.from}\u0000${r.output.name}\u0000${r.to}\u0000${r.op.name}`
   const apply = () => {
-    if (stopped || applying) return // our own subscribe/unsubscribe deltas come back here
+    if (stopped) return
+    if (applying) { dirty = true; return } // our own subscribe/unsubscribe deltas come back here; re-plan after
     applying = true
-    try { reconcile() } finally { applying = false }
+    try { for (let i = 0; i === 0 || (dirty && i < 10); i++) { dirty = false; reconcile() } } finally { applying = false; dirty = false }
     for (const fn of listeners) try { fn(status) } catch {}
   }
   const reconcile = () => {

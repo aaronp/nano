@@ -131,6 +131,19 @@ test('a failing child disposes the ones already created', async () => {
   expect(disposed).toBe(1)
 })
 
+test('a route the inner System refuses at create time rejects create and disposes the children', async () => {
+  let disposed = 0
+  const S = Components.declare({ author: 't', id: 'src' }), T = Components.declare({ author: 't', id: 'dst' })
+  const out = S.op('out', 'out', { output: Type.String() }), inn = T.op('in', 'in', { input: Type.String() })
+  const src = S.define({ state: () => 0, dispose: () => { disposed++ } })
+  const dst = T.define({ state: () => 0, handlers: [[inn, () => {}]] })
+  // dst's factory promises `in`, but the component it creates lacks it: only the live System can notice
+  const liar: ComponentFactory = { manifest: dst.manifest, create: () => ({ ...dst.create(), manifest: { id: { author: 't', id: 'dst' }, ops: [] } }) }
+  const bad = Components.compose(meta('bad'), c => { const a = c.use('a', src), b = c.use('b', liar); c.route(a(out), b(inn)); return { a, b } })
+  await expect(bad.create()).rejects.toThrow('route: ')
+  expect(disposed).toBe(1)
+})
+
 test('use(..., wrap): the parent derives a child handle, and can pass calls through to its own System', async () => {
   const outer = Systems.create(), page = outer.register('page', Components.party())
   const l = listener()
