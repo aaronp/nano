@@ -174,6 +174,7 @@ function composite<const R extends Record<string, Handle>>(
         if (!o) throw new Error(`${label}: step ${i} (${s.child} ${s.op.name}) does not exist`)
         return o
       })
+      if (!found[0].input) throw new Error(`${label}: step 0 (${steps[0].child} ${found[0].name}) takes no input`)
       found.forEach((o, i) => {
         if (i === steps.length - 1) return
         const at = `${label}: step ${i} (${steps[i].child} ${o.name})`
@@ -184,8 +185,7 @@ function composite<const R extends Record<string, Handle>>(
           throw new Error(`${label}: step ${i} output does not fit step ${i + 1} input`)
       })
       const last = found[found.length - 1]
-      const op: Op = { name: opName, description, ...(found[0].input ? { input: found[0].input } : {}), ...(last.output ? { output: last.output } : {}) }
-      if (!op.input && !op.output) throw new Error(`${label}: needs a first step with input or a last step with output`)
+      const op: Op = { name: opName, description, input: found[0].input, ...(last.output ? { output: last.output } : {}) }
       pipes.set(opName, steps); pipeOps.push(op)
       return op
     },
