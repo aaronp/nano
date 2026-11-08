@@ -4,7 +4,7 @@
 
 **Goal:** Rebuild the puzzle prototype on the `@composable` SDK as an isolated System of small components, usable bundled (`<puzzle-editor>`) or piece by piece, and linkable to a real System with no glue, after first making subscriptions first-class System data.
 
-**Architecture:** SDK first: subscriptions become data with `subscription-opened` / `subscription-closed` deltas, the runtime returns `Result`s, `Systems.restrict` limits a holder to itself, and `compose` gains `pipe`. Then `packages/puzzle-editor`: a pure model (types with stable ids → TypeBox schemas and SAIDs, looks, draft components, the board model moved from `connection-designer`, TypeScript print/parse), four `define`d components inside one composite, and Lit views ported from the prototype.
+**Architecture:** SDK first: subscriptions become data with `subscription-opened` / `subscription-closed` deltas, the runtime returns `Result`s, `Systems.restrict` limits a holder to itself. Then `packages/puzzle-editor`: a pure model (types with stable ids → TypeBox schemas and SAIDs, looks, draft components, the board model moved from `connection-designer`, TypeScript print/parse), four `define`d components inside one composite, and Lit views ported from the prototype.
 
 **Tech Stack:** TypeScript (strict), Bun (`bun test`, `bun build`), TypeBox 1.x (`typebox`), Lit 3, happy-dom for DOM tests.
 
@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Prefer `Result`s over throwing in the runtime (`register`, `subscribe`, `unsubscribe`, `bind`, `unbind`); throwing stays only at build/definition time (`define`, `compose`, `lift`).
-- No new SDK concepts beyond subscriptions as data, `Systems.restrict`, `pipe` and the orchestrator's `set-intents` op.
+- No new SDK concepts beyond subscriptions as data, `Systems.restrict` and the orchestrator's `set-intents` op.
 - Editor components never hold a `SystemRuntime`; everything arrives and leaves through ops.
 - Draft components and types are saved in the `EditorDoc`; live ones are never saved (they come from the System).
 - Board joins are horizontal only (input left, output right).
@@ -226,6 +226,8 @@ git add packages/sdk && git commit -m "feat(sdk): System component ops for subsc
 ---
 
 ### Task 4: `pipe` in `compose`
+
+> **Dropped (user, 2026-11-08):** implemented then reverted (87f35fd, 96a91aa → fd6e247, c3996d9). Pipe belongs in its own package, built on the SDK; see the spec's Follow-ons.
 
 **Files:**
 - Modify: `packages/sdk/src/components.ts` (`Builder.pipe`)

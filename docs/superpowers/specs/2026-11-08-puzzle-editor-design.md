@@ -18,9 +18,8 @@ real System with no glue code, the SDK's model (components, ops, Systems, links,
    only through ops. Nothing outside reaches its internals.
 3. **Composition.** One bundled `<puzzle-editor>` that looks like the prototype, and the same pieces standalone:
    `<type-editor>`, `<component-list>`, `<connection-editor>`, each placeable in any System.
-4. **Chains as actions.** A composite can expose an internal chain A → B → C as one action (`pipe`), which then
-   appears in other Systems' manifests like any op. *(call)* The editor itself does not need `pipe` in v1; it is
-   built and tested as an SDK capability, with its own example.
+4. **Chains as actions: out of scope here.** Exposing a chain A → B → C as one action belongs in its own package,
+   built on the SDK rather than in it. *(user, after review)* The editor does not need it in v1.
 5. **Plugs into a real System without mapping.** Because the editor's inputs are SDK types, a host links a System
    component's `changed` (an `Instance[]`) straight into the editor's `set-instances` (one link), and the editor's
    `intents-updated` straight into an orchestrator's `set-intents` (one link).
@@ -38,7 +37,8 @@ real System with no glue code, the SDK's model (components, ops, Systems, links,
   it knows arrives through its ops; everything it produces leaves through its ops.
 - No second data model beside the SDK's ("elements/actions" from the prototype map onto manifests/ops; there is no
   translation layer to maintain).
-- No new SDK concepts beyond subscriptions as data, `Systems.restrict`, `pipe` and the orchestrator's ops (below).
+- No new SDK concepts beyond subscriptions as data, `Systems.restrict` and the orchestrator's ops (below). The SDK stays the
+  solid core (Components, Ops, Systems, pub/sub/actions); anything built from those lives in its own package.
 
 ## Decisions
 
@@ -159,21 +159,10 @@ The composite (`puzzle-editor`) exposes `document.load`, `document.model-updated
 
 Each child owns its state in the `define` model (`state`) and notifies on every change; views re-render from it.
 
-### 3. `pipe` (new SDK capability, in `Components.compose`)
+### 3. `pipe`: moved out
 
-```ts
-c.pipe('slider-to-chart', 'Map a value and chart it', [doubler(map), chart(push)])
-```
-
-- Declares an action op on the composite whose input is the first step's input and whose output is the last
-  step's output (none if the last step is a sink).
-- At build time: every step must exist on its child; every step but the last must be an action (input and output);
-  each step's output type SAID must equal the next step's input (or the next input is `Unknown`); otherwise compose
-  throws, as `route` does today.
-- At run time: calling the op calls step 0 with the input, then each next step with the previous step's result data,
-  in order, through the composite's own System, carrying the call's correlation. The first non-success result is
-  returned as is; otherwise the last step's result.
-- A pipe op is an ordinary op: it appears in the composite's manifest and can be called or linked from any System.
+Chains as one action (a `pipe`) are not an SDK feature. They come later as their own package, built on System calls
+(see Follow-ons).
 
 ### 4. The orchestrator gets ops
 
@@ -196,7 +185,7 @@ So the editor can drive it through a link rather than code, the orchestrator pol
 
 - `packages/puzzle-editor`: `model/` (pure: document, types and looks, components, the board model moved from
   `connection-designer`), `components/` (the four children and the composite), `views/` (Lit).
-- Subscriptions as data, rich results, `Systems.restrict` and `pipe` in `@composable/sdk`; orchestrator ops in
+- Subscriptions as data, rich results, `Systems.restrict` in `@composable/sdk`; orchestrator ops in
   `@composable/connections`.
 - `packages/connection-designer` is removed once `<connection-editor>` replaces it; `ui-workspace`'s Connections
   page hosts `<puzzle-editor>` linked to the page System as in goal 5.
@@ -211,8 +200,7 @@ So the editor can drive it through a link rather than code, the orchestrator pol
   looks surviving edits, live types collected by SAID, draft vs live components, the board edits (existing tests
   move), TypeScript print/parse round trip.
 - Components: each child through a System (`set-*` in, `*-updated` out); the composite end to end (`load`,
-  model-updated after edits, Live gating `intents-updated`, internals not visible from outside); `pipe` (SDK):
-  build-time errors, success, a failing step.
+  model-updated after edits, Live gating `intents-updated`, internals not visible from outside).
 - Integration: a page System with a System component and an orchestrator, linked to `<puzzle-editor>` with no glue
   code; a chain designed on the board becomes viable and carries data.
 - Views: happy-dom tests for placement, drag and drop and the shape editor's point editing.
@@ -222,3 +210,12 @@ So the editor can drive it through a link rather than code, the orchestrator pol
 - File splits inside the package, internal state shapes, helper names.
 - How look presets are parameterised from SAID bytes, as long as it is deterministic and close to the prototype.
 - The exact visual values: replicate the prototype's inline styles faithfully through the theme tokens.
+
+## Follow-ons (after the editor; each its own package on the SDK)
+
+- **Platform:** a Platform System that creates and registers other Systems and answers "which components are in
+  this System" and "which Systems is this component in".
+- **Chains:** a chain component (the old `pipe`): steps as component coordinates plus ops, exposed as one action,
+  checked against the steps' types.
+- **Workflow list:** a component that instantiates named chains (slider → debounce → map → log → database) from the
+  puzzle editor's declarative workflows.
