@@ -31,6 +31,20 @@
         "typebox": "^1.4.0",
       },
     },
+    "packages/puzzle-editor": {
+      "name": "@composable/puzzle-editor",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+      "peerDependencies": {
+        "@composable/connections": "workspace:*",
+        "@composable/sdk": "workspace:*",
+        "@composable/ui": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+    },
     "packages/sdk": {
       "name": "@composable/sdk",
       "version": "0.1.0",
@@ -81,6 +95,8 @@
     "@composable/connection-designer": ["@composable/connection-designer@workspace:packages/connection-designer"],
 
     "@composable/connections": ["@composable/connections@workspace:packages/connections"],
+
+    "@composable/puzzle-editor": ["@composable/puzzle-editor@workspace:packages/puzzle-editor"],
 
     "@composable/sdk": ["@composable/sdk@workspace:packages/sdk"],
 
