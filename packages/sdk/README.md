@@ -39,15 +39,18 @@ Plain code can be lifted instead: `Components.lift(id, { echo: Type.Function([In
 ## 3. Create, register, connect
 
 ```ts
-import { Systems } from '@composable/sdk'
+import { Systems, unwrap } from '@composable/sdk'
 
 const system = Systems.create()
 const c = chart.create()                       // the owner creates (and later disposes) the instance
-system.register('chart', c)                    // ...and registers it; the same instance may join other Systems
-system.connect('slider', valueChanged, 'chart', push)   // an output (a source, or an action's outcome) feeds an op
-const page = system.register('page', Components.party())
+system.register('chart', c)                    // ...and registers it (a Result); the same instance may join other Systems
+system.subscribe({ source: 'slider', op: valueChanged.name, listener: 'chart', target: push.name })   // an output feeds an op
+const page = unwrap(system.register('page', Components.party()))   // hosts take the handle with unwrap
 await page.call('chart', stats, null)          // → { type: 'success', data: { n: … } }
 ```
+
+`system.subscribe` returns a Result holding the subscription; `system.unsubscribe(id)` closes it. Subscriptions are System
+data: `snapshot().subscriptions`, with `subscription-opened` / `subscription-closed` deltas in `updates`.
 
 A component acts only through the handles it is given (`onAddedToSystem`): `notify`, `call`, `subscribe`, `use`.
 Being in two Systems, it decides where its notifications go. Handles given for a call carry its correlation, so
@@ -60,7 +63,7 @@ A component can declare an op it needs from another; something binds it, and han
 ```ts
 const enrich = C.dependency('enrich', 'look up a date of birth', { op: { name: 'enrich', input: Name, output: Born } })
 const toUser = C.op('to-user', 'Person → User', { input: Person, output: User, requires: [enrich] })
-system.bind('map', 'enrich', 'dob', dob.ops.lookup)      // or a policy component does it
+system.bind('map', 'enrich', 'dob', dob.ops.lookup.name)   // a Result; `unbind('map', 'enrich')` undoes it
 ```
 
 ## 5. Compose
@@ -81,8 +84,10 @@ A composite owns a System of its own; only exposed ops are visible outside. Wrap
 ## 6. Systems as components
 
 `Systems.component(system, { catalog })` exposes a System through ops (`instances`, `changed`, `definitions`,
-`create`, `remove`, `connect`, `disconnect`, `links`, `links-changed`, `bind`, `unbind`, `bindings`). Register it in
-the same System, or another (a System of Systems). Pickers, editors and policies are just components that use it.
+`create`, `remove`, `subscribe`, `unsubscribe`, `subscriptions`, `subscriptions-changed`, `bind`, `unbind`,
+`bindings`). Register it in the same System, or another (a System of Systems). Pickers, editors and policies are just
+components that use it. `Systems.restrict(system, as)` is a view that answers `not-allowed` for anything involving
+another instance.
 `system.observe(trace => …)` sees every operation.
 
 ## Building
