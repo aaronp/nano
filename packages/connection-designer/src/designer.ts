@@ -1,16 +1,17 @@
 /**
- * <connection-designer>: a puzzle-style editor for declarative connections. Components present in the scope are
+ * <connection-designer>: a puzzle-style editor for declarative connections. Components present in the System are
  * listed in a palette; each op is a piece (input: a hole on the left; output: a knob on the right; shapes from the
  * types' SAIDs). Pieces joined in a row are a workflow. Fan-out connections are rules in a side list. Every intent
- * shows its live plan status; "Live" hands the intents to an orchestrator, which wires the scope to match.
+ * shows its live plan status; "Live" hands the intents to an orchestrator (a policy component), which wires the System.
  * The document (`{ intents, layout }`) is shown as JSON, and can be copied, loaded and kept in localStorage.
  *
- * Gets its scope from the nearest `provideScope`, or set `.scope`. Attributes: `storage-key` (optional).
+ * Gets its System from the nearest `provideSystem`, or set `.system`; it joins it as a small component to follow its
+ * changes. Attributes: `storage-key` (optional).
  */
 import { LitElement, css, html, nothing, svg } from 'lit'
-import type { Instance, Scope } from '@composable/sdk'
+import { fail, type Instance, type SystemRuntime } from '@composable/sdk'
 import { Orchestrators, plan, type Connection, type InstanceSel, type Orchestrator, type Plan, type Problem } from '@composable/connections'
-import { base, requestScope, t } from '@composable/ui'
+import { base, requestSystem, t } from '@composable/ui'
 import {
   addConnection, board, componentKey, connections, emptyDoc, joins, look, move, palette, partners, pin, place, remove,
   stepFor, take, toggle, workflows, type BoardPiece, type Doc, type PaletteEntry, type PieceSpec, type TypeInfo,
@@ -37,13 +38,14 @@ const problemText = (p: Problem, names: Map<string, string>): string =>
     : p.kind === 'ambiguous' ? `${p.at} matches ${p.instances.join(', ')}: pin one`
       : p.kind === 'no-op' ? `${p.at} has no ${p.op.split('/').pop()}`
         : p.kind === 'type-mismatch' ? `${p.at}: ${names.get(p.output) ?? p.output.slice(0, 8)} does not fit ${names.get(p.input) ?? p.input.slice(0, 8)}`
+          : p.kind === 'unavailable' ? `${p.at} needs ${p.needs.join(', ')}, which nothing here provides`
           : (() => { throw new Error(`unknown problem ${JSON.stringify(p)}`) })()
 
 type Drag = { kind: 'new'; entry: PaletteEntry; piece: PieceSpec } | { kind: 'move'; at: BoardPiece; piece: PieceSpec }
 
 export class ConnectionDesigner extends LitElement {
-  static properties = { scope: { attribute: false }, storageKey: { attribute: 'storage-key' } }
-  declare scope?: Scope
+  static properties = { system: { attribute: false }, storageKey: { attribute: 'storage-key' } }
+  declare system?: SystemRuntime
   declare storageKey?: string
   #instances: Instance[] = []
   #doc: Doc = emptyDoc()
@@ -63,9 +65,15 @@ export class ConnectionDesigner extends LitElement {
 
   #attach() {
     if (this.#unwatch || !this.isConnected) return
-    this.scope ??= requestScope(this)
-    if (!this.scope) return
-    this.#unwatch = this.scope.context('connection-designer').watch(list => { this.#instances = list; this.requestUpdate() })
+    this.system ??= requestSystem(this)
+    const sys = this.system
+    if (!sys) return
+    const id = `connection-designer-${(++seq).toString(36)}`
+    const refresh = () => { this.#instances = sys.snapshot().instances; this.requestUpdate() }
+    sys.register(id, { manifest: { id: { author: 'composable', id: 'connection-designer' }, ops: [] },
+      onAction: async () => fail('unknown-action', 'the designer takes no calls'), onSystemUpdated: refresh })
+    refresh()
+    this.#unwatch = () => sys.unregister(id)
   }
 
   // ---- document
@@ -82,7 +90,7 @@ export class ConnectionDesigner extends LitElement {
   }
   #setLive(on: boolean) {
     this.#live = on
-    if (on && this.scope) (this.#orch ??= Orchestrators.create(this.scope, [], 'connection-designer:orchestrator')).set(this.#doc.intents)
+    if (on && this.system) (this.#orch ??= Orchestrators.create(this.system, [], `orchestrator-${(++seq).toString(36)}`)).set(this.#doc.intents)
     else this.#orch?.set([])
     this.requestUpdate()
   }
@@ -118,7 +126,7 @@ export class ConnectionDesigner extends LitElement {
   }
 
   override render() {
-    if (!this.scope) return html`<p class="muted">Put &lt;connection-designer&gt; inside a scope provider, or set <code>.scope</code>.</p>`
+    if (!this.system) return html`<p class="muted">Put &lt;connection-designer&gt; inside a System provider, or set <code>.system</code>.</p>`
     const entries = palette(this.#instances)
     const result: Plan = plan(this.#doc.intents, this.#instances)
     const names = new Map(entries.flatMap(e => e.pieces.flatMap(p => [p.input, p.output])).filter((x): x is TypeInfo => !!x).map(x => [x.hash, x.name]))
@@ -126,7 +134,7 @@ export class ConnectionDesigner extends LitElement {
     return html`
       <aside class="palette" @dragover=${(e: DragEvent) => e.preventDefault()} @drop=${(e: DragEvent) => this.#dropOnPalette(e)}>
         <h3>Components</h3>
-        ${entries.length ? nothing : html`<p class="muted">No components in this scope yet.</p>`}
+        ${entries.length ? nothing : html`<p class="muted">No components in this System yet.</p>`}
         ${entries.map(e => html`
           <section>
             <h4>${e.key} <small>${e.instances.join(', ')}</small></h4>

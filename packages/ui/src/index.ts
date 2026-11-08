@@ -1,28 +1,28 @@
 import { LitElement, type PropertyValues } from 'lit'
-import type { Component, ComponentFactory, Scope } from '@composable/sdk'
+import type { Component, ComponentFactory, SystemRuntime } from '@composable/sdk'
 
 type Observable = Component & { onChange?(fn: () => void): () => void }
 
-const REQUEST = 'composable-scope-request'
-type Request = { scope?: Scope }
+const REQUEST = 'composable-system-request'
+type Request = { system?: SystemRuntime }
 
-/** Make `host` answer scope requests from everything inside it (the request crosses shadow roots). Returns stop. */
-export const provideScope = (host: EventTarget, scope: Scope) => {
+/** Make `host` answer System requests from everything inside it (the request crosses shadow roots). Returns stop. */
+export const provideSystem = (host: EventTarget, system: SystemRuntime) => {
   const answer = (e: Event) => {
     const d = (e as CustomEvent<Request>).detail
-    if (d.scope) return
-    d.scope = scope
+    if (d.system) return
+    d.system = system
     e.stopPropagation()
   }
   host.addEventListener(REQUEST, answer)
   return () => host.removeEventListener(REQUEST, answer)
 }
 
-/** The scope of the nearest enclosing provider, or undefined. */
-export const requestScope = (el: EventTarget): Scope | undefined => {
+/** The System of the nearest enclosing provider, or undefined. */
+export const requestSystem = (el: EventTarget): SystemRuntime | undefined => {
   const detail: Request = {}
   el.dispatchEvent(new CustomEvent(REQUEST, { detail, bubbles: true, composed: true }))
-  return detail.scope
+  return detail.system
 }
 
 let seq = 0
@@ -31,16 +31,16 @@ let seq = 0
  * Base for a view element. Set `.component` as a property (`<x-view .component=${c}>` in a template); the view
  * re-renders whenever the component reports a change, and any number of views can share one component.
  *
- * A view class with a `static factory` also places itself: connected without a component, it adds one to the
- * nearest provided scope (under its `name` attribute, or a generated name) and removes it when disconnected. So
- * the same element works written in markup at build time or created at runtime.
+ * A view class with a `static factory` also places itself: connected without a component, it creates one and
+ * registers it in the nearest provided System (under its `name` attribute, or a generated name); disconnected, it
+ * unregisters and disposes it (it owns it). So the same element works in markup at build time or created at runtime.
  */
 export class View<C extends Component = Component> extends LitElement {
   static properties = { component: { attribute: false } }
   static factory?: ComponentFactory<any>
   declare component: C
   #off?: () => void
-  #placed?: { scope: Scope; name: string }
+  #placed?: { system: SystemRuntime; name: string; component?: Component }
   #watch() { this.#off?.(); this.#off = (this.component as Observable | undefined)?.onChange?.(() => this.requestUpdate()) }
 
   override connectedCallback() {
@@ -56,7 +56,8 @@ export class View<C extends Component = Component> extends LitElement {
       const p = this.#placed
       if (this.isConnected || !p) return
       this.#placed = undefined
-      void p.scope.remove(p.name)
+      p.system.unregister(p.name)
+      void p.component?.dispose?.()
     })
   }
   protected override shouldUpdate() { return !!this.component }
@@ -64,18 +65,21 @@ export class View<C extends Component = Component> extends LitElement {
 
   #place() {
     const factory = (this.constructor as typeof View).factory
-    const scope = factory && requestScope(this)
-    if (!factory || !scope) return
-    const p = { scope, name: this.getAttribute('name') ?? `${this.localName}-${++seq}` }
+    const system = factory && requestSystem(this)
+    if (!factory || !system) return
+    const p: { system: SystemRuntime; name: string; component?: Component } = { system, name: this.getAttribute('name') ?? `${this.localName}-${++seq}` }
     this.#placed = p
-    scope.add(p.name, factory).then(
-      c => { if (this.#placed === p) this.component = c as C; else void scope.remove(p.name) },
-      err => {
-        if (this.#placed !== p) return // removed before it finished joining: expected
-        this.#placed = undefined
-        console.error(`<${this.localName}> could not join its scope:`, err)
+    Promise.resolve(factory.create()).then(
+      c => {
+        if (this.#placed !== p) return void c.dispose?.()       // removed while being created
+        system.register(p.name, c)
+        p.component = c
+        this.component = c as C
       },
-    )
+    ).catch(err => {
+      if (this.#placed === p) this.#placed = undefined
+      console.error(`<${this.localName}> could not join its System:`, err)
+    })
   }
 }
 

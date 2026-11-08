@@ -8,7 +8,7 @@ export class TextEmitView extends View<Created<typeof textEmit>> {
   static styles = [base, css`form { display: flex; gap: ${t.gap}; } input { flex: 1; min-width: 0; }`]
   render() {
     const c = this.component
-    return html`<form @submit=${(e: Event) => { e.preventDefault(); void c.publish(submitted, c.state.value) }}>
+    return html`<form @submit=${(e: Event) => { e.preventDefault(); void c.notify(submitted, c.state.value) }}>
       <input aria-label="Message" .value=${c.state.value} @input=${(e: Event) => { c.state.value = (e.target as HTMLInputElement).value }}>
       <button>Send</button>
     </form>`
@@ -46,7 +46,7 @@ export class SliderView extends View<Created<typeof slider>> {
     const c = this.component
     return html`<label>Value <output>${c.state.value}</output>
       <input type="range" min="0" max="100" .value=${String(c.state.value)}
-        @input=${(e: Event) => { c.state.value = Number((e.target as HTMLInputElement).value); void c.publish(valueChanged, c.state.value) }}>
+        @input=${(e: Event) => { c.state.value = Number((e.target as HTMLInputElement).value); void c.notify(valueChanged, c.state.value) }}>
     </label>`
   }
 }

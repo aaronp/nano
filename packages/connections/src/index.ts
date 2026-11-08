@@ -6,7 +6,7 @@
  * `plan` (pure) turns intents plus the instances present into the routes they want and a status per intent;
  * an orchestrator keeps a scope's routes matching the plan as instances come and go.
  */
-import { canonicalType, typeHash, type ComponentId, type Instance, type Op, type Scope } from '@composable/sdk'
+import { canonicalType, fail, missing, providerOf, typeHash, type Component, type ComponentId, type Instance, type Op, type SystemRuntime } from '@composable/sdk'
 
 // ---------------------------------------------------------------- data
 
@@ -31,13 +31,14 @@ export type Problem =
   | { kind: 'ambiguous'; at: string; instances: string[] }              // a workflow step matches several
   | { kind: 'no-op'; at: string; op: string }                           // the instance has no such op (with the needed input/output)
   | { kind: 'type-mismatch'; at: string; output: string; input: string } // type SAIDs that do not fit
+  | { kind: 'unavailable'; at: string; needs: string[] }                // the op's dependencies have no provider
 export type Status = { enabled: boolean; viable: boolean; routes: number; problems: Problem[] }
 export type PlannedRoute = { intent: string; from: string; output: Op; to: string; op: Op }
 export type Plan = { routes: PlannedRoute[]; status: Record<string, Status> }
 
 const matches = (sel: InstanceSel, i: Instance) =>
   sel.by === 'any' ? true
-    : sel.by === 'name' ? i.name === sel.name
+    : sel.by === 'name' ? i.id === sel.name
       : sel.by === 'component' ? i.manifest.id.author === sel.id.author && i.manifest.id.id === sel.id.id
         : (() => { throw new Error(`unknown selector ${JSON.stringify(sel)}`) })()
 
@@ -56,15 +57,17 @@ function planConnection(c: Connection, instances: Instance[]): { routes: Planned
   const routes: PlannedRoute[] = []
   for (const t of targets) {
     const op = t.manifest.ops.find(o => o.name === c.to.op && o.input)
-    if (!op) { problems.push({ kind: 'no-op', at: `to ${t.name}`, op: c.to.op }); continue }
+    if (!op) { problems.push({ kind: 'no-op', at: `to ${t.id}`, op: c.to.op }); continue }
+    const needs = missing(op, t.manifest, instances, t.id)
+    if (needs.length) { problems.push({ kind: 'unavailable', at: `to ${t.id}`, needs }); continue }
     for (const s of sources) {
-      if (s.name === t.name) continue // never feed an instance its own output
+      if (s.id === t.id) continue // never feed an instance its own output
       const outs = s.manifest.ops.filter(o => o.output && (
         c.from.output.by === 'outputs' || (c.from.output.by === 'name' ? o.name === c.from.output.name : typeHash(o.output!) === c.from.output.type)))
-      if (c.from.output.by === 'name' && !outs.length) problems.push({ kind: 'no-op', at: `from ${s.name}`, op: c.from.output.name })
+      if (c.from.output.by === 'name' && !outs.length) problems.push({ kind: 'no-op', at: `from ${s.id}`, op: c.from.output.name })
       for (const out of outs) {
-        if (fits(out, op)) routes.push({ intent: c.id, from: s.name, output: out, to: t.name, op })
-        else if (c.from.output.by === 'name') problems.push(mismatch(`${s.name} → ${t.name}`, out, op))
+        if (fits(out, op)) routes.push({ intent: c.id, from: s.id, output: out, to: t.id, op })
+        else if (c.from.output.by === 'name') problems.push(mismatch(`${s.id} → ${t.id}`, out, op))
       }
     }
   }
@@ -76,10 +79,12 @@ function planWorkflow(w: Workflow, instances: Instance[]): { routes: PlannedRout
   const steps = w.steps.map((step, i) => {
     const found = instances.filter(x => matches(step.select, x))
     if (!found.length) { problems.push({ kind: 'no-match', at: `step ${i}` }); return undefined }
-    if (found.length > 1) { problems.push({ kind: 'ambiguous', at: `step ${i}`, instances: found.map(x => x.name) }); return undefined }
+    if (found.length > 1) { problems.push({ kind: 'ambiguous', at: `step ${i}`, instances: found.map(x => x.id) }); return undefined }
     const op = found[0].manifest.ops.find(o => o.name === step.op && (i === 0 || o.input) && (i === w.steps.length - 1 || o.output))
     if (!op) { problems.push({ kind: 'no-op', at: `step ${i}`, op: step.op }); return undefined }
-    return { instance: found[0].name, op }
+    const needs = i > 0 ? missing(op, found[0].manifest, instances, found[0].id) : []
+    if (needs.length) { problems.push({ kind: 'unavailable', at: `step ${i}`, needs }); return undefined }
+    return { instance: found[0].id, op }
   })
   const routes: PlannedRoute[] = []
   for (let i = 0; i + 1 < steps.length; i++) {
@@ -117,31 +122,62 @@ export type Orchestrator = {
   stop(): void
 }
 
+/** A component with no ops that runs `apply` whenever its System changes: the shape every policy here takes. */
+const policyComponent = (id: string, apply: () => void): Component => ({
+  manifest: { id: { author: 'composable', id }, ops: [] },
+  onAction: async () => fail('unknown-action', `${id} takes no calls`),
+  onSystemUpdated: () => apply(),
+})
+
 /**
- * Keep `scope` wired to match `intents`: re-plans whenever instances come or go, and adds or removes only the
- * routes it made itself. It never creates or removes instances.
+ * A policy: keep `system` wired to match `intents`. It registers itself (as `id`), re-plans on every change, and
+ * adds or removes only the links it made. It never creates instances.
  */
-function create(scope: Scope, intents: readonly Intent[], name = 'orchestrator'): Orchestrator {
-  const ctx = scope.context(name)
+function create(system: SystemRuntime, intents: readonly Intent[], id = 'orchestrator'): Orchestrator {
   const mine = new Map<string, () => void>()
   const listeners = new Set<(s: Record<string, Status>) => void>()
-  let current = intents, status: Record<string, Status> = {}
+  let current = intents, status: Record<string, Status> = {}, stopped = false
   const key = (r: PlannedRoute) => `${r.from}\u0000${r.output.name}\u0000${r.to}\u0000${r.op.name}`
   const apply = () => {
-    const p = plan(current, ctx.instances())
+    if (stopped) return
+    const p = plan(current, system.snapshot().instances)
     const want = new Map(p.routes.map(r => [key(r), r]))
     for (const [k, off] of mine) if (!want.has(k)) { off(); mine.delete(k) }
-    for (const [k, r] of want) if (!mine.has(k)) mine.set(k, scope.route(r.from, r.output, r.to, r.op))
+    for (const [k, r] of want) if (!mine.has(k)) try { mine.set(k, system.connect(r.from, r.output, r.to, r.op)) } catch {}
     status = p.status
     for (const fn of listeners) try { fn(status) } catch {}
   }
-  const unwatch = ctx.watch(apply)
+  system.register(id, policyComponent('orchestrator', apply))
+  apply()
   return {
     status: () => status,
     onStatus(fn) { listeners.add(fn); return () => { listeners.delete(fn) } },
     set(next) { current = next; apply() },
-    stop() { unwatch(); for (const off of mine.values()) off(); mine.clear() },
+    stop() { stopped = true; system.unregister(id); for (const off of mine.values()) off(); mine.clear() },
   }
 }
 
 export const Orchestrators = { create }
+
+/**
+ * A policy: bind every unbound dependency in `system` to the first instance that provides it (by shape), and again
+ * whenever things change (a provider leaving drops its bindings). One choice among many; write your own for others.
+ */
+function firstProvider(system: SystemRuntime, id = 'binder'): () => void {
+  let stopped = false
+  const apply = () => {
+    if (stopped) return
+    const all = system.snapshot().instances
+    const bound = new Set(system.bindings().map(b => `${b.from}\u0000${b.dependency}`))
+    for (const i of all) for (const d of i.manifest.dependencies ?? []) {
+      if (bound.has(`${i.id}\u0000${d.name}`)) continue
+      const p = providerOf(d, all, i.id)
+      if (p) try { system.bind(i.id, d.name, p.instance, p.op) } catch {}
+    }
+  }
+  system.register(id, policyComponent('binder', apply))
+  apply()
+  return () => { stopped = true; system.unregister(id) }
+}
+
+export const Binders = { firstProvider }

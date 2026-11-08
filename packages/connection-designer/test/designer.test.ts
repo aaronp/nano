@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
-import { Components, Scopes, ok } from '@composable/sdk'
-import { provideScope } from '@composable/ui'
+import { Components, Systems, ok } from '@composable/sdk'
+import { provideSystem } from '@composable/ui'
 import { defineDesigner, type ConnectionDesigner } from '../src'
 
 const tick = (ms = 5) => new Promise(r => setTimeout(r, ms))
@@ -21,9 +21,9 @@ defineDesigner()
 
 const setup = async () => {
   // setup: a scope with three components, and a designer inside its provider
-  const scope = Scopes.create(), host = document.createElement('div')
-  provideScope(host, scope); document.body.append(host)
-  const c = await scope.add('crm', crm); await scope.add('map', map); await scope.add('tax', tax)
+  const scope = Systems.create(), host = document.createElement('div')
+  provideSystem(host, scope); document.body.append(host)
+  const c = crm.create(); scope.register('crm', c); scope.register('map', map.create()); scope.register('tax', tax.create())
   host.innerHTML = '<connection-designer></connection-designer>'
   await tick()
   const d = host.querySelector('connection-designer') as ConnectionDesigner
@@ -50,12 +50,12 @@ test('dragging pieces into a row makes a viable workflow; Live wires the scope a
   // one workflow, every seam fits, status viable
   expect([...root.querySelectorAll('.placed .seam')].map(s => s.className)).toEqual(['seam ok', 'seam ok'])
   expect(root.querySelector('.intent .status')!.textContent).toContain('viable · 2 route(s)')
-  expect(scope.routes()).toEqual([])
+  expect(scope.links()).toEqual([])
   // switch on: the orchestrator wires it, and an address flows through to tax
   const live = root.querySelector('.live input') as HTMLInputElement
   live.checked = true; live.dispatchEvent(new Event('change'))
-  expect(scope.routes().map(r => `${r.from}→${r.to}`)).toEqual(['crm→map', 'map→tax'])
-  await c.publish(updated, { city: 'Leeds', country: 'UK', street: '1 Park Row' }); await tick()
+  expect(scope.links().map(r => `${r.from}→${r.to}`)).toEqual(['crm→map', 'map→tax'])
+  await c.notify(updated, { city: 'Leeds', country: 'UK', street: '1 Park Row' }); await tick()
   expect(seen).toEqual([{ city: 'Leeds', country: 'UK' }])
 })
 

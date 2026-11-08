@@ -50,9 +50,10 @@ const pieceOf = (op: Op): PieceSpec => ({
 export function palette(instances: readonly Instance[]): PaletteEntry[] {
   const by = new Map<string, PaletteEntry>()
   for (const i of instances) {
+    if (!i.manifest.ops.length) continue // nothing to connect (e.g. a policy or a party)
     const key = componentKey(i.manifest.id)
     const e = by.get(key) ?? { key, component: i.manifest.id, instances: [], pieces: i.manifest.ops.map(pieceOf) }
-    e.instances.push(i.name)
+    e.instances.push(i.id)
     by.set(key, e)
   }
   return [...by.values()].sort((a, b) => a.key.localeCompare(b.key))

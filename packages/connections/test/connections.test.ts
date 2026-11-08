@@ -1,13 +1,13 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
-import { Components, Scopes, ok, typeHash } from '@composable/sdk'
+import { Components, Systems, ok, typeHash } from '@composable/sdk'
 import { Orchestrators, plan, type Intent } from '../src'
 
 const flush = () => new Promise(r => setTimeout(r, 0))
 const Address = Type.Object({ street: Type.String(), city: Type.String(), country: Type.String() }, { $id: 'geo.Address' })
 const Jurisdiction = Type.Object({ city: Type.String(), country: Type.String() }, { $id: 'geo.Jurisdiction' })
 
-// crm publishes addressUpdated (Address)
+// crm notifies addressUpdated (Address)
 const Crm = Components.declare({ author: 't', id: 'crm' })
 const addressUpdated = Crm.op('address-updated', 'An address changed', { output: Address })
 const crm = Crm.define({ state: () => null })
@@ -34,7 +34,7 @@ const logEverything: Intent = { kind: 'connection', id: 'log-all',
 
 test('plan: a workflow is viable only when every step resolves to one instance and the types fit', () => {
   // setup: just crm and tax: Address cannot feed a Jurisdiction input
-  const inst = (name: string, f: { manifest: any }) => ({ name, manifest: f.manifest })
+  const inst = (id: string, f: { manifest: any }) => ({ id, manifest: f.manifest })
   const direct: Intent = { kind: 'workflow', id: 'direct', steps: [workflow.kind === 'workflow' ? workflow.steps[0] : undefined!, workflow.steps[2]] }
   // call out our method under test
   const p = plan([direct, workflow], [inst('crm', crm), inst('tax', tax())])
@@ -52,7 +52,7 @@ test('plan: a workflow is viable only when every step resolves to one instance a
 })
 
 test('plan: a connection fans out, never feeds an instance its own output, and can be switched off', () => {
-  const inst = (name: string, f: { manifest: any }) => ({ name, manifest: f.manifest })
+  const inst = (id: string, f: { manifest: any }) => ({ id, manifest: f.manifest })
   const l = logger()
   const instances = [inst('crm', crm), inst('m', mapper), inst('log', l)]
   // call out our method under test
@@ -65,45 +65,46 @@ test('plan: a connection fans out, never feeds an instance its own output, and c
 
 test('orchestrator: wires and unwires as instances come and go; the chain runs end to end; status follows', async () => {
   // setup: a scope with just crm and tax, orchestrated with the workflow and the logger connection
-  const scope = Scopes.create({ onError: e => { throw e } })
+  const scope = Systems.create({ onError: e => { throw e } })
+  const add = async (id: string, f: { create(): any }) => { const c = await f.create(); scope.register(id, c); return c }
   const t = tax(), l = logger()
-  const c = await scope.add('crm', crm); await scope.add('tax', t)
+  const c = await add('crm', crm); await add('tax', t)
   // call out our method under test
   const o = Orchestrators.create(scope, [workflow, logEverything])
   const statuses: boolean[] = []
   o.onStatus(s => statuses.push(s['address-to-tax'].viable))
   expect(o.status()['address-to-tax'].viable).toBe(false)
-  expect(scope.routes()).toEqual([])
+  expect(scope.links()).toEqual([])
 
   // a map instance appears: the workflow becomes viable and is wired
-  await scope.add('map', mapper)
+  await add('map', mapper)
   expect(o.status()['address-to-tax'].viable).toBe(true)
-  expect(scope.routes().map(r => `${r.from}→${r.to}`)).toEqual(['crm→map', 'map→tax'])
+  expect(scope.links().map(r => `${r.from}→${r.to}`)).toEqual(['crm→map', 'map→tax'])
 
   // a logger appears: everything that gives output is logged too
-  await scope.add('log', l)
-  await c.publish(addressUpdated, { street: '1 High St', city: 'LONDON', country: 'UK' })
+  await add('log', l)
+  await c.notify(addressUpdated, { street: '1 High St', city: 'LONDON', country: 'UK' })
   await flush()
   expect(t.seen).toEqual([{ city: 'london', country: 'UK' }])   // crm → map (action) → its outcome → tax
   expect(l.seen.sort()).toEqual(['crm:address-updated', 'map:to-jurisdiction'])   // the publication and the map's outcome
 
   // the map goes away: the chain stops, its routes are removed, the logger's stay for what is left
-  await scope.remove('map')
+  scope.unregister('map')
   expect(o.status()['address-to-tax'].viable).toBe(false)
-  expect(scope.routes().map(r => `${r.from}→${r.to}`)).toEqual(['crm→log'])
+  expect(scope.links().map(r => `${r.from}→${r.to}`)).toEqual(['crm→log'])
   expect(statuses).toContain(true); expect(statuses.at(-1)).toBe(false)
 
   // switching the logger off removes its routes; stop removes everything the orchestrator made
   o.set([workflow, { ...logEverything, enabled: false }])
-  expect(scope.routes()).toEqual([])
-  await scope.add('map2', mapper)
-  expect(scope.routes().length).toBe(2)
+  expect(scope.links()).toEqual([])
+  await add('map2', mapper)
+  expect(scope.links().length).toBe(2)
   o.stop()
-  expect(scope.routes()).toEqual([])
+  expect(scope.links()).toEqual([])
 })
 
 test('intents are plain JSON: they round-trip and plan the same', () => {
-  const inst = (name: string, f: { manifest: any }) => ({ name, manifest: f.manifest })
+  const inst = (id: string, f: { manifest: any }) => ({ id, manifest: f.manifest })
   const instances = [inst('crm', crm), inst('m', mapper), inst('tax', tax())]
   const saved = JSON.parse(JSON.stringify([workflow, logEverything])) as Intent[]
   expect(plan(saved, instances)).toEqual(plan([workflow, logEverything], instances))

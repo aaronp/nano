@@ -1,13 +1,13 @@
 import Type from 'typebox'
 import { Components, ok } from '@composable/sdk'
 
-// ---- slider: publishes its value; set-value moves it ----
+// ---- slider: notifies its value; set-value moves it ----
 const S = Components.declare({ author: 'composable', id: 'slider' })
 export const valueChanged = S.op('value-changed', 'The slider moved to a new value', { output: Type.Number() })
 export const setValue = S.op('set-value', 'Move the slider', { input: Type.Number({ minimum: 0, maximum: 100 }) })
 export const slider = S.define({
   state: () => ({ value: 50 }),
-  handlers: [[setValue, (v, { state, ctx }) => { state.value = v; return ctx.publish(valueChanged, v) }]],
+  handlers: [[setValue, (v, { state, system }) => { state.value = v; return system.notify(valueChanged, v) }]],
 })
 
 // ---- mapper: an action, number → fn(number); its outcome feeds whatever it is wired to ----
@@ -24,7 +24,7 @@ export const count = C.op('count', 'Anything to count', { input: Type.Unknown() 
 export const reached = C.op('reached', 'The count reached a multiple of N', { output: Type.Integer() })
 export const counter = (opts: { every: number }) => C.define({
   state: () => ({ n: 0, every: opts.every }),
-  handlers: [[count, (_x, { state, ctx }) => { if (++state.n % state.every === 0) return ctx.publish(reached, state.n) }]],
+  handlers: [[count, (_x, { state, system }) => { if (++state.n % state.every === 0) return system.notify(reached, state.n) }]],
 })
 
 // ---- chart: consumes points ----
@@ -35,24 +35,27 @@ export const chart = Ch.define({
   handlers: [[push, (v, { state }) => { state.points = [...state.points, v].slice(-60) }]],
 })
 
-// ---- log: an observer; watches the instances and subscribes to every output they declare (publications and action outcomes) ----
-export type LogRow = { at: string; from: string; op: string; payload: unknown; correlation: string }
+// ---- log: an observer; in every System it joins, subscribes to every output declared there (sources and action outcomes) ----
+export type LogRow = { at: string; system: string; from: string; op: string; payload: unknown; correlation: string }
 const L = Components.declare({ author: 'composable', id: 'log' })
 export const log = L.define({
-  state: () => ({ rows: [] as LogRow[] }),
-  setup: ({ state, appContext: ctx, changed }) => {
+  state: () => ({ rows: [] as LogRow[], follow: new Map<string, () => void>() }),
+  added: (system, { state, changed }) => {
     const offs = new Map<string, () => void>()
-    const unwatch = ctx.watch(list => {
-      for (const op of list.flatMap(i => i.manifest.ops).filter(o => o.output)) {
+    const follow = () => {
+      for (const op of system.system.manifest.flatMap(m => m.ops).filter(o => o.output)) {
         if (offs.has(op.name)) continue
-        offs.set(op.name, ctx.subscribe(op, (payload, d) => {
+        offs.set(op.name, system.subscribe(op, (payload, d) => {
           state.rows = [{
-            at: new Date().toLocaleTimeString(), from: d.from, op: op.name.split('/').pop()!, payload, correlation: d.correlation,
+            at: new Date().toLocaleTimeString(), system: d.system, from: d.from, op: op.name.split('/').pop()!, payload, correlation: d.correlation,
           }, ...state.rows].slice(0, 30)
           changed()
         }))
       }
-    })
-    return () => { unwatch(); offs.forEach(off => off()) }
+    }
+    follow()
+    state.follow.set(system.system.id, follow)
+    return () => { offs.forEach(off => off()); state.follow.delete(system.system.id) }
   },
+  updated: (delta, { state, system }) => { if (delta.type === 'manifest') state.follow.get(system.system.id)?.() },
 })

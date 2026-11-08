@@ -1,17 +1,18 @@
 import { test, expect } from 'bun:test'
-import { Scopes } from '@composable/sdk'
+import { Components, Systems } from '@composable/sdk'
 import { chart, count, counter, log, mapNumber, mapper, push, setValue, slider, valueChanged } from '../src'
 
 test('slider → doubler → chart and slider → counter (routed); log sees every publication, grouped by correlation', async () => {
-  const scope = Scopes.create({ onError: e => { throw e } }), page = scope.context('page')
-  const l = await scope.add('log', log)
-  await scope.add('slider', slider)
-  const d = await scope.add('doubler', mapper({ label: 'x2', fn: x => x * 2 }))
-  const k = await scope.add('counter', counter({ every: 2 }))
-  const c = await scope.add('chart', chart)
-  scope.route('slider', valueChanged, 'doubler', mapNumber)
-  scope.route('slider', valueChanged, 'counter', count)
-  scope.route('doubler', mapNumber, 'chart', push)
+  const scope = Systems.create({ onError: e => { throw e } }), page = scope.register('page', Components.party())
+  const add = async <F extends { create(): any }>(id: string, f: F) => { const c = await f.create(); scope.register(id, c); return c as Awaited<ReturnType<F['create']>> }
+  const l = await add('log', log)
+  await add('slider', slider)
+  const d = await add('doubler', mapper({ label: 'x2', fn: x => x * 2 }))
+  const k = await add('counter', counter({ every: 2 }))
+  const c = await add('chart', chart)
+  scope.connect('slider', valueChanged, 'doubler', mapNumber)
+  scope.connect('slider', valueChanged, 'counter', count)
+  scope.connect('doubler', mapNumber, 'chart', push)
 
   for (const v of [10, 20, 30]) await page.call('slider', setValue, v)
   for (let i = 0; i < 5; i++) await new Promise(r => setTimeout(r, 0))

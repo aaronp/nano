@@ -19,13 +19,13 @@ const L = Components.declare({ author: 't', id: 'log' })
 const log = L.op('log', 'anything', { input: Type.Unknown() })
 const logger = L.define({ state: () => null, handlers: [[log, () => {}]] })
 const instances = [
-  { name: 'crm', manifest: crm.manifest }, { name: 'map', manifest: map.manifest },
-  { name: 'tax', manifest: tax.manifest }, { name: 'log', manifest: logger.manifest },
+  { id: 'crm', manifest: crm.manifest }, { id: 'map', manifest: map.manifest },
+  { id: 'tax', manifest: tax.manifest }, { id: 'log', manifest: logger.manifest },
 ]
 
 test('palette: components with their instances and pieces; types by SAID with readable names', () => {
   // call out our method under test
-  const p = palette([...instances, { name: 'map2', manifest: map.manifest }])
+  const p = palette([...instances, { id: 'map2', manifest: map.manifest }])
   expect(p.map(e => [e.key, e.instances])).toEqual([['t/crm', ['crm']], ['t/log', ['log']], ['t/map', ['map', 'map2']], ['t/tax', ['tax']]])
   const mapPiece = p[2].pieces[0]
   expect(mapPiece).toMatchObject({ label: 'to-jurisdiction', role: 'action', input: { name: 'Address', hash: typeHash(Address), any: false }, output: { name: 'Jurisdiction' } })
@@ -70,10 +70,10 @@ test('edits: place, join, merge and split keep the board and the workflow intent
 })
 
 test('edits: pin a piece to one instance; switch a workflow off; the document is plain JSON', () => {
-  const p = palette([...instances, { name: 'map2', manifest: map.manifest }]), e = (k: string) => p.find(x => x.key === k)!
+  const p = palette([...instances, { id: 'map2', manifest: map.manifest }]), e = (k: string) => p.find(x => x.key === k)!
   let doc = place(place(place(emptyDoc(), stepFor(e('t/crm'), e('t/crm').pieces[0]), { c: 0, r: 0 }, 'w'),
     stepFor(e('t/map'), e('t/map').pieces[0]), { c: 1, r: 0 }, 'x'), stepFor(e('t/tax'), e('t/tax').pieces[0]), { c: 2, r: 0 }, 'y')
-  const all = [...instances, { name: 'map2', manifest: map.manifest }]
+  const all = [...instances, { id: 'map2', manifest: map.manifest }]
   expect(plan(doc.intents, all).status.w.problems).toEqual([{ kind: 'ambiguous', at: 'step 1', instances: ['map', 'map2'] }])
   // call out our method under test: pin the map step to one instance
   doc = pin(doc, 'w', 1, { by: 'name', name: 'map2' })
