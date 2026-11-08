@@ -6,12 +6,13 @@
 import { css, html, nothing } from 'lit'
 import { live } from 'lit/directives/live.js'
 import type { TSchema } from 'typebox'
-import type { Created, Input, Instance, Op, Result } from '@composable/sdk'
+import type { Created, Input, Instance, Op } from '@composable/sdk'
 import type { Connection, InstanceSel, Problem } from '@composable/connections'
 import { View, base, t } from '@composable/ui'
 import { PRESETS, lookOf, board as bm, type Look } from '../model'
 import { ConnectionEditorOps as O, connectionEditor } from '../components'
 import { CELL, PAD, tilePath, type SideKind } from './tiles'
+import { act, problemOf } from './act'
 const { board, componentKey, joins, palette, partners, workflows } = bm
 type BoardPiece = bm.BoardPiece; type PaletteEntry = bm.PaletteEntry; type PieceSpec = bm.PieceSpec; type TypeInfo = bm.TypeInfo
 
@@ -37,11 +38,7 @@ export class ConnectionEditorView extends View<Created<typeof connectionEditor>>
 
   /** Call one of the component's own ops through its handle; a failed Result shows as text. */
   async #act<P extends Op<TSchema, TSchema | undefined>>(op: P, input: Input<P>) {
-    const h = this.component.systems[0]
-    let r: Result<unknown>
-    try { r = h ? await h.call(h.instanceId, op, input) : { type: 'error', error: { code: 'unavailable', message: 'not in a System' } } }
-    catch (e) { r = { type: 'error', error: { code: 'handler', message: String((e as Error)?.message ?? e) } } }
-    this.#error = r.type === 'success' ? '' : r.type === 'error' ? r.error.message : r.reason
+    this.#error = problemOf(await act(this.component, op, input))
     this.requestUpdate()
   }
 
@@ -173,7 +170,9 @@ export class ConnectionEditorView extends View<Created<typeof connectionEditor>>
     const pick = sinks.find(s => `${s.e.key}|${s.p.op}` === this.#rule.to) ?? sinks[0]
     const add = () => {
       if (!pick) return
-      const from: InstanceSel = this.#rule.from === 'any' ? { by: 'any' } : { by: 'component', id: entries.find(e => e.key === this.#rule.from)!.component }
+      const src = this.#rule.from === 'any' ? undefined : entries.find(e => e.key === this.#rule.from)
+      if (this.#rule.from !== 'any' && !src) { this.#error = `${this.#rule.from} is no longer on the palette`; this.requestUpdate(); return }
+      const from: InstanceSel = src ? { by: 'component', id: src.component } : { by: 'any' }
       const connection: Connection = { kind: 'connection', id: newId(), from: { select: from, output: { by: 'outputs' } }, to: { select: { by: 'component', id: pick.e.component }, op: pick.p.op } }
       void this.#act(O.addRule, { connection })
     }

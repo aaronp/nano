@@ -1,11 +1,10 @@
-import Type from 'typebox'
 import { Components, ok, type SystemInstance } from '@composable/sdk'
 import { checkDoc, emptyEditorDoc, type DraftComponent, type EditorDoc, type board } from '../model'
 import { ComponentListOps } from './component-list'
 import { ConnectionEditorOps } from './connection-editor'
 import { TypeEditorOps, type TypesUpdated } from './type-editor'
+import { any } from './schemas'
 
-const any = <T>() => Type.Unsafe<T>(Type.Unknown())
 const Doc = any<EditorDoc>()
 
 const C = Components.declare({ author: 'composable', id: 'document' })

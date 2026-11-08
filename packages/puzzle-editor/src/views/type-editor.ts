@@ -5,15 +5,16 @@
 import { css, html, nothing } from 'lit'
 import { live } from 'lit/directives/live.js'
 import type { TSchema } from 'typebox'
-import type { Created, Input, Op, Result } from '@composable/sdk'
+import type { Created, Input, Op } from '@composable/sdk'
 import { View, base, t } from '@composable/ui'
 import {
-  PRESETS, PRESET_LABELS, PRESET_ORDER, SWATCHES, effectiveLook, movePoint, nameOf, presetShape, removeAnchor, saidOf, splitSegment,
+  PRESETS, PRESET_LABELS, PRESET_ORDER, SWATCHES, anchorOf, effectiveLook, movePoint, nameOf, presetShape, removeAnchor, saidOf, splitSegment,
   type EditorType, type Handle, type Look,
 } from '../model'
 import { printTypes } from '../model/typescript'
 import { TypeEditorOps as O, typeEditor } from '../components'
 import { iconFor, presetIcon } from './tiles'
+import { act, problemOf } from './act'
 
 type Pt = [number, number]
 // The shape editor canvas: shape coordinates (u along the edge, v out of it) map to the canvas as in the prototype.
@@ -23,7 +24,6 @@ const f1 = (n: number) => Math.round(n * 10) / 10
 const fmt = (p: Pt) => `${f1(p[0])} ${f1(p[1])}`
 const PATTERNS: [Look['pattern'], string][] = [['none', 'None'], ['diagonal', 'Diagonal /'], ['anti-diagonal', 'Diagonal \\'], ['vertical', 'Vertical'], ['horizontal', 'Horizontal'], ['dots', 'Dots']]
 const patFill = (p: Look['pattern']) => p === 'none' ? 'none' : `url(#pat-${p})`
-const anchorOf = (s: Look['shape'], k: number): Pt => k === 0 ? s.start : s.segs[k - 1]!.p
 
 export class TypeEditorView extends View<Created<typeof typeEditor>> {
   static factory = typeEditor
@@ -43,11 +43,8 @@ export class TypeEditorView extends View<Created<typeof typeEditor>> {
 
   /** Call one of the component's own ops through its handle; a failed Result shows as text. True on success. */
   async #act<P extends Op<TSchema, TSchema | undefined>>(op: P, input: Input<P>) {
-    const h = this.component.systems[0]
-    let r: Result<unknown>
-    try { r = h ? await h.call(h.instanceId, op, input) : { type: 'error', error: { code: 'unavailable', message: 'not in a System' } } }
-    catch (e) { r = { type: 'error', error: { code: 'handler', message: String((e as Error)?.message ?? e) } } }
-    this.#errors = r.type === 'success' ? [] : (r.type === 'error' ? r.error.message : r.reason).split('; ')
+    const r = await act(this.component, op, input)
+    this.#errors = r.type === 'success' ? [] : problemOf(r).split('; ')
     this.requestUpdate()
     return r.type === 'success'
   }

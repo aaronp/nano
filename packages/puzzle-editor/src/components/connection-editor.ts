@@ -4,8 +4,8 @@ import { plan, type Connection, type InstanceSel, type Status } from '@composabl
 import { board, type ComponentEntry } from '../model'
 import { listed } from './component-list'
 import type { TypesUpdated } from './type-editor'
+import { any } from './schemas'
 
-const any = <T>() => Type.Unsafe<T>(Type.Unknown())
 const Conns = any<board.Connections>()
 const Cell = Type.Object({ c: Type.Number(), r: Type.Number() })
 const At = { workflow: Type.String(), index: Type.Number() }

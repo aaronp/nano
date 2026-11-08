@@ -5,10 +5,11 @@
 import { css, nothing } from 'lit'
 import { html, unsafeStatic } from 'lit/static-html.js'
 import type { PropertyValues } from 'lit'
-import type { Created, Result } from '@composable/sdk'
+import type { Created } from '@composable/sdk'
 import { View, base, t } from '@composable/ui'
 import { board as bm, emptyEditorDoc } from '../model'
 import { DocumentOps, puzzleEditor } from '../components'
+import { act, problemOf } from './act'
 
 export class PuzzleEditorView extends View<Created<typeof puzzleEditor>> {
   static factory = puzzleEditor
@@ -27,13 +28,11 @@ export class PuzzleEditorView extends View<Created<typeof puzzleEditor>> {
   }
   override disconnectedCallback() { super.disconnectedCallback(); this.#offs.forEach(off => off()); this.#offs = [] }
 
-  /** Clear all is a load of the empty document. */
+  /** Clear all is a load of the empty document, once confirmed. */
   async #clear() {
-    const h = this.component.children.document.systems[0]   // the composite's own handle is outside; load is exposed straight from this child
-    let r: Result<unknown>
-    try { r = h ? await h.call(h.instanceId, DocumentOps.load, emptyEditorDoc()) : { type: 'error', error: { code: 'unavailable', message: 'not in a System' } } }
-    catch (e) { r = { type: 'error', error: { code: 'handler', message: String((e as Error)?.message ?? e) } } }
-    this.#error = r.type === 'success' ? '' : r.type === 'error' ? r.error.message : r.reason
+    if (!confirm('Clear the whole document?')) return
+    // the composite's own handle is outside; load is exposed straight from this child
+    this.#error = problemOf(await act(this.component.children.document, DocumentOps.load, emptyEditorDoc()))
     this.requestUpdate()
   }
 

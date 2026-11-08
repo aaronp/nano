@@ -2,7 +2,7 @@ import { test, expect } from 'bun:test'
 import Type from 'typebox'
 import { Components, ok, typeHash } from '@composable/sdk'
 import { plan } from '@composable/connections'
-import { board, emptyConnections, look, move, palette, partners, pin, place, take, toggle, workflows, stepFor, type Connections } from '../src/model/board'
+import { board, emptyConnections, move, palette, partners, pin, place, take, toggle, workflows, stepFor, type Connections } from '../src/model/board'
 
 const Address = Type.Object({ street: Type.String(), city: Type.String(), country: Type.String() }, { $id: 'geo.Address' })
 const Jurisdiction = Type.Object({ city: Type.String(), country: Type.String() }, { $id: 'geo.Jurisdiction' })
@@ -81,13 +81,6 @@ test('edits: pin a piece to one instance; switch a workflow off; the document is
   doc = toggle(doc, 'w', false)
   expect(plan(doc.intents, all).routes).toEqual([])
   expect(JSON.parse(JSON.stringify(doc))).toEqual(doc)
-})
-
-test('look: deterministic per SAID, different for different types, plain for "any"', () => {
-  const a = { hash: typeHash(Address), name: 'Address', any: false }, j = { hash: typeHash(Jurisdiction), name: 'Jurisdiction', any: false }
-  expect(look(a)).toEqual(look({ ...a }))
-  expect(look(a)).not.toEqual(look(j))
-  expect(look({ hash: '', name: 'any', any: true }).head).toBe(0)
 })
 
 test('typeName shows constraints, so types that differ only by them read differently', async () => {

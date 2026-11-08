@@ -31,3 +31,10 @@ test('checkDoc rejects hostile shapes without throwing', () => {
     withComps({ id, ops: [null] }),
   ]) expect(checkDoc(doc).type).toBe('error')
 })
+
+test('checkDoc checks the intents and the layout', () => {
+  const conn = (intents: unknown[], layout: unknown = {}) => ({ ...emptyEditorDoc(), connections: { intents, layout } })
+  expect(checkDoc(conn([{ kind: 'nope' }]))).toMatchObject({ type: 'error', error: { code: 'validation' } })
+  expect(checkDoc(conn([], { a: { c: 1 } }))).toEqual(fail('validation', 'layout a is not {c, r}'))
+  expect(checkDoc(conn([], { a: { c: 1, r: 2 } })).type).toBe('success')
+})

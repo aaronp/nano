@@ -5,12 +5,11 @@ import {
   type EditorType, type Look,
 } from '../model'
 import { parseTypes } from '../model/typescript'
+import { any, Ref } from './schemas'
 
 export type TypesUpdated = { types: EditorType[]; derived: { id: string; said: string; schema: TSchema; look: Look }[] }
 
-const any = <T>() => Type.Unsafe<T>(Type.Unknown())
 const Types = any<EditorType[]>()
-const Ref = Type.Object({ type: Type.String(), array: Type.Boolean() })
 
 const C = Components.declare({ author: 'composable', id: 'type-editor' })
 export const TypeEditorOps = {

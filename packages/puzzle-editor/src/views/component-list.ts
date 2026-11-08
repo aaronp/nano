@@ -1,10 +1,11 @@
 /** <component-list>: the Elements tab of a component-list component. Reads its state; acts only by calling its ops. */
 import { css, html, nothing } from 'lit'
 import type { TSchema } from 'typebox'
-import type { Created, Input, Op, Result } from '@composable/sdk'
+import type { Created, Input, Op } from '@composable/sdk'
 import { View, base, t } from '@composable/ui'
 import { componentsOf, nameOf, type DraftOp, type TypeRef } from '../model'
 import { ComponentListOps as O, componentList } from '../components'
+import { act, problemOf } from './act'
 
 const AUTHOR = 'me'
 
@@ -16,11 +17,8 @@ export class ComponentListView extends View<Created<typeof componentList>> {
   #name = ''
 
   async #act<P extends Op<TSchema, TSchema | undefined>>(op: P, input: Input<P>) {
-    const h = this.component.systems[0]
-    let r: Result<unknown>
-    try { r = h ? await h.call(h.instanceId, op, input) : { type: 'error', error: { code: 'unavailable', message: 'not in a System' } } }
-    catch (e) { r = { type: 'error', error: { code: 'handler', message: String((e as Error)?.message ?? e) } } }
-    this.#error = r.type === 'success' ? '' : r.type === 'error' ? r.error.message : r.reason
+    const r = await act(this.component, op, input)
+    this.#error = problemOf(r)
     if (r.type === 'success') this.#adding = undefined
     this.requestUpdate()
   }

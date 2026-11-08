@@ -16,7 +16,8 @@ const PATTERNS: Look['pattern'][] = ['diagonal', 'anti-diagonal', 'vertical', 'h
 
 const clampPt = (p: Pt): Pt => [Math.max(UMIN, Math.min(UMAX, p[0])), Math.max(0, Math.min(VMAX, p[1]))]
 const mid = (a: Pt, b: Pt): Pt => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
-const anchorOf = (s: Shape, k: number): Pt => k === 0 ? s.start : s.segs[k - 1]!.p
+/** The k-th anchor of a shape: its start, then each segment's end. */
+export const anchorOf = (s: Shape, k: number): Pt => k === 0 ? s.start : s.segs[k - 1]!.p
 const line = (a: Pt, b: Pt): Seg => ({ c1: [a[0] + (b[0] - a[0]) / 3, a[1] + (b[1] - a[1]) / 3], c2: [a[0] + 2 * (b[0] - a[0]) / 3, a[1] + 2 * (b[1] - a[1]) / 3], p: b })
 const polyline = (pts: Pt[]): Shape => ({ start: pts[0]!, segs: pts.slice(1).map((p, i) => line(pts[i]!, p)) })
 

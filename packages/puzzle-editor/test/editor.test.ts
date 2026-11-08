@@ -30,6 +30,16 @@ test('load rejects a malformed doc and keeps state', async () => {
   expect(JSON.stringify(ed.children.types.state.types)).toBe(before)
 })
 
+test('load of a doc with a bad intent fails up front and leaves all three children unchanged', async () => {
+  const { page, ed } = await editorIn()
+  await page.call('editor', DocumentOps.load, emptyEditorDoc())
+  const snap = () => JSON.stringify([ed.children.types.state.types, ed.children.list.state.drafts, ed.children.board.state.connections])
+  const before = snap()
+  const doc = { ...emptyEditorDoc(), components: [{ id: { author: 'me', id: 'x' }, ops: [] }], connections: { intents: [{ kind: 'nope' }], layout: {} } }
+  expect(await page.call('editor', DocumentOps.load, doc as never)).toMatchObject({ type: 'error', error: { code: 'validation' } })
+  expect(snap()).toBe(before)
+})
+
 test('set-instances is linked once and reaches both children; status is planned locally', async () => {
   const { s, ed } = await editorIn()
   unwrap(s.register('system', Systems.component(s).create() as never))

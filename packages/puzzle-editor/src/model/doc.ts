@@ -1,4 +1,4 @@
-import type { Intent } from '@composable/connections'
+import { checkIntents, type Intent } from '@composable/connections'
 import { fail, ok, type Result } from '@composable/sdk'
 import type { DraftComponent } from './components'
 import { builtins, nameOf, type EditorType, type TypeRef } from './types'
@@ -22,7 +22,11 @@ export function checkDoc(d: unknown): Result<EditorDoc> {
   const { types, components, connections } = d
   if (!Array.isArray(types)) return bad('types must be an array')
   if (!Array.isArray(components)) return bad('components must be an array')
-  if (!isObj(connections) || !Array.isArray(connections.intents) || !isObj(connections.layout)) return bad('connections must have intents and layout')
+  if (!isObj(connections) || !isObj(connections.layout)) return bad('connections must have intents and layout')
+  const ci = checkIntents(connections.intents)
+  if (ci.type !== 'success') return ci
+  for (const [k, v] of Object.entries(connections.layout))
+    if (!isObj(v) || typeof v.c !== 'number' || typeof v.r !== 'number') return bad(`layout ${k} is not {c, r}`)
   const ids = new Set<string>()
   for (const [i, t] of types.entries()) {
     if (!isObj(t) || typeof t.id !== 'string' || typeof t.name !== 'string') return bad(`type ${i} is malformed`)

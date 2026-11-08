@@ -8,10 +8,10 @@
  *     status-line) show them.
  * The page System is also a component (`system`), and an orchestrator keeps it wired to intents. When
  * <puzzle-editor name="editor"> places itself, it is linked: system/changed → its set-instances, its
- * intents-updated → orchestrator/set-intents. Its document is loaded from localStorage (or the empty one), and saved there.
+ * intents-updated → orchestrator/set-intents; when it is removed, the orchestrator's intents are cleared. Its document is loaded from localStorage (or the empty one), and saved there.
  * Imported before the views are defined, so the provider exists when markup upgrades.
  */
-import { Components, Systems, type Component, type Result } from '@composable/sdk'
+import { Components, Systems, fail, type Component, type Result } from '@composable/sdk'
 import { provideSystem } from '@composable/ui'
 import { defineElements } from '@composable/widgets/views'
 import { OrchestratorOps, Orchestrators } from '@composable/connections'
@@ -26,7 +26,9 @@ const saved = 'ui-workspace.editor'
 
 // linked before `system` exists, so this runs before it publishes the editor's arrival
 scope.updates(d => {
-  if (d.type !== 'added' || !d.instances.some(i => i.id === 'editor')) return
+  if ((d.type !== 'added' && d.type !== 'removed') || !d.instances.some(i => i.id === 'editor')) return
+  // the editor's links close with it, but the routes it asked for would stay: take its intents down too
+  if (d.type === 'removed') { if (host.type === 'success') void host.data.call('orchestrator', OrchestratorOps.setIntents, []).then(log); return }
   log(scope.subscribe({ source: 'system', op: Systems.ops.changed.name, listener: 'editor', target: ComponentListOps.setInstances.name }))
   log(scope.subscribe({ source: 'editor', op: ConnectionEditorOps.intentsUpdated.name, listener: 'orchestrator', target: OrchestratorOps.setIntents.name }))
   void restore()
@@ -37,7 +39,8 @@ const host = scope.register('host', Components.party())   // the host's own hand
 
 /**
  * Load the saved document, or the empty one if nothing is saved. Saving waits for that load, so the editor's
- * changes before it are not saved over the document; one that cannot be loaded is left as it is, and not saved over.
+ * changes before it are not saved over the document. One that cannot be loaded is copied to `<key>.rejected`,
+ * and the editor starts empty and saves as usual, so both the old data and the new work survive.
  */
 let saving = false
 const restore = async () => {
@@ -45,12 +48,16 @@ const restore = async () => {
   let raw: string | null = null
   try { raw = localStorage.getItem(saved) } catch {}
   saving = false
-  let r: Result<unknown> = { type: 'error', error: { code: 'validation', message: 'the saved editor document is not JSON' } }
+  let r: Result<unknown> = fail('validation', 'the saved editor document is not JSON')
   try { if (raw !== null) r = await host.data.call('editor', DocumentOps.load, JSON.parse(raw)) } catch {}
-  if (r.type === 'success') { saving = true; return }
-  if (raw !== null) log(r)
-  saving = raw === null
-  log(await host.data.call('editor', DocumentOps.load, emptyEditorDoc()))
+  if (r.type !== 'success') {
+    if (raw !== null) {
+      try { localStorage.setItem(`${saved}.rejected`, raw) } catch {}
+      console.error(`composable: the saved editor document was rejected; moved to ${saved}.rejected:`, r, raw)
+    }
+    log(await host.data.call('editor', DocumentOps.load, emptyEditorDoc()))
+  }
+  saving = true
 }
 scope.observe(t => {
   if (saving && t.kind === 'notify' && t.from === 'editor' && t.op === DocumentOps.modelUpdated.name) try { localStorage.setItem(saved, JSON.stringify(t.data)) } catch {}

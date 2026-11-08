@@ -1,7 +1,7 @@
 // A smoke of the ui-workspace host page: its markup, its composable.ts, and the editor wired to the page System.
 import { expect, test } from 'bun:test'
 import type { Created, Op } from '@composable/sdk'
-import { ConnectionEditorOps, emptyEditorDoc, type DraftComponent, type puzzleEditor } from '../src'
+import { ComponentListOps, ConnectionEditorOps, emptyEditorDoc, type DraftComponent, type puzzleEditor } from '../src'
 import { flush } from './fixtures'
 
 const page = await Bun.file(new URL('../../ui-workspace/public/index.html', import.meta.url)).text()
@@ -34,6 +34,18 @@ test('the host page: place slider → doubler → chart on the editor\'s board, 
   expect((scope.component('c-chart') as unknown as { state: { points: number[] } }).state.points).toEqual([42])
 })
 
+test('removing the editor while Live is on takes its routes down', async () => {
+  const links = () => scope.snapshot().subscriptions.filter(s => s.source === 'c-slider' || s.listener === 'c-chart')
+  expect(links().length).toBeGreaterThan(0)   // left Live by the test above
+  const old = document.querySelector('puzzle-editor[name="editor"]')!, parent = old.parentElement!
+  old.remove()
+  for (let i = 0; i < 3; i++) await flush()
+  expect(scope.component('editor')).toBeUndefined()
+  expect(links()).toEqual([])
+  const el = document.createElement('puzzle-editor'); el.setAttribute('name', 'editor'); parent.append(el)   // for the tests below
+  for (let i = 0; i < 5; i++) await flush()
+})
+
 // Restore runs whenever an `editor` is added, so a fresh <puzzle-editor name="editor"> reads what is stored now.
 const KEY = 'ui-workspace.editor'
 const readd = async (stored: string) => {
@@ -52,11 +64,14 @@ test('a saved document is loaded into the editor when it arrives', async () => {
   expect(ed.children.document.state.doc.components).toEqual([draft])
 })
 
-test('a garbage saved document is ignored and left as it is', async () => {
+test('a garbage saved document is moved to .rejected, and the editor starts empty and saves edits', async () => {
   for (const junk of ['not json {', JSON.stringify({ types: [] })]) {   // unparseable, then rejected by checkDoc
     const ed = await readd(junk)
     expect(ed).toBeDefined()
     expect(ed.children.document.state.doc).toEqual(emptyEditorDoc())   // the editor starts empty
-    expect(localStorage.getItem(KEY)).toBe(junk)   // not replaced by an empty doc
+    expect(localStorage.getItem(`${KEY}.rejected`)).toBe(junk)   // the old data survives
+    const draft: DraftComponent = { id: { author: 'me', id: 'new' }, ops: [] }
+    await ed.children.list.systems[0].call('list', ComponentListOps.setDrafts, [draft]); await flush()
+    expect(JSON.parse(localStorage.getItem(KEY)!).components).toEqual([draft])   // and so does the new work
   }
 })

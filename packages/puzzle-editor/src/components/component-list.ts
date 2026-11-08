@@ -5,10 +5,9 @@ import {
   type ComponentEntry, type DraftComponent, type EditorType,
 } from '../model'
 import type { TypesUpdated } from './type-editor'
+import { any, Ref } from './schemas'
 
-const any = <T>() => Type.Unsafe<T>(Type.Unknown())
 const Drafts = any<DraftComponent[]>()
-const Ref = Type.Object({ type: Type.String(), array: Type.Boolean() })
 const OpOf = { component: ComponentId, name: Type.String() }
 
 const C = Components.declare({ author: 'composable', id: 'component-list' })

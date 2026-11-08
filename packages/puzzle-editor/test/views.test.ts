@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
-import { unwrap } from '@composable/sdk'
+import { Components, unwrap } from '@composable/sdk'
 import { OrchestratorOps, Orchestrators } from '@composable/connections'
-import { ConnectionEditorOps } from '../src'
+import { ConnectionEditorOps, TypeEditorOps } from '../src'
 import { iconFor, tilePath } from '../src/views/tiles'
 import { defineEditor } from '../src/views'
 import { PRESETS, presetShape, type EditorType } from '../src/model'
@@ -93,7 +93,12 @@ test('the type editor: add a record, code view errors, shape editor presets', as
   await click(el, '.tab-list'); await click(el, '[data-type="string"] .edit-shape'); await click(el, '.preset[data-preset="dome"]')
   expect(model.state.types.find((t: EditorType) => t.id === 'string')).toMatchObject({ look: { shape: presetShape('dome') } })
   await click(el, '.swatch[data-colour="#FF8FC0"]'); await click(el, '.pattern[data-pattern="dots"]')
-  await click(el, '.add-point'); await click(el, '.remove-point')
+  const segs = () => model.state.types.find((t: EditorType) => t.id === 'string').look.shape.segs.length
+  const points = segs()
+  await click(el, '.remove-point')   // nothing selected: refused, with a message
+  expect(segs()).toBe(points); expect(el.shadowRoot!.querySelector('.shape-editor')!.textContent).toContain('Select a middle point first')
+  await click(el, '.add-point'); expect(segs()).toBe(points + 1)   // the new point is selected
+  await click(el, '.remove-point'); expect(segs()).toBe(points)
   expect(model.state.types.find((t: EditorType) => t.id === 'string')).toMatchObject({ look: { colour: '#FF8FC0', pattern: 'dots' } })
   expect(el.shadowRoot!.querySelector('.used-by')!.textContent).toBe('Not used yet.')
   await click(el, '.done'); expect(el.shadowRoot!.querySelector('.shape-editor')).toBeNull()
@@ -105,7 +110,23 @@ test('<puzzle-editor>: both tabs and the board in one System; Show model shows t
   await click(el, '.tab-types'); expect(el.shadowRoot!.querySelector('type-editor, [data-part="type-editor"]')).not.toBeNull()
   expect(el.shadowRoot!.querySelector('.status-line')!.textContent).toBe('0 placed · 0 connections · 0 problems')
   await click(el, '.show-model'); expect(JSON.parse(el.shadowRoot!.querySelector('.model pre')!.textContent!)).toMatchObject({ types: expect.any(Array) })
-  await click(el, '.clear-all'); expect(el.shadowRoot!.querySelector('.problem')).toBeNull()
+  const added = () => el.component.children.document.state.doc.types.length
+  await el.component.children.types.systems[0].call('types', TypeEditorOps.addRecord, { id: 'a', name: 'Address' }); await flush()
+  const n = added(), confirm = window.confirm
+  try {
+    window.confirm = () => false; await click(el, '.clear-all'); expect(added()).toBe(n)   // declined: nothing cleared
+    window.confirm = () => true; await click(el, '.clear-all'); expect(added()).toBe(n - 1)
+  } finally { window.confirm = confirm }
+  expect(el.shadowRoot!.querySelector('.problem')).toBeNull()
+})
+
+test('a fan-out rule from a component that has gone shows an error, not a throw', async () => {
+  const { s, el } = await hosted('connection-editor')
+  await select(el, '.rule select', 't/crm')
+  const page = unwrap(s.register('other', Components.party()))
+  await page.call('connection-editor', ConnectionEditorOps.setInstances, s.snapshot().instances.filter(i => i.id === 'map')); await flush()
+  await click(el, '.add-rule')
+  expect(el.shadowRoot!.querySelector('.error')!.textContent).toContain('t/crm is no longer on the palette')
 })
 
 test('a successful code apply shows the printed source; two prefixes can be defined', async () => {

@@ -171,16 +171,3 @@ export const remove = (doc: Connections, id: string): Connections => {
 
 /** A step for a palette piece: by component (the default), so it holds as long as there is one such instance. */
 export const stepFor = (entry: PaletteEntry, piece: PieceSpec): Step => ({ select: { by: 'component', id: entry.component }, op: piece.op })
-
-// ---------------------------------------------------------------- looks
-
-export type Look = { hue: number; neck: number; head: number; lift: number; pattern: 'none' | 'stripes' | 'dots' | 'checks' }
-/** A deterministic look from a type's SAID (its base64url characters as bytes). `any` gets a plain square slot. */
-export function look(t: TypeInfo): Look {
-  if (t.any) return { hue: 0, neck: 0.5, head: 0, lift: 0, pattern: 'none' }
-  const b = (i: number) => (t.hash.charCodeAt(1 + (i % 43)) * 2654435761 >>> 0) % 1000 / 1000
-  return {
-    hue: Math.round(b(0) * 360), neck: 0.18 + b(1) * 0.12, head: 0.22 + b(2) * 0.14, lift: (b(3) - 0.5) * 0.3,
-    pattern: (['none', 'stripes', 'dots', 'checks'] as const)[Math.floor(b(4) * 4)],
-  }
-}
