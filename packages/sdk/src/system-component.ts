@@ -9,8 +9,8 @@ import type { SystemRuntime } from './system'
 import { ComponentId, Instance, Manifest, fail, ok, type Component, type ComponentFactory, type Op } from './types'
 
 const S = Components.declare({ author: 'composable', id: 'system' })
-const NewSubscription = Type.Object({ source: Type.String(), op: Type.String(), listener: Type.String(), target: Type.Optional(Type.String()) },
-  { $id: 'composable.NewSubscription', description: 'listener hears source\'s (or anyone\'s, \'*\') output op; with a target, it feeds the listener\'s target op.' })
+const NewSubscription = Type.Object({ source: Type.String(), op: Type.String(), listener: Type.String(), target: Type.String() },
+  { $id: 'composable.NewSubscription', description: 'listener hears source\'s (or anyone\'s, \'*\') output op, which feeds the listener\'s target op.' })
 const Sub = Type.Object({ id: Type.String(), source: Type.String(), op: Type.String(), listener: Type.String(), target: Type.Optional(Type.String()) },
   { $id: 'composable.Subscription' })
 const Binding = Type.Object({ from: Type.String(), dependency: Type.String(), to: Type.String(), op: Type.String() },
@@ -25,7 +25,7 @@ export const SystemOps = {
     input: Type.Object({ component: ComponentId, name: Type.String() }), output: Type.Object({ name: Type.String() }),
   }),
   remove: S.op('remove', 'Unregister an instance (disposing it if this System created it)', { input: Type.Object({ name: Type.String() }) }),
-  subscribe: S.op('subscribe', 'Open a subscription: listener hears source\'s output op (a link when it has a target)', { input: NewSubscription, output: Sub }),
+  subscribe: S.op('subscribe', 'Open a link: source\'s output op feeds listener\'s target op', { input: NewSubscription, output: Sub }),
   unsubscribe: S.op('unsubscribe', 'Close a subscription', { input: Type.Object({ id: Type.String() }) }),
   subscriptions: S.op('subscriptions', 'The subscriptions in place', { input: Type.Null(), output: Type.Array(Sub) }),
   subscriptionsChanged: S.op('subscriptions-changed', 'Published whenever a subscription is opened or closed', { output: Type.Array(Sub) }),
@@ -59,7 +59,7 @@ export function systemComponent(runtime: SystemRuntime, opts: { catalog?: readon
         if (r.type !== 'success') return r
         await state.made.get(name)?.dispose?.(); state.made.delete(name)
       }],
-      [o.subscribe, s => runtime.subscribe(s as never)],
+      [o.subscribe, s => runtime.subscribe(s)],
       [o.unsubscribe, ({ id }) => runtime.unsubscribe(id)],
       [o.subscriptions, () => ok(runtime.snapshot().subscriptions)],
       [o.bind, (b, { state }) => {
@@ -67,7 +67,7 @@ export function systemComponent(runtime: SystemRuntime, opts: { catalog?: readon
         const r = runtime.bind(b.from, b.dependency, b.to, b.op)
         if (r.type !== 'success') return r
       }],
-      [o.unbind, b => { const r = runtime.unbind(b.from, b.dependency); if (r.type === 'error') return r }],
+      [o.unbind, b => { const r = runtime.unbind(b.from, b.dependency); if (r.type !== 'success') return r }],
       [o.bindings, () => ok(runtime.bindings())],
     ],
   })

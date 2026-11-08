@@ -289,7 +289,7 @@ test('Systems.restrict: a holder may only act for itself', () => {
   const theirs = unwrap(s.subscribe({ source: 'a', op: fired.name, listener: 'c', target: log.name }))
   expect(asB.unsubscribe(theirs.id).type).toBe('not-allowed')
   expect(asB.register('d', x()).type).toBe('not-allowed')
-  expect(asB.component('a')).toBeUndefined()
+  expect(asB.component('a')).toBe(s.component('a'))   // reading is free
   expect(asB.snapshot().instances.length).toBe(s.snapshot().instances.length)   // reading is allowed
   expect(asB.bind('a', 'dep', 'b', 'x').type).toBe('not-allowed')
   expect(asB.unbind('a', 'dep').type).toBe('not-allowed')

@@ -151,10 +151,16 @@ function badIntent(x: unknown, at: string): string | undefined {
   }
   return `${at}.kind is neither connection nor workflow`
 }
-/** Untrusted data in, a typed Intent[] out. Never throws. */
+/** Untrusted data in, a typed Intent[] out; ids must be unique. Never throws. */
 export function checkIntents(x: unknown): Result<Intent[]> {
   if (!Array.isArray(x)) return fail('validation', 'intents is not an array')
-  for (const [i, it] of x.entries()) { const p = badIntent(it, `intents[${i}]`); if (p) return fail('validation', p) }
+  const ids = new Set<string>()
+  for (const [i, it] of x.entries()) {
+    const p = badIntent(it, `intents[${i}]`); if (p) return fail('validation', p)
+    const id = (it as Intent).id
+    if (ids.has(id)) return fail('validation', `intents[${i}].id ${id} is used twice`)
+    ids.add(id)
+  }
   return ok(x as Intent[])
 }
 

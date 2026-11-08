@@ -84,3 +84,10 @@ test('sandboxes are isolated; a System of Systems exposes an inner System in an 
   a.rt.register('more', numbers.create())
   expect(heard.at(-1)).toEqual(['page', 'system', 'numbers', 'more'])
 })
+
+test('a refused unbind is reported, not taken as success', async () => {
+  const rt = Systems.create(), page = unwrap(rt.register('page', Components.party()))
+  rt.register('a', numbers.create()); rt.register('b', numbers.create())
+  rt.register('system', Systems.component(Systems.restrict(rt, 'a')).create() as never)
+  expect(await page.call('system', sys.unbind, { from: 'b', dependency: 'x' })).toEqual({ type: 'not-allowed', reason: 'a may only act for itself' })
+})

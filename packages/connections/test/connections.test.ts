@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
-import { Components, Systems, ok, unwrap, typeHash } from '@composable/sdk'
-import { Binders, OrchestratorOps, Orchestrators, plan, type Intent } from '../src'
+import { Components, Systems, fail, ok, unwrap, typeHash } from '@composable/sdk'
+import { Binders, OrchestratorOps, Orchestrators, checkIntents, plan, type Intent } from '../src'
 const links = (s: { snapshot(): { subscriptions: { source: string; listener: string; target?: string }[] } }) => s.snapshot().subscriptions.filter(x => x.target)
 
 const flush = () => new Promise(r => setTimeout(r, 0))
@@ -168,4 +168,10 @@ test('malformed intents are refused with no instances present, and the previous 
 
 test('create checks its initial intents', () => {
   expect(Orchestrators.create(Systems.create(), [{ kind: 'workflow', id: 'w' } as never]).type).toBe('error')
+})
+
+test('checkIntents refuses an intent id used twice', () => {
+  const w = { kind: 'workflow', id: 'w', steps: [] }
+  expect(checkIntents([w, { ...w }])).toEqual(fail('validation', 'intents[1].id w is used twice'))
+  expect(checkIntents([w, { ...w, id: 'v' }]).type).toBe('success')
 })
