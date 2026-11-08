@@ -132,9 +132,9 @@ type EditorDoc = {
 | Child | Owns | In (sinks / actions) | Out (sources) |
 |---|---|---|---|
 | `type-editor` | `types` (built-ins, drafts) and the live types it is given | `set-types (EditorType[])`, `set-live-types (TSchema[])`, edit actions (add record, add field, add brand, rename, delete, set shape/colour/pattern) | `types-updated` (all types, with derived schemas, SAIDs and looks) |
-| `component-list` | `components` (drafts) and live instances | `set-instances (Instance[])`, `set-drafts (DraftComponent[])`, `set-types`, edit actions (add draft component, add/remove op, set op types) | `components-updated` (live + draft manifests), `instances-updated (Instance[])`, `live-types (TSchema[])` |
+| `component-list` | `components` (drafts) and live instances | `set-instances (Instance[])`, `set-drafts (DraftComponent[])`, `set-types`, edit actions (add draft component, add/remove op, set op types) | `components-updated` (live + draft manifests), `instances-updated (Instance[])`, `live-types (TSchema[])`, `drafts-updated (DraftComponent[])` |
 | `connection-editor` | `connections` and a **Live** switch | `set-connections`, `set-components`, `set-instances`, `set-looks`, edit actions (place, take, move, pin, toggle, add rule, remove), `set-live (boolean)` | `connections-updated`, `intents-updated` (only while Live is on; `[]` when switched off) |
-| `document` | nothing | `load (EditorDoc)`: calls `set-types`, `set-drafts`, `set-connections` in turn | `model-updated (EditorDoc)` |
+| `document` | the saved `EditorDoc` (the latest of each part; live types are not saved) | `load (EditorDoc)`: checks it, then calls `set-types`, `set-drafts`, `set-connections` in turn; `types-in`, `drafts-in`, `connections-in` (the children's `*-updated`) | `model-updated (EditorDoc)` |
 
 Internal links (made with `route` in the composite):
 
@@ -144,6 +144,8 @@ Internal links (made with `route` in the composite):
   one child and forwarded inside, so the host links it once and no new SDK concept is needed)*
 - `component-list.live-types → type-editor.set-live-types`
 - the three `*-updated` sources → the `document` child, which keeps the latest of each and notifies `model-updated`
+
+The editor hides its own component, and instances with no ops (such as a host's party), from the list and the board.
 
 The composite (`puzzle-editor`) exposes `document.load`, `document.model-updated`, `component-list.set-instances`,
 `connection-editor.intents-updated` and `connection-editor.set-live`, under the children's own op names, as
