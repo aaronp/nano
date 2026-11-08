@@ -6,6 +6,7 @@
  * `plan` (pure) turns intents plus the instances present into the routes they want and a status per intent;
  * an orchestrator keeps a scope's routes matching the plan as instances come and go.
  */
+import Type from 'typebox'
 import { canonicalType, fail, missing, ok, providerOf, typeHash, type Component, type ComponentId, type Instance, type Op, type Result, type SystemRuntime } from '@composable/sdk'
 
 // ---------------------------------------------------------------- data
@@ -112,6 +113,11 @@ export function plan(intents: readonly Intent[], instances: readonly Instance[])
 
 // ---------------------------------------------------------------- orchestrator
 
+/** The orchestrator's own op: a link from anything that publishes an `Unknown[]` of intents can drive `set`. */
+export const OrchestratorOps = {
+  setIntents: { name: 'composable/orchestrator/set-intents', description: 'Replace the intents', input: Type.Array(Type.Unknown()) } satisfies Op,
+}
+
 export type Orchestrator = {
   /** The status of each intent as of the last change. */
   status(): Record<string, Status>
@@ -152,7 +158,16 @@ function create(system: SystemRuntime, intents: readonly Intent[], id = 'orchest
     for (const [k, r] of want) if (!mine.has(k)) { const s = system.subscribe({ source: r.from, op: r.output.name, listener: r.to, target: r.op.name }); if (s.type === 'success') mine.set(k, s.data.id) }
     status = p.status
   }
-  const reg = system.register(id, policyComponent('orchestrator', apply))
+  /** Intents arriving as data are untrusted: a dry plan (pure) rejects what would make `plan` throw. */
+  const replace = (next: readonly unknown[]): Result<void> => {
+    try { plan(next as Intent[], system.snapshot().instances) } catch (e) { return fail('validation', `bad intents: ${e instanceof Error ? e.message : String(e)}`) }
+    current = next as Intent[]; apply(); return ok(undefined)
+  }
+  const reg = system.register(id, {
+    manifest: { id: { author: 'composable', id: 'orchestrator' }, ops: [OrchestratorOps.setIntents] },
+    onAction: async (_s, inv) => inv.op === OrchestratorOps.setIntents.name ? replace(inv.input as unknown[]) : fail('unknown-action', `${id} takes no such call`),
+    onSystemUpdated: () => apply(),
+  })
   if (reg.type !== 'success') return reg
   apply()
   return ok({

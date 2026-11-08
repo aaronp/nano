@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
 import { Components, Systems, ok, unwrap, typeHash } from '@composable/sdk'
-import { Binders, Orchestrators, plan, type Intent } from '../src'
+import { Binders, OrchestratorOps, Orchestrators, plan, type Intent } from '../src'
 const links = (s: { snapshot(): { subscriptions: { source: string; listener: string; target?: string }[] } }) => s.snapshot().subscriptions.filter(x => x.target)
 
 const flush = () => new Promise(r => setTimeout(r, 0))
@@ -136,4 +136,19 @@ test('a policy under a taken id fails and leaves the first one registered and wo
   expect(scope.snapshot().instances.map(i => i.id)).toEqual(['binder'])
   stop()
   expect(scope.snapshot().instances).toEqual([])
+})
+
+test('the orchestrator can be driven by a link: set-intents', async () => {
+  const intentsOut = { name: 't/page/intents', output: Type.Array(Type.Unknown()) }
+  const scope = Systems.create(), page = unwrap(scope.register('page', Components.party({ author: 't', id: 'page' }, [intentsOut])))
+  for (const [n, f] of [['crm', crm], ['map', mapper], ['tax', tax()]] as const) unwrap(scope.register(n, f.create()))
+  Orchestrators.create(scope, [])
+  unwrap(scope.subscribe({ source: 'page', op: intentsOut.name, listener: 'orchestrator', target: OrchestratorOps.setIntents.name }))
+  await page.notify(intentsOut, [workflow]); await flush()
+  expect(scope.snapshot().subscriptions.filter(s => s.listener !== 'orchestrator').map(s => `${s.source}→${s.listener}`)).toEqual(['crm→map', 'map→tax'])
+  await page.notify(intentsOut, [{ kind: 'workflow', id: 'bad' }, null]); await flush() // malformed: refused, previous intents stay
+  expect(scope.snapshot().subscriptions.filter(s => s.listener !== 'orchestrator').length).toBe(2)
+  expect((await page.call('orchestrator', OrchestratorOps.setIntents, [null])).type).toBe('error')
+  await page.notify(intentsOut, []); await flush()
+  expect(scope.snapshot().subscriptions.filter(s => s.listener !== 'orchestrator')).toEqual([])
 })
