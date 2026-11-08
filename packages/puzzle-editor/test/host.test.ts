@@ -9,7 +9,7 @@ const { scope } = await import('../../ui-workspace/src/composable.ts')
 // after the provider exists (other test files may have defined the editor's tags already, so it upgrades on insert)
 document.body.innerHTML = page.slice(page.indexOf('<body>') + 6, page.indexOf('</body>'))
 
-test('the host page: place slider → doubler → chart on the editor\'s board, switch Live on, and it runs', async () => {
+test('the host page: place slider → doubler → chart, Live runs it, and removing the editor takes its routes down', async () => {
   await flush()
   const ed = scope.component('editor') as Created<typeof puzzleEditor>
   expect(ed).toBeDefined()
@@ -32,11 +32,10 @@ test('the host page: place slider → doubler → chart on the editor\'s board, 
   const slider = scope.component('c-slider') as unknown as { notify(op: Op, data: unknown): Promise<unknown> }
   await slider.notify(op('c-slider', '/value-changed'), 21); await flush()
   expect((scope.component('c-chart') as unknown as { state: { points: number[] } }).state.points).toEqual([42])
-})
 
-test('removing the editor while Live is on takes its routes down', async () => {
+  // removing the editor while Live is on takes its routes down
   const links = () => scope.snapshot().subscriptions.filter(s => s.source === 'c-slider' || s.listener === 'c-chart')
-  expect(links().length).toBeGreaterThan(0)   // left Live by the test above
+  expect(links().length).toBeGreaterThan(0)
   const old = document.querySelector('puzzle-editor[name="editor"]')!, parent = old.parentElement!
   old.remove()
   for (let i = 0; i < 3; i++) await flush()
