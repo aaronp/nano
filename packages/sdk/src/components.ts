@@ -1,6 +1,5 @@
 import type { Static, TFunction, TSchema } from 'typebox'
 import { Systems, type ErrorInfo } from './system'
-import { canonicalType, typeHash } from './typehash'
 import {
   fail, ok, roleOf, routeProblem, unwrap,
   type Component, type ComponentFactory, type ComponentId, type Created, type Dependency, type Input, type Invocation,
@@ -130,12 +129,6 @@ export type Builder = {
   route(from: Bound, to: Bound): void
   /** Which child ops make up the composite's manifest (default: all of them). */
   expose(...ops: Op[]): void
-  /**
-   * Declare an action `author/id/name` on the composite that calls the steps in order, each fed the previous result.
-   * Input is the first step's, output the last's. Pipe ops are always in the manifest; with no `expose`, a composite
-   * that has pipes shows only them (its children may share op names).
-   */
-  pipe(name: string, description: string, steps: Bound[]): Op
 }
 export type Composite<R extends Record<string, Handle>> = Component & { children: { [K in keyof R]: Created<R[K]['factory']> } }
 
@@ -150,7 +143,6 @@ function composite<const R extends Record<string, Handle>>(
 ): ComponentFactory<Composite<R>> {
   const uses: { name: string; factory: ComponentFactory<any>; wrap?: (h: SystemInstance, outer: () => SystemInstance | undefined) => SystemInstance }[] = []
   const routes: [Bound, Bound][] = []
-  const pipes = new Map<string, Bound[]>(), pipeOps: Op[] = []
   let shown: Op[] | undefined
   const manifestOf = (child: string) => uses.find(u => u.name === child)?.factory.manifest
   const children = build({
@@ -165,37 +157,13 @@ function composite<const R extends Record<string, Handle>>(
       if (problem) throw new Error(`route: ${problem}`)
       routes.push([from, to])
     },
-    pipe(name, description, steps) {
-      const label = `pipe ${name}`, opName = `${meta.id.author}/${meta.id.id}/${name}`
-      if (pipes.has(opName)) throw new Error(`${label}: duplicate pipe`)
-      if (!steps.length) throw new Error(`${label}: no steps`)
-      const found = steps.map((s, i) => {
-        const o = manifestOf(s.child)?.ops.find(x => x.name === s.op.name)
-        if (!o) throw new Error(`${label}: step ${i} (${s.child} ${s.op.name}) does not exist`)
-        return o
-      })
-      found.forEach((o, i) => {
-        if (i === steps.length - 1) return
-        const at = `${label}: step ${i} (${steps[i].child} ${o.name})`
-        if (!o.output) throw new Error(`${at} gives no output`)
-        const n = found[i + 1]
-        const open = n.input && !Object.keys((canonicalType(n.input) as object | null) ?? {}).length
-        if (!n.input || !(open || typeHash(n.input) === typeHash(o.output)))
-          throw new Error(`${label}: step ${i} output does not fit step ${i + 1} input`)
-      })
-      const last = found[found.length - 1]
-      const op: Op = { name: opName, description, ...(found[0].input ? { input: found[0].input } : {}), ...(last.output ? { output: last.output } : {}) }
-      if (!op.input && !op.output) throw new Error(`${label}: needs a first step with input or a last step with output`)
-      pipes.set(opName, steps); pipeOps.push(op)
-      return op
-    },
     expose(...ops) { shown = [...(shown ?? []), ...ops] },
   })
   const all = uses.flatMap(u => u.factory.manifest.ops)
   for (const o of shown ?? []) if (!all.some(x => x.name === o.name)) throw new Error(`expose: no child has ${o.name}`)
-  const pick = (o: Op) => shown ? shown.some(s => s.name === o.name) : !pipes.size
+  const pick = (o: Op) => !shown || shown.some(s => s.name === o.name)
   // Children are bound inside the composite's System, so exported ops do not carry `requires`.
-  const manifest = compose(meta.id, { id: meta.id, ops: [...all.filter(pick).map(({ requires: _r, ...o }) => o), ...pipeOps] })
+  const manifest = compose(meta.id, { id: meta.id, ops: all.filter(pick).map(({ requires: _r, ...o }) => o) })
   const owner = new Map(uses.flatMap(u => u.factory.manifest.ops.filter(o => o.input && pick(o)).map(o => [o.name, { child: u.name, op: o }])))
 
   return {
@@ -224,16 +192,6 @@ function composite<const R extends Record<string, Handle>>(
         onAddedToSystem: s => { outer.push(s) },
         onRemovedFromSystem: id => { const i = outer.findIndex(o => o.system.id === id); if (i >= 0) outer.splice(i, 1) },
         onAction: (_s, inv) => {
-          const steps = pipes.get(inv.op)
-          if (steps) return (async () => {
-            const h = self.within(inv.correlation)
-            let r: Result<unknown> = ok(inv.input)
-            for (const st of steps) {
-              r = await h.call(st.child, st.op as Op<TSchema>, (r as { data?: unknown }).data as never)
-              if (r.type !== 'success') return r
-            }
-            return r
-          })()
           const o = owner.get(inv.op)!
           return self.within(inv.correlation).call(o.child, o.op as Op<TSchema>, inv.input as never)
         },
