@@ -165,3 +165,7 @@ test('malformed intents are refused with no instances present, and the previous 
   for (const [n, f] of [['crm', crm], ['map', mapper], ['tax', tax()]] as const) unwrap(scope.register(n, f.create()))
   expect(scope.snapshot().subscriptions.filter(s => s.listener !== 'orchestrator').map(s => `${s.source}→${s.listener}`)).toEqual(['crm→map', 'map→tax'])
 })
+
+test('create checks its initial intents', () => {
+  expect(Orchestrators.create(Systems.create(), [{ kind: 'workflow', id: 'w' } as never]).type).toBe('error')
+})

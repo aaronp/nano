@@ -186,7 +186,10 @@ const policyComponent = (id: string, apply: () => void): Component => ({
  * A policy: keep `system` wired to match `intents`. It registers itself (as `id`), re-plans on every change, and
  * adds or removes only the links it made. It never creates instances.
  */
-function create(system: SystemRuntime, intents: readonly Intent[], id = 'orchestrator'): Result<Orchestrator> {
+function create(system: SystemRuntime, given: readonly Intent[], id = 'orchestrator'): Result<Orchestrator> {
+  const checked = checkIntents(given)
+  if (checked.type !== 'success') return checked
+  const intents = checked.data
   const mine = new Map<string, string>() // route key -> subscription id
   const listeners = new Set<(s: Record<string, Status>) => void>()
   let current = intents, status: Record<string, Status> = {}, stopped = false, applying = false, dirty = false
