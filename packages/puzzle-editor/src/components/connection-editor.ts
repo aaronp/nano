@@ -2,6 +2,7 @@ import Type from 'typebox'
 import { ComponentId, Components, Instance, fail, ok, type SystemInstance } from '@composable/sdk'
 import { plan, type Connection, type InstanceSel, type Status } from '@composable/connections'
 import { board, type ComponentEntry } from '../model'
+import { listed } from './component-list'
 import type { TypesUpdated } from './type-editor'
 
 const any = <T>() => Type.Unsafe<T>(Type.Unknown())
@@ -51,7 +52,7 @@ export const connectionEditor = C.define({
   handlers: [
     [o.setConnections, async (c, { state, system }) => { await set(state, system, c) }],
     [o.setComponents, (components, { state }) => { state.components = components }],
-    [o.setInstances, (instances, { state }) => { state.instances = instances; replan(state) }],
+    [o.setInstances, (instances, { state }) => { state.instances = listed(instances); replan(state) }],
     [o.setLooks, (looks, { state }) => { state.looks = looks }],
     [o.setLive, async (on, { state, system }) => {
       if (on === state.live) return

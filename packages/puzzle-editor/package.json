@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "A puzzle-style editor for types, components and connections.",
-  "exports": { ".": "./src/index.ts", "./model": "./src/model/index.ts" },
+  "exports": { ".": "./src/index.ts", "./model": "./src/model/index.ts", "./views": "./src/views/index.ts" },
   "scripts": { "build": "bun ../../scripts/build-package.ts ." },
   "peerDependencies": {
     "@composable/connections": "workspace:*",

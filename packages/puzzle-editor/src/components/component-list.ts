@@ -30,6 +30,10 @@ export const ComponentListOps = {
 }
 const o = ComponentListOps
 
+/** The instances to list: never an editor itself (it would show its own ops as pieces). By exact id: widgets share the author. */
+export const listed = (instances: Instance[]) =>
+  instances.filter(i => !(i.manifest.id.author === 'composable' && i.manifest.id.id === 'puzzle-editor'))
+
 type State = { types: EditorType[]; drafts: DraftComponent[]; instances: Instance[] }
 
 const components = (s: State, system: SystemInstance) => system.notify(o.componentsUpdated, componentsOf(s.drafts, s.types, s.instances))
@@ -46,8 +50,8 @@ const edit = async (r: Result<DraftComponent[]>, s: State, system: SystemInstanc
 export const componentList = C.define({
   state: (): State => ({ types: [], drafts: [], instances: [] }),
   handlers: [
-    [o.setInstances, async (instances, { state, system }) => {
-      state.instances = instances
+    [o.setInstances, async (all, { state, system }) => {
+      const instances = state.instances = listed(all)
       await system.notify(o.instancesUpdated, instances)
       await system.notify(o.liveTypes, liveTypes(instances).flatMap(t => t.kind === 'live' ? [t.schema] : []))
       await components(state, system)
