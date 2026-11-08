@@ -90,7 +90,7 @@ export class ConnectionDesigner extends LitElement {
   }
   #setLive(on: boolean) {
     this.#live = on
-    if (on && this.system) (this.#orch ??= Orchestrators.create(this.system, [], `orchestrator-${(++seq).toString(36)}`)).set(this.#doc.intents)
+    if (on && this.system) (this.#orch ??= unwrap(Orchestrators.create(this.system, [], `orchestrator-${(++seq).toString(36)}`))).set(this.#doc.intents)
     else this.#orch?.set([])
     this.requestUpdate()
   }

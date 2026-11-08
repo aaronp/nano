@@ -6,7 +6,7 @@
  * `plan` (pure) turns intents plus the instances present into the routes they want and a status per intent;
  * an orchestrator keeps a scope's routes matching the plan as instances come and go.
  */
-import { canonicalType, fail, missing, providerOf, typeHash, type Component, type ComponentId, type Instance, type Op, type SystemRuntime } from '@composable/sdk'
+import { canonicalType, fail, missing, ok, providerOf, typeHash, type Component, type ComponentId, type Instance, type Op, type Result, type SystemRuntime } from '@composable/sdk'
 
 // ---------------------------------------------------------------- data
 
@@ -133,7 +133,7 @@ const policyComponent = (id: string, apply: () => void): Component => ({
  * A policy: keep `system` wired to match `intents`. It registers itself (as `id`), re-plans on every change, and
  * adds or removes only the links it made. It never creates instances.
  */
-function create(system: SystemRuntime, intents: readonly Intent[], id = 'orchestrator'): Orchestrator {
+function create(system: SystemRuntime, intents: readonly Intent[], id = 'orchestrator'): Result<Orchestrator> {
   const mine = new Map<string, string>() // route key -> subscription id
   const listeners = new Set<(s: Record<string, Status>) => void>()
   let current = intents, status: Record<string, Status> = {}, stopped = false, applying = false, dirty = false
@@ -152,14 +152,15 @@ function create(system: SystemRuntime, intents: readonly Intent[], id = 'orchest
     for (const [k, r] of want) if (!mine.has(k)) { const s = system.subscribe({ source: r.from, op: r.output.name, listener: r.to, target: r.op.name }); if (s.type === 'success') mine.set(k, s.data.id) }
     status = p.status
   }
-  system.register(id, policyComponent('orchestrator', apply))
+  const reg = system.register(id, policyComponent('orchestrator', apply))
+  if (reg.type !== 'success') return reg
   apply()
-  return {
+  return ok({
     status: () => status,
     onStatus(fn) { listeners.add(fn); return () => { listeners.delete(fn) } },
     set(next) { current = next; apply() },
     stop() { stopped = true; system.unregister(id); for (const sid of mine.values()) system.unsubscribe(sid); mine.clear() },
-  }
+  })
 }
 
 export const Orchestrators = { create }
@@ -168,7 +169,7 @@ export const Orchestrators = { create }
  * A policy: bind every unbound dependency in `system` to the first instance that provides it (by shape), and again
  * whenever things change (a provider leaving drops its bindings). One choice among many; write your own for others.
  */
-function firstProvider(system: SystemRuntime, id = 'binder'): () => void {
+function firstProvider(system: SystemRuntime, id = 'binder'): Result<() => void> {
   let stopped = false
   const apply = () => {
     if (stopped) return
@@ -177,12 +178,13 @@ function firstProvider(system: SystemRuntime, id = 'binder'): () => void {
     for (const i of all) for (const d of i.manifest.dependencies ?? []) {
       if (bound.has(`${i.id}\u0000${d.name}`)) continue
       const p = providerOf(d, all, i.id)
-      if (p) system.bind(i.id, d.name, p.instance, p.op.name)
+      if (p) void system.bind(i.id, d.name, p.instance, p.op.name) // a refused bind is retried on the next change
     }
   }
-  system.register(id, policyComponent('binder', apply))
+  const reg = system.register(id, policyComponent('binder', apply))
+  if (reg.type !== 'success') return reg
   apply()
-  return () => { stopped = true; system.unregister(id) }
+  return ok(() => { stopped = true; system.unregister(id) })
 }
 
 export const Binders = { firstProvider }

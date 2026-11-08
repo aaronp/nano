@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test'
 import Type from 'typebox'
-import { Components, Systems, ok, typeHash } from '@composable/sdk'
-import { Orchestrators, plan, type Intent } from '../src'
+import { Components, Systems, ok, unwrap, typeHash } from '@composable/sdk'
+import { Binders, Orchestrators, plan, type Intent } from '../src'
 const links = (s: { snapshot(): { subscriptions: { source: string; listener: string; target?: string }[] } }) => s.snapshot().subscriptions.filter(x => x.target)
 
 const flush = () => new Promise(r => setTimeout(r, 0))
@@ -71,7 +71,7 @@ test('orchestrator: wires and unwires as instances come and go; the chain runs e
   const t = tax(), l = logger()
   const c = await add('crm', crm); await add('tax', t)
   // call out our method under test
-  const o = Orchestrators.create(scope, [workflow, logEverything])
+  const o = unwrap(Orchestrators.create(scope, [workflow, logEverything]))
   const statuses: boolean[] = []
   o.onStatus(s => statuses.push(s['address-to-tax'].viable))
   expect(o.status()['address-to-tax'].viable).toBe(false)
@@ -114,7 +114,7 @@ test('orchestrator: a change made while it is wiring still triggers a re-plan', 
     onAction: async () => ({ type: 'error', error: { code: 'unknown-action', message: 'none' } }),
     onSystemUpdated: (_s, d) => { if (armed && d.type === 'subscription-opened') { armed = false; scope.unregister('m2') } },
   })
-  Orchestrators.create(scope, [logEverything, workflow])
+  unwrap(Orchestrators.create(scope, [logEverything, workflow]))
   expect(links(scope).map(r => r.listener)).not.toContain('tax')   // two maps: ambiguous, not wired
   armed = true
   scope.register('crm2', crm.create())   // a new source: the orchestrator subscribes it to the log, and the meddler reacts
@@ -126,4 +126,14 @@ test('intents are plain JSON: they round-trip and plan the same', () => {
   const instances = [inst('crm', crm), inst('m', mapper), inst('tax', tax())]
   const saved = JSON.parse(JSON.stringify([workflow, logEverything])) as Intent[]
   expect(plan(saved, instances)).toEqual(plan([workflow, logEverything], instances))
+})
+
+test('a policy under a taken id fails and leaves the first one registered and working', () => {
+  const scope = Systems.create()
+  const stop = unwrap(Binders.firstProvider(scope))
+  expect(Binders.firstProvider(scope).type).toBe('error')
+  expect(Orchestrators.create(scope, [], 'binder').type).toBe('error')
+  expect(scope.snapshot().instances.map(i => i.id)).toEqual(['binder'])
+  stop()
+  expect(scope.snapshot().instances).toEqual([])
 })

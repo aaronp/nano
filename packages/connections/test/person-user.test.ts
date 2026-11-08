@@ -56,8 +56,8 @@ test('lift two CRUD libraries, map between them with a runtime component that ne
 
   // call out our methods under test: plan says why it is not viable yet; the orchestrator waits
   expect(plan([chain], page.system.instances).status['person-to-user'].problems).toEqual([{ kind: 'unavailable', at: 'step 1', needs: ['enrich'] }])
-  const o = Orchestrators.create(scope, [chain])
-  Binders.firstProvider(scope)
+  const o = unwrap(Orchestrators.create(scope, [chain]))
+  unwrap(Binders.firstProvider(scope))
   expect(o.status()['person-to-user'].viable).toBe(false)
   expect(scope.bindings()).toEqual([])
 
