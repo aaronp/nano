@@ -30,9 +30,12 @@ export const ComponentListOps = {
 }
 const o = ComponentListOps
 
-/** The instances to list: never an editor itself (it would show its own ops as pieces). By exact id: widgets share the author. */
+/**
+ * The instances to list: never an editor itself (it would show its own ops as pieces; by exact id, as widgets share
+ * the author), nor one with no ops (a party, say: nothing to place).
+ */
 export const listed = (instances: Instance[]) =>
-  instances.filter(i => !(i.manifest.id.author === 'composable' && i.manifest.id.id === 'puzzle-editor'))
+  instances.filter(i => i.manifest.ops.length && !(i.manifest.id.author === 'composable' && i.manifest.id.id === 'puzzle-editor'))
 
 type State = { types: EditorType[]; drafts: DraftComponent[]; instances: Instance[] }
 

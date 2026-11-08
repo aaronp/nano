@@ -8,14 +8,14 @@
  *     status-line) show them.
  * The page System is also a component (`system`), and an orchestrator keeps it wired to intents. When
  * <puzzle-editor name="editor"> places itself, it is linked: system/changed → its set-instances, its
- * intents-updated → orchestrator/set-intents. Its document is saved to localStorage and loaded back.
+ * intents-updated → orchestrator/set-intents. Its document is loaded from localStorage (or the empty one), and saved there.
  * Imported before the views are defined, so the provider exists when markup upgrades.
  */
 import { Components, Systems, type Component, type Result } from '@composable/sdk'
 import { provideSystem } from '@composable/ui'
 import { defineElements } from '@composable/widgets/views'
 import { OrchestratorOps, Orchestrators } from '@composable/connections'
-import { ComponentListOps, ConnectionEditorOps, DocumentOps } from '@composable/puzzle-editor'
+import { ComponentListOps, ConnectionEditorOps, DocumentOps, emptyEditorDoc } from '@composable/puzzle-editor'
 import { defineEditor } from '@composable/puzzle-editor/views'
 import { requestBus } from './lib/bus.ts'
 
@@ -29,15 +29,31 @@ scope.updates(d => {
   if (d.type !== 'added' || !d.instances.some(i => i.id === 'editor')) return
   log(scope.subscribe({ source: 'system', op: Systems.ops.changed.name, listener: 'editor', target: ComponentListOps.setInstances.name }))
   log(scope.subscribe({ source: 'editor', op: ConnectionEditorOps.intentsUpdated.name, listener: 'orchestrator', target: OrchestratorOps.setIntents.name }))
-  let doc: unknown
-  try { doc = JSON.parse(localStorage.getItem(saved) ?? 'null') } catch {}
-  if (doc && host.type === 'success') void host.data.call('editor', DocumentOps.load, doc as never).then(log)
+  void restore()
 })
 log(scope.register('system', Systems.component(scope).create() as Component))   // its create is synchronous
 log(Orchestrators.create(scope, []))
-const host = scope.register('host', Components.party())   // the host's own handle, to load a saved document
+const host = scope.register('host', Components.party())   // the host's own handle, to load the editor's document
+
+/**
+ * Load the saved document, or the empty one if nothing is saved. Saving waits for that load, so the editor's
+ * changes before it are not saved over the document; one that cannot be loaded is left as it is, and not saved over.
+ */
+let saving = false
+const restore = async () => {
+  if (host.type !== 'success') return log(host)
+  let raw: string | null = null
+  try { raw = localStorage.getItem(saved) } catch {}
+  saving = false
+  let r: Result<unknown> = { type: 'error', error: { code: 'validation', message: 'the saved editor document is not JSON' } }
+  try { if (raw !== null) r = await host.data.call('editor', DocumentOps.load, JSON.parse(raw)) } catch {}
+  if (r.type === 'success') { saving = true; return }
+  if (raw !== null) log(r)
+  saving = raw === null
+  log(await host.data.call('editor', DocumentOps.load, emptyEditorDoc()))
+}
 scope.observe(t => {
-  if (t.kind === 'notify' && t.from === 'editor' && t.op === DocumentOps.modelUpdated.name) try { localStorage.setItem(saved, JSON.stringify(t.data)) } catch {}
+  if (saving && t.kind === 'notify' && t.from === 'editor' && t.op === DocumentOps.modelUpdated.name) try { localStorage.setItem(saved, JSON.stringify(t.data)) } catch {}
 })
 provideSystem(document, scope)
 defineElements()

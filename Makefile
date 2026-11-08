@@ -16,7 +16,7 @@ ui:
 	cd packages/ui-workspace && bun run build
 	bun scripts/serve.ts packages/ui-workspace/public $(PORT)
 
-# The puzzle connection designer: the same host, on its Connections page.
+# The puzzle editor: the same host, on its Connections page.
 puzzle:
-	@echo "Connection designer: http://localhost:$(PORT)/#/connections"
+	@echo "Puzzle editor: http://localhost:$(PORT)/#/connections"
 	@$(MAKE) --no-print-directory ui PORT=$(PORT)

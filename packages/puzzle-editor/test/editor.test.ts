@@ -37,11 +37,11 @@ test('set-instances is linked once and reaches both children; status is planned 
   for (const [n, f] of [['crm', crm], ['map', mapper], ['tax', tax]] as const) unwrap(s.register(n, f.create()))
   await flush()
   expect(ed.children.board.state.instances.map((i: Instance) => i.id)).toContain('map')
-  // the editor hides itself (by exact id), from the list and the board alike
-  expect(ed.children.list.state.instances.map((i: Instance) => i.id)).not.toContain('editor')
+  // the editor hides itself (by exact id) and instances with no ops (the page party), from the list and the board alike
+  expect(ed.children.list.state.instances.map((i: Instance) => i.id)).toEqual(['system', 'crm', 'map', 'tax'])
   expect(ed.children.board.state.instances.map((i: Instance) => i.id)).not.toContain('editor')
   await ed.children.board.systems[0].call('board', ConnectionEditorOps.setInstances, s.snapshot().instances)
-  expect(ed.children.board.state.instances.map((i: Instance) => i.id)).toEqual(['page', 'system', 'crm', 'map', 'tax'])
+  expect(ed.children.board.state.instances.map((i: Instance) => i.id)).toEqual(['system', 'crm', 'map', 'tax'])
   await ed.children.board.systems[0].call('board', ConnectionEditorOps.place, { component: { author: 't', id: 'crm' }, op: updated.name, cell: { c: 0, r: 0 } })
   await ed.children.board.systems[0].call('board', ConnectionEditorOps.place, { component: { author: 't', id: 'map' }, op: toJ.name, cell: { c: 1, r: 0 } })
   await ed.children.board.systems[0].call('board', ConnectionEditorOps.place, { component: { author: 't', id: 'tax' }, op: rate.name, cell: { c: 2, r: 0 } })
