@@ -4,7 +4,7 @@ import type { Look } from './looks'
 
 export type TypeRef = { type: string; array: boolean }
 export type EditorType =
-  | { id: string; kind: 'primitive'; name: 'string' | 'number' | 'boolean' }
+  | { id: string; kind: 'primitive'; name: 'string' | 'number' | 'boolean'; look?: Look }
   | { id: string; kind: 'record'; name: string; fields: { name: string; ref: TypeRef }[]; look?: Look }
   | { id: string; kind: 'brand'; name: string; of: string; look?: Look }
   | { id: string; kind: 'live'; schema: TSchema }
@@ -81,7 +81,7 @@ export const remove = (types: Types, id: string): Result<Types> => {
 
 export const setLook = (types: Types, id: string, look: Look): Result<Types> => {
   const t = types.find(x => x.id === id)
-  return t && (t.kind === 'record' || t.kind === 'brand') ? ok(types.map(x => x === t ? { ...t, look } : x)) : fail('validation', `cannot style ${id}`)
+  return t && t.kind !== 'live' ? ok(types.map(x => x === t ? { ...t, look } : x)) : fail('validation', `cannot style ${id}`)
 }
 
 /** Every distinct named schema on the ops of the instances, by SAID. */

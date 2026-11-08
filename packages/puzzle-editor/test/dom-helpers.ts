@@ -1,16 +1,15 @@
 import { Components, Systems, unwrap } from '@composable/sdk'
 import { provideSystem } from '@composable/ui'
-import { ComponentListOps, ConnectionEditorOps, TypeEditorOps } from '../src'
-import { builtins } from '../src/model'
-import { defineComponentList } from '../src/views/component-list'
-import { defineConnectionEditor } from '../src/views/connection-editor'
+import { ComponentListOps, ConnectionEditorOps, DocumentOps, TypeEditorOps } from '../src'
+import { builtins, emptyEditorDoc } from '../src/model'
+import { defineEditor } from '../src/views'
 import { crm, flush, mapper, tax } from './fixtures'
 
-defineConnectionEditor(); defineComponentList()
+defineEditor()
 type Host = HTMLElement & { component: any; updateComplete: Promise<boolean> }
 
 /** A System with a provider, the fixtures (crm, map, tax) and the element, fed the fixtures as its instances. */
-export const hosted = async (name: 'connection-editor' | 'component-list') => {
+export const hosted = async (name: 'connection-editor' | 'component-list' | 'type-editor' | 'puzzle-editor') => {
   const s = Systems.create(), host = document.createElement('div')
   provideSystem(host, s); document.body.append(host)
   const page = unwrap(s.register('page', Components.party()))
@@ -21,6 +20,8 @@ export const hosted = async (name: 'connection-editor' | 'component-list') => {
   const model = el.component
   const instances = s.snapshot().instances.filter(i => ['crm', 'map', 'tax'].includes(i.id))
   if (name === 'connection-editor') await page.call(name, ConnectionEditorOps.setInstances, instances)
+  else if (name === 'type-editor') await page.call(name, TypeEditorOps.setTypes, builtins())
+  else if (name === 'puzzle-editor') await page.call(name, DocumentOps.load, emptyEditorDoc())
   else {
     await page.call(name, ComponentListOps.setTypes, { types: builtins(), derived: [] })
     await page.call(name, ComponentListOps.setInstances, instances)

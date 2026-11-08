@@ -3,7 +3,7 @@ import { unwrap } from '@composable/sdk'
 import { OrchestratorOps, Orchestrators } from '@composable/connections'
 import { ConnectionEditorOps } from '../src'
 import { iconFor, tilePath } from '../src/views/tiles'
-import { PRESETS } from '../src/model'
+import { PRESETS, presetShape, type EditorType } from '../src/model'
 import { click, clickLive, dragRow, hosted, select, type } from './dom-helpers'
 import { flush, updated } from './fixtures'
 
@@ -80,4 +80,29 @@ test('tilePath and iconFor draw closed paths', () => {
   const d = tilePath({ T: 'flat', B: 'flat', R: 'knob', L: 'hole' }, { R: PRESETS.jigsaw, L: PRESETS.jigsaw })
   expect(d).toStartWith('M 40 40') ; expect(d).toEndWith('Z'); expect(d).toContain('C ')
   expect(iconFor(PRESETS.dome)).toStartWith('M 3 1')
+})
+
+test('the type editor: add a record, code view errors, shape editor presets', async () => {
+  const { el, model } = await hosted('type-editor')
+  await click(el, '.new-record'); await type(el, '.new-record-form input', 'Address'); await click(el, '.new-record-form button')
+  expect([...el.shadowRoot!.querySelectorAll('.type-row .name')].map(n => n.textContent)).toContain('Address')
+  await click(el, '.tab-code'); await type(el, 'textarea.code', 'type A = {\n  x: Strin;\n}'); await click(el, '.apply')
+  expect(el.shadowRoot!.querySelector('.problem')!.textContent).toBe('Line 2: unknown type Strin')
+  expect(model.state.types.some((t: EditorType) => t.kind === 'record' && t.name === 'A')).toBe(false)
+  await click(el, '.tab-list'); await click(el, '[data-type="string"] .edit-shape'); await click(el, '.preset[data-preset="dome"]')
+  expect(model.state.types.find((t: EditorType) => t.id === 'string')).toMatchObject({ look: { shape: presetShape('dome') } })
+  await click(el, '.swatch[data-colour="#FF8FC0"]'); await click(el, '.pattern[data-pattern="dots"]')
+  await click(el, '.add-point'); await click(el, '.remove-point')
+  expect(model.state.types.find((t: EditorType) => t.id === 'string')).toMatchObject({ look: { colour: '#FF8FC0', pattern: 'dots' } })
+  expect(el.shadowRoot!.querySelector('.used-by')!.textContent).toBe('Not used yet.')
+  await click(el, '.done'); expect(el.shadowRoot!.querySelector('.shape-editor')).toBeNull()
+})
+
+test('<puzzle-editor>: both tabs and the board in one System; Show model shows the document', async () => {
+  const { el } = await hosted('puzzle-editor')
+  expect(el.shadowRoot!.querySelector('component-list, [data-part="component-list"]')).not.toBeNull()
+  await click(el, '.tab-types'); expect(el.shadowRoot!.querySelector('type-editor, [data-part="type-editor"]')).not.toBeNull()
+  expect(el.shadowRoot!.querySelector('.status-line')!.textContent).toBe('0 placed · 0 connections · 0 problems')
+  await click(el, '.show-model'); expect(JSON.parse(el.shadowRoot!.querySelector('.model pre')!.textContent!)).toMatchObject({ types: expect.any(Array) })
+  await click(el, '.clear-all'); expect(el.shadowRoot!.querySelector('.problem')).toBeNull()
 })
