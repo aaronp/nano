@@ -18,7 +18,8 @@ export abstract class ModelElement extends LitElement {
   #values = new Map<string, unknown>()
   #view?: { id: string; handle: Handle; registry: Registry }
 
-  connectedCallback() { super.connectedCallback(); this.#attach() }
+  // before the first update, willUpdate attaches (registry and model arrive as changes); after it, reconnecting does
+  connectedCallback() { super.connectedCallback(); if (this.hasUpdated) this.#attach() }
   disconnectedCallback() { super.disconnectedCallback(); this.#detach() }
   willUpdate(changed: Map<string, unknown>) {
     if (changed.has('registry') || changed.has('model') || changed.has('watch')) { this.#detach(); this.#attach() }
@@ -52,12 +53,14 @@ export abstract class ModelElement extends LitElement {
     this.#view = { id, handle: reg.get(id)!.env.handles()[0]!, registry: reg }
     // read what each holds now: sources with a reader answer a call
     for (const [i, a] of sources) if (a.run) void this.#view.handle.call(i, a.op, null).then(r => {
-      if ('value' in r) { this.#values.set(Ops.key(a.op), r.value); this.requestUpdate() }
+      // only for the current view: one replaced since the call started must not write
+      if ('value' in r && this.#view?.id === id) { this.#values.set(Ops.key(a.op), r.value); this.requestUpdate() }
     })
   }
 
   #detach() {
     this.#view?.registry.remove(this.#view.id)   // from the registry it joined, even if `registry` has changed since
     this.#view = undefined
+    this.#values.clear()
   }
 }

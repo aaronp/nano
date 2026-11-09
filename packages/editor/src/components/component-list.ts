@@ -10,7 +10,7 @@ export type Selection = { component?: string; op?: string }
 /** The list of available components, and which one (and which op) is selected. */
 export const ComponentList = component('composable.editor/component-list', () => {
   const s = state({ components: [] as Entry[], selected: {} as Selection })
-  const componentSelected = event(), opSelected = event(), removed = event()
+  const componentSelected = event(), opSelected = event(), removed = event(), opRemoved = event()
   const find = (id: string) => {
     const c = s.components.find(c => c.id === id)
     if (!c) throw new Error(`no component ${id}`)
@@ -19,8 +19,12 @@ export const ComponentList = component('composable.editor/component-list', () =>
   return {
     get components() { return s.components },
     get selected() { return s.selected },
-    componentSelected, opSelected, removed,
-    set: (list: Entry[]) => { s.components = list; s.selected = {} },
+    componentSelected, opSelected, removed, opRemoved,
+    set: (list: Entry[]) => {
+      const gone = s.components.filter(c => !list.some(n => n.id === c.id)).map(c => c.id)
+      s.components = list; s.selected = {}
+      for (const id of gone) removed(id)
+    },
     add: (e: Entry) => {
       if (s.components.some(c => c.id === e.id)) throw new Error(`${e.id} is already listed`)
       s.components.push(e)
@@ -40,6 +44,7 @@ export const ComponentList = component('composable.editor/component-list', () =>
       const c = find(component), i = c.ops.findIndex(o => Ops.key(o) === op)
       if (i < 0) throw new Error(`${component} has no ${op}`)
       c.ops.splice(i, 1)
+      opRemoved({ component, op })
     },
     select: ({ component, op }: Selection & { component: string }) => {
       find(component)

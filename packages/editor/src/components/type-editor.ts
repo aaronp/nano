@@ -1,7 +1,7 @@
 // Edits one type: its fields (for a record) and its look. Takes a TypeEntry in, publishes the edited one.
 import type { TSchema } from 'typebox'
 import { component, event, state } from '@composable/runes'
-import type { Look, TypeEntry } from '../model'
+import { isBuiltin, titleOf, type Look, type TypeEntry } from '../model'
 
 type Record_ = TSchema & { title?: string; type: 'object'; properties: Record<string, TSchema>; required?: string[] }
 
@@ -9,7 +9,11 @@ type Record_ = TSchema & { title?: string; type: 'object'; properties: Record<st
 export const TypeEditor = component('composable.editor/type-editor', () => {
   const s = state({ entry: undefined as TypeEntry | undefined })
   const typeChanged = event()
-  const loaded = () => { if (!s.entry) throw new Error('no type is being edited'); return s.entry }
+  const loaded = () => {
+    if (!s.entry) throw new Error('no type is being edited')
+    if (isBuiltin(titleOf(s.entry.type))) throw new Error(`${titleOf(s.entry.type)} is built in`)
+    return s.entry
+  }
   const record = () => {
     const t = loaded().type as Record_
     if (t.type !== 'object') throw new Error(`${String(t.title)} is not a record`)
@@ -19,7 +23,8 @@ export const TypeEditor = component('composable.editor/type-editor', () => {
   return {
     get entry() { return s.entry },
     typeChanged,
-    edit: (entry: TypeEntry) => { s.entry = entry },
+    /** Loads a type to edit; null lets go of it. */
+    edit: (entry: TypeEntry | null) => { s.entry = entry ?? undefined },
     addField: ({ name, type }: { name: string; type: TSchema }) => {
       const r = record()
       if (name in r.properties) throw new Error(`${name} is already a field`)

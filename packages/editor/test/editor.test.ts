@@ -41,3 +41,27 @@ test('removing a component from the list takes its pieces off the board', async 
   await call(ids.list, L.ops.remove, 'slider'); await tick()
   expect((await value(ids.board, B.ops.pieces)).map((p: any) => p.instance)).toEqual(['chart'])
 })
+
+test('the type editor lets go of a type the list removes or replaces, and refuses to change built-ins', async () => {
+  const { call, value, ids } = setup()
+  await call(ids.types, T.ops.add, 'Pt')
+  await call(ids.types, T.ops.select, 'Pt'); await tick()
+  await call(ids.types, T.ops.remove, 'Pt'); await tick()
+  expect(await value(ids.typeEditor, E.ops.entry)).toBeUndefined()
+  await call(ids.types, T.ops.add, 'Q'); await call(ids.types, T.ops.select, 'Q'); await tick()
+  await call(ids.types, T.ops.set, []); await tick()
+  expect(await value(ids.typeEditor, E.ops.entry)).toBeUndefined()
+  await call(ids.types, T.ops.select, 'number'); await tick()
+  expect('error' in await call(ids.typeEditor, E.ops.resetLook)).toBe(true)
+})
+
+test('pieces leave the board when their op is removed, or their component drops out of a new list', async () => {
+  const { call, value, ids } = setup()
+  await call(ids.list, L.ops.set, [demo.slider, demo.chart, demo.doubler])
+  await call(ids.board, B.ops.place, { instance: 'slider', op: demo.slider.ops[0], cell: { c: 0, r: 0 } })
+  await call(ids.board, B.ops.place, { instance: 'chart', op: demo.chart.ops[0], cell: { c: 1, r: 0 } })
+  await call(ids.board, B.ops.place, { instance: 'doubler', op: demo.doubler.ops[0], cell: { c: 2, r: 0 } })
+  await call(ids.list, L.ops.removeOp, { component: 'chart', op: 'demo/chart/push' }); await tick()
+  await call(ids.list, L.ops.set, [demo.slider]); await tick()
+  expect((await value(ids.board, B.ops.pieces)).map((p: any) => p.instance)).toEqual(['slider'])
+})

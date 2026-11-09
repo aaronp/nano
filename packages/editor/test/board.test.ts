@@ -46,3 +46,13 @@ test('one instance may be placed twice; removeInstance takes all its pieces off'
   await call('board', B.ops.removeInstance, 'slider')
   expect((await value('board', B.ops.pieces)).map((p: Piece) => p.instance)).toEqual(['chart'])
 })
+
+test('cells are non-negative whole numbers, and set refuses two pieces on one cell', async () => {
+  const { add, call, value } = page(); add('board', B)
+  expect('error' in await call('board', B.ops.place, { instance: 'slider', op: valueChanged, cell: { c: -1, r: 0 } })).toBe(true)
+  expect('error' in await call('board', B.ops.place, { instance: 'slider', op: valueChanged, cell: { c: 1.5, r: 0 } })).toBe(true)
+  expect('error' in await call('board', B.ops.set, [piece('a', map, 0), piece('b', map, 0)])).toBe(true)
+  await call('board', B.ops.place, { instance: 'slider', op: valueChanged, cell: at(0) })
+  expect('error' in await call('board', B.ops.move, { from: at(0), to: { c: 0, r: -2 } })).toBe(true)
+  expect(await value('board', B.ops.pieces)).toHaveLength(1)
+})

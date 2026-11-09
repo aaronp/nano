@@ -19,7 +19,10 @@ export const TypeList = component('composable.editor/type-list', () => {
     get types() { return all() },
     get selected() { return s.selected },
     typeSelected,
-    set: (entries: TypeEntry[]) => { s.custom = entries.filter(e => !isBuiltin(titleOf(e.type))); s.selected = undefined },
+    set: (entries: TypeEntry[]) => {
+      s.custom = entries.filter(e => !isBuiltin(titleOf(e.type)))
+      if (s.selected !== undefined) { s.selected = undefined; typeSelected(null) }   // whoever edits it lets go
+    },
     add: (title: string) => { fresh(title); s.custom.push({ type: Type.Object({}, { title }) }) },
     rename: ({ from, to }: { from: string; to: string }) => {
       mine(from); fresh(to)
@@ -31,7 +34,7 @@ export const TypeList = component('composable.editor/type-list', () => {
     remove: (title: string) => {
       mine(title)
       s.custom = s.custom.filter(e => titleOf(e.type) !== title)
-      if (s.selected === title) s.selected = undefined
+      if (s.selected === title) { s.selected = undefined; typeSelected(null) }
     },
     select: (title: string) => { const e = find(title); s.selected = title; typeSelected(e) },
     /** Takes back an edited type: replaces the entry with the same title. */

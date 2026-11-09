@@ -50,3 +50,16 @@ test('the element is a subscriber in the registry while it is on the page, and n
   expect(views()).toEqual([])
   expect(reg.snapshot().subscriptions.some(s => s.source === 'counter')).toBe(false)
 })
+
+test('mounting adds exactly one view', async () => {
+  const reg = Runtimes.create(Registries.create('r')).registry
+  reg.add('counter', Components.instantiate(Counter))
+  let added = 0
+  reg.listen(d => { if (d.type === 'instance-added' && d.instance.includes('~view')) added++ })
+  const el = document.createElement('count-el') as CountEl
+  el.registry = reg; el.model = 'counter'
+  document.body.append(el)
+  await tick(); await el.updateComplete
+  expect(added).toBe(1)
+  el.remove()
+})

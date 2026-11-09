@@ -21,5 +21,6 @@ export function addEditor(registry: Registry, prefix = 'editor'): Ids {
   wire(ids.types, TypeList.ops.typeSelected, ids.typeEditor, TypeEditor.ops.edit)
   wire(ids.typeEditor, TypeEditor.ops.typeChanged, ids.types, TypeList.ops.update)
   wire(ids.list, ComponentList.ops.removed, ids.board, ConnectionBoard.ops.removeInstance)
+  wire(ids.list, ComponentList.ops.opRemoved, ids.board, ConnectionBoard.ops.removeOp)
   return ids
 }
