@@ -1,0 +1,1348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Puzzle prototype</title>
+<script src="./vendor/react.js"></script>
+<script src="./vendor/react-dom.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#9EC3FF}a:hover{color:#C7DCFF}
+</style>
+</helmet>
+<div onMouseMove="{{onMove}}" onMouseUp="{{onUp}}" onMouseLeave="{{onLeave}}" style="position: relative; width: 1440px; height: 900px; background: #0D0F13; color: #E7E9EE; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; user-select: none">
+
+<svg width="0" height="0" aria-hidden="true" style="position: absolute"><defs>
+<pattern id="pat-diag" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2.2" height="6" fill="#0D0F13" fill-opacity="0.6"></rect></pattern>
+<pattern id="pat-diag2" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><rect width="2.2" height="6" fill="#0D0F13" fill-opacity="0.6"></rect></pattern>
+<pattern id="pat-vert" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="2.2" height="6" fill="#0D0F13" fill-opacity="0.6"></rect></pattern>
+<pattern id="pat-horiz" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="2.2" fill="#0D0F13" fill-opacity="0.6"></rect></pattern>
+<pattern id="pat-dots" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.4" fill="#0D0F13" fill-opacity="0.7"></circle></pattern>
+</defs></svg>
+
+<div style="position: absolute; left: 0; top: 0; width: 320px; height: 900px; box-sizing: border-box; background: #14171D; border-right: 1px solid #2A303C; display: flex; flex-direction: column">
+<div style="padding: 16px 16px 0; display: flex; flex-direction: column; gap: 12px">
+<span style="font-size: 16px; font-weight: 700">Puzzle editor</span>
+<div role="tablist" style="display: flex; gap: 4px; background: #0D0F13; border: 1px solid #2A303C; border-radius: 8px; padding: 3px">
+<button type="button" role="tab" aria-selected="{{tabs.elementsSel}}" onClick="{{tabs.toElements}}" style="flex: 1; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; color: {{tabs.elementsColour}}; background: {{tabs.elementsBg}}; border: 0; border-radius: 6px; padding: 7px 0; cursor: pointer">Elements</button>
+<button type="button" role="tab" aria-selected="{{tabs.typesSel}}" onClick="{{tabs.toTypes}}" style="flex: 1; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; color: {{tabs.typesColour}}; background: {{tabs.typesBg}}; border: 0; border-radius: 6px; padding: 7px 0; cursor: pointer">Types</button>
+</div>
+</div>
+
+<div style="flex: 1; overflow-y: auto; padding: 14px 16px 20px; display: flex; flex-direction: column; gap: 12px">
+
+<sc-if value="{{tabs.isElements}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<sc-if value="{{elementDraft.open}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; gap: 6px"><input type="text" aria-label="New element name" value="{{elementDraft.value}}" onChange="{{elementDraft.onChange}}" placeholder="Element name, e.g. Payments" style="flex: 1; min-width: 0; height: 32px; box-sizing: border-box; padding: 0 8px; background: #0D0F13; border: 1px solid #3A4150; border-radius: 6px; color: #E7E9EE; font-size: 12px"><button type="button" onClick="{{elementDraft.save}}" style="font-size: 12px; font-weight: 600; color: #0D0F13; background: #6FA8FF; border: 0; border-radius: 6px; padding: 0 12px; cursor: pointer">Add</button><button type="button" onClick="{{elementDraft.cancel}}" aria-label="Cancel" style="font-size: 12px; color: #A3AAB8; background: transparent; border: 1px solid #3A4150; border-radius: 6px; padding: 0 10px; cursor: pointer">✕</button></div>
+</sc-if>
+<sc-if value="{{elementDraft.closed}}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{elementDraft.open_}}" style="height: 34px; font-size: 13px; font-weight: 600; color: #E7E9EE; background: transparent; border: 1px dashed #4A5263; border-radius: 8px; cursor: pointer">+ Element</button>
+</sc-if>
+<sc-for list="{{panelErrors}}" as="er" hint-placeholder-count="0"><span style="font-size: 11px; color: #FF8A80">{{er.text}}</span></sc-for>
+<sc-if value="{{noElements}}" hint-placeholder-val="{{ false }}">
+<span style="font-size: 12px; line-height: 18px; color: #A3AAB8">An element is a namespace for actions. Add one, then use its + to add actions you can drag onto the board.</span>
+</sc-if>
+
+<sc-for list="{{elements}}" as="el" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 4px; border-top: 1px solid #2A303C; padding-top: 10px">
+<div style="display: flex; align-items: center; gap: 8px"><span style="flex: 1; font-size: 12px; font-weight: 700; letter-spacing: 0.06em">{{el.name}}</span><button type="button" onClick="{{el.addAction}}" aria-label="{{el.addLabel}}" style="width: 26px; height: 26px; font-size: 16px; line-height: 1; color: #E7E9EE; background: #212632; border: 1px solid #3A4150; border-radius: 6px; cursor: pointer">+</button><button type="button" onClick="{{el.remove}}" aria-label="{{el.removeLabel}}" style="width: 26px; height: 26px; font-size: 12px; color: #A3AAB8; background: transparent; border: 1px solid #2A303C; border-radius: 6px; cursor: pointer">✕</button></div>
+
+<sc-if value="{{el.formOpen}}" hint-placeholder-val="{{ false }}">
+<div style="background: #1A1E26; border: 1px solid #3A4150; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px">
+<input type="text" aria-label="Action name" value="{{actionForm.name}}" onChange="{{actionForm.setName}}" placeholder="Action name" style="height: 30px; box-sizing: border-box; padding: 0 8px; background: #0D0F13; border: 1px solid #3A4150; border-radius: 6px; color: #E7E9EE; font-family: 'JetBrains Mono', monospace; font-size: 12px">
+<sc-for list="{{actionForm.pickers}}" as="pk" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 5px">
+<div style="display: flex; align-items: center; gap: 6px"><span style="flex: 1; font-size: 11px; color: #A3AAB8">{{pk.title}} <b style="color: #E7E9EE; font-family: 'JetBrains Mono', monospace">{{pk.current}}</b></span><label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: #A3AAB8"><input type="checkbox" checked="{{pk.array}}" onChange="{{pk.toggleArray}}" style="accent-color: #6FA8FF">array</label></div>
+<input type="search" aria-label="{{pk.searchLabel}}" value="{{pk.query}}" onChange="{{pk.setQuery}}" placeholder="filter types" style="height: 26px; box-sizing: border-box; padding: 0 8px; background: #0D0F13; border: 1px solid #2A303C; border-radius: 5px; color: #E7E9EE; font-size: 11px">
+<div style="display: flex; flex-wrap: wrap; gap: 4px">
+<sc-for list="{{pk.chips}}" as="ch" hint-placeholder-count="4">
+<button type="button" onClick="{{ch.pick}}" aria-pressed="{{ch.pressed}}" style="display: flex; align-items: center; gap: 5px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #E7E9EE; background: {{ch.bg}}; border: 1px solid {{ch.border}}; border-radius: 5px; padding: 3px 6px; cursor: pointer"><span style="width: 8px; height: 8px; border-radius: 50%; background: {{ch.colour}}"></span>{{ch.label}}</button>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<sc-for list="{{actionForm.errors}}" as="er" hint-placeholder-count="0"><span style="font-size: 11px; color: #FF8A80">{{er.text}}</span></sc-for>
+<div style="display: flex; gap: 6px"><button type="button" onClick="{{actionForm.save}}" style="flex: 1; height: 30px; font-size: 12px; font-weight: 600; color: #0D0F13; background: #6FA8FF; border: 0; border-radius: 6px; cursor: pointer">Add action</button><button type="button" onClick="{{actionForm.cancel}}" style="height: 30px; font-size: 12px; color: #A3AAB8; background: transparent; border: 1px solid #3A4150; border-radius: 6px; padding: 0 10px; cursor: pointer">Cancel</button></div>
+</div>
+</sc-if>
+
+<sc-for list="{{el.actions}}" as="ac" hint-placeholder-count="2">
+<div onMouseDown="{{ac.onDown}}" style="display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; background: {{ac.bg}}; cursor: grab">
+<svg width="30" height="26" viewBox="0 0 30 26" aria-hidden="true"><path d="{{ac.icon.body}}" fill="{{ac.icon.fill}}" stroke="{{ac.icon.stroke}}" stroke-width="1"></path><path d="{{ac.icon.knob}}" fill="{{ac.icon.knobFill}}" stroke="{{ac.icon.stroke}}" stroke-width="0.8"></path></svg>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px">{{ac.name}}</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #A3AAB8">{{ac.signature}}</span></span>
+<span style="font-size: 10px; color: {{ac.statusColour}}">{{ac.status}}</span>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{tabs.isTypes}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div role="group" aria-label="Types view" style="display: flex; gap: 4px; border: 1px solid #2A303C; border-radius: 8px; padding: 3px">
+<button type="button" aria-pressed="{{code.listPressed}}" onClick="{{code.toList}}" style="flex: 1; font-size: 12px; color: #E7E9EE; background: {{code.listBg}}; border: 0; border-radius: 6px; padding: 6px 0; cursor: pointer">List</button>
+<button type="button" aria-pressed="{{code.codePressed}}" onClick="{{code.toCode}}" style="flex: 1; font-size: 12px; color: #E7E9EE; background: {{code.codeBg}}; border: 0; border-radius: 6px; padding: 6px 0; cursor: pointer">Code</button>
+</div>
+<sc-if value="{{typeDraft.open}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; gap: 6px"><input type="text" aria-label="New record type name" value="{{typeDraft.value}}" onChange="{{typeDraft.onChange}}" placeholder="Record type name, e.g. Address" style="flex: 1; min-width: 0; height: 32px; box-sizing: border-box; padding: 0 8px; background: #0D0F13; border: 1px solid #3A4150; border-radius: 6px; color: #E7E9EE; font-family: 'JetBrains Mono', monospace; font-size: 12px"><button type="button" onClick="{{typeDraft.save}}" style="font-size: 12px; font-weight: 600; color: #0D0F13; background: #6FA8FF; border: 0; border-radius: 6px; padding: 0 12px; cursor: pointer">Create</button><button type="button" onClick="{{typeDraft.cancel}}" aria-label="Cancel" style="font-size: 12px; color: #A3AAB8; background: transparent; border: 1px solid #3A4150; border-radius: 6px; padding: 0 10px; cursor: pointer">✕</button></div>
+</sc-if>
+<sc-if value="{{typeDraft.closed}}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{typeDraft.open_}}" style="height: 34px; font-size: 13px; font-weight: 600; color: #E7E9EE; background: transparent; border: 1px dashed #4A5263; border-radius: 8px; cursor: pointer">+ New record type</button>
+</sc-if>
+<sc-for list="{{panelErrors}}" as="er" hint-placeholder-count="0"><span style="font-size: 11px; color: #FF8A80">{{er.text}}</span></sc-for>
+
+<sc-for list="{{typeGroups}}" as="tg" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #A3AAB8; padding: 6px 0">{{tg.title}}</span>
+<sc-for list="{{tg.items}}" as="ty" hint-placeholder-count="3">
+<button type="button" onClick="{{ty.select}}" style="display: flex; align-items: center; gap: 10px; text-align: left; padding: 6px 8px; border-radius: 6px; background: {{ty.bg}}; border: 1px solid {{ty.border}}; color: #E7E9EE; cursor: pointer">
+<svg width="30" height="26" viewBox="0 0 30 26" aria-hidden="true"><path d="{{ty.icon.body}}" fill="#1A1E26" stroke="#4A5263" stroke-width="1"></path><path d="{{ty.icon.knob}}" fill="{{ty.icon.knobFill}}" stroke="#4A5263" stroke-width="0.8"></path><path d="{{ty.icon.knob}}" fill="{{ty.icon.pattern}}" stroke="none"></path></svg>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px">{{ty.name}}</span><span style="font-size: 10px; color: #A3AAB8">{{ty.detail}}</span></span>
+</button>
+</sc-for>
+</div>
+</sc-for>
+
+<sc-if value="{{typeDetail.show}}" hint-placeholder-val="{{ false }}">
+<div style="background: #1A1E26; border: 1px solid #3A4150; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: baseline; gap: 8px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700">{{typeDetail.name}}</span><span style="font-size: 11px; color: #A3AAB8">{{typeDetail.kindLabel}}</span></div>
+<sc-if value="{{typeDetail.isRecord}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 11px; color: #A3AAB8">Fields</span>
+<sc-for list="{{typeDetail.fields}}" as="fd" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 4px">
+<input type="text" aria-label="Field name" value="{{fd.name}}" onChange="{{fd.setName}}" placeholder="field" style="width: 84px; height: 26px; box-sizing: border-box; padding: 0 6px; background: #0D0F13; border: 1px solid #3A4150; border-radius: 5px; color: #E7E9EE; font-family: 'JetBrains Mono', monospace; font-size: 11px">
+<button type="button" onClick="{{fd.togglePicker}}" style="flex: 1; display: flex; align-items: center; gap: 5px; height: 26px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #E7E9EE; background: #0D0F13; border: 1px solid #3A4150; border-radius: 5px; padding: 0 6px; cursor: pointer"><span style="width: 8px; height: 8px; border-radius: 50%; background: {{fd.colour}}"></span>{{fd.typeLabel}}</button>
+<label style="display: flex; align-items: center; gap: 3px; font-size: 10px; color: #A3AAB8"><input type="checkbox" checked="{{fd.array}}" onChange="{{fd.toggleArray}}" style="accent-color: #6FA8FF">[ ]</label>
+<button type="button" onClick="{{fd.remove}}" aria-label="Remove field" style="width: 22px; height: 26px; font-size: 11px; color: #A3AAB8; background: transparent; border: 0; cursor: pointer">✕</button>
+</div>
+<sc-if value="{{fd.pickerOpen}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; gap: 4px; padding-left: 88px">
+<sc-for list="{{fd.chips}}" as="ch" hint-placeholder-count="3">
+<button type="button" onClick="{{ch.pick}}" style="display: flex; align-items: center; gap: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #E7E9EE; background: {{ch.bg}}; border: 1px solid {{ch.border}}; border-radius: 5px; padding: 2px 5px; cursor: pointer"><span style="width: 7px; height: 7px; border-radius: 50%; background: {{ch.colour}}"></span>{{ch.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-for>
+<button type="button" onClick="{{typeDetail.addField}}" style="align-self: flex-start; font-size: 11px; color: #9EC3FF; background: transparent; border: 1px dashed #3A4150; border-radius: 5px; padding: 4px 8px; cursor: pointer">+ Field</button>
+</div>
+</sc-if>
+<sc-if value="{{typeDetail.isAlias}}" hint-placeholder-val="{{ false }}">
+<span style="font-size: 12px; color: #A3AAB8">Brand of <b style="font-family: 'JetBrains Mono', monospace; color: #E7E9EE">{{typeDetail.aliasFor}}</b>. Same data, but only joins with itself.</span>
+</sc-if>
+<sc-if value="{{brandDraft.open}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; gap: 6px"><input type="text" aria-label="Brand name" value="{{brandDraft.value}}" onChange="{{brandDraft.onChange}}" placeholder="Brand name, e.g. Email" style="flex: 1; min-width: 0; height: 30px; box-sizing: border-box; padding: 0 8px; background: #0D0F13; border: 1px solid #3A4150; border-radius: 6px; color: #E7E9EE; font-family: 'JetBrains Mono', monospace; font-size: 12px"><button type="button" onClick="{{brandDraft.save}}" style="font-size: 12px; font-weight: 600; color: #0D0F13; background: #6FA8FF; border: 0; border-radius: 6px; padding: 0 10px; cursor: pointer">Copy</button></div>
+</sc-if>
+<div style="display: flex; gap: 6px">
+<button type="button" onClick="{{typeDetail.copy}}" style="flex: 1; height: 30px; font-size: 12px; color: #E7E9EE; background: transparent; border: 1px solid #3A4150; border-radius: 6px; cursor: pointer">Copy as brand</button>
+<sc-if value="{{typeDetail.deletable}}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{typeDetail.remove}}" style="height: 30px; font-size: 12px; color: #FFB4A8; background: transparent; border: 1px solid #5A3A3A; border-radius: 6px; padding: 0 10px; cursor: pointer">Delete</button>
+</sc-if>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</div>
+
+<div data-canvas="puzzle" style="position: absolute; left: 320px; top: 0; width: 1120px; height: 900px; z-index: 2">
+<div style="position: absolute; left: 80px; top: 110px; width: 960px; height: 720px; background-image: linear-gradient(#1A1E26 1px, transparent 1px), linear-gradient(90deg, #1A1E26 1px, transparent 1px); background-size: 120px 120px; border-right: 1px solid #1A1E26; border-bottom: 1px solid #1A1E26"></div>
+
+<div style="position: absolute; left: 80px; top: 28px; width: 960px; display: flex; align-items: center; gap: 14px">
+<span style="font-size: 13px; color: #A3AAB8">{{summary}}</span>
+<span style="font-size: 12px; color: #F5CF5B">{{notice}}</span>
+<span style="flex: 1"></span>
+<span style="font-size: 11px; color: {{storage.colour}}">{{storage.text}}</span>
+<button type="button" onClick="{{toggleModel}}" style="font-size: 12px; color: #E7E9EE; background: #14171D; border: 1px solid #3A4150; border-radius: 6px; padding: 7px 12px; cursor: pointer">{{modelButtonLabel}}</button>
+<button type="button" onClick="{{clearAll}}" style="font-size: 12px; color: #E7E9EE; background: #14171D; border: 1px solid #3A4150; border-radius: 6px; padding: 7px 12px; cursor: pointer">Clear all</button>
+</div>
+
+<sc-if value="{{emptyBoard}}" hint-placeholder-val="{{ true }}">
+<div style="position: absolute; left: 80px; top: 420px; width: 960px; text-align: center; font-size: 14px; line-height: 22px; color: #6F7787">The board is empty.<br>Add an element and its actions on the left, then drag actions here.</div>
+</sc-if>
+
+<sc-for list="{{eligible}}" as="cell" hint-placeholder-count="0">
+<div style="position: absolute; left: {{cell.left}}px; top: {{cell.top}}px; width: 120px; height: 120px; box-sizing: border-box; background: rgba(124, 227, 161, 0.08); border: 1px dashed rgba(124, 227, 161, 0.5)"></div>
+</sc-for>
+<sc-if value="{{hover.show}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; left: {{hover.left}}px; top: {{hover.top}}px; width: 120px; height: 120px; box-sizing: border-box; border: 2px solid {{hover.colour}}; border-radius: 4px"></div>
+</sc-if>
+
+<sc-for list="{{tiles}}" as="p" hint-placeholder-count="0">
+<div style="position: absolute; left: {{p.left}}px; top: {{p.top}}px; width: 200px; height: 200px; pointer-events: none; opacity: {{p.opacity}}; filter: {{p.filter}}; z-index: {{p.z}}">
+<svg width="200" height="200" viewBox="0 0 200 200" aria-hidden="true" style="position: absolute; left: 0; top: 0; overflow: visible">
+<path d="{{p.d}}" fill="{{p.fill}}" stroke="{{p.stroke}}" stroke-width="1.5" stroke-linejoin="round"></path>
+<path d="{{p.hole.d}}" fill="{{p.hole.fill}}" fill-opacity="0.18" stroke="{{p.hole.stroke}}" stroke-width="1.5" stroke-dasharray="3 3"></path>
+<path d="{{p.knob.d}}" fill="{{p.knob.fill}}" stroke="{{p.knob.stroke}}" stroke-width="{{p.knob.width}}" stroke-linejoin="round"></path>
+<path d="{{p.knob.d}}" fill="{{p.knob.pattern}}" stroke="none"></path>
+<path d="{{p.knob.inner}}" fill="none" stroke="#0D0F13" stroke-width="1.5" stroke-opacity="0.6"></path>
+<path d="{{p.d}}" fill="none" stroke="{{p.selStroke}}" stroke-width="2.5" stroke-linejoin="round"></path>
+</svg>
+<div style="position: absolute; left: 40px; top: {{p.nameTop}}px; width: 120px; display: flex; flex-direction: column; align-items: center; gap: 2px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600">{{p.name}}</span><span style="font-size: 11px; color: #A3AAB8">{{p.element}}</span></div>
+<sc-for list="{{p.labels}}" as="lb" hint-placeholder-count="2">
+<span style="position: absolute; left: {{lb.left}}px; top: {{lb.top}}px; width: {{lb.width}}px; text-align: {{lb.align}}; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: {{lb.colour}}">{{lb.text}}</span>
+</sc-for>
+<div onMouseDown="{{p.onDown}}" style="position: absolute; left: 40px; top: 40px; width: 120px; height: 120px; pointer-events: {{p.hit}}; cursor: grab"></div>
+</div>
+</sc-for>
+
+<sc-if value="{{sel.show}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; left: 80px; top: 842px; width: 960px; height: 44px; box-sizing: border-box; padding: 0 12px; background: #14171D; border: 1px solid #2A303C; border-radius: 10px; display: flex; align-items: center; gap: 10px; font-size: 12px">
+<span style="font-family: 'JetBrains Mono', monospace; font-weight: 600">{{sel.name}}</span>
+<span style="color: #A3AAB8; font-family: 'JetBrains Mono', monospace; font-size: 11px">{{sel.detail}}</span>
+<span style="flex: 1"></span>
+<sc-if value="{{sel.hasInput}}" hint-placeholder-val="{{ true }}"><button type="button" onClick="{{sel.flipInput}}" style="font-size: 12px; color: #E7E9EE; background: transparent; border: 1px solid #3A4150; border-radius: 6px; padding: 6px 10px; cursor: pointer">{{sel.inputLabel}}</button></sc-if>
+<sc-if value="{{sel.hasOutput}}" hint-placeholder-val="{{ true }}"><button type="button" onClick="{{sel.flipOutput}}" style="font-size: 12px; color: #E7E9EE; background: transparent; border: 1px solid #3A4150; border-radius: 6px; padding: 6px 10px; cursor: pointer">{{sel.outputLabel}}</button></sc-if>
+<sc-if value="{{sel.placed}}" hint-placeholder-val="{{ true }}"><button type="button" onClick="{{sel.unplace}}" style="font-size: 12px; color: #E7E9EE; background: transparent; border: 1px solid #3A4150; border-radius: 6px; padding: 6px 10px; cursor: pointer">Take off</button></sc-if>
+<button type="button" onClick="{{sel.remove}}" style="font-size: 12px; color: #FFB4A8; background: transparent; border: 1px solid #5A3A3A; border-radius: 6px; padding: 6px 10px; cursor: pointer">Delete action</button>
+</div>
+</sc-if>
+
+<sc-if value="{{editor.show}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; left: 0; top: 0; width: 1120px; height: 900px; background: rgba(13, 15, 19, 0.82); z-index: 60"></div>
+<div style="position: absolute; left: 120px; top: 80px; width: 880px; height: 700px; box-sizing: border-box; background: #14171D; border: 1px solid #3A4150; border-radius: 14px; padding: 22px 24px; display: flex; gap: 24px; z-index: 61; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6)">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 10px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700">{{editor.name}}</span><span style="font-size: 12px; color: #A3AAB8">edge shape</span></div>
+<div data-shape-editor="1" onMouseMove="{{editor.onMove}}" onMouseUp="{{editor.onUp}}" onMouseLeave="{{editor.onUp}}" style="position: relative; width: 420px; height: 400px; background: #0D0F13; border: 1px solid #2A303C; border-radius: 10px; box-sizing: border-box">
+<svg width="420" height="400" viewBox="0 0 420 400" aria-hidden="true" style="position: absolute; left: -1px; top: -1px">
+<path d="M 200 20 L 200 380" stroke="#2A303C" stroke-width="1" stroke-dasharray="4 4"></path>
+<path d="{{editor.body}}" fill="#1A1E26" stroke="#4A5263" stroke-width="2" stroke-linejoin="miter"></path>
+<path d="{{editor.knob}}" fill="{{editor.colour}}" stroke="#4A5263" stroke-width="2"></path>
+<path d="{{editor.knob}}" fill="{{editor.pattern}}" stroke="none"></path>
+<path d="{{editor.handleLines}}" fill="none" stroke="#9EC3FF" stroke-width="1.2"></path>
+</svg>
+<sc-for list="{{editor.handles}}" as="h" hint-placeholder-count="0">
+<div onMouseDown="{{h.onDown}}" aria-label="{{h.label}}" style="position: absolute; left: {{h.left}}px; top: {{h.top}}px; width: {{h.size}}px; height: {{h.size}}px; box-sizing: border-box; border-radius: {{h.radius}}; background: {{h.bg}}; border: 2px solid {{h.border}}; cursor: move"></div>
+</sc-for>
+</div>
+<span style="width: 420px; font-size: 12px; line-height: 18px; color: #A3AAB8">Drag the square points to move the outline; drag the round handles to bend the curves. The two end points stay on the edge and slide along it.</span>
+</div>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; justify-content: flex-end"><button type="button" onClick="{{editor.close}}" style="font-size: 12px; font-weight: 600; color: #0D0F13; background: #E7E9EE; border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer">Done</button></div>
+<div style="display: flex; flex-direction: column; gap: 8px"><span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #A3AAB8">STARTING SHAPES</span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px">
+<sc-for list="{{editor.presets}}" as="ps" hint-placeholder-count="8">
+<button type="button" onClick="{{ps.pick}}" aria-label="{{ps.label}}" style="height: 56px; background: {{ps.bg}}; border: 1px solid {{ps.border}}; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px"><svg width="40" height="30" viewBox="0 0 40 30" aria-hidden="true"><path d="{{ps.d}}" fill="{{editor.colour}}" stroke="#4A5263" stroke-width="1"></path></svg><span style="font-size: 9px; color: #A3AAB8">{{ps.label}}</span></button>
+</sc-for>
+</div></div>
+<div style="display: flex; flex-direction: column; gap: 8px"><span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #A3AAB8">COLOUR</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{editor.swatches}}" as="sw" hint-placeholder-count="10">
+<button type="button" onClick="{{sw.pick}}" aria-label="{{sw.label}}" style="width: 28px; height: 28px; border-radius: 6px; background: {{sw.colour}}; border: 2px solid {{sw.ring}}; cursor: pointer"></button>
+</sc-for>
+</div></div>
+<div style="display: flex; flex-direction: column; gap: 8px"><span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #A3AAB8">PATTERN · marks a brand</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{editor.patterns}}" as="pt" hint-placeholder-count="6">
+<button type="button" onClick="{{pt.pick}}" style="font-size: 11px; color: #E7E9EE; background: {{pt.bg}}; border: 1px solid {{pt.border}}; border-radius: 6px; padding: 5px 9px; cursor: pointer">{{pt.label}}</button>
+</sc-for>
+</div></div>
+<div style="display: flex; flex-direction: column; gap: 8px"><span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #A3AAB8">POINTS · {{editor.pointText}}</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<button type="button" onClick="{{editor.addPoint}}" style="font-size: 12px; color: #E7E9EE; background: transparent; border: 1px solid #3A4150; border-radius: 6px; padding: 7px 12px; cursor: pointer">Add point</button>
+<button type="button" onClick="{{editor.removePoint}}" style="font-size: 12px; color: #E7E9EE; background: transparent; border: 1px solid #3A4150; border-radius: 6px; padding: 7px 12px; cursor: pointer">Remove point</button>
+<label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #E7E9EE"><input type="checkbox" checked="{{editor.mirror}}" onChange="{{editor.toggleMirror}}" style="accent-color: #9B8CFF">Mirror handles</label>
+</div>
+<span style="font-size: 11px; color: #F5CF5B">{{editor.message}}</span>
+</div>
+<span style="font-size: 12px; line-height: 18px; color: #A3AAB8">{{editor.usage}}</span>
+<div style="display: flex; align-items: center; gap: 10px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #A3AAB8">{{editor.shaText}}</span>
+<sc-if value="{{editor.canRegenerate}}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{editor.regenerate}}" style="font-size: 12px; color: #E7E9EE; background: transparent; border: 1px solid #3A4150; border-radius: 6px; padding: 6px 10px; cursor: pointer">Regenerate from SHA</button></sc-if>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{code.show}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; left: 0; top: 0; width: 1120px; height: 900px; background: rgba(13, 15, 19, 0.82); z-index: 60"></div>
+<div style="position: absolute; left: 60px; top: 60px; width: 1000px; height: 780px; box-sizing: border-box; background: #14171D; border: 1px solid #3A4150; border-radius: 14px; padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; z-index: 61; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6)">
+<div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 18px; font-weight: 700">Types as TypeScript</span><span style="flex: 1"></span>
+<button type="button" onClick="{{code.revert}}" style="font-size: 12px; color: #E7E9EE; background: transparent; border: 1px solid #3A4150; border-radius: 6px; padding: 7px 12px; cursor: pointer">Revert</button>
+<button type="button" onClick="{{code.apply}}" style="font-size: 12px; font-weight: 600; color: #0D0F13; background: {{code.applyBg}}; border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer">Apply</button>
+<button type="button" onClick="{{code.toList}}" style="font-size: 12px; font-weight: 600; color: #0D0F13; background: #E7E9EE; border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer">Done</button></div>
+<div style="flex: 1; display: flex; gap: 20px; min-height: 0">
+<textarea aria-label="TypeScript types" spellcheck="false" value="{{code.text}}" onChange="{{code.onChange}}" style="width: 600px; height: 100%; box-sizing: border-box; padding: 14px; background: #0D0F13; border: 1px solid #2A303C; border-radius: 10px; color: #E7E9EE; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 20px; resize: none; user-select: text; tab-size: 2"></textarea>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 12px; overflow-y: auto">
+<span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #A3AAB8">IF YOU APPLY</span>
+<span style="font-size: 13px; color: {{code.summaryColour}}">{{code.summary}}</span>
+<sc-for list="{{code.errors}}" as="er" hint-placeholder-count="0"><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 16px; color: #FF8A80">{{er.text}}</span></sc-for>
+<span style="font-size: 12px; color: #F5CF5B">{{code.message}}</span>
+<div style="border-top: 1px solid #2A303C; padding-top: 12px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; line-height: 18px; color: #A3AAB8">
+<span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em">WHAT IT UNDERSTANDS</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #C9CED8; white-space: pre">interface Address {
+  street: string;
+  tags: string[];
+}
+type Point = { x: number; y: number };
+type Email = string;   // a brand of string</span>
+<span>Fields take a named type, <span style="font-family: 'JetBrains Mono', monospace">T[]</span> or <span style="font-family: 'JetBrains Mono', monospace">Array&lt;T&gt;</span>. <span style="font-family: 'JetBrains Mono', monospace">type X = Y</span> makes X a brand of Y. Removing a type that an action uses is refused.</span>
+<span>New or changed types get a shape and colour from the SHA-256 of their definition, unless you have customised the shape.</span>
+</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{showModel}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; left: 600px; top: 72px; width: 440px; height: 560px; box-sizing: border-box; background: #14171D; border: 1px solid #3A4150; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; z-index: 50; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5)">
+<span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #A3AAB8">MODEL</span>
+<div style="flex: 1; overflow: auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 16px; color: #C9CED8; white-space: pre; user-select: text">{{modelJson}}</div>
+</div>
+</sc-if>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+const CELL = 120;
+const PAD = 40;
+const COLS = 8;
+const ROWS = 6;
+const OX = 80;
+const OY = 110;
+const CANVAS_W = 1120;
+const SIDES = ['T', 'R', 'B', 'L'];
+const DIRS = { T: [0, -1], R: [1, 0], B: [0, 1], L: [-1, 0] };
+const OPP = { T: 'B', B: 'T', L: 'R', R: 'L' };
+const U0 = 34;
+const U1 = 86;
+const HMAX = 34;
+const SAMPLES = [38, 42, 46, 50, 54, 58, 62, 66, 70, 74, 78, 82];
+const STORE_KEY = 'puzzle-proto-v2';
+const BAD = '#FF6B6B';
+const SWATCHES = ['#5ED6B4', '#F5CF5B', '#FF8FC0', '#9B8CFF', '#7CC7FF', '#FF9F7A', '#C5F27A', '#66D9E8', '#F2A7C8', '#D9D27A', '#E8833A', '#B0B8C8'];
+const PATTERNS = [{ id: 'none', label: 'None' }, { id: 'diag', label: 'Diagonal /' }, { id: 'diag2', label: 'Diagonal \\' }, { id: 'vert', label: 'Vertical' }, { id: 'horiz', label: 'Horizontal' }, { id: 'dots', label: 'Dots' }];
+const ROLES = {
+  source: { fill: '#2B2015', stroke: '#FFA45C', label: 'source' },
+  transform: { fill: '#172234', stroke: '#6FA8FF', label: 'transform' },
+  sink: { fill: '#15281F', stroke: '#7CE3A1', label: 'sink' }
+};
+const UMIN = 4;
+const UMAX = 116;
+const VMAX = 38;
+function line(a, b) { return { c1: [a[0] + (b[0] - a[0]) / 3, a[1] + (b[1] - a[1]) / 3], c2: [a[0] + 2 * (b[0] - a[0]) / 3, a[1] + 2 * (b[1] - a[1]) / 3], p: b }; }
+function polyline(points) { return { start: points[0], segs: points.slice(1).map((p, i) => line(points[i], p)) }; }
+function centrePoint(shape, headIndex) { return splitSegment(shape, headIndex); }
+const PRESETS = {
+  jigsaw: centrePoint({ start: [51, 0], segs: [{ c1: [51, 9], c2: [38, 7], p: [38, 18] }, { c1: [38, 32], c2: [82, 32], p: [82, 18] }, { c1: [82, 7], c2: [69, 9], p: [69, 0] }] }, 1),
+  slim: centrePoint({ start: [54, 0], segs: [{ c1: [54, 10], c2: [44, 10], p: [44, 22] }, { c1: [44, 36], c2: [76, 36], p: [76, 22] }, { c1: [76, 10], c2: [66, 10], p: [66, 0] }] }, 1),
+  dome: { start: [38, 0], segs: [{ c1: [38, 16], c2: [46, 28], p: [60, 28] }, { c1: [74, 28], c2: [82, 16], p: [82, 0] }] },
+  triangle: polyline([[40, 0], [60, 30], [80, 0]]),
+  square: centrePoint(polyline([[42, 0], [42, 24], [78, 24], [78, 0]]), 1),
+  house: polyline([[42, 0], [42, 18], [60, 32], [78, 18], [78, 0]]),
+  double: { start: [38, 0], segs: [{ c1: [38, 24], c2: [58, 24], p: [60, 10] }, { c1: [62, 24], c2: [82, 24], p: [82, 0] }] },
+  arrow: polyline([[46, 0], [46, 14], [36, 14], [60, 32], [84, 14], [74, 14], [74, 0]]),
+  flat: polyline([[40, 0], [80, 0]])
+};
+const PRESET_ORDER = ['jigsaw', 'slim', 'dome', 'triangle', 'square', 'house', 'double', 'arrow'];
+const PRESET_LABELS = { jigsaw: 'Jigsaw', slim: 'Slim jigsaw', dome: 'Dome', triangle: 'Triangle', square: 'Square', house: 'House', double: 'Double', arrow: 'Arrow' };
+
+function bug(msg) { throw new Error('bug: ' + msg); }
+function round1(n) { return Math.round(n * 10) / 10; }
+function fmt(p) { return round1(p[0]) + ' ' + round1(p[1]); }
+function clampPt(p) { return [Math.max(UMIN, Math.min(UMAX, p[0])), Math.max(0, Math.min(VMAX, p[1]))]; }
+function copyPt(p) { return [p[0], p[1]]; }
+function presetShape(id) {
+  const pr = PRESETS[id];
+  if (pr === undefined) return bug('unknown preset ' + id);
+  return { preset: id, start: copyPt(pr.start), segs: pr.segs.map((s) => ({ c1: copyPt(s.c1), c2: copyPt(s.c2), p: copyPt(s.p) })) };
+}
+function profileToBezier(prof) {
+  const pts = [[U0, 0]].concat(SAMPLES.map((u, i) => [u, prof[i]])).concat([[U1, 0]]);
+  const segs = [];
+  for (let i = 0; i < pts.length - 1; i += 1) {
+    const p0 = i === 0 ? pts[i] : pts[i - 1];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
+    segs.push({ c1: clampPt([p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6]), c2: clampPt([p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6]), p: copyPt(p2) });
+  }
+  return { preset: 'custom', start: [U0, 0], segs };
+}
+function migrateShape(shape) {
+  if (Array.isArray(shape.segs) && Array.isArray(shape.start)) {
+    const pr = PRESETS[shape.preset];
+    if (pr !== undefined && pr.segs.length !== shape.segs.length) return { shape: presetShape(shape.preset), migrated: false };
+    return { shape, migrated: false };
+  }
+  if (shape.preset === 'jigsaw') return { shape: presetShape('jigsaw'), migrated: true };
+  if (Array.isArray(shape.profile)) return { shape: profileToBezier(shape.profile), migrated: true };
+  return bug('unrecognised saved shape');
+}
+function anchorOf(shape, k) { return k === 0 ? shape.start : shape.segs[k - 1].p; }
+function addPt(a, d) { return [a[0] + d[0], a[1] + d[1]]; }
+function movePoint(shape, target, pt, mirror) {
+  const n = shape.segs.length;
+  if (target.kind === 'anchor') {
+    const k = target.index;
+    if (k < 0 || k > n) return bug('anchor index ' + k);
+    const old = anchorOf(shape, k);
+    const raw = clampPt(pt);
+    const next = k === 0 || k === n ? [raw[0], 0] : raw;
+    const d = [next[0] - old[0], next[1] - old[1]];
+    return Object.assign({}, shape, {
+      preset: 'custom',
+      start: k === 0 ? next : shape.start,
+      segs: shape.segs.map((s, i) => ({ c1: i === k ? clampPt(addPt(s.c1, d)) : s.c1, c2: i === k - 1 ? clampPt(addPt(s.c2, d)) : s.c2, p: i === k - 1 ? next : s.p }))
+    });
+  }
+  const i = target.index;
+  if (i < 0 || i >= n) return bug('segment index ' + i);
+  const np = clampPt(pt);
+  if (target.kind === 'c1') {
+    const a = anchorOf(shape, i);
+    const mir = mirror && i >= 1 ? clampPt([2 * a[0] - np[0], 2 * a[1] - np[1]]) : null;
+    return Object.assign({}, shape, { preset: 'custom', segs: shape.segs.map((s, j) => (j === i ? Object.assign({}, s, { c1: np }) : (mir !== null && j === i - 1 ? Object.assign({}, s, { c2: mir }) : s))) });
+  }
+  if (target.kind === 'c2') {
+    const a = anchorOf(shape, i + 1);
+    const mir = mirror && i + 1 <= n - 1 ? clampPt([2 * a[0] - np[0], 2 * a[1] - np[1]]) : null;
+    return Object.assign({}, shape, { preset: 'custom', segs: shape.segs.map((s, j) => (j === i ? Object.assign({}, s, { c2: np }) : (mir !== null && j === i + 1 ? Object.assign({}, s, { c1: mir }) : s))) });
+  }
+  return bug('unknown handle kind ' + target.kind);
+}
+// ---------- SHA-256 (pure, synchronous) ----------
+const SHA_K = (() => {
+  const primes = [];
+  for (let c = 2; primes.length < 64; c += 1) { if (primes.every((p) => c % p !== 0)) primes.push(c); }
+  return primes.map((p) => (Math.pow(p, 1 / 3) % 1) * 4294967296 | 0);
+})();
+const SHA_H0 = (() => {
+  const primes = [2, 3, 5, 7, 11, 13, 17, 19];
+  return primes.map((p) => (Math.pow(p, 1 / 2) % 1) * 4294967296 | 0);
+})();
+function rotr(x, n) { return (x >>> n) | (x << (32 - n)); }
+function sha256(text) {
+  const bytes = Array.from(unescape(encodeURIComponent(text))).map((ch) => ch.charCodeAt(0));
+  const bitLen = bytes.length * 8;
+  bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  for (let i = 7; i >= 0; i -= 1) bytes.push(i >= 4 ? 0 : (bitLen >>> (i * 8)) & 0xff);
+  let H = SHA_H0.slice();
+  for (let off = 0; off < bytes.length; off += 64) {
+    const w = new Array(64);
+    for (let t = 0; t < 16; t += 1) w[t] = (bytes[off + 4 * t] << 24) | (bytes[off + 4 * t + 1] << 16) | (bytes[off + 4 * t + 2] << 8) | bytes[off + 4 * t + 3];
+    for (let t = 16; t < 64; t += 1) {
+      const s0 = rotr(w[t - 15], 7) ^ rotr(w[t - 15], 18) ^ (w[t - 15] >>> 3);
+      const s1 = rotr(w[t - 2], 17) ^ rotr(w[t - 2], 19) ^ (w[t - 2] >>> 10);
+      w[t] = (w[t - 16] + s0 + w[t - 7] + s1) | 0;
+    }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let t = 0; t < 64; t += 1) {
+      const t1 = (h + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + SHA_K[t] + w[t]) | 0;
+      const t2 = ((rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    H = [H[0] + a, H[1] + b, H[2] + c, H[3] + d, H[4] + e, H[5] + f, H[6] + g, H[7] + h].map((x) => x | 0);
+  }
+  return H.map((x) => (x >>> 0).toString(16).padStart(8, '0')).join('');
+}
+function shaByte(hex, i) { return parseInt(hex.substr((i % 32) * 2, 2), 16) / 255; }
+function shaShape(hex) {
+  const b = (i) => shaByte(hex, i);
+  const n = 6 + b(0) * 5;
+  const h = Math.min(26, n + 7 + b(1) * 9);
+  const y1 = 5 + b(2) * 6;
+  const y2 = 12 + b(3) * 8;
+  const top = Math.min(VMAX, y2 + 10 + b(4) * 8);
+  const o = (b(5) - 0.5) * 12;
+  const tilt = (b(6) - 0.5) * 10;
+  const sq = b(7) * 0.6;
+  const cx = 60 + o;
+  const shape = {
+    start: [cx - n, 0],
+    segs: [
+      { c1: [cx - n, y1], c2: [cx - h, y1 * 0.8], p: [cx - h, y2] },
+      { c1: clampPt([cx - h + h * sq, top + tilt]), c2: clampPt([cx + h - h * sq, top - tilt]), p: [cx + h, y2] },
+      { c1: [cx + h, y1 * 0.8], c2: [cx + n, y1], p: [cx + n, 0] }
+    ]
+  };
+  return Object.assign({}, centrePoint(shape, 1), { preset: 'sha' });
+}
+function shaColour(hex) { return 'hsl(' + Math.round(shaByte(hex, 8) * 360) + ', 62%, 68%)'; }
+function shaPattern(hex) { return PATTERNS[1 + Math.floor(shaByte(hex, 9) * 4.999)].id; }
+function canonicalDef(t, nameOf) {
+  if (t.kind === 'record') return 'record ' + t.name + ' {' + t.fields.map((f) => f.name + ':' + nameOf(f.typeId) + (f.array ? '[]' : '')).join(';') + '}';
+  if (t.kind === 'alias') return 'alias ' + t.name + ' = ' + nameOf(t.aliasFor);
+  return 'primitive ' + t.name;
+}
+function refreshSha(types) {
+  const byId = types.reduce((acc, t) => Object.assign({}, acc, { [t.id]: t }), {});
+  const nameOf = (id) => { const t = byId[id]; if (t === undefined) bug('unknown type id ' + id); return t.name; };
+  const withSha = types.map((t) => (t.builtIn ? t : Object.assign({}, t, { sha: sha256(canonicalDef(t, nameOf)) })));
+  const records = withSha.map((t) => (t.kind === 'record' && t.shapeSource === 'sha' ? Object.assign({}, t, { shape: shaShape(t.sha), colour: shaColour(t.sha) }) : t));
+  const resolve = (list, depth) => {
+    if (depth > list.length + 1) return bug('brands refer to each other in a loop');
+    const map = list.reduce((acc, t) => Object.assign({}, acc, { [t.id]: t }), {});
+    const next = list.map((t) => (t.kind === 'alias' && t.shapeSource === 'sha' ? Object.assign({}, t, { shape: map[t.aliasFor].shape, colour: map[t.aliasFor].colour, pattern: shaPattern(t.sha) }) : t));
+    const same = next.every((t, i) => t.shape === list[i].shape && t.colour === list[i].colour);
+    return same ? next : resolve(next, depth + 1);
+  };
+  return resolve(records, 0);
+}
+
+// ---------- TypeScript view ----------
+const BUILTIN_NAMES = ['string', 'number', 'boolean'];
+function modelToTs(types) {
+  const byId = types.reduce((acc, t) => Object.assign({}, acc, { [t.id]: t }), {});
+  const lines = ['// Built-in: string, number, boolean', ''];
+  types.filter((t) => !t.builtIn).forEach((t) => {
+    if (t.kind === 'alias') { lines.push('type ' + t.name + ' = ' + byId[t.aliasFor].name + '; // brand'); lines.push(''); return; }
+    if (t.kind === 'record') {
+      lines.push('interface ' + t.name + ' {');
+      t.fields.forEach((f) => lines.push('  ' + f.name + ': ' + byId[f.typeId].name + (f.array ? '[]' : '') + ';'));
+      lines.push('}');
+      lines.push('');
+      return;
+    }
+    bug('cannot print kind ' + t.kind);
+  });
+  return lines.join('\n');
+}
+function blankComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
+}
+function lineAt(text, index) { return text.slice(0, index).split('\n').length; }
+function parseTypeExpr(expr) {
+  const e = expr.trim();
+  const arr1 = /^([A-Za-z_]\w*)\s*\[\s*\]$/.exec(e);
+  if (arr1) return { name: arr1[1], array: true };
+  const arr2 = /^Array\s*<\s*([A-Za-z_]\w*)\s*>$/.exec(e);
+  if (arr2) return { name: arr2[1], array: true };
+  const one = /^([A-Za-z_]\w*)$/.exec(e);
+  if (one) return { name: one[1], array: false };
+  return null;
+}
+function parseTs(source) {
+  const text = blankComments(source);
+  const re = /(?:export\s+)?interface\s+([A-Za-z_]\w*)\s*\{([^{}]*)\}|(?:export\s+)?type\s+([A-Za-z_]\w*)\s*=\s*\{([^{}]*)\}\s*;?|(?:export\s+)?type\s+([A-Za-z_]\w*)\s*=\s*([^;{}\n]+?)\s*;?(?=\s*\n|\s*$)/g;
+  const decls = [];
+  const errors = [];
+  let last = 0;
+  let m = re.exec(text);
+  while (m !== null) {
+    const gap = text.slice(last, m.index);
+    if (gap.trim() !== '') errors.push('Line ' + lineAt(text, last + gap.search(/\S/)) + ': could not read "' + gap.trim().split('\n')[0].slice(0, 40) + '"');
+    const line = lineAt(text, m.index);
+    const name = m[1] || m[3] || m[5];
+    const body = m[2] !== undefined ? m[2] : m[4];
+    if (body !== undefined) {
+      const bodyStart = m.index + m[0].indexOf('{') + 1;
+      const fields = [];
+      let cursor = 0;
+      body.split(/[;,\n]/).forEach((raw) => {
+        const at = body.indexOf(raw, cursor);
+        cursor = at + raw.length;
+        const part = raw.trim();
+        if (part === '') return;
+        const fl = lineAt(text, bodyStart + at);
+        const fm = /^([A-Za-z_]\w*)(\??)\s*:\s*(.+)$/.exec(part);
+        if (fm === null) { errors.push('Line ' + fl + ': expected "name: Type", got "' + part + '"'); return; }
+        const te = parseTypeExpr(fm[3]);
+        if (te === null) { errors.push('Line ' + fl + ': ' + fm[1] + ' — only a named type or T[] is supported, got "' + fm[3].trim() + '"'); return; }
+        fields.push({ name: fm[1], typeName: te.name, array: te.array, line: fl });
+      });
+      if (fields.length === 0) errors.push('Line ' + line + ': ' + name + ' has no fields');
+      decls.push({ name, kind: 'record', fields, line });
+    } else {
+      const te = parseTypeExpr(m[6]);
+      if (te === null) errors.push('Line ' + line + ': ' + name + ' — a brand must point at one named type, got "' + m[6].trim() + '"');
+      else if (te.array) errors.push('Line ' + line + ': ' + name + ' — a brand of an array is not supported yet; use a record field instead');
+      else decls.push({ name, kind: 'alias', aliasName: te.name, line });
+    }
+    last = re.lastIndex;
+    m = re.exec(text);
+  }
+  const tail = text.slice(last);
+  if (tail.trim() !== '') errors.push('Line ' + lineAt(text, last + tail.search(/\S/)) + ': could not read "' + tail.trim().split('\n')[0].slice(0, 40) + '"');
+  const seen = {};
+  decls.forEach((d) => {
+    if (BUILTIN_NAMES.includes(d.name)) errors.push('Line ' + d.line + ': ' + d.name + ' is built in and cannot be redefined');
+    if (seen[d.name] !== undefined) errors.push('Line ' + d.line + ': ' + d.name + ' is already defined on line ' + seen[d.name]);
+    seen[d.name] = d.line;
+  });
+  const known = BUILTIN_NAMES.concat(decls.map((d) => d.name));
+  decls.forEach((d) => {
+    if (d.kind === 'alias' && !known.includes(d.aliasName)) errors.push('Line ' + d.line + ': unknown type ' + d.aliasName);
+    if (d.kind === 'record') d.fields.forEach((f) => { if (!known.includes(f.typeName)) errors.push('Line ' + f.line + ': unknown type ' + f.typeName); });
+  });
+  return { decls, errors };
+}
+function planTs(model, source) {
+  const parsed = parseTs(source);
+  if (parsed.errors.length > 0) return { ok: false, errors: parsed.errors, summary: '' };
+  const existing = model.types.filter((t) => !t.builtIn);
+  const byName = existing.reduce((acc, t) => Object.assign({}, acc, { [t.name]: t }), {});
+  let nextId = model.nextId;
+  const idOf = model.types.filter((t) => t.builtIn).reduce((acc, t) => Object.assign({}, acc, { [t.name]: t.id }), {});
+  parsed.decls.forEach((d) => { idOf[d.name] = byName[d.name] !== undefined ? byName[d.name].id : 't' + (nextId++); });
+  const built = parsed.decls.map((d) => {
+    const prev = byName[d.name];
+    const base = prev !== undefined ? prev : { id: idOf[d.name], name: d.name, builtIn: false, shapeSource: 'sha', shape: presetShape('dome'), colour: '#B0B8C8', pattern: 'none' };
+    const core = Object.assign({}, base, { kind: d.kind });
+    delete core.fields;
+    delete core.aliasFor;
+    return d.kind === 'record'
+      ? Object.assign(core, { fields: d.fields.map((f) => ({ name: f.name, typeId: idOf[f.typeName], array: f.array })) })
+      : Object.assign(core, { aliasFor: idOf[d.aliasName] });
+  });
+  const removed = existing.filter((t) => !parsed.decls.some((d) => d.name === t.name));
+  const errors = removed.reduce((acc, t) => {
+    const used = model.actions.filter((a) => (a.input !== null && a.input.typeId === t.id) || (a.output !== null && a.output.typeId === t.id)).map((a) => a.name);
+    return used.length === 0 ? acc : acc.concat(['Cannot remove ' + t.name + ': used by action ' + used.join(', ')]);
+  }, []);
+  if (errors.length > 0) return { ok: false, errors, summary: '' };
+  const types = refreshSha(model.types.filter((t) => t.builtIn).concat(built));
+  const oldDefs = (() => { const map = model.types.reduce((acc, t) => Object.assign({}, acc, { [t.id]: t.name }), {}); return existing.reduce((acc, t) => Object.assign({}, acc, { [t.name]: canonicalDef(t, (id) => map[id]) }), {}); })();
+  const newMap = types.reduce((acc, t) => Object.assign({}, acc, { [t.id]: t.name }), {});
+  const added = built.filter((t) => byName[t.name] === undefined).map((t) => t.name);
+  const changed = types.filter((t) => !t.builtIn && byName[t.name] !== undefined && oldDefs[t.name] !== canonicalDef(t, (id) => newMap[id])).map((t) => t.name);
+  const parts = [];
+  if (added.length > 0) parts.push('adds ' + added.join(', '));
+  if (changed.length > 0) parts.push('changes ' + changed.join(', '));
+  if (removed.length > 0) parts.push('removes ' + removed.map((t) => t.name).join(', '));
+  return { ok: true, errors: [], summary: parts.length === 0 ? 'No changes' : parts.join(' · '), model: Object.assign({}, model, { types, nextId }) };
+}
+function mid(a, b) { return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; }
+function splitSegment(shape, si) {
+  const s = shape.segs[si];
+  if (s === undefined) return bug('no segment ' + si);
+  const p0 = anchorOf(shape, si);
+  const a = mid(p0, s.c1); const b = mid(s.c1, s.c2); const c = mid(s.c2, s.p);
+  const d = mid(a, b); const e = mid(b, c); const f = mid(d, e);
+  const segs = shape.segs.slice(0, si).concat([{ c1: a, c2: d, p: f }, { c1: e, c2: c, p: s.p }]).concat(shape.segs.slice(si + 1));
+  return Object.assign({}, shape, { preset: 'custom', segs });
+}
+function removeAnchor(shape, k) {
+  const n = shape.segs.length;
+  if (k < 1 || k > n - 1) return bug('cannot remove anchor ' + k);
+  const merged = { c1: shape.segs[k - 1].c1, c2: shape.segs[k].c2, p: shape.segs[k].p };
+  return Object.assign({}, shape, { preset: 'custom', segs: shape.segs.slice(0, k - 1).concat([merged]).concat(shape.segs.slice(k + 1)) });
+}
+function makeEdge(p0, t, n, scale) { return { p0, t, n, scale }; }
+function edgeAt(e, sign, u, v) { return [e.p0[0] + (e.t[0] * u + e.n[0] * v * sign) * e.scale, e.p0[1] + (e.t[1] * u + e.n[1] * v * sign) * e.scale]; }
+function signOf(kind) {
+  if (kind === 'knob') return 1;
+  if (kind === 'hole') return -1;
+  return bug('signOf on ' + kind);
+}
+function shapeSegments(e, sign, shape, vScale) {
+  if (!Array.isArray(shape.segs) || shape.segs.length === 0) return bug('shape has no segments');
+  const at = (q) => fmt(edgeAt(e, sign, q[0], q[1] * vScale));
+  const body = shape.segs.map((s) => 'C ' + at(s.c1) + ' ' + at(s.c2) + ' ' + at(s.p)).join(' ');
+  return { start: edgeAt(e, sign, shape.start[0], shape.start[1] * vScale), body };
+}
+function knobClosed(e, kind, shape, vScale) {
+  const s = shapeSegments(e, signOf(kind), shape, vScale);
+  return 'M ' + fmt(s.start) + ' ' + s.body + ' Z';
+}
+const TILE_EDGES = {
+  T: makeEdge([PAD, PAD], [1, 0], [0, -1], 1),
+  R: makeEdge([PAD + CELL, PAD], [0, 1], [1, 0], 1),
+  B: makeEdge([PAD + CELL, PAD + CELL], [-1, 0], [0, 1], 1),
+  L: makeEdge([PAD, PAD + CELL], [0, -1], [-1, 0], 1)
+};
+function edgeEnd(e) { return [e.p0[0] + e.t[0] * CELL * e.scale, e.p0[1] + e.t[1] * CELL * e.scale]; }
+function tilePath(sides, shapes) {
+  const parts = SIDES.map((side) => {
+    const e = TILE_EDGES[side];
+    if (sides[side] === 'flat') return 'L ' + fmt(edgeEnd(e));
+    const s = shapeSegments(e, signOf(sides[side]), shapes[side], 1);
+    return 'L ' + fmt(s.start) + ' ' + s.body + ' L ' + fmt(edgeEnd(e));
+  });
+  return 'M ' + fmt(TILE_EDGES.T.p0) + ' ' + parts.join(' ') + ' Z';
+}
+function iconFor(shape) {
+  const e = makeEdge([18, 1], [0, 1], [1, 0], 0.2);
+  const s = shapeSegments(e, 1, shape, 1);
+  return { body: 'M 3 1 L 18 1 L ' + fmt(s.start) + ' ' + s.body + ' L 18 25 L 3 25 Z', knob: 'M ' + fmt(s.start) + ' ' + s.body + ' Z' };
+}
+function presetIcon(shape) {
+  const e = makeEdge([2, 26], [1, 0], [0, -1], 0.3);
+  const s = shapeSegments(e, 1, shape, 1);
+  return 'M 2 26 L ' + fmt(s.start) + ' ' + s.body + ' L 38 26 L 38 29 L 2 29 Z';
+}
+
+function builtinTypes() {
+  return [
+    { id: 'string', name: 'string', kind: 'primitive', builtIn: true, shape: presetShape('jigsaw'), colour: '#5ED6B4', pattern: 'none' },
+    { id: 'number', name: 'number', kind: 'primitive', builtIn: true, shape: presetShape('triangle'), colour: '#F5CF5B', pattern: 'none' },
+    { id: 'boolean', name: 'boolean', kind: 'primitive', builtIn: true, shape: presetShape('dome'), colour: '#FF8FC0', pattern: 'none' }
+  ];
+}
+function emptyModel() { return { types: builtinTypes(), elements: [], actions: [], placements: {}, nextId: 1 }; }
+function validateModel(m) {
+  if (m === null || typeof m !== 'object') bug('model is not an object');
+  ['types', 'elements', 'actions'].forEach((k) => { if (!Array.isArray(m[k])) bug('model.' + k + ' is not an array'); });
+  if (m.placements === null || typeof m.placements !== 'object') bug('model.placements is not an object');
+  if (typeof m.nextId !== 'number') bug('model.nextId is not a number');
+  const results = m.types.map((t) => migrateShape(t.shape));
+  const migrated = results.filter((r) => r.migrated).length;
+  const types = m.types.map((t, i) => Object.assign({}, t, { shape: results[i].shape, shapeSource: t.shapeSource === undefined ? 'custom' : t.shapeSource }));
+  return { model: Object.assign({}, m, { types: refreshSha(types) }), migrated };
+}
+function loadModel() {
+  try {
+    const raw = window.localStorage.getItem(STORE_KEY);
+    if (raw === null) return { model: emptyModel(), storage: { ok: true, text: 'Saved in this browser' }, notice: '' };
+    const v = validateModel(JSON.parse(raw));
+    return { model: v.model, storage: { ok: true, text: 'Saved in this browser' }, notice: v.migrated > 0 ? 'Converted ' + v.migrated + ' brush-drawn shape(s) to editable curves.' : '' };
+  } catch (err) {
+    return { model: emptyModel(), storage: { ok: false, text: 'Not saving: ' + err.message }, notice: 'Your work will not be kept after a reload.' };
+  }
+}
+function typeLabel(ref, typeById) {
+  if (ref === null) return '—';
+  const t = typeById[ref.typeId];
+  if (t === undefined) return bug('missing type ' + ref.typeId);
+  return t.name + (ref.array ? '[]' : '');
+}
+function refEq(a, b) { return a.typeId === b.typeId && a.array === b.array; }
+function roleOf(action) {
+  if (action.input !== null && action.output !== null) return 'transform';
+  if (action.input !== null) return 'sink';
+  if (action.output !== null) return 'source';
+  return bug('action ' + action.name + ' has neither input nor output');
+}
+function shapeOfAction(a) {
+  const sides = { T: 'flat', R: 'flat', B: 'flat', L: 'flat' };
+  const refs = {};
+  if (a.input !== null) {
+    if (a.inputSide !== 'L' && a.inputSide !== 'T') bug('inputSide ' + a.inputSide);
+    sides[a.inputSide] = 'hole';
+    refs[a.inputSide] = a.input;
+  }
+  if (a.output !== null) {
+    if (a.outputSide !== 'R' && a.outputSide !== 'B') bug('outputSide ' + a.outputSide);
+    sides[a.outputSide] = 'knob';
+    refs[a.outputSide] = a.output;
+  }
+  return { sides, refs };
+}
+function key(c, r) { return c + ',' + r; }
+function occupancy(placements) { return Object.keys(placements).reduce((acc, id) => Object.assign({}, acc, { [key(placements[id].c, placements[id].r)]: id }), {}); }
+function omit(obj, k) { return Object.keys(obj).filter((x) => x !== k).reduce((acc, x) => Object.assign({}, acc, { [x]: obj[x] }), {}); }
+function inGrid(c, r) { return c >= 0 && c < COLS && r >= 0 && r < ROWS; }
+function joinStatus(mine, theirs, side) {
+  const kind = mine.sides[side];
+  if (kind === 'flat') return bug('joinStatus on flat side');
+  if (theirs === null) return 'free';
+  const o = OPP[side];
+  const want = kind === 'knob' ? 'hole' : 'knob';
+  if (theirs.sides[o] !== want) return 'blocked';
+  return refEq(mine.refs[side], theirs.refs[o]) ? 'ok' : 'mismatch';
+}
+function statusesAt(shape, cell, occ, shapes) {
+  return SIDES.filter((s) => shape.sides[s] !== 'flat').reduce((acc, s) => {
+    const nid = occ[key(cell.c + DIRS[s][0], cell.r + DIRS[s][1])];
+    return Object.assign({}, acc, { [s]: joinStatus(shape, nid === undefined ? null : shapes[nid], s) });
+  }, {});
+}
+function labelFor(side, text, colour) {
+  if (side === 'R') return { left: PAD + 56, top: PAD + 94, width: 56, align: 'right', text, colour };
+  if (side === 'B') return { left: PAD + 20, top: PAD + 106, width: 80, align: 'center', text, colour };
+  if (side === 'L') return { left: PAD + 8, top: PAD + 94, width: 56, align: 'left', text, colour };
+  if (side === 'T') return { left: PAD + 20, top: PAD + 36, width: 80, align: 'center', text, colour };
+  return bug('side ' + side);
+}
+function usesOf(model, typeId) {
+  const inActions = model.actions.filter((a) => (a.input !== null && a.input.typeId === typeId) || (a.output !== null && a.output.typeId === typeId)).map((a) => 'action ' + a.name);
+  const inFields = model.types.filter((t) => t.kind === 'record' && t.fields.some((f) => f.typeId === typeId)).map((t) => 'field of ' + t.name);
+  const brands = model.types.filter((t) => t.kind === 'alias' && t.aliasFor === typeId).map((t) => 'brand ' + t.name);
+  return inActions.concat(inFields, brands);
+}
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const loaded = loadModel();
+    this.state = {
+      model: loaded.model,
+      storage: loaded.storage,
+      tab: 'elements',
+      selectedAction: null,
+      selectedType: null,
+      editorOpen: false,
+      drag: null,
+      notice: loaded.notice,
+      panelErrors: [],
+      elementDraft: null,
+      typeDraft: null,
+      brandDraft: null,
+      actionForm: null,
+      fieldPicker: null,
+      handleDrag: null,
+      selectedAnchor: null,
+      mirror: true,
+      editorMessage: '',
+      codeOpen: false,
+      codeText: '',
+      codeMessage: '',
+      showModel: false
+    };
+    this.ctx = null;
+    this.shapeCtx = null;
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    if (prevState.model === this.state.model) return;
+    try {
+      window.localStorage.setItem(STORE_KEY, JSON.stringify(this.state.model));
+      if (!this.state.storage.ok) this.setState({ storage: { ok: true, text: 'Saved in this browser' } });
+    } catch (err) {
+      if (this.state.storage.ok) this.setState({ storage: { ok: false, text: 'Not saving: ' + err.message } });
+    }
+  }
+
+  setModel(fn) { this.setState((s) => ({ model: fn(s.model) })); }
+  newId(prefix) { const n = this.state.model.nextId; this.setModel((m) => Object.assign({}, m, { nextId: m.nextId + 1 })); return prefix + n; }
+  typeById() { return this.state.model.types.reduce((acc, t) => Object.assign({}, acc, { [t.id]: t }), {}); }
+
+  // ---------- board dragging ----------
+  toLocal(e) {
+    if (this.ctx === null) return bug('no drag context');
+    return { x: (e.clientX - this.ctx.rect.left) / this.ctx.scale, y: (e.clientY - this.ctx.rect.top) / this.ctx.scale };
+  }
+  startDrag(id, fromPanel, e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const canvas = e.currentTarget.ownerDocument.querySelector('[data-canvas="puzzle"]');
+    if (canvas === null) bug('canvas missing');
+    const rect = canvas.getBoundingClientRect();
+    this.ctx = { rect, scale: rect.width / CANVAS_W, sx: e.clientX, sy: e.clientY };
+    const p = this.toLocal(e);
+    const pl = this.state.model.placements[id];
+    const grab = pl !== undefined && !fromPanel ? { gx: p.x - (OX + pl.c * CELL), gy: p.y - (OY + pl.r * CELL) } : { gx: CELL / 2, gy: CELL / 2 };
+    this.setState({ drag: { id, x: p.x, y: p.y, gx: grab.gx, gy: grab.gy, moved: false }, selectedAction: id, notice: '' });
+  }
+  dropCell(d) {
+    const c = Math.floor((d.x - d.gx + CELL / 2 - OX) / CELL);
+    const r = Math.floor((d.y - d.gy + CELL / 2 - OY) / CELL);
+    return inGrid(c, r) ? { c, r } : null;
+  }
+  moveImpl(e) {
+    const d = this.state.drag;
+    if (d === null) return;
+    if (!d.moved && Math.hypot(e.clientX - this.ctx.sx, e.clientY - this.ctx.sy) < 4) return;
+    const p = this.toLocal(e);
+    this.setState((s) => ({ drag: Object.assign({}, s.drag, { x: p.x, y: p.y, moved: true }) }));
+  }
+  upImpl() {
+    const d = this.state.drag;
+    if (d === null) return;
+    this.ctx = null;
+    if (!d.moved) { this.setState({ drag: null }); return; }
+    const placed = this.state.model.placements[d.id] !== undefined;
+    if (d.x < 0) {
+      this.setState({ drag: null, notice: placed ? 'Taken off the board.' : '' });
+      this.setModel((m) => Object.assign({}, m, { placements: omit(m.placements, d.id) }));
+      return;
+    }
+    const cell = this.dropCell(d);
+    if (cell === null) { this.setState({ drag: null, notice: 'Dropped outside the grid, so nothing moved.' }); return; }
+    const occ = occupancy(omit(this.state.model.placements, d.id));
+    if (occ[key(cell.c, cell.r)] !== undefined) { this.setState({ drag: null, notice: 'That square is taken.' }); return; }
+    this.setState({ drag: null, notice: '' });
+    this.setModel((m) => Object.assign({}, m, { placements: Object.assign({}, m.placements, { [d.id]: cell }) }));
+  }
+
+  // ---------- elements & actions ----------
+  saveElement() {
+    const name = (this.state.elementDraft === null ? '' : this.state.elementDraft).trim();
+    if (name === '') { this.setState({ panelErrors: ['Give the element a name.'] }); return; }
+    if (this.state.model.elements.some((el) => el.name === name)) { this.setState({ panelErrors: ['There is already an element called ' + name + '.'] }); return; }
+    const id = 'e' + this.state.model.nextId;
+    this.setModel((m) => Object.assign({}, m, { nextId: m.nextId + 1, elements: m.elements.concat([{ id, name }]) }));
+    this.setState({ elementDraft: null, panelErrors: [], actionForm: this.blankActionForm(id) });
+  }
+  removeElement(id) {
+    const acts = this.state.model.actions.filter((a) => a.elementId === id);
+    if (acts.length > 0) { this.setState({ panelErrors: ['Delete its ' + acts.length + ' action(s) first.'] }); return; }
+    this.setModel((m) => Object.assign({}, m, { elements: m.elements.filter((el) => el.id !== id) }));
+    this.setState({ panelErrors: [] });
+  }
+  blankActionForm(elementId) { return { elementId, name: '', input: null, output: null, inArray: false, outArray: false, inQuery: '', outQuery: '', errors: [] }; }
+  patchActionForm(patch) { this.setState((s) => ({ actionForm: Object.assign({}, s.actionForm, patch, { errors: [] }) })); }
+  saveAction() {
+    const f = this.state.actionForm;
+    if (f === null) return bug('saveAction with no form');
+    const errors = [];
+    const name = f.name.trim();
+    if (name === '') errors.push('Give the action a name.');
+    if (f.input === null && f.output === null) errors.push('Pick an input, an output, or both.');
+    if (this.state.model.actions.some((a) => a.elementId === f.elementId && a.name === name)) errors.push('This element already has ' + name + '.');
+    if (errors.length > 0) { this.setState({ actionForm: Object.assign({}, f, { errors }) }); return; }
+    const id = 'a' + this.state.model.nextId;
+    const action = {
+      id,
+      elementId: f.elementId,
+      name,
+      input: f.input === null ? null : { typeId: f.input, array: f.inArray },
+      output: f.output === null ? null : { typeId: f.output, array: f.outArray },
+      inputSide: 'L',
+      outputSide: 'R'
+    };
+    roleOf(action);
+    this.setModel((m) => Object.assign({}, m, { nextId: m.nextId + 1, actions: m.actions.concat([action]) }));
+    this.setState({ actionForm: null, selectedAction: id, notice: 'Added ' + name + '. Drag it onto the board.' });
+  }
+  removeAction(id) {
+    this.setModel((m) => Object.assign({}, m, { actions: m.actions.filter((a) => a.id !== id), placements: omit(m.placements, id) }));
+    this.setState({ selectedAction: null });
+  }
+  patchAction(id, fn) { this.setModel((m) => Object.assign({}, m, { actions: m.actions.map((a) => (a.id === id ? fn(a) : a)) })); }
+
+  // ---------- types ----------
+  saveRecordType() {
+    const name = (this.state.typeDraft === null ? '' : this.state.typeDraft).trim();
+    if (name === '') { this.setState({ panelErrors: ['Give the type a name.'] }); return; }
+    if (this.state.model.types.some((t) => t.name === name)) { this.setState({ panelErrors: [name + ' already exists.'] }); return; }
+    const id = 't' + this.state.model.nextId;
+    const colour = SWATCHES[(this.state.model.types.length + 3) % SWATCHES.length];
+    const type = { id, name, kind: 'record', builtIn: false, fields: [{ name: 'field1', typeId: 'string', array: false }], shape: presetShape('house'), colour, pattern: 'none', shapeSource: 'sha' };
+    this.setModel((m) => Object.assign({}, m, { nextId: m.nextId + 1, types: refreshSha(m.types.concat([type])) }));
+    this.setState({ typeDraft: null, panelErrors: [], selectedType: id, editorOpen: true });
+  }
+  patchType(id, fn) { this.setModel((m) => Object.assign({}, m, { types: refreshSha(m.types.map((t) => (t.id === id ? fn(t) : t))) })); }
+  patchLook(id, fn) { this.patchType(id, (t) => Object.assign({}, fn(t), { shapeSource: 'custom' })); }
+  regenerate(id) { this.patchType(id, (t) => Object.assign({}, t, { shapeSource: 'sha' })); this.setState({ selectedAnchor: null }); }
+  openCode() { this.setState({ codeOpen: true, codeText: modelToTs(this.state.model.types), codeMessage: '' }); }
+  applyCode() {
+    const plan = planTs(this.state.model, this.state.codeText);
+    if (!plan.ok) { this.setState({ codeMessage: 'Not applied: fix the problems listed.' }); return; }
+    this.setState({ model: plan.model, codeText: modelToTs(plan.model.types), codeMessage: 'Applied: ' + plan.summary + '.' });
+  }
+  patchField(typeId, index, patch) {
+    this.patchType(typeId, (t) => {
+      if (t.kind !== 'record') return bug('patchField on non-record ' + t.name);
+      return Object.assign({}, t, { fields: t.fields.map((f, i) => (i === index ? Object.assign({}, f, patch) : f)) });
+    });
+  }
+  saveBrand() {
+    const d = this.state.brandDraft;
+    if (d === null) return bug('saveBrand with no draft');
+    const name = d.value.trim();
+    if (name === '') { this.setState({ panelErrors: ['Give the brand a name.'] }); return; }
+    if (this.state.model.types.some((t) => t.name === name)) { this.setState({ panelErrors: [name + ' already exists.'] }); return; }
+    const src = this.typeById()[d.sourceId];
+    if (src === undefined) return bug('brand source missing');
+    const id = 't' + this.state.model.nextId;
+    const type = { id, name, kind: 'alias', builtIn: false, aliasFor: src.id, shape: src.shape, colour: src.colour, pattern: 'diag', shapeSource: 'sha' };
+    this.setModel((m) => Object.assign({}, m, { nextId: m.nextId + 1, types: refreshSha(m.types.concat([type])) }));
+    this.setState({ brandDraft: null, panelErrors: [], selectedType: id, editorOpen: true });
+  }
+  removeType(id) {
+    const uses = usesOf(this.state.model, id);
+    if (uses.length > 0) { this.setState({ panelErrors: ['Still used by: ' + uses.join(', ') + '.'] }); return; }
+    this.setModel((m) => Object.assign({}, m, { types: m.types.filter((t) => t.id !== id) }));
+    this.setState({ selectedType: null, editorOpen: false, panelErrors: [] });
+  }
+
+  // ---------- shape push editor ----------
+  editorPoint(e) {
+    if (this.shapeCtx === null) return bug('no shape editor context');
+    const x = (e.clientX - this.shapeCtx.rect.left) / this.shapeCtx.scale;
+    const y = (e.clientY - this.shapeCtx.rect.top) / this.shapeCtx.scale;
+    return { u: (y - 20) / 3, v: (x - 200) / 3 };
+  }
+  ensureContext(e) {
+    const el = e.currentTarget.ownerDocument.querySelector('[data-shape-editor="1"]');
+    if (el === null) bug('shape editor missing');
+    const rect = el.getBoundingClientRect();
+    this.shapeCtx = { rect, scale: rect.width / 420 };
+  }
+  handleDown(target, e) {
+    e.preventDefault();
+    e.stopPropagation();
+    this.ensureContext(e);
+    this.setState({ handleDrag: target, selectedAnchor: target.kind === 'anchor' ? target.index : this.state.selectedAnchor, editorMessage: '' });
+  }
+  editorMove(e) {
+    const target = this.state.handleDrag;
+    if (target === null) return;
+    const p = this.editorPoint(e);
+    const mirror = this.state.mirror;
+    this.patchLook(this.state.selectedType, (t) => Object.assign({}, t, { shape: movePoint(t.shape, target, [p.u, p.v], mirror) }));
+  }
+  editorUp() { if (this.state.handleDrag !== null) this.setState({ handleDrag: null }); }
+  addPoint() {
+    const t = this.typeById()[this.state.selectedType];
+    if (t === undefined) return bug('addPoint with no type');
+    const n = t.shape.segs.length;
+    const sel = this.state.selectedAnchor;
+    const si = sel === null ? Math.floor(n / 2) : Math.min(sel, n - 1);
+    this.patchLook(t.id, (x) => Object.assign({}, x, { shape: splitSegment(x.shape, si) }));
+    this.setState({ selectedAnchor: si + 1, editorMessage: '' });
+  }
+  removePoint() {
+    const t = this.typeById()[this.state.selectedType];
+    if (t === undefined) return bug('removePoint with no type');
+    const k = this.state.selectedAnchor;
+    const n = t.shape.segs.length;
+    if (k === null || k < 1 || k > n - 1) { this.setState({ editorMessage: 'Select a middle point first. The two end points sit on the edge and stay.' }); return; }
+    this.patchLook(t.id, (x) => Object.assign({}, x, { shape: removeAnchor(x.shape, k) }));
+    this.setState({ selectedAnchor: null, editorMessage: '' });
+  }
+
+  // ---------- views ----------
+  tileView(action, shape, statuses, left, top, opts, typeById, elementName) {
+    const role = ROLES[roleOf(action)];
+    const visual = (ref) => { const t = typeById[ref.typeId]; if (t === undefined) bug('missing type ' + ref.typeId); return t; };
+    const empty = { d: '', fill: 'none', stroke: 'none', width: 0, pattern: 'none', inner: '' };
+    const shapesBySide = SIDES.reduce((acc, s) => (shape.sides[s] === 'flat' ? acc : Object.assign({}, acc, { [s]: visual(shape.refs[s]).shape })), {});
+    const knobSide = SIDES.find((s) => shape.sides[s] === 'knob');
+    const holeSide = SIDES.find((s) => shape.sides[s] === 'hole');
+    const isBad = (st) => st === 'mismatch' || st === 'blocked';
+    const knob = knobSide === undefined ? empty : (() => {
+      const t = visual(shape.refs[knobSide]);
+      const bad = isBad(statuses[knobSide]);
+      return {
+        d: knobClosed(TILE_EDGES[knobSide], 'knob', t.shape, 1),
+        fill: t.colour,
+        stroke: bad ? BAD : role.stroke,
+        width: bad ? 2.5 : 1.5,
+        pattern: t.pattern === 'none' ? 'none' : 'url(#pat-' + t.pattern + ')',
+        inner: shape.refs[knobSide].array ? knobClosed(TILE_EDGES[knobSide], 'knob', t.shape, 0.55) : ''
+      };
+    })();
+    const hole = holeSide === undefined || statuses[holeSide] === 'ok' ? empty : (() => {
+      const t = visual(shape.refs[holeSide]);
+      const bad = isBad(statuses[holeSide]);
+      return { d: knobClosed(TILE_EDGES[holeSide], 'hole', t.shape, 1), fill: t.colour, stroke: bad ? BAD : t.colour, width: 1.5, pattern: 'none', inner: '' };
+    })();
+    const labels = SIDES.filter((s) => shape.sides[s] !== 'flat').map((s) => {
+      const bad = isBad(statuses[s]);
+      return labelFor(s, typeLabel(shape.refs[s], typeById) + (bad ? ' ✕' : ''), bad ? BAD : visual(shape.refs[s]).colour);
+    });
+    return {
+      id: action.id,
+      name: action.name,
+      element: elementName,
+      left: left - PAD,
+      top: top - PAD,
+      d: tilePath(shape.sides, shapesBySide),
+      fill: role.fill,
+      stroke: role.stroke,
+      knob,
+      hole,
+      selStroke: opts.selected ? '#E7E9EE' : 'none',
+      nameTop: shape.sides.T === 'hole' ? PAD + 52 : PAD + 42,
+      labels,
+      opacity: opts.dragging ? 0.92 : 1,
+      filter: opts.dragging ? 'drop-shadow(0 14px 22px rgba(0,0,0,0.55))' : 'none',
+      z: opts.dragging ? 40 : (opts.selected ? 5 : 1),
+      hit: opts.dragging ? 'none' : 'auto',
+      onDown: (e) => this.startDrag(action.id, false, e)
+    };
+  }
+
+  pickerView(kind, f, typeById, types) {
+    const isIn = kind === 'in';
+    const current = isIn ? f.input : f.output;
+    const query = (isIn ? f.inQuery : f.outQuery).trim().toLowerCase();
+    const arr = isIn ? f.inArray : f.outArray;
+    const noneChip = { label: 'none', colour: '#4A5263', pressed: current === null ? 'true' : 'false', bg: current === null ? '#212632' : 'transparent', border: current === null ? '#A3AAB8' : '#2A303C', pick: () => this.patchActionForm(isIn ? { input: null } : { output: null }) };
+    const chips = types.filter((t) => query === '' || t.name.toLowerCase().includes(query)).map((t) => {
+      const on = current === t.id;
+      return { label: t.name, colour: t.colour, pressed: on ? 'true' : 'false', bg: on ? '#212632' : 'transparent', border: on ? t.colour : '#2A303C', pick: () => this.patchActionForm(isIn ? { input: t.id } : { output: t.id }) };
+    });
+    return {
+      title: isIn ? 'Input (hole):' : 'Output (knob):',
+      current: current === null ? 'none' : typeById[current].name + (arr ? '[]' : ''),
+      array: arr,
+      toggleArray: () => this.patchActionForm(isIn ? { inArray: !f.inArray } : { outArray: !f.outArray }),
+      query: isIn ? f.inQuery : f.outQuery,
+      searchLabel: isIn ? 'Filter input types' : 'Filter output types',
+      setQuery: (e) => this.patchActionForm(isIn ? { inQuery: e.target.value } : { outQuery: e.target.value }),
+      chips: [noneChip].concat(chips)
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const m = s.model;
+    const typeById = m.types.reduce((acc, t) => Object.assign({}, acc, { [t.id]: t }), {});
+    const elementById = m.elements.reduce((acc, el) => Object.assign({}, acc, { [el.id]: el }), {});
+    const actionById = m.actions.reduce((acc, a) => Object.assign({}, acc, { [a.id]: a }), {});
+    const shapes = m.actions.reduce((acc, a) => Object.assign({}, acc, { [a.id]: shapeOfAction(a) }), {});
+    const dragging = s.drag !== null && s.drag.moved;
+    const base = dragging ? omit(m.placements, s.drag.id) : m.placements;
+    const occ = occupancy(base);
+    const placedIds = Object.keys(base);
+    const statusById = placedIds.reduce((acc, id) => Object.assign({}, acc, { [id]: statusesAt(shapes[id], base[id], occ, shapes) }), {});
+    const fullName = (a) => elementById[a.elementId].name + '.' + a.name;
+    const connections = placedIds.reduce((acc, id) => {
+      const sh = shapes[id];
+      const out = SIDES.filter((side) => sh.sides[side] === 'knob' && statusById[id][side] === 'ok').map((side) => {
+        const nid = occ[key(base[id].c + DIRS[side][0], base[id].r + DIRS[side][1])];
+        return { from: fullName(actionById[id]), to: fullName(actionById[nid]), type: typeLabel(sh.refs[side], typeById) };
+      });
+      return acc.concat(out);
+    }, []);
+    const problems = placedIds.reduce((n, id) => n + SIDES.filter((side) => {
+      const st = statusById[id][side];
+      const kind = shapes[id].sides[side];
+      return (kind === 'knob' && (st === 'mismatch' || st === 'blocked')) || (kind === 'hole' && st === 'blocked');
+    }).length, 0);
+
+    const tiles = placedIds.map((id) => this.tileView(actionById[id], shapes[id], statusById[id], OX + base[id].c * CELL, OY + base[id].r * CELL, { selected: s.selectedAction === id, dragging: false }, typeById, elementById[actionById[id].elementId].name));
+    const hoverCell = dragging ? this.dropCell(s.drag) : null;
+    const hoverFree = hoverCell !== null && occ[key(hoverCell.c, hoverCell.r)] === undefined;
+    const dragStatuses = dragging && hoverFree ? statusesAt(shapes[s.drag.id], hoverCell, occ, shapes) : {};
+    const vals = Object.keys(dragStatuses).map((k) => dragStatuses[k]);
+    if (dragging) {
+      const a = actionById[s.drag.id];
+      tiles.push(this.tileView(a, shapes[a.id], dragStatuses, s.drag.x - s.drag.gx, s.drag.y - s.drag.gy, { selected: true, dragging: true }, typeById, elementById[a.elementId].name));
+    }
+    const hover = hoverCell === null ? { show: false, left: 0, top: 0, colour: 'none' } : {
+      show: true, left: OX + hoverCell.c * CELL, top: OY + hoverCell.r * CELL,
+      colour: !hoverFree || vals.includes('mismatch') || vals.includes('blocked') ? BAD : (vals.includes('ok') ? '#7CE3A1' : '#E7E9EE')
+    };
+    const eligible = [];
+    if (dragging) {
+      const ds = shapes[s.drag.id];
+      for (let r = 0; r < ROWS; r += 1) {
+        for (let c = 0; c < COLS; c += 1) {
+          if (occ[key(c, r)] !== undefined) continue;
+          const st = statusesAt(ds, { c, r }, occ, shapes);
+          const v = Object.keys(st).map((k) => st[k]);
+          if (v.includes('ok') && !v.includes('mismatch') && !v.includes('blocked')) eligible.push({ left: OX + c * CELL, top: OY + r * CELL });
+        }
+      }
+    }
+
+    const f = s.actionForm;
+    const elements = m.elements.map((el) => ({
+      name: el.name.toUpperCase(),
+      addLabel: 'Add action to ' + el.name,
+      removeLabel: 'Delete element ' + el.name,
+      addAction: () => this.setState({ actionForm: this.blankActionForm(el.id) }),
+      remove: () => this.removeElement(el.id),
+      formOpen: f !== null && f.elementId === el.id,
+      actions: m.actions.filter((a) => a.elementId === el.id).map((a) => {
+        const role = ROLES[roleOf(a)];
+        const outT = a.output === null ? null : typeById[a.output.typeId];
+        const inT = a.input === null ? null : typeById[a.input.typeId];
+        const icon = iconFor(outT !== null ? outT.shape : presetShape('flat'));
+        const placed = m.placements[a.id] !== undefined;
+        return {
+          name: a.name,
+          signature: (a.input === null ? '' : typeLabel(a.input, typeById)) + ' → ' + (a.output === null ? '' : typeLabel(a.output, typeById)),
+          status: placed ? 'placed' : 'loose',
+          statusColour: placed ? '#A3AAB8' : '#F5CF5B',
+          bg: s.selectedAction === a.id ? '#212632' : 'transparent',
+          icon: { body: icon.body, knob: outT === null ? '' : icon.knob, fill: role.fill, stroke: inT !== null ? inT.colour : role.stroke, knobFill: outT === null ? 'none' : outT.colour },
+          onDown: (e) => this.startDrag(a.id, true, e)
+        };
+      })
+    }));
+    const actionForm = f === null ? { name: '', setName: () => bug('no form'), pickers: [], errors: [], save: () => bug('no form'), cancel: () => bug('no form') } : {
+      name: f.name,
+      setName: (e) => this.patchActionForm({ name: e.target.value }),
+      pickers: [this.pickerView('in', f, typeById, m.types), this.pickerView('out', f, typeById, m.types)],
+      errors: f.errors.map((text) => ({ text })),
+      save: () => this.saveAction(),
+      cancel: () => this.setState({ actionForm: null })
+    };
+
+    const groupDefs = [['BUILT-IN', (t) => t.builtIn], ['RECORDS', (t) => t.kind === 'record'], ['BRANDS', (t) => t.kind === 'alias']];
+    const typeGroups = groupDefs.map(([title, pred]) => ({
+      title,
+      items: m.types.filter(pred).map((t) => {
+        const ic = iconFor(t.shape);
+        const on = s.selectedType === t.id;
+        return {
+          name: t.name,
+          detail: t.kind === 'record' ? t.fields.length + ' field' + (t.fields.length === 1 ? '' : 's') : (t.kind === 'alias' ? 'brand of ' + typeById[t.aliasFor].name : 'built-in'),
+          bg: on ? '#212632' : 'transparent',
+          border: on ? '#6FA8FF' : 'transparent',
+          icon: { body: ic.body, knob: ic.knob, knobFill: t.colour, pattern: t.pattern === 'none' ? 'none' : 'url(#pat-' + t.pattern + ')' },
+          select: () => this.setState({ selectedType: t.id, editorOpen: true, brandDraft: null, fieldPicker: null, panelErrors: [] })
+        };
+      })
+    })).filter((g) => g.items.length > 0);
+
+    const st = s.selectedType === null ? undefined : typeById[s.selectedType];
+    const fp = s.fieldPicker;
+    const typeDetail = st === undefined ? { show: false, name: '', kindLabel: '', isRecord: false, isAlias: false, aliasFor: '', fields: [], addField: () => bug('no type'), copy: () => bug('no type'), deletable: false, remove: () => bug('no type') } : {
+      show: true,
+      name: st.name,
+      kindLabel: st.kind === 'primitive' ? 'built-in' : st.kind,
+      isRecord: st.kind === 'record',
+      isAlias: st.kind === 'alias',
+      aliasFor: st.kind === 'alias' ? typeById[st.aliasFor].name : '',
+      fields: st.kind !== 'record' ? [] : st.fields.map((fd, i) => {
+        const ft = typeById[fd.typeId];
+        const open = fp !== null && fp.typeId === st.id && fp.index === i;
+        return {
+          name: fd.name,
+          setName: (e) => this.patchField(st.id, i, { name: e.target.value }),
+          typeLabel: ft.name,
+          colour: ft.colour,
+          array: fd.array,
+          toggleArray: () => this.patchField(st.id, i, { array: !fd.array }),
+          togglePicker: () => this.setState({ fieldPicker: open ? null : { typeId: st.id, index: i } }),
+          pickerOpen: open,
+          chips: m.types.filter((t) => t.id !== st.id).map((t) => ({ label: t.name, colour: t.colour, bg: t.id === fd.typeId ? '#212632' : 'transparent', border: t.id === fd.typeId ? t.colour : '#2A303C', pick: () => { this.patchField(st.id, i, { typeId: t.id }); this.setState({ fieldPicker: null }); } })),
+          remove: () => this.patchType(st.id, (t) => Object.assign({}, t, { fields: t.fields.filter((_, j) => j !== i) }))
+        };
+      }),
+      addField: () => this.patchType(st.id, (t) => Object.assign({}, t, { fields: t.fields.concat([{ name: 'field' + (t.fields.length + 1), typeId: 'string', array: false }]) })),
+      copy: () => this.setState({ brandDraft: { sourceId: st.id, value: '' } }),
+      deletable: !st.builtIn,
+      remove: () => this.removeType(st.id)
+    };
+
+    const noEditor = () => bug('shape editor is closed');
+    const editor = st === undefined || !s.editorOpen ? { show: false, name: '', body: '', knob: '', colour: 'none', pattern: 'none', handleLines: '', handles: [], onMove: noEditor, onUp: noEditor, presets: [], swatches: [], patterns: [], pointText: '', addPoint: noEditor, removePoint: noEditor, mirror: true, toggleMirror: noEditor, message: '', close: noEditor, usage: '', shaText: '', canRegenerate: false, regenerate: noEditor } : (() => {
+      const e = makeEdge([200, 20], [0, 1], [1, 0], 3);
+      const seg = shapeSegments(e, 1, st.shape, 1);
+      return {
+        show: true,
+        name: st.name,
+        body: 'M 40 20 L 200 20 L ' + fmt(seg.start) + ' ' + seg.body + ' L 200 380 L 40 380 Z',
+        knob: 'M ' + fmt(seg.start) + ' ' + seg.body + ' Z',
+        colour: st.colour,
+        pattern: st.pattern === 'none' ? 'none' : 'url(#pat-' + st.pattern + ')',
+        handleLines: st.shape.segs.map((sg, i) => {
+          const a = anchorOf(st.shape, i);
+          return 'M ' + fmt(edgeAt(e, 1, a[0], a[1])) + ' L ' + fmt(edgeAt(e, 1, sg.c1[0], sg.c1[1])) + ' M ' + fmt(edgeAt(e, 1, sg.p[0], sg.p[1])) + ' L ' + fmt(edgeAt(e, 1, sg.c2[0], sg.c2[1]));
+        }).join(' '),
+        handles: (() => {
+          const n = st.shape.segs.length;
+          const place = (pt, size) => { const q = edgeAt(e, 1, pt[0], pt[1]); return { left: round1(q[0] - size / 2 - 1), top: round1(q[1] - size / 2 - 1) }; };
+          const controls = st.shape.segs.reduce((acc, sg, i) => acc.concat([
+            Object.assign({ size: 10, radius: '50%', bg: '#9EC3FF', border: '#0D0F13', label: 'Curve handle', onDown: (ev) => this.handleDown({ kind: 'c1', index: i }, ev) }, place(sg.c1, 10)),
+            Object.assign({ size: 10, radius: '50%', bg: '#9EC3FF', border: '#0D0F13', label: 'Curve handle', onDown: (ev) => this.handleDown({ kind: 'c2', index: i }, ev) }, place(sg.c2, 10))
+          ]), []);
+          const anchors = Array.from({ length: n + 1 }, (_, k) => {
+            const on = s.selectedAnchor === k;
+            const end = k === 0 || k === n;
+            return Object.assign({ size: 13, radius: '2px', bg: on ? '#9EC3FF' : (end ? '#4A5263' : '#0D0F13'), border: '#E7E9EE', label: end ? 'End point' : 'Point', onDown: (ev) => this.handleDown({ kind: 'anchor', index: k }, ev) }, place(anchorOf(st.shape, k), 13));
+          });
+          return controls.concat(anchors);
+        })(),
+        onMove: (ev) => this.editorMove(ev),
+        onUp: () => this.editorUp(),
+        presets: PRESET_ORDER.map((id) => {
+          const shp = presetShape(id);
+          const on = st.shape.preset === id;
+          return { label: PRESET_LABELS[id], d: presetIcon(shp), bg: on ? '#212632' : 'transparent', border: on ? '#9B8CFF' : '#2A303C', pick: () => { this.patchLook(st.id, (t) => Object.assign({}, t, { shape: presetShape(id) })); this.setState({ selectedAnchor: null, editorMessage: '' }); } };
+        }),
+        swatches: SWATCHES.map((c) => ({ colour: c, label: 'Colour ' + c, ring: c === st.colour ? '#E7E9EE' : 'transparent', pick: () => this.patchLook(st.id, (t) => Object.assign({}, t, { colour: c })) })),
+        patterns: PATTERNS.map((p) => ({ label: p.label, bg: st.pattern === p.id ? '#212632' : 'transparent', border: st.pattern === p.id ? '#9B8CFF' : '#2A303C', pick: () => this.patchLook(st.id, (t) => Object.assign({}, t, { pattern: p.id })) })),
+        shaText: st.builtIn ? 'Built-in shape' : (st.shapeSource === 'sha' ? 'Generated from SHA ' + st.sha.slice(0, 10) : 'Customised · SHA ' + st.sha.slice(0, 10)),
+        canRegenerate: !st.builtIn && st.shapeSource !== 'sha',
+        regenerate: () => this.regenerate(st.id),
+        pointText: (st.shape.segs.length + 1) + ' points' + (s.selectedAnchor === null ? '' : ' · point ' + (s.selectedAnchor + 1) + ' selected'),
+        addPoint: () => this.addPoint(),
+        removePoint: () => this.removePoint(),
+        mirror: s.mirror,
+        toggleMirror: () => this.setState((x) => ({ mirror: !x.mirror })),
+        message: s.editorMessage,
+        close: () => this.setState({ editorOpen: false }),
+        usage: (() => { const u = usesOf(m, st.id); return u.length === 0 ? 'Not used yet.' : 'Used by ' + u.join(', ') + '.'; })()
+      };
+    })();
+
+    const sa = s.selectedAction === null ? undefined : actionById[s.selectedAction];
+    const sel = sa === undefined ? { show: false, name: '', detail: '', hasInput: false, hasOutput: false, placed: false, inputLabel: '', outputLabel: '', flipInput: () => bug('none'), flipOutput: () => bug('none'), unplace: () => bug('none'), remove: () => bug('none') } : {
+      show: true,
+      name: sa.name,
+      detail: elementById[sa.elementId].name + ' · ' + roleOf(sa) + ' · ' + typeLabel(sa.input, typeById) + ' → ' + typeLabel(sa.output, typeById),
+      hasInput: sa.input !== null,
+      hasOutput: sa.output !== null,
+      placed: m.placements[sa.id] !== undefined,
+      inputLabel: sa.inputSide === 'L' ? 'Input: left' : 'Input: top',
+      outputLabel: sa.outputSide === 'R' ? 'Output: right' : 'Output: bottom',
+      flipInput: () => this.patchAction(sa.id, (a) => Object.assign({}, a, { inputSide: a.inputSide === 'L' ? 'T' : 'L' })),
+      flipOutput: () => this.patchAction(sa.id, (a) => Object.assign({}, a, { outputSide: a.outputSide === 'R' ? 'B' : 'R' })),
+      unplace: () => this.setModel((mm) => Object.assign({}, mm, { placements: omit(mm.placements, sa.id) })),
+      remove: () => this.removeAction(sa.id)
+    };
+
+    const draft = (val, setter, save, cancel, open) => ({
+      open: val !== null, closed: val === null, value: val === null ? '' : val,
+      onChange: (e) => this.setState({ [setter]: e.target.value }),
+      save, cancel: () => this.setState({ [setter]: null, panelErrors: [] }), open_: () => this.setState({ [setter]: '', panelErrors: [] })
+    });
+    const isEl = s.tab === 'elements';
+    const modelOut = {
+      types: m.types.map((t) => Object.assign({ id: t.id, name: t.name, kind: t.kind }, t.kind === 'record' ? { fields: t.fields.map((fd) => ({ name: fd.name, type: typeById[fd.typeId].name, array: fd.array })) } : {}, t.kind === 'alias' ? { aliasFor: typeById[t.aliasFor].name } : {}, { display: { colour: t.colour, pattern: t.pattern, shape: t.shape.preset } })),
+      elements: m.elements.map((el) => ({ name: el.name, actions: m.actions.filter((a) => a.elementId === el.id).map((a) => ({ name: a.name, input: a.input === null ? null : typeLabel(a.input, typeById), output: a.output === null ? null : typeLabel(a.output, typeById) })) })),
+      connections
+    };
+
+    const plan = s.codeOpen ? planTs(m, s.codeText) : { ok: true, errors: [], summary: '' };
+    const code = {
+      show: s.codeOpen && s.tab === 'types',
+      listPressed: s.codeOpen ? 'false' : 'true',
+      codePressed: s.codeOpen ? 'true' : 'false',
+      listBg: s.codeOpen ? 'transparent' : '#212632',
+      codeBg: s.codeOpen ? '#212632' : 'transparent',
+      toList: () => this.setState({ codeOpen: false, codeMessage: '' }),
+      toCode: () => this.openCode(),
+      text: s.codeText,
+      onChange: (e) => this.setState({ codeText: e.target.value, codeMessage: '' }),
+      summary: plan.ok ? plan.summary : plan.errors.length + ' problem' + (plan.errors.length === 1 ? '' : 's') + ' to fix',
+      summaryColour: plan.ok ? '#7CE3A1' : '#FF8A80',
+      errors: plan.errors.map((text) => ({ text })),
+      applyBg: plan.ok ? '#6FA8FF' : '#4A5263',
+      apply: () => this.applyCode(),
+      revert: () => this.setState({ codeText: modelToTs(m.types), codeMessage: 'Reverted to the current types.' }),
+      message: s.codeMessage
+    };
+
+    return {
+      code,
+      onMove: (e) => this.moveImpl(e),
+      onUp: () => this.upImpl(),
+      onLeave: () => { this.ctx = null; this.setState({ drag: null }); },
+      tabs: {
+        isElements: isEl, isTypes: !isEl,
+        elementsSel: isEl ? 'true' : 'false', typesSel: isEl ? 'false' : 'true',
+        elementsBg: isEl ? '#E7E9EE' : 'transparent', typesBg: isEl ? 'transparent' : '#E7E9EE',
+        elementsColour: isEl ? '#0D0F13' : '#A3AAB8', typesColour: isEl ? '#A3AAB8' : '#0D0F13',
+        toElements: () => this.setState({ tab: 'elements', editorOpen: false, panelErrors: [] }),
+        toTypes: () => this.setState({ tab: 'types', panelErrors: [] })
+      },
+      elementDraft: Object.assign(draft(s.elementDraft, 'elementDraft', () => this.saveElement()), {}),
+      typeDraft: draft(s.typeDraft, 'typeDraft', () => this.saveRecordType()),
+      brandDraft: s.brandDraft === null ? { open: false, value: '', onChange: () => bug('no brand draft'), save: () => bug('no brand draft') } : { open: true, value: s.brandDraft.value, onChange: (e) => this.setState({ brandDraft: Object.assign({}, s.brandDraft, { value: e.target.value }) }), save: () => this.saveBrand() },
+      panelErrors: s.panelErrors.map((text) => ({ text })),
+      noElements: m.elements.length === 0,
+      elements,
+      actionForm,
+      typeGroups,
+      typeDetail,
+      editor,
+      tiles,
+      eligible,
+      hover,
+      sel,
+      emptyBoard: placedIds.length === 0 && !dragging,
+      summary: placedIds.length + ' placed · ' + connections.length + ' connection' + (connections.length === 1 ? '' : 's') + ' · ' + problems + ' problem' + (problems === 1 ? '' : 's'),
+      notice: s.notice,
+      storage: { text: s.storage.text, colour: s.storage.ok ? '#7CE3A1' : BAD },
+      showModel: s.showModel,
+      modelButtonLabel: s.showModel ? 'Hide model' : 'Show model',
+      toggleModel: () => this.setState((x) => ({ showModel: !x.showModel })),
+      modelJson: JSON.stringify(modelOut, null, 2),
+      clearAll: () => { this.ctx = null; this.setState({ model: emptyModel(), selectedAction: null, selectedType: null, editorOpen: false, actionForm: null, notice: 'Cleared.' }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

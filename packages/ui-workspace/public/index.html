@@ -16,6 +16,9 @@
 
   <!-- Navigation: one link per <app-route> below, in order. -->
   <a slot="nav" href="#/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/></svg>Overview</a>
+  <a slot="nav" href="#/systems"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6v5H4zM14 13h6v5h-6zM10 8.5h2a2 2 0 0 1 2 2V15.5"/></svg>Systems</a>
+  <a slot="nav" href="#/puzzle-prototype"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v4a2 2 0 1 0 0 4v4H4zM13 8h7v12h-7v-4a2 2 0 1 1 0-4z"/></svg>Puzzle Prototype</a>
+  <a slot="nav" href="#/puzzle-port"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v4a2 2 0 1 0 0 4v4H4zM13 8h7v12h-7v-4a2 2 0 1 1 0-4z"/></svg>Puzzle Port</a>
   <a slot="nav" href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspace</a>
   <!-- Workspace widgets: click to add a panel, or drag one into the layout. data-widget matches a <template> below. -->
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="notes" title="Click to add, or drag into the workspace">+ Notes</a>
@@ -23,9 +26,10 @@
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="metrics" title="Click to add, or drag into the workspace">+ Metrics</a>
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="messages" title="Click to add, or drag into the workspace">+ Messages</a>
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="activity" title="Click to add, or drag into the workspace">+ Activity</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-slider" title="Click to add, or drag into the workspace">+ Slider (composable)</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-debug" title="Click to add, or drag into the workspace">+ Debug (composable)</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-log" title="Click to add, or drag into the workspace">+ Log (composable)</a>
+  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-platform" title="Click to add, or drag into the workspace">+ Systems</a>
+  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="puzzle-prototype" title="Click to add, or drag into the workspace">+ Puzzle Prototype</a>
+  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="puzzle-port" title="Click to add, or drag into the workspace">+ Puzzle Port</a>
+  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-editor" title="Click to add, or drag into the workspace">+ Puzzle editor</a>
   <a slot="nav" href="#/inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 13h5l2 3h4l2-3h5"/></svg>Inbox</a>
   <a slot="nav" href="#/settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Settings</a>
   <div slot="drawer-footer" class="drawer-foot">[Company] · v0.1</div>
@@ -46,7 +50,7 @@
     <!-- @composable components, written in markup at build time: they place themselves in the page's scope. -->
     <section class="panel composable">
       <h2>Composable</h2>
-      <flow-slider name="slider"></flow-slider>
+      <c-range name="slider"></c-range>
     </section>
     <split-pane class="tall" direction="row" sizes="2,1" min="220" collapse-below="760" storage-key="overview">
       <line-chart></line-chart>
@@ -68,17 +72,49 @@
 
   <!-- Workspace: a golden-layout dock. Each <template> is a widget the drawer can add. -->
   <app-route path="/workspace" bleed>
-    <workspace-dock id="workspace" storage-key="workspace-starter.layout" open="notes,chart,metrics,activity" arrangement="grid">
-      <template data-widget="notes" data-title="Notes"><notes-panel></notes-panel></template>
-      <template data-widget="chart" data-title="Chart" data-flush><line-chart style="border:0;border-radius:0;box-shadow:none"></line-chart></template>
-      <template data-widget="metrics" data-title="Metrics"><div class="cards"><stat-card index="0"></stat-card><stat-card index="1"></stat-card><stat-card index="2"></stat-card><stat-card index="3"></stat-card></div></template>
-      <template data-widget="messages" data-title="Messages" data-flush><mail-list></mail-list></template>
-      <template data-widget="activity" data-title="Activity"><bus-log limit="40"></bus-log></template>
-      <!-- @composable components, added at runtime: each panel places a new instance and removes it on close. -->
-      <template data-widget="c-slider" data-title="Slider (composable)"><flow-slider></flow-slider></template>
-      <template data-widget="c-debug" data-title="Debug (composable)"><debug-panel></debug-panel></template>
-      <template data-widget="c-log" data-title="Log (composable)"><flow-log></flow-log></template>
-    </workspace-dock>
+    <!-- <c-wires> tilts the live dock to show the connections behind it (the dock's Connections button). -->
+    <c-wires>
+      <workspace-dock id="workspace" storage-key="workspace-starter.layout" open="notes,chart,metrics,activity" arrangement="grid">
+        <template data-widget="notes" data-title="Notes"><notes-panel></notes-panel></template>
+        <template data-widget="chart" data-title="Chart" data-flush><line-chart style="border:0;border-radius:0;box-shadow:none"></line-chart></template>
+        <template data-widget="metrics" data-title="Metrics"><div class="cards"><stat-card index="0"></stat-card><stat-card index="1"></stat-card><stat-card index="2"></stat-card><stat-card index="3"></stat-card></div></template>
+        <template data-widget="messages" data-title="Messages" data-flush><mail-list></mail-list></template>
+        <template data-widget="activity" data-title="Activity"><bus-log limit="40"></bus-log></template>
+        <!-- @composable components, added at runtime: each panel places a new instance and removes it on close.
+             composable.ts adds one per catalog kind that has an element, before these. -->
+        <template data-widget="c-platform" data-title="Systems"><c-platform></c-platform></template>
+        <template data-widget="puzzle-prototype" data-title="Puzzle Prototype" data-flush><puzzle-prototype></puzzle-prototype></template>
+        <template data-widget="puzzle-port" data-title="Puzzle Port" data-flush><puzzle-port></puzzle-port></template>
+        <template data-widget="c-editor" data-title="Puzzle editor"><editor-page></editor-page></template>
+      </workspace-dock>
+    </c-wires>
+  </app-route>
+
+  <!-- Systems: every system and its components, by system or by component. Select an action, then connect it to
+       one that fits. The example below is made by composable.ts; these elements attach to it by name. -->
+  <app-route path="/systems">
+    <header class="page-head">
+      <h1>Systems</h1>
+      <p>Move the range: its values queue in the debounce and land in the log as a batch. Type a number into the input and press Enter: the map doubles it into the log. Select an action in the tree, then connect it to one that fits.</p>
+    </header>
+    <section class="panel"><c-platform></c-platform></section>
+    <div class="cards composable-row">
+      <section class="panel"><h2>Range</h2><c-range name="ex-range"></c-range></section>
+      <section class="panel"><h2>Debounce</h2><c-debounce name="ex-debounce"></c-debounce></section>
+      <section class="panel"><h2>Input</h2><c-input name="ex-input"></c-input></section>
+      <section class="panel"><h2>Map</h2><c-map name="ex-map"></c-map></section>
+      <section class="panel"><h2>Log</h2><c-log name="ex-log"></c-log></section>
+    </div>
+  </app-route>
+
+  <!-- The original puzzle prototype, exactly as designed (its own runtime, in a frame). -->
+  <app-route path="/puzzle-prototype" bleed>
+    <puzzle-prototype></puzzle-prototype>
+  </app-route>
+
+  <!-- The same prototype ported to a Lit element: its own markup and styles, no theme. -->
+  <app-route path="/puzzle-port" bleed>
+    <puzzle-port></puzzle-port>
   </app-route>
 
   <app-route path="/settings">

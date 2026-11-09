@@ -33,6 +33,16 @@ export const readWidgetId = (state: unknown): string => {
   throw new Error(`workspace panel state must be { "widget": "<id>" }, got ${JSON.stringify(state)}`);
 };
 
+/** The instance a panel's element shows, if the panel names one (a component reopened from the rack). */
+export const readWidgetName = (state: unknown): string | undefined => {
+  const n = typeof state === 'object' && state !== null ? (state as Record<string, unknown>)['name'] : undefined;
+  return typeof n === 'string' && n ? n : undefined;
+};
+
+/** A panel's saved state: its widget, and the instance its element shows (if it shows one), to reattach to. */
+export const panelState = (widget: string, shown: { model?: unknown } | null): { widget: string; name?: string } =>
+  typeof shown?.model === 'string' && shown.model ? { widget, name: shown.model } : { widget };
+
 /** A starting layout: the given entries arranged side by side, stacked, as tabs, or in a two-column grid. */
 export const initialLayout = (entries: readonly PaletteEntry[], arrangement: Arrangement): { readonly root: LayoutItem } => {
   const items = entries.map(panel);

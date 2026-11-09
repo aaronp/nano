@@ -9,10 +9,114 @@
         "typescript": "^7.0.2",
       },
     },
+    "packages/bundle": {
+      "name": "@composable/bundle",
+      "version": "0.1.0",
+      "dependencies": {
+        "@composable/core": "workspace:*",
+        "@composable/elements": "workspace:*",
+        "@composable/runes": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+    },
+    "packages/connections": {
+      "name": "@composable/connections",
+      "version": "0.1.0",
+      "peerDependencies": {
+        "@composable/sdk": "workspace:*",
+        "typebox": "^1.4.0",
+      },
+    },
+    "packages/core": {
+      "name": "@composable/core",
+      "version": "0.1.0",
+      "dependencies": {
+        "typebox": "^1.4.0",
+      },
+    },
+    "packages/editor": {
+      "name": "@composable/editor",
+      "version": "0.1.0",
+      "dependencies": {
+        "@composable/core": "workspace:*",
+        "@composable/elements": "workspace:*",
+        "@composable/runes": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+    },
+    "packages/elements": {
+      "name": "@composable/elements",
+      "version": "0.1.0",
+      "dependencies": {
+        "@composable/core": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+      "devDependencies": {
+        "@composable/runes": "workspace:*",
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+    },
+    "packages/platform": {
+      "name": "@composable/platform",
+      "version": "0.1.0",
+      "dependencies": {
+        "@composable/core": "workspace:*",
+        "@composable/elements": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+      "devDependencies": {
+        "@composable/bundle": "workspace:*",
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+    },
+    "packages/puzzle-editor": {
+      "name": "@composable/puzzle-editor",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+      "peerDependencies": {
+        "@composable/connections": "workspace:*",
+        "@composable/sdk": "workspace:*",
+        "@composable/ui": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+    },
+    "packages/puzzle-port": {
+      "name": "@composable/puzzle-port",
+      "version": "0.1.0",
+      "dependencies": {
+        "lit": "^3.0.0",
+      },
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+    },
+    "packages/runes": {
+      "name": "@composable/runes",
+      "version": "0.1.0",
+      "dependencies": {
+        "@composable/core": "workspace:*",
+        "typebox": "^1.4.0",
+      },
+    },
     "packages/sdk": {
       "name": "@composable/sdk",
       "version": "0.1.0",
       "dependencies": {
+        "@noble/hashes": "^2.0.1",
+        "json-canonicalize": "2.0.0",
         "typebox": "^1.4.0",
       },
     },
@@ -32,12 +136,20 @@
       "name": "@composable/ui-workspace",
       "version": "0.1.0",
       "dependencies": {
-        "@composable/sdk": "workspace:*",
-        "@composable/ui": "workspace:*",
-        "@composable/widgets": "workspace:*",
+        "@composable/bundle": "workspace:*",
+        "@composable/core": "workspace:*",
+        "@composable/editor": "workspace:*",
+        "@composable/elements": "workspace:*",
+        "@composable/platform": "workspace:*",
+        "@composable/puzzle-port": "workspace:*",
+        "@composable/runes": "workspace:*",
+        "@composable/wires": "workspace:*",
         "golden-layout": "^2.6.0",
         "lit": "^3.3.3",
         "typebox": "^1.4.0",
+      },
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^21.0.4",
       },
     },
     "packages/widgets": {
@@ -50,8 +162,41 @@
         "typebox": "^1.4.0",
       },
     },
+    "packages/wires": {
+      "name": "@composable/wires",
+      "version": "0.1.0",
+      "dependencies": {
+        "@composable/core": "workspace:*",
+        "@composable/elements": "workspace:*",
+        "@composable/platform": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+      "devDependencies": {
+        "@composable/bundle": "workspace:*",
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+    },
   },
   "packages": {
+    "@composable/bundle": ["@composable/bundle@workspace:packages/bundle"],
+
+    "@composable/connections": ["@composable/connections@workspace:packages/connections"],
+
+    "@composable/core": ["@composable/core@workspace:packages/core"],
+
+    "@composable/editor": ["@composable/editor@workspace:packages/editor"],
+
+    "@composable/elements": ["@composable/elements@workspace:packages/elements"],
+
+    "@composable/platform": ["@composable/platform@workspace:packages/platform"],
+
+    "@composable/puzzle-editor": ["@composable/puzzle-editor@workspace:packages/puzzle-editor"],
+
+    "@composable/puzzle-port": ["@composable/puzzle-port@workspace:packages/puzzle-port"],
+
+    "@composable/runes": ["@composable/runes@workspace:packages/runes"],
+
     "@composable/sdk": ["@composable/sdk@workspace:packages/sdk"],
 
     "@composable/ui": ["@composable/ui@workspace:packages/ui"],
@@ -60,11 +205,15 @@
 
     "@composable/widgets": ["@composable/widgets@workspace:packages/widgets"],
 
+    "@composable/wires": ["@composable/wires@workspace:packages/wires"],
+
     "@happy-dom/global-registrator": ["@happy-dom/global-registrator@21.0.4", "", { "dependencies": { "@types/node": ">=20.0.0", "happy-dom": "^21.0.4" } }, "sha512-Bbr0hW9hhDhBf3Jp0EyDlkCbFgbr0z2jd3BMKYOYW+fOkPM4Nx195GMXyCtRCGEgoNn6i09FabXrSkNFm2ONzg=="],
 
     "@lit-labs/ssr-dom-shim": ["@lit-labs/ssr-dom-shim@1.6.0", "", {}, "sha512-VHb0ALPMTlgKjM6yIxxoQNnpKyUKLD04VzeQdsiXkMqkvYlAHxq9glGLmgbb889/1GsohSOAjvQYoiBppXFqrQ=="],
 
     "@lit/reactive-element": ["@lit/reactive-element@2.1.2", "", { "dependencies": { "@lit-labs/ssr-dom-shim": "^1.5.0" } }, "sha512-pbCDiVMnne1lYUIaYNN5wrwQXDtHaYtg7YEFPeW+hws6U47WeFvISGUWekPGKWOP1ygrs0ef0o1VJMk1exos5A=="],
+
+    "@noble/hashes": ["@noble/hashes@2.4.0", "", {}, "sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA=="],
 
     "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 
@@ -125,6 +274,8 @@
     "golden-layout": ["golden-layout@2.6.0", "", {}, "sha512-sIVQCiRWOymHbVD1Aw/T9/ijbPYAVGBlgGYd1N9MRKfcyBNSpjr87Vg9nSHm+RCT8ELrvK8IJYJV0QRJuVUkCQ=="],
 
     "happy-dom": ["happy-dom@21.0.4", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "buffer-image-size": "^0.6.4", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.21.0" } }, "sha512-tFm+GaLBgo6o0awHnvHaNoraVo27qJ+2tZEtZ+cIa08hXbeitrxAJajLI05hsUy/2/YTKcUjQYzHe5mCcraLBw=="],
+
+    "json-canonicalize": ["json-canonicalize@2.0.0", "", {}, "sha512-yyrnK/mEm6Na3ChbJUWueXdapueW0p380RUyTW87XGb1ww8l8hU0pRrGC3vSWHe9CxrbPHX2fGUOZpNiHR0IIg=="],
 
     "lit": ["lit@3.3.3", "", { "dependencies": { "@lit/reactive-element": "^2.1.0", "lit-element": "^4.2.0", "lit-html": "^3.3.0" } }, "sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw=="],
 

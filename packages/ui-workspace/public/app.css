@@ -37,3 +37,4 @@ html[data-theme='retro'] .page-head a { color: #FFFF9E; }
   --c-accent: var(--accent); --c-accent-fg: var(--on-accent); --c-radius: var(--radius); --c-font: var(--font); --c-mono: var(--mono);
 }
 .composable { margin-bottom: 16px; }
+.composable-row { margin-top: 16px; }

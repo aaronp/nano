@@ -1,4 +1,4 @@
-.PHONY: test install ui
+.PHONY: test install ui puzzle
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
@@ -15,3 +15,8 @@ PORT ?= 3000
 ui:
 	cd packages/ui-workspace && bun run build
 	bun scripts/serve.ts packages/ui-workspace/public $(PORT)
+
+# The puzzle editor: the same host, on its Connections page.
+puzzle:
+	@echo "Puzzle editor: http://localhost:$(PORT)/#/connections"
+	@$(MAKE) --no-print-directory ui PORT=$(PORT)

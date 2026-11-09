@@ -10,11 +10,19 @@
     "serve": "bunx serve public"
   },
   "dependencies": {
-    "@composable/sdk": "workspace:*",
-    "@composable/ui": "workspace:*",
-    "@composable/widgets": "workspace:*",
     "golden-layout": "^2.6.0",
     "lit": "^3.3.3",
-    "typebox": "^1.4.0"
+    "typebox": "^1.4.0",
+    "@composable/core": "workspace:*",
+    "@composable/runes": "workspace:*",
+    "@composable/elements": "workspace:*",
+    "@composable/bundle": "workspace:*",
+    "@composable/platform": "workspace:*",
+    "@composable/editor": "workspace:*",
+    "@composable/puzzle-port": "workspace:*",
+    "@composable/wires": "workspace:*"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "^21.0.4"
   }
 }

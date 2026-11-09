@@ -1,25 +1,66 @@
 /**
  * The adapter between this host and @composable components. Nothing else in the starter knows about them, and
  * they know nothing about the starter:
- *   - one scope for the page, provided on the document, so any composable view (in markup, or cloned into a
- *     dock panel) places its component there and leaves when it is removed;
- *   - our theme tokens (--c-*) are mapped onto this starter's in app.css (CSS only);
- *   - our publications are mirrored onto the starter's bus as `composable:<op>`, so its widgets (bus-log,
- *     status-line) show them.
- * Imported before the views are defined, so the provider exists when markup upgrades.
+ *   - one runtime over the registry `host`, provided on the document, so elements in markup (or cloned into a
+ *     dock panel) place their components there, and remove the ones they made when they go;
+ *   - the platform as `platform`: it holds `host` and any systems made later, and builds from the bundle catalog;
+ *   - a worked example, made through the platform so it outlives page changes: range → debounce → log, and
+ *     input → map → log. The Systems page's elements name these instances and attach to them.
+ * Imported before the elements are defined, so the registry is provided when markup upgrades.
  */
-import { Scopes } from '@composable/sdk'
-import { provideScope } from '@composable/ui'
-import { defineElements } from '@composable/widgets/views'
-import { requestBus } from './lib/bus.ts'
+import { Components, Ops, Registries, Runtimes, type Op } from '@composable/core'
+import { provide } from '@composable/elements'
+import { catalog as bundle, Debounce, defineBundle, Input, Log, Map, Range } from '@composable/bundle'
+import { catalog as editor } from '@composable/editor'
+import type { Catalog } from '@composable/elements'
+import { definePlatform, platform, PlatformOps as P } from '@composable/platform'
+import { defineElements as defineEditor } from '@composable/editor/elements'
+import { defineWires } from '@composable/wires'
 
-export const scope = Scopes.create({ onError: (e, info) => console.error('composable:', e, info) })
-provideScope(document, scope)
-defineElements()
+/** Every kind of component this host offers: its packages' catalogs, merged. Add a package, add its catalog. */
+export const catalog: Catalog = { ...bundle, ...editor }
 
-void customElements.whenDefined('app-shell').then(() => {
-  const shell = document.querySelector('app-shell')
-  if (!shell) return
-  const bus = requestBus(shell as HTMLElement)
-  scope.observe(t => { if (t.kind === 'publish') bus.publish(`composable:${t.op.split('/').pop()}`, t.data, t.from) })
+/** The page's runtime and its registry, `host`. */
+export const host = Runtimes.create(Registries.create('host'))
+provide(document, host.registry)
+host.registry.add('platform', Components.instantiate(platform(host, catalog)))
+
+const ask = async (op: Op, arg: unknown) => {
+  const r = await host.call({ registry: 'host', instance: 'workspace' }, 'platform', Ops.key(op), arg)
+  if ('error' in r) console.error('composable:', r.error)
+}
+for (const [kind, name] of [['range', 'ex-range'], ['debounce', 'ex-debounce'], ['log', 'ex-log'], ['input', 'ex-input'], ['map', 'ex-map']])
+  await ask(P.createComponent, { kind, name, system: 'host' })
+const wire = (source: string, op: Op, listener: string, target: Op) =>
+  ask(P.connect, { system: 'host', source, op: Ops.key(op), listener, target: Ops.key(target) })
+await wire('ex-range', Range.ops.value, 'ex-debounce', Debounce.ops.enqueue)
+await wire('ex-debounce', Debounce.ops.flushed, 'ex-log', Log.ops.info)
+await wire('ex-input', Input.ops.submitted, 'ex-map', Map.ops.map)
+await wire('ex-map', Map.ops.mapped, 'ex-log', Log.ops.info)
+const set = (id: string, op: Op, arg: unknown) => host.call({ registry: 'host', instance: 'workspace' }, id, Ops.key(op), arg)
+await set('ex-map', Map.ops.setCode, 'return x * 2')
+await set('ex-input', Input.ops.setKind, 'number')
+
+// The dock lists every kind that has an element: a drawer link and a panel template each, before the hand-written ones.
+const link = document.querySelector('a[data-dock-add][data-widget="c-platform"]'), panel = document.querySelector('template[data-widget="c-platform"]')
+for (const [kind, e] of Object.entries(catalog)) if (e.tag) {
+  const a = Object.assign(document.createElement('a'), { href: '#/workspace', title: 'Click to add, or drag into the workspace', textContent: `+ ${e.title}` })
+  for (const [k, v] of [['slot', 'nav'], ['data-sub', ''], ['data-dock-add', 'workspace'], ['data-widget', kind]]) a.setAttribute(k, v!)
+  link?.before(a)
+  const t = Object.assign(document.createElement('template'), { innerHTML: `<${e.tag} keep></${e.tag}>` })   // closing a panel sends it to the rack
+  t.dataset.widget = kind; t.dataset.title = e.title
+  panel?.before(t)
+}
+
+// The wiring view asks for a rack component back on the front: a panel of its kind, showing that instance.
+document.addEventListener('wires:open-panel', e => {
+  const { kind, name } = (e as CustomEvent<{ kind: string; name: string }>).detail
+  ;(document.querySelector('workspace-dock') as (Element & { addWidget?(id: string, name?: string): void }) | null)?.addWidget?.(kind, name)
 })
+
+defineBundle()
+definePlatform()
+defineEditor()
+defineWires()
+// the wiring view over the Workspace dock: it shows and edits the host system, and offers the merged catalog
+for (const w of document.querySelectorAll('c-wires')) Object.assign(w, { runtime: host, catalog })
