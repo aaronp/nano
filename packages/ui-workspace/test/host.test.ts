@@ -66,8 +66,16 @@ test('the dock lists every catalog type that has an element, and + Add can make 
   expect(tagged.length).toBeGreaterThanOrEqual(6)
   for (const [kind, e] of tagged) {
     expect(document.querySelector(`a[data-dock-add][data-widget="${kind}"]`)?.textContent).toBe(`+ ${e.title}`)
-    expect(document.querySelector(`template[data-widget="${kind}"]`)?.innerHTML).toBe(`<${e.tag}></${e.tag}>`)
+    expect(document.querySelector(`template[data-widget="${kind}"]`)?.innerHTML).toBe(`<${e.tag} keep=""></${e.tag}>`)   // closing sends it to the rack
   }
   const kinds = (await call('platform', P.catalog)).value
   expect(kinds).toEqual(expect.arrayContaining(['range', 'log', 'component-list', 'connection-board']))
+})
+
+test('wires:open-panel reopens a rack component as a dock panel showing that instance', async () => {
+  const dock = document.querySelector('workspace-dock') as HTMLElement & { addWidget?: (id: string, name?: string) => void }
+  const opened: unknown[] = []
+  dock.addWidget = (id, name) => { opened.push([id, name]) }
+  dock.dispatchEvent(new CustomEvent('wires:open-panel', { bubbles: true, composed: true, detail: { kind: 'range', name: 'ex-range' } }))
+  expect(opened).toEqual([['range', 'ex-range']])
 })

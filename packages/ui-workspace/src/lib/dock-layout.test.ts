@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { countPanels, initialLayout, panelIds, readWidgetId } from './dock-layout.ts';
+import { countPanels, initialLayout, panelIds, readWidgetId, readWidgetName } from './dock-layout.ts';
 
 const e = (id: string) => ({ id, title: id.toUpperCase() });
 
@@ -21,4 +21,10 @@ test('panel state is strict so corrupt saved layouts fail loudly', () => {
   assert.throws(() => readWidgetId({ widget: '<b>' }), /must be/);
   assert.throws(() => readWidgetId(null), /must be/);
   assert.throws(() => panelIds({ type: 'row', content: [{ type: 'component', componentState: {} }] }), /must be/);
+});
+
+test('a panel may name the instance its element shows; anything else is ignored', () => {
+  assert.equal(readWidgetName({ widget: 'range', name: 'ex-range' }), 'ex-range');
+  assert.equal(readWidgetName({ widget: 'range' }), undefined);
+  assert.equal(readWidgetName({ widget: 'range', name: 42 }), undefined);
 });

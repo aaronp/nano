@@ -11,12 +11,14 @@
  * A saved layout opens automatically next time. Panels refer to widgets by id, so saved layouts hold no markup.
  *
  * Bus topics (the app bus): dock:opened {widget} · dock:layout {panels} · dock:saved · dock:error {message}.
+ * The toolbar's Connections button fires a bubbling `dock:connections` DOM event; whatever wraps the dock (the
+ * wiring view) decides what it means.
  * Light DOM, because golden-layout positions its drag proxy in document.body.
  */
 import { GoldenLayout, LayoutConfig, type ComponentContainer, type JsonValue, type ResolvedLayoutConfig } from 'golden-layout';
 import baseCss from 'golden-layout/dist/css/goldenlayout-base.css';
 import { provideBus, requestBus, type Bus } from '../lib/bus.ts';
-import { ARRANGEMENTS, PALETTE_ID, initialLayout, panelIds, readWidgetId, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
+import { ARRANGEMENTS, PALETTE_ID, initialLayout, panelIds, readWidgetId, readWidgetName, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
 
 const STYLE_ID = 'workspace-dock-styles';
 const DOCK_CSS = `
@@ -86,7 +88,9 @@ export class WorkspaceDock extends HTMLElement {
     const hint = this.el('span', 'hint', 'Add widgets from the menu: click to add, or drag into place.');
     this.status = this.el('span', 'status');
     this.status.setAttribute('role', 'status');
-    bar.append(title, hint, this.el('span', 'grow'), this.status,
+    const connections = this.button('⇄ Connections', () => this.dispatchEvent(new CustomEvent('dock:connections', { bubbles: true, composed: true })));
+    connections.title = 'Show the connections behind the workspace';
+    bar.append(title, hint, this.el('span', 'grow'), this.status, connections,
       this.button('Save layout', () => this.save()), this.button('Restore', () => this.restore()), this.button('Reset', () => this.reset()));
     const area = this.el('div', 'dock-area');
     this.append(bar, area);
@@ -111,11 +115,11 @@ export class WorkspaceDock extends HTMLElement {
     });
   }
 
-  /** Open a palette widget as a new panel. */
-  addWidget(id: string) {
+  /** Open a palette widget as a new panel; with `name`, its element shows that existing instance. */
+  addWidget(id: string, name?: string) {
     const def = this.defs.get(id);
     if (!def) throw new Error(`<workspace-dock> has no palette widget "${id}"`);
-    this.requireLayout().addComponent('widget', { widget: def.id }, def.title);
+    this.requireLayout().addComponent('widget', name ? { widget: def.id, name } : { widget: def.id }, name ?? def.title);
   }
 
   /** Ids of the panels currently open, in layout order. */
@@ -198,7 +202,10 @@ export class WorkspaceDock extends HTMLElement {
     /* golden-layout may build a panel inside its drag proxy (in document.body), so each panel provides the bus itself */
     if (!this.bus) throw new Error('bug: panel mounted before the workspace was connected');
     provideBus(container.element, this.bus);
-    container.element.append(def.template.content.cloneNode(true));
+    const content = def.template.content.cloneNode(true) as DocumentFragment;
+    const name = readWidgetName(state);
+    if (name) content.firstElementChild?.setAttribute('name', name);   // before it connects, so it attaches to that instance
+    container.element.append(content);
     this.send('dock:opened', { widget: id });
     return undefined;
   }

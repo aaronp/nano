@@ -46,10 +46,16 @@ for (const [kind, e] of Object.entries(catalog)) if (e.tag) {
   const a = Object.assign(document.createElement('a'), { href: '#/workspace', title: 'Click to add, or drag into the workspace', textContent: `+ ${e.title}` })
   for (const [k, v] of [['slot', 'nav'], ['data-sub', ''], ['data-dock-add', 'workspace'], ['data-widget', kind]]) a.setAttribute(k, v!)
   link?.before(a)
-  const t = Object.assign(document.createElement('template'), { innerHTML: `<${e.tag}></${e.tag}>` })
+  const t = Object.assign(document.createElement('template'), { innerHTML: `<${e.tag} keep></${e.tag}>` })   // closing a panel sends it to the rack
   t.dataset.widget = kind; t.dataset.title = e.title
   panel?.before(t)
 }
+
+// The wiring view asks for a rack component back on the front: a panel of its kind, showing that instance.
+document.addEventListener('wires:open-panel', e => {
+  const { kind, name } = (e as CustomEvent<{ kind: string; name: string }>).detail
+  ;(document.querySelector('workspace-dock') as (Element & { addWidget?(id: string, name?: string): void }) | null)?.addWidget?.(kind, name)
+})
 
 defineBundle()
 definePlatform()
