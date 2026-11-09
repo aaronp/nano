@@ -26,9 +26,13 @@ export const Registries = {
   create(id: string): Registry {
     const instances = new Map<string, Instance>(), subs = new Map<string, Subscription>()
     const listeners = new Set<(d: Delta) => void>()
+    // subscriptions by `source op`, so a publish looks at its matches only; seq keeps them in subscription order
+    const index = new Map<string, Set<Subscription>>(), seq = new Map<Subscription, number>()
+    let n = 0
+    const bucket = (source: string, op: string) => index.get(`${source} ${op}`) ?? index.set(`${source} ${op}`, new Set()).get(`${source} ${op}`)!
     const emit = (d: Delta) => listeners.forEach(fn => fn(d))
     const keys = (inst: Instance) => [...inst.actions.keys()]
-    const close = (s: Subscription) => { subs.delete(s.id); emit({ type: 'subscription-closed', subscription: s }) }
+    const close = (s: Subscription) => { subs.delete(s.id); bucket(s.source, s.op).delete(s); seq.delete(s); emit({ type: 'subscription-closed', subscription: s }) }
     return {
       id,
       get: i => instances.get(i),
@@ -49,7 +53,7 @@ export const Registries = {
       subscribe(s) {
         if (!instances.has(s.listener)) return err(`no listener ${s.listener} in ${id}`)
         const sub = { id: crypto.randomUUID(), ...s }
-        subs.set(sub.id, sub)
+        subs.set(sub.id, sub); bucket(sub.source, sub.op).add(sub); seq.set(sub, n++)
         emit({ type: 'subscription-opened', subscription: sub })
         return ok(sub)
       },
@@ -64,7 +68,7 @@ export const Registries = {
         emit({ type, instance: i, op: Ops.key(op) })
         return ok(undefined)
       },
-      matching: (source, op) => [...subs.values()].filter(s => (s.source === '*' || s.source === source) && s.op === op),
+      matching: (source, op) => [...(index.get(`* ${op}`) ?? []), ...(source === '*' ? [] : index.get(`${source} ${op}`) ?? [])].sort((a, b) => seq.get(a)! - seq.get(b)!),
       snapshot: () => ({
         id,
         instances: [...instances].map(([i, inst]) => ({ id: i, ops: [...inst.actions.values()].map(a => a.op) })),

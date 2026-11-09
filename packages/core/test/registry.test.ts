@@ -57,3 +57,15 @@ test('announce passes an op change to every listener, and unlisten stops it', ()
   r.announce('l', 'op-added', Ops.sink('t', 'y', Type.Null()))
   expect(got).toEqual([{ type: 'op-added', instance: 'l', op: 't/x' }])
 })
+
+test('matching keeps subscription order across specific and any-source subscriptions, and forgets closed ones', () => {
+  const { r } = watched()
+  r.add('l', thing())
+  const sub = (source: string, op = 't/ping') => (r.subscribe({ source, op, listener: 'l', target: 't/ping' }) as { value: { id: string } }).value.id
+  const a = sub('a'); sub('*'); sub('a'); sub('a', 't/other'); sub('b')
+  expect(r.matching('a', 't/ping').map(s => s.source)).toEqual(['a', '*', 'a'])
+  r.unsubscribe(a)
+  expect(r.matching('a', 't/ping').map(s => s.source)).toEqual(['*', 'a'])
+  r.remove('l')
+  expect(r.matching('a', 't/ping')).toEqual([])
+})
