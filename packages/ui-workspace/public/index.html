@@ -72,19 +72,22 @@
 
   <!-- Workspace: a golden-layout dock. Each <template> is a widget the drawer can add. -->
   <app-route path="/workspace" bleed>
-    <workspace-dock id="workspace" storage-key="workspace-starter.layout" open="notes,chart,metrics,activity" arrangement="grid">
-      <template data-widget="notes" data-title="Notes"><notes-panel></notes-panel></template>
-      <template data-widget="chart" data-title="Chart" data-flush><line-chart style="border:0;border-radius:0;box-shadow:none"></line-chart></template>
-      <template data-widget="metrics" data-title="Metrics"><div class="cards"><stat-card index="0"></stat-card><stat-card index="1"></stat-card><stat-card index="2"></stat-card><stat-card index="3"></stat-card></div></template>
-      <template data-widget="messages" data-title="Messages" data-flush><mail-list></mail-list></template>
-      <template data-widget="activity" data-title="Activity"><bus-log limit="40"></bus-log></template>
-      <!-- @composable components, added at runtime: each panel places a new instance and removes it on close.
-           composable.ts adds one per catalog kind that has an element, before these. -->
-      <template data-widget="c-platform" data-title="Systems"><c-platform></c-platform></template>
-      <template data-widget="puzzle-prototype" data-title="Puzzle Prototype" data-flush><puzzle-prototype></puzzle-prototype></template>
-      <template data-widget="puzzle-port" data-title="Puzzle Port" data-flush><puzzle-port></puzzle-port></template>
-      <template data-widget="c-editor" data-title="Puzzle editor"><editor-page></editor-page></template>
-    </workspace-dock>
+    <!-- <c-wires> tilts the live dock to show the connections behind it (the dock's Connections button). -->
+    <c-wires>
+      <workspace-dock id="workspace" storage-key="workspace-starter.layout" open="notes,chart,metrics,activity" arrangement="grid">
+        <template data-widget="notes" data-title="Notes"><notes-panel></notes-panel></template>
+        <template data-widget="chart" data-title="Chart" data-flush><line-chart style="border:0;border-radius:0;box-shadow:none"></line-chart></template>
+        <template data-widget="metrics" data-title="Metrics"><div class="cards"><stat-card index="0"></stat-card><stat-card index="1"></stat-card><stat-card index="2"></stat-card><stat-card index="3"></stat-card></div></template>
+        <template data-widget="messages" data-title="Messages" data-flush><mail-list></mail-list></template>
+        <template data-widget="activity" data-title="Activity"><bus-log limit="40"></bus-log></template>
+        <!-- @composable components, added at runtime: each panel places a new instance and removes it on close.
+             composable.ts adds one per catalog kind that has an element, before these. -->
+        <template data-widget="c-platform" data-title="Systems"><c-platform></c-platform></template>
+        <template data-widget="puzzle-prototype" data-title="Puzzle Prototype" data-flush><puzzle-prototype></puzzle-prototype></template>
+        <template data-widget="puzzle-port" data-title="Puzzle Port" data-flush><puzzle-port></puzzle-port></template>
+        <template data-widget="c-editor" data-title="Puzzle editor"><editor-page></editor-page></template>
+      </workspace-dock>
+    </c-wires>
   </app-route>
 
   <!-- Systems: every system and its components, by system or by component. Select an action, then connect it to

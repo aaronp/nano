@@ -143,6 +143,7 @@
         "@composable/platform": "workspace:*",
         "@composable/puzzle-port": "workspace:*",
         "@composable/runes": "workspace:*",
+        "@composable/wires": "workspace:*",
         "golden-layout": "^2.6.0",
         "lit": "^3.3.3",
         "typebox": "^1.4.0",

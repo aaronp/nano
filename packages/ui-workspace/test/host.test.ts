@@ -79,3 +79,15 @@ test('wires:open-panel reopens a rack component as a dock panel showing that ins
   dock.dispatchEvent(new CustomEvent('wires:open-panel', { bubbles: true, composed: true, detail: { kind: 'range', name: 'ex-range' } }))
   expect(opened).toEqual([['range', 'ex-range']])
 })
+
+test('the Workspace dock sits inside <c-wires>, which has the host runtime and the merged catalog', async () => {
+  const { catalog } = await import('../src/composable.ts')
+  const wires = document.querySelector('app-route[path="/workspace"] c-wires') as HTMLElement & { runtime?: unknown; catalog?: unknown; flipped?: boolean; updateComplete?: Promise<boolean> }
+  expect(wires).not.toBeNull()
+  expect(wires.querySelector(':scope > workspace-dock')).not.toBeNull()
+  expect(wires.runtime).toBe(host)
+  expect(wires.catalog).toBe(catalog)
+  wires.querySelector('workspace-dock')!.dispatchEvent(new CustomEvent('dock:connections', { bubbles: true, composed: true }))
+  await wires.updateComplete
+  expect(wires.flipped).toBe(true)
+})

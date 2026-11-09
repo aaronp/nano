@@ -15,6 +15,7 @@ import { catalog as editor } from '@composable/editor'
 import type { Catalog } from '@composable/elements'
 import { definePlatform, platform, PlatformOps as P } from '@composable/platform'
 import { defineElements as defineEditor } from '@composable/editor/elements'
+import { defineWires } from '@composable/wires'
 
 /** Every kind of component this host offers: its packages' catalogs, merged. Add a package, add its catalog. */
 export const catalog: Catalog = { ...bundle, ...editor }
@@ -60,3 +61,6 @@ document.addEventListener('wires:open-panel', e => {
 defineBundle()
 definePlatform()
 defineEditor()
+defineWires()
+// the wiring view over the Workspace dock: it shows and edits the host system, and offers the merged catalog
+for (const w of document.querySelectorAll('c-wires')) Object.assign(w, { runtime: host, catalog })
