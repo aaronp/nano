@@ -34,7 +34,7 @@ test('a template-built manifest parses; anything else is refused with a reason',
 test('the shared report ticks what the host provides and warns on the rest', () => {
   expect(sharedReport(manifest as any, { '@pritzlaff/nano-core': '0.1.0', lit: '3.3.3' }).every(r => r.ok)).toBe(true)
   const r = sharedReport(manifest as any, { '@pritzlaff/nano-core': '0.2.0' })
-  expect(r.map(x => [x.specifier, x.ok, x.provided])).toEqual([['@pritzlaff/nano-core', false, '0.2.0'], ['lit', false, undefined]] as unknown[][])
+  expect(r.map(x => [x.specifier, x.ok, x.provided]) as unknown[][]).toEqual([['@pritzlaff/nano-core', false, '0.2.0'], ['lit', false, undefined]])
 })
 
 test('clashes with what is loaded: kind, component id or element tag', () => {
