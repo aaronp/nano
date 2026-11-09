@@ -199,3 +199,15 @@ test('a splice that fails partway puts the chain back as it was', async () => {
   expect(host.registry.snapshot().instances.some(i => i.id.startsWith('map-'))).toBe(false)   // no orphan
   expect(root.textContent).toContain('refused for the test')
 })
+
+test('opening eases the pane straight back from full size to 90% of the stage, with no turn', async () => {
+  const { root, flip } = await mount()
+  await flip()
+  const world = () => (root.querySelector('.world') as HTMLElement).style
+  expect(world().transform).toContain('scale(1)')
+  await new Promise(r => setTimeout(r, 80))
+  await tick()
+  expect(world().transform).toContain('scale(0.9)')
+  expect(world().transform).toContain('rotateX(0.00deg) rotateY(0.00deg)')
+  expect(world().transition).toContain('cubic-bezier(0.65, 0, 0.35, 1)')
+})

@@ -10,8 +10,12 @@ import type { Wires } from './wires'
 export function renderStage(el: Wires, d: Vals) {
   const { s, m, isRelay } = d
   const { W, H } = m
-  const worldT = 'scale(' + SCALE + ') rotateX(' + s.rx.toFixed(2) + 'deg) rotateY(' + s.ry.toFixed(2) + 'deg)'
-  const worldTr = s.dragging ? 'none' : 'transform 900ms cubic-bezier(0.2, 0.75, 0.15, 1)'
+  // Facing front, the pane fills SCALE of the stage; turning to the back eases out to fit the rack below it too.
+  const fit = (h: number) => (el.stage.w ? Math.min(el.stage.w / W, el.stage.h / h) : 1) * SCALE
+  const t = (1 + d.backness) / 2
+  const scale = s.entering ? 1 : fit(H) + (fit(H + m.rackH) - fit(H)) * t
+  const worldT = 'translateY(' + (-m.rackH / 2 * t * scale).toFixed(1) + 'px) scale(' + +scale.toFixed(4) + ') rotateX(' + s.rx.toFixed(2) + 'deg) rotateY(' + s.ry.toFixed(2) + 'deg)'
+  const worldTr = s.dragging ? 'none' : 'transform 900ms cubic-bezier(0.65, 0, 0.35, 1)'
   const cursor = s.editing ? (s.cord || s.lift ? 'grabbing' : 'crosshair') : s.dragging ? 'grabbing' : 'grab'
   const armed = s.armed ? el.catalog[s.armed]?.title ?? s.armed : null
   const hint = !s.editing
@@ -24,7 +28,7 @@ export function renderStage(el: Wires, d: Vals) {
   const toast = s.cord && s.cord.err ? { kind: 'err', text: s.cord.err } : s.toast
   return html`<div class="stage-bg" @pointerdown=${(e: PointerEvent) => onDown(el, e)} @pointermove=${(e: PointerEvent) => onMove(el, e)} @pointerup=${(e: PointerEvent) => onUp(el, e)} @pointercancel=${() => onCancel(el)} @dblclick=${() => onDbl(el)} style="position:relative; flex:1; min-width:0; overflow:hidden; perspective:2400px; perspective-origin:50% 40%; cursor:${cursor}; touch-action:none; user-select:none">
 
-  <div style="position:absolute; left:50%; top:46%; width:${W}px; height:${H}px; margin-left:${-W / 2}px; margin-top:${-H / 2 - 50}px; transform-style:preserve-3d; transform:${worldT}; transition:${worldTr}">
+  <div class="world" style="position:absolute; left:50%; top:50%; width:${W}px; height:${H}px; margin-left:${-W / 2}px; margin-top:${-H / 2}px; transform-style:preserve-3d; transform:${worldT}; transition:${worldTr}">
 
     <div style="position:absolute; left:0; top:0; width:${W}px; height:12px; background:#2A313C; transform:translateY(-6px) rotateX(90deg)"></div>
     <div style="position:absolute; left:0; top:${H - 12}px; width:${W}px; height:12px; background:#1A1F27; transform:translateY(6px) rotateX(90deg)"></div>

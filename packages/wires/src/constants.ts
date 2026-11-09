@@ -15,7 +15,8 @@ export const PUZ_Y0 = 40
 export const TAB_R = 7
 export const FORK_W = 64
 export const HIT_R = 16
-export const SCALE = 0.7
+/** The pane's share of the stage when it eases back. */
+export const SCALE = 0.9
 
 /** Route colours, in the order routes get them: the prototype's four sample routes, then its extra colours. */
 export const PALETTE = ['#7EE787', '#F5A524', '#4CC2FF', '#FF7AB6', '#D2A8FF', '#FFA657', '#79C0FF', '#F2CC60', '#56D4DD']

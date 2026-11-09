@@ -16,7 +16,7 @@ export type Cord = { anchor: string; picked: string | null; x: number; y: number
 export type Packet = { id: number; wire: string; born: number; label: string }
 /** All of the view's state. */
 export interface State {
-  ry: number; rx: number; dragging: boolean; mode: 'relay' | 'puzzle'; sel: string | null; depth: number; editing: boolean
+  ry: number; rx: number; dragging: boolean; mode: 'relay' | 'puzzle'; sel: string | null; depth: number; editing: boolean; entering: boolean
   cord: Cord | null; armed: string | null; selMod: string | null; lift: string | null; toast: { kind: 'ok' | 'err'; text: string } | null
   packets: Packet[]; hits: Record<string, number>; flashes: Record<string, number>; stats: Record<string, { in: number; out: number }>
 }
@@ -61,9 +61,10 @@ export class Wires extends LitElement {
   declare platform: string
   declare system: string
   declare flipped: boolean
-  s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
+  s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, entering: false, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
   model: Model = empty()
   puzzle = buildPuzzle(this.model)
+  stage = { w: 0, h: 0 }
   drag: { x: number; y: number; ry: number; rx: number } | null = null
   #off: (() => void)[] = []
   #timer?: ReturnType<typeof setInterval>
@@ -147,6 +148,7 @@ export class Wires extends LitElement {
       this.setState({ packets: this.s.packets.filter(p => !arrived.includes(p)), hits })
     }
     if (JSON.stringify(this.panels()) !== this.#layout) this.rebuild()
+    this.measure()
     const hot = [...Object.values(this.s.hits), ...Object.values(this.s.flashes)].some(at => this.recent(at))
     if (this.s.packets.length || hot) this.requestUpdate()
   }
@@ -155,14 +157,19 @@ export class Wires extends LitElement {
     const dock = this.dock()
     this.model = { ...this.model, W: dock?.offsetWidth || 1340, H: dock?.offsetHeight || 560 }
     this.rebuild()
-    this.s = { ...this.s, ry: 0, rx: 0, dragging: false, packets: [] }
+    this.s = { ...this.s, ry: 0, rx: 0, dragging: false, entering: true, packets: [] }
     this.#stop()
     this.#timer = setInterval(() => this.frame(), FRAME_MS)
-    setTimeout(() => { if (this.flipped && this.s.ry === 0 && this.s.rx === 0) this.goTo('angled') }, 60)   // let the turn animate
+    setTimeout(() => { this.measure(); this.setState({ entering: false }) }, 60)   // starts at full size, then eases back
   }
   #close() { this.#stop(); this.s = { ...this.s, editing: false, cord: null, armed: null, selMod: null, lift: null, toast: null, dragging: false } }
   #stop() { clearInterval(this.#timer); this.#timer = undefined }
 
+  /** The stage's size, which the pane is fitted to; a change re-renders. */
+  measure() {
+    const st = this.renderRoot.querySelector<HTMLElement>('.stage-bg')
+    if (st && (st.clientWidth !== this.stage.w || st.clientHeight !== this.stage.h)) { this.stage = { w: st.clientWidth, h: st.clientHeight }; this.requestUpdate() }
+  }
   goTo(name: View) {
     const v = VIEWS[name]
     const target = v.ry + 360 * Math.round((this.s.ry - v.ry) / 360)
