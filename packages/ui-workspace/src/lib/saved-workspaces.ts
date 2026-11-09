@@ -13,8 +13,10 @@ export const ICONS: Record<string, string> = {
   box: 'M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10',
 };
 
-/** A saved workspace: where it lives, and how the nav shows it. */
-export interface SavedWorkspace { readonly path: string; readonly title: string; readonly icon: string }
+/** A saved workspace: where it lives, how the nav shows it, and the system (registry) its components run in. */
+export interface SavedWorkspace { readonly path: string; readonly title: string; readonly icon: string; readonly system?: string }
+/** A system's name, as a registry id. */
+export const SYSTEM = /^[a-z0-9][a-z0-9-]*$/;
 
 const KEY = 'workspace-starter.saved-workspaces';
 export const PATH = /^\/[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)*$/;
@@ -29,7 +31,9 @@ export const savedWorkspaces = (storage: Pick<Storage, 'getItem' | 'setItem'>) =
     if (taken.includes(ws.path) || list().some((w) => w.path === ws.path)) return `${ws.path} is already a page.`;
     if (!ws.title.trim()) return 'Give it a title for the nav.';
     if (!(ws.icon in ICONS)) return `There is no icon called ${ws.icon}.`;
-    storage.setItem(KEY, JSON.stringify([...list(), { path: ws.path, title: ws.title.trim(), icon: ws.icon }]));
+    const system = ws.system ?? 'host';
+    if (!SYSTEM.test(system)) return 'A system name is lower-case letters, digits and dashes.';
+    storage.setItem(KEY, JSON.stringify([...list(), { path: ws.path, title: ws.title.trim(), icon: ws.icon, system }]));
     return null;
   };
   return { list, add };
