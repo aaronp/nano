@@ -9,6 +9,7 @@ import './components/app-shell.ts';
 import './components/split-pane.ts';
 import './components/component-drawer.ts';
 import './components/import-dialog.ts';
+import './components/gallery.ts';
 import './components/theme-picker.ts';
 import './components/puzzle-prototype.ts';
 import './components/puzzle-port.ts';

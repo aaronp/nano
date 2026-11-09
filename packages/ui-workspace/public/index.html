@@ -41,6 +41,7 @@
   <!-- Workspaces: each runs in a system (a registry and runtime); + makes a new one. Saved ones are added under Main. -->
   <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspaces</a><button type="button" data-toggle-drawer aria-pressed="true" aria-label="Components drawer" title="Show or hide the components drawer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM9 4v16"/></svg></button><button type="button" data-new-workspace aria-label="New workspace" title="New workspace">+</button></div>
   <a slot="nav" data-sub href="#/workspace">Main</a>
+  <a slot="nav" href="#/components"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM16.5 13v7M13 16.5h7"/></svg>Components</a>
   <a slot="nav" href="#/inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 13h5l2 3h4l2-3h5"/></svg>Inbox</a>
   <a slot="nav" href="#/settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Settings</a>
   <div slot="drawer-footer" class="drawer-foot">[Company] · v0.1</div>
@@ -99,6 +100,7 @@
         <template data-widget="puzzle-prototype" data-title="Puzzle Prototype" data-flush><puzzle-prototype></puzzle-prototype></template>
         <template data-widget="puzzle-port" data-title="Puzzle Port" data-flush><puzzle-port></puzzle-port></template>
         <template data-widget="c-editor" data-title="Puzzle editor"><editor-page></editor-page></template>
+        <template data-widget="nano-gallery" data-title="Components gallery"><nano-gallery></nano-gallery></template>
       </workspace-dock>
     </c-wires>
     </div>
@@ -119,6 +121,11 @@
       <section class="panel"><h2>Map</h2><c-map name="ex-map"></c-map></section>
       <section class="panel"><h2>Log</h2><c-log name="ex-log"></c-log></section>
     </div>
+  </app-route>
+
+  <!-- Components: the widgets' component library under the chosen theme, or every theme side by side. -->
+  <app-route path="/components">
+    <nano-gallery></nano-gallery>
   </app-route>
 
   <!-- The original puzzle prototype, exactly as designed (its own runtime, in a frame). -->
