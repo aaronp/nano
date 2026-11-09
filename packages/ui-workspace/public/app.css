@@ -7,6 +7,36 @@ code { font-family: var(--mono); font-size: .92em; }
 a[slot='nav'] svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .drawer-foot { padding: 10px 14px 4px; color: var(--muted); font-size: 12px; }
 
+/* The Workspaces nav row: its link, and a + to make a new workspace. */
+.nav-row a { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; color: inherit; text-decoration: none; }
+.nav-row a svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.nav-row button { flex: none; width: 26px; height: 26px; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); font: inherit; font-size: 16px; line-height: 1; cursor: pointer; }
+.nav-row button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+a[slot='nav'][data-sub] svg { width: 16px; height: 16px; }
+/* The components drawer's toggle beside +: pressed while the drawers show. */
+.nav-row [data-toggle-drawer] { display: grid; place-items: center; padding: 0; }
+.nav-row [data-toggle-drawer] svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.nav-row [data-toggle-drawer][aria-pressed='true'] { background: var(--accent-soft); }
+html[data-drawers-hidden] component-drawer { display: none; }
+
+/* A workspace page: the components drawer beside the dock. */
+.ws-page { display: flex; height: 100%; min-height: 0; }
+.ws-page > c-wires { flex: 1; min-width: 0; }
+component-drawer { box-sizing: border-box; width: 240px; flex: none; display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow-y: auto;
+  background: var(--surface); border-right: 1px solid var(--line); font-size: 14px; }
+component-drawer .cd-bar { display: flex; align-items: center; gap: 6px; }
+component-drawer .cd-title { flex: 1; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+component-drawer button { font: inherit; font-size: 12px; padding: 4px 8px; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); cursor: pointer; }
+component-drawer button:disabled { opacity: .5; cursor: not-allowed; }
+component-drawer .cd-filter { box-sizing: border-box; width: 100%; font: inherit; padding: 6px 8px; border-radius: 6px; border: var(--card-border); background: var(--bg); color: var(--fg); }
+component-drawer h3 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+component-drawer .cd-section { display: flex; flex-direction: column; gap: 2px; }
+component-drawer .cd-section a { padding: 7px 10px; border-radius: var(--radius); color: var(--fg); text-decoration: none; cursor: grab; }
+component-drawer .cd-section a:hover { background: var(--surface-2); }
+component-drawer h4 { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 0; padding: 0 2px 0 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
+component-drawer h4 button { padding: 1px 6px; font-size: 11px; }
+component-drawer .cd-failed { margin: 4px 0 0; padding: 6px 10px; border-radius: var(--radius); background: var(--surface-2); color: var(--danger, #c33); font-size: 12px; overflow-wrap: anywhere; }
+
 .page-head { margin-bottom: 20px; }
 .page-head h1 { margin: 0 0 4px; font: 600 28px/1.15 var(--display); text-wrap: balance; }
 .page-head p { margin: 0; color: var(--muted); max-width: 70ch; }
@@ -38,3 +68,17 @@ html[data-theme='retro'] .page-head a { color: #FFFF9E; }
 }
 .composable { margin-bottom: 16px; }
 .composable-row { margin-top: 16px; }
+
+/* The Import dialog. */
+.import-dialog { box-sizing: border-box; width: min(560px, 92vw); max-height: 86vh; overflow: auto; padding: 20px; border: var(--card-border); border-radius: var(--radius);
+  background: var(--surface); color: var(--fg); font: 14px var(--font); }
+.import-dialog h2 { margin: 0 0 12px; font: 600 16px var(--display); }
+.import-dialog h3 { margin: 12px 0 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.import-dialog .row { display: flex; gap: 8px; }
+.import-dialog input { flex: 1; min-width: 0; font: inherit; padding: 6px 8px; border: var(--card-border); border-radius: var(--radius); background: var(--surface-2); color: var(--fg); }
+.import-dialog button { font: inherit; padding: 6px 12px; border: var(--card-border); border-radius: var(--radius); background: var(--surface-2); color: var(--fg); cursor: pointer; }
+.import-dialog button:disabled { opacity: .5; cursor: not-allowed; }
+.import-dialog ul { margin: 0; padding-left: 18px; } .import-dialog li { margin: 4px 0; }
+.import-dialog .ops { margin-top: 2px; display: flex; flex-wrap: wrap; gap: 4px; font-size: 12px; color: var(--muted); }
+.import-dialog [role='alert'] { min-height: 1em; color: var(--danger, #c33); }
+.import-dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }

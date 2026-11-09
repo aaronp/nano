@@ -41,15 +41,35 @@ const set = (id: string, op: Op, arg: unknown) => host.call({ registry: 'host', 
 await set('ex-map', Map.ops.setCode, 'return x * 2')
 await set('ex-input', Input.ops.setKind, 'number')
 
-// The dock lists every kind that has an element: a drawer link and a panel template each, before the hand-written ones.
-const link = document.querySelector('a[data-dock-add][data-widget="c-platform"]'), panel = document.querySelector('template[data-widget="c-platform"]')
-for (const [kind, e] of Object.entries(catalog)) if (e.tag) {
-  const a = Object.assign(document.createElement('a'), { href: '#/workspace', title: 'Click to add, or drag into the workspace', textContent: `+ ${e.title}` })
-  for (const [k, v] of [['slot', 'nav'], ['data-sub', ''], ['data-dock-add', 'workspace'], ['data-widget', kind]]) a.setAttribute(k, v!)
-  link?.before(a)
-  const t = Object.assign(document.createElement('template'), { innerHTML: `<${e.tag} keep></${e.tag}>` })   // closing a panel sends it to the rack
-  t.dataset.widget = kind; t.dataset.title = e.title
-  panel?.before(t)
+// The dock can add every kind that has an element: a panel template each (marked as the catalog's, for the components
+// drawer), before the hand-written ones.
+/** A panel template for a kind: its element, kept when the panel closes (closing sends it to the rack). */
+const templateFor = (kind: string, e: { title: string; tag?: string }) => {
+  const t = Object.assign(document.createElement('template'), { innerHTML: `<${e.tag} keep></${e.tag}>` })
+  t.dataset.widget = kind; t.dataset.title = e.title; t.dataset.catalog = ''
+  return t
+}
+const panel = document.querySelector('template[data-widget="c-platform"]')
+for (const [kind, e] of Object.entries(catalog)) if (e.tag) panel?.before(templateFor(kind, e))
+
+/** The kinds (and the page's own widget ids), component ids and element tags the host has loaded: an import must not
+ * clash with them. */
+export function loadedNames() {
+  const es = Object.entries(catalog)
+  const widgets = [...document.querySelectorAll<HTMLTemplateElement>('workspace-dock > template[data-widget]')].map(t => t.dataset.widget!)
+  return { kinds: [...new Set([...es.map(([k]) => k), ...widgets])], ids: es.map(([, e]) => `${e.component.id.ns}/${e.component.id.name}`), tags: es.flatMap(([, e]) => (e.tag ? [e.tag] : [])) }
+}
+
+/** Adds an imported package's catalog to the running host: the platform can make its kinds (it holds this catalog),
+ * every dock gets a panel template per kind with an element, and drawers hear `catalog:changed`. */
+export function addCatalog(entries: Catalog, from: { name: string; url: string }) {
+  Object.assign(catalog, entries)
+  for (const [kind, e] of Object.entries(entries)) if (e.tag) for (const dock of document.querySelectorAll<HTMLElement & { addTemplate?(t: HTMLTemplateElement): void }>('workspace-dock')) {
+    const t = templateFor(kind, e)
+    t.dataset.package = from.name; t.dataset.packageUrl = from.url
+    if (dock.addTemplate) dock.addTemplate(t); else dock.append(t)   // not defined yet: read when it connects
+  }
+  document.dispatchEvent(new CustomEvent('catalog:changed', { detail: from }))
 }
 
 // The wiring view asks for a rack component back on the front: a panel of its kind, showing that instance.

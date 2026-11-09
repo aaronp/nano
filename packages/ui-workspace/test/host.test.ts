@@ -60,13 +60,14 @@ test('<puzzle-port> is on its own page and in the dock, rendering the ported art
   expect(document.querySelector('template[data-widget="puzzle-port"]')).not.toBeNull()
 })
 
-test('the dock lists every catalog type that has an element, and + Add can make every type', async () => {
+test('the dock can add every catalog type that has an element (marked for the drawer), and + Add can make every type', async () => {
   const { catalog } = await import('../src/composable.ts')
   const tagged = Object.entries(catalog).filter(([, e]) => e.tag)
   expect(tagged.length).toBeGreaterThanOrEqual(6)
   for (const [kind, e] of tagged) {
-    expect(document.querySelector(`a[data-dock-add][data-widget="${kind}"]`)?.textContent).toBe(`+ ${e.title}`)
-    expect(document.querySelector(`template[data-widget="${kind}"]`)?.innerHTML).toBe(`<${e.tag} keep=""></${e.tag}>`)   // closing sends it to the rack
+    const t = document.querySelector(`template[data-widget="${kind}"]`)!
+    expect(t.innerHTML).toBe(`<${e.tag} keep=""></${e.tag}>`)   // closing sends it to the rack
+    expect(t.hasAttribute('data-catalog')).toBe(true)
   }
   const kinds = (await call('platform', P.catalog)).value
   expect(kinds).toEqual(expect.arrayContaining(['range', 'log', 'component-list', 'connection-board']))
@@ -90,4 +91,35 @@ test('the Workspace dock sits inside <c-wires>, which has the host runtime and t
   wires.querySelector('workspace-dock')!.dispatchEvent(new CustomEvent('dock:connections', { bubbles: true, composed: true }))
   await wires.updateComplete
   expect(wires.flipped).toBe(true)
+})
+
+test('the nav has a Workspaces group with + and Main, and no component items; Main is a drawer beside its dock', () => {
+  const group = document.querySelector('app-shell > [data-workspaces]')!
+  expect(group.querySelector('a')!.getAttribute('href')).toBe('#/workspace')
+  expect(group.querySelector('button[data-new-workspace]')).not.toBeNull()
+  expect(group.nextElementSibling!.textContent!.trim()).toBe('Main')
+  expect([...document.querySelectorAll('a[slot="nav"]')].filter(a => a.textContent!.trim().startsWith('+'))).toEqual([])
+  expect(document.querySelector('app-route[path="/workspace"] .ws-page > component-drawer')!.getAttribute('for')).toBe('workspace')
+})
+
+test('a package\'s catalog joins the running host: the platform can make it, Main\'s dock can add it, its names are taken', async () => {
+  const { addCatalog, loadedNames } = await import('../src/composable.ts')
+  const { component, state } = await import('@pritzlaff/nano-runes')
+  const Timer = component('nano.template/timer', () => { const s = state({ count: 0 }); return { get count() { return s.count } } })
+  let changed = 0
+  document.addEventListener('catalog:changed', () => { changed++ })
+  addCatalog({ timer: { component: Timer, title: 'Timer', tag: 'nano-timer' } }, { name: 'nano-template', url: 'https://x/manifest.json' })
+  expect(changed).toBe(1)
+  expect(await call('platform', P.createComponent, { kind: 'timer', name: 't1', system: 'host' })).not.toHaveProperty('error')
+  expect(host.registry.get('t1')!.component).toBe(Timer)
+  const t = document.querySelector('workspace-dock#workspace > template[data-widget="timer"]') as HTMLTemplateElement
+  expect([t.dataset.title, t.dataset.package, t.dataset.packageUrl, t.hasAttribute('data-catalog')]).toEqual(['Timer', 'nano-template', 'https://x/manifest.json', true])
+  const names = loadedNames()
+  expect(names.kinds).toContain('timer'); expect(names.ids).toContain('nano.template/timer'); expect(names.tags).toContain('nano-timer')
+  expect(names.kinds).toContain('range')
+})
+
+test('the names an import must not take include the page\'s own widgets', async () => {
+  const { loadedNames } = await import('../src/composable.ts')
+  expect(loadedNames().kinds).toEqual(expect.arrayContaining(['notes', 'chart', 'activity', 'range']))
 })

@@ -21,6 +21,7 @@
 import { GoldenLayout, LayoutConfig, type ComponentContainer, type JsonValue, type ResolvedLayoutConfig } from 'golden-layout';
 import baseCss from 'golden-layout/dist/css/goldenlayout-base.css';
 import { provideBus, requestBus, type Bus } from '../lib/bus.ts';
+import { panelContent } from '../lib/panel-content.ts';
 import { ARRANGEMENTS, PALETTE_ID, WINDOW_STYLES, windowStyle, type WindowStyle, initialLayout, panelIds, readWidgetId, readWidgetName, panelState, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
 
 const STYLE_ID = 'workspace-dock-styles';
@@ -86,6 +87,9 @@ const ensureStyles = (doc: Document) => {
 interface Def extends PaletteEntry { readonly template: HTMLTemplateElement }
 
 export class WorkspaceDock extends HTMLElement {
+  /** The system (registry) the panels' components live in; unset, they use the page's provided registry. Declared,
+   * not a class field: a field would wipe a value set before the element upgrades (saved workspaces set it at start). */
+  declare registry?: unknown;
   private bus: Bus | null = null;
   private layout: GoldenLayout | null = null;
   private defs = new Map<string, Def>();
@@ -115,7 +119,7 @@ export class WorkspaceDock extends HTMLElement {
     this.setAttribute('chrome', pick.value);
     pick.addEventListener('change', () => { style.set(pick.value as WindowStyle); this.setAttribute('chrome', pick.value); });
     bar.append(title, hint, this.el('span', 'grow'), this.status, pick, connections,
-      this.button('Save workspace…', () => this.dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true, composed: true, detail: { layout: this.requireLayout().saveLayout() } }))),
+      this.button('Save workspace…', () => this.dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true, composed: true, detail: { layout: this.requireLayout().saveLayout(), system: this.getAttribute('system') ?? 'host' } }))),
       this.button('Save layout', () => this.save()), this.button('Restore', () => this.restore()), this.button('Reset', () => this.reset()));
     const area = this.el('div', 'dock-area');
     this.append(bar, area);
@@ -145,6 +149,14 @@ export class WorkspaceDock extends HTMLElement {
     const def = this.defs.get(id);
     if (!def) throw new Error(`<workspace-dock> has no palette widget "${id}"`);
     this.requireLayout().addComponent('widget', name ? { widget: def.id, name } : { widget: def.id }, name ?? def.title);
+  }
+
+  /** Adds a palette widget while running (an imported package's kind): its template, now addable. */
+  addTemplate(t: HTMLTemplateElement) {
+    const id = t.dataset['widget'] ?? '';
+    if (!PALETTE_ID.test(id) || this.defs.has(id)) return;
+    this.append(t);
+    this.defs.set(id, { id, title: t.dataset['title'] ?? id, template: t });
   }
 
   /** Ids of the panels currently open, in layout order. */
@@ -207,15 +219,18 @@ export class WorkspaceDock extends HTMLElement {
 
   /** Any data-dock-add element targeting this dock becomes a drag source and a click-to-add button. */
   private connectSources(layout: GoldenLayout) {
-    for (const el of this.ownerDocument.querySelectorAll<HTMLElement>(`[data-dock-add="${CSS.escape(this.id)}"]`)) {
-      const id = el.dataset['widget'] ?? '';
-      const def = this.defs.get(id);
-      if (!def) throw new Error(`menu item targets unknown workspace widget "${id}"`);
-      el.setAttribute('draggable', 'false');
-      layout.newDragSource(el, () => ({ type: 'component', componentType: 'widget', componentState: { widget: def.id }, title: def.title }));
-      /* the link's own navigation (to the workspace page) happens first; add once the page is shown */
-      el.addEventListener('click', () => requestAnimationFrame(() => this.addWidget(def.id)));
-    }
+    for (const el of this.ownerDocument.querySelectorAll<HTMLElement>(`[data-dock-add="${CSS.escape(this.id)}"]`)) this.addSource(el, layout);
+  }
+
+  /** Makes an element (its data-widget names a palette widget) a drag source for this dock, and click-to-add. */
+  addSource(el: HTMLElement, layout = this.requireLayout()) {
+    const id = el.dataset['widget'] ?? '';
+    const def = this.defs.get(id);
+    if (!def) throw new Error(`menu item targets unknown workspace widget "${id}"`);
+    el.setAttribute('draggable', 'false');
+    layout.newDragSource(el, () => ({ type: 'component', componentType: 'widget', componentState: { widget: def.id }, title: def.title }));
+    /* a link's own navigation (to the workspace page) happens first; add once the page is shown */
+    el.addEventListener('click', (e) => { e.preventDefault(); requestAnimationFrame(() => this.addWidget(def.id)); });
   }
 
   private mount(container: ComponentContainer, state: JsonValue | undefined) {
@@ -227,7 +242,8 @@ export class WorkspaceDock extends HTMLElement {
     /* golden-layout may build a panel inside its drag proxy (in document.body), so each panel provides the bus itself */
     if (!this.bus) throw new Error('bug: panel mounted before the workspace was connected');
     provideBus(container.element, this.bus);
-    const content = def.template.content.cloneNode(true) as DocumentFragment;
+    // upgraded at once, with placed elements in the dock's system (if it has one)
+    const content = panelContent(this.ownerDocument, def.template, this.registry);
     const name = readWidgetName(state);
     const shown = content.firstElementChild as (Element & { model?: unknown }) | null;
     if (name) shown?.setAttribute('name', name);   // before it connects, so it attaches to that instance

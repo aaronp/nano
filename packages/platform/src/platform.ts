@@ -98,3 +98,8 @@ export function platform(host: Runtime, catalog: Record<string, { component: Com
   })
   return c
 }
+
+/** A system's runtime, from the platform instance in `registry` (the platform owns the runtimes it creates). */
+export function runtimeOf(registry: Registry, system: string, platformId = 'platform'): Runtime | undefined {
+  return (registry.get(platformId)?.value as State | undefined)?.systems.get(system)
+}

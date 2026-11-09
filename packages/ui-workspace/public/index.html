@@ -7,6 +7,25 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&family=JetBrains+Mono:wght@400;600&family=Architects+Daughter&family=Caveat:wght@600;700&family=Pixelify+Sans:wght@500;700&display=swap">
   <link rel="stylesheet" href="./app.css">
+  <!-- The shared libraries, for packages imported from a URL (src/shared/specifiers.ts): one copy, the host's. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "@pritzlaff/nano-core": "./shared/nano-core.js",
+      "@pritzlaff/nano-runes": "./shared/nano-runes.js",
+      "@pritzlaff/nano-elements": "./shared/nano-elements.js",
+      "lit": "./shared/lit.js",
+      "lit/decorators.js": "./shared/lit-decorators.js",
+      "lit/directive.js": "./shared/lit-directive.js",
+      "lit/directives/class-map.js": "./shared/lit-class-map.js",
+      "lit/directives/style-map.js": "./shared/lit-style-map.js",
+      "lit/directives/repeat.js": "./shared/lit-repeat.js",
+      "lit/directives/if-defined.js": "./shared/lit-if-defined.js",
+      "typebox": "./shared/typebox.js",
+      "typebox/value": "./shared/typebox-value.js"
+    }
+  }
+  </script>
   <script type="module" src="./main.js"></script>
 </head>
 <body>
@@ -19,17 +38,9 @@
   <a slot="nav" href="#/systems"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6v5H4zM14 13h6v5h-6zM10 8.5h2a2 2 0 0 1 2 2V15.5"/></svg>Systems</a>
   <a slot="nav" href="#/puzzle-prototype"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v4a2 2 0 1 0 0 4v4H4zM13 8h7v12h-7v-4a2 2 0 1 1 0-4z"/></svg>Puzzle Prototype</a>
   <a slot="nav" href="#/puzzle-port"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v4a2 2 0 1 0 0 4v4H4zM13 8h7v12h-7v-4a2 2 0 1 1 0-4z"/></svg>Puzzle Port</a>
-  <a slot="nav" href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspace</a>
-  <!-- Workspace widgets: click to add a panel, or drag one into the layout. data-widget matches a <template> below. -->
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="notes" title="Click to add, or drag into the workspace">+ Notes</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="chart" title="Click to add, or drag into the workspace">+ Chart</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="metrics" title="Click to add, or drag into the workspace">+ Metrics</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="messages" title="Click to add, or drag into the workspace">+ Messages</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="activity" title="Click to add, or drag into the workspace">+ Activity</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-platform" title="Click to add, or drag into the workspace">+ Systems</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="puzzle-prototype" title="Click to add, or drag into the workspace">+ Puzzle Prototype</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="puzzle-port" title="Click to add, or drag into the workspace">+ Puzzle Port</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-editor" title="Click to add, or drag into the workspace">+ Puzzle editor</a>
+  <!-- Workspaces: each runs in a system (a registry and runtime); + makes a new one. Saved ones are added under Main. -->
+  <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspaces</a><button type="button" data-toggle-drawer aria-pressed="true" aria-label="Components drawer" title="Show or hide the components drawer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM9 4v16"/></svg></button><button type="button" data-new-workspace aria-label="New workspace" title="New workspace">+</button></div>
+  <a slot="nav" data-sub href="#/workspace">Main</a>
   <a slot="nav" href="#/inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 13h5l2 3h4l2-3h5"/></svg>Inbox</a>
   <a slot="nav" href="#/settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Settings</a>
   <div slot="drawer-footer" class="drawer-foot">[Company] · v0.1</div>
@@ -72,7 +83,9 @@
 
   <!-- Workspace: a golden-layout dock. Each <template> is a widget the drawer can add. -->
   <app-route path="/workspace" bleed>
-    <!-- <c-wires> tilts the live dock to show the connections behind it (the dock's Connections button). -->
+    <!-- The components drawer beside the dock; <c-wires> tilts the live dock to show the connections behind it. -->
+    <div class="ws-page">
+    <component-drawer for="workspace"></component-drawer>
     <c-wires>
       <workspace-dock id="workspace" storage-key="workspace-starter.layout" open="notes,chart,metrics,activity" arrangement="grid">
         <template data-widget="notes" data-title="Notes"><notes-panel></notes-panel></template>
@@ -88,6 +101,7 @@
         <template data-widget="c-editor" data-title="Puzzle editor"><editor-page></editor-page></template>
       </workspace-dock>
     </c-wires>
+    </div>
   </app-route>
 
   <!-- Systems: every system and its components, by system or by component. Select an action, then connect it to

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { Components, Ops, Registries, Runtimes, type Op, type Snapshot } from '@pritzlaff/nano-core'
 import { catalog, Log, Range } from '@composable/bundle'
-import { platform, PlatformOps as P } from '../src'
+import { platform, PlatformOps as P, runtimeOf } from '../src'
 
 const tick = () => new Promise(r => setTimeout(r, 0))
 const setup = () => {
@@ -89,4 +89,12 @@ test('removing a component from a system removes its connections both ways', asy
   await call(P.connect, { system: 'host', source: 'r', op: Ops.key(Range.ops.value), listener: 'l', target: Ops.key(Log.ops.info) })
   await call(P.removeFromSystem, { instance: 'r', system: 'host' })
   expect(host.registry.snapshot().subscriptions.filter(s => s.source === 'r')).toEqual([])
+})
+
+test('runtimeOf finds a system\'s runtime through the platform', async () => {
+  const { host, call } = setup()
+  await call(P.createSystem, 'lab')
+  expect(runtimeOf(host.registry, 'lab')!.registry.id).toBe('lab')
+  expect(runtimeOf(host.registry, 'host')).toBe(host)
+  expect(runtimeOf(host.registry, 'nope')).toBeUndefined()
 })

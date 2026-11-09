@@ -85,3 +85,13 @@ test('by component: the add button never targets a system the component is alrea
   const systems = (await call(P.systems)).value
   expect(systems[2].instances.map((i: any) => i.id)).toContain('r')
 })
+
+test('a component can be selected; a selection made elsewhere opens the tree to it', async () => {
+  const { call, settle, $ } = await mount()
+  ;($('[data-component="host/r"]') as HTMLButtonElement).click(); await settle()
+  expect((await call(P.selected)).value).toEqual({ system: 'host', instance: 'r' })
+  expect($('[data-component="host/r"]')!.getAttribute('aria-pressed')).toBe('true')
+  expect($(`[data-op="host/l/${Ops.key(Log.ops.info)}"]`)).toBeNull()   // l is closed
+  await call(P.select, { system: 'host', instance: 'l', op: Ops.key(Log.ops.info) }); await settle()
+  expect($(`[data-op="host/l/${Ops.key(Log.ops.info)}"]`)!.getAttribute('aria-pressed')).toBe('true')
+})

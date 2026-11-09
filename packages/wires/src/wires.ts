@@ -3,7 +3,7 @@
 // system through the platform. The render-* files draw it, as the prototype's template does from renderVals.
 import { LitElement, css } from 'lit'
 import { Ops, type Op, type Result, type Runtime, type Trace } from '@pritzlaff/nano-core'
-import { PlatformOps } from '@composable/platform'
+import { PlatformOps, PlatformOps as P, type Selection } from '@composable/platform'
 import type { Catalog } from '@pritzlaff/nano-elements'
 import { FLASH_MS, FONTS, FRAME_MS, MAX_PACKETS, TRAVEL_MS, TURN_MS, VIEWS, short, type View } from './constants'
 import { buildModel, type Model, type Panel } from './model'
@@ -17,6 +17,10 @@ export type Packet = { id: number; wire: string; born: number; label: string }
 /** All of the view's state. */
 export interface State {
   ry: number; rx: number; dragging: boolean; mode: 'relay' | 'puzzle'; sel: string | null; depth: number; editing: boolean; entering: boolean; leaving: boolean
+  /** Zoom (1 = fitted) and pan (screen px) on top of the camera; `zooming` makes them follow the wheel without easing. */
+  zoom: number; panX: number; panY: number; zooming: boolean
+  /** The drawer's tab, and what is selected (the platform's selection, kept in step through the trace). */
+  tab: 'view' | 'detail'; picked: Selection
   cord: Cord | null; armed: string | null; selMod: string | null; lift: string | null; toast: { kind: 'ok' | 'err'; text: string } | null
   packets: Packet[]; hits: Record<string, number>; flashes: Record<string, number>; stats: Record<string, { in: number; out: number }>
 }
@@ -42,7 +46,7 @@ let packetId = 0
 
 /** The wiring view: slot the live `<workspace-dock>`; its `dock:connections` event flips it to show the back. */
 export class Wires extends LitElement {
-  static properties = { runtime: { attribute: false }, catalog: { attribute: false }, platform: {}, system: {}, flipped: { type: Boolean, reflect: true } }
+  static properties = { runtime: { attribute: false }, host: { attribute: false }, catalog: { attribute: false }, platform: {}, system: {}, flipped: { type: Boolean, reflect: true } }
   static styles = css`
     :host { display: block; height: 100% }
     .stage-bg{background-color:#0B0E12;background-image:radial-gradient(#1C222B 1px, transparent 1px);background-size:22px 22px}
@@ -57,11 +61,13 @@ export class Wires extends LitElement {
     .joint:hover{background:#FFFFFF}
     .pkt-label{paint-order:stroke;stroke:#0A0D11;stroke-width:3px;stroke-linejoin:round}`
   declare runtime?: Runtime
+  /** The runtime the platform lives in (platform calls, selection); defaults to `runtime`. */
+  declare host?: Runtime
   declare catalog: Catalog
   declare platform: string
   declare system: string
   declare flipped: boolean
-  s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, entering: false, leaving: false, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
+  s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, entering: false, leaving: false, zoom: 1, panX: 0, panY: 0, zooming: false, tab: 'view', picked: null, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
   model: Model = empty()
   puzzle = buildPuzzle(this.model)
   stage = { w: 0, h: 0 }
@@ -73,19 +79,40 @@ export class Wires extends LitElement {
 
   constructor() {
     super()
-    this.catalog = {}; this.platform = 'platform'; this.system = 'host'; this.flipped = false
+    this.catalog = {}; this.platform = 'platform'; this.system = ''; this.flipped = false
     this.addEventListener('dock:connections', () => { if (this.flipped) this.close(); else this.flipped = true })
   }
   connectedCallback() { super.connectedCallback(); loadFonts(this.ownerDocument); if (this.hasUpdated) this.#attach() }
   disconnectedCallback() { super.disconnectedCallback(); this.#detach(); this.#stop() }
   willUpdate(changed: Map<string, unknown>) {
-    if (changed.has('runtime')) { this.#detach(); this.#attach() }
+    if (changed.has('runtime') || changed.has('host')) { this.#detach(); this.#attach() }
     if (changed.has('flipped')) this.flipped ? this.#open() : this.#close()
   }
   render() { return renderRoot(this) }
 
   /** React-style setState: merges a patch and re-renders. */
-  setState(patch: Partial<State>) { this.s = { ...this.s, ...patch }; this.requestUpdate() }
+  setState(patch: Partial<State>) {
+    if ('ry' in patch || 'rx' in patch) patch = { zooming: false, ...patch }   // camera moves ease again
+    this.s = { ...this.s, ...patch }; this.requestUpdate()
+  }
+  /** Zooms by a factor (kept within 0.25–4), about a client point if given, so what is under it stays put. */
+  zoomBy(factor: number, at?: { clientX: number; clientY: number }) {
+    const { zoom, panX, panY } = this.s, next = Math.min(4, Math.max(0.25, zoom * factor))
+    if (!at) return this.setState({ zoom: next, zooming: false })
+    const r = this.renderRoot.querySelector('.world')?.getBoundingClientRect()
+    const k = 1 - next / zoom, cx = r ? r.left + r.width / 2 : 0, cy = r ? r.top + r.height / 2 : 0
+    this.setState({ zoom: next, panX: panX + k * (at.clientX - cx), panY: panY + k * (at.clientY - cy), zooming: true })
+  }
+  /** Pinch or ctrl/cmd+scroll zooms about the pointer; scrolling pans. */
+  onWheel(e: WheelEvent) {
+    e.preventDefault()
+    if (e.ctrlKey || e.metaKey) this.zoomBy(Math.exp(-e.deltaY * 0.01), e)
+    else this.setState({ panX: this.s.panX - e.deltaX, panY: this.s.panY - e.deltaY, zooming: true })
+  }
+  /** Selects a component, or one of its actions, through the platform, and shows it in Detail. */
+  pick(sel: Exclude<Selection, null>) { this.setState({ picked: sel, tab: 'detail' }); void this.call(P.select, sel) }
+  /** Back to the fitted view. */
+  fit() { this.setState({ zoom: 1, panX: 0, panY: 0, zooming: false }) }
   now() { return performance.now() }
   recent(at: number | undefined) { return at !== undefined && this.now() - at < FLASH_MS }
   /** The slotted dock. */
@@ -95,6 +122,8 @@ export class Wires extends LitElement {
     const rt = this.runtime
     if (!rt || !this.isConnected || this.#off.length) return
     this.#off = [rt.registry.listen(() => this.schedule()), rt.listen(t => this.trace(t))]
+    // the platform's selection is published where the platform lives
+    if (this.host && this.host !== rt) this.#off.push(this.host.listen(t => { if (t.kind === 'publish') this.trace(t) }))
     this.rebuild()
   }
   #detach() { this.#off.forEach(f => f()); this.#off = [] }
@@ -104,7 +133,8 @@ export class Wires extends LitElement {
   panels(): Panel[] {
     const dock = this.dock()
     if (!dock) return []
-    return [...dock.querySelectorAll<HTMLElement>('.dock-panel')].map(p => {
+    // only panels that are showing: an inactive tab has no size or place, and its component waits in the rack
+    return [...dock.querySelectorAll<HTMLElement>('.dock-panel')].filter(p => p.offsetWidth > 0 && p.offsetHeight > 0).map(p => {
       const el = modelIn(p)
       return { instance: el?.model ?? null, rect: rectIn(p, dock), tag: (el ?? p.firstElementChild ?? p).localName }
     })
@@ -128,6 +158,7 @@ export class Wires extends LitElement {
 
   /** A delivery on a drawn wire sends a packet along it, flashes its source and counts it. */
   trace(t: Trace) {
+    if (this.flipped && t.kind === 'publish' && t.from.instance === this.platform && t.op === Ops.key(P.selectionChanged)) this.setState({ picked: (t.data ?? null) as Selection })
     if (!this.flipped || t.kind !== 'delivery' || !this.model.wires.some(w => w.id === t.subscription)) return   // flat: nothing to draw
     const now = this.now(), { stats, flashes } = this.s
     const stat = (id: string) => stats[id] ?? { in: 0, out: 0 }
@@ -157,7 +188,7 @@ export class Wires extends LitElement {
     const dock = this.dock()
     this.model = { ...this.model, W: dock?.offsetWidth || 1340, H: dock?.offsetHeight || 560 }
     this.rebuild()
-    this.s = { ...this.s, ry: 0, rx: 0, dragging: false, entering: true, leaving: false, packets: [] }
+    this.s = { ...this.s, ry: 0, rx: 0, dragging: false, entering: true, leaving: false, zoom: 1, panX: 0, panY: 0, zooming: false, packets: [] }
     this.#stop()
     this.#timer = setInterval(() => this.frame(), FRAME_MS)
     setTimeout(() => { this.measure(); this.setState({ entering: false }) }, 60)   // starts at full size, then eases back
@@ -185,23 +216,26 @@ export class Wires extends LitElement {
   fail(text: string) { this.setState({ cord: null, toast: { kind: 'err', text } }) }
 
   /** Calls a platform op as the view; a refusal is shown, and returned. */
+  /** The system shown: `system`, or the runtime's registry. */
+  get sys() { return this.system || this.runtime?.registry.id || 'host' }
   async call(op: Op, arg: unknown): Promise<Result> {
-    if (!this.runtime) return { error: 'no runtime' }
-    const r = await this.runtime.call({ registry: this.system, instance: 'wires' }, this.platform, Ops.key(op), arg)
+    const at = this.host ?? this.runtime
+    if (!at) return { error: 'no runtime' }
+    const r = await at.call({ registry: at.registry.id, instance: 'wires' }, this.platform, Ops.key(op), arg)
     if ('error' in r) this.fail(r.error)
     return r
   }
   async connect(from: string, to: string) {
     const a = this.model.P[from]!, b = this.model.P[to]!
-    return this.call(PlatformOps.connect, { system: this.system, source: a.owner, op: Ops.key(a.op), listener: b.owner, target: Ops.key(b.op) })
+    return this.call(PlatformOps.connect, { system: this.sys, source: a.owner, op: Ops.key(a.op), listener: b.owner, target: Ops.key(b.op) })
   }
-  disconnect(id: string) { return this.call(PlatformOps.disconnect, { system: this.system, id }) }
-  removeComponent(instance: string) { return this.call(PlatformOps.removeFromSystem, { instance, system: this.system }) }
+  disconnect(id: string) { return this.call(PlatformOps.disconnect, { system: this.sys, id }) }
+  removeComponent(instance: string) { return this.call(PlatformOps.removeFromSystem, { instance, system: this.sys }) }
   /** Adds a component of `kind` to the rack, under a fresh name; returns the name, or null if refused. */
   async create(kind: string) {
     let n = 1
     while (this.runtime?.registry.get(kind + '-' + n)) n += 1
-    const r = await this.call(PlatformOps.createComponent, { kind, name: kind + '-' + n, system: this.system })
+    const r = await this.call(PlatformOps.createComponent, { kind, name: kind + '-' + n, system: this.sys })
     return 'error' in r ? null : kind + '-' + n
   }
   /** Asks the workspace to open a rack component as a panel again, with the element of the kind it was made from. */

@@ -2,10 +2,12 @@ import { afterEach, expect, test } from 'bun:test'
 import { Ops } from '@pritzlaff/nano-core'
 import { catalog, Map, Range } from '@composable/bundle'
 import { defineWires, type Wires } from '../src'
+import { definePlatform, PlatformOps as P } from '@composable/platform'
 import { onDown, onMove, onUp, removeSel, toggleEdit } from '../src/pointer'
 import { setup, tick } from './setup'
 
 defineWires()
+definePlatform()
 afterEach(() => { document.body.innerHTML = '' })
 
 const box = (el: HTMLElement, x: number, y: number, w: number, h: number) => {
@@ -231,4 +233,131 @@ test('the edit drawer fades in once the pane has dropped back; Done fades it out
   expect(world().transform).toContain('rotateX(0.00deg) rotateY(360.00deg)')
   await new Promise(r => setTimeout(r, 950)); await settle()
   expect(el.flipped).toBe(false)
+})
+
+test('pinch or ctrl/cmd+scroll zooms the view, scrolling pans it, and Fit puts it back', async () => {
+  const { el, root, flip, settle } = await mount()
+  await flip(); await new Promise(r => setTimeout(r, 80)); await settle()
+  const stage = root.querySelector('.stage-bg') as HTMLElement
+  const world = () => (root.querySelector('.world') as HTMLElement).style.transform
+  // happy-dom's WheelEvent drops the mouse fields (ctrlKey, metaKey, clientX…), so they are set on the event
+  const wheel = (init: Record<string, number | boolean>) => {
+    const e = new WheelEvent('wheel', { deltaX: Number(init.deltaX ?? 0), deltaY: Number(init.deltaY ?? 0), bubbles: true, cancelable: true })
+    for (const k of ['ctrlKey', 'metaKey', 'clientX', 'clientY']) Object.defineProperty(e, k, { value: init[k] ?? (k.endsWith('Key') ? false : 0) })
+    stage.dispatchEvent(e)
+  }
+  wheel({ deltaY: -100, ctrlKey: true, clientX: 600, clientY: 300 })
+  await settle()
+  expect(el.s.zoom).toBeGreaterThan(1)
+  expect(el.s.zoom).toBeLessThanOrEqual(4)
+  const [px, py] = [el.s.panX, el.s.panY]   // zooming about the pointer moved it
+  wheel({ deltaX: 30, deltaY: 40 })
+  await settle()
+  expect([el.s.panX - px, el.s.panY - py]).toEqual([-30, -40])
+  expect(world()).toContain(`translate(${-170 + el.s.panX}px`)
+  expect(world()).toContain(`scale(${+(0.9 * el.s.zoom).toFixed(4)})`)
+  for (let i = 0; i < 40; i++) wheel({ deltaY: 500, metaKey: true })
+  await settle()
+  expect(el.s.zoom).toBe(0.25)
+  ;(root.querySelector('[aria-label="Fit the view"]') as HTMLButtonElement).click(); await settle()
+  expect([el.s.zoom, el.s.panX, el.s.panY]).toEqual([1, 0, 0])
+  ;(root.querySelector('[aria-label="Zoom in"]') as HTMLButtonElement).click(); await settle()
+  expect(el.s.zoom).toBeGreaterThan(1)
+})
+
+test('every cord glows and shows its direction of flow', async () => {
+  const { root, flip } = await mount()
+  await flip()
+  const cords = [...root.querySelectorAll('[data-wire]')]
+  expect(cords.length).toBe(2)
+  for (const c of cords) { expect(c.querySelector('.glow')).not.toBeNull(); expect(c.querySelector('.flow')).not.toBeNull() }
+})
+
+test('a panel that is not showing (an inactive tab) is not drawn on the pane; its component waits in the rack', async () => {
+  const { el, dock, flip } = await mount()
+  const hidden = document.createElement('div')
+  hidden.className = 'dock-panel'
+  hidden.innerHTML = '<x-m></x-m>'
+  Object.assign(hidden.querySelector('x-m')!, { model: 'm' })
+  box(hidden, 0, 0, 0, 0)   // display:none: no size
+  dock.append(hidden)
+  await flip()
+  expect(el.model.chassis.length).toBe(3)
+  expect(el.model.chassis.some(c => c.instance === 'm')).toBe(false)
+  expect(el.model.rack.map(r => r.id)).toContain('m')
+})
+
+test('clicking a jack on the back selects its action, and Detail shows its op, schemas and connections', async () => {
+  const { el, root, call, flip, settle, at } = await mount()
+  await flip()
+  const jack = at(k('r', Range.ops.value))
+  onDown(el, jack); await onUp(el, jack); await settle(); await settle()
+  expect((await call(P.selected, null)).value).toEqual({ system: 'host', instance: 'r', op: Ops.key(Range.ops.value) })
+  expect(el.s.tab).toBe('detail')
+  const card = root.querySelector('.detail')!.textContent!
+  expect(card).toContain(Ops.key(Range.ops.value))
+  expect(card).toContain('source')
+  expect(card).toContain('"type": "number"')
+  expect(card).toContain('r.value → d.enqueue')
+})
+
+test('clicking a panel selects its component: coordinates, kind, jacks and connections', async () => {
+  const { el, root, call, flip, settle } = await mount()
+  await flip()
+  const c = el.model.chassis.find(x => x.instance === 'r')!, mid = { clientX: c.x + c.w / 2, clientY: c.y + c.h / 2 }   // the back is the front mirrored
+  onDown(el, mid); await onUp(el, mid); await settle(); await settle()
+  expect((await call(P.selected, null)).value).toEqual({ system: 'host', instance: 'r' })
+  const card = root.querySelector('.detail')!.textContent!
+  expect(card).toContain('host / r')
+  expect(card).toContain('range')
+  expect(card).toContain('composable.bundle/range')
+  expect(card).toContain('r.value → d.enqueue')
+})
+
+test('the drawer has View and Detail tabs; Detail holds the system tree, in step with the selection', async () => {
+  const { el, root, flip, settle } = await mount()
+  await flip()
+  const tab = (name: string) => [...root.querySelectorAll('[role="tab"]')].find(t => t.textContent!.trim() === name) as HTMLButtonElement
+  expect(tab('View').getAttribute('aria-selected')).toBe('true')
+  tab('Detail').click(); await settle()
+  expect(root.querySelector('.detail')!.textContent).toContain('Click a panel')
+  const tree = root.querySelector('c-platform') as HTMLElement & { updateComplete: Promise<boolean> }
+  for (let i = 0; i < 4; i++) { await tree.updateComplete; await settle() }
+  ;(tree.shadowRoot!.querySelector('[data-component="host/d"]') as HTMLButtonElement).click()
+  for (let i = 0; i < 3; i++) await settle()
+  expect(el.s.picked).toEqual({ system: 'host', instance: 'd' })
+  expect(root.querySelector('.detail')!.textContent).toContain('host / d')
+  tab('View').click(); await settle()
+  expect(root.querySelector('c-platform')).toBeNull()
+})
+
+test('over another system: cords connect in that system, through the platform in host, and picks name that system', async () => {
+  const t = await setup()
+  await t.call(P.createSystem, 'lab')
+  for (const [kind, name] of [['range', 'lr'], ['debounce', 'ld']]) await t.call(P.createComponent, { kind, name, system: 'lab' })
+  const { runtimeOf } = await import('@composable/platform')
+  const lab = runtimeOf(t.host.registry, 'lab')!
+  const el = document.createElement('c-wires') as Wires
+  Object.assign(el, { runtime: lab, host: t.host, catalog })
+  const dock = document.createElement('div')
+  box(dock, 0, 0, 1200, 600)
+  el.append(dock); document.body.append(el)
+  await el.updateComplete
+  expect(el.sys).toBe('lab')
+  el.flipped = true; await el.updateComplete; await tick(); await el.updateComplete
+  const plate = el.shadowRoot!.querySelector('.plate-bg')!
+  plate.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1200, height: 600 }) as DOMRect
+  const at = (key: string) => ({ clientX: el.model.P[key]!.x, clientY: el.model.P[key]!.y })
+  toggleEdit(el)
+  onDown(el, at(k('lr', Range.ops.value)))
+  onMove(el, at(k('ld', { ns: 'composable.bundle/debounce', name: 'enqueue' })))
+  await onUp(el, at(k('ld', { ns: 'composable.bundle/debounce', name: 'enqueue' })))
+  expect(lab.registry.snapshot().subscriptions.some(s => s.source === 'lr' && s.listener === 'ld')).toBe(true)
+  expect(t.host.registry.snapshot().subscriptions.some(s => s.source === 'lr')).toBe(false)
+  toggleEdit(el)
+  const jack = at(k('lr', Range.ops.value))
+  onDown(el, jack); await onUp(el, jack); await tick(); await el.updateComplete
+  expect((await t.call(P.selected, null)).value).toEqual({ system: 'lab', instance: 'lr', op: Ops.key(Range.ops.value) })
+  expect(el.s.picked).toEqual({ system: 'lab', instance: 'lr', op: Ops.key(Range.ops.value) })
+  expect(el.shadowRoot!.querySelector('.detail')!.textContent).toContain('lab / lr')
 })

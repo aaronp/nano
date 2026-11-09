@@ -109,7 +109,8 @@ export class AppShell extends LitElement {
 
   private markNav() {
     for (const a of this.querySelectorAll<HTMLAnchorElement>(':scope > a[slot="nav"]')) {
-      if (!a.hasAttribute('data-sub') && isCurrent(a.getAttribute('href'), this.route)) a.setAttribute('aria-current', 'page');
+      // a sub-item that is a page (a workspace) can be current; one that adds something (data-dock-add) never is
+      if (!a.hasAttribute('data-dock-add') && isCurrent(a.getAttribute('href'), this.route)) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     }
   }
