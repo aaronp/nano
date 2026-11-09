@@ -14,5 +14,5 @@ export const resolveRoute = (hash: string, paths: readonly string[]): string => 
   throw new Error(`no <app-route> matches ${want} and there is no path="*" fallback`);
 };
 
-/** Is this nav link for the route being shown? Sub-items (data-sub) never are. */
+/** Is this nav link for the route being shown? (The shell never marks links that add something, data-dock-add.) */
 export const isCurrent = (href: string | null, route: string): boolean => href === `#${route}`;

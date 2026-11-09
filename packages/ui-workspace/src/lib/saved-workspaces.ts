@@ -21,20 +21,25 @@ export const SYSTEM = /^[a-z0-9][a-z0-9-]*$/;
 const KEY = 'workspace-starter.saved-workspaces';
 export const PATH = /^\/[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)*$/;
 
-/** The saved workspaces in storage: list them, or add one (a refusal is returned as a sentence). */
+/** The saved workspaces in storage: list them, check one, or add one (a refusal is returned as a sentence). */
 export const savedWorkspaces = (storage: Pick<Storage, 'getItem' | 'setItem'>) => {
   const list = (): SavedWorkspace[] => {
     try { const v = JSON.parse(storage.getItem(KEY) ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
   };
-  const add = (ws: SavedWorkspace, taken: readonly string[]): string | null => {
+  const refusal = (ws: SavedWorkspace, taken: readonly string[]): string | null => {
     if (!PATH.test(ws.path)) return 'The route must look like /my-workspace: lower-case letters, digits and dashes after a /.';
     if (taken.includes(ws.path) || list().some((w) => w.path === ws.path)) return `${ws.path} is already a page.`;
     if (!ws.title.trim()) return 'Give it a title for the nav.';
     if (!(ws.icon in ICONS)) return `There is no icon called ${ws.icon}.`;
     const system = ws.system ?? 'host';
     if (!SYSTEM.test(system)) return 'A system name is lower-case letters, digits and dashes.';
-    storage.setItem(KEY, JSON.stringify([...list(), { path: ws.path, title: ws.title.trim(), icon: ws.icon, system }]));
     return null;
   };
-  return { list, add };
+  const add = (ws: SavedWorkspace, taken: readonly string[]): string | null => {
+    const refused = refusal(ws, taken);
+    if (refused) return refused;
+    storage.setItem(KEY, JSON.stringify([...list(), { path: ws.path, title: ws.title.trim(), icon: ws.icon, system: ws.system ?? 'host' }]));
+    return null;
+  };
+  return { list, refusal, add };
 };

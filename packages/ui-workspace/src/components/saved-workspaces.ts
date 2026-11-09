@@ -89,9 +89,12 @@ export function bootSavedWorkspaces(doc: Document) {
       const fresh = c.system === 'new', system = fresh ? (c.newSystem ?? '') : (c.system ?? 'host');
       const refusal = fresh && systems.includes(system) ? `${system} is already a system: choose it from the list.` : fresh && !SYSTEM.test(system) ? 'Name the new system: lower-case letters, digits and dashes.' : null;
       const ws = { path: c.path, title: c.title, icon: c.icon, system };
-      const refused = refusal ?? saved.add(ws, taken());
+      const refused = refusal ?? saved.refusal(ws, taken());
       if (refused) { error = refused; prev = c; continue; }
-      if (fresh) await call(P.createSystem, system);
+      // the system first: a workspace is only saved once the system it runs in exists
+      const made = fresh ? await call(P.createSystem, system) : null;
+      if (made && 'error' in made) { error = made.error; prev = c; continue; }
+      saved.add(ws, taken());
       return open(ws);
     }
   });

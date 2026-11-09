@@ -10,7 +10,6 @@ a[slot='nav'] svg { width: 20px; height: 20px; flex: none; fill: none; stroke: c
 /* The Workspaces nav row: its link, and a + to make a new workspace. */
 .nav-row a { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; color: inherit; text-decoration: none; }
 .nav-row a svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.nav-row:has(a[aria-current='page']) { background: var(--accent-soft); color: var(--fg); font-weight: 600; }
 .nav-row button { flex: none; width: 26px; height: 26px; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); font: inherit; font-size: 16px; line-height: 1; cursor: pointer; }
 .nav-row button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 a[slot='nav'][data-sub] svg { width: 16px; height: 16px; }
