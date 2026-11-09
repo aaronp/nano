@@ -28,8 +28,8 @@ export function mountWorkspace(doc: Document, ws: SavedWorkspace) {
   const route = doc.createElement('app-route');
   route.setAttribute('path', ws.path); route.setAttribute('bleed', '');
   const id = `ws${ws.path.replace(/\//g, '-')}`;
-  const pane = doc.createElement('split-pane'), drawer = doc.createElement('component-drawer');
-  pane.setAttribute('direction', 'row'); pane.setAttribute('sizes', '22,78'); pane.setAttribute('min', '160'); pane.setAttribute('storage-key', `ws:${ws.path}`);
+  const pane = doc.createElement('div'), drawer = doc.createElement('component-drawer');
+  pane.className = 'ws-page';
   drawer.setAttribute('for', id);
   const wires = doc.createElement('c-wires'), dock = doc.createElement('workspace-dock');
   const mainWires = main.closest('c-wires') as (HTMLElement & { runtime?: unknown; catalog?: unknown }) | null;

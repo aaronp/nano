@@ -108,7 +108,7 @@ export class AppShell extends LitElement {
   };
 
   private markNav() {
-    for (const a of this.querySelectorAll<HTMLAnchorElement>(':scope > a[slot="nav"]')) {
+    for (const a of this.querySelectorAll<HTMLAnchorElement>(':scope > a[slot="nav"], :scope > .nav-row[slot="nav"] > a')) {
       if (!a.hasAttribute('data-sub') && isCurrent(a.getAttribute('href'), this.route)) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     }

@@ -41,14 +41,12 @@ const set = (id: string, op: Op, arg: unknown) => host.call({ registry: 'host', 
 await set('ex-map', Map.ops.setCode, 'return x * 2')
 await set('ex-input', Input.ops.setKind, 'number')
 
-// The dock lists every kind that has an element: a drawer link and a panel template each, before the hand-written ones.
-const link = document.querySelector('a[data-dock-add][data-widget="c-platform"]'), panel = document.querySelector('template[data-widget="c-platform"]')
+// The dock can add every kind that has an element: a panel template each (marked as the catalog's, for the components
+// drawer), before the hand-written ones.
+const panel = document.querySelector('template[data-widget="c-platform"]')
 for (const [kind, e] of Object.entries(catalog)) if (e.tag) {
-  const a = Object.assign(document.createElement('a'), { href: '#/workspace', title: 'Click to add, or drag into the workspace', textContent: `+ ${e.title}` })
-  for (const [k, v] of [['slot', 'nav'], ['data-sub', ''], ['data-dock-add', 'workspace'], ['data-widget', kind]]) a.setAttribute(k, v!)
-  link?.before(a)
   const t = Object.assign(document.createElement('template'), { innerHTML: `<${e.tag} keep></${e.tag}>` })   // closing a panel sends it to the rack
-  t.dataset.widget = kind; t.dataset.title = e.title
+  t.dataset.widget = kind; t.dataset.title = e.title; t.dataset.catalog = ''
   panel?.before(t)
 }
 

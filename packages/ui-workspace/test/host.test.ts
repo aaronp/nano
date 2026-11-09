@@ -60,13 +60,14 @@ test('<puzzle-port> is on its own page and in the dock, rendering the ported art
   expect(document.querySelector('template[data-widget="puzzle-port"]')).not.toBeNull()
 })
 
-test('the dock lists every catalog type that has an element, and + Add can make every type', async () => {
+test('the dock can add every catalog type that has an element (marked for the drawer), and + Add can make every type', async () => {
   const { catalog } = await import('../src/composable.ts')
   const tagged = Object.entries(catalog).filter(([, e]) => e.tag)
   expect(tagged.length).toBeGreaterThanOrEqual(6)
   for (const [kind, e] of tagged) {
-    expect(document.querySelector(`a[data-dock-add][data-widget="${kind}"]`)?.textContent).toBe(`+ ${e.title}`)
-    expect(document.querySelector(`template[data-widget="${kind}"]`)?.innerHTML).toBe(`<${e.tag} keep=""></${e.tag}>`)   // closing sends it to the rack
+    const t = document.querySelector(`template[data-widget="${kind}"]`)!
+    expect(t.innerHTML).toBe(`<${e.tag} keep=""></${e.tag}>`)   // closing sends it to the rack
+    expect(t.hasAttribute('data-catalog')).toBe(true)
   }
   const kinds = (await call('platform', P.catalog)).value
   expect(kinds).toEqual(expect.arrayContaining(['range', 'log', 'component-list', 'connection-board']))
@@ -90,4 +91,13 @@ test('the Workspace dock sits inside <c-wires>, which has the host runtime and t
   wires.querySelector('workspace-dock')!.dispatchEvent(new CustomEvent('dock:connections', { bubbles: true, composed: true }))
   await wires.updateComplete
   expect(wires.flipped).toBe(true)
+})
+
+test('the nav has a Workspaces group with + and Main, and no component items; Main is a drawer beside its dock', () => {
+  const group = document.querySelector('app-shell > [data-workspaces]')!
+  expect(group.querySelector('a')!.getAttribute('href')).toBe('#/workspace')
+  expect(group.querySelector('button[data-new-workspace]')).not.toBeNull()
+  expect(group.nextElementSibling!.textContent!.trim()).toBe('Main')
+  expect([...document.querySelectorAll('a[slot="nav"]')].filter(a => a.textContent!.trim().startsWith('+'))).toEqual([])
+  expect(document.querySelector('app-route[path="/workspace"] .ws-page > component-drawer')!.getAttribute('for')).toBe('workspace')
 })
