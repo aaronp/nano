@@ -17,6 +17,13 @@
         "typebox": "^1.4.0",
       },
     },
+    "packages/core": {
+      "name": "@composable/core",
+      "version": "0.1.0",
+      "dependencies": {
+        "typebox": "^1.4.0",
+      },
+    },
     "packages/puzzle-editor": {
       "name": "@composable/puzzle-editor",
       "version": "0.1.0",
@@ -79,6 +86,8 @@
   },
   "packages": {
     "@composable/connections": ["@composable/connections@workspace:packages/connections"],
+
+    "@composable/core": ["@composable/core@workspace:packages/core"],
 
     "@composable/puzzle-editor": ["@composable/puzzle-editor@workspace:packages/puzzle-editor"],
 
