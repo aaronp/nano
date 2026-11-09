@@ -59,3 +59,14 @@ test('placing slider then doubler side by side makes one connection', async () =
   expect((await call(ids.board, B.ops.connections)).value).toHaveLength(1)
   expect(deep(page, '.connection')).toHaveLength(1)
 })
+
+test('an <editor-page> with no ids adds an editor to the provided registry, once', async () => {
+  const { provide } = await import('@composable/elements')
+  const reg = Runtimes.create(Registries.create('provided')).registry
+  provide(document, reg)
+  document.body.insertAdjacentHTML('beforeend', '<editor-page></editor-page><editor-page></editor-page>')
+  const pages = [...document.querySelectorAll('editor-page')].slice(-2) as El[]
+  for (const p of pages) await settle(p)
+  expect(reg.snapshot().instances.filter(i => i.id === 'editor-list')).toHaveLength(1)
+  expect(deep(pages[1]!, 'component-list-el')).toHaveLength(1)
+})

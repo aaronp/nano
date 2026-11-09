@@ -16,7 +16,7 @@
 
   <!-- Navigation: one link per <app-route> below, in order. -->
   <a slot="nav" href="#/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/></svg>Overview</a>
-  <a slot="nav" href="#/connections"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6v5H4zM14 13h6v5h-6zM10 8.5h2a2 2 0 0 1 2 2V15.5"/></svg>Connections</a>
+  <a slot="nav" href="#/systems"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6v5H4zM14 13h6v5h-6zM10 8.5h2a2 2 0 0 1 2 2V15.5"/></svg>Systems</a>
   <a slot="nav" href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspace</a>
   <!-- Workspace widgets: click to add a panel, or drag one into the layout. data-widget matches a <template> below. -->
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="notes" title="Click to add, or drag into the workspace">+ Notes</a>
@@ -24,13 +24,14 @@
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="metrics" title="Click to add, or drag into the workspace">+ Metrics</a>
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="messages" title="Click to add, or drag into the workspace">+ Messages</a>
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="activity" title="Click to add, or drag into the workspace">+ Activity</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-slider" title="Click to add, or drag into the workspace">+ Slider (composable)</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-debug" title="Click to add, or drag into the workspace">+ Debug (composable)</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-log" title="Click to add, or drag into the workspace">+ Log (composable)</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-type-editor" title="Click to add, or drag into the workspace">+ Type editor</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-component-list" title="Click to add, or drag into the workspace">+ Component list</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-connection-editor" title="Click to add, or drag into the workspace">+ Connection editor</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-puzzle-editor" title="Click to add, or drag into the workspace">+ Puzzle editor</a>
+  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-input" title="Click to add, or drag into the workspace">+ Input</a>
+  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-range" title="Click to add, or drag into the workspace">+ Range</a>
+  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-log" title="Click to add, or drag into the workspace">+ Log</a>
+  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-debounce" title="Click to add, or drag into the workspace">+ Debounce</a>
+  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-map" title="Click to add, or drag into the workspace">+ Map</a>
+  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-filter" title="Click to add, or drag into the workspace">+ Filter</a>
+  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-platform" title="Click to add, or drag into the workspace">+ Systems</a>
+  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-editor" title="Click to add, or drag into the workspace">+ Puzzle editor</a>
   <a slot="nav" href="#/inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 13h5l2 3h4l2-3h5"/></svg>Inbox</a>
   <a slot="nav" href="#/settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Settings</a>
   <div slot="drawer-footer" class="drawer-foot">[Company] · v0.1</div>
@@ -51,7 +52,7 @@
     <!-- @composable components, written in markup at build time: they place themselves in the page's scope. -->
     <section class="panel composable">
       <h2>Composable</h2>
-      <flow-slider name="slider"></flow-slider>
+      <c-range name="slider"></c-range>
     </section>
     <split-pane class="tall" direction="row" sizes="2,1" min="220" collapse-below="760" storage-key="overview">
       <line-chart></line-chart>
@@ -80,29 +81,31 @@
       <template data-widget="messages" data-title="Messages" data-flush><mail-list></mail-list></template>
       <template data-widget="activity" data-title="Activity"><bus-log limit="40"></bus-log></template>
       <!-- @composable components, added at runtime: each panel places a new instance and removes it on close. -->
-      <template data-widget="c-slider" data-title="Slider (composable)"><flow-slider></flow-slider></template>
-      <template data-widget="c-debug" data-title="Debug (composable)"><debug-panel></debug-panel></template>
-      <template data-widget="c-log" data-title="Log (composable)"><flow-log></flow-log></template>
-      <template data-widget="c-type-editor" data-title="Type editor"><type-editor></type-editor></template>
-      <template data-widget="c-component-list" data-title="Component list"><component-list></component-list></template>
-      <template data-widget="c-connection-editor" data-title="Connection editor"><connection-editor></connection-editor></template>
-      <template data-widget="c-puzzle-editor" data-title="Puzzle editor"><puzzle-editor></puzzle-editor></template>
+      <template data-widget="c-input" data-title="Input"><c-input></c-input></template>
+      <template data-widget="c-range" data-title="Range"><c-range></c-range></template>
+      <template data-widget="c-log" data-title="Log"><c-log></c-log></template>
+      <template data-widget="c-debounce" data-title="Debounce"><c-debounce></c-debounce></template>
+      <template data-widget="c-map" data-title="Map"><c-map></c-map></template>
+      <template data-widget="c-filter" data-title="Filter"><c-filter></c-filter></template>
+      <template data-widget="c-platform" data-title="Systems"><c-platform></c-platform></template>
+      <template data-widget="c-editor" data-title="Puzzle editor"><editor-page></editor-page></template>
     </workspace-dock>
   </app-route>
 
-  <!-- Connections: the puzzle editor, for declarative connections between the composable widgets below.
-       Join pieces into a workflow, switch on Live, then move the slider. -->
-  <app-route path="/connections">
+  <!-- Systems: every system and its components, by system or by component. Select an action, then connect it to
+       one that fits. The example below is made by composable.ts; these elements attach to it by name. -->
+  <app-route path="/systems">
     <header class="page-head">
-      <h1>Connections</h1>
-      <p>Drag pieces from the palette into a row to make a workflow (e.g. slider → doubler <em>in</em> → chart <em>push</em>), or add a fan-out connection (every output → log). Switch on <b>Live</b>, then move the slider.</p>
+      <h1>Systems</h1>
+      <p>Move the range: its values queue in the debounce and land in the log as a batch. Type a number into the input and press Enter: the map doubles it into the log. Select an action in the tree, then connect it to one that fits.</p>
     </header>
-    <section class="panel"><puzzle-editor name="editor"></puzzle-editor></section>
+    <section class="panel"><c-platform></c-platform></section>
     <div class="cards composable-row">
-      <section class="panel"><h2>Slider</h2><flow-slider name="c-slider"></flow-slider></section>
-      <section class="panel"><h2>Doubler</h2><flow-mapper name="c-doubler"></flow-mapper></section>
-      <section class="panel"><h2>Chart</h2><flow-chart name="c-chart"></flow-chart></section>
-      <section class="panel"><h2>Log</h2><flow-log name="c-log"></flow-log></section>
+      <section class="panel"><h2>Range</h2><c-range name="ex-range"></c-range></section>
+      <section class="panel"><h2>Debounce</h2><c-debounce name="ex-debounce"></c-debounce></section>
+      <section class="panel"><h2>Input</h2><c-input name="ex-input"></c-input></section>
+      <section class="panel"><h2>Map</h2><c-map name="ex-map"></c-map></section>
+      <section class="panel"><h2>Log</h2><c-log name="ex-log"></c-log></section>
     </div>
   </app-route>
 

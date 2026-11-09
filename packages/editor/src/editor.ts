@@ -8,9 +8,13 @@ import { TypeList } from './components/type-list'
 /** The instance ids of one editor's components. */
 export type Ids = { list: string; types: string; typeEditor: string; board: string }
 
+/** The instance ids an editor with this prefix uses. */
+export const editorIds = (prefix = 'editor'): Ids =>
+  ({ list: `${prefix}-list`, types: `${prefix}-types`, typeEditor: `${prefix}-type-editor`, board: `${prefix}-board` })
+
 /** Adds an editor's components to `registry` and wires them. Returns their ids. */
 export function addEditor(registry: Registry, prefix = 'editor'): Ids {
-  const ids: Ids = { list: `${prefix}-list`, types: `${prefix}-types`, typeEditor: `${prefix}-type-editor`, board: `${prefix}-board` }
+  const ids = editorIds(prefix)
   const add = (id: string, c: Component) => {
     const r = registry.add(id, Components.instantiate(c))
     if ('error' in r) throw new Error(r.error)

@@ -67,3 +67,8 @@ test('Add creates a component from the catalog', async () => {
   button('Create').click(); await settle()
   expect((await call(P.systems)).value[0].instances.map((i: any) => i.id)).toContain('d1')
 })
+
+test('the tree lists connections, not the hidden subscriptions of views', async () => {
+  const { $$ } = await mount()
+  expect($$('.connection')).toHaveLength(0)   // <c-platform> itself subscribes to the platform, in host
+})

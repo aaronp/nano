@@ -127,14 +127,18 @@
       "name": "@composable/ui-workspace",
       "version": "0.1.0",
       "dependencies": {
-        "@composable/connections": "workspace:*",
-        "@composable/puzzle-editor": "workspace:*",
-        "@composable/sdk": "workspace:*",
-        "@composable/ui": "workspace:*",
-        "@composable/widgets": "workspace:*",
+        "@composable/bundle": "workspace:*",
+        "@composable/core": "workspace:*",
+        "@composable/editor": "workspace:*",
+        "@composable/elements": "workspace:*",
+        "@composable/platform": "workspace:*",
+        "@composable/runes": "workspace:*",
         "golden-layout": "^2.6.0",
         "lit": "^3.3.3",
         "typebox": "^1.4.0",
+      },
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^21.0.4",
       },
     },
     "packages/widgets": {

@@ -3,18 +3,26 @@ import { css, html } from 'lit'
 import type { Entry, Selection } from '../components/component-list'
 import { ComponentList as L } from '../components/component-list'
 import { TypeList as T } from '../components/type-list'
-import type { Ids } from '../editor'
+import { addEditor, editorIds, type Ids } from '../editor'
 import type { TypeEntry } from '../model'
-import { base } from '@composable/elements'
-import { ModelElement } from '@composable/elements'
+import { base, ModelElement, providedRegistry } from '@composable/elements'
 
-/** Lays out one editor: give it the `registry` and the `ids` from `addEditor`. */
+/** Lays out one editor: give it the `registry` and the `ids` from `addEditor`. Without them it uses the provided
+ * registry, and the editor there (adding one if there is none). */
 export class EditorPage extends ModelElement {
   static styles = [base, css`:host { background: #0D0F13; padding: 16px } .tabs button { flex: 1 }`]
   static properties = { ...ModelElement.properties, ids: { attribute: false }, tab: { state: true } }
   declare ids?: Ids
   declare tab: 'elements' | 'types'
   constructor() { super(); this.tab = 'elements' }
+
+  connectedCallback() {
+    if (!this.ids) {
+      this.registry ??= providedRegistry(this.ownerDocument)
+      if (this.registry) this.ids = this.registry.get(editorIds().list) ? editorIds() : addEditor(this.registry)
+    }
+    super.connectedCallback()
+  }
 
   willUpdate(changed: Map<string, unknown>) {
     if (changed.has('ids') && this.ids) { this.model = this.ids.list; this.watch = [this.ids.types] }

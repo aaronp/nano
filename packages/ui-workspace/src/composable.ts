@@ -1,74 +1,40 @@
 /**
  * The adapter between this host and @composable components. Nothing else in the starter knows about them, and
  * they know nothing about the starter:
- *   - one System for the page, provided on the document, so any composable view (in markup, or cloned into a
- *     dock panel) creates and registers its component there, and unregisters it when it is removed;
- *   - our theme tokens (--c-*) are mapped onto this starter's in app.css (CSS only);
- *   - our notifications are mirrored onto the starter's bus as `composable:<op>`, so its widgets (bus-log,
- *     status-line) show them.
- * The page System is also a component (`system`), and an orchestrator keeps it wired to intents. When
- * <puzzle-editor name="editor"> places itself, it is linked: system/changed → its set-instances, its
- * intents-updated → orchestrator/set-intents; when it is removed, the orchestrator's intents are cleared. Its document is loaded from localStorage (or the empty one), and saved there.
- * Imported before the views are defined, so the provider exists when markup upgrades.
+ *   - one runtime over the registry `host`, provided on the document, so elements in markup (or cloned into a
+ *     dock panel) place their components there, and remove the ones they made when they go;
+ *   - the platform as `platform`: it holds `host` and any systems made later, and builds from the bundle catalog;
+ *   - a worked example, made through the platform so it outlives page changes: range → debounce → log, and
+ *     input → map → log. The Systems page's elements name these instances and attach to them.
+ * Imported before the elements are defined, so the registry is provided when markup upgrades.
  */
-import { Components, Systems, fail, type Component, type Result } from '@composable/sdk'
-import { provideSystem } from '@composable/ui'
-import { defineElements } from '@composable/widgets/views'
-import { OrchestratorOps, Orchestrators } from '@composable/connections'
-import { ComponentListOps, ConnectionEditorOps, DocumentOps, emptyEditorDoc } from '@composable/puzzle-editor'
-import { defineEditor } from '@composable/puzzle-editor/views'
-import { requestBus } from './lib/bus.ts'
+import { Components, Ops, Registries, Runtimes, type Op } from '@composable/core'
+import { provide } from '@composable/elements'
+import { catalog, Debounce, defineBundle, Input, Log, Map, Range } from '@composable/bundle'
+import { definePlatform, platform, PlatformOps as P } from '@composable/platform'
+import { defineElements as defineEditor } from '@composable/editor/elements'
 
-/** The page's System. Other Systems (sandboxes, a workspace of its own) are just more `Systems.create()`. */
-export const scope = Systems.create({ id: 'page', onError: (e, info) => console.error('composable:', e, info) })
-const log = (r: Result<unknown>) => { if (r.type !== 'success') console.error('composable:', r.type === 'error' ? r.error : r) }
-const saved = 'ui-workspace.editor'
+/** The page's runtime and its registry, `host`. */
+export const host = Runtimes.create(Registries.create('host'))
+provide(document, host.registry)
+host.registry.add('platform', Components.instantiate(platform(host, catalog)))
 
-// linked before `system` exists, so this runs before it publishes the editor's arrival
-scope.updates(d => {
-  if ((d.type !== 'added' && d.type !== 'removed') || !d.instances.some(i => i.id === 'editor')) return
-  // the editor's links close with it, but the routes it asked for would stay: take its intents down too
-  if (d.type === 'removed') { if (host.type === 'success') void host.data.call('orchestrator', OrchestratorOps.setIntents, []).then(log); return }
-  log(scope.subscribe({ source: 'system', op: Systems.ops.changed.name, listener: 'editor', target: ComponentListOps.setInstances.name }))
-  log(scope.subscribe({ source: 'editor', op: ConnectionEditorOps.intentsUpdated.name, listener: 'orchestrator', target: OrchestratorOps.setIntents.name }))
-  void restore()
-})
-log(scope.register('system', Systems.component(scope).create() as Component))   // its create is synchronous
-log(Orchestrators.create(scope, []))
-const host = scope.register('host', Components.party())   // the host's own handle, to load the editor's document
-
-/**
- * Load the saved document, or the empty one if nothing is saved. Saving waits for that load, so the editor's
- * changes before it are not saved over the document. One that cannot be loaded is copied to `<key>.rejected`,
- * and the editor starts empty and saves as usual, so both the old data and the new work survive.
- */
-let saving = false
-const restore = async () => {
-  if (host.type !== 'success') return log(host)
-  let raw: string | null = null
-  try { raw = localStorage.getItem(saved) } catch {}
-  saving = false
-  let r: Result<unknown> = fail('validation', 'the saved editor document is not JSON')
-  try { if (raw !== null) r = await host.data.call('editor', DocumentOps.load, JSON.parse(raw)) } catch {}
-  if (r.type !== 'success') {
-    if (raw !== null) {
-      try { localStorage.setItem(`${saved}.rejected`, raw) } catch {}
-      console.error(`composable: the saved editor document was rejected; moved to ${saved}.rejected:`, r, raw)
-    }
-    log(await host.data.call('editor', DocumentOps.load, emptyEditorDoc()))
-  }
-  saving = true
+const ask = async (op: Op, arg: unknown) => {
+  const r = await host.call({ registry: 'host', instance: 'workspace' }, 'platform', Ops.key(op), arg)
+  if ('error' in r) console.error('composable:', r.error)
 }
-scope.observe(t => {
-  if (saving && t.kind === 'notify' && t.from === 'editor' && t.op === DocumentOps.modelUpdated.name) try { localStorage.setItem(saved, JSON.stringify(t.data)) } catch {}
-})
-provideSystem(document, scope)
-defineElements()
-defineEditor()
+for (const [kind, name] of [['range', 'ex-range'], ['debounce', 'ex-debounce'], ['log', 'ex-log'], ['input', 'ex-input'], ['map', 'ex-map']])
+  await ask(P.createComponent, { kind, name, system: 'host' })
+const wire = (source: string, op: Op, listener: string, target: Op) =>
+  ask(P.connect, { system: 'host', source, op: Ops.key(op), listener, target: Ops.key(target) })
+await wire('ex-range', Range.ops.value, 'ex-debounce', Debounce.ops.enqueue)
+await wire('ex-debounce', Debounce.ops.flushed, 'ex-log', Log.ops.info)
+await wire('ex-input', Input.ops.submitted, 'ex-map', Map.ops.map)
+await wire('ex-map', Map.ops.mapped, 'ex-log', Log.ops.info)
+const set = (id: string, op: Op, arg: unknown) => host.call({ registry: 'host', instance: 'workspace' }, id, Ops.key(op), arg)
+await set('ex-map', Map.ops.setCode, 'return x * 2')
+await set('ex-input', Input.ops.setKind, 'number')
 
-void customElements.whenDefined('app-shell').then(() => {
-  const shell = document.querySelector('app-shell')
-  if (!shell) return
-  const bus = requestBus(shell as HTMLElement)
-  scope.observe(t => { if (t.kind === 'notify') bus.publish(`composable:${t.op.split('/').pop()}`, t.data, t.from) })
-})
+defineBundle()
+definePlatform()
+defineEditor()

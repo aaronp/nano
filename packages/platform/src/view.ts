@@ -55,7 +55,7 @@ export class PlatformEl extends ModelElement {
     return html`<div><div class="row">${this.#toggle(`s:${s.id}`)}<b>${s.id}</b></div>
       ${this.#is(`s:${s.id}`) ? html`<div class="indent">
         ${insts.map(i => this.#instance(s, i))}
-        ${s.subscriptions.map(sub => this.#connection(s.id, sub))}</div>` : ''}</div>`
+        ${s.subscriptions.filter(sub => !sub.listener.includes('~view')).map(sub => this.#connection(s.id, sub))}</div>` : ''}</div>`
   }
 
   #instance(s: Snapshot, i: Inst) {
