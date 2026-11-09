@@ -1,16 +1,19 @@
 // <c-debounce>: the debounce prototype's view over the real component. Queued values wait in the switchback; when the
 // component flushes, the batch drops through the hatch into a bucket, and the buckets slide along as history.
-import { html } from 'lit'
+import { css, html } from 'lit'
 import { PlacedElement } from '@composable/elements'
 import { Debounce, type Queued } from '../components/debounce'
 import { arrivalPos, bucketView, clamp01, colorOf, flushTravel, G, label, reasonFor, rgba, slotXY, startFlush, type Batch, type Flushing } from './debounce-model'
 
 const MONO = "'JetBrains Mono', ui-monospace, monospace"
+/** The part of the prototype's 1200×610 stage that has anything on it; it is scaled to fit the panel. */
+const BOX = { x: 90, w: 1090, h: 600 }
 const REASON_COLOR = { quiet: '#9AA4B2', 'max wait': '#E8B04B' }
 
 /** The debounce prototype's view of one debouncer: its queue, hatch, batches, and quiet and max-wait settings. */
 export class DebounceEl extends PlacedElement {
   static component = Debounce
+  static styles = css`:host { display: block; height: 100%; min-height: 160px }`
   /** The last batch seen dropping, and the queue it came from (until the component publishes its emptied queue). */
   #batch: unknown
   #flushedQ: unknown
@@ -21,13 +24,17 @@ export class DebounceEl extends PlacedElement {
   committed = 0
   lastCommitAt = -1e9
   #raf = 0
-  #width = 1200
+  /** The stage area's size, measured; the stage scales to fit it. */
+  #fit = { w: BOX.w, h: BOX.h }
   #ro?: ResizeObserver
 
-  connectedCallback() {
-    super.connectedCallback()
-    if (typeof ResizeObserver !== 'undefined') { this.#ro = new ResizeObserver(() => { this.#width = this.clientWidth || 1200; this.requestUpdate() }); this.#ro.observe(this) }
+  firstUpdated() {
+    const box = this.renderRoot.querySelector<HTMLElement>('.fit')
+    if (!box || typeof ResizeObserver === 'undefined') return
+    this.#ro = new ResizeObserver(() => { this.#fit = { w: box.clientWidth, h: box.clientHeight }; this.requestUpdate() })
+    this.#ro.observe(box)
   }
+  connectedCallback() { super.connectedCallback(); const box = this.renderRoot?.querySelector?.('.fit'); if (box) this.#ro?.observe(box) }
   disconnectedCallback() { super.disconnectedCallback(); this.#ro?.disconnect(); cancelAnimationFrame(this.#raf); this.#raf = 0 }
 
   get quiet() { return this.read<number>(Debounce.ops.quiet) ?? 300 }
@@ -75,29 +82,24 @@ export class DebounceEl extends PlacedElement {
     const status = n ? 'collecting ' + n + (f ? ' · hatch busy' : ' · drops in ' + dropIn + ' ms (' + reasonFor(pending, quiet, maxWait) + ')')
       : f ? 'hatch open · dropping ' + f.events.length : 'idle · waiting for events'
     const total = this.committed + (f?.events.length ?? 0) + n, batches = this.batchSeq + (f ? 1 : 0)
-    const k = Math.min(1, this.#width / 1200)
+    const k = Math.max(0.1, Math.min(this.#fit.w / BOX.w, this.#fit.h / BOX.h))
+    const dx = (this.#fit.w - BOX.w * k) / 2 - BOX.x * k, dy = Math.max(0, (this.#fit.h - BOX.h * k) / 2)
     const slider = (name: string, min: number, max: number, step: number, value: number, elapsed: number, color: string, set: typeof Debounce.ops.setQuiet) => html`
-      <label style="display:flex; flex-direction:column; gap:6px; width:200px">
+      <label style="display:flex; flex-direction:column; gap:6px; width:180px">
         <span style="display:flex; justify-content:space-between"><span>${name}</span><span style="color:#E6EAF0">${Math.round(Math.min(elapsed, value))} / ${value} ms</span></span>
         <span style="display:block; height:6px; border-radius:3px; background:#222933; overflow:hidden"><span style="display:block; height:6px; width:${Math.round(clamp01(elapsed / value) * 100)}%; background:${color}"></span></span>
-        <input type="range" min=${min} max=${max} step=${step} .value=${String(value)} @input=${(e: Event) => this.act(set, Number((e.target as HTMLInputElement).value))} aria-label=${name === 'quiet' ? 'Quiet period in milliseconds' : 'Maximum wait in milliseconds'} style="width:200px; margin:0; accent-color:${color}">
+        <input type="range" min=${min} max=${max} step=${step} .value=${String(value)} @input=${(e: Event) => this.act(set, Number((e.target as HTMLInputElement).value))} aria-label=${name === 'quiet' ? 'Quiet period in milliseconds' : 'Maximum wait in milliseconds'} style="width:180px; margin:0; accent-color:${color}">
       </label>`
-    return html`<div style="box-sizing:border-box; padding:${36 * k}px ${40 * k}px ${40 * k}px; display:flex; flex-direction:column; gap:22px; background:#0E1116; color:#E6EAF0; font-family:Inter, system-ui, sans-serif; overflow:hidden; min-height:100%">
-  <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:24px; flex-wrap:wrap">
-    <div style="display:flex; flex-direction:column; gap:6px">
-      <h1 style="margin:0; font-family:'Space Grotesk', Inter, sans-serif; font-weight:600; font-size:34px; letter-spacing:-0.02em">Debounce</h1>
-      <p style="margin:0; font-size:14px; color:#9AA4B2">Values wait in the switchback queue. The hatch drops them as one batch after <span style="font-family:${MONO}; color:#E6EAF0">${quiet} ms</span> of quiet, or at most <span style="font-family:${MONO}; color:#E6EAF0">${maxWait} ms</span> after the first value.</p>
+    return html`<div style="box-sizing:border-box; height:100%; padding:12px 16px; display:flex; flex-direction:column; gap:12px; background:#0E1116; color:#E6EAF0; font-family:Inter, system-ui, sans-serif; overflow:hidden">
+  <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px 20px; flex-wrap:wrap; font-family:${MONO}; font-size:12px; color:#9AA4B2">
+    <div style="display:flex; gap:20px">
+      <div style="display:flex; flex-direction:column; gap:4px"><span>in → out</span><span class="ratio" style="color:#E6EAF0; font-size:14px">${total} → ${batches} batches</span></div>
+      <div style="display:flex; flex-direction:column; gap:4px"><span>avg batch</span><span style="color:#E6EAF0; font-size:14px">${this.batchSeq ? (this.committed / this.batchSeq).toFixed(1) + ' values' : '—'}</span></div>
     </div>
-    <div style="display:flex; gap:28px; font-family:${MONO}; font-size:13px; color:#9AA4B2; text-align:right">
-      <div style="display:flex; flex-direction:column; gap:4px"><span>in → out</span><span class="ratio" style="color:#E6EAF0; font-size:16px">${total} → ${batches} batches</span></div>
-      <div style="display:flex; flex-direction:column; gap:4px"><span>avg batch</span><span style="color:#E6EAF0; font-size:16px">${this.batchSeq ? (this.committed / this.batchSeq).toFixed(1) + ' values' : '—'}</span></div>
-    </div>
-  </div>
-  <div style="display:flex; justify-content:flex-end; gap:20px; flex-wrap:wrap; font-family:${MONO}; font-size:12px; color:#9AA4B2">
-    ${slider('quiet', 100, 5000, 50, quiet, quietElapsed, '#8FB3FF', Debounce.ops.setQuiet)}${slider('max wait', 200, 10000, 100, maxWait, maxElapsed, '#E8B04B', Debounce.ops.setMaxWait)}
+    <div style="display:flex; gap:12px 20px; flex-wrap:wrap">${slider('quiet', 100, 5000, 50, quiet, quietElapsed, '#8FB3FF', Debounce.ops.setQuiet)}${slider('max wait', 200, 10000, 100, maxWait, maxElapsed, '#E8B04B', Debounce.ops.setMaxWait)}</div>
   </div>
   ${this.problem ? html`<div style="color:#FFB4A8; font-size:13px">${this.problem}</div>` : ''}
-  <div style="width:${1200 * k}px; height:${610 * k}px; flex:none"><div style="position:relative; width:1200px; height:610px; transform:scale(${k}); transform-origin:0 0">
+  <div class="fit" style="flex:1; min-height:0; position:relative; overflow:hidden"><div style="position:absolute; left:0; top:0; width:1200px; height:610px; transform:translate(${dx}px, ${dy}px) scale(${k}); transform-origin:0 0">
     ${track()}
     ${overflow ? html`<div style="position:absolute; left:100px; top:70px; font-family:${MONO}; font-size:12px; color:#E8B04B">+${overflow} queued</div>` : ''}
     <div class="status" style="position:absolute; left:660px; top:214px; width:400px; text-align:right; font-family:${MONO}; font-size:13px; color:#9AA4B2">${status}</div>
