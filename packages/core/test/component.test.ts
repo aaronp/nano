@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { Components, err, Ops, type Handle, type Op } from '../src'
+import { Components, err, Ops, type Component, type Handle, type Op } from '../src'
 
 class AtomicInteger { n = 0; get() { return this.n }; incrementAndGet() { return ++this.n } }
 const Updated = Ops.source('com.acme', 'counter-updated', Type.Number())
@@ -79,4 +79,9 @@ test('handles are kept once per coordinate and dropped on removal', () => {
   expect(inst.env.handles()).toHaveLength(1)
   inst.env.removed({ registry: 'r', instance: 'c' })
   expect(inst.env.handles()).toEqual([])
+})
+
+test('a bare Component accepts any component', () => {
+  const mixed: Component[] = [Components.create({ ns: 'a', name: 'n' }, () => 1), Components.create({ ns: 'a', name: 's' }, () => 'x')]
+  expect(mixed).toHaveLength(2)
 })

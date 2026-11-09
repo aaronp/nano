@@ -12,7 +12,7 @@ export type Run<A, I = any, O = any> = (instance: A, arg: I, env: Environment) =
 export type Action<A> = { op: Op; run?: Run<A>; emits?: Op[] }
 
 /** A definition: how to make an A, and the actions over it. */
-export type Component<A> = {
+export type Component<A = any> = {
   id: { ns: string; name: string }
   make(env: Environment): A
   actions: Map<string, Action<A>>
