@@ -8,6 +8,7 @@ import './components/app-shell.ts';
 import './components/split-pane.ts';
 import './components/theme-picker.ts';
 import './components/puzzle-prototype.ts';
+import './components/puzzle-port.ts';
 import './widgets/widgets.ts';
 import './widgets/notes-panel.ts';
 import './components/workspace-dock.ts';

@@ -142,6 +142,7 @@
         "@composable/editor": "workspace:*",
         "@composable/elements": "workspace:*",
         "@composable/platform": "workspace:*",
+        "@composable/puzzle-port": "workspace:*",
         "@composable/runes": "workspace:*",
         "golden-layout": "^2.6.0",
         "lit": "^3.3.3",

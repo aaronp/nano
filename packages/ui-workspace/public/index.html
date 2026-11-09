@@ -18,6 +18,7 @@
   <a slot="nav" href="#/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/></svg>Overview</a>
   <a slot="nav" href="#/systems"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6v5H4zM14 13h6v5h-6zM10 8.5h2a2 2 0 0 1 2 2V15.5"/></svg>Systems</a>
   <a slot="nav" href="#/puzzle-prototype"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v4a2 2 0 1 0 0 4v4H4zM13 8h7v12h-7v-4a2 2 0 1 1 0-4z"/></svg>Puzzle Prototype</a>
+  <a slot="nav" href="#/puzzle-port"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v4a2 2 0 1 0 0 4v4H4zM13 8h7v12h-7v-4a2 2 0 1 1 0-4z"/></svg>Puzzle Port</a>
   <a slot="nav" href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspace</a>
   <!-- Workspace widgets: click to add a panel, or drag one into the layout. data-widget matches a <template> below. -->
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="notes" title="Click to add, or drag into the workspace">+ Notes</a>
@@ -33,6 +34,7 @@
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-filter" title="Click to add, or drag into the workspace">+ Filter</a>
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-platform" title="Click to add, or drag into the workspace">+ Systems</a>
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="puzzle-prototype" title="Click to add, or drag into the workspace">+ Puzzle Prototype</a>
+  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="puzzle-port" title="Click to add, or drag into the workspace">+ Puzzle Port</a>
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-editor" title="Click to add, or drag into the workspace">+ Puzzle editor</a>
   <a slot="nav" href="#/inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 13h5l2 3h4l2-3h5"/></svg>Inbox</a>
   <a slot="nav" href="#/settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Settings</a>
@@ -91,6 +93,7 @@
       <template data-widget="c-filter" data-title="Filter"><c-filter></c-filter></template>
       <template data-widget="c-platform" data-title="Systems"><c-platform></c-platform></template>
       <template data-widget="puzzle-prototype" data-title="Puzzle Prototype" data-flush><puzzle-prototype></puzzle-prototype></template>
+      <template data-widget="puzzle-port" data-title="Puzzle Port" data-flush><puzzle-port></puzzle-port></template>
       <template data-widget="c-editor" data-title="Puzzle editor"><editor-page></editor-page></template>
     </workspace-dock>
   </app-route>
@@ -115,6 +118,11 @@
   <!-- The original puzzle prototype, exactly as designed (its own runtime, in a frame). -->
   <app-route path="/puzzle-prototype" bleed>
     <puzzle-prototype></puzzle-prototype>
+  </app-route>
+
+  <!-- The same prototype ported to a Lit element: its own markup and styles, no theme. -->
+  <app-route path="/puzzle-port" bleed>
+    <puzzle-port></puzzle-port>
   </app-route>
 
   <app-route path="/settings">

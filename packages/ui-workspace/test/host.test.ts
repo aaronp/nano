@@ -48,3 +48,13 @@ test('<puzzle-prototype> shows the original prototype page, served beside the ap
   expect(document.querySelector('a[href="#/puzzle-prototype"]')).not.toBeNull()
   el.remove()
 })
+
+test('<puzzle-port> is on its own page and in the dock, rendering the ported artboard', async () => {
+  await import('../src/components/puzzle-port.ts')
+  const port = document.querySelector('app-route[path="/puzzle-port"] puzzle-port') as HTMLElement & { updateComplete: Promise<boolean> }
+  expect(port).not.toBeNull()
+  await port.updateComplete
+  expect(port.shadowRoot!.innerHTML.length).toBeGreaterThan(1000)
+  expect(document.querySelector('a[href="#/puzzle-port"]')).not.toBeNull()
+  expect(document.querySelector('template[data-widget="puzzle-port"]')).not.toBeNull()
+})

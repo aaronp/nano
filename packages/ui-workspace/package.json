@@ -18,7 +18,8 @@
     "@composable/elements": "workspace:*",
     "@composable/bundle": "workspace:*",
     "@composable/platform": "workspace:*",
-    "@composable/editor": "workspace:*"
+    "@composable/editor": "workspace:*",
+    "@composable/puzzle-port": "workspace:*"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^21.0.4"
