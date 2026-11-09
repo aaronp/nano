@@ -38,12 +38,14 @@ workspace-dock .dock-area { position: relative; min-height: 0; overflow: hidden;
 .lm_splitter { background: var(--line); opacity: .6; transition: opacity .15s; }
 .lm_splitter:hover, .lm_splitter.lm_dragging { background: var(--accent); opacity: 1; }
 .lm_header { height: 30px; }
-.lm_header .lm_tabs { gap: 2px; }
-.lm_header .lm_tab { height: 22px; margin-top: 6px; padding: 2px 26px 2px 12px; font: 12px var(--font); color: var(--muted); background: var(--surface-2);
-  border: 1px solid var(--line); border-bottom: 0; border-radius: 6px 6px 0 0; }
-.lm_header .lm_tab.lm_active { color: var(--fg); background: var(--surface); font-weight: 600; }
+/* plain text tabs: the active one is underlined; a tab's close shows on hover */
+.lm_header .lm_tabs { gap: 4px; padding-left: 4px; }
+.lm_header .lm_tab { height: 28px; line-height: 28px; padding: 0 22px 0 8px; font: 12px var(--font); color: var(--muted); background: none; border: 0; border-radius: 0; box-shadow: none; }
+.lm_header .lm_tab:hover { color: var(--fg); }
+.lm_header .lm_tab.lm_active { color: var(--fg); background: none; font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
 .lm_header .lm_tab .lm_close_tab, .lm_controls > li { width: 11px; height: 11px; opacity: .55; background-repeat: no-repeat; background-position: center; background-size: 11px; cursor: pointer; }
-.lm_header .lm_tab .lm_close_tab { position: absolute; top: 7px; right: 8px; }
+.lm_header .lm_tab .lm_close_tab { position: absolute; top: 9px; right: 6px; opacity: 0; }
+.lm_header .lm_tab:hover .lm_close_tab { opacity: .55; }
 .lm_controls { display: flex; gap: 8px; top: 9px; right: 8px; }
 .lm_controls > li:hover, .lm_header .lm_tab .lm_close_tab:hover { opacity: 1; }
 .lm_maximise { background-image: var(--icon-max); }
