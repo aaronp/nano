@@ -1,4 +1,5 @@
 // Types are TypeBox schemas named by `title`. These helpers compare, hash and name them; nothing maps them.
+import { canonical } from '@composable/core'
 import { Type, type TSchema } from 'typebox'
 import type { Look } from './looks'
 
@@ -8,13 +9,8 @@ export type TypeEntry = { type: TSchema; look?: Look }
 /** A type's name. */
 export const titleOf = (s: TSchema): string => ((s as { title?: string }).title ?? 'unknown')
 
-const sorted = (v: unknown): unknown =>
-  Array.isArray(v) ? v.map(sorted)
-  : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, sorted((v as Record<string, unknown>)[k])]))
-  : v
-
-/** The schema as JSON with sorted keys: equal types give equal strings. */
-export const canonical = (s: TSchema): string => JSON.stringify(sorted(s))
+/** The schema as JSON with sorted keys (core's): equal types give equal strings. */
+export { canonical }
 
 /** Same type, name included: a brand is not its base. */
 export const sameType = (a: TSchema, b: TSchema) => canonical(a) === canonical(b)

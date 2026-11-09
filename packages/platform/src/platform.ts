@@ -2,7 +2,6 @@
 // systems, connects their actions, and publishes every change in any system.
 import { Type } from 'typebox'
 import { Components, Ops, Registries, Runtimes, type Component, type Environment, type Registry, type Runtime, type Snapshot } from '@composable/core'
-import { joins } from '@composable/editor'
 
 const NS = 'composable/platform', any = Type.Unknown(), str = Type.String()
 
@@ -85,7 +84,7 @@ export function platform(host: Runtime, catalog: Record<string, Component>): Com
   })
   c.action(P.connect, (s, { system: id, source, op, listener, target }) => {
     const reg = system(s, id), from = opOf(reg, source, op), to = opOf(reg, listener, target)
-    if (!joins(from, to)) throw new Error(`${source} · ${op} doesn't fit ${listener} · ${target}`)
+    if (!Ops.fits(from, to)) throw new Error(`${source} · ${op} doesn't fit ${listener} · ${target}`)
     return must(reg.subscribe({ source, op, listener, target }))
   })
   c.action(P.disconnect, (s, { system: id, id: sub }) => { must(system(s, id).unsubscribe(sub)) })

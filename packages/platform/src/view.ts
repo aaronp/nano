@@ -3,7 +3,6 @@
 import { css, html } from 'lit'
 import type { TSchema } from 'typebox'
 import { Ops, type Op, type Snapshot, type Subscription } from '@composable/core'
-import { joins } from '@composable/editor'
 import { base, ModelElement, providedRegistry } from '@composable/elements'
 import { PlatformOps as P, type Selection } from './platform'
 
@@ -68,7 +67,7 @@ export class PlatformEl extends ModelElement {
     const sel = this.read<Selection>(P.selected), key = Ops.key(o), at = `${s.id}/${i.id}/${key}`, typesKey = `o:${at}`
     const chosen = sel?.system === s.id && sel.instance === i.id && sel.op === key
     const from = sel?.op && sel.system === s.id ? s.instances.find(x => x.id === sel.instance)?.ops.find(x => Ops.key(x) === sel.op) : undefined
-    const fits = !!from && !chosen && joins(from, o)
+    const fits = !!from && !chosen && Ops.fits(from, o)
     return html`<div class="op"><div class="row">${this.#toggle(typesKey)}
       <button class="mono" data-op=${at} aria-pressed=${chosen} @click=${() => this.act(P.select, chosen ? null : { system: s.id, instance: i.id, op: key })}>${o.name}</button>
       ${fits ? html`<button class="connect" data-connect=${at} title="Connect" @click=${() => this.act(P.connect, { system: s.id, source: sel!.instance, op: sel!.op, listener: i.id, target: key })}>⇢</button>` : ''}</div>

@@ -1,6 +1,5 @@
 // The board's rule: pieces side by side in a row join when the left one's output fits the right one's input.
 import { Ops, type Op, type Subscription } from '@composable/core'
-import { sameType, takesAnything } from './schema'
 
 /** A grid position. */
 export type Cell = { c: number; r: number }
@@ -9,9 +8,8 @@ export type Piece = { instance: string; op: Op; cell: Cell }
 /** A design-time connection: a core Subscription without its id. */
 export type Connection = Omit<Subscription, 'id'>
 
-/** Can `left` feed `right`? Same type (name included), or an input that takes anything. */
-export const joins = (left: Op, right: Op) =>
-  !!left.output && !!right.input && (takesAnything(right.input) || sameType(left.output, right.input))
+/** Can `left` feed `right`? Same type (name included), or an input that takes anything: core's `Ops.fits`. */
+export const joins = Ops.fits
 
 const at = (cell: Cell) => `${cell.c},${cell.r}`
 

@@ -3,13 +3,17 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Systems as a component: create them, put components in them, connect them, and watch them change.",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "dependencies": {
     "@composable/core": "workspace:*",
-    "@composable/editor": "workspace:*",
     "@composable/elements": "workspace:*",
     "lit": "^3.0.0",
     "typebox": "^1.4.0"
   },
-  "devDependencies": { "@composable/bundle": "workspace:*", "@happy-dom/global-registrator": "^21.0.4" }
+  "devDependencies": {
+    "@composable/bundle": "workspace:*",
+    "@happy-dom/global-registrator": "^21.0.4"
+  }
 }

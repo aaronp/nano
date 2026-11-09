@@ -6,6 +6,17 @@ type S = TSchema | undefined
 /** A named operation a component offers. With input and output it is an action, output only a source, input only a sink. */
 export type Op<I extends S = S, O extends S = S> = { ns: string; name: string; input?: I; output?: O }
 
+const sorted = (v: unknown): unknown =>
+  Array.isArray(v) ? v.map(sorted)
+  : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, sorted((v as Record<string, unknown>)[k])]))
+  : v
+
+/** A value as JSON with sorted keys: equal data gives equal strings (schemas included). */
+export const canonical = (value: unknown): string => JSON.stringify(sorted(value))
+
+/** A schema that accepts any value: no constraints besides, at most, a name. */
+const anything = (s: TSchema) => Object.keys(s).every(k => k === 'title')
+
 /** Makes ops and names them. */
 export const Ops = {
   action: <I extends TSchema, O extends TSchema>(ns: string, name: string, input: I, output: O): Op<I, O> => ({ ns, name, input, output }),
@@ -13,6 +24,9 @@ export const Ops = {
   sink: <I extends TSchema>(ns: string, name: string, input: I): Op<I, undefined> => ({ ns, name, input }),
   /** The op's coordinate, used wherever an op is referred to by name. */
   key: (op: Pick<Op, 'ns' | 'name'>): string => `${op.ns}/${op.name}`,
+  /** Can what `from` outputs be given to `to`? Its input takes anything, or is the same type, name included. */
+  fits: (from: Op, to: Op): boolean =>
+    !!from.output && !!to.input && (anything(to.input) || canonical(from.output) === canonical(to.input)),
 }
 
 /** Where an instance lives: a registry and an instance id within it. */

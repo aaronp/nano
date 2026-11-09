@@ -70,7 +70,6 @@
       "version": "0.1.0",
       "dependencies": {
         "@composable/core": "workspace:*",
-        "@composable/editor": "workspace:*",
         "@composable/elements": "workspace:*",
         "lit": "^3.0.0",
         "typebox": "^1.4.0",
