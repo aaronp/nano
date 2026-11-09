@@ -94,6 +94,16 @@
         "typebox": "^1.4.0",
       },
     },
+    "packages/puzzle-port": {
+      "name": "@composable/puzzle-port",
+      "version": "0.1.0",
+      "dependencies": {
+        "lit": "^3.0.0",
+      },
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+    },
     "packages/runes": {
       "name": "@composable/runes",
       "version": "0.1.0",
@@ -166,6 +176,8 @@
     "@composable/platform": ["@composable/platform@workspace:packages/platform"],
 
     "@composable/puzzle-editor": ["@composable/puzzle-editor@workspace:packages/puzzle-editor"],
+
+    "@composable/puzzle-port": ["@composable/puzzle-port@workspace:packages/puzzle-port"],
 
     "@composable/runes": ["@composable/runes@workspace:packages/runes"],
 
