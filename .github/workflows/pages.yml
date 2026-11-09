@@ -28,7 +28,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Test
         run: |
-          for p in core sdk ui widgets connections puzzle-editor ui-workspace; do (cd packages/$p && bun test); done
+          for p in core runes sdk ui widgets connections puzzle-editor ui-workspace; do (cd packages/$p && bun test); done
       - name: Build
         working-directory: packages/ui-workspace
         run: bun run build
