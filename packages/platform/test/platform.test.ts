@@ -1,0 +1,68 @@
+import { expect, test } from 'bun:test'
+import { Components, Ops, Registries, Runtimes, type Op, type Snapshot } from '@composable/core'
+import { catalog, Log, Range } from '@composable/bundle'
+import { platform, PlatformOps as P } from '../src'
+
+const tick = () => new Promise(r => setTimeout(r, 0))
+const setup = () => {
+  const host = Runtimes.create(Registries.create('host'))
+  host.registry.add('platform', Components.instantiate(platform(host, catalog)))
+  const call = (op: Op, arg: unknown = null) => host.call({ registry: 'host', instance: 'test' }, 'platform', Ops.key(op), arg) as Promise<any>
+  const events: unknown[] = []
+  const spy = Components.create({ ns: 't', name: 'spy' }, () => events)
+  spy.action(Ops.sink('t', 'take', P.stateChanged.output!), (e, x) => { e.push(x) })
+  host.registry.add('spy', Components.instantiate(spy))
+  host.registry.subscribe({ source: 'platform', op: Ops.key(P.stateChanged), listener: 'spy', target: 't/take' })
+  return { host, call, events }
+}
+const ids = (s: Snapshot) => s.instances.map(i => i.id).filter(i => i !== 'registry')
+
+test('create a system and a component in it', async () => {
+  const { call } = setup()
+  expect((await call(P.createSystem, 'lab')).value).toBeUndefined()
+  expect('error' in await call(P.createSystem, 'lab')).toBe(true)
+  await call(P.createComponent, { kind: 'range', name: 'r', system: 'lab' })
+  expect('error' in await call(P.createComponent, { kind: 'nope', name: 'x', system: 'lab' })).toBe(true)
+  const systems: Snapshot[] = (await call(P.systems)).value
+  expect(systems.map(s => s.id)).toEqual(['host', 'lab'])
+  expect(ids(systems[1]!)).toEqual(['r'])
+  expect((await call(P.catalog)).value).toEqual(Object.keys(catalog))
+})
+
+test('add-to-system puts the same instance in both systems', async () => {
+  const { call } = setup()
+  await call(P.createSystem, 'lab')
+  await call(P.createComponent, { kind: 'range', name: 'r', system: 'host' })
+  await call(P.addToSystem, { instance: 'r', from: 'host', to: 'lab' })
+  const systems: Snapshot[] = (await call(P.systems)).value
+  expect(ids(systems[1]!)).toEqual(['r'])
+  await call(P.removeFromSystem, { instance: 'r', system: 'host' })
+  expect(ids((await call(P.systems)).value[0])).not.toContain('r')
+  expect('error' in await call(P.removeFromSystem, { instance: 'platform', system: 'host' })).toBe(true)
+})
+
+test('connect wires fitting actions in one system, and refuses the rest', async () => {
+  const { host, call } = setup()
+  await call(P.createComponent, { kind: 'range', name: 'r', system: 'host' })
+  await call(P.createComponent, { kind: 'log', name: 'l', system: 'host' })
+  await call(P.createSystem, 'lab')
+  await call(P.createComponent, { kind: 'log', name: 'far', system: 'lab' })
+  const sub = await call(P.connect, { system: 'host', source: 'r', op: Ops.key(Range.ops.value), listener: 'l', target: Ops.key(Log.ops.info) })
+  expect(sub.value.id).toBeString()
+  expect('error' in await call(P.connect, { system: 'host', source: 'l', op: Ops.key(Log.ops.entries), listener: 'r', target: Ops.key(Range.ops.set) })).toBe(true)   // entries are not a number
+  expect('error' in await call(P.connect, { system: 'host', source: 'r', op: Ops.key(Range.ops.value), listener: 'far', target: Ops.key(Log.ops.info) })).toBe(true)
+  await host.call({ registry: 'host', instance: 'test' }, 'r', Ops.key(Range.ops.set), 12); await tick()
+  expect((host.registry.get('l')!.value as any).entries.map((e: any) => e.value)).toEqual([12])
+  await call(P.disconnect, { system: 'host', id: sub.value.id })
+  expect(host.registry.snapshot().subscriptions.some(s => s.listener === 'l')).toBe(false)
+})
+
+test('state-changed fires for every system; select publishes the selection', async () => {
+  const { call, events } = setup()
+  await call(P.createSystem, 'lab')
+  await call(P.createComponent, { kind: 'log', name: 'l', system: 'lab' }); await tick()
+  expect(events.some((e: any) => e.system === 'lab' && e.delta.type === 'instance-added')).toBe(true)
+  const sel = { system: 'host', instance: 'platform', op: Ops.key(P.select) }
+  await call(P.select, sel)
+  expect((await call(P.selected)).value).toEqual(sel)
+})
