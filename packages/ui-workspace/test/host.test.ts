@@ -101,3 +101,20 @@ test('the nav has a Workspaces group with + and Main, and no component items; Ma
   expect([...document.querySelectorAll('a[slot="nav"]')].filter(a => a.textContent!.trim().startsWith('+'))).toEqual([])
   expect(document.querySelector('app-route[path="/workspace"] .ws-page > component-drawer')!.getAttribute('for')).toBe('workspace')
 })
+
+test('a package\'s catalog joins the running host: the platform can make it, Main\'s dock can add it, its names are taken', async () => {
+  const { addCatalog, loadedNames } = await import('../src/composable.ts')
+  const { component, state } = await import('@pritzlaff/nano-runes')
+  const Timer = component('nano.template/timer', () => { const s = state({ count: 0 }); return { get count() { return s.count } } })
+  let changed = 0
+  document.addEventListener('catalog:changed', () => { changed++ })
+  addCatalog({ timer: { component: Timer, title: 'Timer', tag: 'nano-timer' } }, { name: 'nano-template', url: 'https://x/manifest.json' })
+  expect(changed).toBe(1)
+  expect(await call('platform', P.createComponent, { kind: 'timer', name: 't1', system: 'host' })).not.toHaveProperty('error')
+  expect(host.registry.get('t1')!.component).toBe(Timer)
+  const t = document.querySelector('workspace-dock#workspace > template[data-widget="timer"]') as HTMLTemplateElement
+  expect([t.dataset.title, t.dataset.package, t.dataset.packageUrl, t.hasAttribute('data-catalog')]).toEqual(['Timer', 'nano-template', 'https://x/manifest.json', true])
+  const names = loadedNames()
+  expect(names.kinds).toContain('timer'); expect(names.ids).toContain('nano.template/timer'); expect(names.tags).toContain('nano-timer')
+  expect(names.kinds).toContain('range')
+})

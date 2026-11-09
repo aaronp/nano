@@ -151,6 +151,14 @@ export class WorkspaceDock extends HTMLElement {
     this.requireLayout().addComponent('widget', name ? { widget: def.id, name } : { widget: def.id }, name ?? def.title);
   }
 
+  /** Adds a palette widget while running (an imported package's kind): its template, now addable. */
+  addTemplate(t: HTMLTemplateElement) {
+    const id = t.dataset['widget'] ?? '';
+    if (!PALETTE_ID.test(id) || this.defs.has(id)) return;
+    this.append(t);
+    this.defs.set(id, { id, title: t.dataset['title'] ?? id, template: t });
+  }
+
   /** Ids of the panels currently open, in layout order. */
   openIds(): readonly string[] {
     const root = this.requireLayout().saveLayout().root;

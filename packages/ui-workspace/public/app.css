@@ -33,6 +33,9 @@ component-drawer h3 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; lett
 component-drawer .cd-section { display: flex; flex-direction: column; gap: 2px; }
 component-drawer .cd-section a { padding: 7px 10px; border-radius: var(--radius); color: var(--fg); text-decoration: none; cursor: grab; }
 component-drawer .cd-section a:hover { background: var(--surface-2); }
+component-drawer h4 { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 0; padding: 0 2px 0 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
+component-drawer h4 button { padding: 1px 6px; font-size: 11px; }
+component-drawer .cd-failed { margin: 4px 0 0; padding: 6px 10px; border-radius: var(--radius); background: var(--surface-2); color: var(--danger, #c33); font-size: 12px; overflow-wrap: anywhere; }
 
 .page-head { margin-bottom: 20px; }
 .page-head h1 { margin: 0 0 4px; font: 600 28px/1.15 var(--display); text-wrap: balance; }
