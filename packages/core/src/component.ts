@@ -3,7 +3,7 @@ import type { Static, TSchema } from 'typebox'
 import { err, isOk, ok, Ops, type Op, type Result } from './data'
 import { Environments, type Environment } from './env'
 
-type StaticOf<T> = T extends TSchema ? Static<T> : undefined
+type StaticOf<T> = T extends TSchema ? Static<T> : void
 
 /** What an action does: given the instance, the argument and the environment, produce the output. */
 export type Run<A, I = any, O = any> = (instance: A, arg: I, env: Environment) => O | Promise<O>
