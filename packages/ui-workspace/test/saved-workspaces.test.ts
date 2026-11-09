@@ -61,3 +61,42 @@ test('a mounted workspace runs in its system: its wiring view over that runtime 
   expect(wires.host).toBe(host)
   expect((route.querySelector('workspace-dock') as HTMLElement & { registry?: unknown }).registry).toBe(runtimeOf(host.registry, 'lab')!.registry)
 })
+
+test('+ makes a workspace in a new system, empty; a taken route is refused with the input kept', async () => {
+  const { Components, Ops, Registries, Runtimes } = await import('@pritzlaff/nano-core')
+  const { platform, PlatformOps: P, runtimeOf } = await import('@composable/platform')
+  const { bootSavedWorkspaces } = await import('../src/components/saved-workspaces.ts')
+  localStorage.clear()
+  const host = Runtimes.create(Registries.create('host'))
+  host.registry.add('platform', Components.instantiate(platform(host, {})))
+  document.body.innerHTML = `<app-shell><div slot="nav" class="nav-row" data-workspaces><a href="#/workspace">Workspaces</a><button data-new-workspace>+</button></div>
+    <a slot="nav" data-sub href="#/workspace">Main</a>
+    <app-route path="/workspace"><div class="ws-page"><c-wires><workspace-dock id="workspace" storage-key="k"></workspace-dock></c-wires></div></app-route><app-route path="*"></app-route></app-shell>`
+  Object.assign(document.querySelector('c-wires')!, { runtime: host })
+  bootSavedWorkspaces(document)
+  const tick = () => new Promise(r => setTimeout(r, 0))
+  const dialog = () => document.querySelector('dialog[aria-label="New workspace"]') as HTMLDialogElement
+  const field = (name: string) => dialog().querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLSelectElement
+  const type = (name: string, v: string) => { const f = field(name); f.value = v; f.dispatchEvent(new Event('input')); f.dispatchEvent(new Event('change')) }
+
+  ;(document.querySelector('[data-new-workspace]') as HTMLButtonElement).click(); await tick()
+  expect([...(field('system') as HTMLSelectElement).options].map(o => o.value)).toEqual(['host', 'new'])
+  type('title', 'Lab Bench')
+  expect(field('path').value).toBe('/lab-bench')   // filled from the name
+  type('system', 'new'); type('newSystem', 'lab')
+  dialog().close('save'); await tick(); await tick()
+  expect(runtimeOf(host.registry, 'lab')).toBeDefined()
+  expect(document.querySelector('a[href="#/lab-bench"]')!.textContent).toBe('Lab Bench')
+  const dock = document.querySelector('app-route[path="/lab-bench"] workspace-dock')!
+  expect(dock.getAttribute('system')).toBe('lab')
+  expect(dock.getAttribute('open')).toBe('')   // starts empty
+
+  ;(document.querySelector('[data-new-workspace]') as HTMLButtonElement).click(); await tick()
+  type('title', 'Again'); type('path', '/lab-bench'); type('system', 'lab')
+  dialog().close('save'); await tick(); await tick()
+  expect(dialog().textContent).toContain('already')
+  expect(field('title').value).toBe('Again')
+  expect(field('system').value).toBe('lab')
+  dialog().close('cancel'); await tick()
+  expect(dialog()).toBeNull()
+})
