@@ -1,0 +1,12 @@
+{
+  "name": "@composable/runes",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@composable/core": "workspace:*",
+    "typebox": "^1.4.0"
+  }
+}

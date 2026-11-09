@@ -38,6 +38,14 @@
         "typebox": "^1.4.0",
       },
     },
+    "packages/runes": {
+      "name": "@composable/runes",
+      "version": "0.1.0",
+      "dependencies": {
+        "@composable/core": "workspace:*",
+        "typebox": "^1.4.0",
+      },
+    },
     "packages/sdk": {
       "name": "@composable/sdk",
       "version": "0.1.0",
@@ -90,6 +98,8 @@
     "@composable/core": ["@composable/core@workspace:packages/core"],
 
     "@composable/puzzle-editor": ["@composable/puzzle-editor@workspace:packages/puzzle-editor"],
+
+    "@composable/runes": ["@composable/runes@workspace:packages/runes"],
 
     "@composable/sdk": ["@composable/sdk@workspace:packages/sdk"],
 
