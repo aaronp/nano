@@ -73,3 +73,13 @@ export const panelIds = (item: { readonly type: string; readonly content?: reado
   if (item.type === 'component') return [readWidgetId(item.componentState)];
   return (item.content ?? []).flatMap((c) => panelIds(c as { type: string; content?: readonly unknown[]; componentState?: unknown }));
 };
+
+/** How panels are framed: with tabs, or distraction free (a lone panel has no tab, and its controls show on hover). */
+export const WINDOW_STYLES = [{ id: 'tabs', title: 'Tabs' }, { id: 'focus', title: 'Distraction free' }] as const;
+export type WindowStyle = (typeof WINDOW_STYLES)[number]['id'];
+
+/** The remembered window style for one dock (by its storage key); anything unknown reads as tabs. */
+export const windowStyle = (storage: Pick<Storage, 'getItem' | 'setItem'>, key: string) => ({
+  get: (): WindowStyle => { const v = storage.getItem(`${key}.window-style`); return WINDOW_STYLES.some((s) => s.id === v) ? (v as WindowStyle) : 'tabs'; },
+  set: (style: WindowStyle) => storage.setItem(`${key}.window-style`, style),
+});

@@ -11,6 +11,7 @@
  * A saved layout opens automatically next time. Panels refer to widgets by id, so saved layouts hold no markup.
  *
  * Bus topics (the app bus): dock:opened {widget} · dock:layout {panels} · dock:saved · dock:error {message}.
+ * The toolbar's window style select switches between tabs and distraction free (remembered per dock).
  * The toolbar's Connections button fires a bubbling `dock:connections` DOM event; whatever wraps the dock (the
  * wiring view) decides what it means.
  * Light DOM, because golden-layout positions its drag proxy in document.body.
@@ -18,7 +19,7 @@
 import { GoldenLayout, LayoutConfig, type ComponentContainer, type JsonValue, type ResolvedLayoutConfig } from 'golden-layout';
 import baseCss from 'golden-layout/dist/css/goldenlayout-base.css';
 import { provideBus, requestBus, type Bus } from '../lib/bus.ts';
-import { ARRANGEMENTS, PALETTE_ID, initialLayout, panelIds, readWidgetId, readWidgetName, panelState, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
+import { ARRANGEMENTS, PALETTE_ID, WINDOW_STYLES, windowStyle, type WindowStyle, initialLayout, panelIds, readWidgetId, readWidgetName, panelState, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
 
 const STYLE_ID = 'workspace-dock-styles';
 const DOCK_CSS = `
@@ -54,6 +55,16 @@ workspace-dock .dock-area { position: relative; min-height: 0; overflow: hidden;
 .lm_maximised { z-index: 40; }
 .lm_dragging, .lm_dragging * { cursor: grabbing !important; user-select: none; }
 [data-dock-add] { cursor: grab; }
+workspace-dock .dock-bar select { font: inherit; font-size: 13px; padding: 4px 6px; border: var(--card-border); border-radius: var(--radius); background: var(--surface-2); color: var(--fg); }
+/* Distraction free: a stack with one panel has no tab bar; its maximise and close float over it on hover.
+   Stacked panels keep their tabs. The panel takes the header's room (golden-layout sizes it inline). */
+workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_header { position: absolute; top: 0; right: 0; left: auto; width: 0 !important; z-index: 5; opacity: 0; transition: opacity .15s; }
+workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_header .lm_tabs { display: none; }
+workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)):hover > .lm_header,
+workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_header:focus-within { opacity: 1; }
+workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_header .lm_controls { top: 6px; right: 6px; padding: 5px 7px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line); }
+workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_items,
+workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_items > .lm_item { height: 100% !important; }
 `;
 
 const icon = (path: string) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="none" stroke="#7a808c" stroke-width="1.6">${path}</svg>`)}")`;
@@ -90,7 +101,14 @@ export class WorkspaceDock extends HTMLElement {
     this.status.setAttribute('role', 'status');
     const connections = this.button('⇄ Connections', () => this.dispatchEvent(new CustomEvent('dock:connections', { bubbles: true, composed: true })));
     connections.title = 'Show the connections behind the workspace';
-    bar.append(title, hint, this.el('span', 'grow'), this.status, connections,
+    const style = windowStyle(localStorage, this.storageKey);
+    const pick = this.el('select');
+    pick.setAttribute('aria-label', 'Window style');
+    for (const s of WINDOW_STYLES) pick.append(new Option(s.title, s.id));
+    pick.value = style.get();
+    this.setAttribute('chrome', pick.value);
+    pick.addEventListener('change', () => { style.set(pick.value as WindowStyle); this.setAttribute('chrome', pick.value); });
+    bar.append(title, hint, this.el('span', 'grow'), this.status, pick, connections,
       this.button('Save layout', () => this.save()), this.button('Restore', () => this.restore()), this.button('Reset', () => this.reset()));
     const area = this.el('div', 'dock-area');
     this.append(bar, area);
