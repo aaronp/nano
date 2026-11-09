@@ -1,0 +1,14 @@
+{
+  "name": "@composable/editor",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A puzzle-style editor for components, types and connections, as small rune components over core.",
+  "exports": { ".": "./src/index.ts", "./elements": "./src/elements/index.ts" },
+  "dependencies": {
+    "@composable/core": "workspace:*",
+    "@composable/runes": "workspace:*",
+    "lit": "^3.0.0",
+    "typebox": "^1.4.0"
+  },
+  "devDependencies": { "@happy-dom/global-registrator": "^21.0.4" }
+}

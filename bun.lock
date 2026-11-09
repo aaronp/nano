@@ -24,6 +24,19 @@
         "typebox": "^1.4.0",
       },
     },
+    "packages/editor": {
+      "name": "@composable/editor",
+      "version": "0.1.0",
+      "dependencies": {
+        "@composable/core": "workspace:*",
+        "@composable/runes": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+    },
     "packages/puzzle-editor": {
       "name": "@composable/puzzle-editor",
       "version": "0.1.0",
@@ -96,6 +109,8 @@
     "@composable/connections": ["@composable/connections@workspace:packages/connections"],
 
     "@composable/core": ["@composable/core@workspace:packages/core"],
+
+    "@composable/editor": ["@composable/editor@workspace:packages/editor"],
 
     "@composable/puzzle-editor": ["@composable/puzzle-editor@workspace:packages/puzzle-editor"],
 
