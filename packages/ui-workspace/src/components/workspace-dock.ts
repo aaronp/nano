@@ -12,6 +12,8 @@
  *
  * Bus topics (the app bus): dock:opened {widget} · dock:layout {panels} · dock:saved · dock:error {message}.
  * The toolbar's window style select switches between tabs and distraction free (remembered per dock).
+ * The toolbar's Save workspace… button fires a bubbling `dock:save-as` {layout} event, for the page to save it as a
+ * workspace of its own (saved-workspaces.ts).
  * The toolbar's Connections button fires a bubbling `dock:connections` DOM event; whatever wraps the dock (the
  * wiring view) decides what it means.
  * Light DOM, because golden-layout positions its drag proxy in document.body.
@@ -113,6 +115,7 @@ export class WorkspaceDock extends HTMLElement {
     this.setAttribute('chrome', pick.value);
     pick.addEventListener('change', () => { style.set(pick.value as WindowStyle); this.setAttribute('chrome', pick.value); });
     bar.append(title, hint, this.el('span', 'grow'), this.status, pick, connections,
+      this.button('Save workspace…', () => this.dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true, composed: true, detail: { layout: this.requireLayout().saveLayout() } }))),
       this.button('Save layout', () => this.save()), this.button('Restore', () => this.restore()), this.button('Reset', () => this.reset()));
     const area = this.el('div', 'dock-area');
     this.append(bar, area);

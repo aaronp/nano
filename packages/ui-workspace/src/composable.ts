@@ -55,7 +55,8 @@ for (const [kind, e] of Object.entries(catalog)) if (e.tag) {
 // The wiring view asks for a rack component back on the front: a panel of its kind, showing that instance.
 document.addEventListener('wires:open-panel', e => {
   const { kind, name } = (e as CustomEvent<{ kind: string; name: string }>).detail
-  ;(document.querySelector('workspace-dock') as (Element & { addWidget?(id: string, name?: string): void }) | null)?.addWidget?.(kind, name)
+  const dock = (e.target as Element).querySelector?.('workspace-dock') ?? document.querySelector('workspace-dock')   // the dock the view tilts
+  ;(dock as (Element & { addWidget?(id: string, name?: string): void }) | null)?.addWidget?.(kind, name)
 })
 
 defineBundle()
