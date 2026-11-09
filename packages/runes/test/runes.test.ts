@@ -192,3 +192,16 @@ test('an action returning state returns a copy', async () => {
 test('an id needs a namespace', () => {
   expect(() => component('counter', () => ({}))).toThrow()
 })
+
+test('a value written into state is a copy: the caller\'s object is never shared with state', async () => {
+  const Holder = component('demo/holder', () => {
+    const s = state({ list: [] as number[] })
+    return { get list() { return s.list }, set: (l: number[]) => { s.list = l }, push: (x: number) => { s.list.push(x) } }
+  })
+  const { add, call } = page()
+  add('h', Holder)
+  const mine = [1]
+  await call('h', Holder.ops.set, mine)
+  await call('h', Holder.ops.push, 2)
+  expect(mine).toEqual([1])
+})
