@@ -18,7 +18,7 @@ export class PlatformEl extends ModelElement {
   static styles = [base, css`
     .tree { display: flex; flex-direction: column; gap: 2px } .indent { padding-left: 16px }
     .op .connect { visibility: hidden } .op:hover .connect { visibility: visible }
-    .toggle { border: 0; padding: 2px 4px; width: 22px } .types { padding-left: 40px; color: #A3AAB8 }`]
+    .toggle { border: 0; padding: 2px 4px; width: 22px } .plain { border-color: transparent; background: none } .types { padding-left: 40px; color: #A3AAB8 }`]
   static properties = { ...ModelElement.properties, mode: { state: true }, filter: { state: true }, open: { state: true }, form: { state: true }, target: { state: true } }
   declare mode: 'system' | 'component'
   declare filter: string
@@ -28,6 +28,21 @@ export class PlatformEl extends ModelElement {
   constructor() { super(); this.mode = 'system'; this.filter = ''; this.open = new Set(); this.target = {} }
 
   connectedCallback() { this.registry ??= providedRegistry(this.ownerDocument); this.model ??= 'platform'; super.connectedCallback() }
+
+  // a new selection, from here or elsewhere, opens the tree down to it and brings it into view
+  #shownSel = 'null'
+  willUpdate(changed: Map<string, unknown>) {
+    super.willUpdate(changed)
+    const sel = this.read<Selection>(P.selected) ?? null, json = JSON.stringify(sel)
+    if (json === this.#shownSel) return
+    this.#shownSel = json
+    if (!sel) return
+    const o = new Set(this.open), sys = `s:${sel.system}`, inst = `c:${sel.system}/${sel.instance}`
+    o.delete(sys)   // systems are open unless flipped
+    if (sel.op) o.add(inst)   // components are closed unless flipped
+    this.open = o
+    void this.updateComplete.then(() => this.renderRoot.querySelector('[aria-pressed="true"][data-op], [aria-pressed="true"][data-component]')?.scrollIntoView?.({ block: 'nearest' }))
+  }
 
   // systems start open, everything below them closed; `open` holds the keys flipped from that; a filter opens all
   #is = (key: string) => this.filter !== '' || (key.startsWith('s:') !== this.open.has(key))
@@ -59,7 +74,9 @@ export class PlatformEl extends ModelElement {
 
   #instance(s: Snapshot, i: Inst) {
     const key = `c:${s.id}/${i.id}`, ops = i.ops.filter(o => this.#match(s.id, i.id, o.name, typeLabel(o.input), typeLabel(o.output)))
-    return html`<div data-instance="${s.id}/${i.id}"><div class="row">${this.#toggle(key)}<span class="mono">${i.id}</span></div>
+    const sel = this.read<Selection>(P.selected), chosen = sel?.system === s.id && sel.instance === i.id && !sel.op
+    return html`<div data-instance="${s.id}/${i.id}"><div class="row">${this.#toggle(key)}
+      <button class="mono plain" data-component="${s.id}/${i.id}" aria-pressed=${chosen} @click=${() => this.act(P.select, chosen ? null : { system: s.id, instance: i.id })}>${i.id}</button></div>
       ${this.#is(key) ? html`<div class="indent">${ops.map(o => this.#op(s, i, o))}</div>` : ''}</div>`
   }
 
