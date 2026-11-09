@@ -21,8 +21,11 @@ export type Coord = { registry: string; instance: string }
 /** The outcome of anything that can fail: a value, or an error message. */
 export type Result<A = unknown> = { value: A; detail?: unknown } | { error: string; detail?: unknown }
 
+/** A success. */
 export const ok = <A>(value: A, detail?: unknown): Result<A> => (detail === undefined ? { value } : { value, detail })
+/** A failure, with a message. */
 export const err = (error: string, detail?: unknown): Result<never> => (detail === undefined ? { error } : { error, detail })
+/** Whether a Result is a success. */
 export const isOk = <A>(r: Result<A>): r is { value: A; detail?: unknown } => 'value' in r
 
 /** Something an instance published: who, which op (by key), and the data. */

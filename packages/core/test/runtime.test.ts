@@ -99,3 +99,29 @@ test('the registry is callable as an instance in itself', async () => {
   expect(s.value.instances.map(i => i.id)).toEqual(['registry', 'log'])
   expect(isOk(await rt.call(me, 'registry', Ops.key(RegistryOps.remove), 'ghost'))).toBe(false)
 })
+
+test('an action that unregisters its own op still returns a Result', async () => {
+  const c = Components.create({ ns: 't', name: 'quitter' }, () => 0)
+  c.action(Log, (_s, _x, env) => { env.unregister(Log) })
+  expect(await Components.invoke(Components.instantiate(c), Ops.key(Log), 1)).toEqual({ value: undefined })
+})
+
+test('a delivery is checked against the listener\'s input schema', async () => {
+  const { rt, reg } = setup()
+  const Num = Ops.sink('t', 'num', Type.Number()), got: unknown[] = []
+  const c = Components.create({ ns: 't', name: 'nums' }, () => got); c.action(Num, (g, n) => { g.push(n) })
+  reg.add('c', counter()); reg.add('n', Components.instantiate(c))
+  reg.subscribe({ source: 'registry', op: 'composable/instance-added', listener: 'n', target: Ops.key(Num) })
+  reg.add('x', counter()); await flush()
+  expect(got).toEqual([])
+})
+
+test('a registry gets one runtime', () => {
+  const reg = Registries.create('r'); Runtimes.create(reg)
+  expect(() => Runtimes.create(reg)).toThrow()
+})
+
+test('announcing a change for an unknown instance is refused', () => {
+  const reg = Runtimes.create(Registries.create('r')).registry
+  expect(isOk(reg.announce('ghost', 'op-added', Log))).toBe(false)
+})

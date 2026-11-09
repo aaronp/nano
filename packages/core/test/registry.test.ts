@@ -50,9 +50,10 @@ test('a snapshot lists each instance with its ops; unsubscribe and unlisten work
   expect(seen).toHaveLength(n)
 })
 
-test('emit passes a delta to every listener, and unlisten stops it', () => {
-  const r = Registries.create('r'), got: Delta[] = [], stop = r.listen(d => { got.push(d) })
-  r.emit({ type: 'op-added', instance: 'l', op: 't/x' }); stop()
-  r.emit({ type: 'op-added', instance: 'l', op: 't/y' })
+test('announce passes an op change to every listener, and unlisten stops it', () => {
+  const r = Registries.create('r'), got: Delta[] = []
+  r.add('l', thing()); const stop = r.listen(d => { got.push(d) })
+  r.announce('l', 'op-added', Ops.sink('t', 'x', Type.Null())); stop()
+  r.announce('l', 'op-added', Ops.sink('t', 'y', Type.Null()))
   expect(got).toEqual([{ type: 'op-added', instance: 'l', op: 't/x' }])
 })

@@ -46,6 +46,7 @@ function registryComponent(registry: Registry) {
 
 /** Makes the runtime for a registry, adds the registry to itself as 'registry', and publishes its changes. */
 function create(registry: Registry, policy?: Policy): Runtime {
+  if (registry.get('registry')) throw new Error(`registry ${registry.id} already has a runtime`)
   const at = (instance: string): Coord => ({ registry: registry.id, instance })
   const base: Runtime = {
     registry,
@@ -59,11 +60,8 @@ function create(registry: Registry, policy?: Policy): Runtime {
       const a = registry.get(e.from.instance)?.actions.get(e.op)
       if (e.from.registry !== registry.id || !a) return err(`${e.from.instance} does not publish ${e.op} in ${registry.id}`)
       if (a.op.output && !Value.Check(a.op.output, e.data)) return err(`invalid data for ${e.op}`)
-      const results: Result[] = []
-      for (const s of registry.matching(e.from.instance, e.op)) {
-        const l = registry.get(s.listener)
-        results.push(l ? await Components.invoke(l, s.target, e.data) : err(`listener ${s.listener} is gone`))
-      }
+      const results: Result[] = []   // a delivery is a call: same lookup, same input check
+      for (const s of registry.matching(e.from.instance, e.op)) results.push(await base.call(e.from, s.listener, s.target, e.data))
       return { value: results }
     },
   }
@@ -75,7 +73,7 @@ function create(registry: Registry, policy?: Policy): Runtime {
       envs.set(d.instance, env)
       env.added(
         { coord, notify: (op, data, correlation) => outer.notify({ from: coord, op: Ops.key(op), data, correlation }), call: (t, op, arg) => outer.call(coord, t, Ops.key(op), arg) },
-        (type, op) => registry.emit({ type, instance: d.instance, op: Ops.key(op) }),
+        (type, op) => { registry.announce(d.instance, type, op) },
       )
     }
     if (d.type === 'instance-removed') { envs.get(d.instance)?.removed(at(d.instance)); envs.delete(d.instance) }
@@ -85,4 +83,5 @@ function create(registry: Registry, policy?: Policy): Runtime {
   return outer
 }
 
+/** Makes runtimes. */
 export const Runtimes = { create }

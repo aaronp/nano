@@ -1,6 +1,6 @@
 // One place holding instances by id, and the subscriptions between them. Data only: it never runs an action.
 import type { Instance } from './component'
-import { err, ok, type Delta, type Op, type Result, type Subscription } from './data'
+import { err, ok, Ops, type Delta, type Op, type Result, type Subscription } from './data'
 
 /** What a registry holds, as plain data. */
 export type Snapshot = { id: string; instances: { id: string; ops: Op[] }[]; subscriptions: Subscription[] }
@@ -16,7 +16,8 @@ export type Registry = {
   /** The subscriptions a publish of `op` by `source` reaches. */
   matching(source: string, op: string): Subscription[]
   snapshot(): Snapshot
-  emit(d: Delta): void
+  /** Records that an instance's ops changed; refused for an unknown instance. */
+  announce(instance: string, type: 'op-added' | 'op-removed', op: Op): Result<void>
   listen(fn: (d: Delta) => void): () => void
 }
 
@@ -29,7 +30,7 @@ export const Registries = {
     const keys = (inst: Instance) => [...inst.actions.keys()]
     const close = (s: Subscription) => { subs.delete(s.id); emit({ type: 'subscription-closed', subscription: s }) }
     return {
-      id, emit,
+      id,
       get: i => instances.get(i),
       add(i, inst) {
         if (instances.has(i)) return err(`${i} is already in ${id}`)
@@ -56,6 +57,11 @@ export const Registries = {
         const s = subs.get(sid)
         if (!s) return err(`no subscription ${sid} in ${id}`)
         close(s)
+        return ok(undefined)
+      },
+      announce(i, type, op) {
+        if (!instances.has(i)) return err(`no instance ${i} in ${id}`)
+        emit({ type, instance: i, op: Ops.key(op) })
         return ok(undefined)
       },
       matching: (source, op) => [...subs.values()].filter(s => (s.source === '*' || s.source === source) && s.op === op),

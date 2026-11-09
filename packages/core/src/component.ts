@@ -52,10 +52,11 @@ export const Components = {
 
   /** Runs the action, then publishes each op it emits with that op's own reading. The action stands if an emit fails. */
   async invoke(inst: Instance, key: string, arg: unknown): Promise<Result> {
+    const emits = inst.actions.get(key)?.emits ?? []   // read first: the action may unregister itself
     const r = await run(inst, key, arg)
     if (!isOk(r)) return r
     const failed: Result[] = []
-    for (const op of inst.actions.get(key)!.emits ?? []) {
+    for (const op of emits) {
       const read = await run(inst, Ops.key(op), undefined)
       if (!isOk(read)) { failed.push(read); continue }
       for (const sent of await inst.env.notify(op, read.value)) if (!isOk(sent)) failed.push(sent)
