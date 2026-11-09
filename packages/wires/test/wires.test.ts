@@ -270,3 +270,17 @@ test('every cord glows and shows its direction of flow', async () => {
   expect(cords.length).toBe(2)
   for (const c of cords) { expect(c.querySelector('.glow')).not.toBeNull(); expect(c.querySelector('.flow')).not.toBeNull() }
 })
+
+test('a panel that is not showing (an inactive tab) is not drawn on the pane; its component waits in the rack', async () => {
+  const { el, dock, flip } = await mount()
+  const hidden = document.createElement('div')
+  hidden.className = 'dock-panel'
+  hidden.innerHTML = '<x-m></x-m>'
+  Object.assign(hidden.querySelector('x-m')!, { model: 'm' })
+  box(hidden, 0, 0, 0, 0)   // display:none: no size
+  dock.append(hidden)
+  await flip()
+  expect(el.model.chassis.length).toBe(3)
+  expect(el.model.chassis.some(c => c.instance === 'm')).toBe(false)
+  expect(el.model.rack.map(r => r.id)).toContain('m')
+})

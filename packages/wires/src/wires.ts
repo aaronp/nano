@@ -125,7 +125,8 @@ export class Wires extends LitElement {
   panels(): Panel[] {
     const dock = this.dock()
     if (!dock) return []
-    return [...dock.querySelectorAll<HTMLElement>('.dock-panel')].map(p => {
+    // only panels that are showing: an inactive tab has no size or place, and its component waits in the rack
+    return [...dock.querySelectorAll<HTMLElement>('.dock-panel')].filter(p => p.offsetWidth > 0 && p.offsetHeight > 0).map(p => {
       const el = modelIn(p)
       return { instance: el?.model ?? null, rect: rectIn(p, dock), tag: (el ?? p.firstElementChild ?? p).localName }
     })
