@@ -100,3 +100,29 @@ test('+ makes a workspace in a new system, empty; a taken route is refused with 
   dialog().close('cancel'); await tick()
   expect(dialog()).toBeNull()
 })
+
+test('the Workspaces toggle collapses the group completely, is remembered, and new workspaces follow it', async () => {
+  const { bootSavedWorkspaces } = await import('../src/components/saved-workspaces.ts')
+  localStorage.clear()
+  const page = () => {
+    document.body.innerHTML = `<app-shell><div slot="nav" class="nav-row" data-workspaces><a href="#/workspace">Workspaces</a>
+      <button data-toggle-workspaces aria-expanded="true">▾</button><button data-new-workspace>+</button></div>
+      <a slot="nav" data-sub href="#/workspace">Main</a><a slot="nav" href="#/inbox">Inbox</a>
+      <app-route path="/workspace"><div class="ws-page"><c-wires><workspace-dock id="workspace" storage-key="k"></workspace-dock></c-wires></div></app-route><app-route path="*"></app-route></app-shell>`
+    bootSavedWorkspaces(document)
+  }
+  const shown = () => [...document.querySelectorAll<HTMLElement>('app-shell > a[slot="nav"]')].filter(a => !a.hidden).map(a => a.textContent)
+  const toggle = () => document.querySelector('[data-toggle-workspaces]') as HTMLButtonElement
+  page()
+  expect(shown()).toEqual(['Main', 'Inbox'])
+  toggle().click()
+  expect(shown()).toEqual(['Inbox'])
+  expect(toggle().getAttribute('aria-expanded')).toBe('false')
+  ;(await import('../src/components/saved-workspaces.ts')).mountWorkspace(document, { path: '/lab', title: 'Lab', icon: 'box' })
+  expect(shown()).toEqual(['Inbox'])   // a new one follows the group
+  page()   // a reload
+  expect(shown()).toEqual(['Inbox'])
+  toggle().click()
+  expect(shown()).toEqual(['Main', 'Inbox'])
+  expect(toggle().getAttribute('aria-expanded')).toBe('true')
+})

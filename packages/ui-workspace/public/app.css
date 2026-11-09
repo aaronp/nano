@@ -13,6 +13,10 @@ a[slot='nav'] svg { width: 20px; height: 20px; flex: none; fill: none; stroke: c
 .nav-row button { flex: none; width: 26px; height: 26px; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); font: inherit; font-size: 16px; line-height: 1; cursor: pointer; }
 .nav-row button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 a[slot='nav'][data-sub] svg { width: 16px; height: 16px; }
+[slot='nav'][hidden] { display: none !important; }
+.nav-row [data-toggle-workspaces] { display: grid; place-items: center; padding: 0; }
+.nav-row [data-toggle-workspaces] svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+.nav-row[data-collapsed] [data-toggle-workspaces] svg { transform: rotate(-90deg); }
 
 /* A workspace page: the components drawer beside the dock. */
 .ws-page { display: flex; height: 100%; min-height: 0; }

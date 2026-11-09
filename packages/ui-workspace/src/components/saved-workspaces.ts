@@ -25,6 +25,7 @@ export function mountWorkspace(doc: Document, ws: SavedWorkspace) {
   a.innerHTML = icon(ws.icon);
   a.append(ws.title);
   const group = shell.querySelector(':scope > [data-workspaces]');
+  a.hidden = !!group?.hasAttribute('data-collapsed');   // a collapsed group keeps it hidden
   let last: Element | null = group;
   while (last?.nextElementSibling?.hasAttribute('data-sub')) last = last.nextElementSibling;
   if (last) last.after(a); else shell.append(a);
@@ -53,12 +54,31 @@ export function mountWorkspace(doc: Document, ws: SavedWorkspace) {
 }
 
 /** Mounts the saved workspaces, and saves new ones when a dock asks. */
+const COLLAPSED = 'workspaces:collapsed';
+/** Opens or collapses the Workspaces group: its sub-items (Main and the saved ones) show or hide. */
+function setWorkspacesOpen(doc: Document, open: boolean) {
+  const group = doc.querySelector('app-shell > [data-workspaces]');
+  if (!group) return;
+  group.toggleAttribute('data-collapsed', !open);
+  for (let n = group.nextElementSibling; n?.hasAttribute('data-sub'); n = n.nextElementSibling) (n as HTMLElement).hidden = !open;
+  const b = group.querySelector('[data-toggle-workspaces]');
+  b?.setAttribute('aria-expanded', String(open));
+  b?.setAttribute('aria-label', open ? 'Collapse workspaces' : 'Expand workspaces');
+}
+
 const hostOf = (doc: Document) => (mainDock(doc)?.closest('c-wires') as (HTMLElement & { runtime?: Runtime }) | null)?.runtime;
 
 /** Mounts the saved workspaces, saves a dock's layout as a new workspace when it asks, and makes new ones with +. */
 export function bootSavedWorkspaces(doc: Document) {
   const saved = savedWorkspaces(localStorage);
   for (const ws of saved.list()) mountWorkspace(doc, ws);
+  const collapsed = () => { try { return localStorage.getItem(COLLAPSED) === 'true'; } catch { return false; } };
+  setWorkspacesOpen(doc, !collapsed());
+  doc.querySelector('[data-toggle-workspaces]')?.addEventListener('click', () => {
+    const open = collapsed();   // it was collapsed: open it
+    try { localStorage.setItem(COLLAPSED, String(!open)); } catch { /* not kept */ }
+    setWorkspacesOpen(doc, open);
+  });
   const taken = () => [...doc.querySelectorAll('app-route')].map((r) => r.getAttribute('path') ?? '');
   const open = (ws: SavedWorkspace) => { mountWorkspace(doc, ws); location.hash = `#${ws.path}`; };
 
