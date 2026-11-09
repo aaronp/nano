@@ -125,3 +125,30 @@ test('announcing a change for an unknown instance is refused', () => {
   const reg = Runtimes.create(Registries.create('r')).registry
   expect(isOk(reg.announce('ghost', 'op-added', Log))).toBe(false)
 })
+
+test('listen reports every call, publish and delivery, as they happen', async () => {
+  const { rt, reg, sub } = setup()
+  reg.add('c', counter()); sub('c', Ops.key(Updated))
+  const seen: any[] = []
+  const stop = rt.listen(t => { seen.push(t) })
+  await rt.call(me, 'c', 'com.acme/inc', null)
+  expect(seen.map(t => t.kind)).toEqual(['delivery', 'publish', 'call'])   // innermost first: each is told when it ends
+  const [delivery, publish, call] = seen
+  expect(delivery).toMatchObject({ kind: 'delivery', from: { registry: 'r', instance: 'c' }, target: 'log', op: Ops.key(Log), data: 1, result: { value: undefined } })
+  expect(delivery.subscription).toBe(reg.snapshot().subscriptions.find(s => s.listener === 'log')!.id)
+  expect(publish).toMatchObject({ kind: 'publish', from: { registry: 'r', instance: 'c' }, op: Ops.key(Updated), data: 1 })
+  expect(call).toMatchObject({ kind: 'call', from: me, target: 'c', op: 'com.acme/inc', data: null, result: { value: 1 } })
+  expect(typeof call.time).toBe('number')
+  stop()
+  await rt.call(me, 'c', 'com.acme/inc', null)
+  expect(seen).toHaveLength(3)
+})
+
+test('a policy-wrapped runtime passes listen through', async () => {
+  const { rt, reg } = setup(inner => ({ ...inner }))
+  reg.add('c', counter())
+  const seen: unknown[] = []
+  rt.listen(t => { seen.push(t) })
+  await rt.call(me, 'c', 'com.acme/inc', null)
+  expect(seen.length).toBeGreaterThan(0)
+})

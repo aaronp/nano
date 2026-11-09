@@ -81,3 +81,12 @@ test('a burst of changes publishes the systems once', async () => {
   await tick()
   expect(seen).toHaveLength(1)
 })
+
+test('removing a component from a system removes its connections both ways', async () => {
+  const { host, call } = setup()
+  await call(P.createComponent, { kind: 'range', name: 'r', system: 'host' })
+  await call(P.createComponent, { kind: 'log', name: 'l', system: 'host' })
+  await call(P.connect, { system: 'host', source: 'r', op: Ops.key(Range.ops.value), listener: 'l', target: Ops.key(Log.ops.info) })
+  await call(P.removeFromSystem, { instance: 'r', system: 'host' })
+  expect(host.registry.snapshot().subscriptions.filter(s => s.source === 'r')).toEqual([])
+})

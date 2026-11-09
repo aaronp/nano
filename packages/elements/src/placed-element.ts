@@ -12,7 +12,8 @@ export const providedRegistry = (doc: Document) => provided.get(doc)
 
 /**
  * A ModelElement that brings its own component (`static component`). On the page it shows the instance named by
- * its `name` attribute, creating it if it doesn't exist; an instance it created goes when the element does.
+ * its `name` attribute, creating it if it doesn't exist; an instance it created goes when the element does,
+ * unless the element has a `keep` attribute (a dock panel: closing it leaves the component in the system).
  */
 export abstract class PlacedElement extends ModelElement {
   static component: Component
@@ -35,7 +36,7 @@ export abstract class PlacedElement extends ModelElement {
     // wait a moment: moving the element (as a dock does) disconnects and reconnects it, and keeps the instance
     queueMicrotask(() => {
       const mine = this.#mine
-      if (this.isConnected || !mine) return
+      if (this.isConnected || !mine || this.hasAttribute('keep')) return
       if (mine.registry.get(mine.id) === mine.inst) mine.registry.remove(mine.id)   // not one that replaced it
       this.#mine = undefined
     })

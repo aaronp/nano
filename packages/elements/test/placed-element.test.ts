@@ -69,3 +69,12 @@ test('an element only ever removes the instance it made', async () => {
   expect(ids()).toContain('x')
   reg.remove('x')
 })
+
+test('an element with keep never removes its instance (a closed dock panel sends it to the rack)', async () => {
+  document.body.insertAdjacentHTML('beforeend', '<note-el name="kept" keep></note-el>')
+  const el = document.body.lastElementChild as NoteEl
+  await tick(); await el.updateComplete
+  el.remove(); await tick()
+  expect(ids()).toContain('kept')
+  reg.remove('kept')
+})

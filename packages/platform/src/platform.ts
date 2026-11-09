@@ -80,7 +80,10 @@ export function platform(host: Runtime, catalog: Record<string, { component: Com
   c.action(P.removeFromSystem, (s, { instance, system: id }) => {
     const self = s.env.handles().find(h => h.coord.registry === id)?.coord.instance
     if (instance === 'registry' || instance === self) throw new Error(`${instance} can't be removed from ${id}`)
-    must(system(s, id).remove(instance))
+    const reg = system(s, id)
+    // gone from the system means gone from its wiring too: core keeps a source's subscriptions, the platform doesn't
+    for (const sub of reg.snapshot().subscriptions) if (sub.source === instance) reg.unsubscribe(sub.id)
+    must(reg.remove(instance))
   })
   c.action(P.connect, (s, { system: id, source, op, listener, target }) => {
     const reg = system(s, id), from = opOf(reg, source, op), to = opOf(reg, listener, target)

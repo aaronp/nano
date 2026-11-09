@@ -12,7 +12,15 @@ export type Runtime = {
   call(from: Coord, target: string, op: string, arg: unknown): Promise<Result>
   /** Outer Result: was the publish allowed. Inner: one Result per delivery. */
   notify(e: Event): Promise<Result<Result[]>>
+  /** Tells `fn` about every call, publish and delivery as it ends. Returns a function that stops telling it. */
+  listen(fn: (t: Trace) => void): () => void
 }
+
+/** One message through a runtime, as data: what a histogram, a live wire view or a replay is built from. */
+export type Trace =
+  | { kind: 'call'; time: number; from: Coord; target: string; op: string; data: unknown; result: Result }
+  | { kind: 'publish'; time: number; from: Coord; op: string; data: unknown; result: Result<Result[]> }
+  | { kind: 'delivery'; time: number; from: Coord; target: string; op: string; data: unknown; subscription: string; result: Result }
 
 /** Rules around a runtime: takes the runtime and returns one that enforces them. */
 export type Policy = (inner: Runtime) => Runtime
@@ -48,21 +56,36 @@ function registryComponent(registry: Registry) {
 function create(registry: Registry, policy?: Policy): Runtime {
   if (registry.get('registry')) throw new Error(`registry ${registry.id} already has a runtime`)
   const at = (instance: string): Coord => ({ registry: registry.id, instance })
+  const listeners = new Set<(t: Trace) => void>()
+  const tell = (t: Trace) => listeners.forEach(fn => fn(t))
+  /** Runs `op` on `target`: the lookup and input check every call and delivery share. */
+  const run = async (target: string, op: string, arg: unknown): Promise<Result> => {
+    const inst = registry.get(target), a = inst?.actions.get(op)
+    if (!inst || !a) return err(inst ? `unknown op ${op}` : `no instance ${target} in ${registry.id}`)
+    if (a.op.input && !Value.Check(a.op.input, arg)) return err(`invalid input for ${op}`)
+    return Components.invoke(inst, op, arg)
+  }
   const base: Runtime = {
     registry,
-    async call(_from, target, op, arg) {
-      const inst = registry.get(target), a = inst?.actions.get(op)
-      if (!inst || !a) return err(inst ? `unknown op ${op}` : `no instance ${target} in ${registry.id}`)
-      if (a.op.input && !Value.Check(a.op.input, arg)) return err(`invalid input for ${op}`)
-      return Components.invoke(inst, op, arg)
+    async call(from, target, op, arg) {
+      const result = await run(target, op, arg)
+      tell({ kind: 'call', time: Date.now(), from, target, op, data: arg, result })
+      return result
     },
+    listen(fn) { listeners.add(fn); return () => { listeners.delete(fn) } },
     async notify(e) {
       const a = registry.get(e.from.instance)?.actions.get(e.op)
       if (e.from.registry !== registry.id || !a) return err(`${e.from.instance} does not publish ${e.op} in ${registry.id}`)
       if (a.op.output && !Value.Check(a.op.output, e.data)) return err(`invalid data for ${e.op}`)
       const results: Result[] = []   // a delivery is a call: same lookup, same input check
-      for (const s of registry.matching(e.from.instance, e.op)) results.push(await base.call(e.from, s.listener, s.target, e.data))
-      return { value: results }
+      for (const s of registry.matching(e.from.instance, e.op)) {
+        const result = await run(s.listener, s.target, e.data)
+        tell({ kind: 'delivery', time: Date.now(), from: e.from, target: s.listener, op: s.target, data: e.data, subscription: s.id, result })
+        results.push(result)
+      }
+      const result = { value: results }
+      tell({ kind: 'publish', time: Date.now(), from: e.from, op: e.op, data: e.data, result })
+      return result
     },
   }
   const outer = policy ? policy(base) : base
