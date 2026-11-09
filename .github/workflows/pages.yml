@@ -29,6 +29,8 @@ jobs:
       - name: Test
         run: |
           for p in core runes elements bundle platform editor puzzle-port wires sdk ui widgets connections puzzle-editor ui-workspace; do (cd packages/$p && bun test); done
+      - name: The template, against this commit's libraries
+        run: bun scripts/template-check.ts
       - name: Build
         working-directory: packages/ui-workspace
         run: bun run build

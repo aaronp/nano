@@ -1,4 +1,4 @@
-.PHONY: test install ui dev puzzle packages smoke publish
+.PHONY: test install ui dev puzzle packages smoke publish template-check template-export
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
@@ -46,3 +46,11 @@ publish: smoke
 	  echo "publishing $$name@$$version as $$(npm whoami)"; \
 	  npm publish "packages/$$p/dist" --access public $(if $(OTP),--otp=$(OTP)) || exit 1; \
 	done
+
+# Test and build templates/nano-template against the libraries in this commit (not the published ones).
+template-check:
+	bun scripts/template-check.ts
+
+# Mirror templates/nano-template to github.com/aaronp/nano-template (main) as one commit, with your git credentials.
+template-export:
+	scripts/template-export.sh https://github.com/aaronp/nano-template.git
