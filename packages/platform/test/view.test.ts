@@ -72,3 +72,16 @@ test('the tree lists connections, not the hidden subscriptions of views', async 
   const { $$ } = await mount()
   expect($$('.connection')).toHaveLength(0)   // <c-platform> itself subscribes to the platform, in host
 })
+
+test('by component: the add button never targets a system the component is already in', async () => {
+  const { call, button, $, settle } = await mount()
+  button('By component').click(); await settle()
+  $('[data-toggle="c:r"]')!.click(); await settle()
+  const pick = $('select[name="add-to-r"]') as HTMLSelectElement
+  pick.value = 'lab'; pick.dispatchEvent(new Event('change')); await settle()
+  $('[aria-label="Add r to system"]')!.click(); await settle()
+  await call(P.createSystem, 'third'); await settle()
+  $('[aria-label="Add r to system"]')!.click(); await settle()   // 'lab' already holds r: this goes to 'third'
+  const systems = (await call(P.systems)).value
+  expect(systems[2].instances.map((i: any) => i.id)).toContain('r')
+})

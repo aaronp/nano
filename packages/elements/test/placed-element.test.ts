@@ -53,3 +53,19 @@ test('without a name, an element gets a generated one', async () => {
   el.remove(); await tick()
   expect(ids().some(i => i.startsWith('note-el-'))).toBe(false)
 })
+
+test('an element only ever removes the instance it made', async () => {
+  reg.add('other', Components.instantiate(Note))
+  const el = await place('mine')
+  el.model = 'other'; await tick(); await el.updateComplete   // now shows another instance
+  el.remove(); await tick()
+  expect(ids()).toContain('other')          // not its to remove
+  expect(ids()).not.toContain('mine')       // its own goes
+  reg.remove('other')
+
+  const el2 = await place('x')
+  reg.remove('x'); reg.add('x', Components.instantiate(Note))   // replaced under it
+  el2.remove(); await tick()
+  expect(ids()).toContain('x')
+  reg.remove('x')
+})

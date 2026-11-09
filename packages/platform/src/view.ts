@@ -84,12 +84,13 @@ export class PlatformEl extends ModelElement {
     const where = new Map<string, string[]>()
     for (const s of systems) for (const i of s.instances.filter(shown)) where.set(i.id, [...(where.get(i.id) ?? []), s.id])
     return [...where].filter(([id, in_]) => this.#match(id, ...in_)).map(([id, in_]) => {
-      const others = systems.map(s => s.id).filter(s => !in_.includes(s)), to = this.target[id] ?? others[0]
+      const others = systems.map(s => s.id).filter(s => !in_.includes(s))
+      const to = others.includes(this.target[id] ?? '') ? this.target[id]! : others[0]   // a pick it is already in no longer counts
       return html`<div><div class="row">${this.#toggle(`c:${id}`)}<span class="mono">${id}</span></div>
         ${this.#is(`c:${id}`) ? html`<div class="indent">${in_.map(s => html`<div class="mono">${s}</div>`)}
           ${others.length ? html`<div class="row"><select name="add-to-${id}" @change=${(e: Event) => { this.target = { ...this.target, [id]: (e.target as HTMLSelectElement).value } }}>
             ${others.map(s => html`<option ?selected=${s === to}>${s}</option>`)}</select>
-            <button aria-label="Add ${id} to system" @click=${() => this.act(P.addToSystem, { instance: id, from: in_[0], to: this.target[id] ?? others[0] })}>+</button></div>` : ''}</div>` : ''}</div>`
+            <button aria-label="Add ${id} to system" @click=${() => this.act(P.addToSystem, { instance: id, from: in_[0], to })}>+</button></div>` : ''}</div>` : ''}</div>`
     })
   }
 

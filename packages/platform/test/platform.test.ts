@@ -66,3 +66,18 @@ test('state-changed fires for every system; select publishes the selection', asy
   await call(P.select, sel)
   expect((await call(P.selected)).value).toEqual(sel)
 })
+
+test('a burst of changes publishes the systems once', async () => {
+  const { host } = setup()
+  const seen: unknown[] = []
+  const counter = Components.create({ ns: 't', name: 'count' }, () => seen)
+  counter.action(Ops.sink('t', 'see', P.systems.output!), (s, x) => { s.push(x) })
+  host.registry.add('counter', Components.instantiate(counter))
+  host.registry.subscribe({ source: 'platform', op: Ops.key(P.systems), listener: 'counter', target: 't/see' })
+  await tick(); seen.length = 0
+  host.registry.add('a', Components.instantiate(Log))   // three deltas in a row, as attaching an element makes:
+  host.registry.subscribe({ source: 'a', op: 'x', listener: 'a', target: 'y' })
+  host.registry.subscribe({ source: 'a', op: 'z', listener: 'a', target: 'y' })
+  await tick()
+  expect(seen).toHaveLength(1)
+})

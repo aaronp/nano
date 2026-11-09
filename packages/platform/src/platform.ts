@@ -26,7 +26,7 @@ export const PlatformOps = {
 }
 const P = PlatformOps
 
-type State = { systems: Map<string, Runtime>; selected: Selection; env: Environment; watch(rt: Runtime): void }
+type State = { systems: Map<string, Runtime>; selected: Selection; env: Environment; watch(rt: Runtime): void; changed(id: string, delta: unknown): void }
 
 const must = <A>(r: { value: A } | { error: string }): A => { if ('error' in r) throw new Error(r.error); return r.value }
 const system = (s: State, id: string): Registry => {
@@ -45,13 +45,16 @@ const opOf = (reg: Registry, instance: string, key: string) => {
 export function platform(host: Runtime, catalog: Record<string, Component>): Component<State> {
   const c = Components.create<State>({ ns: 'composable', name: 'platform' }, env => {
     const s: State = {
-      systems: new Map([[host.registry.id, host]]), selected: null, env,
+      systems: new Map([[host.registry.id, host]]), selected: null, env, changed: () => {},
       watch: rt => { rt.registry.listen(delta => changed(rt.registry.id, delta)) },
     }
+    // every change is told at once; the snapshots go out once per burst (adding an element makes several deltas)
+    let pending = false
     const changed = (id: string, delta: unknown) => {
       void env.notify(P.stateChanged, { system: id, delta })
-      void env.notify(P.systems, snapshots(s))
+      if (!pending) { pending = true; queueMicrotask(() => { pending = false; void env.notify(P.systems, snapshots(s)) }) }
     }
+    s.changed = changed
     s.watch(host)
     return s
   })
@@ -63,8 +66,7 @@ export function platform(host: Runtime, catalog: Record<string, Component>): Com
     if (s.systems.has(name)) throw new Error(`${name} already exists`)
     const rt = Runtimes.create(Registries.create(name))
     s.systems.set(name, rt); s.watch(rt)
-    void s.env.notify(P.stateChanged, { system: name, delta: { type: 'system-created' } })
-    void s.env.notify(P.systems, snapshots(s))
+    s.changed(name, { type: 'system-created' })
   })
   c.action(P.createComponent, (s, { kind, name, system: id }) => {
     const def = catalog[kind]
