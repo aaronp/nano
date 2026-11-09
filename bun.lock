@@ -9,6 +9,20 @@
         "typescript": "^7.0.2",
       },
     },
+    "packages/bundle": {
+      "name": "@composable/bundle",
+      "version": "0.1.0",
+      "dependencies": {
+        "@composable/core": "workspace:*",
+        "@composable/elements": "workspace:*",
+        "@composable/runes": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+    },
     "packages/connections": {
       "name": "@composable/connections",
       "version": "0.1.0",
@@ -120,6 +134,8 @@
     },
   },
   "packages": {
+    "@composable/bundle": ["@composable/bundle@workspace:packages/bundle"],
+
     "@composable/connections": ["@composable/connections@workspace:packages/connections"],
 
     "@composable/core": ["@composable/core@workspace:packages/core"],

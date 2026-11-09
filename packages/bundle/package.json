@@ -1,0 +1,15 @@
+{
+  "name": "@composable/bundle",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Basic components to wire together: input, range, log, debounce, map and filter.",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@composable/core": "workspace:*",
+    "@composable/elements": "workspace:*",
+    "@composable/runes": "workspace:*",
+    "lit": "^3.0.0",
+    "typebox": "^1.4.0"
+  },
+  "devDependencies": { "@happy-dom/global-registrator": "^21.0.4" }
+}
