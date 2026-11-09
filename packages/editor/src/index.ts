@@ -1,2 +1,4 @@
 export * from './model'
 export * from './components/component-list'
+export * from './components/type-list'
+export * from './components/type-editor'
