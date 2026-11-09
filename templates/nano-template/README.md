@@ -41,6 +41,22 @@ is a `PlacedElement` from `@pritzlaff/nano-elements`, which places the component
 - **`dist/index.html`**: a preview that runs the components on their own, with an import map to those shared
   packages on esm.sh.
 
+## What a package may import
+
+A host gives the packages it imports its own copies of the shared libraries, so the module must leave them as bare
+imports (the build does) and use only these:
+
+`@pritzlaff/nano-core`, `@pritzlaff/nano-runes`, `@pritzlaff/nano-elements`, `lit`, `lit/decorators.js`,
+`lit/directive.js`, `lit/directives/class-map.js`, `lit/directives/style-map.js`, `lit/directives/repeat.js`,
+`lit/directives/if-defined.js`, `typebox`, `typebox/value`.
+
+Anything else must be bundled into the module.
+
+## Import it
+
+In a host, open a workspace's Components drawer, click **Import**, and paste the manifest's URL. Locally:
+`bun run preview` serves `dist/` at `http://localhost:4000/manifest.json`, and lets other origins fetch it.
+
 ## Publish
 
 Pushes to `main` build and deploy `dist/` to GitHub Pages (`.github/workflows/pages.yml`; set Settings → Pages →
