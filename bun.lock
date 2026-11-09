@@ -161,6 +161,21 @@
         "typebox": "^1.4.0",
       },
     },
+    "packages/wires": {
+      "name": "@composable/wires",
+      "version": "0.1.0",
+      "dependencies": {
+        "@composable/core": "workspace:*",
+        "@composable/elements": "workspace:*",
+        "@composable/platform": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+      "devDependencies": {
+        "@composable/bundle": "workspace:*",
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+    },
   },
   "packages": {
     "@composable/bundle": ["@composable/bundle@workspace:packages/bundle"],
@@ -188,6 +203,8 @@
     "@composable/ui-workspace": ["@composable/ui-workspace@workspace:packages/ui-workspace"],
 
     "@composable/widgets": ["@composable/widgets@workspace:packages/widgets"],
+
+    "@composable/wires": ["@composable/wires@workspace:packages/wires"],
 
     "@happy-dom/global-registrator": ["@happy-dom/global-registrator@21.0.4", "", { "dependencies": { "@types/node": ">=20.0.0", "happy-dom": "^21.0.4" } }, "sha512-Bbr0hW9hhDhBf3Jp0EyDlkCbFgbr0z2jd3BMKYOYW+fOkPM4Nx195GMXyCtRCGEgoNn6i09FabXrSkNFm2ONzg=="],
 
