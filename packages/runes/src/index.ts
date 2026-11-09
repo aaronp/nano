@@ -11,23 +11,30 @@ type EventMark = { schema?: TSchema; bind(op: Op): void }
 const copy = (json: string | undefined) => (json === undefined ? undefined : JSON.parse(json))
 const inMake = (what: string) => { if (!making) throw new Error(`${what}() must be called while a component's make function runs`); return making }
 
+const proxies = new WeakSet<object>()   // every state proxy, so actions never hand one out
+/** State is JSON-shaped data: only arrays and plain, unfrozen objects are tracked. Map, Set, Date stay as they are. */
+const plain = (v: unknown): v is object =>
+  v !== null && typeof v === 'object' && !Object.isFrozen(v) && (Array.isArray(v) || [Object.prototype, null].includes(Object.getPrototypeOf(v)))
+
 /** Wraps an object (and everything inside it) so every write marks the owner dirty. */
 function reactive<T extends object>(target: T, dirty: () => void, seen: WeakMap<object, object>): T {
+  if (!plain(target)) return target
   const cached = seen.get(target)
   if (cached) return cached as T
   const p = new Proxy(target, {
-    get: (t, k, r) => { const v = Reflect.get(t, k, r); return v !== null && typeof v === 'object' ? reactive(v, dirty, seen) : v },
+    get: (t, k, r) => { const v = Reflect.get(t, k, r); return plain(v) ? reactive(v, dirty, seen) : v },
     set: (t, k, v, r) => { const ok = Reflect.set(t, k, v, r); dirty(); return ok },
     deleteProperty: (t, k) => { const ok = Reflect.deleteProperty(t, k); dirty(); return ok },
   })
   seen.set(target, p)
+  proxies.add(p)
   return p
 }
 
 /** Reactive state for the component being made: any write, at any depth, re-publishes the getters that changed. */
 export function state<T extends object>(init: T): T {
   const m = inMake('state')
-  return reactive(init, () => m.dirty(), new WeakMap())
+  return reactive(structuredClone(init), () => m.dirty(), new WeakMap())   // a copy: instances never share state
 }
 
 /** A source that is not state, such as a click: calling it publishes a copy of its argument. */
@@ -62,26 +69,29 @@ export function component<A extends object>(id: string, make: () => A, schemas: 
   }
   const getters = [...kinds].filter(([, kind]) => kind === 'getter').map(([k]) => k)
   const at = id.lastIndexOf('/')
+  if (at < 1) throw new Error(`component id ${id} needs a namespace, like acme/${id}`)
   const c = Components.create<A>({ ns: id.slice(0, at), name: id.slice(at + 1) }, env => {
     const last = new Map<string, string | undefined>()
     let pending = false
     const read = (k: string) => JSON.stringify((api as any)[k])
     const flush = () => {
-      pending = false
-      for (const k of getters) {
-        const now = read(k)
-        if (now !== last.get(k)) { last.set(k, now); void env.notify(ops[k]!, copy(now)) }
-      }
+      try {
+        for (const k of getters) {
+          let now: string | undefined
+          try { now = read(k) } catch { continue }   // a failing getter is skipped; calling it reports the error
+          if (now !== last.get(k)) { last.set(k, now); void env.notify(ops[k]!, copy(now)) }
+        }
+      } finally { pending = false }   // after the loop: writes made by getters don't schedule another flush
     }
     const api = run(make, { env, dirty: () => { if (!pending) { pending = true; queueMicrotask(flush) } } })
-    for (const k of getters) last.set(k, read(k))
+    for (const k of getters) { try { last.set(k, read(k)) } catch {} }
     for (const [k, kind] of kinds) if (kind === 'event') ((api as any)[k][EVENT] as EventMark).bind(ops[k]!)
     return api
   })
   for (const [k, kind] of kinds) {
     if (kind === 'getter') c.action(ops[k]!, a => copy(JSON.stringify((a as any)[k])))
     else if (kind === 'event') c.action(ops[k]!)
-    else c.action(ops[k]!, (a, arg) => (a as any)[k](arg))
+    else c.action(ops[k]!, (a, arg) => { const r = (a as any)[k](arg); return proxies.has(r) ? copy(JSON.stringify(r)) : r })
   }
   return Object.assign(c, { ops: ops as { [K in keyof A]: Op } })
 }

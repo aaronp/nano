@@ -139,3 +139,56 @@ test('nothing is published on creation; state and event outside make throw', asy
   expect(() => state({ x: 1 })).toThrow()
   expect(() => event()).toThrow()
 })
+
+const Fragile = component('demo/fragile', () => {
+  const s = state({ xs: [{ n: 1 }], when: new Date(0), tags: new Map([['a', 1]]), x: 0 })
+  return {
+    get first() { return s.xs[0]!.n },
+    get later() { return s.xs.length },
+    get writes() { s.x = s.x; return s.x },
+    clear: () => { s.xs = [] },
+    tag: () => s.tags.get('a'),
+    all: () => s.xs,
+  }
+})
+
+test('a getter that throws during a flush does not stop the other getters', async () => {
+  const { add, wire, call } = page()
+  add('f', Fragile); const spy = add('spy', Spy)
+  wire('f', Fragile.ops.later, 'spy', Spy.ops.take)
+  await call('f', Fragile.ops.clear); await tick()
+  expect((spy.value as any).last).toBe(0)
+})
+
+test('a getter that writes state does not loop forever', async () => {
+  const { add, call } = page()
+  add('f', Fragile)
+  await call('f', Fragile.ops.clear)
+  await new Promise(r => setTimeout(r, 5))   // would never fire if flushes re-queued themselves forever
+})
+
+test('Map and Date in state are left alone', async () => {
+  const { add, call } = page()
+  add('f', Fragile)
+  expect(await call('f', Fragile.ops.tag)).toEqual({ value: 1 })
+})
+
+test('each instance has its own state, even from a shared init', async () => {
+  const init = { xs: [] as number[] }
+  const Shared = component('demo/shared', () => { const s = state(init); return { get xs() { return s.xs }, push: (x: number) => { s.xs.push(x) } } })
+  const { add, call } = page()
+  add('a', Shared); add('b', Shared)
+  await call('a', Shared.ops.push, 1)
+  expect((await call('b', Shared.ops.xs)).value).toEqual([])
+})
+
+test('an action returning state returns a copy', async () => {
+  const { add, call } = page()
+  add('f', Fragile)
+  ;((await call('f', Fragile.ops.all)).value as unknown[]).push(99)
+  expect((await call('f', Fragile.ops.all)).value).toEqual([{ n: 1 }])
+})
+
+test('an id needs a namespace', () => {
+  expect(() => component('counter', () => ({}))).toThrow()
+})

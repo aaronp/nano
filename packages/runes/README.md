@@ -22,4 +22,5 @@ reg.subscribe({ source: 'counter', op: Ops.key(Counter.ops.count), listener: 'lo
   `schemas` optionally types any member, and the runtime validates against it. `make` runs once when the
   component is defined, to read its shape, and once per instance. `.ops` holds typed references to every op.
 
-`state` and `event` must be called while `make` runs. Called anywhere else, they throw.
+`state` and `event` must be called while `make` runs. Called anywhere else, they throw. State is JSON-shaped data:
+arrays and plain objects are tracked (and copied per instance); a Map, Set or Date inside is stored but its changes are not seen.
