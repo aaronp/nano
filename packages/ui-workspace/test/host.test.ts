@@ -36,3 +36,15 @@ test('the page elements attach to the example instead of making their own', asyn
   expect(el).not.toBeNull()
   expect(host.registry.snapshot().instances.filter(i => i.id === 'ex-range')).toHaveLength(1)
 })
+
+test('<puzzle-prototype> shows the original prototype page, served beside the app', async () => {
+  await import('../src/components/puzzle-prototype.ts')
+  const el = document.createElement('puzzle-prototype')
+  document.body.append(el)
+  const frame = el.shadowRoot!.querySelector('iframe')!
+  expect(frame.getAttribute('src')).toBe('./puzzle-prototype/PuzzlePrototype.dc.html')
+  for (const f of ['PuzzlePrototype.dc.html', 'support.js', 'vendor/react.js', 'vendor/react-dom.js'])
+    expect(await Bun.file(new URL(`../public/puzzle-prototype/${f}`, import.meta.url)).exists()).toBe(true)
+  expect(document.querySelector('a[href="#/puzzle-prototype"]')).not.toBeNull()
+  el.remove()
+})
