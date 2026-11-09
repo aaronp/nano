@@ -11,3 +11,4 @@ export type { Entry } from './components/log'
 
 /** Every bundle component by kind, for whatever creates components by name (such as the platform). */
 export const catalog = { input: Input, range: Range, log: Log, debounce: Debounce, map: Map, filter: Filter }
+export * from './elements/elements'
