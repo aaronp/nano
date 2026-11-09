@@ -19,7 +19,7 @@ export class TimerEl extends PlacedElement {
       <span class="count">${this.read<number>(Timer.ops.count) ?? 0}</span>
       <button @click=${() => this.act(running ? Timer.ops.stop : Timer.ops.start)}>${running ? 'Stop' : 'Start'}</button>
       <button @click=${() => this.act(Timer.ops.reset)}>Reset</button>
-      <label>interval ms <input type="number" min="10" .value=${String(this.read<number>(Timer.ops.interval) ?? 1000)}
+      <label>interval ms <input type="number" min="10" max="2147483647" .value=${String(this.read<number>(Timer.ops.interval) ?? 1000)}
         @change=${(e: Event) => this.act(Timer.ops.setInterval, Number((e.target as HTMLInputElement).value))}></label>
     </div>${this.problem ? html`<div class="problem">${this.problem}</div>` : ''}`
   }

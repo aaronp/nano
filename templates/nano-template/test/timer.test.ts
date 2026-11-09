@@ -55,10 +55,11 @@ test('stop holds the count; reset zeroes it and keeps running as it was', async 
   await call(Timer.ops.stop)
 })
 
-test('an interval under 10ms, or not a number, is refused', async () => {
+test('an interval under 10ms, over 2^31-1ms, or not a number, is refused', async () => {
   const { call, value } = page()
   expect(await call(Timer.ops.setInterval, 5)).toHaveProperty('error')
   expect(await call(Timer.ops.setInterval, 'x')).toHaveProperty('error')
+  expect(await call(Timer.ops.setInterval, 2 ** 31)).toHaveProperty('error')   // timers clamp longer delays to ~1ms
   expect(await value(Timer.ops.interval)).toBe(1000)
 })
 

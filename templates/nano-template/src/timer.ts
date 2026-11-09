@@ -21,4 +21,4 @@ export const Timer = component('nano.template/timer', () => {
     reset: () => { s.count = 0 },
     setInterval: (ms: number) => { s.interval = ms; run() },
   }
-}, { setInterval: Type.Number({ minimum: 10 }) })
+}, { setInterval: Type.Number({ minimum: 10, maximum: 2 ** 31 - 1 }) })   // longer delays are clamped to ~1ms by timers
