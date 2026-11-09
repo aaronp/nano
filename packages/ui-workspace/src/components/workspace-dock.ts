@@ -22,6 +22,8 @@ import { provideBus, requestBus, type Bus } from '../lib/bus.ts';
 import { ARRANGEMENTS, PALETTE_ID, WINDOW_STYLES, windowStyle, type WindowStyle, initialLayout, panelIds, readWidgetId, readWidgetName, panelState, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
 
 const STYLE_ID = 'workspace-dock-styles';
+/** The tab bar's height: the CSS draws it, and golden-layout must size panels for it too (saved layouts included). */
+const HEADER_H = 30;
 const DOCK_CSS = `
 workspace-dock { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; background: var(--bg); color: var(--fg); font: 14px var(--font); }
 workspace-dock .dock-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
@@ -37,7 +39,7 @@ workspace-dock .dock-area { position: relative; min-height: 0; overflow: hidden;
 .lm_content { background: var(--surface); border: 1px solid var(--line); box-sizing: border-box; }
 .lm_splitter { background: var(--line); opacity: .6; transition: opacity .15s; }
 .lm_splitter:hover, .lm_splitter.lm_dragging { background: var(--accent); opacity: 1; }
-.lm_header { height: 30px; }
+.lm_header { height: ${HEADER_H}px; }
 /* plain text tabs: the active one is underlined; a tab's close shows on hover */
 .lm_header .lm_tabs { gap: 4px; padding-left: 4px; }
 .lm_header .lm_tab { height: 28px; line-height: 28px; padding: 0 22px 0 8px; font: 12px var(--font); color: var(--muted); background: none; border: 0; border-radius: 0; box-shadow: none; }
@@ -122,7 +124,7 @@ export class WorkspaceDock extends HTMLElement {
     this.layout = layout;
     this.connectSources(layout);
     const saved = this.readSaved();
-    layout.loadLayout(saved ?? this.initial());
+    this.load(saved ?? this.initial());
     if (saved) this.say('Opened your saved layout.');
   }
 
@@ -239,6 +241,10 @@ export class WorkspaceDock extends HTMLElement {
   }
 
   /** A remembered layout, if storage works and it only names widgets this palette still has. */
+  private load(config: LayoutConfig) {
+    this.requireLayout().loadLayout({ ...config, dimensions: { ...config.dimensions, headerHeight: HEADER_H } });
+  }
+
   private readSaved(): LayoutConfig | null {
     let raw: string | null;
     try { raw = localStorage.getItem(this.storageKey); } catch { return null; }
@@ -264,12 +270,12 @@ export class WorkspaceDock extends HTMLElement {
   private restore() {
     const saved = this.readSaved();
     if (!saved) { this.say('No saved layout yet.'); return; }
-    this.requireLayout().loadLayout(saved);
+    this.load(saved);
     this.say('Layout restored.');
   }
 
   private reset() {
-    this.requireLayout().loadLayout(this.initial());
+    this.load(this.initial());
     this.say('Back to the starting layout.');
   }
 }
