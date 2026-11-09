@@ -3,7 +3,7 @@ import { css, html } from 'lit'
 import type { Op } from '@composable/core'
 import { base, PlacedElement } from '@composable/elements'
 import { Filter, Map } from '../components/code'
-import { Debounce } from '../components/debounce'
+import { DebounceEl } from './debounce-el'
 import { Input, type Kind } from '../components/input'
 import { Log, type Entry } from '../components/log'
 import { Range } from '../components/range'
@@ -56,18 +56,6 @@ export class LogEl extends PlacedElement {
   }
 }
 
-/** Quiet period and max wait, and how many values are queued. */
-export class DebounceEl extends PlacedElement {
-  static component = Debounce
-  static styles = base
-  render() {
-    const num = (label: string, op: typeof Debounce.ops.quiet, set: typeof Debounce.ops.setQuiet) => html`<label class="muted">${label}
-      <input type="number" min="0" style="width:70px" .value=${String(this.read<number>(op) ?? '')} @change=${(e: Event) => this.act(set, Number(target(e).value))}> ms</label>`
-    return html`<div class="row">${num('quiet', Debounce.ops.quiet, Debounce.ops.setQuiet)}${num('max wait', Debounce.ops.maxWait, Debounce.ops.setMaxWait)}
-      <span class="mono">${this.read<number>(Debounce.ops.pending) ?? 0} queued</span></div>${problem(this.problem)}`
-  }
-}
-
 /** A code box over `x`, and a box to try a value on it. */
 abstract class CodeEl extends PlacedElement {
   static styles = base
@@ -91,6 +79,8 @@ abstract class CodeEl extends PlacedElement {
 export class MapEl extends CodeEl { static component = Map; ops = { ...Map.ops, run: Map.ops.map } }
 /** Filter's element. */
 export class FilterEl extends CodeEl { static component = Filter; ops = { ...Filter.ops, run: Filter.ops.filter } }
+
+export { DebounceEl }
 
 /** Defines every bundle element under its tag, once. */
 export function defineBundle() {

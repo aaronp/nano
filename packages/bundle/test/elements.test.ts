@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { Components, Ops, Registries, Runtimes } from '@composable/core'
 import { provide } from '@composable/elements'
-import { defineBundle, Input, Log, Map as MapC, Range } from '../src'
+import { Debounce, defineBundle, Input, Log, Map as MapC, Range } from '../src'
 import { tick } from './fixtures'
 
 defineBundle()
@@ -47,4 +47,28 @@ test('c-map: the code box sets the code', async () => {
   const box = el.shadowRoot!.querySelector('textarea')!
   box.value = 'return x + 1'; box.dispatchEvent(new Event('change')); await settle(el)
   expect(await value('m1', MapC.ops.code)).toBe('return x + 1')
+})
+
+test('c-debounce: queued values wait in the switchback, then drop as one batch into a bucket', async () => {
+  const el = await place('c-debounce', 'd1')
+  const call = (op: any, x: unknown) => rt.call({ registry: 'page', instance: 't' }, 'd1', Ops.key(op), x)
+  await call(Debounce.ops.setQuiet, 100)
+  for (const v of [1, 'two', { three: 3 }]) await call(Debounce.ops.enqueue, v)
+  await settle(el)
+  const root = el.shadowRoot!
+  expect(root.querySelectorAll('.item').length).toBe(3)
+  expect(root.querySelector('.status')!.textContent).toContain('collecting 3')
+  expect(root.querySelector('.ratio')!.textContent).toBe('3 → 0 batches')
+  await tick(1600); await settle(el)
+  expect(root.querySelectorAll('.item').length).toBe(0)
+  expect(root.querySelectorAll('.batch .cell').length).toBe(3)
+  expect(root.querySelector('.batch')!.textContent).toContain('quiet')
+  expect(root.querySelector('.ratio')!.textContent).toBe('3 → 1 batches')
+})
+
+test('c-debounce: the quiet slider sets the quiet period', async () => {
+  const el = await place('c-debounce', 'd2')
+  const slider = el.shadowRoot!.querySelector('input[aria-label="Quiet period in milliseconds"]') as HTMLInputElement
+  slider.value = '750'; slider.dispatchEvent(new Event('input')); await settle(el)
+  expect(await value('d2', Debounce.ops.quiet)).toBe(750)
 })

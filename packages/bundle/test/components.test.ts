@@ -39,9 +39,13 @@ test('debounce: values within the quiet period come out as one batch', async () 
   await call('d', Debounce.ops.setQuiet, 20); await call('d', Debounce.ops.setMaxWait, 1000)
   for (const v of [1, 2, 3]) await call('d', Debounce.ops.enqueue, v)
   expect(await value('d', Debounce.ops.pending)).toBe(3)
+  const queued = await value('d', Debounce.ops.queued)
+  expect(queued.map((q: any) => q.value)).toEqual([1, 2, 3])
+  expect(typeof queued[0].at).toBe('number')
   await tick(40)
   expect(got).toEqual([[1, 2, 3]])
   expect(await value('d', Debounce.ops.pending)).toBe(0)
+  expect(await value('d', Debounce.ops.queued)).toEqual([])
 })
 
 test('debounce: max wait flushes even while values keep arriving', async () => {
