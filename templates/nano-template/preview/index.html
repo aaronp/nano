@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>nano-template preview</title>
+  <!-- The shared packages, which a host would provide: filled in by scripts/build.ts from package.json. -->
+  <script type="importmap">%IMPORTMAP%</script>
+  <style>body { font: 14px system-ui, sans-serif; margin: 24px; max-width: 640px } code { font-size: 13px }</style>
+</head>
+<body>
+  <h1>nano-template</h1>
+  <p>This package's components, running on their own. A host imports them from <a href="manifest.json"><code>manifest.json</code></a>.</p>
+  <nano-timer name="timer"></nano-timer>
+  <script type="module">
+    import { Registries, Runtimes } from '@pritzlaff/nano-core'
+    import { provide } from '@pritzlaff/nano-elements'
+    import { define } from './index.js'
+    // a registry and runtime for the page, as a host has; elements place their components in it
+    const runtime = Runtimes.create(Registries.create('preview'))
+    provide(document, runtime.registry)
+    define()
+  </script>
+</body>
+</html>
