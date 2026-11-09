@@ -41,6 +41,17 @@ is a `PlacedElement` from `@pritzlaff/nano-elements`, which places the component
 - **`dist/index.html`**: a preview that runs the components on their own, with an import map to those shared
   packages on esm.sh.
 
+## Looks and skins
+
+The component is the work; its element is a thin UI. Style elements with the `--nano-*` tokens (the contract in
+`@pritzlaff/nano-elements`' README: colours, fonts, radius, series), with fallbacks, so they take on any host's
+theme. From `@pritzlaff/nano-elements` 0.2.0, extend its `base` stylesheet for the shared component library
+(`.btn`, `.badge`, `.card`, `.field`, `.table`…).
+
+A **skin** is another element set over the same components: same component ids and ops, so a host's connections
+don't change when it swaps the UI. Ship it as a second catalog (say `catalogCompact`, with its own tags and a
+`defineCompact()`), or as a separate package that imports this one's components.
+
 ## What a package may import
 
 A host gives the packages it imports its own copies of the shared libraries, so the module must leave them as bare
