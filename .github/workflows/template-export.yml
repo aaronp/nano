@@ -1,0 +1,39 @@
+# Mirrors templates/nano-template to aaronp/nano-template (its main branch) when it changes on master.
+# One-time setup: create aaronp/nano-template (empty; Settings → "Template repository"; Pages source "GitHub
+# Actions"), and add a TEMPLATE_TOKEN secret here: a fine-grained token on that repo with Contents: read and
+# write, and Workflows: read and write (the template carries its own workflows, and GitHub refuses pushes that
+# change workflow files without it). The template is tested before it is exported.
+name: Export template
+
+on:
+  push:
+    branches: [master]
+    paths: ['templates/nano-template/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: template-export
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+      - name: The template's own tests and build, before anything is exported
+        working-directory: templates/nano-template
+        run: bun install --frozen-lockfile && bun test && bun run build
+      - name: Export
+        env:
+          TEMPLATE_TOKEN: ${{ secrets.TEMPLATE_TOKEN }}
+        run: |
+          [ -n "$TEMPLATE_TOKEN" ] || { echo "Add a TEMPLATE_TOKEN secret (see this workflow's header)."; exit 1; }
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          scripts/template-export.sh "https://x-access-token:${TEMPLATE_TOKEN}@github.com/aaronp/nano-template.git"
