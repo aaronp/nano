@@ -9,6 +9,7 @@ import type { Wires } from './wires'
 
 const h2 = (text: string) => html`<h2 style="margin:0; font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#8B96A5">${text}</h2>`
 const viewBtn = (label: string, go: () => void) => html`<button type="button" class="sidebtn" @click=${go} style="height:44px; border-radius:6px; border:1px solid #2F3845; background:#161B22; color:#E6EDF3; font:inherit; font-size:12px; cursor:pointer">${label}</button>`
+const zoomBtn = (label: string, name: string, go: () => void) => html`<button type="button" class="sidebtn" aria-label=${name} @click=${go} style="height:32px; min-width:36px; padding:0 8px; border-radius:6px; border:1px solid #2F3845; background:#161B22; color:#E6EDF3; font:inherit; font-size:12px; cursor:pointer">${label}</button>`
 const seg = (label: string, on: boolean, pick: () => void) => html`<button type="button" class="seg" aria-pressed=${on ? 'true' : 'false'} @click=${pick} style="height:40px; border-radius:5px; border:0; background:${on ? '#E6EDF3' : 'transparent'}; color:${on ? '#12161C' : '#C9D1D9'}; font:inherit; font-size:12px; font-weight:600; cursor:pointer">${label}</button>`
 
 export function renderAside(el: Wires, d: Vals) {
@@ -34,6 +35,11 @@ export function renderAside(el: Wires, d: Vals) {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#12161C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"></path><path d="M21 3v5h-5"></path></svg>
       Flip pane
     </button>
+    <div style="display:grid; grid-template-columns:auto 1fr auto auto auto; align-items:center; gap:6px; font-size:12px; color:#C9D1D9">
+      <span>Zoom</span><span class="mono" style="color:#8B96A5; text-align:right">${Math.round(s.zoom * 100)}%</span>
+      ${zoomBtn('−', 'Zoom out', () => el.zoomBy(1 / 1.25))}${zoomBtn('+', 'Zoom in', () => el.zoomBy(1.25))}${zoomBtn('Fit', 'Fit the view', () => el.fit())}
+    </div>
+    <p style="margin:0; font-size:11px; color:#8B96A5">Pinch or ⌘/Ctrl+scroll to zoom · scroll to pan</p>
   </section>
 
   <section style="display:flex; flex-direction:column; gap:10px">

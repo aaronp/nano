@@ -15,9 +15,9 @@ export function renderStage(el: Wires, d: Vals) {
   const fit = (h: number) => (el.stage.w ? Math.min((el.stage.w - ASIDE_W) / W, (el.stage.h - HEADER_H) / h) : 1) * SCALE
   const t = (1 + d.backness) / 2
   const scale = d.shown ? fit(H) + (fit(H + m.rackH) - fit(H)) * t : 1
-  const dx = d.shown ? -ASIDE_W / 2 : 0, dy = d.shown ? HEADER_H / 2 - m.rackH / 2 * t * scale : 0
-  const worldT = 'translate(' + dx + 'px, ' + dy.toFixed(1) + 'px) scale(' + +scale.toFixed(4) + ') rotateX(' + s.rx.toFixed(2) + 'deg) rotateY(' + s.ry.toFixed(2) + 'deg)'
-  const worldTr = s.dragging ? 'none' : 'transform ' + TURN_MS + 'ms cubic-bezier(0.65, 0, 0.35, 1)'
+  const dx = (d.shown ? -ASIDE_W / 2 : 0) + s.panX, dy = (d.shown ? HEADER_H / 2 - m.rackH / 2 * t * scale : 0) + s.panY
+  const worldT = 'translate(' + dx + 'px, ' + dy.toFixed(1) + 'px) scale(' + +(scale * (d.shown ? s.zoom : 1)).toFixed(4) + ') rotateX(' + s.rx.toFixed(2) + 'deg) rotateY(' + s.ry.toFixed(2) + 'deg)'
+  const worldTr = s.dragging ? 'none' : s.zooming ? 'transform 80ms linear' : 'transform ' + TURN_MS + 'ms cubic-bezier(0.65, 0, 0.35, 1)'
   const cursor = s.editing ? (s.cord || s.lift ? 'grabbing' : 'crosshair') : s.dragging ? 'grabbing' : 'grab'
   const armed = s.armed ? el.catalog[s.armed]?.title ?? s.armed : null
   const hint = !s.editing
@@ -28,7 +28,7 @@ export function renderStage(el: Wires, d: Vals) {
         ? 'Click a + to insert ' + armed + ' there'
         : 'Pick an operator, then click a + between pieces · click × to unplug · click an operator piece to select it'
   const toast = s.cord && s.cord.err ? { kind: 'err', text: s.cord.err } : s.toast
-  return html`<div class="stage-bg" @pointerdown=${(e: PointerEvent) => onDown(el, e)} @pointermove=${(e: PointerEvent) => onMove(el, e)} @pointerup=${(e: PointerEvent) => onUp(el, e)} @pointercancel=${() => onCancel(el)} @dblclick=${() => onDbl(el)} style="position:absolute; inset:0; overflow:hidden; perspective:2400px; perspective-origin:50% 40%; cursor:${cursor}; touch-action:none; user-select:none">
+  return html`<div class="stage-bg" @wheel=${(e: WheelEvent) => el.onWheel(e)} @pointerdown=${(e: PointerEvent) => onDown(el, e)} @pointermove=${(e: PointerEvent) => onMove(el, e)} @pointerup=${(e: PointerEvent) => onUp(el, e)} @pointercancel=${() => onCancel(el)} @dblclick=${() => onDbl(el)} style="position:absolute; inset:0; overflow:hidden; perspective:2400px; perspective-origin:50% 40%; cursor:${cursor}; touch-action:none; user-select:none">
 
   <div class="world" style="position:absolute; left:50%; top:50%; width:${W}px; height:${H}px; margin-left:${-W / 2}px; margin-top:${-H / 2}px; transform-style:preserve-3d; transform:${worldT}; transition:${worldTr}">
 

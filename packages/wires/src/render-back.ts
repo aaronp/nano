@@ -121,11 +121,12 @@ export function renderBack(el: Wires, d: Vals) {
 
   ${isRelay ? html`<svg width=${W} height=${H} style="position:absolute; left:0; top:0; overflow:visible; pointer-events:none" aria-hidden="true">
     ${cords.map(w => svg`<g data-wire=${w.id} opacity=${w.op}>
-      <path d=${w.d} fill="none" stroke="#000000" stroke-opacity="0.55" stroke-width="7" stroke-linecap="round"></path>
-      <path d=${w.d} fill="none" stroke=${w.color} stroke-width="3.5" stroke-linecap="round"></path>
-      <path d=${w.d} fill="none" stroke="#FFFFFF" stroke-opacity="0.85" stroke-width="2" stroke-linecap="round" class=${w.sel ? 'flow' : 'noflow'} opacity=${w.sel ? 1 : 0}></path>
-      <circle cx=${w.gm.a[0]} cy=${w.gm.a[1]} r="5.5" fill=${w.color} stroke="#0A0D11" stroke-width="1.5"></circle>
-      <circle cx=${w.gm.b[0]} cy=${w.gm.b[1]} r="5.5" fill=${w.color} stroke="#0A0D11" stroke-width="1.5"></circle>
+      <path class="glow" d=${w.d} fill="none" stroke=${w.color} stroke-opacity="0.3" stroke-width="16" stroke-linecap="round"></path>
+      <path d=${w.d} fill="none" stroke="#000000" stroke-opacity="0.6" stroke-width="9" stroke-linecap="round"></path>
+      <path d=${w.d} fill="none" stroke=${w.color} stroke-width="5" stroke-linecap="round"></path>
+      <path d=${w.d} fill="none" stroke="#FFFFFF" stroke-opacity=${w.sel ? 0.95 : 0.5} stroke-width="2" stroke-linecap="round" class="flow"></path>
+      <circle cx=${w.gm.a[0]} cy=${w.gm.a[1]} r="7" fill=${w.color} stroke="#0A0D11" stroke-width="2"></circle>
+      <circle cx=${w.gm.b[0]} cy=${w.gm.b[1]} r="7" fill=${w.color} stroke="#0A0D11" stroke-width="2"></circle>
     </g>`)}
     ${relayPackets.map(k => packet(k, 6, 3, 10))}
   </svg>` : ''}

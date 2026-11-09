@@ -17,6 +17,8 @@ export type Packet = { id: number; wire: string; born: number; label: string }
 /** All of the view's state. */
 export interface State {
   ry: number; rx: number; dragging: boolean; mode: 'relay' | 'puzzle'; sel: string | null; depth: number; editing: boolean; entering: boolean; leaving: boolean
+  /** Zoom (1 = fitted) and pan (screen px) on top of the camera; `zooming` makes them follow the wheel without easing. */
+  zoom: number; panX: number; panY: number; zooming: boolean
   cord: Cord | null; armed: string | null; selMod: string | null; lift: string | null; toast: { kind: 'ok' | 'err'; text: string } | null
   packets: Packet[]; hits: Record<string, number>; flashes: Record<string, number>; stats: Record<string, { in: number; out: number }>
 }
@@ -61,7 +63,7 @@ export class Wires extends LitElement {
   declare platform: string
   declare system: string
   declare flipped: boolean
-  s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, entering: false, leaving: false, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
+  s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, entering: false, leaving: false, zoom: 1, panX: 0, panY: 0, zooming: false, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
   model: Model = empty()
   puzzle = buildPuzzle(this.model)
   stage = { w: 0, h: 0 }
@@ -85,7 +87,26 @@ export class Wires extends LitElement {
   render() { return renderRoot(this) }
 
   /** React-style setState: merges a patch and re-renders. */
-  setState(patch: Partial<State>) { this.s = { ...this.s, ...patch }; this.requestUpdate() }
+  setState(patch: Partial<State>) {
+    if ('ry' in patch || 'rx' in patch) patch = { zooming: false, ...patch }   // camera moves ease again
+    this.s = { ...this.s, ...patch }; this.requestUpdate()
+  }
+  /** Zooms by a factor (kept within 0.25–4), about a client point if given, so what is under it stays put. */
+  zoomBy(factor: number, at?: { clientX: number; clientY: number }) {
+    const { zoom, panX, panY } = this.s, next = Math.min(4, Math.max(0.25, zoom * factor))
+    if (!at) return this.setState({ zoom: next, zooming: false })
+    const r = this.renderRoot.querySelector('.world')?.getBoundingClientRect()
+    const k = 1 - next / zoom, cx = r ? r.left + r.width / 2 : 0, cy = r ? r.top + r.height / 2 : 0
+    this.setState({ zoom: next, panX: panX + k * (at.clientX - cx), panY: panY + k * (at.clientY - cy), zooming: true })
+  }
+  /** Pinch or ctrl/cmd+scroll zooms about the pointer; scrolling pans. */
+  onWheel(e: WheelEvent) {
+    e.preventDefault()
+    if (e.ctrlKey || e.metaKey) this.zoomBy(Math.exp(-e.deltaY * 0.01), e)
+    else this.setState({ panX: this.s.panX - e.deltaX, panY: this.s.panY - e.deltaY, zooming: true })
+  }
+  /** Back to the fitted view. */
+  fit() { this.setState({ zoom: 1, panX: 0, panY: 0, zooming: false }) }
   now() { return performance.now() }
   recent(at: number | undefined) { return at !== undefined && this.now() - at < FLASH_MS }
   /** The slotted dock. */
@@ -157,7 +178,7 @@ export class Wires extends LitElement {
     const dock = this.dock()
     this.model = { ...this.model, W: dock?.offsetWidth || 1340, H: dock?.offsetHeight || 560 }
     this.rebuild()
-    this.s = { ...this.s, ry: 0, rx: 0, dragging: false, entering: true, leaving: false, packets: [] }
+    this.s = { ...this.s, ry: 0, rx: 0, dragging: false, entering: true, leaving: false, zoom: 1, panX: 0, panY: 0, zooming: false, packets: [] }
     this.#stop()
     this.#timer = setInterval(() => this.frame(), FRAME_MS)
     setTimeout(() => { this.measure(); this.setState({ entering: false }) }, 60)   // starts at full size, then eases back

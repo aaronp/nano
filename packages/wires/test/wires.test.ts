@@ -232,3 +232,41 @@ test('the edit drawer fades in once the pane has dropped back; Done fades it out
   await new Promise(r => setTimeout(r, 950)); await settle()
   expect(el.flipped).toBe(false)
 })
+
+test('pinch or ctrl/cmd+scroll zooms the view, scrolling pans it, and Fit puts it back', async () => {
+  const { el, root, flip, settle } = await mount()
+  await flip(); await new Promise(r => setTimeout(r, 80)); await settle()
+  const stage = root.querySelector('.stage-bg') as HTMLElement
+  const world = () => (root.querySelector('.world') as HTMLElement).style.transform
+  // happy-dom's WheelEvent drops the mouse fields (ctrlKey, metaKey, clientX…), so they are set on the event
+  const wheel = (init: Record<string, number | boolean>) => {
+    const e = new WheelEvent('wheel', { deltaX: Number(init.deltaX ?? 0), deltaY: Number(init.deltaY ?? 0), bubbles: true, cancelable: true })
+    for (const k of ['ctrlKey', 'metaKey', 'clientX', 'clientY']) Object.defineProperty(e, k, { value: init[k] ?? (k.endsWith('Key') ? false : 0) })
+    stage.dispatchEvent(e)
+  }
+  wheel({ deltaY: -100, ctrlKey: true, clientX: 600, clientY: 300 })
+  await settle()
+  expect(el.s.zoom).toBeGreaterThan(1)
+  expect(el.s.zoom).toBeLessThanOrEqual(4)
+  const [px, py] = [el.s.panX, el.s.panY]   // zooming about the pointer moved it
+  wheel({ deltaX: 30, deltaY: 40 })
+  await settle()
+  expect([el.s.panX - px, el.s.panY - py]).toEqual([-30, -40])
+  expect(world()).toContain(`translate(${-170 + el.s.panX}px`)
+  expect(world()).toContain(`scale(${+(0.9 * el.s.zoom).toFixed(4)})`)
+  for (let i = 0; i < 40; i++) wheel({ deltaY: 500, metaKey: true })
+  await settle()
+  expect(el.s.zoom).toBe(0.25)
+  ;(root.querySelector('[aria-label="Fit the view"]') as HTMLButtonElement).click(); await settle()
+  expect([el.s.zoom, el.s.panX, el.s.panY]).toEqual([1, 0, 0])
+  ;(root.querySelector('[aria-label="Zoom in"]') as HTMLButtonElement).click(); await settle()
+  expect(el.s.zoom).toBeGreaterThan(1)
+})
+
+test('every cord glows and shows its direction of flow', async () => {
+  const { root, flip } = await mount()
+  await flip()
+  const cords = [...root.querySelectorAll('[data-wire]')]
+  expect(cords.length).toBe(2)
+  for (const c of cords) { expect(c.querySelector('.glow')).not.toBeNull(); expect(c.querySelector('.flow')).not.toBeNull() }
+})
