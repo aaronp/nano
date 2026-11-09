@@ -35,6 +35,7 @@ workspace-dock .dock-bar .grow { flex: 1; }
 workspace-dock .dock-bar button { font: inherit; font-size: 13px; padding: 5px 10px; border: var(--card-border); border-radius: var(--radius); background: var(--surface-2); color: var(--fg); cursor: pointer; }
 workspace-dock .dock-bar button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 workspace-dock .dock-area { position: relative; min-height: 0; overflow: hidden; }
+workspace-dock .dock-empty { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; color: var(--muted); font-size: 14px; pointer-events: none; }
 .dock-panel { box-sizing: border-box; height: 100%; overflow: auto; padding: 14px; background: var(--surface); color: var(--fg); font-family: var(--font); }
 .dock-panel.flush { padding: 0; }
 .lm_goldenlayout { background: var(--bg); }
@@ -86,6 +87,8 @@ const ensureStyles = (doc: Document) => {
 interface Def extends PaletteEntry { readonly template: HTMLTemplateElement }
 
 export class WorkspaceDock extends HTMLElement {
+  /** The system (registry) the panels' components live in; unset, they use the page's provided registry. */
+  registry?: unknown;
   private bus: Bus | null = null;
   private layout: GoldenLayout | null = null;
   private defs = new Map<string, Def>();
@@ -115,7 +118,7 @@ export class WorkspaceDock extends HTMLElement {
     this.setAttribute('chrome', pick.value);
     pick.addEventListener('change', () => { style.set(pick.value as WindowStyle); this.setAttribute('chrome', pick.value); });
     bar.append(title, hint, this.el('span', 'grow'), this.status, pick, connections,
-      this.button('Save workspace…', () => this.dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true, composed: true, detail: { layout: this.requireLayout().saveLayout() } }))),
+      this.button('Save workspace…', () => this.dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true, composed: true, detail: { layout: this.requireLayout().saveLayout(), system: this.getAttribute('system') ?? 'host' } }))),
       this.button('Save layout', () => this.save()), this.button('Restore', () => this.restore()), this.button('Reset', () => this.reset()));
     const area = this.el('div', 'dock-area');
     this.append(bar, area);
@@ -123,7 +126,9 @@ export class WorkspaceDock extends HTMLElement {
     const layout = new GoldenLayout(area);
     layout.resizeWithContainerAutomatically = true;
     layout.registerComponentFactoryFunction('widget', (container, state) => this.mount(container, state));
-    layout.on('stateChanged', () => this.send('dock:layout', { panels: this.openIds().length }));
+    const empty = this.el('p', 'dock-empty', 'Drag a component in from the drawer, or click one to add it.');
+    area.append(empty);
+    layout.on('stateChanged', () => { const n = this.openIds().length; empty.hidden = n > 0; this.send('dock:layout', { panels: n }); });
     this.layout = layout;
     this.connectSources(layout);
     const saved = this.readSaved();
@@ -207,15 +212,18 @@ export class WorkspaceDock extends HTMLElement {
 
   /** Any data-dock-add element targeting this dock becomes a drag source and a click-to-add button. */
   private connectSources(layout: GoldenLayout) {
-    for (const el of this.ownerDocument.querySelectorAll<HTMLElement>(`[data-dock-add="${CSS.escape(this.id)}"]`)) {
-      const id = el.dataset['widget'] ?? '';
-      const def = this.defs.get(id);
-      if (!def) throw new Error(`menu item targets unknown workspace widget "${id}"`);
-      el.setAttribute('draggable', 'false');
-      layout.newDragSource(el, () => ({ type: 'component', componentType: 'widget', componentState: { widget: def.id }, title: def.title }));
-      /* the link's own navigation (to the workspace page) happens first; add once the page is shown */
-      el.addEventListener('click', () => requestAnimationFrame(() => this.addWidget(def.id)));
-    }
+    for (const el of this.ownerDocument.querySelectorAll<HTMLElement>(`[data-dock-add="${CSS.escape(this.id)}"]`)) this.addSource(el, layout);
+  }
+
+  /** Makes an element (its data-widget names a palette widget) a drag source for this dock, and click-to-add. */
+  addSource(el: HTMLElement, layout = this.requireLayout()) {
+    const id = el.dataset['widget'] ?? '';
+    const def = this.defs.get(id);
+    if (!def) throw new Error(`menu item targets unknown workspace widget "${id}"`);
+    el.setAttribute('draggable', 'false');
+    layout.newDragSource(el, () => ({ type: 'component', componentType: 'widget', componentState: { widget: def.id }, title: def.title }));
+    /* a link's own navigation (to the workspace page) happens first; add once the page is shown */
+    el.addEventListener('click', (e) => { e.preventDefault(); requestAnimationFrame(() => this.addWidget(def.id)); });
   }
 
   private mount(container: ComponentContainer, state: JsonValue | undefined) {
@@ -230,6 +238,10 @@ export class WorkspaceDock extends HTMLElement {
     const content = def.template.content.cloneNode(true) as DocumentFragment;
     const name = readWidgetName(state);
     const shown = content.firstElementChild as (Element & { model?: unknown }) | null;
+    // its system: elements in the panel place their components in the dock's registry, not the page's (they keep a
+    // property set before they upgrade). ponytail: only the panel's own elements; ones a panel makes inside its
+    // shadow root still use the page's provided registry.
+    if (this.registry) for (const e of content.querySelectorAll('*')) if (e.localName.includes('-')) (e as Element & { registry?: unknown }).registry = this.registry;
     if (name) shown?.setAttribute('name', name);   // before it connects, so it attaches to that instance
     container.element.append(content);
     // saved layouts name the instance each panel shows, so Reset and Restore reattach instead of making new ones

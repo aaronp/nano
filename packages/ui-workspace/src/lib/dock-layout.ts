@@ -43,11 +43,12 @@ export const readWidgetName = (state: unknown): string | undefined => {
 export const panelState = (widget: string, shown: { model?: unknown } | null): { widget: string; name?: string } =>
   typeof shown?.model === 'string' && shown.model ? { widget, name: shown.model } : { widget };
 
-/** A starting layout: the given entries arranged side by side, stacked, as tabs, or in a two-column grid. */
-export const initialLayout = (entries: readonly PaletteEntry[], arrangement: Arrangement): { readonly root: LayoutItem } => {
+/** A starting layout: the given entries arranged side by side, stacked, as tabs, or in a two-column grid. With no
+ * entries the workspace starts empty. */
+export const initialLayout = (entries: readonly PaletteEntry[], arrangement: Arrangement): { readonly root: LayoutItem | undefined } => {
   const items = entries.map(panel);
   const first = items[0];
-  if (!first) throw new Error('a workspace needs at least one panel open at start');
+  if (!first) return { root: undefined };
   if (items.length === 1) return { root: first };
   switch (arrangement) {
     case 'row': case 'column': case 'stack': return { root: { type: arrangement, content: items } };

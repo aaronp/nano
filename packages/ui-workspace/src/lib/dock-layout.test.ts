@@ -6,14 +6,15 @@ const e = (id: string) => ({ id, title: id.toUpperCase() });
 
 test('starting layouts follow the arrangement', () => {
   const one = initialLayout([e('notes')], 'grid');
-  assert.equal(one.root.type, 'component');
+  assert.equal(one.root!.type, 'component');
   const tabs = initialLayout([e('a'), e('b')], 'stack');
-  assert.equal(tabs.root.type, 'stack');
+  assert.equal(tabs.root!.type, 'stack');
   const grid = initialLayout([e('a'), e('b'), e('c')], 'grid');
-  assert.equal(grid.root.type, 'row');
+  assert.equal(grid.root!.type, 'row');
   assert.deepEqual(panelIds(grid.root), ['a', 'b', 'c']);
   assert.equal(countPanels(grid.root), 3);
-  assert.throws(() => initialLayout([], 'row'), /at least one panel/);
+  assert.deepEqual(initialLayout([], 'row'), { root: undefined });   // an empty workspace
+  assert.deepEqual(panelIds(initialLayout([], 'grid').root), []);
 });
 
 test('panel state is strict so corrupt saved layouts fail loudly', () => {
