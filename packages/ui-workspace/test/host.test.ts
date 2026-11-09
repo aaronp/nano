@@ -1,6 +1,6 @@
 // The workspace page on core: its markup and composable.ts, the platform with the worked example, and a flow through it.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
-GlobalRegistrator.register()
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()   // another test file may have already (file order differs by OS)
 import { expect, test } from 'bun:test'
 
 const { Ops } = await import('@pritzlaff/nano-core')
