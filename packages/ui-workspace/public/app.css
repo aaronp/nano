@@ -68,3 +68,17 @@ html[data-theme='retro'] .page-head a { color: #FFFF9E; }
 }
 .composable { margin-bottom: 16px; }
 .composable-row { margin-top: 16px; }
+
+/* The Import dialog. */
+.import-dialog { box-sizing: border-box; width: min(560px, 92vw); max-height: 86vh; overflow: auto; padding: 20px; border: var(--card-border); border-radius: var(--radius);
+  background: var(--surface); color: var(--fg); font: 14px var(--font); }
+.import-dialog h2 { margin: 0 0 12px; font: 600 16px var(--display); }
+.import-dialog h3 { margin: 12px 0 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.import-dialog .row { display: flex; gap: 8px; }
+.import-dialog input { flex: 1; min-width: 0; font: inherit; padding: 6px 8px; border: var(--card-border); border-radius: var(--radius); background: var(--surface-2); color: var(--fg); }
+.import-dialog button { font: inherit; padding: 6px 12px; border: var(--card-border); border-radius: var(--radius); background: var(--surface-2); color: var(--fg); cursor: pointer; }
+.import-dialog button:disabled { opacity: .5; cursor: not-allowed; }
+.import-dialog ul { margin: 0; padding-left: 18px; } .import-dialog li { margin: 4px 0; }
+.import-dialog .ops { margin-top: 2px; display: flex; flex-wrap: wrap; gap: 4px; font-size: 12px; color: var(--muted); }
+.import-dialog [role='alert'] { min-height: 1em; color: var(--danger, #c33); }
+.import-dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
