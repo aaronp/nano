@@ -1,8 +1,6 @@
 // A page to test components on: a registry with a runtime, and a spy that records what it is sent.
 import { Components, Ops, Registries, Runtimes, type Component, type Op } from '@composable/core'
 import { component } from '@composable/runes'
-import { Type } from 'typebox'
-import { brandOf } from '../src/model'
 
 export const tick = () => new Promise(r => setTimeout(r, 0))
 
@@ -26,12 +24,4 @@ export const page = () => {
   return { rt, reg, add, call, value, spy }
 }
 
-// The demo's components, as list entries: their ops carry the schemas the board joins on.
-const num = Type.Number({ title: 'number' }), meters = brandOf(num, 'Meters')
-export const demo = {
-  slider: { id: 'slider', ops: [Ops.source('demo/slider', 'value-changed', num), Ops.action('demo/slider', 'set', num, num)] },
-  doubler: { id: 'doubler', ops: [Ops.action('demo/doubler', 'map', num, num)] },
-  chart: { id: 'chart', ops: [Ops.sink('demo/chart', 'push', num)] },
-  meter: { id: 'meter', ops: [Ops.sink('demo/meter', 'show', meters)] },
-  log: { id: 'log', ops: [Ops.sink('demo/log', 'write', Type.Unknown({ title: 'unknown' }))] },
-}
+export { demo } from '../demo/seed'

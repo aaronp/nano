@@ -6,11 +6,13 @@ import { Components, Ops, type Handle, type Op, type Registry, type Result } fro
 
 let n = 0
 
-/** Base class for an element that shows and drives one model: set `registry` and `model` (the instance id). */
+/** Base class for an element that shows and drives one model: set `registry` and `model` (the instance id).
+ * `watch` names more instances whose sources it reads too (it acts only on `model`). */
 export abstract class ModelElement extends LitElement {
-  static properties = { registry: { attribute: false }, model: {}, problem: { state: true } }
+  static properties = { registry: { attribute: false }, model: {}, watch: { attribute: false }, problem: { state: true } }
   declare registry?: Registry
   declare model?: string
+  declare watch?: string[]
   /** The last refusal from `act`, for rendering. */
   declare problem?: string
   #values = new Map<string, unknown>()
@@ -19,7 +21,7 @@ export abstract class ModelElement extends LitElement {
   connectedCallback() { super.connectedCallback(); this.#attach() }
   disconnectedCallback() { super.disconnectedCallback(); this.#detach() }
   willUpdate(changed: Map<string, unknown>) {
-    if (changed.has('registry') || changed.has('model')) { this.#detach(); this.#attach() }
+    if (changed.has('registry') || changed.has('model') || changed.has('watch')) { this.#detach(); this.#attach() }
   }
 
   /** The model's latest value for a source op. */
@@ -34,19 +36,22 @@ export abstract class ModelElement extends LitElement {
   }
 
   #attach() {
-    const reg = this.registry, model = this.model && reg?.get(this.model)
-    if (!reg || !model || this.#view || !this.isConnected) return
-    const id = `${this.model}~view-${n++}`, sources = [...model.actions.values()].filter(a => a.op.output && !a.op.input)
+    const reg = this.registry
+    if (!reg || !this.model || !reg.get(this.model) || this.#view || !this.isConnected) return
+    // every source op of the model and the watched instances: [instance, action]
+    const sources = [this.model, ...(this.watch ?? [])].flatMap(i =>
+      [...(reg.get(i)?.actions.values() ?? [])].filter(a => a.op.output && !a.op.input).map(a => [i, a] as const))
+    const id = `${this.model}~view-${n++}`
     const view = Components.create({ ns: 'composable.editor', name: 'view' }, () => this)
-    for (const a of sources) {
-      const key = Ops.key(a.op)
+    for (const [, a] of sources) {
+      const key = Ops.key(a.op)   // ponytail: two watched instances of one component would share a key
       view.action(Ops.sink('composable.editor/view', key, Type.Unknown()), (el, data) => { el.#values.set(key, data); el.requestUpdate() })
     }
     reg.add(id, Components.instantiate(view))
-    for (const a of sources) reg.subscribe({ source: this.model!, op: Ops.key(a.op), listener: id, target: `composable.editor/view/${Ops.key(a.op)}` })
+    for (const [i, a] of sources) reg.subscribe({ source: i, op: Ops.key(a.op), listener: id, target: `composable.editor/view/${Ops.key(a.op)}` })
     this.#view = { id, handle: reg.get(id)!.env.handles()[0]!, registry: reg }
-    // read what the model holds now: sources with a reader answer a call
-    for (const a of sources) if (a.run) void this.#view.handle.call(this.model!, a.op, null).then(r => {
+    // read what each holds now: sources with a reader answer a call
+    for (const [i, a] of sources) if (a.run) void this.#view.handle.call(i, a.op, null).then(r => {
       if ('value' in r) { this.#values.set(Ops.key(a.op), r.value); this.requestUpdate() }
     })
   }
