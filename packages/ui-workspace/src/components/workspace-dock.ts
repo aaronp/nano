@@ -18,7 +18,7 @@
 import { GoldenLayout, LayoutConfig, type ComponentContainer, type JsonValue, type ResolvedLayoutConfig } from 'golden-layout';
 import baseCss from 'golden-layout/dist/css/goldenlayout-base.css';
 import { provideBus, requestBus, type Bus } from '../lib/bus.ts';
-import { ARRANGEMENTS, PALETTE_ID, initialLayout, panelIds, readWidgetId, readWidgetName, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
+import { ARRANGEMENTS, PALETTE_ID, initialLayout, panelIds, readWidgetId, readWidgetName, panelState, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
 
 const STYLE_ID = 'workspace-dock-styles';
 const DOCK_CSS = `
@@ -204,8 +204,11 @@ export class WorkspaceDock extends HTMLElement {
     provideBus(container.element, this.bus);
     const content = def.template.content.cloneNode(true) as DocumentFragment;
     const name = readWidgetName(state);
-    if (name) content.firstElementChild?.setAttribute('name', name);   // before it connects, so it attaches to that instance
+    const shown = content.firstElementChild as (Element & { model?: unknown }) | null;
+    if (name) shown?.setAttribute('name', name);   // before it connects, so it attaches to that instance
     container.element.append(content);
+    // saved layouts name the instance each panel shows, so Reset and Restore reattach instead of making new ones
+    container.stateRequestEvent = () => panelState(id, shown);
     this.send('dock:opened', { widget: id });
     return undefined;
   }

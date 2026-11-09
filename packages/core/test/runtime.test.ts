@@ -152,3 +152,27 @@ test('a policy-wrapped runtime passes listen through', async () => {
   await rt.call(me, 'c', 'com.acme/inc', null)
   expect(seen.length).toBeGreaterThan(0)
 })
+
+test('a trace listener that throws changes nothing: the call succeeds and every delivery is made', async () => {
+  const { rt, reg, log, sub } = setup()
+  reg.add('c', counter()); sub('c', Ops.key(Updated))
+  const errors: unknown[] = []
+  const was = globalThis.reportError
+  globalThis.reportError = (e: unknown) => { errors.push(e) }
+  rt.listen(() => { throw new Error('observer bug') })
+  try {
+    expect(await rt.call(me, 'c', 'com.acme/inc', null)).toEqual({ value: 1 })
+    expect(log.value).toEqual([1])
+    expect(errors.length).toBe(3)   // reported, not thrown: one per trace
+  } finally { globalThis.reportError = was }
+})
+
+test('a refused publish is traced with its error', async () => {
+  const { rt, reg } = setup()
+  reg.add('c', counter())
+  const seen: any[] = []
+  rt.listen(t => { seen.push(t) })
+  await rt.notify({ from: { registry: 'r', instance: 'c' }, op: 'com.acme/nope', data: 1 })
+  expect(seen).toHaveLength(1)
+  expect(seen[0]).toMatchObject({ kind: 'publish', op: 'com.acme/nope', result: { error: expect.any(String) } })
+})

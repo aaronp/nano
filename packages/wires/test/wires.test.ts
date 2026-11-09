@@ -174,3 +174,28 @@ test('removed from the page, it stops listening', async () => {
   await tick()
   expect(el.s.packets).toEqual([])
 })
+
+test('while flat it does no work: no packets pile up, and none fly in when it flips', async () => {
+  const { el, host, flip, settle } = await mount()
+  await host.call({ registry: 'host', instance: 'test' }, 'r', Ops.key(Range.ops.set), 7)
+  await settle()
+  expect(el.s.packets).toEqual([])
+  await flip()
+  expect(el.s.packets).toEqual([])
+})
+
+test('a splice that fails partway puts the chain back as it was', async () => {
+  const { el, host, flip, settle, s1, root } = await mount()
+  await flip()
+  toggleEdit(el); el.setState({ mode: 'puzzle' }); await settle()
+  el.setState({ armed: 'map' })
+  const real = el.connect.bind(el)
+  let n = 0
+  el.connect = async (a: string, b: string) => (++n === 2 ? { error: 'refused for the test' } : real(a, b))   // the second patch fails
+  const { joint } = await import('../src/pointer')
+  await joint(el, s1.id); await settle()
+  const subs = host.registry.snapshot().subscriptions.filter(s => !s.listener.includes('~view'))
+  expect(subs.some(s => s.source === 'r' && s.listener === 'd')).toBe(true)   // the original wire is back
+  expect(host.registry.snapshot().instances.some(i => i.id.startsWith('map-'))).toBe(false)   // no orphan
+  expect(root.textContent).toContain('refused for the test')
+})

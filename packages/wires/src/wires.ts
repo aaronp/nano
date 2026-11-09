@@ -98,8 +98,8 @@ export class Wires extends LitElement {
   }
   #detach() { this.#off.forEach(f => f()); this.#off = [] }
 
-  /** Rebuilds the model once, after the current burst of registry changes. */
-  schedule() { if (!this.#pending) { this.#pending = true; queueMicrotask(() => { this.#pending = false; this.rebuild() }) } }
+  /** Rebuilds the model once, after the current burst of registry changes; only while flipped (opening rebuilds). */
+  schedule() { if (!this.flipped) return; if (!this.#pending) { this.#pending = true; queueMicrotask(() => { this.#pending = false; this.rebuild() }) } }
   panels(): Panel[] {
     const dock = this.dock()
     if (!dock) return []
@@ -127,7 +127,7 @@ export class Wires extends LitElement {
 
   /** A delivery on a drawn wire sends a packet along it, flashes its source and counts it. */
   trace(t: Trace) {
-    if (t.kind !== 'delivery' || !this.model.wires.some(w => w.id === t.subscription)) return
+    if (!this.flipped || t.kind !== 'delivery' || !this.model.wires.some(w => w.id === t.subscription)) return   // flat: nothing to draw
     const now = this.now(), { stats, flashes } = this.s
     const stat = (id: string) => stats[id] ?? { in: 0, out: 0 }
     let label: string
@@ -155,7 +155,7 @@ export class Wires extends LitElement {
     const dock = this.dock()
     this.model = { ...this.model, W: dock?.offsetWidth || 1340, H: dock?.offsetHeight || 560 }
     this.rebuild()
-    this.s = { ...this.s, ry: 0, rx: 0, dragging: false }
+    this.s = { ...this.s, ry: 0, rx: 0, dragging: false, packets: [] }
     this.#stop()
     this.#timer = setInterval(() => this.frame(), FRAME_MS)
     setTimeout(() => { if (this.flipped && this.s.ry === 0 && this.s.rx === 0) this.goTo('angled') }, 60)   // let the turn animate

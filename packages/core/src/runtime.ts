@@ -57,7 +57,8 @@ function create(registry: Registry, policy?: Policy): Runtime {
   if (registry.get('registry')) throw new Error(`registry ${registry.id} already has a runtime`)
   const at = (instance: string): Coord => ({ registry: registry.id, instance })
   const listeners = new Set<(t: Trace) => void>()
-  const tell = (t: Trace) => listeners.forEach(fn => fn(t))
+  // an observer can't change what happens: its error is reported, never thrown into the call or the delivery loop
+  const tell = (t: Trace) => listeners.forEach(fn => { try { fn(t) } catch (e) { reportError(e) } })
   /** Runs `op` on `target`: the lookup and input check every call and delivery share. */
   const run = async (target: string, op: string, arg: unknown): Promise<Result> => {
     const inst = registry.get(target), a = inst?.actions.get(op)
@@ -75,8 +76,13 @@ function create(registry: Registry, policy?: Policy): Runtime {
     listen(fn) { listeners.add(fn); return () => { listeners.delete(fn) } },
     async notify(e) {
       const a = registry.get(e.from.instance)?.actions.get(e.op)
-      if (e.from.registry !== registry.id || !a) return err(`${e.from.instance} does not publish ${e.op} in ${registry.id}`)
-      if (a.op.output && !Value.Check(a.op.output, e.data)) return err(`invalid data for ${e.op}`)
+      const refuse = (error: string) => {   // a refused publish is traced too, with its error
+        const result = err(error)
+        tell({ kind: 'publish', time: Date.now(), from: e.from, op: e.op, data: e.data, result })
+        return result
+      }
+      if (e.from.registry !== registry.id || !a) return refuse(`${e.from.instance} does not publish ${e.op} in ${registry.id}`)
+      if (a.op.output && !Value.Check(a.op.output, e.data)) return refuse(`invalid data for ${e.op}`)
       const results: Result[] = []   // a delivery is a call: same lookup, same input check
       for (const s of registry.matching(e.from.instance, e.op)) {
         const result = await run(s.listener, s.target, e.data)

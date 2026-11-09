@@ -125,10 +125,18 @@ export async function joint(el: Wires, wireId: string) {
   if (!inOp || !outOp) { el.fail((el.catalog[armed]?.title ?? armed) + " doesn't fit between " + portName(el.model, w.from) + ' and ' + portName(el.model, w.to)); return }
   const name = await el.create(armed)
   if (!name) return
-  if ('error' in await el.disconnect(wireId)) return
+  // all or nothing: if a step is refused, undo the ones before it, so the chain is as it was
+  const undo: (() => Promise<unknown>)[] = [() => el.removeComponent(name)]
+  const step = async (r: Promise<{ value?: unknown } | { error: string }>, back?: (v: any) => () => Promise<unknown>) => {
+    const res = await r
+    if ('error' in res) { for (const u of undo.reverse()) await u(); el.rebuild(); el.fail(res.error); return false }
+    if (back) undo.push(back(res.value))
+    return true
+  }
+  if (!await step(el.disconnect(wireId), () => () => el.connect(w.from, w.to))) return
   el.rebuild()   // the new component's jacks, before patching them
-  if ('error' in await el.connect(w.from, portKey(name, Ops.key(inOp)))) return
-  if ('error' in await el.connect(portKey(name, Ops.key(outOp)), w.to)) return
+  if (!await step(el.connect(w.from, portKey(name, Ops.key(inOp))), sub => () => el.disconnect(sub.id))) return
+  if (!await step(el.connect(portKey(name, Ops.key(outOp)), w.to))) return
   el.ok('Inserted ' + (el.catalog[armed]?.title ?? armed))
   el.setState({ armed: null })
 }

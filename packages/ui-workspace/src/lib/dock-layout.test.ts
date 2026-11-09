@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { countPanels, initialLayout, panelIds, readWidgetId, readWidgetName } from './dock-layout.ts';
+import { countPanels, initialLayout, panelIds, readWidgetId, readWidgetName, panelState } from './dock-layout.ts';
 
 const e = (id: string) => ({ id, title: id.toUpperCase() });
 
@@ -27,4 +27,10 @@ test('a panel may name the instance its element shows; anything else is ignored'
   assert.equal(readWidgetName({ widget: 'range', name: 'ex-range' }), 'ex-range');
   assert.equal(readWidgetName({ widget: 'range' }), undefined);
   assert.equal(readWidgetName({ widget: 'range', name: 42 }), undefined);
+});
+
+test('a saved panel names the instance its element shows, so Reset and Restore reattach to it', () => {
+  assert.deepEqual(panelState('range', { model: 'range-3' }), { widget: 'range', name: 'range-3' });
+  assert.deepEqual(panelState('notes', {}), { widget: 'notes' });
+  assert.deepEqual(panelState('notes', null), { widget: 'notes' });
 });
