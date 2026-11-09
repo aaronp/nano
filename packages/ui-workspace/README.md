@@ -1,14 +1,16 @@
 # ui-workspace
 
 A host site made from the [workspace shell starter](../../shell-starters/workspace), hosting `@composable` components.
-Everything that joins the two is in `src/composable.ts` (one scope provided on the document; our publications
-mirrored to the starter's bus as `composable:<op>`) and a few lines at the end of `public/app.css` (our `--c-*`
-theme tokens mapped onto the starter's). The components and the starter otherwise know nothing about each other.
+Everything that joins the two is in `src/composable.ts` (one `@composable/core` runtime over the registry `host`,
+provided on the document, plus the platform that holds every system) and a few lines at the end of
+`public/app.css` (our `--c-*` theme tokens mapped onto the starter's). The components and the starter otherwise
+know nothing about each other.
 
-- **Build time:** `<flow-slider name="slider">` on the Overview page places itself in the scope when the page loads.
-- **Runtime:** the drawer's *(composable)* entries add panels to the Workspace dock; each panel places a new
-  instance and removes it when closed. *Log (composable)* shows everything in the scope; the starter's *Activity*
-  shows the mirrored `composable:*` topics.
+- **Build time:** `<c-range name="slider">` on the Overview page places itself in `host` when the page loads.
+- **Systems:** `<c-platform>` shows every system by system or by component; select an action and connect it to
+  one that fits. Below it, a worked example made by `composable.ts` (range → debounce → log, input → map → log).
+- **Runtime:** the drawer's Workspace entries add panels to the dock; each panel places a new instance and
+  removes it when closed.
 
 `bun run build` (then `bun run serve`) builds `public/main.js` with Bun instead of esbuild. The rest of this
 README is the starter's.
