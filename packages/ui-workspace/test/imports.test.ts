@@ -59,3 +59,10 @@ test('the imports store keeps one record per URL, and forgets on remove', () => 
   store.remove('https://a/manifest.json')
   expect(store.list().map(r => r.name)).toEqual(['b'])
 })
+
+test('a kind must be a widget id, and a tag a custom element name', () => {
+  const one = (c: object) => ({ ...manifest, components: [{ ...manifest.components[0], ...c }] })
+  expect(parseManifest(one({ kind: 'Bad_Kind' }))).toContain('kind')
+  expect(parseManifest(one({ tag: 'div' }))).toContain('element')
+  expect(parseManifest(one({ tag: '<x-y onclick=1>' }))).toContain('element')
+})

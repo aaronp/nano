@@ -6,6 +6,8 @@
  * any [data-toggle-drawer] button (the one beside + in the nav) shows or hides them, and the choice is remembered.
  * Light DOM, so golden-layout can drag from it; it never imports the dock, only calls its `addSource`.
  */
+import { importFailures } from '../lib/import-failures.ts';
+
 type Dock = HTMLElement & { addSource?(el: HTMLElement): void };
 
 const SECTIONS = [{ id: 'components', title: 'Components', catalog: true }, { id: 'widgets', title: 'Widgets', catalog: false }];
@@ -90,15 +92,12 @@ export class ComponentDrawer extends HTMLElement {
       h.append(x);
       section.append(h, ...ts.map((t) => this.#entry(t)));
     }
-    for (const f of failures) section.append(Object.assign(this.ownerDocument.createElement('p'), { className: 'cd-failed', textContent: `${f.url}: ${f.error}` }));
+    for (const f of importFailures()) section.append(Object.assign(this.ownerDocument.createElement('p'), { className: 'cd-failed', textContent: `${f.url}: ${f.error}` }));
     if (section.childElementCount > 1) this.append(section);
     this.#filter();
   }
 }
 
-/** Imports that failed to load at start-up, as told by `imports:failed`. */
-let failures: { url: string; error: string }[] = [];
-document.addEventListener('imports:failed', (e) => { failures = (e as CustomEvent<typeof failures>).detail ?? []; }, { capture: true });
 
 if (!customElements.get('component-drawer')) {
   customElements.define('component-drawer', ComponentDrawer);

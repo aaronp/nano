@@ -65,7 +65,7 @@ test('imported packages get their own section, by package, with remove; failed i
   dock.insertAdjacentHTML('beforeend', '<template data-widget="timer" data-title="Timer" data-catalog data-package="nano-template" data-package-url="https://x/manifest.json"></template>')
   added.length = 0
   document.dispatchEvent(new CustomEvent('catalog:changed'))
-  document.dispatchEvent(new CustomEvent('imports:failed', { detail: [{ url: 'https://dead/manifest.json', error: 'not found' }] }))
+  ;(await import('../src/lib/import-failures.ts')).setImportFailures([{ url: 'https://dead/manifest.json', error: 'not found' }])
   await tick()
   const imported = d.querySelector('[data-section="imported"]')!
   expect(imported.querySelector('h4')!.textContent).toContain('nano-template')
@@ -77,4 +77,12 @@ test('imported packages get their own section, by package, with remove; failed i
   document.addEventListener('imports:remove', e => removed.push((e as CustomEvent).detail))
   ;(imported.querySelector('[aria-label="Remove nano-template"]') as HTMLButtonElement).click()
   expect(removed).toEqual([{ url: 'https://x/manifest.json', name: 'nano-template' }])
+})
+
+test('import failures from before the drawer existed are listed when it is built', async () => {
+  const { setImportFailures } = await import('../src/lib/import-failures.ts')
+  setImportFailures([{ url: 'https://early/manifest.json', error: 'gone' }])
+  const { d } = await mount()
+  expect(d.querySelector('[data-section="imported"]')!.textContent).toContain('https://early/manifest.json: gone')
+  setImportFailures([])
 })

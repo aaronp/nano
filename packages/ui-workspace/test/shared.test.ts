@@ -23,4 +23,7 @@ test('the build writes a module per shared specifier, the import map names each,
   const defining = []
   for (const f of js) if ((await Bun.file(join(pub, f)).text()).includes('litHtmlVersions')) defining.push(f)   // lit-html records itself in this global, once per copy
   expect(defining.length).toBe(1)
+  // default exports carry through too (typebox's Type and Value are also its defaults)
+  expect((await import(join(pub, 'shared', 'typebox.js'))).default).toBeDefined()
+  expect((await import(join(pub, 'shared', 'typebox-value.js'))).default).toBeDefined()
 }, 60000)

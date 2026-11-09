@@ -9,6 +9,8 @@ export interface Manifest {
 }
 
 const str = (v: unknown) => typeof v === 'string' && v.length > 0;
+/** A kind is a dock widget id; a tag a custom element name. (A bad kind would break a dock's palette.) */
+const KIND = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, TAG = /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/;
 
 /** The manifest, checked; or why it isn't one. */
 export function parseManifest(json: unknown): Manifest | string {
@@ -20,6 +22,10 @@ export function parseManifest(json: unknown): Manifest | string {
   if (!Array.isArray(m.components) || !m.components.length) return 'The manifest lists no components.';
   const bad = m.components.find((c) => !c || !str(c.kind) || !str(c.id) || !str(c.title) || (c.tag !== undefined && !str(c.tag)));
   if (bad) return `A component in the manifest needs a kind, an id and a title (${JSON.stringify(bad)}).`;
+  const kind = m.components.find((c) => !KIND.test(c.kind));
+  if (kind) return `A component's kind must be lower-case words joined by dashes (like my-thing), not ${JSON.stringify(kind.kind)}.`;
+  const tag = m.components.find((c) => c.tag !== undefined && !TAG.test(c.tag));
+  if (tag) return `A component's element must be a custom element name (like my-thing), not ${JSON.stringify(tag.tag)}.`;
   return m as Manifest;
 }
 

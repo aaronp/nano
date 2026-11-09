@@ -118,3 +118,8 @@ test('a package\'s catalog joins the running host: the platform can make it, Mai
   expect(names.kinds).toContain('timer'); expect(names.ids).toContain('nano.template/timer'); expect(names.tags).toContain('nano-timer')
   expect(names.kinds).toContain('range')
 })
+
+test('the names an import must not take include the page\'s own widgets', async () => {
+  const { loadedNames } = await import('../src/composable.ts')
+  expect(loadedNames().kinds).toEqual(expect.arrayContaining(['notes', 'chart', 'activity', 'range']))
+})

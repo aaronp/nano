@@ -52,10 +52,12 @@ const templateFor = (kind: string, e: { title: string; tag?: string }) => {
 const panel = document.querySelector('template[data-widget="c-platform"]')
 for (const [kind, e] of Object.entries(catalog)) if (e.tag) panel?.before(templateFor(kind, e))
 
-/** The kinds, component ids and element tags the host has loaded: an import must not clash with them. */
+/** The kinds (and the page's own widget ids), component ids and element tags the host has loaded: an import must not
+ * clash with them. */
 export function loadedNames() {
   const es = Object.entries(catalog)
-  return { kinds: es.map(([k]) => k), ids: es.map(([, e]) => `${e.component.id.ns}/${e.component.id.name}`), tags: es.flatMap(([, e]) => (e.tag ? [e.tag] : [])) }
+  const widgets = [...document.querySelectorAll<HTMLTemplateElement>('workspace-dock > template[data-widget]')].map(t => t.dataset.widget!)
+  return { kinds: [...new Set([...es.map(([k]) => k), ...widgets])], ids: es.map(([, e]) => `${e.component.id.ns}/${e.component.id.name}`), tags: es.flatMap(([, e]) => (e.tag ? [e.tag] : [])) }
 }
 
 /** Adds an imported package's catalog to the running host: the platform can make its kinds (it holds this catalog),

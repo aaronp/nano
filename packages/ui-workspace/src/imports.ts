@@ -5,6 +5,7 @@
  */
 import type { Catalog } from '@pritzlaff/nano-elements';
 import { addCatalog, loadedNames } from './composable.ts';
+import { setImportFailures } from './lib/import-failures.ts';
 import { catalogMismatch, clashes, importsStore, parseManifest, type Manifest } from './lib/imports.ts';
 
 /** How to reach the network: the page's fetch and import(), or stand-ins in tests. */
@@ -41,14 +42,14 @@ export async function loadPackage(url: string, deps: ImportDeps = pageDeps): Pro
   return { manifest: m };
 }
 
-/** Loads the remembered imports, in order; failures are told in one `imports:failed` (the drawers list them). */
+/** Loads the remembered imports, in order; failures are recorded for the drawers (built later) to list. */
 export async function bootImports(deps: ImportDeps = pageDeps) {
   const store = importsStore(localStorage), failed: { url: string; error: string }[] = [];
   for (const r of store.list()) {
     const got = await loadPackage(r.url, deps);
     if ('error' in got) failed.push({ url: r.url, error: got.error });
   }
-  if (failed.length) document.dispatchEvent(new CustomEvent('imports:failed', { detail: failed }));
+  setImportFailures(failed);
 }
 
 // a drawer's ✕ forgets an import (its components stay until the page reloads)
