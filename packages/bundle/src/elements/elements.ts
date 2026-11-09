@@ -45,8 +45,8 @@ export class RangeEl extends PlacedElement {
 /** A table of log entries, newest last, with Clear. */
 export class LogEl extends PlacedElement {
   static component = Log
-  static styles = [base, css`table { border-collapse: collapse; width: 100% } td, th { text-align: left; padding: 3px 6px; border-bottom: 1px solid #2A303C }
-    .warn { color: #FFB4A8 } .debug { color: #A3AAB8 }`]
+  static styles = [base, css`table { border-collapse: collapse; width: 100% } td, th { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--nano-border, #2A303C) }
+    .warn { color: var(--nano-bad, #FFB4A8) } .debug { color: var(--nano-muted, #A3AAB8) }`]
   render() {
     const entries = this.read<Entry[]>(Log.ops.entries) ?? []
     return html`<div class="col"><div class="row"><span class="muted">${entries.length} entries</span><button @click=${() => this.act(Log.ops.clear)}>Clear</button></div>

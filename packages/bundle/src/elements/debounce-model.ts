@@ -40,14 +40,13 @@ export function slotXY(pos: number) {
   return { x: xAt(r, G.perRow - 1), y: G.rowY[r]! + (G.rowY[r + 1]! - G.rowY[r]!) * frac }
 }
 
-/** A value's colour, by its JSON type (the prototype coloured by event type). */
+/** A value's colour, by its JSON type (the prototype coloured by event type): a series token. */
 export function colorOf(v: unknown) {
-  return typeof v === 'number' ? '#4C8DFF' : typeof v === 'string' ? '#FF9F1C' : v === null || typeof v === 'boolean' ? '#B48CFF' : '#2EC4A6'
+  return typeof v === 'number' ? 'var(--nano-s1, #4C8DFF)' : typeof v === 'string' ? 'var(--nano-s2, #FF9F1C)'
+    : v === null || typeof v === 'boolean' ? 'var(--nano-s5, #B48CFF)' : 'var(--nano-s3, #2EC4A6)'
 }
-export const rgba = (hex: string, a: number) => {
-  const n = parseInt(hex.slice(1), 16)
-  return 'rgba(' + ((n >> 16) & 255) + ', ' + ((n >> 8) & 255) + ', ' + (n & 255) + ', ' + a + ')'
-}
+/** A colour (a token) at an opacity. */
+export const tint = (color: string, a: number) => `color-mix(in srgb, ${color} ${Math.round(a * 100)}%, transparent)`
 export const label = (v: unknown, n: number) => { const s = typeof v === 'string' ? v : JSON.stringify(v) ?? String(v); return s.length > n ? s.slice(0, n - 1) + '…' : s }
 export const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
@@ -58,6 +57,6 @@ export function bucketView(events: Queued[]) {
   const fill = n === 0 ? 0 : Math.min(inner, n * h + (n - 1) * gap)
   return {
     n, gap, solid: n > 0, countTop: G.bucketTop + G.bucketH - 4 - fill - 24,
-    cells: events.map(e => ({ color: colorOf(e.value), bg: rgba(colorOf(e.value), 0.32), h, text: h >= 16 ? label(e.value, 8) : '' })),
+    cells: events.map(e => ({ color: colorOf(e.value), bg: tint(colorOf(e.value), 0.32), h, text: h >= 16 ? label(e.value, 8) : '' })),
   }
 }
