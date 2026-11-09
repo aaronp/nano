@@ -1,8 +1,11 @@
 // The manifest: what a host reads (from the URL it is given) before importing this package's module.
 import type { Catalog } from '@pritzlaff/nano-elements'
 
-/** The packages a host provides to what it imports; the module leaves them as bare imports. */
+/** The packages a host provides to what it imports (their version ranges go in the manifest). */
 export const SHARED = ['@pritzlaff/nano-core', '@pritzlaff/nano-runes', '@pritzlaff/nano-elements', 'lit', 'typebox']
+/** Exactly the imports a host provides: the module leaves these bare, and bundles anything else (other subpaths too). */
+export const SHARED_IMPORTS = ['@pritzlaff/nano-core', '@pritzlaff/nano-runes', '@pritzlaff/nano-elements', 'lit', 'lit/decorators.js', 'lit/directive.js',
+  'lit/directives/class-map.js', 'lit/directives/style-map.js', 'lit/directives/repeat.js', 'lit/directives/if-defined.js', 'typebox', 'typebox/value']
 
 /** Manifest version 1. `module` is relative to the manifest's URL; the module itself is the authority. */
 export type Manifest = {

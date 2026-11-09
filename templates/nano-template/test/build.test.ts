@@ -2,6 +2,7 @@
 import { expect, test } from 'bun:test'
 import { $ } from 'bun'
 import { join } from 'node:path'
+import { SHARED_IMPORTS } from '../src/manifest'
 
 const dist = join(import.meta.dir, '..', 'dist')
 
@@ -15,6 +16,10 @@ test('the build writes the module, manifest and preview; the module carries no c
   expect(manifest.components.map((c: { tag: string }) => c.tag)).toEqual(['nano-timer'])
   const html = await Bun.file(join(dist, 'index.html')).text()
   expect(html).toContain('"@pritzlaff/nano-core": "https://esm.sh/*@pritzlaff/nano-core@^0.1.0"')
-  expect(html).toContain('"typebox/": "https://esm.sh/typebox@^1.4.0/"')
+  // exactly the host's shared imports (anything else is bundled in), so what passes the preview imports into a host
+  const map = JSON.parse(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)![1]!).imports as Record<string, string>
+  expect(Object.keys(map).sort()).toEqual([...SHARED_IMPORTS].sort())
+  expect(map['typebox/value']).toBe('https://esm.sh/typebox@^1.4.0/value')
+  expect(map['lit/decorators.js']).toBe('https://esm.sh/lit@^3.0.0/decorators.js')
   expect(html).not.toContain('%IMPORTMAP%')
 }, 30000)

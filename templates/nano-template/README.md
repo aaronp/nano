@@ -50,7 +50,7 @@ imports (the build does) and use only these:
 `lit/directive.js`, `lit/directives/class-map.js`, `lit/directives/style-map.js`, `lit/directives/repeat.js`,
 `lit/directives/if-defined.js`, `typebox`, `typebox/value`.
 
-Anything else must be bundled into the module.
+Anything else (other `lit` or `typebox` subpaths too) is bundled into the module by the build.
 
 ## Import it
 
