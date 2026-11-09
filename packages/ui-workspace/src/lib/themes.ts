@@ -25,7 +25,17 @@ export interface Theme {
   readonly schemes: Readonly<Partial<Record<Scheme, Tokens>>>;
   /** Google Fonts families this theme uses (for the docs; index.html loads them). */
   readonly fonts: readonly string[];
+  /** Widget colours the --nano-* contract adds; unset ones come from the scheme's defaults (nano-vars.ts). */
+  readonly nano?: NanoExtras;
+  /** A page background image (such as grid paper), behind everything. */
+  readonly background?: string;
 }
+
+/** The --nano-* tokens a theme may set beyond its page tokens. */
+export type NanoExtras = Readonly<Partial<Record<'fg-2' | 'border-strong' | 'radius-s' | 'good' | 'good-bg' | 'bad' | 'bad-bg' | 'warn' | 'warn-bg'
+  | 's1' | 's2' | 's3' | 's4' | 's5' | 's6' | 's7' | 's8', string>>>;
+
+import { LEDGER_THEMES } from './ledger-themes.ts';
 
 const SANS = "'IBM Plex Sans', system-ui, sans-serif";
 const MONO = "'IBM Plex Mono', ui-monospace, monospace";
@@ -94,6 +104,7 @@ export const THEMES = {
       },
     },
   },
+  ...LEDGER_THEMES,
 } as const satisfies Record<string, Theme>;
 
 export type ThemeId = keyof typeof THEMES;

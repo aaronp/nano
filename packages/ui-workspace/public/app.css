@@ -1,6 +1,6 @@
 /* Page-level styles for content you put inside <app-route>. Every colour and font comes from the theme tokens. */
 html, body { margin: 0; height: 100%; }
-body { background: var(--bg); color: var(--fg); font-family: var(--font); }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); background-image: var(--page-bg, none); background-size: 28px 28px; }
 a { color: var(--accent); }
 code { font-family: var(--mono); font-size: .92em; }
 
