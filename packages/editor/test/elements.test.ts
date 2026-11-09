@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { Registries, Runtimes } from '@composable/core'
+import { Registries, Runtimes } from '@pritzlaff/nano-core'
 import { addEditor, ConnectionBoard as B, ComponentList as L, TypeList as T } from '../src'
 import { defineElements } from '../src/elements'
 import { seed } from '../demo/seed'
@@ -61,7 +61,7 @@ test('placing slider then doubler side by side makes one connection', async () =
 })
 
 test('an <editor-page> with no ids adds an editor to the provided registry, once', async () => {
-  const { provide } = await import('@composable/elements')
+  const { provide } = await import('@pritzlaff/nano-elements')
   const reg = Runtimes.create(Registries.create('provided')).registry
   provide(document, reg)
   document.body.insertAdjacentHTML('beforeend', '<editor-page></editor-page><editor-page></editor-page>')

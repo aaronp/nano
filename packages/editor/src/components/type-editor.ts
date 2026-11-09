@@ -1,6 +1,6 @@
 // Edits one type: its fields (for a record) and its look. Takes a TypeEntry in, publishes the edited one.
 import type { TSchema } from 'typebox'
-import { component, event, state } from '@composable/runes'
+import { component, event, state } from '@pritzlaff/nano-runes'
 import { isBuiltin, titleOf, type Look, type TypeEntry } from '../model'
 
 type Record_ = TSchema & { title?: string; type: 'object'; properties: Record<string, TSchema>; required?: string[] }

@@ -1,7 +1,7 @@
 // The bundle's elements: each places its component by `name` and is a thin view onto it.
 import { css, html } from 'lit'
-import type { Op } from '@composable/core'
-import { base, PlacedElement } from '@composable/elements'
+import type { Op } from '@pritzlaff/nano-core'
+import { base, PlacedElement } from '@pritzlaff/nano-elements'
 import { Filter, Map } from '../components/code'
 import { DebounceEl } from './debounce-el'
 import { Input, type Kind } from '../components/input'

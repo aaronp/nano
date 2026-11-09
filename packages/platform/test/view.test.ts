@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import { Components, Ops, Registries, Runtimes } from '@composable/core'
-import { provide } from '@composable/elements'
+import { Components, Ops, Registries, Runtimes } from '@pritzlaff/nano-core'
+import { provide } from '@pritzlaff/nano-elements'
 import { catalog, Log, Range } from '@composable/bundle'
 import { definePlatform, platform, PlatformOps as P } from '../src'
 

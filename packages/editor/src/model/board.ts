@@ -1,5 +1,5 @@
 // The board's rule: pieces side by side in a row join when the left one's output fits the right one's input.
-import { Ops, type Op, type Subscription } from '@composable/core'
+import { Ops, type Op, type Subscription } from '@pritzlaff/nano-core'
 
 /** A grid position. */
 export type Cell = { c: number; r: number }

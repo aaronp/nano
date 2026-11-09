@@ -1,6 +1,6 @@
 // A page to test components on: a registry with a runtime, and a spy that records what it is sent.
-import { Components, Ops, Registries, Runtimes, type Component, type Op } from '@composable/core'
-import { component } from '@composable/runes'
+import { Components, Ops, Registries, Runtimes, type Component, type Op } from '@pritzlaff/nano-core'
+import { component } from '@pritzlaff/nano-runes'
 
 export const tick = () => new Promise(r => setTimeout(r, 0))
 

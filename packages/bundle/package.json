@@ -1,13 +1,13 @@
 {
-  "name": "@composable/bundle",
+  "name": "@composable/bundle", "private": true,
   "version": "0.1.0",
   "type": "module",
   "description": "Basic components to wire together: input, range, log, debounce, map and filter.",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@composable/core": "workspace:*",
-    "@composable/elements": "workspace:*",
-    "@composable/runes": "workspace:*",
+    "@pritzlaff/nano-core": "workspace:*",
+    "@pritzlaff/nano-elements": "workspace:*",
+    "@pritzlaff/nano-runes": "workspace:*",
     "lit": "^3.0.0",
     "typebox": "^1.4.0"
   },

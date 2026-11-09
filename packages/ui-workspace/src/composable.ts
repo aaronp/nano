@@ -8,11 +8,11 @@
  *     input → map → log. The Systems page's elements name these instances and attach to them.
  * Imported before the elements are defined, so the registry is provided when markup upgrades.
  */
-import { Components, Ops, Registries, Runtimes, type Op } from '@composable/core'
-import { provide } from '@composable/elements'
+import { Components, Ops, Registries, Runtimes, type Op } from '@pritzlaff/nano-core'
+import { provide } from '@pritzlaff/nano-elements'
 import { catalog as bundle, Debounce, defineBundle, Input, Log, Map, Range } from '@composable/bundle'
 import { catalog as editor } from '@composable/editor'
-import type { Catalog } from '@composable/elements'
+import type { Catalog } from '@pritzlaff/nano-elements'
 import { definePlatform, platform, PlatformOps as P } from '@composable/platform'
 import { defineElements as defineEditor } from '@composable/editor/elements'
 import { defineWires } from '@composable/wires'

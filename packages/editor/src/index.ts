@@ -5,7 +5,7 @@ export * from './components/type-editor'
 export * from './components/connection-board'
 export * from './editor'
 
-import type { Catalog } from '@composable/elements'
+import type { Catalog } from '@pritzlaff/nano-elements'
 import { ComponentList } from './components/component-list'
 import { ConnectionBoard } from './components/connection-board'
 import { TypeEditor } from './components/type-editor'

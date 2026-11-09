@@ -1,5 +1,5 @@
 {
-  "name": "@composable/puzzle-port",
+  "name": "@composable/puzzle-port", "private": true,
   "version": "0.1.0",
   "type": "module",
   "description": "A faithful Lit port of the puzzle editor prototype (puzzles/PuzzlePrototype.dc.html), with its own literal styles.",

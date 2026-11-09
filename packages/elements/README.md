@@ -1,6 +1,6 @@
-# @composable/elements
+# @pritzlaff/nano-elements
 
-Lit elements over `@composable/core` components.
+Lit elements over `@pritzlaff/nano-core` components.
 
 - **`ModelElement`:** shows and drives one model. Give it a `registry` and a `model` (an instance id), and
   optionally a `watch` list of more instances whose sources it reads. It joins the registry as a hidden

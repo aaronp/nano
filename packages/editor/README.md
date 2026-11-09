@@ -1,7 +1,7 @@
 # @composable/editor
 
 A puzzle-style editor for components, types and connections, built as small rune components over
-`@composable/core`. Each holds only its own state, can be tested without a UI, and is wired to the others by
+`@pritzlaff/nano-core`. Each holds only its own state, can be tested without a UI, and is wired to the others by
 ordinary subscriptions.
 
 | Component | State | Publishes |

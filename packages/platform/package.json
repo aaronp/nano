@@ -1,5 +1,5 @@
 {
-  "name": "@composable/platform",
+  "name": "@composable/platform", "private": true,
   "version": "0.1.0",
   "type": "module",
   "description": "Systems as a component: create them, put components in them, connect them, and watch them change.",
@@ -7,8 +7,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@composable/core": "workspace:*",
-    "@composable/elements": "workspace:*",
+    "@pritzlaff/nano-core": "workspace:*",
+    "@pritzlaff/nano-elements": "workspace:*",
     "lit": "^3.0.0",
     "typebox": "^1.4.0"
   },

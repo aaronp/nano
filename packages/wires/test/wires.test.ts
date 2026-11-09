@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
-import { Ops } from '@composable/core'
+import { Ops } from '@pritzlaff/nano-core'
 import { catalog, Map, Range } from '@composable/bundle'
 import { defineWires, type Wires } from '../src'
 import { onDown, onMove, onUp, removeSel, toggleEdit } from '../src/pointer'

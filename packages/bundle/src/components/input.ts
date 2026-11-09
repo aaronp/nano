@@ -1,6 +1,6 @@
 // One value and a submit: what the user typed (or ticked), published when they submit it.
 import { Type } from 'typebox'
-import { component, event, state } from '@composable/runes'
+import { component, event, state } from '@pritzlaff/nano-runes'
 
 /** The kinds of input: a line of text, a text area, a number or a checkbox. */
 export type Kind = 'text' | 'textarea' | 'number' | 'boolean'

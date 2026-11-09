@@ -1,7 +1,7 @@
 // <c-debounce>: the debounce prototype's view over the real component. Queued values wait in the switchback; when the
 // component flushes, the batch drops through the hatch into a bucket, and the buckets slide along as history.
 import { css, html } from 'lit'
-import { PlacedElement } from '@composable/elements'
+import { PlacedElement } from '@pritzlaff/nano-elements'
 import { Debounce, type Queued } from '../components/debounce'
 import { arrivalPos, bucketView, clamp01, colorOf, flushTravel, G, label, reasonFor, rgba, slotXY, startFlush, type Batch, type Flushing } from './debounce-model'
 

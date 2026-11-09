@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { html } from 'lit'
-import { Components, Registries, Runtimes } from '@composable/core'
-import { component, state } from '@composable/runes'
+import { Components, Registries, Runtimes } from '@pritzlaff/nano-core'
+import { component, state } from '@pritzlaff/nano-runes'
 import { PlacedElement, provide } from '../src'
 
 const tick = () => new Promise(r => setTimeout(r, 0))

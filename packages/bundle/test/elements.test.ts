@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import { Components, Ops, Registries, Runtimes } from '@composable/core'
-import { provide } from '@composable/elements'
+import { Components, Ops, Registries, Runtimes } from '@pritzlaff/nano-core'
+import { provide } from '@pritzlaff/nano-elements'
 import { Debounce, defineBundle, Input, Log, Map as MapC, Range } from '../src'
 import { tick } from './fixtures'
 

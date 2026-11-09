@@ -1,7 +1,7 @@
 // Systems as a component: it holds the registries (host first), creates components from a catalog, adds them to
 // systems, connects their actions, and publishes every change in any system.
 import { Type } from 'typebox'
-import { Components, Ops, Registries, Runtimes, type Component, type Environment, type Registry, type Runtime, type Snapshot } from '@composable/core'
+import { Components, Ops, Registries, Runtimes, type Component, type Environment, type Registry, type Runtime, type Snapshot } from '@pritzlaff/nano-core'
 
 const NS = 'composable/platform', any = Type.Unknown(), str = Type.String()
 

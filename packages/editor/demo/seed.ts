@@ -1,5 +1,5 @@
 // The demo's components and types, as data for the editor. Shared with the tests.
-import { Ops, type Runtime } from '@composable/core'
+import { Ops, type Runtime } from '@pritzlaff/nano-core'
 import { Type } from 'typebox'
 import { ComponentList, TypeList, brandOf, type Ids } from '../src'
 

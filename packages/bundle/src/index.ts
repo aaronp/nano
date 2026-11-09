@@ -1,5 +1,5 @@
 // Basic components to wire together, and their elements.
-import type { Catalog } from '@composable/elements'
+import type { Catalog } from '@pritzlaff/nano-elements'
 import { Filter, Map } from './components/code'
 import { Debounce } from './components/debounce'
 import { Input } from './components/input'

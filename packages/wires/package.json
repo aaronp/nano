@@ -1,12 +1,12 @@
 {
-  "name": "@composable/wires",
+  "name": "@composable/wires", "private": true,
   "version": "0.1.0",
   "type": "module",
   "description": "The workspace's connection view: a faithful Lit port of the wires prototype, over the live host system.",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@composable/core": "workspace:*",
-    "@composable/elements": "workspace:*",
+    "@pritzlaff/nano-core": "workspace:*",
+    "@pritzlaff/nano-elements": "workspace:*",
     "@composable/platform": "workspace:*",
     "lit": "^3.0.0",
     "typebox": "^1.4.0"

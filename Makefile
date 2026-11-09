@@ -1,4 +1,4 @@
-.PHONY: test install ui dev puzzle
+.PHONY: test install ui dev puzzle packages smoke
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
@@ -25,3 +25,11 @@ dev:
 puzzle:
 	@echo "Puzzle editor: http://localhost:$(PORT)/#/connections"
 	@$(MAKE) --no-print-directory ui PORT=$(PORT)
+
+# Build the published packages (@pritzlaff/nano-core, -runes, -elements) into packages/*/dist, ready for npm.
+packages:
+	bun scripts/build-packages.ts
+
+# Install the built packages into a scratch folder as a stranger would, type-check and run a consumer.
+smoke: packages
+	bun scripts/smoke-packages.ts

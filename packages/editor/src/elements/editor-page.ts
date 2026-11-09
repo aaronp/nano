@@ -5,7 +5,7 @@ import { ComponentList as L } from '../components/component-list'
 import { TypeList as T } from '../components/type-list'
 import { addEditor, editorIds, type Ids } from '../editor'
 import type { TypeEntry } from '../model'
-import { base, ModelElement, providedRegistry } from '@composable/elements'
+import { base, ModelElement, providedRegistry } from '@pritzlaff/nano-elements'
 
 /** Lays out one editor: give it the `registry` and the `ids` from `addEditor`. Without them it uses the provided
  * registry, and the editor there (adding one if there is none). */

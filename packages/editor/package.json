@@ -1,5 +1,5 @@
 {
-  "name": "@composable/editor",
+  "name": "@composable/editor", "private": true,
   "version": "0.1.0",
   "type": "module",
   "description": "A puzzle-style editor for components, types and connections, as small rune components over core.",
@@ -8,11 +8,11 @@
     "./elements": "./src/elements/index.ts"
   },
   "dependencies": {
-    "@composable/core": "workspace:*",
-    "@composable/runes": "workspace:*",
+    "@pritzlaff/nano-core": "workspace:*",
+    "@pritzlaff/nano-runes": "workspace:*",
     "lit": "^3.0.0",
     "typebox": "^1.4.0",
-    "@composable/elements": "workspace:*"
+    "@pritzlaff/nano-elements": "workspace:*"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^21.0.4"

@@ -1,5 +1,5 @@
 // The editor is the four components in one registry, wired by subscriptions. Nothing else.
-import { Components, Ops, type Component, type Op, type Registry } from '@composable/core'
+import { Components, Ops, type Component, type Op, type Registry } from '@pritzlaff/nano-core'
 import { ComponentList } from './components/component-list'
 import { ConnectionBoard } from './components/connection-board'
 import { TypeEditor } from './components/type-editor'

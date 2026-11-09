@@ -1,5 +1,5 @@
 // The demo: an editor in a registry, seeded with slider, doubler, chart, meter and log.
-import { Registries, Runtimes } from '@composable/core'
+import { Registries, Runtimes } from '@pritzlaff/nano-core'
 import { addEditor } from '../src'
 import { defineElements, type EditorPage } from '../src/elements'
 import { seed } from './seed'
