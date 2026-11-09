@@ -1,6 +1,6 @@
 // Pieces on a grid, and the connections they make. The board only publishes connections; it never applies them.
-import { Ops } from '@composable/core'
-import { component, state } from '@composable/runes'
+import { Ops } from '@pritzlaff/nano-core'
+import { component, state } from '@pritzlaff/nano-runes'
 import { connectionsOf, pieceAt, type Cell, type Piece } from '../model/board'
 
 /** The board: its pieces, and the connections derived from them. */

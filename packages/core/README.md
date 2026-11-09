@@ -1,4 +1,4 @@
-# @composable/core
+# @pritzlaff/nano-core
 
 Lift ordinary code into named coordinates that can be called, published from, subscribed to and observed.
 

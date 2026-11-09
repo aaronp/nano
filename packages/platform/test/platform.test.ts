@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { Components, Ops, Registries, Runtimes, type Op, type Snapshot } from '@composable/core'
+import { Components, Ops, Registries, Runtimes, type Op, type Snapshot } from '@pritzlaff/nano-core'
 import { catalog, Log, Range } from '@composable/bundle'
 import { platform, PlatformOps as P } from '../src'
 

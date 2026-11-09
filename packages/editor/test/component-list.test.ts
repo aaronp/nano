@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { Ops } from '@composable/core'
+import { Ops } from '@pritzlaff/nano-core'
 import { ComponentList as L } from '../src'
 import { demo, page, tick } from './fixtures'
 

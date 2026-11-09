@@ -2,8 +2,8 @@
 // to a fitting one; add components to systems; create new ones from the catalog.
 import { css, html } from 'lit'
 import type { TSchema } from 'typebox'
-import { Ops, type Op, type Snapshot, type Subscription } from '@composable/core'
-import { base, ModelElement, providedRegistry } from '@composable/elements'
+import { Ops, type Op, type Snapshot, type Subscription } from '@pritzlaff/nano-core'
+import { base, ModelElement, providedRegistry } from '@pritzlaff/nano-elements'
 import { PlatformOps as P, type Selection } from './platform'
 
 type Inst = Snapshot['instances'][number]

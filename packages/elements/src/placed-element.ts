@@ -1,5 +1,5 @@
 // An element that places its own component: by its `name`, in the registry provided for its document.
-import { Components, type Component, type Instance, type Registry } from '@composable/core'
+import { Components, type Component, type Instance, type Registry } from '@pritzlaff/nano-core'
 import { ModelElement } from './model-element'
 
 const provided = new WeakMap<Document, Registry>()

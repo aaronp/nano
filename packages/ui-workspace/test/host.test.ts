@@ -3,7 +3,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator'
 GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
 
-const { Ops } = await import('@composable/core')
+const { Ops } = await import('@pritzlaff/nano-core')
 const { Debounce, Log, Range } = await import('@composable/bundle')
 const { PlatformOps: P } = await import('@composable/platform')
 const page = await Bun.file(new URL('../public/index.html', import.meta.url)).text()

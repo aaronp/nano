@@ -1,6 +1,6 @@
 // Queues values and publishes them as one batch: after a quiet period, or at the latest after max wait.
 import { Type } from 'typebox'
-import { component, event, state } from '@composable/runes'
+import { component, event, state } from '@pritzlaff/nano-runes'
 
 /** A queued value and when it arrived (ms since the epoch). */
 export type Queued = { value: unknown; at: number }

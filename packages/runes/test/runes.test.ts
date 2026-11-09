@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { Components, Ops, Registries, Runtimes, type Component, type Op } from '@composable/core'
+import { Components, Ops, Registries, Runtimes, type Component, type Op } from '@pritzlaff/nano-core'
 import { component, event, state } from '../src'
 
 const tick = () => new Promise(r => setTimeout(r, 0))

@@ -1,6 +1,6 @@
 // A page to test components on: a registry with a runtime, calls by op, and a spy on what a source publishes.
-import { Components, Ops, Registries, Runtimes, type Component, type Op } from '@composable/core'
-import { component } from '@composable/runes'
+import { Components, Ops, Registries, Runtimes, type Component, type Op } from '@pritzlaff/nano-core'
+import { component } from '@pritzlaff/nano-runes'
 
 export const tick = (ms = 0) => new Promise(r => setTimeout(r, ms))
 const Spy = component('test/spy', () => { const got: unknown[] = []; return { get got() { return got }, take: (x: unknown) => { got.push(x) } } })

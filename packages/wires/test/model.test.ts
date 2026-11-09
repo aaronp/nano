@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { Components, Ops } from '@composable/core'
+import { Components, Ops } from '@pritzlaff/nano-core'
 import { Debounce, Log, Map, Range } from '@composable/bundle'
 import { PlatformOps as P } from '@composable/platform'
 import { Type } from 'typebox'

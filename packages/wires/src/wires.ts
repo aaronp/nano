@@ -2,9 +2,9 @@
 // the model in step with the registry and the dock's layout, turns trace deliveries into packets, and edits the
 // system through the platform. The render-* files draw it, as the prototype's template does from renderVals.
 import { LitElement, css } from 'lit'
-import { Ops, type Op, type Result, type Runtime, type Trace } from '@composable/core'
+import { Ops, type Op, type Result, type Runtime, type Trace } from '@pritzlaff/nano-core'
 import { PlatformOps } from '@composable/platform'
-import type { Catalog } from '@composable/elements'
+import type { Catalog } from '@pritzlaff/nano-elements'
 import { FLASH_MS, FONTS, FRAME_MS, MAX_PACKETS, TRAVEL_MS, TURN_MS, VIEWS, short, type View } from './constants'
 import { buildModel, type Model, type Panel } from './model'
 import { buildPuzzle } from './puzzle'

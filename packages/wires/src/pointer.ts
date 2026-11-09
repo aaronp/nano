@@ -1,6 +1,6 @@
 // The prototype's stage handlers (onDown, onMove, onUp, …) and edit actions, over the live system: cords connect
 // and disconnect through the platform, the palette creates components, and a rack module dropped on the pane opens it.
-import { Ops } from '@composable/core'
+import { Ops } from '@pritzlaff/nano-core'
 import { clamp } from './constants'
 import { nearestPort } from './geometry'
 import { checkConnect, dirOf, portKey, portName } from './model'

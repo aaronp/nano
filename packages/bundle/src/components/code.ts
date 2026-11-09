@@ -1,5 +1,5 @@
 // Map and Filter: a function body over `x`, typed in by the user. Not for untrusted input: it runs as code.
-import { component, event, state } from '@composable/runes'
+import { component, event, state } from '@pritzlaff/nano-runes'
 
 const run = (code: string, x: unknown): unknown => new Function('x', code)(x)   // compile errors throw here too
 

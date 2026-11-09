@@ -13,9 +13,9 @@
       "name": "@composable/bundle",
       "version": "0.1.0",
       "dependencies": {
-        "@composable/core": "workspace:*",
-        "@composable/elements": "workspace:*",
-        "@composable/runes": "workspace:*",
+        "@pritzlaff/nano-core": "workspace:*",
+        "@pritzlaff/nano-elements": "workspace:*",
+        "@pritzlaff/nano-runes": "workspace:*",
         "lit": "^3.0.0",
         "typebox": "^1.4.0",
       },
@@ -32,7 +32,7 @@
       },
     },
     "packages/core": {
-      "name": "@composable/core",
+      "name": "@pritzlaff/nano-core",
       "version": "0.1.0",
       "dependencies": {
         "typebox": "^1.4.0",
@@ -42,9 +42,9 @@
       "name": "@composable/editor",
       "version": "0.1.0",
       "dependencies": {
-        "@composable/core": "workspace:*",
-        "@composable/elements": "workspace:*",
-        "@composable/runes": "workspace:*",
+        "@pritzlaff/nano-core": "workspace:*",
+        "@pritzlaff/nano-elements": "workspace:*",
+        "@pritzlaff/nano-runes": "workspace:*",
         "lit": "^3.0.0",
         "typebox": "^1.4.0",
       },
@@ -53,24 +53,24 @@
       },
     },
     "packages/elements": {
-      "name": "@composable/elements",
+      "name": "@pritzlaff/nano-elements",
       "version": "0.1.0",
       "dependencies": {
-        "@composable/core": "workspace:*",
+        "@pritzlaff/nano-core": "workspace:*",
         "lit": "^3.0.0",
         "typebox": "^1.4.0",
       },
       "devDependencies": {
-        "@composable/runes": "workspace:*",
         "@happy-dom/global-registrator": "^21.0.4",
+        "@pritzlaff/nano-runes": "workspace:*",
       },
     },
     "packages/platform": {
       "name": "@composable/platform",
       "version": "0.1.0",
       "dependencies": {
-        "@composable/core": "workspace:*",
-        "@composable/elements": "workspace:*",
+        "@pritzlaff/nano-core": "workspace:*",
+        "@pritzlaff/nano-elements": "workspace:*",
         "lit": "^3.0.0",
         "typebox": "^1.4.0",
       },
@@ -104,10 +104,10 @@
       },
     },
     "packages/runes": {
-      "name": "@composable/runes",
+      "name": "@pritzlaff/nano-runes",
       "version": "0.1.0",
       "dependencies": {
-        "@composable/core": "workspace:*",
+        "@pritzlaff/nano-core": "workspace:*",
         "typebox": "^1.4.0",
       },
     },
@@ -137,13 +137,13 @@
       "version": "0.1.0",
       "dependencies": {
         "@composable/bundle": "workspace:*",
-        "@composable/core": "workspace:*",
         "@composable/editor": "workspace:*",
-        "@composable/elements": "workspace:*",
         "@composable/platform": "workspace:*",
         "@composable/puzzle-port": "workspace:*",
-        "@composable/runes": "workspace:*",
         "@composable/wires": "workspace:*",
+        "@pritzlaff/nano-core": "workspace:*",
+        "@pritzlaff/nano-elements": "workspace:*",
+        "@pritzlaff/nano-runes": "workspace:*",
         "golden-layout": "^2.6.0",
         "lit": "^3.3.3",
         "typebox": "^1.4.0",
@@ -166,9 +166,9 @@
       "name": "@composable/wires",
       "version": "0.1.0",
       "dependencies": {
-        "@composable/core": "workspace:*",
-        "@composable/elements": "workspace:*",
         "@composable/platform": "workspace:*",
+        "@pritzlaff/nano-core": "workspace:*",
+        "@pritzlaff/nano-elements": "workspace:*",
         "lit": "^3.0.0",
         "typebox": "^1.4.0",
       },
@@ -183,19 +183,13 @@
 
     "@composable/connections": ["@composable/connections@workspace:packages/connections"],
 
-    "@composable/core": ["@composable/core@workspace:packages/core"],
-
     "@composable/editor": ["@composable/editor@workspace:packages/editor"],
-
-    "@composable/elements": ["@composable/elements@workspace:packages/elements"],
 
     "@composable/platform": ["@composable/platform@workspace:packages/platform"],
 
     "@composable/puzzle-editor": ["@composable/puzzle-editor@workspace:packages/puzzle-editor"],
 
     "@composable/puzzle-port": ["@composable/puzzle-port@workspace:packages/puzzle-port"],
-
-    "@composable/runes": ["@composable/runes@workspace:packages/runes"],
 
     "@composable/sdk": ["@composable/sdk@workspace:packages/sdk"],
 
@@ -214,6 +208,12 @@
     "@lit/reactive-element": ["@lit/reactive-element@2.1.2", "", { "dependencies": { "@lit-labs/ssr-dom-shim": "^1.5.0" } }, "sha512-pbCDiVMnne1lYUIaYNN5wrwQXDtHaYtg7YEFPeW+hws6U47WeFvISGUWekPGKWOP1ygrs0ef0o1VJMk1exos5A=="],
 
     "@noble/hashes": ["@noble/hashes@2.4.0", "", {}, "sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA=="],
+
+    "@pritzlaff/nano-core": ["@pritzlaff/nano-core@workspace:packages/core"],
+
+    "@pritzlaff/nano-elements": ["@pritzlaff/nano-elements@workspace:packages/elements"],
+
+    "@pritzlaff/nano-runes": ["@pritzlaff/nano-runes@workspace:packages/runes"],
 
     "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 

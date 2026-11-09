@@ -1,5 +1,5 @@
 // A real host: runtime, platform and the bundle's catalog, with range → debounce → log connected and a map unwired.
-import { Components, Ops, Registries, Runtimes, type Op } from '@composable/core'
+import { Components, Ops, Registries, Runtimes, type Op } from '@pritzlaff/nano-core'
 import { catalog, Debounce, Log, Range } from '@composable/bundle'
 import { platform, PlatformOps as P } from '@composable/platform'
 

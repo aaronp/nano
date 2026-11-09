@@ -1,11 +1,11 @@
 // The Elements pane: components and their ops. Picking an op selects it (for the board); forms add and remove.
 import { html } from 'lit'
-import { Ops, type Op } from '@composable/core'
+import { Ops, type Op } from '@pritzlaff/nano-core'
 import { ComponentList as L, type Entry, type Selection } from '../components/component-list'
 import { titleOf, type TypeEntry } from '../model'
-import { base } from '@composable/elements'
+import { base } from '@pritzlaff/nano-elements'
 import { typeNamed, typeOptions } from './types'
-import { ModelElement } from '@composable/elements'
+import { ModelElement } from '@pritzlaff/nano-elements'
 
 /** Shows a component-list model. `types` feed the add-action form. */
 export class ComponentListEl extends ModelElement {

@@ -1,6 +1,6 @@
-# @composable/runes
+# @pritzlaff/nano-runes
 
-Write a component as plain state and functions; get an ordinary `@composable/core` Component.
+Write a component as plain state and functions; get an ordinary `@pritzlaff/nano-core` Component.
 
 ```ts
 const Counter = component('acme/counter', () => {

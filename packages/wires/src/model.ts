@@ -1,6 +1,6 @@
 // The view model, as pure functions: from a registry snapshot, the dock's panel geometry and the catalog, the
 // prototype's chassis, jacks (ports), rack modules and blocks, wires and routes.
-import { Ops, type Op, type Snapshot } from '@composable/core'
+import { Ops, type Op, type Snapshot } from '@pritzlaff/nano-core'
 import { BLOCK_DY, BLOCK_H, BLOCK_JACK_DY, JACK_W, MOD_H, PALETTE, ROW_STEP, ROW_Y } from './constants'
 
 /** A rectangle in the dock's (front) coordinates. */

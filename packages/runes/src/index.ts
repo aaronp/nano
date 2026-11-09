@@ -1,6 +1,6 @@
-// Rune-style sugar over @composable/core: write plain state and functions; get an ordinary core Component.
+// Rune-style sugar over @pritzlaff/nano-core: write plain state and functions; get an ordinary core Component.
 import { Type, type Static, type TSchema, type TUnknown } from 'typebox'
-import { Components, Ops, type Component, type Environment, type Op } from '@composable/core'
+import { Components, Ops, type Component, type Environment, type Op } from '@pritzlaff/nano-core'
 
 /** The instance whose `make` is running: what state writes mark dirty, and where events publish. */
 type Making = { dirty(): void; env?: Environment }

@@ -1,6 +1,6 @@
 // Performance and scalability probe (not a test): bun packages/runes/bench.ts
 import { Type } from 'typebox'
-import { Components, Ops, Registries, Runtimes } from '@composable/core'
+import { Components, Ops, Registries, Runtimes } from '@pritzlaff/nano-core'
 import { component, state } from './src'
 
 const time = async (label: string, n: number, fn: (i: number) => unknown) => {

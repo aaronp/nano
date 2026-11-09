@@ -1,5 +1,5 @@
 // A log of whatever is sent to it, by level. Subscribe any source to debug, info or warn.
-import { component, state } from '@composable/runes'
+import { component, state } from '@pritzlaff/nano-runes'
 
 /** One logged value. */
 export type Entry = { time: number; level: 'debug' | 'info' | 'warn'; value: unknown }

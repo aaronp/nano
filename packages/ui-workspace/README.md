@@ -1,7 +1,7 @@
 # ui-workspace
 
 A host site made from the [workspace shell starter](../../shell-starters/workspace), hosting `@composable` components.
-Everything that joins the two is in `src/composable.ts` (one `@composable/core` runtime over the registry `host`,
+Everything that joins the two is in `src/composable.ts` (one `@pritzlaff/nano-core` runtime over the registry `host`,
 provided on the document, plus the platform that holds every system) and a few lines at the end of
 `public/app.css` (our `--c-*` theme tokens mapped onto the starter's). The components and the starter otherwise
 know nothing about each other.

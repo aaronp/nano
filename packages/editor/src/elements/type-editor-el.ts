@@ -3,10 +3,10 @@ import { html, svg } from 'lit'
 import type { TSchema } from 'typebox'
 import { TypeEditor as E } from '../components/type-editor'
 import { isBuiltin, lookFor, PRESET_LABELS, PRESET_ORDER, presetShape, SWATCHES, titleOf, type TypeEntry } from '../model'
-import { base } from '@composable/elements'
+import { base } from '@pritzlaff/nano-elements'
 import { presetIcon } from './tiles'
 import { typeNamed, typeOptions } from './types'
-import { ModelElement } from '@composable/elements'
+import { ModelElement } from '@pritzlaff/nano-elements'
 
 /** Shows a type-editor model. `types` feed the field type pickers. */
 export class TypeEditorEl extends ModelElement {

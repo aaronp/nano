@@ -1,5 +1,5 @@
 // Types are TypeBox schemas named by `title`. These helpers compare, hash and name them; nothing maps them.
-import { canonical } from '@composable/core'
+import { canonical } from '@pritzlaff/nano-core'
 import { Type, type TSchema } from 'typebox'
 import type { Look } from './looks'
 

@@ -11,6 +11,9 @@
  * A saved layout opens automatically next time. Panels refer to widgets by id, so saved layouts hold no markup.
  *
  * Bus topics (the app bus): dock:opened {widget} · dock:layout {panels} · dock:saved · dock:error {message}.
+ * The toolbar's window style select switches between tabs and distraction free (remembered per dock).
+ * The toolbar's Save workspace… button fires a bubbling `dock:save-as` {layout} event, for the page to save it as a
+ * workspace of its own (saved-workspaces.ts).
  * The toolbar's Connections button fires a bubbling `dock:connections` DOM event; whatever wraps the dock (the
  * wiring view) decides what it means.
  * Light DOM, because golden-layout positions its drag proxy in document.body.
@@ -18,9 +21,11 @@
 import { GoldenLayout, LayoutConfig, type ComponentContainer, type JsonValue, type ResolvedLayoutConfig } from 'golden-layout';
 import baseCss from 'golden-layout/dist/css/goldenlayout-base.css';
 import { provideBus, requestBus, type Bus } from '../lib/bus.ts';
-import { ARRANGEMENTS, PALETTE_ID, initialLayout, panelIds, readWidgetId, readWidgetName, panelState, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
+import { ARRANGEMENTS, PALETTE_ID, WINDOW_STYLES, windowStyle, type WindowStyle, initialLayout, panelIds, readWidgetId, readWidgetName, panelState, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
 
 const STYLE_ID = 'workspace-dock-styles';
+/** The tab bar's height: the CSS draws it, and golden-layout must size panels for it too (saved layouts included). */
+const HEADER_H = 30;
 const DOCK_CSS = `
 workspace-dock { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; background: var(--bg); color: var(--fg); font: 14px var(--font); }
 workspace-dock .dock-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
@@ -36,13 +41,15 @@ workspace-dock .dock-area { position: relative; min-height: 0; overflow: hidden;
 .lm_content { background: var(--surface); border: 1px solid var(--line); box-sizing: border-box; }
 .lm_splitter { background: var(--line); opacity: .6; transition: opacity .15s; }
 .lm_splitter:hover, .lm_splitter.lm_dragging { background: var(--accent); opacity: 1; }
-.lm_header { height: 30px; }
-.lm_header .lm_tabs { gap: 2px; }
-.lm_header .lm_tab { height: 22px; margin-top: 6px; padding: 2px 26px 2px 12px; font: 12px var(--font); color: var(--muted); background: var(--surface-2);
-  border: 1px solid var(--line); border-bottom: 0; border-radius: 6px 6px 0 0; }
-.lm_header .lm_tab.lm_active { color: var(--fg); background: var(--surface); font-weight: 600; }
+.lm_header { height: ${HEADER_H}px; }
+/* plain text tabs: the active one is underlined; a tab's close shows on hover */
+.lm_header .lm_tabs { gap: 4px; padding-left: 4px; }
+.lm_header .lm_tab { height: 28px; line-height: 28px; padding: 0 22px 0 8px; font: 12px var(--font); color: var(--muted); background: none; border: 0; border-radius: 0; box-shadow: none; }
+.lm_header .lm_tab:hover { color: var(--fg); }
+.lm_header .lm_tab.lm_active { color: var(--fg); background: none; font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
 .lm_header .lm_tab .lm_close_tab, .lm_controls > li { width: 11px; height: 11px; opacity: .55; background-repeat: no-repeat; background-position: center; background-size: 11px; cursor: pointer; }
-.lm_header .lm_tab .lm_close_tab { position: absolute; top: 7px; right: 8px; }
+.lm_header .lm_tab .lm_close_tab { position: absolute; top: 9px; right: 6px; opacity: 0; }
+.lm_header .lm_tab:hover .lm_close_tab { opacity: .55; }
 .lm_controls { display: flex; gap: 8px; top: 9px; right: 8px; }
 .lm_controls > li:hover, .lm_header .lm_tab .lm_close_tab:hover { opacity: 1; }
 .lm_maximise { background-image: var(--icon-max); }
@@ -54,6 +61,16 @@ workspace-dock .dock-area { position: relative; min-height: 0; overflow: hidden;
 .lm_maximised { z-index: 40; }
 .lm_dragging, .lm_dragging * { cursor: grabbing !important; user-select: none; }
 [data-dock-add] { cursor: grab; }
+workspace-dock .dock-bar select { font: inherit; font-size: 13px; padding: 4px 6px; border: var(--card-border); border-radius: var(--radius); background: var(--surface-2); color: var(--fg); }
+/* Distraction free: a stack with one panel has no tab bar; its maximise and close float over it on hover.
+   Stacked panels keep their tabs. The panel takes the header's room (golden-layout sizes it inline). */
+workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_header { position: absolute; top: 0; right: 0; left: auto; width: 0 !important; z-index: 5; opacity: 0; transition: opacity .15s; }
+workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_header .lm_tabs { display: none; }
+workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)):hover > .lm_header,
+workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_header:focus-within { opacity: 1; }
+workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_header .lm_controls { top: 6px; right: 6px; padding: 5px 7px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line); }
+workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_items,
+workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_items > .lm_item { height: 100% !important; }
 `;
 
 const icon = (path: string) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="none" stroke="#7a808c" stroke-width="1.6">${path}</svg>`)}")`;
@@ -90,7 +107,15 @@ export class WorkspaceDock extends HTMLElement {
     this.status.setAttribute('role', 'status');
     const connections = this.button('⇄ Connections', () => this.dispatchEvent(new CustomEvent('dock:connections', { bubbles: true, composed: true })));
     connections.title = 'Show the connections behind the workspace';
-    bar.append(title, hint, this.el('span', 'grow'), this.status, connections,
+    const style = windowStyle(localStorage, this.storageKey);
+    const pick = this.el('select');
+    pick.setAttribute('aria-label', 'Window style');
+    for (const s of WINDOW_STYLES) pick.append(new Option(s.title, s.id));
+    pick.value = style.get();
+    this.setAttribute('chrome', pick.value);
+    pick.addEventListener('change', () => { style.set(pick.value as WindowStyle); this.setAttribute('chrome', pick.value); });
+    bar.append(title, hint, this.el('span', 'grow'), this.status, pick, connections,
+      this.button('Save workspace…', () => this.dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true, composed: true, detail: { layout: this.requireLayout().saveLayout() } }))),
       this.button('Save layout', () => this.save()), this.button('Restore', () => this.restore()), this.button('Reset', () => this.reset()));
     const area = this.el('div', 'dock-area');
     this.append(bar, area);
@@ -102,7 +127,7 @@ export class WorkspaceDock extends HTMLElement {
     this.layout = layout;
     this.connectSources(layout);
     const saved = this.readSaved();
-    layout.loadLayout(saved ?? this.initial());
+    this.load(saved ?? this.initial());
     if (saved) this.say('Opened your saved layout.');
   }
 
@@ -219,6 +244,10 @@ export class WorkspaceDock extends HTMLElement {
   }
 
   /** A remembered layout, if storage works and it only names widgets this palette still has. */
+  private load(config: LayoutConfig) {
+    this.requireLayout().loadLayout({ ...config, dimensions: { ...config.dimensions, headerHeight: HEADER_H } });
+  }
+
   private readSaved(): LayoutConfig | null {
     let raw: string | null;
     try { raw = localStorage.getItem(this.storageKey); } catch { return null; }
@@ -244,12 +273,12 @@ export class WorkspaceDock extends HTMLElement {
   private restore() {
     const saved = this.readSaved();
     if (!saved) { this.say('No saved layout yet.'); return; }
-    this.requireLayout().loadLayout(saved);
+    this.load(saved);
     this.say('Layout restored.');
   }
 
   private reset() {
-    this.requireLayout().loadLayout(this.initial());
+    this.load(this.initial());
     this.say('Back to the starting layout.');
   }
 }

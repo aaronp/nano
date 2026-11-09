@@ -1,6 +1,6 @@
 // The components available to wire: each with its ops. Settable as a whole, editable one op at a time.
-import { Ops, type Op } from '@composable/core'
-import { component, event, state } from '@composable/runes'
+import { Ops, type Op } from '@pritzlaff/nano-core'
+import { component, event, state } from '@pritzlaff/nano-runes'
 
 /** One available component: an instance id and its ops, the shape a registry snapshot lists. */
 export type Entry = { id: string; ops: Op[] }

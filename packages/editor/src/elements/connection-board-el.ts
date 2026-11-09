@@ -1,14 +1,14 @@
 // The board: a grid of pieces drawn with their types' looks. Pick an op in the list, then click a cell to place it.
 import { html, svg } from 'lit'
-import { Ops } from '@composable/core'
+import { Ops } from '@pritzlaff/nano-core'
 import type { Entry, Selection } from '../components/component-list'
 import { ConnectionBoard as B } from '../components/connection-board'
 import { pieceAt, type Cell, type Connection, type Piece } from '../model/board'
 import type { TypeEntry } from '../model'
-import { base } from '@composable/elements'
+import { base } from '@pritzlaff/nano-elements'
 import { CELL, PAD, tilePath } from './tiles'
 import { lookOfSchema } from './types'
-import { ModelElement } from '@composable/elements'
+import { ModelElement } from '@pritzlaff/nano-elements'
 
 const SIZE = 84
 

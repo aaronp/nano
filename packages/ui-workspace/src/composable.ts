@@ -8,11 +8,11 @@
  *     input → map → log. The Systems page's elements name these instances and attach to them.
  * Imported before the elements are defined, so the registry is provided when markup upgrades.
  */
-import { Components, Ops, Registries, Runtimes, type Op } from '@composable/core'
-import { provide } from '@composable/elements'
+import { Components, Ops, Registries, Runtimes, type Op } from '@pritzlaff/nano-core'
+import { provide } from '@pritzlaff/nano-elements'
 import { catalog as bundle, Debounce, defineBundle, Input, Log, Map, Range } from '@composable/bundle'
 import { catalog as editor } from '@composable/editor'
-import type { Catalog } from '@composable/elements'
+import type { Catalog } from '@pritzlaff/nano-elements'
 import { definePlatform, platform, PlatformOps as P } from '@composable/platform'
 import { defineElements as defineEditor } from '@composable/editor/elements'
 import { defineWires } from '@composable/wires'
@@ -55,7 +55,8 @@ for (const [kind, e] of Object.entries(catalog)) if (e.tag) {
 // The wiring view asks for a rack component back on the front: a panel of its kind, showing that instance.
 document.addEventListener('wires:open-panel', e => {
   const { kind, name } = (e as CustomEvent<{ kind: string; name: string }>).detail
-  ;(document.querySelector('workspace-dock') as (Element & { addWidget?(id: string, name?: string): void }) | null)?.addWidget?.(kind, name)
+  const dock = (e.target as Element).querySelector?.('workspace-dock') ?? document.querySelector('workspace-dock')   // the dock the view tilts
+  ;(dock as (Element & { addWidget?(id: string, name?: string): void }) | null)?.addWidget?.(kind, name)
 })
 
 defineBundle()

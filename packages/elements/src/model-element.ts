@@ -2,7 +2,7 @@
 // instance), re-renders when the model publishes, and acts by calling the model through its own handle.
 import { LitElement } from 'lit'
 import { Type } from 'typebox'
-import { Components, Ops, type Handle, type Op, type Registry, type Result } from '@composable/core'
+import { Components, Ops, type Handle, type Op, type Registry, type Result } from '@pritzlaff/nano-core'
 
 let n = 0
 

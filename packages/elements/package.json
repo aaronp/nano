@@ -1,13 +1,13 @@
 {
-  "name": "@composable/elements",
+  "name": "@pritzlaff/nano-elements",
   "version": "0.1.0",
   "type": "module",
   "description": "Lit elements over core components: show and drive a model, or place a component by name.",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@composable/core": "workspace:*",
+    "@pritzlaff/nano-core": "workspace:*",
     "lit": "^3.0.0",
     "typebox": "^1.4.0"
   },
-  "devDependencies": { "@composable/runes": "workspace:*", "@happy-dom/global-registrator": "^21.0.4" }
+  "devDependencies": { "@pritzlaff/nano-runes": "workspace:*", "@happy-dom/global-registrator": "^21.0.4" }
 }

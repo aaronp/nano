@@ -1,6 +1,6 @@
 // A number between bounds, as a slider sets it. Its value is published whenever it changes.
 import { Type } from 'typebox'
-import { component, state } from '@composable/runes'
+import { component, state } from '@pritzlaff/nano-runes'
 
 /** A bounded number; `set` clamps it into [min, max]. */
 export const Range = component('composable.bundle/range', () => {

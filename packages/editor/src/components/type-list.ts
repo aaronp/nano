@@ -1,6 +1,6 @@
 // The named types: built-ins first, then the ones made here. Selecting one hands it, with its look, to whoever listens.
 import { Type } from 'typebox'
-import { component, event, state } from '@composable/runes'
+import { component, event, state } from '@pritzlaff/nano-runes'
 import { brandOf, builtins, isBuiltin, titleOf, type TypeEntry } from '../model'
 
 /** The list of types, and which one is selected (by title). */
