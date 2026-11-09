@@ -39,13 +39,21 @@ test('the filter hides entries and sections that do not match', async () => {
   expect((d.querySelector('[data-section="components"]') as HTMLElement).hidden).toBe(true)
 })
 
-test('collapsing is remembered per dock', async () => {
-  localStorage.clear()
+test('hiding takes the drawer away completely; a toggle elsewhere (beside + in the nav) brings it back; remembered', async () => {
+  localStorage.clear(); document.documentElement.removeAttribute('data-drawers-hidden')
   let { d } = await mount()
-  ;(d.querySelector('[aria-label="Collapse the drawer"]') as HTMLButtonElement).click()
-  expect(d.classList.contains('collapsed')).toBe(true)
-  ;({ d } = await mount())
-  expect(d.classList.contains('collapsed')).toBe(true)
-  ;(d.querySelector('[aria-label="Open the drawer"]') as HTMLButtonElement).click()
-  expect(d.classList.contains('collapsed')).toBe(false)
+  document.body.insertAdjacentHTML('beforeend', '<button data-toggle-drawer aria-pressed="true">nav</button>')
+  const nav = () => document.querySelector('body > [data-toggle-drawer]') as HTMLButtonElement
+  ;(d.querySelector('[aria-label="Hide the components drawer"]') as HTMLButtonElement).click()
+  expect(document.documentElement.hasAttribute('data-drawers-hidden')).toBe(true)
+  expect(nav().getAttribute('aria-pressed')).toBe('false')
+  document.documentElement.removeAttribute('data-drawers-hidden')
+  ;({ d } = await mount())   // a reload
+  const { restoreDrawers } = await import('../src/components/component-drawer.ts')
+  restoreDrawers(document)
+  expect(document.documentElement.hasAttribute('data-drawers-hidden')).toBe(true)
+  document.body.insertAdjacentHTML('beforeend', '<button data-toggle-drawer>nav</button>')
+  nav().click()
+  expect(document.documentElement.hasAttribute('data-drawers-hidden')).toBe(false)
+  expect(nav().getAttribute('aria-pressed')).toBe('true')
 })

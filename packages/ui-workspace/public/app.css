@@ -13,10 +13,11 @@ a[slot='nav'] svg { width: 20px; height: 20px; flex: none; fill: none; stroke: c
 .nav-row button { flex: none; width: 26px; height: 26px; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); font: inherit; font-size: 16px; line-height: 1; cursor: pointer; }
 .nav-row button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 a[slot='nav'][data-sub] svg { width: 16px; height: 16px; }
-[slot='nav'][hidden] { display: none !important; }
-.nav-row [data-toggle-workspaces] { display: grid; place-items: center; padding: 0; }
-.nav-row [data-toggle-workspaces] svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
-.nav-row[data-collapsed] [data-toggle-workspaces] svg { transform: rotate(-90deg); }
+/* The components drawer's toggle beside +: pressed while the drawers show. */
+.nav-row [data-toggle-drawer] { display: grid; place-items: center; padding: 0; }
+.nav-row [data-toggle-drawer] svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.nav-row [data-toggle-drawer][aria-pressed='true'] { background: var(--accent-soft); }
+html[data-drawers-hidden] component-drawer { display: none; }
 
 /* A workspace page: the components drawer beside the dock. */
 .ws-page { display: flex; height: 100%; min-height: 0; }
@@ -32,10 +33,6 @@ component-drawer h3 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; lett
 component-drawer .cd-section { display: flex; flex-direction: column; gap: 2px; }
 component-drawer .cd-section a { padding: 7px 10px; border-radius: var(--radius); color: var(--fg); text-decoration: none; cursor: grab; }
 component-drawer .cd-section a:hover { background: var(--surface-2); }
-component-drawer .cd-open { display: none; }
-component-drawer.collapsed { width: 44px; padding: 8px 6px; }
-component-drawer.collapsed > :not(.cd-open) { display: none; }
-component-drawer.collapsed .cd-open { display: block; }
 
 .page-head { margin-bottom: 20px; }
 .page-head h1 { margin: 0 0 4px; font: 600 28px/1.15 var(--display); text-wrap: balance; }
