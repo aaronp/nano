@@ -7,8 +7,9 @@ const { Ops } = await import('@composable/core')
 const { Debounce, Log, Range } = await import('@composable/bundle')
 const { PlatformOps: P } = await import('@composable/platform')
 const page = await Bun.file(new URL('../public/index.html', import.meta.url)).text()
-const { host } = await import('../src/composable.ts')
+// the page first, as in a browser (module scripts run after parsing): composable.ts adds the dock's entries to it
 document.body.innerHTML = page.slice(page.indexOf('<body>') + 6, page.indexOf('</body>'))
+const { host } = await import('../src/composable.ts')
 const tick = (ms = 0) => new Promise(r => setTimeout(r, ms))
 const me = { registry: 'host', instance: 'test' }
 const call = (id: string, op: any, arg: unknown = null) => host.call(me, id, Ops.key(op), arg) as Promise<any>
@@ -57,4 +58,16 @@ test('<puzzle-port> is on its own page and in the dock, rendering the ported art
   expect(port.shadowRoot!.innerHTML.length).toBeGreaterThan(1000)
   expect(document.querySelector('a[href="#/puzzle-port"]')).not.toBeNull()
   expect(document.querySelector('template[data-widget="puzzle-port"]')).not.toBeNull()
+})
+
+test('the dock lists every catalog type that has an element, and + Add can make every type', async () => {
+  const { catalog } = await import('../src/composable.ts')
+  const tagged = Object.entries(catalog).filter(([, e]) => e.tag)
+  expect(tagged.length).toBeGreaterThanOrEqual(6)
+  for (const [kind, e] of tagged) {
+    expect(document.querySelector(`a[data-dock-add][data-widget="${kind}"]`)?.textContent).toBe(`+ ${e.title}`)
+    expect(document.querySelector(`template[data-widget="${kind}"]`)?.innerHTML).toBe(`<${e.tag}></${e.tag}>`)
+  }
+  const kinds = (await call('platform', P.catalog)).value
+  expect(kinds).toEqual(expect.arrayContaining(['range', 'log', 'component-list', 'connection-board']))
 })

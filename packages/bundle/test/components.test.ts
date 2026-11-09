@@ -75,6 +75,8 @@ test('filter publishes only values its code passes', async () => {
   expect(got).toEqual([15, 20])
 })
 
-test('the catalog names every component', () => {
+test('the catalog names every component, with a title and the element that shows it', () => {
   expect(Object.keys(catalog).sort()).toEqual(['debounce', 'filter', 'input', 'log', 'map', 'range'])
+  expect(catalog.range).toEqual({ component: Range, title: 'Range', tag: 'c-range' })
+  for (const e of Object.values(catalog)) expect(e.tag).toStartWith('c-')
 })

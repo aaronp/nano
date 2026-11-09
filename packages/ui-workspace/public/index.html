@@ -26,12 +26,6 @@
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="metrics" title="Click to add, or drag into the workspace">+ Metrics</a>
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="messages" title="Click to add, or drag into the workspace">+ Messages</a>
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="activity" title="Click to add, or drag into the workspace">+ Activity</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-input" title="Click to add, or drag into the workspace">+ Input</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-range" title="Click to add, or drag into the workspace">+ Range</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-log" title="Click to add, or drag into the workspace">+ Log</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-debounce" title="Click to add, or drag into the workspace">+ Debounce</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-map" title="Click to add, or drag into the workspace">+ Map</a>
-  <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-filter" title="Click to add, or drag into the workspace">+ Filter</a>
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="c-platform" title="Click to add, or drag into the workspace">+ Systems</a>
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="puzzle-prototype" title="Click to add, or drag into the workspace">+ Puzzle Prototype</a>
   <a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="puzzle-port" title="Click to add, or drag into the workspace">+ Puzzle Port</a>
@@ -84,13 +78,8 @@
       <template data-widget="metrics" data-title="Metrics"><div class="cards"><stat-card index="0"></stat-card><stat-card index="1"></stat-card><stat-card index="2"></stat-card><stat-card index="3"></stat-card></div></template>
       <template data-widget="messages" data-title="Messages" data-flush><mail-list></mail-list></template>
       <template data-widget="activity" data-title="Activity"><bus-log limit="40"></bus-log></template>
-      <!-- @composable components, added at runtime: each panel places a new instance and removes it on close. -->
-      <template data-widget="c-input" data-title="Input"><c-input></c-input></template>
-      <template data-widget="c-range" data-title="Range"><c-range></c-range></template>
-      <template data-widget="c-log" data-title="Log"><c-log></c-log></template>
-      <template data-widget="c-debounce" data-title="Debounce"><c-debounce></c-debounce></template>
-      <template data-widget="c-map" data-title="Map"><c-map></c-map></template>
-      <template data-widget="c-filter" data-title="Filter"><c-filter></c-filter></template>
+      <!-- @composable components, added at runtime: each panel places a new instance and removes it on close.
+           composable.ts adds one per catalog kind that has an element, before these. -->
       <template data-widget="c-platform" data-title="Systems"><c-platform></c-platform></template>
       <template data-widget="puzzle-prototype" data-title="Puzzle Prototype" data-flush><puzzle-prototype></puzzle-prototype></template>
       <template data-widget="puzzle-port" data-title="Puzzle Port" data-flush><puzzle-port></puzzle-port></template>

@@ -6,7 +6,7 @@ snapshot of each) and `state-changed` whenever any of them changes.
 
 ```ts
 const host = Runtimes.create(Registries.create('host'))
-host.registry.add('platform', Components.instantiate(platform(host, catalog)))
+host.registry.add('platform', Components.instantiate(platform(host, { ...bundle.catalog, ...editor.catalog })))
 ```
 
 | Action | Does |
@@ -14,7 +14,7 @@ host.registry.add('platform', Components.instantiate(platform(host, catalog)))
 | `create-system(name)` | a new registry with its own runtime |
 | `create-component({ kind, name, system })` | an instance of a catalog kind |
 | `add-to-system({ instance, from, to })` / `remove-from-system` | the same instance in another system, or out of one |
-| `connect({ system, source, op, listener, target })` / `disconnect` | a subscription, only between actions in one system whose types fit (the editor's `joins`) |
+| `connect({ system, source, op, listener, target })` / `disconnect` | a subscription, only between actions in one system whose types fit (core's `Ops.fits`) |
 | `select(selection \| null)` | publishes `selection-changed` |
 
 The platform is a plain core component, built with `Components.create` rather than runes, because it holds live

@@ -40,8 +40,8 @@ const opOf = (reg: Registry, instance: string, key: string) => {
   return op
 }
 
-/** The platform over `host`, able to create the components in `catalog` (kind → component). */
-export function platform(host: Runtime, catalog: Record<string, Component>): Component<State> {
+/** The platform over `host`, able to create the kinds of component in `catalog` (a host's merged catalogs). */
+export function platform(host: Runtime, catalog: Record<string, { component: Component }>): Component<State> {
   const c = Components.create<State>({ ns: 'composable', name: 'platform' }, env => {
     const s: State = {
       systems: new Map([[host.registry.id, host]]), selected: null, env, changed: () => {},
@@ -70,7 +70,7 @@ export function platform(host: Runtime, catalog: Record<string, Component>): Com
   c.action(P.createComponent, (s, { kind, name, system: id }) => {
     const def = catalog[kind]
     if (!def) throw new Error(`no component kind ${kind}`)
-    must(system(s, id).add(name, Components.instantiate(def)))
+    must(system(s, id).add(name, Components.instantiate(def.component)))
   })
   c.action(P.addToSystem, (s, { instance, from, to }) => {
     const inst = system(s, from).get(instance)

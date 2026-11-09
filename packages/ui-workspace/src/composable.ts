@@ -10,9 +10,14 @@
  */
 import { Components, Ops, Registries, Runtimes, type Op } from '@composable/core'
 import { provide } from '@composable/elements'
-import { catalog, Debounce, defineBundle, Input, Log, Map, Range } from '@composable/bundle'
+import { catalog as bundle, Debounce, defineBundle, Input, Log, Map, Range } from '@composable/bundle'
+import { catalog as editor } from '@composable/editor'
+import type { Catalog } from '@composable/elements'
 import { definePlatform, platform, PlatformOps as P } from '@composable/platform'
 import { defineElements as defineEditor } from '@composable/editor/elements'
+
+/** Every kind of component this host offers: its packages' catalogs, merged. Add a package, add its catalog. */
+export const catalog: Catalog = { ...bundle, ...editor }
 
 /** The page's runtime and its registry, `host`. */
 export const host = Runtimes.create(Registries.create('host'))
@@ -34,6 +39,17 @@ await wire('ex-map', Map.ops.mapped, 'ex-log', Log.ops.info)
 const set = (id: string, op: Op, arg: unknown) => host.call({ registry: 'host', instance: 'workspace' }, id, Ops.key(op), arg)
 await set('ex-map', Map.ops.setCode, 'return x * 2')
 await set('ex-input', Input.ops.setKind, 'number')
+
+// The dock lists every kind that has an element: a drawer link and a panel template each, before the hand-written ones.
+const link = document.querySelector('a[data-dock-add][data-widget="c-platform"]'), panel = document.querySelector('template[data-widget="c-platform"]')
+for (const [kind, e] of Object.entries(catalog)) if (e.tag) {
+  const a = Object.assign(document.createElement('a'), { href: '#/workspace', title: 'Click to add, or drag into the workspace', textContent: `+ ${e.title}` })
+  for (const [k, v] of [['slot', 'nav'], ['data-sub', ''], ['data-dock-add', 'workspace'], ['data-widget', kind]]) a.setAttribute(k, v!)
+  link?.before(a)
+  const t = Object.assign(document.createElement('template'), { innerHTML: `<${e.tag}></${e.tag}>` })
+  t.dataset.widget = kind; t.dataset.title = e.title
+  panel?.before(t)
+}
 
 defineBundle()
 definePlatform()

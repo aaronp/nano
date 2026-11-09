@@ -12,7 +12,9 @@ Basic components to wire together. Each is a rune component plus a self-placing 
 | `Map` | `<c-map>` | `set-code`, `map(x)` | `mapped` |
 | `Filter` | `<c-filter>` | `set-code`, `filter(x)` | `passed`: only the values the code passes |
 
-`catalog` maps each kind to its component, for whatever creates components by name, such as the platform.
+`catalog` lists each kind with its component, title and element tag (`{ component, title, tag }`, the `Catalog`
+type from `@composable/elements`). A host merges the catalogs of the packages it uses; the platform makes components
+from it, and `ui-workspace` lists every kind that has an element in its dock.
 
 **Map and Filter run what is typed into them** as `new Function('x', code)`. That's fine for a local playground,
 and never for untrusted input.
