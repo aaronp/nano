@@ -2,10 +2,12 @@ import { afterEach, expect, test } from 'bun:test'
 import { Ops } from '@pritzlaff/nano-core'
 import { catalog, Map, Range } from '@composable/bundle'
 import { defineWires, type Wires } from '../src'
+import { definePlatform, PlatformOps as P } from '@composable/platform'
 import { onDown, onMove, onUp, removeSel, toggleEdit } from '../src/pointer'
 import { setup, tick } from './setup'
 
 defineWires()
+definePlatform()
 afterEach(() => { document.body.innerHTML = '' })
 
 const box = (el: HTMLElement, x: number, y: number, w: number, h: number) => {
@@ -283,4 +285,48 @@ test('a panel that is not showing (an inactive tab) is not drawn on the pane; it
   expect(el.model.chassis.length).toBe(3)
   expect(el.model.chassis.some(c => c.instance === 'm')).toBe(false)
   expect(el.model.rack.map(r => r.id)).toContain('m')
+})
+
+test('clicking a jack on the back selects its action, and Detail shows its op, schemas and connections', async () => {
+  const { el, root, call, flip, settle, at } = await mount()
+  await flip()
+  const jack = at(k('r', Range.ops.value))
+  onDown(el, jack); await onUp(el, jack); await settle(); await settle()
+  expect((await call(P.selected, null)).value).toEqual({ system: 'host', instance: 'r', op: Ops.key(Range.ops.value) })
+  expect(el.s.tab).toBe('detail')
+  const card = root.querySelector('.detail')!.textContent!
+  expect(card).toContain(Ops.key(Range.ops.value))
+  expect(card).toContain('source')
+  expect(card).toContain('"type": "number"')
+  expect(card).toContain('r.value → d.enqueue')
+})
+
+test('clicking a panel selects its component: coordinates, kind, jacks and connections', async () => {
+  const { el, root, call, flip, settle } = await mount()
+  await flip()
+  const c = el.model.chassis.find(x => x.instance === 'r')!, mid = { clientX: c.x + c.w / 2, clientY: c.y + c.h / 2 }   // the back is the front mirrored
+  onDown(el, mid); await onUp(el, mid); await settle(); await settle()
+  expect((await call(P.selected, null)).value).toEqual({ system: 'host', instance: 'r' })
+  const card = root.querySelector('.detail')!.textContent!
+  expect(card).toContain('host / r')
+  expect(card).toContain('range')
+  expect(card).toContain('composable.bundle/range')
+  expect(card).toContain('r.value → d.enqueue')
+})
+
+test('the drawer has View and Detail tabs; Detail holds the system tree, in step with the selection', async () => {
+  const { el, root, flip, settle } = await mount()
+  await flip()
+  const tab = (name: string) => [...root.querySelectorAll('[role="tab"]')].find(t => t.textContent!.trim() === name) as HTMLButtonElement
+  expect(tab('View').getAttribute('aria-selected')).toBe('true')
+  tab('Detail').click(); await settle()
+  expect(root.querySelector('.detail')!.textContent).toContain('Click a panel')
+  const tree = root.querySelector('c-platform') as HTMLElement & { updateComplete: Promise<boolean> }
+  for (let i = 0; i < 4; i++) { await tree.updateComplete; await settle() }
+  ;(tree.shadowRoot!.querySelector('[data-component="host/d"]') as HTMLButtonElement).click()
+  for (let i = 0; i < 3; i++) await settle()
+  expect(el.s.picked).toEqual({ system: 'host', instance: 'd' })
+  expect(root.querySelector('.detail')!.textContent).toContain('host / d')
+  tab('View').click(); await settle()
+  expect(root.querySelector('c-platform')).toBeNull()
 })

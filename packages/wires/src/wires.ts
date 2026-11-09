@@ -3,7 +3,7 @@
 // system through the platform. The render-* files draw it, as the prototype's template does from renderVals.
 import { LitElement, css } from 'lit'
 import { Ops, type Op, type Result, type Runtime, type Trace } from '@pritzlaff/nano-core'
-import { PlatformOps } from '@composable/platform'
+import { PlatformOps, PlatformOps as P, type Selection } from '@composable/platform'
 import type { Catalog } from '@pritzlaff/nano-elements'
 import { FLASH_MS, FONTS, FRAME_MS, MAX_PACKETS, TRAVEL_MS, TURN_MS, VIEWS, short, type View } from './constants'
 import { buildModel, type Model, type Panel } from './model'
@@ -19,6 +19,8 @@ export interface State {
   ry: number; rx: number; dragging: boolean; mode: 'relay' | 'puzzle'; sel: string | null; depth: number; editing: boolean; entering: boolean; leaving: boolean
   /** Zoom (1 = fitted) and pan (screen px) on top of the camera; `zooming` makes them follow the wheel without easing. */
   zoom: number; panX: number; panY: number; zooming: boolean
+  /** The drawer's tab, and what is selected (the platform's selection, kept in step through the trace). */
+  tab: 'view' | 'detail'; picked: Selection
   cord: Cord | null; armed: string | null; selMod: string | null; lift: string | null; toast: { kind: 'ok' | 'err'; text: string } | null
   packets: Packet[]; hits: Record<string, number>; flashes: Record<string, number>; stats: Record<string, { in: number; out: number }>
 }
@@ -63,7 +65,7 @@ export class Wires extends LitElement {
   declare platform: string
   declare system: string
   declare flipped: boolean
-  s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, entering: false, leaving: false, zoom: 1, panX: 0, panY: 0, zooming: false, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
+  s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, entering: false, leaving: false, zoom: 1, panX: 0, panY: 0, zooming: false, tab: 'view', picked: null, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
   model: Model = empty()
   puzzle = buildPuzzle(this.model)
   stage = { w: 0, h: 0 }
@@ -105,6 +107,8 @@ export class Wires extends LitElement {
     if (e.ctrlKey || e.metaKey) this.zoomBy(Math.exp(-e.deltaY * 0.01), e)
     else this.setState({ panX: this.s.panX - e.deltaX, panY: this.s.panY - e.deltaY, zooming: true })
   }
+  /** Selects a component, or one of its actions, through the platform, and shows it in Detail. */
+  pick(sel: Exclude<Selection, null>) { this.setState({ picked: sel, tab: 'detail' }); void this.call(P.select, sel) }
   /** Back to the fitted view. */
   fit() { this.setState({ zoom: 1, panX: 0, panY: 0, zooming: false }) }
   now() { return performance.now() }
@@ -150,6 +154,7 @@ export class Wires extends LitElement {
 
   /** A delivery on a drawn wire sends a packet along it, flashes its source and counts it. */
   trace(t: Trace) {
+    if (this.flipped && t.kind === 'publish' && t.from.instance === this.platform && t.op === Ops.key(P.selectionChanged)) this.setState({ picked: (t.data ?? null) as Selection })
     if (!this.flipped || t.kind !== 'delivery' || !this.model.wires.some(w => w.id === t.subscription)) return   // flat: nothing to draw
     const now = this.now(), { stats, flashes } = this.s
     const stat = (id: string) => stats[id] ?? { in: 0, out: 0 }
