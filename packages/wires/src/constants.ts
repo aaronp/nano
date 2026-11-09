@@ -24,6 +24,12 @@ export const OK_COLOR = '#7EE787'
 export const ERR_COLOR = '#FF7B72'
 
 export const TRAVEL_MS = 900
+/** How long the pane takes to ease back or forward; the header and drawer fade in once it has. */
+export const TURN_MS = 900
+export const HEADER_H = 64
+export const ASIDE_W = 340
+/** Fades the header, drawer and hint in after the pane settles, and out at once. */
+export const fade = (show: boolean) => 'opacity:' + (show ? 1 : 0) + '; transition:opacity 300ms ease ' + (show ? TURN_MS : 0) + 'ms; pointer-events:' + (show ? 'auto' : 'none')
 export const FRAME_MS = 33
 export const FLASH_MS = 320
 /** ponytail: at most this many packets in flight; the oldest go first when a source floods. */

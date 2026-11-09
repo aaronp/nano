@@ -1,6 +1,6 @@
 // The stage: the 3D world (the live dock on its front face, the wiring on its back), and the hint and toast bar.
 import { html } from 'lit'
-import { ERR_COLOR, OK_COLOR, SCALE } from './constants'
+import { ASIDE_W, ERR_COLOR, HEADER_H, OK_COLOR, SCALE, TURN_MS, fade } from './constants'
 import { onCancel, onDbl, onDown, onMove, onUp } from './pointer'
 import { renderBack } from './render-back'
 import { renderBlocks, renderPuzzle } from './render-pieces'
@@ -11,11 +11,13 @@ export function renderStage(el: Wires, d: Vals) {
   const { s, m, isRelay } = d
   const { W, H } = m
   // Facing front, the pane fills SCALE of the stage; turning to the back eases out to fit the rack below it too.
-  const fit = (h: number) => (el.stage.w ? Math.min(el.stage.w / W, el.stage.h / h) : 1) * SCALE
+  // At full size (opening, and after Done) it sits exactly where the flat dock does.
+  const fit = (h: number) => (el.stage.w ? Math.min((el.stage.w - ASIDE_W) / W, (el.stage.h - HEADER_H) / h) : 1) * SCALE
   const t = (1 + d.backness) / 2
-  const scale = s.entering ? 1 : fit(H) + (fit(H + m.rackH) - fit(H)) * t
-  const worldT = 'translateY(' + (-m.rackH / 2 * t * scale).toFixed(1) + 'px) scale(' + +scale.toFixed(4) + ') rotateX(' + s.rx.toFixed(2) + 'deg) rotateY(' + s.ry.toFixed(2) + 'deg)'
-  const worldTr = s.dragging ? 'none' : 'transform 900ms cubic-bezier(0.65, 0, 0.35, 1)'
+  const scale = d.shown ? fit(H) + (fit(H + m.rackH) - fit(H)) * t : 1
+  const dx = d.shown ? -ASIDE_W / 2 : 0, dy = d.shown ? HEADER_H / 2 - m.rackH / 2 * t * scale : 0
+  const worldT = 'translate(' + dx + 'px, ' + dy.toFixed(1) + 'px) scale(' + +scale.toFixed(4) + ') rotateX(' + s.rx.toFixed(2) + 'deg) rotateY(' + s.ry.toFixed(2) + 'deg)'
+  const worldTr = s.dragging ? 'none' : 'transform ' + TURN_MS + 'ms cubic-bezier(0.65, 0, 0.35, 1)'
   const cursor = s.editing ? (s.cord || s.lift ? 'grabbing' : 'crosshair') : s.dragging ? 'grabbing' : 'grab'
   const armed = s.armed ? el.catalog[s.armed]?.title ?? s.armed : null
   const hint = !s.editing
@@ -26,7 +28,7 @@ export function renderStage(el: Wires, d: Vals) {
         ? 'Click a + to insert ' + armed + ' there'
         : 'Pick an operator, then click a + between pieces · click × to unplug · click an operator piece to select it'
   const toast = s.cord && s.cord.err ? { kind: 'err', text: s.cord.err } : s.toast
-  return html`<div class="stage-bg" @pointerdown=${(e: PointerEvent) => onDown(el, e)} @pointermove=${(e: PointerEvent) => onMove(el, e)} @pointerup=${(e: PointerEvent) => onUp(el, e)} @pointercancel=${() => onCancel(el)} @dblclick=${() => onDbl(el)} style="position:relative; flex:1; min-width:0; overflow:hidden; perspective:2400px; perspective-origin:50% 40%; cursor:${cursor}; touch-action:none; user-select:none">
+  return html`<div class="stage-bg" @pointerdown=${(e: PointerEvent) => onDown(el, e)} @pointermove=${(e: PointerEvent) => onMove(el, e)} @pointerup=${(e: PointerEvent) => onUp(el, e)} @pointercancel=${() => onCancel(el)} @dblclick=${() => onDbl(el)} style="position:absolute; inset:0; overflow:hidden; perspective:2400px; perspective-origin:50% 40%; cursor:${cursor}; touch-action:none; user-select:none">
 
   <div class="world" style="position:absolute; left:50%; top:50%; width:${W}px; height:${H}px; margin-left:${-W / 2}px; margin-top:${-H / 2}px; transform-style:preserve-3d; transform:${worldT}; transition:${worldTr}">
 
@@ -44,7 +46,7 @@ export function renderStage(el: Wires, d: Vals) {
     </div>
   </div>
 
-  <div style="position:absolute; left:20px; bottom:18px; right:20px; display:flex; align-items:center; gap:12px; pointer-events:none">
+  <div style="position:absolute; left:20px; bottom:18px; right:${ASIDE_W + 20}px; display:flex; align-items:center; gap:12px; ${fade(d.shown)}; pointer-events:none">
     <div style="display:flex; align-items:center; gap:10px; font-size:12px; color:#8B96A5">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8B96A5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"></path><path d="M3 21v-5h5"></path></svg>
       ${hint}

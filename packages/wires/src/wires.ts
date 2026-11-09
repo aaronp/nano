@@ -5,7 +5,7 @@ import { LitElement, css } from 'lit'
 import { Ops, type Op, type Result, type Runtime, type Trace } from '@composable/core'
 import { PlatformOps } from '@composable/platform'
 import type { Catalog } from '@composable/elements'
-import { FLASH_MS, FONTS, FRAME_MS, MAX_PACKETS, TRAVEL_MS, VIEWS, short, type View } from './constants'
+import { FLASH_MS, FONTS, FRAME_MS, MAX_PACKETS, TRAVEL_MS, TURN_MS, VIEWS, short, type View } from './constants'
 import { buildModel, type Model, type Panel } from './model'
 import { buildPuzzle } from './puzzle'
 import { renderRoot } from './render-root'
@@ -16,7 +16,7 @@ export type Cord = { anchor: string; picked: string | null; x: number; y: number
 export type Packet = { id: number; wire: string; born: number; label: string }
 /** All of the view's state. */
 export interface State {
-  ry: number; rx: number; dragging: boolean; mode: 'relay' | 'puzzle'; sel: string | null; depth: number; editing: boolean; entering: boolean
+  ry: number; rx: number; dragging: boolean; mode: 'relay' | 'puzzle'; sel: string | null; depth: number; editing: boolean; entering: boolean; leaving: boolean
   cord: Cord | null; armed: string | null; selMod: string | null; lift: string | null; toast: { kind: 'ok' | 'err'; text: string } | null
   packets: Packet[]; hits: Record<string, number>; flashes: Record<string, number>; stats: Record<string, { in: number; out: number }>
 }
@@ -61,7 +61,7 @@ export class Wires extends LitElement {
   declare platform: string
   declare system: string
   declare flipped: boolean
-  s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, entering: false, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
+  s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, entering: false, leaving: false, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
   model: Model = empty()
   puzzle = buildPuzzle(this.model)
   stage = { w: 0, h: 0 }
@@ -74,7 +74,7 @@ export class Wires extends LitElement {
   constructor() {
     super()
     this.catalog = {}; this.platform = 'platform'; this.system = 'host'; this.flipped = false
-    this.addEventListener('dock:connections', () => { this.flipped = !this.flipped })
+    this.addEventListener('dock:connections', () => { if (this.flipped) this.close(); else this.flipped = true })
   }
   connectedCallback() { super.connectedCallback(); loadFonts(this.ownerDocument); if (this.hasUpdated) this.#attach() }
   disconnectedCallback() { super.disconnectedCallback(); this.#detach(); this.#stop() }
@@ -157,14 +157,20 @@ export class Wires extends LitElement {
     const dock = this.dock()
     this.model = { ...this.model, W: dock?.offsetWidth || 1340, H: dock?.offsetHeight || 560 }
     this.rebuild()
-    this.s = { ...this.s, ry: 0, rx: 0, dragging: false, entering: true, packets: [] }
+    this.s = { ...this.s, ry: 0, rx: 0, dragging: false, entering: true, leaving: false, packets: [] }
     this.#stop()
     this.#timer = setInterval(() => this.frame(), FRAME_MS)
     setTimeout(() => { this.measure(); this.setState({ entering: false }) }, 60)   // starts at full size, then eases back
   }
-  #close() { this.#stop(); this.s = { ...this.s, editing: false, cord: null, armed: null, selMod: null, lift: null, toast: null, dragging: false } }
+  #close() { this.#stop(); this.s = { ...this.s, editing: false, cord: null, armed: null, selMod: null, lift: null, toast: null, dragging: false, leaving: false } }
   #stop() { clearInterval(this.#timer); this.#timer = undefined }
 
+  /** Done: the drawer fades out and the pane eases forward to full size, then the plain dock is back. */
+  close() {
+    if (!this.flipped || this.s.leaving) return
+    this.setState({ leaving: true, editing: false, cord: null, armed: null, selMod: null, lift: null, toast: null, dragging: false, ry: 360 * Math.round(this.s.ry / 360), rx: 0 })
+    setTimeout(() => { if (this.s.leaving) this.flipped = false }, TURN_MS)
+  }
   /** The stage's size, which the pane is fitted to; a change re-renders. */
   measure() {
     const st = this.renderRoot.querySelector<HTMLElement>('.stage-bg')

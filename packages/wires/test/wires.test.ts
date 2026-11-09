@@ -43,7 +43,7 @@ async function mount() {
 const k = (instance: string, op: { ns: string; name: string }) => instance + ' ' + Ops.key(op)
 
 test('unflipped it is just the dock; dock:connections flips it to the 3D view and back', async () => {
-  const { el, root, flip } = await mount()
+  const { el, root, flip, settle } = await mount()
   expect(root.querySelector('.stage-bg')).toBeNull()
   expect(root.querySelector('slot')).not.toBeNull()
   await flip()
@@ -56,6 +56,7 @@ test('unflipped it is just the dock; dock:connections flips it to the 3D view an
   expect(root.textContent).toContain('r → l')
   expect(document.head.querySelectorAll('link[data-wires-fonts]').length).toBe(1)
   await flip()
+  await new Promise(r => setTimeout(r, 950)); await settle()
   expect(el.flipped).toBe(false)
   expect(root.querySelector('.stage-bg')).toBeNull()
 })
@@ -210,4 +211,24 @@ test('opening eases the pane straight back from full size to 90% of the stage, w
   expect(world().transform).toContain('scale(0.9)')
   expect(world().transform).toContain('rotateX(0.00deg) rotateY(0.00deg)')
   expect(world().transition).toContain('cubic-bezier(0.65, 0, 0.35, 1)')
+})
+
+test('the edit drawer fades in once the pane has dropped back; Done fades it out and eases the pane back to full size', async () => {
+  const { el, root, flip, settle } = await mount()
+  await flip()
+  const aside = () => (root.querySelector('aside') as HTMLElement).style
+  const world = () => (root.querySelector('.world') as HTMLElement).style
+  expect(aside().opacity).toBe('0')
+  await new Promise(r => setTimeout(r, 80)); await settle()
+  expect(aside().opacity).toBe('1')
+  expect(aside().transition).toContain('900ms')   // waits for the drop-back
+  el.setState({ ry: 180 })
+  ;(root.querySelector('[aria-label="Back to the workspace"]') as HTMLButtonElement).click()
+  await settle()
+  expect(el.flipped).toBe(true)
+  expect(aside().opacity).toBe('0')
+  expect(world().transform).toContain('scale(1)')
+  expect(world().transform).toContain('rotateX(0.00deg) rotateY(360.00deg)')
+  await new Promise(r => setTimeout(r, 950)); await settle()
+  expect(el.flipped).toBe(false)
 })

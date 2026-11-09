@@ -1,7 +1,7 @@
 // The right-hand panel: View, the mode toggle and wiring edit, the Operators palette (the host's catalog), Routes
 // and the Legend.
 import { html } from 'lit'
-import { OK_COLOR } from './constants'
+import { ASIDE_W, HEADER_H, OK_COLOR, fade } from './constants'
 import { pickOperator, removeSel, toggleEdit } from './pointer'
 import { inFlight } from './render-back'
 import type { Vals } from './render-root'
@@ -23,7 +23,7 @@ export function renderAside(el: Wires, d: Vals) {
     const on = selId === r.id
     return { ...r, on, chain: el.puzzle.descs[r.id] ?? '', inFlight: n === 0 ? '' : n + ' in flight' }
   })
-  return html`<aside style="width:340px; flex:none; box-sizing:border-box; padding:22px 22px 24px; border-left:1px solid #1F252E; background:#0F1318; display:flex; flex-direction:column; gap:22px; overflow-y:auto">
+  return html`<aside style="position:absolute; right:0; top:${HEADER_H}px; bottom:0; ${fade(d.shown)}; width:${ASIDE_W}px; box-sizing:border-box; padding:22px 22px 24px; border-left:1px solid #1F252E; background:#0F1318; display:flex; flex-direction:column; gap:22px; overflow-y:auto">
 
   <section style="display:flex; flex-direction:column; gap:10px">
     ${h2('View')}
