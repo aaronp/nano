@@ -2,8 +2,8 @@
 import { html } from 'lit'
 import { TypeList as T } from '../components/type-list'
 import { isBuiltin, titleOf, type TypeEntry } from '../model'
-import { base } from './styles'
-import { ModelElement } from './view'
+import { base } from '@composable/elements'
+import { ModelElement } from '@composable/elements'
 
 /** Shows a type-list model. */
 export class TypeListEl extends ModelElement {

@@ -3,8 +3,8 @@ import { html } from 'lit'
 import { Type } from 'typebox'
 import { Components, Registries, Runtimes } from '@composable/core'
 import { component, state } from '@composable/runes'
-import { ModelElement } from '../src/elements/view'
-import { tick } from './fixtures'
+import { ModelElement } from '../src'
+const tick = () => new Promise(r => setTimeout(r, 0))
 
 const Counter = component('test/counter', () => {
   const s = state({ count: 0 })

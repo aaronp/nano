@@ -3,9 +3,9 @@ import { html } from 'lit'
 import { Ops, type Op } from '@composable/core'
 import { ComponentList as L, type Entry, type Selection } from '../components/component-list'
 import { titleOf, type TypeEntry } from '../model'
-import { base } from './styles'
+import { base } from '@composable/elements'
 import { typeNamed, typeOptions } from './types'
-import { ModelElement } from './view'
+import { ModelElement } from '@composable/elements'
 
 /** Shows a component-list model. `types` feed the add-action form. */
 export class ComponentListEl extends ModelElement {

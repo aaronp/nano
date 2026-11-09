@@ -29,11 +29,25 @@
       "version": "0.1.0",
       "dependencies": {
         "@composable/core": "workspace:*",
+        "@composable/elements": "workspace:*",
         "@composable/runes": "workspace:*",
         "lit": "^3.0.0",
         "typebox": "^1.4.0",
       },
       "devDependencies": {
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+    },
+    "packages/elements": {
+      "name": "@composable/elements",
+      "version": "0.1.0",
+      "dependencies": {
+        "@composable/core": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+      "devDependencies": {
+        "@composable/runes": "workspace:*",
         "@happy-dom/global-registrator": "^21.0.4",
       },
     },
@@ -111,6 +125,8 @@
     "@composable/core": ["@composable/core@workspace:packages/core"],
 
     "@composable/editor": ["@composable/editor@workspace:packages/editor"],
+
+    "@composable/elements": ["@composable/elements@workspace:packages/elements"],
 
     "@composable/puzzle-editor": ["@composable/puzzle-editor@workspace:packages/puzzle-editor"],
 

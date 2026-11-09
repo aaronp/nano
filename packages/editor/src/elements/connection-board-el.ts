@@ -5,10 +5,10 @@ import type { Entry, Selection } from '../components/component-list'
 import { ConnectionBoard as B } from '../components/connection-board'
 import { pieceAt, type Cell, type Connection, type Piece } from '../model/board'
 import type { TypeEntry } from '../model'
-import { base } from './styles'
+import { base } from '@composable/elements'
 import { CELL, PAD, tilePath } from './tiles'
 import { lookOfSchema } from './types'
-import { ModelElement } from './view'
+import { ModelElement } from '@composable/elements'
 
 const SIZE = 84
 

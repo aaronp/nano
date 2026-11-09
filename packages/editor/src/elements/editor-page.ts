@@ -5,8 +5,8 @@ import { ComponentList as L } from '../components/component-list'
 import { TypeList as T } from '../components/type-list'
 import type { Ids } from '../editor'
 import type { TypeEntry } from '../model'
-import { base } from './styles'
-import { ModelElement } from './view'
+import { base } from '@composable/elements'
+import { ModelElement } from '@composable/elements'
 
 /** Lays out one editor: give it the `registry` and the `ids` from `addEditor`. */
 export class EditorPage extends ModelElement {

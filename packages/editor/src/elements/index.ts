@@ -6,7 +6,7 @@ import { TypeEditorEl } from './type-editor-el'
 import { TypeListEl } from './type-list-el'
 
 export { ComponentListEl, ConnectionBoardEl, EditorPage, TypeEditorEl, TypeListEl }
-export { ModelElement } from './view'
+export { ModelElement } from '@composable/elements'
 
 /** Defines every editor element under its tag, once. */
 export function defineElements() {
