@@ -1,4 +1,4 @@
-.PHONY: test install ui dev puzzle packages smoke
+.PHONY: test install ui dev puzzle packages smoke publish
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
@@ -33,3 +33,15 @@ packages:
 # Install the built packages into a scratch folder as a stranger would, type-check and run a consumer.
 smoke: packages
 	bun scripts/smoke-packages.ts
+
+# Publish the built packages to npm from this machine (after `npm login`). Builds and smoke-tests first; a version
+# already on npm is skipped. CI publishes the same way on a v* tag (publish.yml), with provenance.
+publish: smoke
+	@npm whoami >/dev/null 2>&1 || { echo "Not logged in to npm: run 'npm login' first."; exit 1; }
+	@for p in core runes elements; do \
+	  name=$$(node -p "require('./packages/$$p/dist/package.json').name"); \
+	  version=$$(node -p "require('./packages/$$p/dist/package.json').version"); \
+	  if npm view "$$name@$$version" version >/dev/null 2>&1; then echo "$$name@$$version is already published"; continue; fi; \
+	  echo "publishing $$name@$$version as $$(npm whoami)"; \
+	  npm publish "packages/$$p/dist" --access public || exit 1; \
+	done

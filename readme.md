@@ -15,5 +15,6 @@ component can be built in its own repo. Everything else here is private.
 
 - `make packages` builds each into `packages/<name>/dist`, a ready-to-publish folder; `make smoke` installs those
   into a scratch folder as a stranger would, type-checks and runs a consumer.
-- To release: `bun scripts/version.ts 0.2.0`, commit, `git tag v0.2.0`, push the tag. `.github/workflows/publish.yml`
+- `make publish` publishes them from your machine (after `npm login`), skipping versions already on npm.
+- To release from CI: `bun scripts/version.ts 0.2.0`, commit, `git tag v0.2.0`, push the tag. `.github/workflows/publish.yml`
   tests, builds, smoke-tests and publishes (npm trusted publishing; see the workflow's header).
