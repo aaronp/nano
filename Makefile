@@ -34,7 +34,8 @@ packages:
 smoke: packages
 	bun scripts/smoke-packages.ts
 
-# Publish the built packages to npm from this machine (after `npm login`). Builds and smoke-tests first; a version
+# Publish the built packages to npm from this machine (after `npm login`; with 2FA, npm asks for a code, or pass
+# OTP=123456). Builds and smoke-tests first; a version
 # already on npm is skipped. CI publishes the same way on a v* tag (publish.yml), with provenance.
 publish: smoke
 	@npm whoami >/dev/null 2>&1 || { echo "Not logged in to npm: run 'npm login' first."; exit 1; }
@@ -43,5 +44,5 @@ publish: smoke
 	  version=$$(node -p "require('./packages/$$p/dist/package.json').version"); \
 	  if npm view "$$name@$$version" version >/dev/null 2>&1; then echo "$$name@$$version is already published"; continue; fi; \
 	  echo "publishing $$name@$$version as $$(npm whoami)"; \
-	  npm publish "packages/$$p/dist" --access public || exit 1; \
+	  npm publish "packages/$$p/dist" --access public $(if $(OTP),--otp=$(OTP)) || exit 1; \
 	done
