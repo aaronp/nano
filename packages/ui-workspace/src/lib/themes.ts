@@ -32,7 +32,7 @@ export interface Theme {
 }
 
 /** The --nano-* tokens a theme may set beyond its page tokens. */
-export type NanoExtras = Readonly<Partial<Record<'fg-2' | 'border-strong' | 'radius-s' | 'good' | 'good-bg' | 'bad' | 'bad-bg' | 'warn' | 'warn-bg'
+export type NanoExtras = Readonly<Partial<Record<'bg' | 'fg-2' | 'border-strong' | 'radius-s' | 'good' | 'good-bg' | 'bad' | 'bad-bg' | 'warn' | 'warn-bg'
   | 's1' | 's2' | 's3' | 's4' | 's5' | 's6' | 's7' | 's8', string>>>;
 
 import { LEDGER_THEMES } from './ledger-themes.ts';
@@ -94,6 +94,7 @@ export const THEMES = {
     label: 'Retro',
     desc: 'Bevelled grey windows on a teal desktop.',
     fonts: ['Pixelify Sans'],
+    nano: { bg: '#FFFFFF' },   // widgets sit in the windows, not on the teal desktop
     schemes: {
       light: {
         bg: '#2A7F7F', surface: '#C3C3C3', 'surface-2': '#FFFFFF', fg: '#000000', muted: '#3A3A3A', line: '#808080',

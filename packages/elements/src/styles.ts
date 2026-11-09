@@ -11,7 +11,7 @@ export const base = css`
 
   /* buttons */
   button, .btn { font: inherit; font-size: 12px; color: ${t('fg')}; background: transparent; border: 1px solid ${t('border-strong')};
-    border-radius: ${t('radius-s')}; padding: 5px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px }
+    border-radius: ${t('radius-s')}; padding: 5px 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px }
   button:hover, .btn:hover { background: ${t('surface-2')} }
   button:disabled, .btn:disabled { opacity: .5; cursor: not-allowed }
   button.primary, .btn.primary { color: ${t('on-accent')}; background: ${t('accent')}; border-color: ${t('accent')}; font-weight: 600 }
@@ -50,7 +50,7 @@ export const base = css`
   .table th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: ${t('muted')} }
   .tabs { display: flex; gap: 2px; border-bottom: 1px solid ${t('border')} }
   .tabs > button { border: 0; border-radius: 0; border-bottom: 2px solid transparent; background: none; color: ${t('muted')} }
-  .tabs > button[aria-selected='true'] { color: ${t('fg')}; border-bottom-color: ${t('accent')} }
+  .tabs > button:is([aria-selected='true'], [aria-pressed='true']) { color: ${t('fg')}; border-bottom-color: ${t('accent')} }
   .list-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid ${t('border')} }
 
   /* type */

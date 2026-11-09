@@ -21,3 +21,8 @@ test('the library has the classes a widget can use', () => {
     '.field', '.input', '.meter', '.table', '.tabs', '.list-row', '.kicker', '.display-s', '.display-m', '.display-l', '.mono', '.muted', '.row', '.col', '.grid-auto'])
     expect(cssText).toContain(c)
 })
+
+test('button labels stay centred, and a pressed or selected tab is marked', () => {
+  expect(cssText).toMatch(/button, \.btn \{[^}]*justify-content: center/)
+  expect(cssText).toMatch(/\.tabs > button:is\(\[aria-selected='true'\], \[aria-pressed='true'\]\)/)
+})

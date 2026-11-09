@@ -14,7 +14,7 @@ const TABS = [['Primitives', primitives], ['Type & colour', typeAndColour], ['La
 export class NanoGallery extends LitElement {
   static override properties = { tab: { state: true }, compare: { state: true } };
   static override styles = [base, css`
-    :host { display: block; padding: 16px; background: var(--nano-bg, transparent) }
+    :host { display: block; padding: 16px }   /* no background: the theme's page (such as grid paper) shows through */
     .bar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap }
     .bar .tabs { flex: 1 }
     .compare { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(340px, 1fr); gap: 12px; overflow-x: auto }
