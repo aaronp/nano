@@ -96,7 +96,7 @@ function pickAt(el: Wires, e: Ptr) {
   const m = el.model, pt = toLocal(el, e), hit = nearestPort(m.P, visibleKeys(el), pt, null)
   const inside = (r: { x: number; y: number; w: number; h: number }) => pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h
   const instance = hit !== null ? m.P[hit]!.owner : m.chassis.find(c => c.instance && inside(c))?.instance ?? m.rack.find(inside)?.id
-  if (instance) el.pick({ system: el.system, instance, ...(hit !== null ? { op: Ops.key(m.P[hit]!.op) } : {}) })
+  if (instance) el.pick({ system: el.sys, instance, ...(hit !== null ? { op: Ops.key(m.P[hit]!.op) } : {}) })
 }
 
 export function onCancel(el: Wires) { el.drag = null; el.setState({ dragging: false, cord: null, lift: null }) }

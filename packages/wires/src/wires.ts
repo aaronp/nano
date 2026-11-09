@@ -46,7 +46,7 @@ let packetId = 0
 
 /** The wiring view: slot the live `<workspace-dock>`; its `dock:connections` event flips it to show the back. */
 export class Wires extends LitElement {
-  static properties = { runtime: { attribute: false }, catalog: { attribute: false }, platform: {}, system: {}, flipped: { type: Boolean, reflect: true } }
+  static properties = { runtime: { attribute: false }, host: { attribute: false }, catalog: { attribute: false }, platform: {}, system: {}, flipped: { type: Boolean, reflect: true } }
   static styles = css`
     :host { display: block; height: 100% }
     .stage-bg{background-color:#0B0E12;background-image:radial-gradient(#1C222B 1px, transparent 1px);background-size:22px 22px}
@@ -61,6 +61,8 @@ export class Wires extends LitElement {
     .joint:hover{background:#FFFFFF}
     .pkt-label{paint-order:stroke;stroke:#0A0D11;stroke-width:3px;stroke-linejoin:round}`
   declare runtime?: Runtime
+  /** The runtime the platform lives in (platform calls, selection); defaults to `runtime`. */
+  declare host?: Runtime
   declare catalog: Catalog
   declare platform: string
   declare system: string
@@ -77,13 +79,13 @@ export class Wires extends LitElement {
 
   constructor() {
     super()
-    this.catalog = {}; this.platform = 'platform'; this.system = 'host'; this.flipped = false
+    this.catalog = {}; this.platform = 'platform'; this.system = ''; this.flipped = false
     this.addEventListener('dock:connections', () => { if (this.flipped) this.close(); else this.flipped = true })
   }
   connectedCallback() { super.connectedCallback(); loadFonts(this.ownerDocument); if (this.hasUpdated) this.#attach() }
   disconnectedCallback() { super.disconnectedCallback(); this.#detach(); this.#stop() }
   willUpdate(changed: Map<string, unknown>) {
-    if (changed.has('runtime')) { this.#detach(); this.#attach() }
+    if (changed.has('runtime') || changed.has('host')) { this.#detach(); this.#attach() }
     if (changed.has('flipped')) this.flipped ? this.#open() : this.#close()
   }
   render() { return renderRoot(this) }
@@ -120,6 +122,8 @@ export class Wires extends LitElement {
     const rt = this.runtime
     if (!rt || !this.isConnected || this.#off.length) return
     this.#off = [rt.registry.listen(() => this.schedule()), rt.listen(t => this.trace(t))]
+    // the platform's selection is published where the platform lives
+    if (this.host && this.host !== rt) this.#off.push(this.host.listen(t => { if (t.kind === 'publish') this.trace(t) }))
     this.rebuild()
   }
   #detach() { this.#off.forEach(f => f()); this.#off = [] }
@@ -212,23 +216,26 @@ export class Wires extends LitElement {
   fail(text: string) { this.setState({ cord: null, toast: { kind: 'err', text } }) }
 
   /** Calls a platform op as the view; a refusal is shown, and returned. */
+  /** The system shown: `system`, or the runtime's registry. */
+  get sys() { return this.system || this.runtime?.registry.id || 'host' }
   async call(op: Op, arg: unknown): Promise<Result> {
-    if (!this.runtime) return { error: 'no runtime' }
-    const r = await this.runtime.call({ registry: this.system, instance: 'wires' }, this.platform, Ops.key(op), arg)
+    const at = this.host ?? this.runtime
+    if (!at) return { error: 'no runtime' }
+    const r = await at.call({ registry: at.registry.id, instance: 'wires' }, this.platform, Ops.key(op), arg)
     if ('error' in r) this.fail(r.error)
     return r
   }
   async connect(from: string, to: string) {
     const a = this.model.P[from]!, b = this.model.P[to]!
-    return this.call(PlatformOps.connect, { system: this.system, source: a.owner, op: Ops.key(a.op), listener: b.owner, target: Ops.key(b.op) })
+    return this.call(PlatformOps.connect, { system: this.sys, source: a.owner, op: Ops.key(a.op), listener: b.owner, target: Ops.key(b.op) })
   }
-  disconnect(id: string) { return this.call(PlatformOps.disconnect, { system: this.system, id }) }
-  removeComponent(instance: string) { return this.call(PlatformOps.removeFromSystem, { instance, system: this.system }) }
+  disconnect(id: string) { return this.call(PlatformOps.disconnect, { system: this.sys, id }) }
+  removeComponent(instance: string) { return this.call(PlatformOps.removeFromSystem, { instance, system: this.sys }) }
   /** Adds a component of `kind` to the rack, under a fresh name; returns the name, or null if refused. */
   async create(kind: string) {
     let n = 1
     while (this.runtime?.registry.get(kind + '-' + n)) n += 1
-    const r = await this.call(PlatformOps.createComponent, { kind, name: kind + '-' + n, system: this.system })
+    const r = await this.call(PlatformOps.createComponent, { kind, name: kind + '-' + n, system: this.sys })
     return 'error' in r ? null : kind + '-' + n
   }
   /** Asks the workspace to open a rack component as a panel again, with the element of the kind it was made from. */

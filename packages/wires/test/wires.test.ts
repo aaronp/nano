@@ -330,3 +330,34 @@ test('the drawer has View and Detail tabs; Detail holds the system tree, in step
   tab('View').click(); await settle()
   expect(root.querySelector('c-platform')).toBeNull()
 })
+
+test('over another system: cords connect in that system, through the platform in host, and picks name that system', async () => {
+  const t = await setup()
+  await t.call(P.createSystem, 'lab')
+  for (const [kind, name] of [['range', 'lr'], ['debounce', 'ld']]) await t.call(P.createComponent, { kind, name, system: 'lab' })
+  const { runtimeOf } = await import('@composable/platform')
+  const lab = runtimeOf(t.host.registry, 'lab')!
+  const el = document.createElement('c-wires') as Wires
+  Object.assign(el, { runtime: lab, host: t.host, catalog })
+  const dock = document.createElement('div')
+  box(dock, 0, 0, 1200, 600)
+  el.append(dock); document.body.append(el)
+  await el.updateComplete
+  expect(el.sys).toBe('lab')
+  el.flipped = true; await el.updateComplete; await tick(); await el.updateComplete
+  const plate = el.shadowRoot!.querySelector('.plate-bg')!
+  plate.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1200, height: 600 }) as DOMRect
+  const at = (key: string) => ({ clientX: el.model.P[key]!.x, clientY: el.model.P[key]!.y })
+  toggleEdit(el)
+  onDown(el, at(k('lr', Range.ops.value)))
+  onMove(el, at(k('ld', { ns: 'composable.bundle/debounce', name: 'enqueue' })))
+  await onUp(el, at(k('ld', { ns: 'composable.bundle/debounce', name: 'enqueue' })))
+  expect(lab.registry.snapshot().subscriptions.some(s => s.source === 'lr' && s.listener === 'ld')).toBe(true)
+  expect(t.host.registry.snapshot().subscriptions.some(s => s.source === 'lr')).toBe(false)
+  toggleEdit(el)
+  const jack = at(k('lr', Range.ops.value))
+  onDown(el, jack); await onUp(el, jack); await tick(); await el.updateComplete
+  expect((await t.call(P.selected, null)).value).toEqual({ system: 'lab', instance: 'lr', op: Ops.key(Range.ops.value) })
+  expect(el.s.picked).toEqual({ system: 'lab', instance: 'lr', op: Ops.key(Range.ops.value) })
+  expect(el.shadowRoot!.querySelector('.detail')!.textContent).toContain('lab / lr')
+})

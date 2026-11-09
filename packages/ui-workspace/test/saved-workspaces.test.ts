@@ -44,3 +44,20 @@ test('mounting one adds a sub-item under Workspaces, and a page with a drawer be
   expect(document.querySelector('app-route[path="/bar"] workspace-dock')!.getAttribute('system')).toBe('host')
   expect(dock.querySelector('template[data-widget="notes"]')).not.toBeNull()
 })
+
+test('a mounted workspace runs in its system: its wiring view over that runtime (platform calls in host), its dock on that registry', async () => {
+  const { Components, Ops, Registries, Runtimes } = await import('@pritzlaff/nano-core')
+  const { platform, PlatformOps: P, runtimeOf } = await import('@composable/platform')
+  const host = Runtimes.create(Registries.create('host'))
+  host.registry.add('platform', Components.instantiate(platform(host, {})))
+  await host.call({ registry: 'host', instance: 't' }, 'platform', Ops.key(P.createSystem), 'lab')
+  document.body.innerHTML = `<app-shell><div slot="nav" data-workspaces></div>
+    <app-route path="/workspace"><div class="ws-page"><c-wires><workspace-dock id="workspace" storage-key="k"></workspace-dock></c-wires></div></app-route></app-shell>`
+  Object.assign(document.querySelector('c-wires')!, { runtime: host })
+  mountWorkspace(document, { path: '/lab', title: 'Lab', icon: 'box', system: 'lab' })
+  const route = document.querySelector('app-route[path="/lab"]')!
+  const wires = route.querySelector('c-wires') as HTMLElement & { runtime?: unknown; host?: unknown }
+  expect(wires.runtime).toBe(runtimeOf(host.registry, 'lab'))
+  expect(wires.host).toBe(host)
+  expect((route.querySelector('workspace-dock') as HTMLElement & { registry?: unknown }).registry).toBe(runtimeOf(host.registry, 'lab')!.registry)
+})

@@ -4,6 +4,8 @@
  * widgets, starting from that layout. Its panels show the same live components (they are named in the layout).
  * Saved ones are mounted at start, before <app-shell> reads its routes.
  */
+import type { Runtime } from '@pritzlaff/nano-core';
+import { runtimeOf } from '@composable/platform';
 import { ICONS, savedWorkspaces, type SavedWorkspace } from '../lib/saved-workspaces.ts';
 
 const icon = (name: string) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] ?? ''}"/></svg>`;
@@ -32,8 +34,11 @@ export function mountWorkspace(doc: Document, ws: SavedWorkspace) {
   pane.className = 'ws-page';
   drawer.setAttribute('for', id);
   const wires = doc.createElement('c-wires'), dock = doc.createElement('workspace-dock');
-  const mainWires = main.closest('c-wires') as (HTMLElement & { runtime?: unknown; catalog?: unknown }) | null;
-  if (mainWires) Object.assign(wires, { runtime: mainWires.runtime, catalog: mainWires.catalog });
+  // its system's runtime, from the platform in the host (Main's wiring view runs over the host)
+  const mainWires = main.closest('c-wires') as (HTMLElement & { runtime?: Runtime; catalog?: unknown }) | null;
+  const host = mainWires?.runtime, rt = host && (runtimeOf(host.registry, ws.system ?? 'host') ?? host);
+  if (mainWires) Object.assign(wires, { runtime: rt, host, catalog: mainWires.catalog });
+  if (rt) Object.assign(dock, { registry: rt.registry });
   dock.id = id;
   dock.setAttribute('label', ws.title);
   dock.setAttribute('storage-key', keyFor(doc, ws.path));
