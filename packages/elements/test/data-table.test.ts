@@ -100,3 +100,17 @@ test('clicking a handle does not sort', async () => {
   handle('name').click(); await settle(d)
   expect(d.shadowRoot!.querySelector('th[data-key="name"]')!.getAttribute('aria-sort')).toBe('none')
 })
+
+test('every handle reports a width before any resize', async () => {
+  const { handle } = await resizable([{ key: 'name', label: 'Name' }, { key: 'status', label: 'Status' }])
+  for (const k of ['name', 'status']) expect(Number(handle(k).getAttribute('aria-valuenow'))).toBeGreaterThan(0)
+})
+
+test('the first resize keeps the other columns at their widths, and the table is as wide as its columns', async () => {
+  const { d, key, now } = await resizable([{ key: 'name', label: 'Name' }, { key: 'status', label: 'Status' }])
+  const before = now('status')
+  await key('name', 'ArrowRight')
+  const cols = [...d.shadowRoot!.querySelectorAll('col')].map(c => (c as HTMLElement).style.width)
+  expect(cols).toEqual([`${now('name')}px`, `${before}px`])
+  expect((d.shadowRoot!.querySelector('table') as HTMLElement).style.width).toBe(`${now('name') + before}px`)
+})

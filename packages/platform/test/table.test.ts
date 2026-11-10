@@ -89,3 +89,13 @@ test('a component created elsewhere appears', async () => {
   await call(P.createComponent, { kind: 'map', name: 'm', system: 'lab' }); await settle()
   expect(rows().some(r => r.system === 'lab' && r.instance === 'm')).toBe(true)
 })
+
+test("the table's colours come from the kit's tokens, with the kit's fallbacks", async () => {
+  const { PlatformTableEl } = await import('../src')
+  const { t } = await import('@pritzlaff/nano-elements')
+  const css = (PlatformTableEl.styles as { cssText: string }[]).at(-1)!.cssText   // its own sheet, after base and kit
+  expect(css).not.toContain('accent-fg')
+  for (const light of ['#2563EB', '#E2E5EA', '#6B7280', '#fff']) expect(css).not.toContain(light)   // no hand-written light fallbacks
+  for (const k of ['accent', 'border', 'muted'] as const) expect(css).toContain(String(t(k)))
+  expect(css).toContain(String(t('on-accent')))
+})

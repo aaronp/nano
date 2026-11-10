@@ -39,11 +39,25 @@ export class NanoDataTable extends LitElement {
     const s = this.sort
     return s ? rows.sort((a, b) => compare(a[s.key], b[s.key]) * s.dir) : rows
   }
-  // a column's width: as resized, else as given, else as laid out (120 when nothing is measured)
-  private widthOf(c: Column) {
-    return this.widths[c.key] ?? c.width ?? ((this.renderRoot.querySelector(`th[data-key="${c.key}"]`) as HTMLElement | null)?.offsetWidth || 120)
+  // widths as laid out, read after each update while no width is fixed (120 when nothing is measured)
+  private measured: Record<string, number> = {}
+  override updated() {
+    if (this.isFixed()) return
+    let moved = false
+    for (const c of this.columns) {
+      const w = (this.renderRoot.querySelector(`th[data-key="${c.key}"]`) as HTMLElement | null)?.offsetWidth || 120
+      if (this.measured[c.key] !== w) { this.measured[c.key] = w; moved = true }
+    }
+    if (moved) this.requestUpdate()   // so each handle reports what it measured
   }
-  private resize(c: Column, px: number) { this.widths = { ...this.widths, [c.key]: Math.max(c.minWidth ?? 60, Math.round(px)) } }
+  private isFixed() { return this.columns.some((c) => (this.widths[c.key] ?? c.width) !== undefined) }
+  // a column's width: as resized, else as given, else as laid out
+  private widthOf(c: Column) { return this.widths[c.key] ?? c.width ?? this.measured[c.key] ?? 120 }
+  private resize(c: Column, px: number) {
+    // the first resize fixes every column where it stands, so the others don't jump
+    const all = this.isFixed() ? this.widths : Object.fromEntries(this.columns.map((x) => [x.key, this.widthOf(x)]))
+    this.widths = { ...all, [c.key]: Math.max(c.minWidth ?? 60, Math.round(px)) }
+  }
   private drag(c: Column, e: PointerEvent) {
     e.preventDefault(); e.stopPropagation()
     const x0 = e.clientX, w0 = this.widthOf(c)
@@ -65,21 +79,21 @@ export class NanoDataTable extends LitElement {
   override render() {
     const all = this.shown, size = this.pageSize || all.length || 1, pages = Math.max(1, Math.ceil(all.length / size))
     const page = Math.min(this.page, pages - 1), rows = all.slice(page * size, page * size + size)
-    const fixed = this.columns.some((c) => (this.widths[c.key] ?? c.width) !== undefined)   // once any width is known, widths hold
+    const fixed = this.isFixed()   // once any width is known, widths hold, and the table is as wide as its columns
+    const total = this.columns.reduce((n, c) => n + this.widthOf(c), this.selectable ? 28 : 0)
     const allPicked = rows.length > 0 && rows.every((r) => this.picked.has(r))
     const head = (c: Column): TemplateResult => {
       const sorted = this.sort?.key === c.key ? (this.sort.dir === 1 ? 'ascending' : 'descending') : undefined
-      const w = this.widths[c.key] ?? c.width
       return html`<th data-key=${c.key} class=${c.align ?? ''} aria-sort=${c.sortable ? sorted ?? 'none' : nothing}>${c.sortable
         ? html`<button @click=${() => this.sortBy(c.key)}>${c.label} ${sorted === 'ascending' ? '↑' : sorted === 'descending' ? '↓' : '↕'}</button>` : c.label}<span
           class="resize" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Resize ${c.label}" aria-valuemin=${c.minWidth ?? 60}
-          aria-valuenow=${w ?? nothing} @pointerdown=${(e: PointerEvent) => this.drag(c, e)} @keydown=${(e: KeyboardEvent) => this.nudge(c, e)}
+          aria-valuenow=${this.widthOf(c)} @pointerdown=${(e: PointerEvent) => this.drag(c, e)} @keydown=${(e: KeyboardEvent) => this.nudge(c, e)}
           @click=${(e: Event) => e.stopPropagation()}></span></th>`
     }
     return html`${this.filter ? html`<input class="input filter" placeholder="Filter…" aria-label="Filter rows" .value=${this.q}
         @input=${(e: Event) => { this.q = (e.target as HTMLInputElement).value; this.page = 0 }}>` : nothing}
-      <div class="frame"><table class="table ${fixed ? 'fixed' : ''}">${fixed ? html`<colgroup>${this.selectable ? html`<col style="width: 28px">` : nothing}
-        ${this.columns.map((c) => { const w = this.widths[c.key] ?? c.width; return html`<col style=${w ? `width: ${w}px` : ''}>` })}</colgroup>` : nothing}<thead><tr>
+      <div class="frame"><table class="table ${fixed ? 'fixed' : ''}" style=${fixed ? `width: ${total}px` : ''}>${fixed ? html`<colgroup>${this.selectable ? html`<col style="width: 28px">` : nothing}
+        ${this.columns.map((c) => html`<col style="width: ${this.widthOf(c)}px">`)}</colgroup>` : nothing}<thead><tr>
         ${this.selectable ? html`<th class="tick"><input type="checkbox" aria-label="Select all" .checked=${allPicked} @click=${() => this.pick(rows, !allPicked)}></th>` : nothing}
         ${this.columns.map(head)}</tr></thead><tbody>
         ${rows.length ? rows.map((r) => html`<tr aria-selected=${this.selectable ? String(this.picked.has(r)) : nothing}>

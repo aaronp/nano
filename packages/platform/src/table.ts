@@ -2,7 +2,7 @@
 // text and pill filters (systems, components) with a count and Clear; clicking an instance selects it.
 import { css, html, nothing } from 'lit'
 import type { Snapshot } from '@pritzlaff/nano-core'
-import { base, kit, ModelElement, providedRegistry, type Column } from '@pritzlaff/nano-elements'
+import { base, kit, ModelElement, providedRegistry, t, type Column } from '@pritzlaff/nano-elements'
 import { PlatformOps as P, type Kind } from './platform'
 import { inventory, matches, UNREGISTERED, type Filters, type Row } from './inventory'
 
@@ -13,10 +13,10 @@ export class PlatformTableEl extends ModelElement {
   static styles = [base, kit, css`
     .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px } .q { flex: 1; min-width: 160px }
     .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; font-size: 11px; line-height: 18px; text-align: center;
-      background: var(--nano-accent, #2563EB); color: var(--nano-accent-fg, #fff) }
+      background: ${t('accent')}; color: ${t('on-accent')} }
     .picks, .options { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; align-items: center }
-    .options { padding: 8px; border: 1px solid var(--nano-border, #E2E5EA); border-radius: var(--nano-radius, 6px) }
-    .group { color: var(--nano-muted, #6B7280); font-size: 12px; margin-right: 2px }
+    .options { padding: 8px; border: 1px solid ${t('border')}; border-radius: ${t('radius')} }
+    .group { color: ${t('muted')}; font-size: 12px; margin-right: 2px }
     .pill { border-radius: 999px; padding: 2px 10px; font-size: 12px } .pick { display: inline-flex; gap: 4px; align-items: center }
     .link { border: 0; padding: 0; background: none; color: inherit; font: inherit; text-decoration: underline dotted; cursor: pointer }`]
   static properties = { ...ModelElement.properties, q: { state: true }, filters: { state: true }, open: { state: true } }
