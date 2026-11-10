@@ -25,6 +25,12 @@ test('the Decision Ledger themes, single-scheme, with their own colours', () => 
   expect(nanoVars('blueprint', 'dark')['--nano-s2']).toBe('#FFB347')
 })
 
+test('a shadcn theme: neutral greys, light and dark', () => {
+  expect(THEMES.shadcn.label).toBe('shadcn'); expect(schemesOf('shadcn')).toEqual(['light', 'dark'])
+  expect(nanoVars('shadcn', 'light')['--nano-accent']).toBe('#171717')
+  expect(nanoVars('shadcn', 'dark')['--nano-bg']).toBe('#0A0A0A')
+})
+
 test('applying a theme sets the --nano-* tokens, and its page background, on the root', () => {
   applyChoice(document, { theme: 'paper', mode: 'system' })
   const root = document.documentElement.style

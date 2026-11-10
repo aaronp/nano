@@ -22,6 +22,10 @@ test('the library has the classes a widget can use', () => {
     expect(cssText).toContain(c)
 })
 
+test('a bare select opens a themed list where the browser allows it', () => {
+  expect(cssText).toMatch(/@supports \(appearance: base-select\) \{[^]*::picker\(select\) \{[^}]*background: var\(--nano-surface/)
+})
+
 test('button labels stay centred, and a pressed or selected tab is marked', () => {
   expect(cssText).toMatch(/button, \.btn \{[^}]*justify-content: center/)
   expect(cssText).toMatch(/\.tabs > button:is\(\[aria-selected='true'\], \[aria-pressed='true'\]\)/)

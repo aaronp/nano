@@ -40,6 +40,14 @@ test('compare shows the primitives once per theme and scheme, each column carryi
   expect(cols.map(c => c.dataset.theme)).toContain('warm/light')
 })
 
+test('each compare column sets its colour scheme, so native pickers match it', async () => {
+  const { $, $$ } = await mount()
+  ;($('[data-compare]') as HTMLInputElement).click(); await tick()
+  const cols = $$('.compare > .theme-col')
+  expect(cols.find(c => c.dataset.theme === 'terminal/dark')!.style.colorScheme).toBe('dark')
+  expect(cols.find(c => c.dataset.theme === 'paper/light')!.style.colorScheme).toBe('light')
+})
+
 test('the page has a Components route, nav item and dock widget for it', async () => {
   const page = await Bun.file(new URL('../public/index.html', import.meta.url)).text()
   expect(page).toContain('<a slot="nav" href="#/components">')

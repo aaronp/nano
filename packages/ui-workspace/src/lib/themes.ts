@@ -39,6 +39,8 @@ import { LEDGER_THEMES } from './ledger-themes.ts';
 
 const SANS = "'IBM Plex Sans', system-ui, sans-serif";
 const MONO = "'IBM Plex Mono', ui-monospace, monospace";
+const GEIST = "Geist, Inter, system-ui, sans-serif";
+const GEIST_MONO = "'Geist Mono', ui-monospace, monospace";
 
 export const THEMES = {
   enterprise: {
@@ -102,6 +104,28 @@ export const THEMES = {
         'appbar-bg': '#00007B', 'appbar-fg': '#FFFFFF', 'drawer-bg': '#C3C3C3',
         font: "Verdana, Tahoma, sans-serif", display: "'Pixelify Sans', Verdana, sans-serif", mono: "'Courier New', monospace",
         radius: '0px', 'card-border': '2px outset #E8E8E8', 'card-shadow': '1px 1px 0 #000', focus: '#00007B',
+      },
+    },
+  },
+  shadcn: {
+    label: 'shadcn',
+    desc: 'Neutral greys, hairline borders, near-black accent.',
+    fonts: ['Geist', 'Geist Mono'],
+    nano: { 'radius-s': '8px', bad: '#DC2626', 'bad-bg': '#FEF2F2' },
+    schemes: {
+      light: {
+        bg: '#FFFFFF', surface: '#FFFFFF', 'surface-2': '#F5F5F5', fg: '#0A0A0A', muted: '#737373', line: '#E5E5E5',
+        accent: '#171717', 'on-accent': '#FAFAFA', 'accent-soft': '#F5F5F5',
+        'appbar-bg': '#FFFFFF', 'appbar-fg': '#0A0A0A', 'drawer-bg': '#FAFAFA',
+        font: GEIST, display: GEIST, mono: GEIST_MONO, radius: '10px',
+        'card-border': '1px solid #E5E5E5', 'card-shadow': '0 1px 2px rgba(0,0,0,.05)', focus: '#A3A3A3',
+      },
+      dark: {
+        bg: '#0A0A0A', surface: '#171717', 'surface-2': '#262626', fg: '#FAFAFA', muted: '#A1A1A1', line: '#262626',
+        accent: '#E5E5E5', 'on-accent': '#171717', 'accent-soft': '#262626',
+        'appbar-bg': '#0A0A0A', 'appbar-fg': '#FAFAFA', 'drawer-bg': '#0A0A0A',
+        font: GEIST, display: GEIST, mono: GEIST_MONO, radius: '10px',
+        'card-border': '1px solid #262626', 'card-shadow': 'none', focus: '#737373',
       },
     },
   },

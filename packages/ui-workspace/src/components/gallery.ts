@@ -34,7 +34,7 @@ export class NanoGallery extends LitElement {
     if (!this.compare) return html`${bar}${TABS[this.tab]![1]()}`;
     const cols = THEME_IDS.flatMap((id) => schemesOf(id).map((s) => ({ id, s, label: `${THEMES[id].label}${schemesOf(id).length > 1 ? ` · ${s}` : ''}`, vars: nanoVars(id, s) })));
     return html`${bar}<div class="compare">${cols.map((c) => html`<div class="theme-col" data-theme=${`${c.id}/${c.s}`}
-      style=${Object.entries(c.vars).map(([k, v]) => `${k}:${v}`).join(';')}><h3 class="display-s">${c.label}</h3>${primitives()}</div>`)}</div>`;
+      style=${`color-scheme:${c.s};` + Object.entries(c.vars).map(([k, v]) => `${k}:${v}`).join(';')}><h3 class="display-s">${c.label}</h3>${primitives()}</div>`)}</div>`;
   }
 }
 

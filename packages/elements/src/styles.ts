@@ -42,6 +42,16 @@ export const base = css`
     border-radius: ${t('radius-s')}; padding: 4px 6px }
   input[type='range'], input[type='checkbox'] { accent-color: ${t('accent')}; padding: 0 }
   .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: ${t('muted')} }
+  /* where the browser allows it, a bare select's open list takes the theme too */
+  @supports (appearance: base-select) {
+    select, ::picker(select) { appearance: base-select }
+    ::picker(select) { background: ${t('surface')}; color: ${t('fg')}; border: 1px solid ${t('border')}; border-radius: ${t('radius-s')};
+      padding: 4px; margin-top: 4px; box-shadow: 0 4px 16px color-mix(in srgb, ${t('bg')} 40%, transparent) }
+    select::picker-icon { color: ${t('muted')} }
+    option { padding: 5px 8px; border-radius: ${t('radius-s')} }
+    option:is(:hover, :focus-visible) { background: ${t('surface-2')}; outline: 0 }
+    option:checked { font-weight: 600 }
+  }
   .meter { height: 6px; border-radius: 3px; background: ${t('surface-2')}; overflow: hidden }
   .meter > span { display: block; height: 100%; background: ${t('accent')} }
 
