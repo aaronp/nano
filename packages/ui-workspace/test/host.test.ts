@@ -92,7 +92,7 @@ test('the nav has a Workspaces group with + and Main, and no component items; Ma
 test('a package\'s catalog joins the running host: the platform can make it, Main\'s dock can add it, its names are taken', async () => {
   const { addCatalog, loadedNames } = await import('../src/composable.ts')
   const { component, state } = await import('@pritzlaff/nano-runes')
-  const Timer = component('nano.template/timer', () => { const s = state({ count: 0 }); return { get count() { return s.count } } })
+  const Timer = component('nano.template/timer', () => { const s = state({ count: 0 }); return { get count() { return s.count } } }, { count: (await import('typebox')).Type.Number({ description: 'The count' }) })
   let changed = 0
   document.addEventListener('catalog:changed', () => { changed++ })
   addCatalog({ timer: { component: Timer, title: 'Timer', tag: 'nano-timer' } }, { name: 'nano-template', url: 'https://x/manifest.json' })
@@ -122,4 +122,9 @@ test('importing a package republishes the platform\'s kinds', async () => {
   addCatalog({ clock: { component: C.create({ ns: 't', name: 'clock' }, () => ({})), title: 'Clock' } }, { name: 'clocks', url: 'https://x/clocks.json' })
   await new Promise(r => setTimeout(r, 0))
   expect(heard.at(-1)?.map(k => k.kind)).toContain('clock')
+})
+
+test('the example wiring still connects, with every op typed and described', () => {
+  const wired = host.registry.snapshot().subscriptions.filter(s => !s.listener.includes('~view') && s.listener !== 'kinds-spy')
+  expect(wired.map(s => `${s.source}→${s.listener}`).sort()).toEqual(['ex-debounce→ex-log', 'ex-input→ex-map', 'ex-map→ex-log', 'ex-range→ex-debounce'])
 })

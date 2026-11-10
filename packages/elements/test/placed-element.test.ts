@@ -1,3 +1,4 @@
+import { Type } from 'typebox'
 import { expect, test } from 'bun:test'
 import { html } from 'lit'
 import { Components, Registries, Runtimes } from '@pritzlaff/nano-core'
@@ -5,7 +6,7 @@ import { component, state } from '@pritzlaff/nano-runes'
 import { PlacedElement, provide } from '../src'
 
 const tick = () => new Promise(r => setTimeout(r, 0))
-const Note = component('test/note', () => { const s = state({ text: 'hi' }); return { get text() { return s.text }, set: (t: string) => { s.text = t } } })
+const Note = component('test/note', () => { const s = state({ text: 'hi' }); return { get text() { return s.text }, set: (t: string) => { s.text = t } } }, { text: Type.String({ description: 'The note' }), set: { in: Type.String(), description: 'Sets the note' } })
 class NoteEl extends PlacedElement {
   static component = Note
   render() { return html`<p>${this.read<string>(Note.ops.text)}</p>` }

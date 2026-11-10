@@ -4,6 +4,8 @@ import { Components, Ops, Registries, Runtimes, type Component, type Op } from '
 import { component, event, state } from '../src'
 
 const tick = () => new Promise(r => setTimeout(r, 0))
+// these tests are about behaviour, not documentation: their components skip schemas on purpose (ops fall back to Unknown)
+const untyped = {} as never
 
 const Counter = component('acme/counter', () => {
   const s = state({ count: 0 })
@@ -11,12 +13,12 @@ const Counter = component('acme/counter', () => {
     get count() { return s.count },
     increment: () => { s.count += 1 },
   }
-})
+}, untyped)
 
 const Log = component('demo/log', () => {
   const s = state({ lines: [] as unknown[] })
   return { get lines() { return s.lines }, log: (x: unknown) => { s.lines.push(x) } }
-})
+}, untyped)
 
 const page = () => {
   const rt = Runtimes.create(Registries.create('page')), reg = rt.registry
@@ -45,7 +47,7 @@ test('ops are known at definition, and listed when an instance is added', () => 
 const Slider = component('demo/slider', () => {
   const s = state({ value: 0 })
   return { get value() { return s.value }, set: (v: number) => { s.value = v } }
-}, { set: Type.Number() })
+}, { value: Type.Number({ description: 'The value' }), set: { in: Type.Number(), description: 'Sets the value' } })
 
 const Debounce = component('demo/debounce', () => {
   const s = state({ ms: 20, batch: [] as unknown[] })
@@ -55,7 +57,7 @@ const Debounce = component('demo/debounce', () => {
     every: (ms: number) => { s.ms = ms },
     in: (x: unknown) => { buffer.push(x); clearTimeout(timer); timer = setTimeout(() => { s.batch = buffer; buffer = [] }, s.ms) },
   }
-})
+}, untyped)
 
 const Table = component('demo/table', () => {
   const s = state({ rows: [] as [number, unknown][] })
@@ -63,7 +65,7 @@ const Table = component('demo/table', () => {
     get csv() { return ['time,value', ...s.rows.map(r => r.join(','))].join('\n') },
     rows: (xs: unknown[]) => { for (const x of xs) s.rows.push([0, x]) },
   }
-})
+}, untyped)
 
 test('slider → debounce (frequency from a second slider) → table', async () => {
   const { add, wire, call } = page()
@@ -84,7 +86,7 @@ test('slider → debounce (frequency from a second slider) → table', async () 
 const Spy = component('demo/spy', () => {
   let n = 0, last: unknown
   return { get seen() { return n }, get last() { return last }, take: (x: unknown) => { n++; last = x } }
-})
+}, untyped)
 const Many = component('demo/many', () => {
   const s = state({ a: 0, b: 0, items: [] as number[] })
   return {
@@ -93,7 +95,7 @@ const Many = component('demo/many', () => {
     touchB: () => { s.b++ },
     push: (x: number) => { s.items.push(x) },
   }
-})
+}, untyped)
 
 test('several writes in one tick publish once; a write that leaves a getter unchanged publishes nothing', async () => {
   const { add, wire, call } = page()
@@ -119,7 +121,7 @@ test('a deep write publishes, and a listener cannot change state through what it
 const Button = component('demo/button', () => {
   const clicked = event(Type.String())
   return { clicked, press: (who: string) => { clicked(who) } }
-})
+}, untyped)
 
 test('event publishes its argument and is not callable from outside', async () => {
   const { add, wire, call } = page()
@@ -150,7 +152,7 @@ const Fragile = component('demo/fragile', () => {
     tag: () => s.tags.get('a'),
     all: () => s.xs,
   }
-})
+}, untyped)
 
 test('a getter that throws during a flush does not stop the other getters', async () => {
   const { add, wire, call } = page()
@@ -175,7 +177,7 @@ test('Map and Date in state are left alone', async () => {
 
 test('each instance has its own state, even from a shared init', async () => {
   const init = { xs: [] as number[] }
-  const Shared = component('demo/shared', () => { const s = state(init); return { get xs() { return s.xs }, push: (x: number) => { s.xs.push(x) } } })
+  const Shared = component('demo/shared', () => { const s = state(init); return { get xs() { return s.xs }, push: (x: number) => { s.xs.push(x) } } }, untyped)
   const { add, call } = page()
   add('a', Shared); add('b', Shared)
   await call('a', Shared.ops.push, 1)
@@ -190,14 +192,14 @@ test('an action returning state returns a copy', async () => {
 })
 
 test('an id needs a namespace', () => {
-  expect(() => component('counter', () => ({}))).toThrow()
+  expect(() => component('counter', () => ({}), untyped)).toThrow()
 })
 
 test('a value written into state is a copy: the caller\'s object is never shared with state', async () => {
   const Holder = component('demo/holder', () => {
     const s = state({ list: [] as number[] })
     return { get list() { return s.list }, set: (l: number[]) => { s.list = l }, push: (x: number) => { s.list.push(x) } }
-  })
+  }, untyped)
   const { add, call } = page()
   add('h', Holder)
   const mine = [1]

@@ -1,10 +1,11 @@
+import { Type } from 'typebox'
 // The Picker: a choice from a list of options; publishes each pick as `changed`.
 import { expect, test } from 'bun:test'
 import { Components, Ops, Registries, Runtimes, type Op } from '@pritzlaff/nano-core'
 import { component } from '@pritzlaff/nano-runes'
 import { Picker } from '../src'
 
-const Spy = component('test/spy', () => { const got: unknown[] = []; return { get got() { return got }, take: (x: unknown) => { got.push(x) } } })
+const Spy = component('test/spy', () => { const got: unknown[] = []; return { get got() { return got }, take: (x: unknown) => { got.push(x) } } }, { got: Type.Array(Type.Unknown(), { description: 'Everything taken' }), take: { in: Type.Unknown({ description: 'Anything' }), description: 'Takes a value' } })
 
 function page() {
   const rt = Runtimes.create(Registries.create('page')), reg = rt.registry
