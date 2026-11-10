@@ -205,3 +205,38 @@ test('a value written into state is a copy: the caller\'s object is never shared
   await call('h', Holder.ops.push, 2)
   expect(mine).toEqual([1])
 })
+
+test('an action spec sets input, output and description', () => {
+  const C = component('t/spec', () => ({ set: (n: number) => n > 0 }), { set: { in: Type.Number(), out: Type.Boolean(), description: 'Sets it' } })
+  expect(C.ops.set.input).toEqual(Type.Number()); expect(C.ops.set.output).toEqual(Type.Boolean())
+  expect(C.ops.set.description).toBe('Sets it')
+})
+
+test("a getter's or event's schema description is its op's description", () => {
+  const C = component('t/getter', () => {
+    const s = state({ n: 1 }), done = event(Type.String())
+    return { get n() { return s.n }, done }
+  }, { n: Type.Number({ description: 'How many' }), done: Type.String({ description: 'Finished, with a note' }) })
+  expect(C.ops.n.description).toBe('How many')
+  expect(C.ops.done.description).toBe('Finished, with a note')
+  expect(C.ops.done.output).toEqual(Type.String({ description: 'Finished, with a note' }))
+})
+
+test('an action given no input takes anything and ignores it; no output is void', () => {
+  const C = component('t/go', () => ({ go: () => {} }), { go: { description: 'Goes' } })
+  expect(Ops.fits(Ops.source('t', 's', Type.String()), C.ops.go)).toBe(true)
+  expect(C.ops.go.output).toEqual(Type.Void())
+})
+
+test("the component's description is kept", () => {
+  expect(component('t/d', () => ({}), {}, { description: 'Does a thing' }).description).toBe('Does a thing')
+})
+
+// type-only: a schema that disagrees with the code is a compile error (tsc proves these)
+const typeChecks = () => {
+  // @ts-expect-error a string schema for a number getter
+  component('t/bad', () => ({ get n() { return 1 } }), { n: Type.String() })
+  // @ts-expect-error a string input for a number parameter
+  component('t/bad2', () => ({ set: (n: number) => { void n } }), { set: { in: Type.String(), description: 'x' } })
+}
+void typeChecks
