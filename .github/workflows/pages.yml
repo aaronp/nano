@@ -31,7 +31,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Test
         run: |
-          for p in core runes elements bundle platform editor wires sdk ui widgets connections puzzle-editor ui-workspace; do (cd packages/$p && bun test --isolate) || exit 1; done   # --isolate: a fresh global per test file, whatever order the OS lists them in
+          for p in core runes elements bundle platform editor wires sdk ui widgets connections ui-workspace; do (cd packages/$p && bun test --isolate) || exit 1; done   # --isolate: a fresh global per test file, whatever order the OS lists them in
       - name: The template, against this commit's libraries
         run: bun scripts/template-check.ts
       - name: Build

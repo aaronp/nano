@@ -79,20 +79,6 @@
         "@happy-dom/global-registrator": "^21.0.4",
       },
     },
-    "packages/puzzle-editor": {
-      "name": "@composable/puzzle-editor",
-      "version": "0.1.0",
-      "devDependencies": {
-        "@happy-dom/global-registrator": "^21.0.4",
-      },
-      "peerDependencies": {
-        "@composable/connections": "workspace:*",
-        "@composable/sdk": "workspace:*",
-        "@composable/ui": "workspace:*",
-        "lit": "^3.0.0",
-        "typebox": "^1.4.0",
-      },
-    },
     "packages/runes": {
       "name": "@pritzlaff/nano-runes",
       "version": "0.2.0",
@@ -175,8 +161,6 @@
     "@composable/editor": ["@composable/editor@workspace:packages/editor"],
 
     "@composable/platform": ["@composable/platform@workspace:packages/platform"],
-
-    "@composable/puzzle-editor": ["@composable/puzzle-editor@workspace:packages/puzzle-editor"],
 
     "@composable/sdk": ["@composable/sdk@workspace:packages/sdk"],
 
