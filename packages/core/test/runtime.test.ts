@@ -30,7 +30,7 @@ test('the registry publishes its own changes as events from itself', async () =>
   const { reg, log, sub } = setup()
   sub('registry', 'composable/instance-added')
   reg.add('c', counter()); await flush()
-  expect(log.value).toEqual([{ type: 'instance-added', instance: 'c', ops: ['com.acme/counter-updated', 'com.acme/inc'] }])
+  expect(log.value).toEqual([{ type: 'instance-added', instance: 'c', ops: ['com.acme/counter-updated', 'com.acme/inc'], component: 'com.acme/counter' }])
 })
 
 test('calling an action runs it, and its emit reaches subscribers', async () => {

@@ -43,7 +43,7 @@ test('a snapshot lists each instance with its ops; unsubscribe and unlisten work
   const { r, seen } = watched()
   r.add('l', thing())
   const s = r.subscribe({ source: '*', op: 't/ping', listener: 'l', target: 't/ping' })
-  expect(r.snapshot()).toEqual({ id: 'r', instances: [{ id: 'l', ops: [Ping] }], subscriptions: [(s as { value: any }).value] })
+  expect(r.snapshot()).toEqual({ id: 'r', instances: [{ id: 'l', component: 't/thing', ops: [Ping] }], subscriptions: [(s as { value: any }).value] })
   expect(isOk(r.unsubscribe((s as { value: { id: string } }).value.id))).toBe(true)
   const n = seen.length, stop = r.listen(() => {}); stop()
   expect(seen.at(-1)!.type).toBe('subscription-closed')
@@ -68,4 +68,30 @@ test('matching keeps subscription order across specific and any-source subscript
   expect(r.matching('a', 't/ping').map(s => s.source)).toEqual(['*', 'a'])
   r.remove('l')
   expect(r.matching('a', 't/ping')).toEqual([])
+})
+
+test("a snapshot names each instance's component and owner", () => {
+  const { r } = watched()
+  r.add('a', thing(), { kind: 'widget', name: 'c-x' }); r.add('b', thing())
+  expect(r.snapshot().instances).toEqual([
+    { id: 'a', component: 't/thing', owner: { kind: 'widget', name: 'c-x' }, ops: [Ping] },
+    { id: 'b', component: 't/thing', ops: [Ping] },
+  ])
+})
+
+test('instance-added carries component and owner', () => {
+  const { r, seen } = watched()
+  r.add('a', thing(), { kind: 'platform', name: 'p' })
+  expect(seen[0]).toEqual({ type: 'instance-added', instance: 'a', ops: ['t/ping'], component: 't/thing', owner: { kind: 'platform', name: 'p' } })
+})
+
+test('owner belongs to the entry: shared instances and re-adds', () => {
+  const r1 = Registries.create('r1'), r2 = Registries.create('r2'), inst = thing()
+  r1.add('a', inst, { kind: 'widget', name: 'w' }); r2.add('a', inst, { kind: 'platform', name: 'p' })
+  expect(r1.snapshot().instances[0]!.owner).toEqual({ kind: 'widget', name: 'w' })
+  expect(r2.snapshot().instances[0]!.owner).toEqual({ kind: 'platform', name: 'p' })
+  r1.remove('a'); r1.add('a', inst, { kind: 'view', name: 'v' })
+  expect(r1.snapshot().instances[0]!.owner).toEqual({ kind: 'view', name: 'v' })
+  r1.remove('a'); r1.add('a', inst)
+  expect(r1.snapshot().instances[0]!.owner).toBeUndefined()
 })

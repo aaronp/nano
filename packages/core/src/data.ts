@@ -50,6 +50,7 @@ export type Subscription = { id: string; source: string; op: string; listener: s
 
 /** A change to a registry, published from the registry itself. */
 export type Delta =
-  | { type: 'instance-added' | 'instance-removed'; instance: string; ops: string[] }
+  | { type: 'instance-added'; instance: string; ops: string[]; component: string; owner?: { kind: string; name: string } }
+  | { type: 'instance-removed'; instance: string; ops: string[] }
   | { type: 'op-added' | 'op-removed'; instance: string; op: string }
   | { type: 'subscription-opened' | 'subscription-closed'; subscription: Subscription }

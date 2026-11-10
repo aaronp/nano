@@ -2,14 +2,18 @@
 import type { Instance } from './component'
 import { err, ok, Ops, type Delta, type Op, type Result, type Subscription } from './data'
 
-/** What a registry holds, as plain data. */
-export type Snapshot = { id: string; instances: { id: string; ops: Op[] }[]; subscriptions: Subscription[] }
+/** Who added an instance to a registry: the one that will remove it (a record only; nothing acts on it). */
+export type Owner = { kind: string; name: string }
+
+/** What a registry holds, as plain data. `component` is the instance's component id, `ns/name`. */
+export type Snapshot = { id: string; instances: { id: string; component: string; owner?: Owner; ops: Op[] }[]; subscriptions: Subscription[] }
 
 /** Stores instances and subscriptions, and tells its listeners about every change as a Delta. */
 export type Registry = {
   id: string
   get(id: string): Instance | undefined
-  add(id: string, inst: Instance): Result<void>
+  /** `owner` belongs to this entry: one instance shared by two registries can have a different owner in each. */
+  add(id: string, inst: Instance, owner?: Owner): Result<void>
   remove(id: string): Result<void>
   subscribe(s: Omit<Subscription, 'id'>): Result<Subscription>
   unsubscribe(id: string): Result<void>
@@ -24,7 +28,7 @@ export type Registry = {
 /** Makes an empty registry. */
 export const Registries = {
   create(id: string): Registry {
-    const instances = new Map<string, Instance>(), subs = new Map<string, Subscription>()
+    const instances = new Map<string, Instance>(), owners = new Map<string, Owner>(), subs = new Map<string, Subscription>()
     const listeners = new Set<(d: Delta) => void>()
     // subscriptions by `source op`, so a publish looks at its matches only; seq keeps them in subscription order
     const index = new Map<string, Set<Subscription>>(), seq = new Map<Subscription, number>()
@@ -32,21 +36,23 @@ export const Registries = {
     const bucket = (source: string, op: string) => index.get(`${source} ${op}`) ?? index.set(`${source} ${op}`, new Set()).get(`${source} ${op}`)!
     const emit = (d: Delta) => listeners.forEach(fn => fn(d))
     const keys = (inst: Instance) => [...inst.actions.keys()]
+    const componentOf = (inst: Instance) => `${inst.component.id.ns}/${inst.component.id.name}`
     const close = (s: Subscription) => { subs.delete(s.id); bucket(s.source, s.op).delete(s); seq.delete(s); emit({ type: 'subscription-closed', subscription: s }) }
     return {
       id,
       get: i => instances.get(i),
-      add(i, inst) {
+      add(i, inst, owner) {
         if (instances.has(i)) return err(`${i} is already in ${id}`)
         instances.set(i, inst)
-        emit({ type: 'instance-added', instance: i, ops: keys(inst) })
+        if (owner) owners.set(i, owner)
+        emit({ type: 'instance-added', instance: i, ops: keys(inst), component: componentOf(inst), ...(owner && { owner }) })
         return ok(undefined)
       },
       remove(i) {
         const inst = instances.get(i)
         if (!inst) return err(`no instance ${i} in ${id}`)
         for (const s of [...subs.values()]) if (s.listener === i) close(s)
-        instances.delete(i)
+        instances.delete(i); owners.delete(i)
         emit({ type: 'instance-removed', instance: i, ops: keys(inst) })
         return ok(undefined)
       },
@@ -71,7 +77,7 @@ export const Registries = {
       matching: (source, op) => [...(index.get(`* ${op}`) ?? []), ...(source === '*' ? [] : index.get(`${source} ${op}`) ?? [])].sort((a, b) => seq.get(a)! - seq.get(b)!),
       snapshot: () => ({
         id,
-        instances: [...instances].map(([i, inst]) => ({ id: i, ops: [...inst.actions.values()].map(a => a.op) })),
+        instances: [...instances].map(([i, inst]) => ({ id: i, component: componentOf(inst), ...(owners.has(i) && { owner: owners.get(i) }), ops: [...inst.actions.values()].map(a => a.op) })),
         subscriptions: [...subs.values()],
       }),
       listen(fn) { listeners.add(fn); return () => { listeners.delete(fn) } },
