@@ -51,3 +51,7 @@ test('in every theme, widget text reads on the widget background (4.5:1)', () =>
     expect(contrast(v['--nano-muted']!, v['--nano-bg']!), `${id}/${s} muted`).toBeGreaterThanOrEqual(4.5)
   }
 })
+
+test('shadcn dark keeps dark reds (its light ones are only for light)', () => {
+  expect(nanoVars('shadcn', 'dark')['--nano-bad-bg']).not.toBe('#FEF2F2')
+})

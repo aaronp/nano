@@ -60,10 +60,10 @@ Elements, defined on import:
 
 | Element | Takes | Emits |
 | --- | --- | --- |
-| `<nano-select>` (`multiple`, `placeholder`) | `options` (strings or `{ value, label?, group?, disabled? }`), `value` (string, or array when multiple) | `change` |
+| `<nano-select>` (`multiple`, `placeholder`, `label`) | `options` (strings or `{ value, label?, group?, disabled? }`), `value` (string, or array when multiple) | `change` |
 | `<nano-command>` | `items` (`{ value, label?, group?, shortcut? }`), `selected` | `pick` (the item) |
 | `<nano-calendar>`, `<nano-date-picker>` | `value` (ISO `YYYY-MM-DD`) | `change` |
-| `<nano-menu>` (wraps content; right-click opens it) | `items` (`{ label, shortcut?, danger?, disabled? }`, `{ separator: true }`, `{ heading }`) | `select` (the item) |
+| `<nano-menu>` (wraps content; right-click opens it) | `items` (`{ label, shortcut?, danger?, disabled? }`, `{ separator: true }`, `{ heading }`) | `pick` (the item) |
 | `<nano-hover-card>` (`open-delay`, `close-delay`) | content, and a `card` slot | |
 | `<nano-data-table>` (`filter`, `selectable`, `page-size`) | `columns` (`{ key, label, sortable?, align?, render? }`), `rows` | `selection` (the rows) |
 | `<nano-code-block>` (`language`) | `code` | |

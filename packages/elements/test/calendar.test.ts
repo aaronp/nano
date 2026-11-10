@@ -36,11 +36,12 @@ test('calendar: clicking a day picks it; the arrows change month; the keyboard m
   $('[aria-label="Previous month"]').click(); $('[aria-label="Previous month"]').click(); await settle(c)
   expect($('.caption').textContent).toBe('October 2026')
   const grid = $('[role="grid"]')
-  key(grid, 'ArrowDown'); await settle(c)                     // focus follows the selection: 12 Nov + 7
-  expect($('[tabindex="0"]').dataset.date).toBe('2026-11-19')
-  expect($('.caption').textContent).toBe('November 2026')
-  key(grid, 'ArrowLeft'); key(grid, 'Enter'); await settle(c)
-  expect(changes).toEqual(['2026-11-12', '2026-11-18'])
+  key(grid, 'ArrowDown'); await settle(c)                     // the keys start from the month on show: 1 Oct + 7
+  expect($('[tabindex="0"]').dataset.date).toBe('2026-10-08')
+  key(grid, 'ArrowUp'); key(grid, 'ArrowUp'); await settle(c)  // and the view follows the focus back a month
+  expect($('.caption').textContent).toBe('September 2026')
+  key(grid, 'Enter'); await settle(c)
+  expect(changes).toEqual(['2026-11-12', '2026-09-24'])
 })
 
 test('date picker: shows the date, opens a calendar, closes on a pick', async () => {

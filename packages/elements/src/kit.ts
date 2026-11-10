@@ -35,10 +35,10 @@ export const kit = css`
   input[type='checkbox'].switch:checked { background: radial-gradient(circle at calc(100% - 9px) 50%, ${t('on-accent')} 6px, transparent 7px), ${t('accent')} }
 
   /* overlays: native <dialog> (showModal()) and [popover] surfaces */
-  dialog.dialog, dialog.drawer { color: ${t('fg')}; background: ${t('surface')}; border: 1px solid ${t('border')}; box-shadow: ${shadow}; padding: 20px }
+  dialog.dialog, dialog.drawer { box-sizing: border-box; color: ${t('fg')}; background: ${t('surface')}; border: 1px solid ${t('border')}; box-shadow: ${shadow}; padding: 20px }
   dialog.dialog { border-radius: ${t('radius')}; width: min(480px, calc(100vw - 32px)) }
   dialog.drawer { margin: 0 0 0 auto; height: 100dvh; max-height: none; width: min(380px, 90vw); border-width: 0 0 0 1px; animation: nano-in-right .2s ease-out }
-  dialog.drawer.bottom { margin: auto 0 0; width: 100vw; max-width: none; height: auto; max-height: 80dvh; border-width: 1px 0 0;
+  dialog.drawer.bottom { margin: auto 0 0; width: 100%; max-width: none; height: auto; max-height: 80dvh; border-width: 1px 0 0;
     border-radius: ${t('radius')} ${t('radius')} 0 0; animation-name: nano-in-up }
   dialog::backdrop { background: color-mix(in srgb, black 50%, transparent) }
   dialog > header { margin-bottom: 12px } dialog > header > h2 { margin: 0 0 4px; font: 600 16px ${t('font-display')} }

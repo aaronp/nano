@@ -62,7 +62,7 @@ export class NanoCommand extends LitElement {
 /** A picker: a trigger showing the choice (chips when `multiple`), opening a filterable list. `value` is a string,
  *  or an array when `multiple`. Emits `change`. */
 export class NanoSelect extends LitElement {
-  static override properties = { options: { attribute: false }, value: { attribute: false }, multiple: { type: Boolean }, placeholder: {}, open: { state: true } }
+  static override properties = { options: { attribute: false }, value: { attribute: false }, multiple: { type: Boolean }, placeholder: {}, label: {}, open: { state: true } }
   static override styles = [base, kit, css`
     :host { display: inline-block; min-width: 180px }
     [role='combobox'] { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-height: 30px; padding: 3px 8px; cursor: pointer;
@@ -71,8 +71,8 @@ export class NanoSelect extends LitElement {
     .chip { padding: 0 2px 0 6px; background: ${t('surface-2')}; border-color: transparent }
     .chip button { border: 0; padding: 0 4px; background: none; color: ${t('muted')} }
     .pop { padding: 0 }`]
-  declare options: (string | Item)[]; declare value: string | string[]; declare multiple: boolean; declare placeholder: string; declare open: boolean
-  constructor() { super(); this.options = []; this.value = ''; this.multiple = false; this.placeholder = 'Select…'; this.open = false }
+  declare options: (string | Item)[]; declare value: string | string[]; declare multiple: boolean; declare placeholder: string; declare label: string; declare open: boolean
+  constructor() { super(); this.options = []; this.value = ''; this.multiple = false; this.placeholder = 'Select…'; this.label = ''; this.open = false }
 
   private get items(): Item[] { return this.options.map((o) => (typeof o === 'string' ? { value: o } : o)) }
   private get chosen(): string[] { return Array.isArray(this.value) ? this.value : this.value ? [this.value] : [] }
@@ -93,7 +93,7 @@ export class NanoSelect extends LitElement {
     this.set(this.chosen.includes(v) ? this.chosen.filter((x) => x !== v) : [...this.chosen, v])
   }
   private onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') this.show(false)
+    if (e.key === 'Escape') { e.preventDefault(); this.show(false) }
     else if (e.target === this.trigger && ['ArrowDown', 'Enter', ' '].includes(e.key)) { e.preventDefault(); this.show(true) }
     else if (e.target === this.trigger && e.key === 'Backspace' && this.multiple && this.chosen.length) this.set(this.chosen.slice(0, -1))
   }
@@ -104,7 +104,7 @@ export class NanoSelect extends LitElement {
       : this.multiple ? chosen.map((v) => html`<span class="chip">${this.labelFor(v)}<button tabindex="-1" aria-label=${`Remove ${this.labelFor(v)}`}
           @click=${(e: Event) => { e.stopPropagation(); this.set(chosen.filter((x) => x !== v)) }}>×</button></span>`)
       : this.labelFor(chosen[0]!)
-    return html`<div role="combobox" tabindex="0" aria-haspopup="listbox" aria-expanded=${String(this.open)} @click=${() => this.show(!this.open)} @keydown=${this.onKey}>
+    return html`<div role="combobox" tabindex="0" aria-label=${this.label || nothing} aria-haspopup="listbox" aria-expanded=${String(this.open)} @click=${() => this.show(!this.open)} @keydown=${this.onKey}>
         ${shown}<svg class="chev" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></div>
       <div class="pop" popover="auto" @toggle=${(e: ToggleEvent) => { if (e.newState === 'closed') this.open = false }} @keydown=${this.onKey}>
         <nano-command .items=${this.items} .selected=${chosen} @pick=${this.onPick}></nano-command></div>`

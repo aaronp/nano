@@ -12,7 +12,7 @@ test('menu: right-click opens it at the pointer; arrows skip separators and disa
   const m = document.querySelector('nano-menu') as El
   m.items = [{ label: 'Rename', shortcut: '⌘R' }, { label: 'Duplicate', disabled: true }, { separator: true }, { label: 'Delete', danger: true }]
   await settle(m)
-  const picked: string[] = []; m.addEventListener('select', (e) => picked.push((e as CustomEvent).detail.label))
+  const picked: string[] = []; m.addEventListener('pick', (e) => picked.push((e as CustomEvent).detail.label))
   document.getElementById('area')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, composed: true, cancelable: true, clientX: 40, clientY: 50 }))
   await settle(m)
   expect(m.open).toBe(true)

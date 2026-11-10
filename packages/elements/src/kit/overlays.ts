@@ -8,9 +8,10 @@ import { hide, place } from './popup'
 
 export type MenuItem = { label: string; value?: string; shortcut?: string; danger?: boolean; disabled?: boolean } | { separator: true } | { heading: string }
 const pickable = (i: MenuItem): i is Extract<MenuItem, { label: string }> => 'label' in i && !i.disabled
+let menus = 0
 const define = (tag: string, cls: CustomElementConstructor) => { if (globalThis.customElements && !customElements.get(tag)) customElements.define(tag, cls) }
 
-/** Wraps content; right-clicking it opens `items` at the pointer. Emits `select` (detail: the item). */
+/** Wraps content; right-clicking it opens `items` at the pointer. Emits `pick` (detail: the item). */
 export class NanoMenu extends LitElement {
   static override properties = { items: { attribute: false }, open: { type: Boolean, reflect: true }, active: { state: true } }
   static override styles = [base, kit, css`:host { display: contents } [role='menu'] { outline: 0; min-width: 12rem }`]
@@ -19,6 +20,7 @@ export class NanoMenu extends LitElement {
     super(); this.items = []; this.open = false; this.active = -1
     this.addEventListener('contextmenu', (e) => { e.preventDefault(); this.show({ x: e.clientX, y: e.clientY }) })
   }
+  private uid = `m${++menus}`
   private get menu() { return this.renderRoot.querySelector('[role="menu"]') as HTMLElement }
 
   /** Opens the menu at a point in the viewport. */
@@ -30,7 +32,7 @@ export class NanoMenu extends LitElement {
   close() { this.open = false; hide(this.menu) }
   private pick(i: MenuItem | undefined) {
     if (!i || !pickable(i)) return
-    this.dispatchEvent(new CustomEvent('select', { detail: i, bubbles: true, composed: true })); this.close()
+    this.dispatchEvent(new CustomEvent('pick', { detail: i, bubbles: true, composed: true })); this.close()
   }
   private onKey(e: KeyboardEvent) {
     const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0
@@ -41,15 +43,15 @@ export class NanoMenu extends LitElement {
         if (pickable(this.items[i]!)) { this.active = i; break }
       }
     } else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.pick(this.items[this.active]) }
-    else if (e.key === 'Escape') this.close()
+    else if (e.key === 'Escape') { e.preventDefault(); this.close() }
   }
 
   override render() {
-    return html`<slot></slot><div class="pop" popover="auto" role="menu" tabindex="-1" @keydown=${this.onKey}
+    return html`<slot></slot><div class="pop" popover="auto" role="menu" tabindex="-1" aria-activedescendant=${this.active >= 0 ? `${this.uid}-${this.active}` : nothing} @keydown=${this.onKey}
       @toggle=${(e: ToggleEvent) => { if (e.newState === 'closed') this.open = false }}>
       ${this.items.map((i, n) => 'separator' in i ? html`<div class="menu-sep" role="separator"></div>`
         : 'heading' in i ? html`<div class="menu-label">${i.heading}</div>`
-        : html`<div role="menuitem" class="menu-item ${i.danger ? 'danger' : ''} ${n === this.active ? 'active' : ''}" aria-disabled=${i.disabled ? 'true' : nothing}
+        : html`<div role="menuitem" id=${`${this.uid}-${n}`} class="menu-item ${i.danger ? 'danger' : ''} ${n === this.active ? 'active' : ''}" aria-disabled=${i.disabled ? 'true' : nothing}
             @pointermove=${() => { if (!i.disabled) this.active = n }} @click=${() => this.pick(i)}>${i.label}${i.shortcut ? html`<span class="shortcut">${i.shortcut}</span>` : nothing}</div>`)}</div>`
   }
 }

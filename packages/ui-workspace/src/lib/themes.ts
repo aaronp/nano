@@ -111,7 +111,7 @@ export const THEMES = {
     label: 'shadcn',
     desc: 'Neutral greys, hairline borders, near-black accent.',
     fonts: ['Geist', 'Geist Mono'],
-    nano: { 'radius-s': '8px', bad: '#DC2626', 'bad-bg': '#FEF2F2' },
+    nano: { 'radius-s': '8px' },
     schemes: {
       light: {
         bg: '#FFFFFF', surface: '#FFFFFF', 'surface-2': '#F5F5F5', fg: '#0A0A0A', muted: '#737373', line: '#E5E5E5',

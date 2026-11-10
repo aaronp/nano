@@ -31,7 +31,9 @@ export class NanoCalendar extends LitElement {
     const d = parse(this.value)
     if (changed.has('value') && d) { this.view = { y: d.getFullYear(), m: d.getMonth() }; this.focusDate = this.value }
   }
-  private shift(n: number) { const d = new Date(this.view.y, this.view.m + n, 1); this.view = { y: d.getFullYear(), m: d.getMonth() } }
+  private shift(n: number) { const d = new Date(this.view.y, this.view.m + n, 1); this.view = { y: d.getFullYear(), m: d.getMonth() }; this.focusDate = iso(d) }
+  /** Focuses the day the keyboard starts from. */
+  override focus() { (this.renderRoot.querySelector('[tabindex="0"]') as HTMLElement | null)?.focus() }
   private pick(date: string) {
     this.value = date
     this.dispatchEvent(new Event('change', { bubbles: true, composed: true }))
@@ -52,7 +54,7 @@ export class NanoCalendar extends LitElement {
     const first = new Date(y, m, 1)
     const days = Array.from({ length: 42 }, (_, i) => new Date(y, m, 1 - first.getDay() + i))
     const today = iso(new Date())
-    const focus = this.focusDate && parse(this.focusDate)!.getMonth() === m ? this.focusDate : iso(first)
+    const focus = this.focusDate.startsWith(`${y}-${pad(m + 1)}-`) ? this.focusDate : iso(first)
     return html`<div class="head">
         <button class="icon-btn" aria-label="Previous month" @click=${() => this.shift(-1)}>${chevron('M10 4L6 8l4 4')}</button>
         <span class="caption" aria-live="polite">${first.toLocaleString('en', { month: 'long' })} ${y}</span>
@@ -94,7 +96,7 @@ export class NanoDatePicker extends LitElement {
         <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M2 6.5h12M5 1.5v3M11 1.5v3" stroke="currentColor" stroke-width="1.3"/></svg>
         ${d ? d.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' }) : html`<span class="muted">${this.placeholder}</span>`}</button>
       <div class="pop" popover="auto" role="dialog" aria-label="Choose a date" @toggle=${(e: ToggleEvent) => { if (e.newState === 'closed') this.open = false }}
-        @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this.show(false) }}>
+        @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); this.show(false) } }}>
         <nano-calendar .value=${this.value} @change=${this.onChange}></nano-calendar></div>`
   }
 }
