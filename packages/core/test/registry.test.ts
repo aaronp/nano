@@ -95,3 +95,12 @@ test('owner belongs to the entry: shared instances and re-adds', () => {
   r1.remove('a'); r1.add('a', inst)
   expect(r1.snapshot().instances[0]!.owner).toBeUndefined()
 })
+
+test("a snapshot and instance-added carry the component's description, when it has one", () => {
+  const { r, seen } = watched()
+  const c = Components.create({ ns: 't', name: 'd' }, () => ({}), { description: 'Described' })
+  r.add('d', Components.instantiate(c)); r.add('a', thing())
+  expect(r.snapshot().instances[0]!.description).toBe('Described')
+  expect('description' in r.snapshot().instances[1]!).toBe(false)
+  expect((seen[0] as { description?: string }).description).toBe('Described')
+})

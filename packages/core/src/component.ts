@@ -14,6 +14,8 @@ export type Action<A> = { op: Op; run?: Run<A>; emits?: Op[] }
 /** A definition: how to make an A, and the actions over it. */
 export type Component<A = any> = {
   id: { ns: string; name: string }
+  /** What the component is for, in a sentence. */
+  description?: string
   make(env: Environment): A
   actions: Map<string, Action<A>>
   action<I extends TSchema | undefined, O extends TSchema | undefined>(op: Op<I, O>, run?: Run<A, StaticOf<I>, StaticOf<O>>, opts?: { emits?: Op[] }): 'added' | 'replaced'
@@ -33,10 +35,10 @@ async function run<A>(inst: Instance<A>, key: string, arg: unknown): Promise<Res
 
 /** Makes components, instances of them, and invokes their actions. */
 export const Components = {
-  create<A>(id: { ns: string; name: string }, make: (env: Environment) => A): Component<A> {
+  create<A>(id: { ns: string; name: string }, make: (env: Environment) => A, opts: { description?: string } = {}): Component<A> {
     const actions = new Map<string, Action<A>>()
     return {
-      id, make, actions,
+      id, make, actions, ...(opts.description !== undefined && { description: opts.description }),
       action(op, run, opts) {
         const had = actions.has(Ops.key(op))
         actions.set(Ops.key(op), { op, run: run as Run<A>, emits: opts?.emits })

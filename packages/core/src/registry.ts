@@ -6,7 +6,7 @@ import { err, ok, Ops, type Delta, type Op, type Result, type Subscription } fro
 export type Owner = { kind: string; name: string }
 
 /** What a registry holds, as plain data. `component` is the instance's component id, `ns/name`. */
-export type Snapshot = { id: string; instances: { id: string; component: string; owner?: Owner; ops: Op[] }[]; subscriptions: Subscription[] }
+export type Snapshot = { id: string; instances: { id: string; component: string; description?: string; owner?: Owner; ops: Op[] }[]; subscriptions: Subscription[] }
 
 /** Stores instances and subscriptions, and tells its listeners about every change as a Delta. */
 export type Registry = {
@@ -37,6 +37,7 @@ export const Registries = {
     const emit = (d: Delta) => listeners.forEach(fn => fn(d))
     const keys = (inst: Instance) => [...inst.actions.keys()]
     const componentOf = (inst: Instance) => `${inst.component.id.ns}/${inst.component.id.name}`
+    const about = (inst: Instance) => (inst.component.description === undefined ? {} : { description: inst.component.description })
     const close = (s: Subscription) => { subs.delete(s.id); bucket(s.source, s.op).delete(s); seq.delete(s); emit({ type: 'subscription-closed', subscription: s }) }
     return {
       id,
@@ -45,7 +46,7 @@ export const Registries = {
         if (instances.has(i)) return err(`${i} is already in ${id}`)
         instances.set(i, inst)
         if (owner) owners.set(i, owner)
-        emit({ type: 'instance-added', instance: i, ops: keys(inst), component: componentOf(inst), ...(owner && { owner }) })
+        emit({ type: 'instance-added', instance: i, ops: keys(inst), component: componentOf(inst), ...about(inst), ...(owner && { owner }) })
         return ok(undefined)
       },
       remove(i) {
@@ -77,7 +78,7 @@ export const Registries = {
       matching: (source, op) => [...(index.get(`* ${op}`) ?? []), ...(source === '*' ? [] : index.get(`${source} ${op}`) ?? [])].sort((a, b) => seq.get(a)! - seq.get(b)!),
       snapshot: () => ({
         id,
-        instances: [...instances].map(([i, inst]) => ({ id: i, component: componentOf(inst), ...(owners.has(i) && { owner: owners.get(i) }), ops: [...inst.actions.values()].map(a => a.op) })),
+        instances: [...instances].map(([i, inst]) => ({ id: i, component: componentOf(inst), ...about(inst), ...(owners.has(i) && { owner: owners.get(i) }), ops: [...inst.actions.values()].map(a => a.op) })),
         subscriptions: [...subs.values()],
       }),
       listen(fn) { listeners.add(fn); return () => { listeners.delete(fn) } },
