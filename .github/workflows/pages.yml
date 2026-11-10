@@ -1,10 +1,12 @@
-# Builds the ui-workspace host and publishes it to GitHub Pages.
+# Tests everything and builds the ui-workspace host; on master, publishes it to GitHub Pages.
+# Pull requests run the same tests and build (so a merge can't break master), but don't deploy.
 # One-time setup: repository Settings → Pages → Source: "GitHub Actions".
 name: Pages
 
 on:
   push:
     branches: [master]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -13,9 +15,10 @@ permissions:
   id-token: write
 
 # One deployment at a time; a newer push replaces a queued one but never cancels one in progress.
+# A pull request has its own group, and a newer push to it cancels its older run.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.ref) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -34,12 +37,15 @@ jobs:
       - name: Build
         working-directory: packages/ui-workspace
         run: bun run build
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: packages/ui-workspace/public
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:

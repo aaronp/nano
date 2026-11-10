@@ -3,6 +3,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
 
+await import('../src/boot-theme.ts')   // as main.ts does first: the theme is on <html> before any element upgrades
 const page = await Bun.file(new URL('../public/index.html', import.meta.url)).text()
 document.body.innerHTML = page.slice(page.indexOf('<body>') + 6, page.indexOf('</body>'))
 const { catalog } = await import('../src/composable.ts')
