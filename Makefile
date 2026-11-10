@@ -1,4 +1,4 @@
-.PHONY: test install ui dev puzzle packages smoke publish template-check template-export
+.PHONY: test install ui dev packages smoke publish template-check template-export
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
@@ -20,11 +20,6 @@ ui:
 dev:
 	cd packages/ui-workspace && bun run build
 	(cd packages/ui-workspace && bun run dev) & trap 'kill $$!' EXIT; bun scripts/serve.ts packages/ui-workspace/public $(PORT) --live
-
-# The puzzle editor: the same host, on its Connections page.
-puzzle:
-	@echo "Puzzle editor: http://localhost:$(PORT)/#/connections"
-	@$(MAKE) --no-print-directory ui PORT=$(PORT)
 
 # Build the published packages (@pritzlaff/nano-core, -runes, -elements) into packages/*/dist, ready for npm.
 packages:

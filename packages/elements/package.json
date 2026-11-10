@@ -1,6 +1,6 @@
 {
   "name": "@pritzlaff/nano-elements",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "Lit elements over core components: show and drive a model, or place a component by name.",
   "exports": { ".": "./src/index.ts" },

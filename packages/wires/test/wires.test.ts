@@ -299,6 +299,8 @@ test('clicking a jack on the back selects its action, and Detail shows its op, s
   expect(card).toContain('source')
   expect(card).toContain('"type": "number"')
   expect(card).toContain('r.value → d.enqueue')
+  expect(card).toContain(Range.ops.value.description!)   // what it is, then each schema's description and examples
+  expect(card).toContain('e.g. 50')
 })
 
 test('clicking a panel selects its component: coordinates, kind, jacks and connections', async () => {
@@ -323,7 +325,8 @@ test('the drawer has View and Detail tabs; Detail holds the system tree, in step
   expect(root.querySelector('.detail')!.textContent).toContain('Click a panel')
   const tree = root.querySelector('c-platform') as HTMLElement & { updateComplete: Promise<boolean> }
   for (let i = 0; i < 4; i++) { await tree.updateComplete; await settle() }
-  ;(tree.shadowRoot!.querySelector('[data-component="host/d"]') as HTMLButtonElement).click()
+  const rows = tree.shadowRoot!.querySelector('nano-tree')!.shadowRoot!
+  ;(rows.querySelector('[data-id="c:host/d"] > .line') as HTMLElement).click()
   for (let i = 0; i < 3; i++) await settle()
   expect(el.s.picked).toEqual({ system: 'host', instance: 'd' })
   expect(root.querySelector('.detail')!.textContent).toContain('host / d')

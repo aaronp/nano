@@ -1,12 +1,16 @@
 // The named types: built-ins first, then the ones made here. Selecting one hands it, with its look, to whoever listens.
 import { Type } from 'typebox'
 import { component, event, state } from '@pritzlaff/nano-runes'
+import { TypeEntrySchema, rename } from './schemas'
 import { brandOf, builtins, isBuiltin, titleOf, type TypeEntry } from '../model'
+
+const title = Type.String({ description: 'A type title', examples: ['Point'] })
+const Picked = Type.Union([TypeEntrySchema, Type.Null()], { description: 'The type selected, or null when let go' })
 
 /** The list of types, and which one is selected (by title). */
 export const TypeList = component('composable.editor/type-list', () => {
   const s = state({ custom: [] as TypeEntry[], selected: undefined as string | undefined })
-  const typeSelected = event()
+  const typeSelected = event<typeof Picked>()
   const all = () => [...builtins(), ...s.custom]
   const find = (title: string) => {
     const e = all().find(e => titleOf(e.type) === title)
@@ -44,4 +48,15 @@ export const TypeList = component('composable.editor/type-list', () => {
       s.custom = s.custom.map(e => (titleOf(e.type) === title ? entry : e))
     },
   }
-})
+}, {
+  types: Type.Array(TypeEntrySchema, { description: 'Built-in types first, then the ones made here' }),
+  selected: Type.Optional(Type.String({ description: 'The selected type, by title', examples: ['Point'] })),
+  typeSelected: Picked,
+  set: { in: Type.Array(TypeEntrySchema, { description: 'The types; built-ins are skipped' }), description: 'Replaces the custom types, letting go of the selection' },
+  add: { in: title, description: 'Adds an empty record type' },
+  rename: { in: rename, description: 'Renames a custom type' },
+  copyAsBrand: { in: rename, description: 'Copies a type under a new name, as a distinct (branded) type' },
+  remove: { in: title, description: 'Removes a custom type' },
+  select: { in: title, description: 'Selects a type, publishing typeSelected' },
+  update: { in: TypeEntrySchema, description: 'Takes back an edited type, replacing the one with its title' },
+}, { description: 'The named types (built-ins first) and which one is selected' })

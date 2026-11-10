@@ -21,4 +21,14 @@ export const Timer = component('nano.template/timer', () => {
     reset: () => { s.count = 0 },
     setInterval: (ms: number) => { s.interval = ms; run() },
   }
-}, { setInterval: Type.Number({ minimum: 10, maximum: 2 ** 31 - 1 }) })   // longer delays are clamped to ~1ms by timers
+}, {
+  count: Type.Integer({ minimum: 0, description: 'Ticks since the last reset', examples: [0, 42] }),
+  running: Type.Boolean({ description: 'Whether it is counting', examples: [true] }),
+  interval: Type.Number({ description: 'ms between ticks', examples: [1000] }),
+  tick: Type.Integer({ minimum: 1, description: 'Each new count, as it happens', examples: [1, 2, 3] }),
+  start: { description: 'Starts counting; does nothing if running' },
+  stop: { description: 'Stops counting' },
+  reset: { description: 'Sets the count back to 0' },
+  // longer delays are clamped to ~1ms by timers
+  setInterval: { in: Type.Number({ minimum: 10, maximum: 2 ** 31 - 1, description: 'ms between ticks', examples: [250, 1000] }), description: 'Changes how often it ticks' },
+}, { description: 'A clock you can start, stop and reset; it publishes each count' })

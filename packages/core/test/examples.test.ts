@@ -116,7 +116,7 @@ test('register an op at runtime', async () => {
   g.env.register(Later)
   await flush()
   expect(watcher.value).toEqual([
-    { type: 'instance-added', instance: 'g', ops: ['com.acme/born'] },
+    { type: 'instance-added', instance: 'g', ops: ['com.acme/born'], component: 'com.acme/grower' },
     { type: 'op-added', instance: 'g', op: 'com.acme/later' },
   ])
 })

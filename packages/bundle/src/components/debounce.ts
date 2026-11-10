@@ -27,4 +27,14 @@ export const Debounce = component('composable.bundle/debounce', () => {
       maxTimer ??= setTimeout(flush, s.maxWait)
     },
   }
-}, { setQuiet: Type.Number({ minimum: 0 }), setMaxWait: Type.Number({ minimum: 0 }) })
+}, {
+  quiet: Type.Number({ description: 'How long, in ms, the queue must be quiet before it flushes', examples: [300] }),
+  maxWait: Type.Number({ description: 'The longest, in ms, a value waits before a flush', examples: [1000] }),
+  pending: Type.Number({ description: 'How many values are waiting', examples: [3] }),
+  queued: Type.Array(Type.Object({ value: Type.Unknown({ description: 'The value' }), at: Type.Number({ description: 'When it arrived, ms since the epoch' }) }),
+    { description: 'The waiting values, oldest first' }),
+  flushed: Type.Array(Type.Unknown(), { description: 'A batch of queued values, oldest first', examples: [[1, 2, 3]] }),
+  setQuiet: { in: Type.Number({ minimum: 0, description: 'ms', examples: [300] }), description: 'Sets the quiet period' },
+  setMaxWait: { in: Type.Number({ minimum: 0, description: 'ms', examples: [1000] }), description: 'Sets the longest wait' },
+  enqueue: { in: Type.Unknown({ description: 'Any value', examples: [42] }), description: 'Queues a value for the next batch' },
+}, { description: 'Queues values and publishes them as one batch, after a quiet period or at most max wait' })

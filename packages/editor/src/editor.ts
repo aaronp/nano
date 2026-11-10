@@ -16,7 +16,7 @@ export const editorIds = (prefix = 'editor'): Ids =>
 export function addEditor(registry: Registry, prefix = 'editor'): Ids {
   const ids = editorIds(prefix)
   const add = (id: string, c: Component) => {
-    const r = registry.add(id, Components.instantiate(c))
+    const r = registry.add(id, Components.instantiate(c), { kind: 'editor', name: prefix })
     if ('error' in r) throw new Error(r.error)
   }
   add(ids.list, ComponentList); add(ids.types, TypeList); add(ids.typeEditor, TypeEditor); add(ids.board, ConnectionBoard)

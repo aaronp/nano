@@ -29,8 +29,11 @@ bun run preview   # build and serve dist/ at http://localhost:4000 (the preview 
 ## Adding a component
 
 1. `src/<thing>.ts`: the component. Its id is `<namespace>/<thing>`, in this package's namespace (the examples use
-   `nano.template/…`; a host refuses ids that clash with its own). Give every action that takes an argument a
-   typebox schema in the third argument, with the bounds it needs: hosts call actions with untrusted values.
+   `nano.template/…`; a host refuses ids that clash with its own). The third argument has an entry for every
+   member: a getter or event gets a typebox schema with a `description`; an action gets `{ in?, out?, description }`,
+   with `in` carrying the bounds it needs (hosts call actions with untrusted values). Add `examples` wherever a value
+   means something, and a `{ description }` fourth argument for the component. `test/described.test.ts` fails
+   until every op is described: it is how the host's views (the Systems tree, the Detail card) explain your ops.
 2. `test/<thing>.test.ts`: the component through a runtime, as `test/timer.test.ts` does (place it in a
    registry, call ops by `Ops.key(op)`, subscribe a spy to its events).
 3. `src/<thing>-el.ts`: the element. `test/<thing>-el.test.ts`: render it in the happy-dom page (preloaded by

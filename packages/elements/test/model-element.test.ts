@@ -9,7 +9,7 @@ const tick = () => new Promise(r => setTimeout(r, 0))
 const Counter = component('test/counter', () => {
   const s = state({ count: 0 })
   return { get count() { return s.count }, add: (n: number) => { if (n < 0) throw new Error('no negatives'); s.count += n } }
-}, { add: Type.Number() })
+}, { count: Type.Number({ description: 'The count' }), add: { in: Type.Number(), description: 'Adds to the count' } })
 
 class CountEl extends ModelElement {
   render() { return html`<b>${this.read<number>(Counter.ops.count)}</b><i>${this.problem ?? ''}</i>` }
@@ -62,4 +62,10 @@ test('mounting adds exactly one view', async () => {
   await tick(); await el.updateComplete
   expect(added).toBe(1)
   el.remove()
+})
+
+test("an element's hidden view instance is owned by the element, as a view", async () => {
+  const { reg } = await mount()
+  const view = reg.snapshot().instances.find(i => i.id.startsWith('counter~view'))!
+  expect(view.owner).toEqual({ kind: 'view', name: 'count-el' })
 })

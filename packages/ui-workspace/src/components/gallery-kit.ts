@@ -1,6 +1,6 @@
 // The gallery's kit samples: pickers and inputs, overlays, data, and the agent pieces (@pritzlaff/nano-elements).
 import { html } from 'lit';
-import { toast, type Column, type MenuItem, type Span, type TestResults, type ToolPart } from '@pritzlaff/nano-elements';
+import { toast, type Column, type MenuItem, type Span, type TestResults, type ToolPart, type TreeNode } from '@pritzlaff/nano-elements';
 
 const KINDS = ['range', 'input', 'log', 'map', 'filter', 'debounce'];
 const GROUPED = [{ value: 'range', group: 'Inputs' }, { value: 'input', group: 'Inputs' }, { value: 'log', group: 'Outputs' }, { value: 'map', group: 'Transforms' },
@@ -58,9 +58,29 @@ const ROWS = [{ name: 'ex-range', kind: 'range', status: 'running', events: 1204
 const TONE: Record<string, string> = { running: 'good', failed: 'bad', idle: '' };
 const COLUMNS: Column[] = [{ key: 'name', label: 'Name', sortable: true }, { key: 'kind', label: 'Kind', sortable: true },
   { key: 'status', label: 'Status', render: (r) => html`<span class="badge ${TONE[r.status as string]}">${r.status}</span>` }, { key: 'events', label: 'Events', sortable: true, align: 'right' }];
+// systems → components → actions, as in the Systems view; a shared component says where else it is
+const action = (sys: string, c: string, name: string, input: string, output: string): TreeNode =>
+  ({ id: `${sys}/${c}/${name}`, label: name, kind: 'action', terms: [input, output], body: html`<span class="mono">${input} → ${output}</span>` });
+const PAYMENTS = (sys: string) => [action(sys, 'payments', 'authorise', 'PaymentRequest', 'Authorisation'), action(sys, 'payments', 'refund', 'RefundRequest', 'RefundResult')];
+const IDENTITY = (sys: string) => [action(sys, 'identity', 'authenticate', 'Credentials', 'Session'), action(sys, 'identity', 'resolve', 'SubjectId', 'Profile')];
+const comp = (sys: string, id: string, label: string, actions: TreeNode[], shared = 0): TreeNode =>
+  ({ id: `${sys}/${id}`, label, kind: 'component', badge: shared ? `↗ ${shared} systems` : undefined, children: actions });
+const TREE: TreeNode[] = [
+  { id: 'commerce', label: 'Commerce', kind: 'system', count: 3, children: [comp('commerce', 'payments', 'Payments', PAYMENTS('commerce'), 2), comp('commerce', 'identity', 'Identity', IDENTITY('commerce'), 3),
+    comp('commerce', 'orders', 'Orders', [action('commerce', 'orders', 'placeOrder', 'OrderRequest', 'Order')])] },
+  { id: 'billing', label: 'Billing', kind: 'system', count: 2, children: [comp('billing', 'payments', 'Payments', PAYMENTS('billing'), 2), comp('billing', 'identity', 'Identity', IDENTITY('billing'), 3)] },
+  { id: 'portal', label: 'Customer portal', kind: 'system', count: 1, children: [comp('portal', 'identity', 'Identity', IDENTITY('portal'), 3)] },
+  { id: 'analytics', label: 'Analytics', kind: 'system', count: 0 },
+];
+/** Sets the sibling tree's query. */
+const query = (e: Event) => { const i = e.target as HTMLInputElement; (i.parentElement!.querySelector('nano-tree') as HTMLElement & { query: string }).query = i.value; };
+
 export const data = () => html`<div class="sample col">
   <div class="kicker">Data table</div>
   <nano-data-table filter selectable page-size="5" .columns=${COLUMNS} .rows=${ROWS}></nano-data-table>
+  <div class="kicker">Tree</div>
+  <div class="card col" style="max-width:520px"><input class="input" type="search" aria-label="Filter the tree" placeholder="Filter systems, components, actions, types…" @input=${query}>
+    <nano-tree open-depth="1" .nodes=${TREE}></nano-tree></div>
   <div class="kicker">Avatars, badges, keys</div>
   <div class="row"><span class="avatar small">AP</span><span class="avatar">NC</span><span class="avatar large">RU</span>
     <span class="avatar-stack"><span class="avatar">AP</span><span class="avatar">CL</span><span class="avatar">+3</span></span>

@@ -60,3 +60,57 @@ test('page-size splits rows into pages', async () => {
   $('[aria-label="Next page"]').click(); await settle(d)
   expect(names()).toEqual(['ex-map', 'ex-input'])
 })
+
+const resizable = async (cols: Record<string, unknown>[]) => {
+  document.body.innerHTML = '<nano-data-table></nano-data-table>'
+  const d = document.querySelector('nano-data-table') as El
+  d.columns = cols; d.rows = ROWS; await settle(d)
+  const handle = (k: string) => d.shadowRoot!.querySelector(`th[data-key="${k}"] .resize`) as HTMLElement
+  const key = async (k: string, key: string) => { handle(k).dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })); await settle(d) }
+  return { d, handle, key, now: (k: string) => Number(handle(k).getAttribute('aria-valuenow')) }
+}
+
+test('a column resizes from its handle with the keyboard', async () => {
+  const { handle, key, now } = await resizable([{ key: 'name', label: 'Name', width: 150 }, { key: 'status', label: 'Status' }])
+  expect(handle('name').getAttribute('role')).toBe('separator')
+  expect(handle('name').getAttribute('aria-label')).toBe('Resize Name')
+  expect(now('name')).toBe(150)
+  await key('name', 'ArrowRight'); expect(now('name')).toBe(160)
+  await key('name', 'ArrowLeft'); await key('name', 'ArrowLeft'); expect(now('name')).toBe(140)
+})
+
+test('a column resizes by dragging its handle', async () => {
+  const { d, handle, now } = await resizable([{ key: 'name', label: 'Name', width: 150 }])
+  handle('name').dispatchEvent(new PointerEvent('pointerdown', { clientX: 100, bubbles: true }))
+  window.dispatchEvent(new PointerEvent('pointermove', { clientX: 150 }))
+  window.dispatchEvent(new PointerEvent('pointerup', { clientX: 150 })); await settle(d)
+  expect(now('name')).toBe(200)
+  window.dispatchEvent(new PointerEvent('pointermove', { clientX: 300 })); await settle(d)
+  expect(now('name')).toBe(200)   // released: moving no longer resizes
+})
+
+test('a column never shrinks below its minimum', async () => {
+  const { key, now } = await resizable([{ key: 'name', label: 'Name', width: 90, minWidth: 80 }])
+  await key('name', 'ArrowLeft'); await key('name', 'ArrowLeft')
+  expect(now('name')).toBe(80)
+})
+
+test('clicking a handle does not sort', async () => {
+  const { d, handle } = await resizable([{ key: 'name', label: 'Name', sortable: true, width: 150 }])
+  handle('name').click(); await settle(d)
+  expect(d.shadowRoot!.querySelector('th[data-key="name"]')!.getAttribute('aria-sort')).toBe('none')
+})
+
+test('every handle reports a width before any resize', async () => {
+  const { handle } = await resizable([{ key: 'name', label: 'Name' }, { key: 'status', label: 'Status' }])
+  for (const k of ['name', 'status']) expect(Number(handle(k).getAttribute('aria-valuenow'))).toBeGreaterThan(0)
+})
+
+test('the first resize keeps the other columns at their widths, and the table is as wide as its columns', async () => {
+  const { d, key, now } = await resizable([{ key: 'name', label: 'Name' }, { key: 'status', label: 'Status' }])
+  const before = now('status')
+  await key('name', 'ArrowRight')
+  const cols = [...d.shadowRoot!.querySelectorAll('col')].map(c => (c as HTMLElement).style.width)
+  expect(cols).toEqual([`${now('name')}px`, `${before}px`])
+  expect((d.shadowRoot!.querySelector('table') as HTMLElement).style.width).toBe(`${now('name') + before}px`)
+})

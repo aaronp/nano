@@ -4,9 +4,6 @@ A micro-frontend platform.
 
 View it [here](https://aaronp.github.io/nano/)
 
-Packages include `@composable/sdk`, `@composable/connections` (connections as data, and an orchestrator) and
-`@composable/puzzle-editor` (a puzzle-style editor for types, components and connections, hosted by `ui-workspace`).
-
 ## Published packages
 
 `@pritzlaff/nano-core` (ops, components, registries, runtimes), `@pritzlaff/nano-runes` (components written as

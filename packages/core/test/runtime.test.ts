@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { Components, err, isOk, Ops, Registries, RegistryOps, Runtimes, type Policy } from '../src'
+import { Components, err, isOk, Ops, Registries, RegistryOps, Runtimes, type Policy, type Op } from '../src'
 
 const flush = () => new Promise(r => setTimeout(r, 0))
 const Updated = Ops.source('com.acme', 'counter-updated', Type.Number())
@@ -30,7 +30,7 @@ test('the registry publishes its own changes as events from itself', async () =>
   const { reg, log, sub } = setup()
   sub('registry', 'composable/instance-added')
   reg.add('c', counter()); await flush()
-  expect(log.value).toEqual([{ type: 'instance-added', instance: 'c', ops: ['com.acme/counter-updated', 'com.acme/inc'] }])
+  expect(log.value).toEqual([{ type: 'instance-added', instance: 'c', ops: ['com.acme/counter-updated', 'com.acme/inc'], component: 'com.acme/counter' }])
 })
 
 test('calling an action runs it, and its emit reaches subscribers', async () => {
@@ -175,4 +175,16 @@ test('a refused publish is traced with its error', async () => {
   await rt.notify({ from: { registry: 'r', instance: 'c' }, op: 'com.acme/nope', data: 1 })
   expect(seen).toHaveLength(1)
   expect(seen[0]).toMatchObject({ kind: 'publish', op: 'com.acme/nope', result: { error: expect.any(String) } })
+})
+
+// an Unknown schema with nothing said about it: what the guard rejects (a described Unknown is a deliberate "anything")
+const undescribedAny = (s: unknown) => !!s && typeof s === 'object' && !['type', 'anyOf', 'oneOf', 'allOf', '$ref', 'const', 'enum', 'not', 'description'].some(k => k in s)
+
+test('every registry op has a description and no undescribed Unknown', () => {
+  const ops = [...Object.values(RegistryOps).filter(o => 'ns' in o), ...Object.values(RegistryOps.deltas)] as Op[]
+  expect(ops.length).toBe(11)
+  for (const op of ops) {
+    expect(op.description, Ops.key(op)).toBeTruthy()
+    for (const s of [op.input, op.output]) if (s) expect(undescribedAny(s), `${Ops.key(op)} ${JSON.stringify(s)}`).toBe(false)
+  }
 })

@@ -13,7 +13,7 @@ import { provide } from '@pritzlaff/nano-elements'
 import { catalog as bundle, Debounce, defineBundle, Input, Log, Map, Range } from '@composable/bundle'
 import { catalog as editor } from '@composable/editor'
 import type { Catalog } from '@pritzlaff/nano-elements'
-import { definePlatform, platform, PlatformOps as P } from '@composable/platform'
+import { definePlatform, definePlatformTable, platform, PlatformOps as P } from '@composable/platform'
 import { defineElements as defineEditor } from '@composable/editor/elements'
 import { defineWires } from '@composable/wires'
 
@@ -23,7 +23,7 @@ export const catalog: Catalog = { ...bundle, ...editor }
 /** The page's runtime and its registry, `host`. */
 export const host = Runtimes.create(Registries.create('host'))
 provide(document, host.registry)
-host.registry.add('platform', Components.instantiate(platform(host, catalog)))
+host.registry.add('platform', Components.instantiate(platform(host, catalog)), { kind: 'app', name: 'ui-workspace' })
 
 const ask = async (op: Op, arg: unknown) => {
   const r = await host.call({ registry: 'host', instance: 'workspace' }, 'platform', Ops.key(op), arg)
@@ -69,6 +69,7 @@ export function addCatalog(entries: Catalog, from: { name: string; url: string }
     t.dataset.package = from.name; t.dataset.packageUrl = from.url
     if (dock.addTemplate) dock.addTemplate(t); else dock.append(t)   // not defined yet: read when it connects
   }
+  void ask(P.catalogChanged, null)   // views of the platform hear the new kinds
   document.dispatchEvent(new CustomEvent('catalog:changed', { detail: from }))
 }
 
@@ -80,7 +81,7 @@ document.addEventListener('wires:open-panel', e => {
 })
 
 defineBundle()
-definePlatform()
+definePlatform(); definePlatformTable()
 defineEditor()
 defineWires()
 // the wiring view over the Workspace dock: it shows and edits the host system, and offers the merged catalog

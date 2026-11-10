@@ -96,6 +96,7 @@
         <!-- @composable components, added at runtime: each panel places a new instance and removes it on close.
              composable.ts adds one per catalog kind that has an element, before these. -->
         <template data-widget="c-platform" data-title="Systems"><c-platform></c-platform></template>
+        <template data-widget="c-platform-table" data-title="Instances"><c-platform-table></c-platform-table></template>
         <template data-widget="c-editor" data-title="Puzzle editor"><editor-page></editor-page></template>
         <template data-widget="nano-gallery" data-title="Components gallery"><nano-gallery></nano-gallery></template>
       </workspace-dock>
@@ -111,6 +112,7 @@
       <p>Move the range: its values queue in the debounce and land in the log as a batch. Type a number into the input and press Enter: the map doubles it into the log. Select an action in the tree, then connect it to one that fits.</p>
     </header>
     <section class="panel"><c-platform></c-platform></section>
+    <section class="panel"><h2>Instances</h2><c-platform-table></c-platform-table></section>
     <div class="cards composable-row">
       <section class="panel"><h2>Range</h2><c-range name="ex-range"></c-range></section>
       <section class="panel"><h2>Debounce</h2><c-debounce name="ex-debounce"></c-debounce></section>

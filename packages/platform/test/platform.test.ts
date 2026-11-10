@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { Components, Ops, Registries, Runtimes, type Op, type Snapshot } from '@pritzlaff/nano-core'
 import { catalog, Log, Range } from '@composable/bundle'
+import type { Catalog } from '@pritzlaff/nano-elements'
 import { platform, PlatformOps as P, runtimeOf } from '../src'
 
 const tick = () => new Promise(r => setTimeout(r, 0))
@@ -97,4 +98,37 @@ test('runtimeOf finds a system\'s runtime through the platform', async () => {
   expect(runtimeOf(host.registry, 'lab')!.registry.id).toBe('lab')
   expect(runtimeOf(host.registry, 'host')).toBe(host)
   expect(runtimeOf(host.registry, 'nope')).toBeUndefined()
+})
+
+test('components the platform creates or adds are owned by the platform', async () => {
+  const { host, call } = setup()
+  await call(P.createSystem, 'lab')
+  await call(P.createComponent, { kind: 'range', name: 'r', system: 'host' })
+  await call(P.addToSystem, { instance: 'r', from: 'host', to: 'lab' })
+  const owner = { kind: 'platform', name: 'platform' }
+  expect(host.registry.snapshot().instances.find(i => i.id === 'r')!.owner).toEqual(owner)
+  expect(runtimeOf(host.registry, 'lab')!.registry.snapshot().instances.find(i => i.id === 'r')!.owner).toEqual(owner)
+})
+
+const idOf = (c: { id: { ns: string; name: string } }) => `${c.id.ns}/${c.id.name}`
+
+test('kinds lists each catalog kind with its component id, title and tag', async () => {
+  const { call } = setup()
+  const kinds = (await call(P.kinds)).value as any[]
+  expect(kinds.map(k => k.kind)).toEqual(Object.keys(catalog))
+  const r = catalog.range!
+  expect(kinds.find(k => k.kind === 'range')).toEqual({ kind: 'range', component: idOf(r.component), title: r.title, ...(r.tag && { tag: r.tag }), description: r.component.description })
+})
+
+test('after catalog-changed, a kind added to the catalog object is published in kinds', async () => {
+  const host = Runtimes.create(Registries.create('host')), mine: Catalog = { ...catalog }
+  host.registry.add('platform', Components.instantiate(platform(host, mine)))
+  const heard: any[][] = []
+  const spy = Components.create({ ns: 't', name: 'spy' }, () => heard)
+  spy.action(Ops.sink('t', 'take', P.kinds.output!), (h, x) => { h.push(x as any[]) })
+  host.registry.add('spy', Components.instantiate(spy))
+  host.registry.subscribe({ source: 'platform', op: Ops.key(P.kinds), listener: 'spy', target: 't/take' })
+  mine.extra = { component: Components.create({ ns: 't', name: 'extra' }, () => ({})), title: 'Extra' }
+  await host.call({ registry: 'host', instance: 'test' }, 'platform', Ops.key(P.catalogChanged), null); await tick()
+  expect(heard.at(-1)!.find(k => k.kind === 'extra')).toEqual({ kind: 'extra', component: 't/extra', title: 'Extra' })
 })

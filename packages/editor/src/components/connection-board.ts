@@ -1,6 +1,8 @@
 // Pieces on a grid, and the connections they make. The board only publishes connections; it never applies them.
 import { Ops } from '@pritzlaff/nano-core'
+import { Type } from 'typebox'
 import { component, state } from '@pritzlaff/nano-runes'
+import { CellSchema, ConnectionSchema, PieceSchema } from './schemas'
 import { connectionsOf, pieceAt, type Cell, type Piece } from '../model/board'
 
 /** The board: its pieces, and the connections derived from them. */
@@ -32,4 +34,14 @@ export const ConnectionBoard = component('composable.editor/connection-board', (
       s.pieces = s.pieces.filter(p => !(p.instance === component && Ops.key(p.op) === op))
     },
   }
-})
+}, {
+  pieces: Type.Array(PieceSchema, { description: 'Every piece on the board' }),
+  connections: Type.Array(ConnectionSchema, { description: 'The connections the pieces make' }),
+  set: { in: Type.Array(PieceSchema, { description: 'The pieces; one per cell' }), description: 'Replaces the pieces' },
+  place: { in: PieceSchema, description: 'Places a piece on a free cell' },
+  move: { in: Type.Object({ from: CellSchema, to: CellSchema }, { description: 'From one cell to a free one' }), description: 'Moves a piece' },
+  takeOff: { in: CellSchema, description: 'Takes the piece off a cell' },
+  removeInstance: { in: Type.String({ description: 'An instance id', examples: ['ex-range'] }), description: "Takes off all of an instance's pieces" },
+  removeOp: { in: Type.Object({ component: Type.String({ description: 'An instance id' }), op: Type.String({ description: 'An op key' }) }, { description: 'One op of one instance' }),
+    description: 'Takes off the pieces of one op of one instance' },
+}, { description: 'Pieces on a grid, and the connections they make' })

@@ -85,3 +85,8 @@ test('a bare Component accepts any component', () => {
   const mixed: Component[] = [Components.create({ ns: 'a', name: 'n' }, () => 1), Components.create({ ns: 'a', name: 's' }, () => 'x')]
   expect(mixed).toHaveLength(2)
 })
+
+test('a component keeps its description', () => {
+  expect(Components.create({ ns: 't', name: 'c' }, () => ({}), { description: 'A thing' }).description).toBe('A thing')
+  expect('description' in Components.create({ ns: 't', name: 'c' }, () => ({}))).toBe(false)
+})

@@ -5,7 +5,7 @@ import { Components, Ops, type Component, type Environment, type Op } from '@pri
 /** The instance whose `make` is running: what state writes mark dirty, and where events publish. */
 type Making = { dirty(): void; env?: Environment }
 let making: Making | undefined
-const EVENT = Symbol('event')
+const EVENT: unique symbol = Symbol('event')
 type EventMark = { schema?: TSchema; bind(op: Op): void }
 
 const copy = (json: string | undefined) => (json === undefined ? undefined : JSON.parse(json))
@@ -47,7 +47,7 @@ export function state<T extends object>(init: T): T {
 }
 
 /** A source that is not state, such as a click: calling it publishes a copy of its argument. */
-export function event<S extends TSchema = TUnknown>(schema?: S): (data: Static<S>) => void {
+export function event<S extends TSchema = TUnknown>(schema?: S): ((data: Static<S>) => void) & { readonly [EVENT]: EventMark } {
   const m = inMake('event')
   let op: Op | undefined
   const fire = (data: Static<S>) => { if (op && m.env) void m.env.notify(op, copy(JSON.stringify(data))) }
@@ -64,17 +64,41 @@ function run<A>(make: () => A, m: Making): A {
 
 type Kind = 'getter' | 'event' | 'action'
 
+/** An action's types and what it does. No `in`: it takes anything and ignores it. No `out`: it returns nothing. */
+export type ActionSpec = { in?: TSchema; out?: TSchema; description: string }
+type Fn = (...a: any[]) => any
+/** What `component()` takes for each key: a schema for a getter or event (its output), a spec for an action. */
+export type Schemas<A> = { [K in keyof A]: A[K] extends { readonly [EVENT]: EventMark } ? TSchema : A[K] extends Fn ? ActionSpec : TSchema }
+type Arg<V> = V extends (d: infer D) => any ? D : never
+// each given schema must agree with the code: a getter's schema describes its value, an action's `in` its argument
+type Agrees<V, S> =
+  // [V] keeps a union whole: every member must agree, not just one
+  [V] extends [{ readonly [EVENT]: EventMark }] ? (S extends TSchema ? (unknown extends Arg<V> ? S : [Arg<V>] extends [Static<S>] ? S : 'schema does not match the event type') : S)
+  : [V] extends [Fn] ? (S extends { in: infer I extends TSchema } ? ([Static<I>] extends [Parameters<V>[0]] ? S : { in: 'does not match the parameter type' }) : S)
+  : S extends TSchema ? ([V] extends [Static<S> | (S extends { '~optional': true } ? undefined : never)] ? S : 'schema does not match the getter type') : S   // every value it returns fits the schema
+type Checked<A, S> = { [K in keyof S]: K extends keyof A ? Agrees<A[K], S[K]> : never }
+
+const IGNORED = Type.Unknown({ description: 'Ignored: any value triggers it' })
+const isSchema = (v: unknown): v is TSchema => !!v && typeof v === 'object' && '~kind' in v
+const about = (s?: TSchema) => { const d = (s as { description?: string } | undefined)?.description; return d === undefined ? {} : { description: d } }
+
 /**
  * A component from a function returning its surface: functions become actions, getters become sources published
  * when their value changes, and `event()` members become sources. `make` runs once here to read the shape.
  */
-export function component<A extends object>(id: string, make: () => A, schemas: { [K in keyof A]?: TSchema } = {}): Component<A> & { ops: { [K in keyof A]: Op } } {
+export function component<A extends object, S extends Schemas<A> = Schemas<A>>(id: string, make: () => A, schemas: S & Checked<A, S>,
+  opts: { description?: string } = {}): Component<A> & { ops: { [K in keyof A]: Op } } {
   const kinds = new Map<string, Kind>(), ops: Record<string, Op> = {}
   for (const [k, d] of Object.entries(Object.getOwnPropertyDescriptors(run(make, { dirty() {} })))) {
-    const given = (schemas as Record<string, TSchema | undefined>)[k], mark = d.value?.[EVENT] as EventMark | undefined
-    if (d.get) { kinds.set(k, 'getter'); ops[k] = Ops.source(id, k, given ?? Type.Unknown()) }
-    else if (mark) { kinds.set(k, 'event'); ops[k] = Ops.source(id, k, given ?? mark.schema ?? Type.Unknown()) }
-    else if (typeof d.value === 'function') { kinds.set(k, 'action'); ops[k] = Ops.action(id, k, given ?? Type.Unknown(), Type.Unknown()) }
+    const given = (schemas as Record<string, TSchema | ActionSpec | undefined>)[k], mark = d.value?.[EVENT] as EventMark | undefined
+    const schema = isSchema(given) ? given : undefined
+    if (d.get) { kinds.set(k, 'getter'); const out = schema ?? Type.Unknown(); ops[k] = Ops.source(id, k, out, about(out)) }
+    else if (mark) { kinds.set(k, 'event'); const out = schema ?? mark.schema ?? Type.Unknown(); ops[k] = Ops.source(id, k, out, about(out)) }
+    else if (typeof d.value === 'function') {
+      kinds.set(k, 'action')
+      const spec: Partial<ActionSpec> = (given as ActionSpec | undefined) ?? {}
+      ops[k] = Ops.action(id, k, spec.in ?? IGNORED, spec.out ?? Type.Void(), spec.description === undefined ? {} : { description: spec.description })
+    }
   }
   const getters = [...kinds].filter(([, kind]) => kind === 'getter').map(([k]) => k)
   const at = id.lastIndexOf('/')
@@ -96,7 +120,7 @@ export function component<A extends object>(id: string, make: () => A, schemas: 
     for (const k of getters) { try { last.set(k, read(k)) } catch {} }
     for (const [k, kind] of kinds) if (kind === 'event') ((api as any)[k][EVENT] as EventMark).bind(ops[k]!)
     return api
-  })
+  }, opts)
   for (const [k, kind] of kinds) {
     if (kind === 'getter') c.action(ops[k]!, a => copy(JSON.stringify((a as any)[k])))
     else if (kind === 'event') c.action(ops[k]!)

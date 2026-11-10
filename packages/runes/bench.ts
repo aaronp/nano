@@ -45,7 +45,7 @@ for (const [getters, items] of [[1, 10], [10, 10], [100, 10], [1, 1000], [10, 10
     const api: Record<string, unknown> = { bump: () => { s.n++ } }
     for (let g = 0; g < getters; g++) Object.defineProperty(api, `g${g}`, { get: () => (g === 0 ? s.n : s.items), enumerable: true })
     return api
-  })
+  }, {})
   const rt = Runtimes.create(Registries.create('r')); rt.registry.add('c', Components.instantiate(C))
   await time(`runes write+flush: ${getters} getters, ${items} items`, 2000, async () => { await rt.call(me, 'c', 'b/many/bump', null); await Promise.resolve() })
 }

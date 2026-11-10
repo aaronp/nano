@@ -1,3 +1,4 @@
+import { Type } from 'typebox'
 // The Timer: ticks while running and publishes each count; start, stop, reset and a checked interval.
 import { expect, test } from 'bun:test'
 import { Components, Ops, Registries, Runtimes, type Op } from '@pritzlaff/nano-core'
@@ -5,7 +6,7 @@ import { component } from '@pritzlaff/nano-runes'
 import { Timer } from '../src'
 
 const tick = (ms: number) => new Promise(r => setTimeout(r, ms))
-const Spy = component('test/spy', () => { const got: unknown[] = []; return { get got() { return got }, take: (x: unknown) => { got.push(x) } } })
+const Spy = component('test/spy', () => { const got: unknown[] = []; return { get got() { return got }, take: (x: unknown) => { got.push(x) } } }, { got: Type.Array(Type.Unknown(), { description: 'Everything taken' }), take: { in: Type.Unknown({ description: 'Anything' }), description: 'Takes a value' } })
 
 /** A page with one Timer `t`, calls by op, and what its `tick` published. */
 function page() {

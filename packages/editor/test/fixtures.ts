@@ -1,3 +1,4 @@
+import { Type } from 'typebox'
 // A page to test components on: a registry with a runtime, and a spy that records what it is sent.
 import { Components, Ops, Registries, Runtimes, type Component, type Op } from '@pritzlaff/nano-core'
 import { component } from '@pritzlaff/nano-runes'
@@ -7,7 +8,7 @@ export const tick = () => new Promise(r => setTimeout(r, 0))
 const Spy = component('test/spy', () => {
   const got: unknown[] = []
   return { get got() { return got }, take: (x: unknown) => { got.push(x) } }
-})
+}, { got: Type.Array(Type.Unknown(), { description: 'Everything taken' }), take: { in: Type.Unknown({ description: 'Anything' }), description: 'Takes a value' } })
 
 export const page = () => {
   const rt = Runtimes.create(Registries.create('page')), reg = rt.registry

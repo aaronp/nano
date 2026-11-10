@@ -65,3 +65,10 @@ test('pieces leave the board when their op is removed, or their component drops 
   await call(ids.list, L.ops.set, [demo.slider]); await tick()
   expect((await value(ids.board, B.ops.pieces)).map((p: any) => p.instance)).toEqual(['slider'])
 })
+
+test("the editor's instances are owned by the editor, named by its prefix", () => {
+  const p = page(); addEditor(p.reg, 'ed')
+  const owners = p.reg.snapshot().instances.filter(i => i.id.startsWith('ed-')).map(i => i.owner)
+  expect(owners).toHaveLength(4)
+  for (const o of owners) expect(o).toEqual({ kind: 'editor', name: 'ed' })
+})

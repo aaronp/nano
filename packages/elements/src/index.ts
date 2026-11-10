@@ -10,3 +10,4 @@ export { NanoMenu, NanoHoverCard, NanoToaster, NanoCodeBlock, toast, type MenuIt
 export { NanoDataTable, type Column } from './kit/data-table'
 export { NanoTool, NanoTask, NanoSubagent, NanoCli, type ToolPart, type Task, type TaskItem, type Subagent, type Run } from './agent/parts'
 export { NanoTrace, NanoTestResults, type Span, type TestCase, type TestResults } from './agent/timeline'
+export { NanoTree, type TreeNode } from './kit/tree'

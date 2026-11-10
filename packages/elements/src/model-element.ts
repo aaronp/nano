@@ -48,7 +48,7 @@ export abstract class ModelElement extends LitElement {
       const key = Ops.key(a.op)   // ponytail: two watched instances of one component would share a key
       view.action(Ops.sink('composable.editor/view', key, Type.Unknown()), (el, data) => { el.#values.set(key, data); el.requestUpdate() })
     }
-    reg.add(id, Components.instantiate(view))
+    reg.add(id, Components.instantiate(view), { kind: 'view', name: this.localName })
     for (const [i, a] of sources) reg.subscribe({ source: i, op: Ops.key(a.op), listener: id, target: `composable.editor/view/${Ops.key(a.op)}` })
     this.#view = { id, handle: reg.get(id)!.env.handles()[0]!, registry: reg }
     // read what each holds now: sources with a reader answer a call
