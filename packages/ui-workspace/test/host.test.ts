@@ -6,6 +6,7 @@ import { expect, test } from 'bun:test'
 const { Ops } = await import('@pritzlaff/nano-core')
 const { Debounce, Log, Range } = await import('@composable/bundle')
 const { PlatformOps: P } = await import('@composable/platform')
+await import('../src/boot-theme.ts')   // as main.ts does first: the theme is on <html> before any element upgrades
 const page = await Bun.file(new URL('../public/index.html', import.meta.url)).text()
 // the page first, as in a browser (module scripts run after parsing): composable.ts adds the dock's entries to it
 document.body.innerHTML = page.slice(page.indexOf('<body>') + 6, page.indexOf('</body>'))
