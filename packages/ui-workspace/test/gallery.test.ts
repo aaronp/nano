@@ -20,7 +20,7 @@ const mount = async () => {
 
 test('the tabs show the primitives, type and colour, layouts and live widgets', async () => {
   const { $, $$, tab } = await mount()
-  expect($$('.bar [role="tab"]').map(t => t.textContent!.trim())).toEqual(['Primitives', 'Type & colour', 'Layouts', 'Live'])
+  expect($$('.bar [role="tab"]').map(t => t.textContent!.trim())).toEqual(['Primitives', 'Pickers & inputs', 'Overlays', 'Data', 'Agent', 'Type & colour', 'Layouts', 'Live'])
   for (const c of ['.btn.primary', '.badge.good', '.chip', '.pill', '.card', '.alert.bad', '.field', '.meter', '.table', '.tabs']) expect($('.sample ' + c), c).not.toBeNull()
   await tab('Type & colour')
   expect($$('.swatch').length).toBeGreaterThanOrEqual(20)
@@ -29,6 +29,20 @@ test('the tabs show the primitives, type and colour, layouts and live widgets', 
   expect($$('[data-layout]').map(l => l.dataset.layout)).toEqual(['cards', 'list', 'form', 'dashboard', 'table'])
   await tab('Live')
   expect(['ex-range', 'ex-debounce', 'ex-log', 'ex-input', 'ex-map'].every(n => $('[name="' + n + '"]'))).toBe(true)
+})
+
+test('the kit tabs show the pickers, overlays, data and agent pieces', async () => {
+  const { $, tab } = await mount()
+  const has = (sels: string[]) => { for (const s of sels) expect($(s), s).not.toBeNull() }
+  await tab('Pickers & inputs')
+  has(['nano-select:not([multiple])', 'nano-select[multiple]', 'nano-date-picker', 'nano-calendar', 'nano-command', '.input-group', '.toggle-group', 'input.switch', 'select'])
+  await tab('Overlays')
+  has(['dialog.dialog', 'dialog.drawer', 'dialog.drawer.bottom', 'nano-hover-card', 'nano-menu', '[data-toast]'])
+  ;($('[data-open="demo-dialog"]') as HTMLElement).click()
+  await tab('Data')
+  has(['nano-data-table', '.avatar-stack', '.bubble.mine', '.kbd', 'nano-code-block'])
+  await tab('Agent')
+  has(['nano-subagent', 'nano-tool', 'nano-task', 'nano-cli', 'nano-trace', 'nano-test-results'])
 })
 
 test('compare shows the primitives once per theme and scheme, each column carrying its own tokens', async () => {
