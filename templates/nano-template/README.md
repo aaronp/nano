@@ -4,17 +4,22 @@ A package of components for nano hosts, built on the published
 [`@pritzlaff/nano-core`](https://www.npmjs.com/package/@pritzlaff/nano-core), `nano-runes` and `nano-elements`.
 Its build is a module plus a `manifest.json`; a host imports the package by the manifest's URL.
 
-It ships one example to start from: a **Timer** (`src/timer.ts`), which counts while running and publishes each
-count as `tick`, and its element `<nano-timer>` (`src/timer-el.ts`).
+It ships two examples to start from:
+
+- a **Timer** (`src/timer.ts`), which counts while running and publishes each count as `tick`, and its element
+  `<nano-timer>` (`src/timer-el.ts`), built from the component library's buttons, badge and input group;
+- a **Picker** (`src/picker.ts`), one choice from a list of options (`pick`, `setOptions`), published as `changed`,
+  and its element `<nano-picker label="…">` (`src/picker-el.ts`), which shows it in the kit's filterable
+  `<nano-select>`.
 
 ## Make it yours
 
 Use this repository as a template (GitHub's "Use this template"), then rename:
 
 1. `package.json`: `name`, `description`, `version`.
-2. Component ids: `nano.template/timer` → `your.name/thing`. The namespace must be yours: a host refuses a
+2. Component ids: `nano.template/timer` and `nano.template/picker` → `your.name/thing`. The namespace must be yours: a host refuses a
    package whose ids clash with ones it already has.
-3. Element tags: `nano-timer` → `your-thing` (custom element names need a dash), in `src/index.ts`'s catalog.
+3. Element tags: `nano-timer` and `nano-picker` → `your-thing` (custom element names need a dash), in `src/index.ts`'s catalog.
 4. Catalog kinds and titles in `src/index.ts`.
 
 ## Develop
@@ -39,14 +44,16 @@ is a `PlacedElement` from `@pritzlaff/nano-elements`, which places the component
   `define()` (defines the elements). `@pritzlaff/nano-*`, `lit` and `typebox` are left as bare imports: the host
   provides them, so everything shares one copy.
 - **`dist/index.html`**: a preview that runs the components on their own, with an import map to those shared
-  packages on esm.sh.
+  packages on esm.sh, a theme picker (a few themes' `--nano-*` tokens, from `preview/themes.ts`) and the kit on
+  show, so you see your elements as a host would.
 
 ## Looks and skins
 
 The component is the work; its element is a thin UI. Style elements with the `--nano-*` tokens (the contract in
 `@pritzlaff/nano-elements`' README: colours, fonts, radius, series), with fallbacks, so they take on any host's
-theme. From `@pritzlaff/nano-elements` 0.2.0, extend its `base` stylesheet for the shared component library
-(`.btn`, `.badge`, `.card`, `.field`, `.table`…).
+theme. Use `@pritzlaff/nano-elements`' stylesheets for the shared component library: `base` (`.btn`, `.badge`,
+`.card`, `.field`, `.table`…) and `kit` (`.input-group`, `.avatar`, `.toggle`…), and its kit elements
+(`<nano-select>`, `<nano-date-picker>`, `<nano-data-table>`, `toast()`…), as the Timer and Picker do.
 
 A **skin** is another element set over the same components: same component ids and ops, so a host's connections
 don't change when it swaps the UI. Ship it as a second catalog (say `catalogCompact`, with its own tags and a

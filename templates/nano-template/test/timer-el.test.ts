@@ -33,6 +33,19 @@ test('<nano-timer> shows the count; Start, Stop, Reset and the interval field dr
   expect(el.shadowRoot!.querySelector('.count')!.textContent).toBe('0')
 })
 
+test('<nano-timer> uses the component library: a primary Start, a running badge, the interval in an input group', async () => {
+  document.body.innerHTML = '<nano-timer name="t2"></nano-timer>'
+  const el = document.querySelector('nano-timer') as El
+  await settle(el)
+  expect(button(el, 'Start').classList.contains('primary')).toBe(true)
+  expect(el.shadowRoot!.querySelector('.badge')!.textContent).toBe('stopped')
+  expect(el.shadowRoot!.querySelector('.input-group input[type=number]')).not.toBeNull()
+  expect(el.shadowRoot!.querySelector('.input-group .addon')!.textContent).toBe('ms')
+  button(el, 'Start').click(); await settle(el)
+  expect(el.shadowRoot!.querySelector('.badge.good')!.textContent).toBe('running')
+  button(el, 'Stop').click(); await settle(el)
+})
+
 test('define() twice is harmless', () => {
   expect(() => define()).not.toThrow()
   expect(customElements.get('nano-timer')).toBeDefined()

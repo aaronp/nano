@@ -2,7 +2,7 @@
  * Builds dist/: `bun scripts/build.ts`.
  * - index.js: the package's module, with the shared packages left as bare imports for the host to provide;
  * - manifest.json: what a host reads first (see src/manifest.ts);
- * - index.html: a preview page, with an import map to the shared packages on esm.sh.
+ * - index.html: a preview page, with an import map to the shared packages on esm.sh, and a few themes to try.
  */
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -26,5 +26,6 @@ const pkgOf = (spec: string) => SHARED.find(p => spec === p || spec.startsWith(p
 const at = (spec: string) => { const p = pkgOf(spec); return `https://esm.sh/${p.startsWith('@pritzlaff/') ? '*' : ''}${p}@${pkg.dependencies[p]}${spec.slice(p.length)}` }
 const imports = Object.fromEntries(SHARED_IMPORTS.map(s => [s, at(s)]))
 const page = await Bun.file(join(root, 'preview/index.html')).text()
-await Bun.write(join(dist, 'index.html'), page.replace('%IMPORTMAP%', JSON.stringify({ imports }, null, 2)))
+const { THEMES } = await import('../preview/themes')
+await Bun.write(join(dist, 'index.html'), page.replace('%IMPORTMAP%', JSON.stringify({ imports }, null, 2)).replace('%THEMES%', JSON.stringify(THEMES)))
 console.log(`built ${pkg.name}@${pkg.version} → dist/ (index.js, manifest.json, index.html)`)
