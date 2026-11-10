@@ -1,5 +1,8 @@
 export { ModelElement } from './model-element'
 export { PlacedElement, provide, providedRegistry } from './placed-element'
 export { base } from './styles'
+export { kit } from './kit'
 export { NANO_TOKENS, t, tv, type NanoToken } from './tokens'
 export type { Catalog, CatalogEntry } from './catalog'
+import './kit/select'
+export { NanoCommand, NanoSelect, type Item } from './kit/select'
