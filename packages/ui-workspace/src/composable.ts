@@ -13,7 +13,7 @@ import { provide } from '@pritzlaff/nano-elements'
 import { catalog as bundle, Debounce, defineBundle, Input, Log, Map, Range } from '@composable/bundle'
 import { catalog as editor } from '@composable/editor'
 import type { Catalog } from '@pritzlaff/nano-elements'
-import { definePlatform, platform, PlatformOps as P } from '@composable/platform'
+import { definePlatform, definePlatformTable, platform, PlatformOps as P } from '@composable/platform'
 import { defineElements as defineEditor } from '@composable/editor/elements'
 import { defineWires } from '@composable/wires'
 
@@ -81,7 +81,7 @@ document.addEventListener('wires:open-panel', e => {
 })
 
 defineBundle()
-definePlatform()
+definePlatform(); definePlatformTable()
 defineEditor()
 defineWires()
 // the wiring view over the Workspace dock: it shows and edits the host system, and offers the merged catalog

@@ -9,7 +9,8 @@ know nothing about each other.
 - **Build time:** `<c-range name="slider">` on the Overview page places itself in `host` when the page loads.
 - **Systems:** `<c-platform>` shows every system as a tree (`<nano-tree>`), by system or by component, with "Also in" for
   a component in several systems and a "Shared only" filter; select an action and connect it to
-  one that fits. Below it, a worked example made by `composable.ts` (range → debounce → log, input → map → log).
+  one that fits. `<c-platform-table>` lists every instance (system, component, instance, name, owner) and every kind
+  nothing has been made of, with text and pill filters; it is also the dock's "Instances". Below them, a worked example made by `composable.ts` (range → debounce → log, input → map → log).
 - **Runtime:** the drawer's Workspace entries add panels to the dock; each panel places a new instance and
   removes it when closed.
 

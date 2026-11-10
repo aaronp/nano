@@ -65,7 +65,7 @@ Elements, defined on import:
 | `<nano-calendar>`, `<nano-date-picker>` | `value` (ISO `YYYY-MM-DD`) | `change` |
 | `<nano-menu>` (wraps content; right-click opens it) | `items` (`{ label, shortcut?, danger?, disabled? }`, `{ separator: true }`, `{ heading }`) | `pick` (the item) |
 | `<nano-hover-card>` (`open-delay`, `close-delay`) | content, and a `card` slot | |
-| `<nano-data-table>` (`filter`, `selectable`, `page-size`) | `columns` (`{ key, label, sortable?, align?, render? }`), `rows` | `selection` (the rows) |
+| `<nano-data-table>` (`filter`, `selectable`, `page-size`) | `columns` (`{ key, label, sortable?, align?, width?, minWidth?, render? }`; each resizes by its header's edge, drag or ←/→), `rows` | `selection` (the rows) |
 | `<nano-code-block>` (`language`) | `code` | |
 | `<nano-tree>` (`open-depth`); `reveal(id, { focus? })` | `nodes` (`{ id, label, kind?, count?, badge?, terms?, end?, body?, children? }`), `query`, `selected` | `select` (`{ id }`; cancel it to keep `selected` yours) |
 | `toast(title, { description?, variant?, duration? })` | shows in one `<nano-toaster>`, made on first use | |
