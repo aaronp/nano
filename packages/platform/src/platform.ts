@@ -1,32 +1,50 @@
 // Systems as a component: it holds the registries (host first), creates components from a catalog, adds them to
 // systems, connects their actions, and publishes every change in any system.
-import { Type } from 'typebox'
-import { Components, Ops, Registries, Runtimes, type Component, type Environment, type Owner, type Registry, type Runtime, type Snapshot } from '@pritzlaff/nano-core'
+import { Type, type Static } from 'typebox'
+import { Components, DeltaSchema, Ops, SnapshotSchema, SubscriptionSchema, Registries, Runtimes, type Component, type Environment, type Owner, type Registry, type Runtime, type Snapshot } from '@pritzlaff/nano-core'
 
-const NS = 'composable/platform', any = Type.Unknown(), str = Type.String()
+const NS = 'composable/platform', none = Type.Void()
+const str = (description: string, examples: string[]) => Type.String({ description, examples })
+const systemId = str('A system (registry) id', ['host', 'lab']), instance = str('An instance id', ['ex-range'])
+const ignored = Type.Unknown({ description: 'Ignored: any value triggers it' })
 
-/** What is selected in the platform: an instance in a system, and maybe one of its ops. */
-export type Selection = { system: string; instance: string; op?: string } | null
+/** What is selected in the platform: an instance in a system, and maybe one of its ops; null when nothing is. */
+export const SelectionSchema = Type.Union([
+  Type.Object({ system: systemId, instance, op: Type.Optional(str('One of its ops, by key', ['composable.bundle/range/value'])) }),
+  Type.Null(),
+], { title: 'Selection', description: 'An instance in a system, and maybe one of its ops; null when nothing is selected',
+  examples: [{ system: 'host', instance: 'ex-range' }, null] })
+export type Selection = Static<typeof SelectionSchema>
 
 /** A kind the platform can make: its catalog name, its component's id (`ns/name`), title and element tag. */
-export type Kind = { kind: string; component: string; title: string; tag?: string }
+export const KindSchema = Type.Object({
+  kind: str('Its catalog name', ['range']), component: str("Its component's id, ns/name", ['composable.bundle/range']),
+  title: str('What to call it', ['Range']), tag: Type.Optional(str("Its element's tag, if it has one", ['c-range'])),
+}, { title: 'Kind', description: 'A kind of component the platform can make' })
+export type Kind = Static<typeof KindSchema>
 
 /** The platform's ops. */
 export const PlatformOps = {
-  systems: Ops.source(NS, 'systems', Type.Array(any)),
-  selected: Ops.source(NS, 'selected', any),
-  catalog: Ops.source(NS, 'catalog', Type.Array(str)),
-  kinds: Ops.source(NS, 'kinds', Type.Array(any)),
-  catalogChanged: Ops.action(NS, 'catalog-changed', any, any),
-  selectionChanged: Ops.source(NS, 'selection-changed', any),
-  stateChanged: Ops.source(NS, 'state-changed', any),
-  createSystem: Ops.action(NS, 'create-system', str, any),
-  createComponent: Ops.action(NS, 'create-component', Type.Object({ kind: str, name: str, system: str }), any),
-  addToSystem: Ops.action(NS, 'add-to-system', Type.Object({ instance: str, from: str, to: str }), any),
-  removeFromSystem: Ops.action(NS, 'remove-from-system', Type.Object({ instance: str, system: str }), any),
-  connect: Ops.action(NS, 'connect', Type.Object({ system: str, source: str, op: str, listener: str, target: str }), any),
-  disconnect: Ops.action(NS, 'disconnect', Type.Object({ system: str, id: str }), any),
-  select: Ops.action(NS, 'select', any, any),
+  systems: Ops.source(NS, 'systems', Type.Array(SnapshotSchema, { description: 'A snapshot of each system, host first' }), { description: 'Every system, as it is now' }),
+  selected: Ops.source(NS, 'selected', SelectionSchema, { description: 'What is selected now' }),
+  catalog: Ops.source(NS, 'catalog', Type.Array(Type.String(), { description: 'Kind names', examples: [['range', 'log']] }), { description: 'The kinds it can make, by name' }),
+  kinds: Ops.source(NS, 'kinds', Type.Array(KindSchema), { description: 'The kinds it can make, with their component ids, titles and tags' }),
+  catalogChanged: Ops.action(NS, 'catalog-changed', ignored, none, { description: 'Tells it the catalog grew (after an import): republishes catalog and kinds' }),
+  selectionChanged: Ops.source(NS, 'selection-changed', SelectionSchema, { description: 'The selection, whenever it changes' }),
+  stateChanged: Ops.source(NS, 'state-changed', Type.Object({ system: systemId, delta: DeltaSchema }, { description: 'Which system changed, and how' }), { description: 'Every change in any system, as it happens' }),
+  createSystem: Ops.action(NS, 'create-system', str('The new system id', ['lab']), none, { description: 'Makes a new, empty system with its own runtime' }),
+  createComponent: Ops.action(NS, 'create-component', Type.Object({ kind: str('A catalog kind', ['range']), name: str('The new instance id', ['r1']), system: systemId },
+    { description: 'What to make, what to call it and where' }), none, { description: 'Makes an instance of a catalog kind in a system' }),
+  addToSystem: Ops.action(NS, 'add-to-system', Type.Object({ instance, from: systemId, to: systemId }, { description: 'Which instance, from where, to where' }), none,
+    { description: 'Adds the same instance to another system' }),
+  removeFromSystem: Ops.action(NS, 'remove-from-system', Type.Object({ instance, system: systemId }, { description: 'Which instance, and from where' }), none,
+    { description: 'Takes an instance out of a system, closing its subscriptions there' }),
+  connect: Ops.action(NS, 'connect', Type.Object({ system: systemId, source: instance, op: str('The published op, by key', ['composable.bundle/range/value']),
+    listener: instance, target: str("The listener's action, by key", ['composable.bundle/debounce/enqueue']) }, { description: 'From which op of which instance, to which action of which' }),
+    SubscriptionSchema, { description: 'Connects a published op to an action that fits it, within one system' }),
+  disconnect: Ops.action(NS, 'disconnect', Type.Object({ system: systemId, id: str('The subscription id', []) }, { description: 'Which subscription, and where' }), none,
+    { description: 'Closes a subscription' }),
+  select: Ops.action(NS, 'select', SelectionSchema, none, { description: 'Selects an instance (and maybe an op), or nothing with null' }),
 }
 const P = PlatformOps
 
@@ -66,7 +84,7 @@ export function platform(host: Runtime, catalog: Record<string, { component: Com
     s.changed = changed
     s.watch(host)
     return s
-  })
+  }, { description: "The systems: makes components from the catalog, adds them to systems, connects their actions, and publishes every change" })
   c.action(P.systems, s => snapshots(s))
   c.action(P.selected, s => s.selected)
   c.action(P.catalog, () => Object.keys(catalog))

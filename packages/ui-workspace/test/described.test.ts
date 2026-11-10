@@ -17,7 +17,7 @@ test('every op of every catalog component, the platform and the registry is desc
   const host = Runtimes.create(Registries.create('host'))
   const ops = [
     ...Object.values(catalog).flatMap(e => [...e.component.actions.values()].map(a => a.op)),
-    ...[...platform(host, catalog).actions.values()].map(a => a.op).filter(o => o.ns !== 'composable/platform'),   // until Task 5
+    ...[...platform(host, catalog).actions.values()].map(a => a.op),
     ...(Object.values(RegistryOps).filter(o => 'ns' in o) as Op[]), ...Object.values(RegistryOps.deltas),
   ]
   expect(ops.flatMap(problems)).toEqual([])
