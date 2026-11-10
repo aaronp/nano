@@ -1,10 +1,10 @@
 // Invokes actions and publishes events by coordinate, over one registry. Wrap it with a Policy to change the rules.
-import { Type } from 'typebox'
+import { Type, type TSchema } from 'typebox'
 import { Value } from 'typebox/value'
 import { Components, type Instance } from './component'
-import { err, isOk, Ops, type Coord, type Delta, type Event, type Result, type Subscription } from './data'
+import { DeltaSchemas, err, isOk, Ops, SubscriptionSchema, type Coord, type Delta, type Op, type Event, type Result, type Subscription } from './data'
 import type { Environment } from './env'
-import type { Registry } from './registry'
+import { SnapshotSchema, type Registry } from './registry'
 
 /** Calls and publishes by name within one registry. In-process, remote or policy-checked, it is these two functions. */
 export type Runtime = {
@@ -25,17 +25,16 @@ export type Trace =
 /** Rules around a runtime: takes the runtime and returns one that enforces them. */
 export type Policy = (inner: Runtime) => Runtime
 
-const any = Type.Unknown()
-const deltas = ['instance-added', 'instance-removed', 'op-added', 'op-removed', 'subscription-opened', 'subscription-closed'] as const
 
 /** The registry's own ops: change it, read it, and the changes it publishes. */
 export const RegistryOps = {
-  add: Ops.action('composable', 'add', Type.Object({ id: Type.String(), instance: any }), any),
-  remove: Ops.action('composable', 'remove', Type.String(), any),
-  subscribe: Ops.action('composable', 'subscribe', Type.Object({ source: Type.String(), op: Type.String(), listener: Type.String(), target: Type.String() }), any),
-  unsubscribe: Ops.action('composable', 'unsubscribe', Type.String(), any),
-  snapshot: Ops.action('composable', 'snapshot', Type.Null(), any),
-  deltas: Object.fromEntries(deltas.map(d => [d, Ops.source('composable', d, any)])) as Record<Delta['type'], ReturnType<typeof Ops.source<typeof any>>>,
+  add: Ops.action('composable', 'add', Type.Object({ id: Type.String({ description: 'The id to add it as', examples: ['ex-range'] }), instance: Type.Unknown({ description: 'A made instance (Components.instantiate)' }) }),
+    Type.Void(), { description: 'Adds an instance to the registry' }),
+  remove: Ops.action('composable', 'remove', Type.String({ description: 'The instance id', examples: ['ex-range'] }), Type.Void(), { description: 'Removes an instance, closing the subscriptions it listens on' }),
+  subscribe: Ops.action('composable', 'subscribe', Type.Omit(SubscriptionSchema, ['id']), SubscriptionSchema, { description: 'Connects a published op to an action' }),
+  unsubscribe: Ops.action('composable', 'unsubscribe', Type.String({ description: 'The subscription id' }), Type.Void(), { description: 'Closes a subscription' }),
+  snapshot: Ops.action('composable', 'snapshot', Type.Null({ description: 'Nothing' }), SnapshotSchema, { description: 'What the registry holds now' }),
+  deltas: Object.fromEntries(Object.entries(DeltaSchemas).map(([d, s]) => [d, Ops.source('composable', d, s, { description: (s as { description?: string }).description })])) as unknown as Record<Delta['type'], Op<undefined, TSchema>>,
 }
 
 const must = <A>(r: Result<A>): A => { if (!isOk(r)) throw new Error(r.error); return r.value }

@@ -1,12 +1,24 @@
 // One place holding instances by id, and the subscriptions between them. Data only: it never runs an action.
 import type { Instance } from './component'
-import { err, ok, Ops, type Delta, type Op, type Result, type Subscription } from './data'
+import { Type, type Static } from 'typebox'
+import { err, ok, Ops, OwnerSchema, SubscriptionSchema, type Delta, type Op, type Owner, type Result, type Subscription } from './data'
 
-/** Who added an instance to a registry: the one that will remove it (a record only; nothing acts on it). */
-export type Owner = { kind: string; name: string }
+// ops are data with schemas inside: described, not checked; typed as Op
+const OpSchema = Type.Unsafe<Op>(Type.Unknown({ description: 'An op: its ns, name, input and output schemas, and description' }))
 
 /** What a registry holds, as plain data. `component` is the instance's component id, `ns/name`. */
-export type Snapshot = { id: string; instances: { id: string; component: string; description?: string; owner?: Owner; ops: Op[] }[]; subscriptions: Subscription[] }
+export const SnapshotSchema = Type.Object({
+  id: Type.String({ description: 'The registry id', examples: ['host'] }),
+  instances: Type.Array(Type.Object({
+    id: Type.String({ description: 'The instance id', examples: ['ex-range'] }),
+    component: Type.String({ description: 'Its component id, ns/name', examples: ['composable.bundle/range'] }),
+    description: Type.Optional(Type.String({ description: "Its component's description" })),
+    owner: Type.Optional(OwnerSchema),
+    ops: Type.Array(OpSchema, { description: 'What it offers' }),
+  }), { description: 'Every instance, in the order added' }),
+  subscriptions: Type.Array(SubscriptionSchema, { description: 'Every subscription' }),
+}, { title: 'Snapshot', description: 'What a registry holds' })
+export type Snapshot = Static<typeof SnapshotSchema>
 
 /** Stores instances and subscriptions, and tells its listeners about every change as a Delta. */
 export type Registry = {
