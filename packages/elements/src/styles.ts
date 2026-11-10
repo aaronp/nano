@@ -1,19 +1,77 @@
-// The prototype's look, shared by every element: dark surfaces, Inter for text, JetBrains Mono for code.
+// The component library: the shared stylesheet every nano element adopts. Every colour, font and radius comes from a
+// --nano-* token (see tokens.ts), so elements take on their host's theme. Bare controls are styled too, so markup
+// without the classes still looks right.
 import { css } from 'lit'
+import { t } from './tokens'
 
-/** Base styles for every editor element. */
+/** The library: host type, bare controls, and the classes (buttons, labels, cards, forms, tables, type, layout). */
 export const base = css`
-  :host { display: block; font-family: Inter, system-ui, sans-serif; font-size: 13px; color: #E7E9EE }
-  button { font: inherit; font-size: 12px; color: #E7E9EE; background: transparent; border: 1px solid #3A4150; border-radius: 6px; padding: 5px 10px; cursor: pointer }
-  button.primary { color: #0D0F13; background: #6FA8FF; border: 0; font-weight: 600 }
-  button.danger { color: #FFB4A8; border-color: #5A3A3A }
-  button.dashed { border-style: dashed; border-color: #4A5263; font-weight: 600 }
-  button[aria-pressed='true'] { background: #212632; border-color: #6FA8FF }
-  input, select { font: inherit; font-size: 12px; color: #E7E9EE; background: #0D0F13; border: 1px solid #3A4150; border-radius: 5px; padding: 4px 6px }
-  .muted { color: #A3AAB8 }
-  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px }
-  .problem { color: #FFB4A8; font-size: 12px }
+  :host { display: block; font-family: ${t('font')}; font-size: 13px; color: ${t('fg')} }
+  :focus-visible { outline: 2px solid ${t('focus')}; outline-offset: 1px }
+
+  /* buttons */
+  button, .btn { font: inherit; font-size: 12px; color: ${t('fg')}; background: transparent; border: 1px solid ${t('border-strong')};
+    border-radius: ${t('radius-s')}; padding: 5px 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px }
+  button:hover, .btn:hover { background: ${t('surface-2')} }
+  button:disabled, .btn:disabled { opacity: .5; cursor: not-allowed }
+  button.primary, .btn.primary { color: ${t('on-accent')}; background: ${t('accent')}; border-color: ${t('accent')}; font-weight: 600 }
+  button.danger, .btn.danger { color: ${t('bad')}; border-color: ${t('bad')} }
+  button.dashed, .btn.dashed { border-style: dashed; font-weight: 600 }
+  .btn.small { font-size: 11px; padding: 2px 7px }
+  .icon-btn { border: 0; background: transparent; padding: 4px; border-radius: ${t('radius-s')}; color: ${t('muted')} }
+  .icon-btn:hover { color: ${t('fg')}; background: ${t('surface-2')} }
+  button[aria-pressed='true'], .btn[aria-pressed='true'] { background: ${t('surface-2')}; border-color: ${t('accent')} }
+
+  /* labels */
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; background: ${t('surface-2')}; color: ${t('fg-2')} }
+  .badge.good { background: ${t('good-bg')}; color: ${t('good')} } .badge.bad { background: ${t('bad-bg')}; color: ${t('bad')} }
+  .badge.warn { background: ${t('warn-bg')}; color: ${t('warn')} } .badge.accent { background: ${t('accent-soft')}; color: ${t('accent')} }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid ${t('border')}; border-radius: ${t('radius-s')}; font-size: 12px }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: ${t('surface-2')}; font-size: 12px }
+  .pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor }
+
+  /* containers and states */
+  .card { background: ${t('surface')}; border: 1px solid ${t('border')}; border-radius: ${t('radius')}; padding: 12px }
+  .alert { padding: 8px 12px; border-radius: ${t('radius-s')}; border: 1px solid ${t('border')}; background: ${t('surface-2')} }
+  .alert.good { background: ${t('good-bg')}; color: ${t('good')}; border-color: transparent }
+  .alert.bad, .problem { color: ${t('bad')} } .alert.bad { background: ${t('bad-bg')}; border-color: transparent }
+  .problem { font-size: 12px }
+
+  /* forms */
+  input, select, textarea, .input { font: inherit; font-size: 12px; color: ${t('fg')}; background: ${t('bg')}; border: 1px solid ${t('border-strong')};
+    border-radius: ${t('radius-s')}; padding: 4px 6px }
+  input[type='range'], input[type='checkbox'] { accent-color: ${t('accent')}; padding: 0 }
+  .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: ${t('muted')} }
+  /* where the browser allows it, a bare select's open list takes the theme too */
+  @supports (appearance: base-select) {
+    select, ::picker(select) { appearance: base-select }
+    ::picker(select) { background: ${t('surface')}; color: ${t('fg')}; border: 1px solid ${t('border')}; border-radius: ${t('radius-s')};
+      padding: 4px; margin-top: 4px; box-shadow: 0 4px 16px color-mix(in srgb, ${t('bg')} 40%, transparent) }
+    select::picker-icon { color: ${t('muted')} }
+    option { padding: 5px 8px; border-radius: ${t('radius-s')} }
+    option:is(:hover, :focus-visible) { background: ${t('surface-2')}; outline: 0 }
+    option:checked { font-weight: 600 }
+  }
+  .meter { height: 6px; border-radius: 3px; background: ${t('surface-2')}; overflow: hidden }
+  .meter > span { display: block; height: 100%; background: ${t('accent')} }
+
+  /* data */
+  .table { width: 100%; border-collapse: collapse } .table th, .table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid ${t('border')} }
+  .table th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: ${t('muted')} }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid ${t('border')} }
+  .tabs > button { border: 0; border-radius: 0; border-bottom: 2px solid transparent; background: none; color: ${t('muted')} }
+  .tabs > button:is([aria-selected='true'], [aria-pressed='true']) { color: ${t('fg')}; border-bottom-color: ${t('accent')} }
+  .list-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid ${t('border')} }
+
+  /* type */
+  .kicker { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: ${t('muted')} }
+  .display-s, .display-m, .display-l { font-family: ${t('font-display')}; font-weight: 600; letter-spacing: -.01em; margin: 0 }
+  .display-s { font-size: 18px } .display-m { font-size: 24px } .display-l { font-size: 34px }
+  .muted { color: ${t('muted')} }
+  .mono { font-family: ${t('font-mono')}; font-size: 11px }
+
+  /* layout */
   .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap }
   .col { display: flex; flex-direction: column; gap: 8px }
-  .card { background: #14171D; border: 1px solid #2A303C; border-radius: 8px; padding: 10px }
+  .grid-auto { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px }
 `

@@ -3,12 +3,12 @@
 import { css, html } from 'lit'
 import { PlacedElement } from '@pritzlaff/nano-elements'
 import { Debounce, type Queued } from '../components/debounce'
-import { arrivalPos, bucketView, clamp01, colorOf, flushTravel, G, label, reasonFor, rgba, slotXY, startFlush, type Batch, type Flushing } from './debounce-model'
+import { arrivalPos, bucketView, clamp01, colorOf, flushTravel, G, label, reasonFor, tint, slotXY, startFlush, type Batch, type Flushing } from './debounce-model'
 
 const MONO = "'JetBrains Mono', ui-monospace, monospace"
 /** The part of the prototype's 1200×610 stage that has anything on it; it is scaled to fit the panel. */
 const BOX = { x: 90, w: 1090, h: 600 }
-const REASON_COLOR = { quiet: '#9AA4B2', 'max wait': '#E8B04B' }
+const REASON_COLOR = { quiet: 'var(--nano-muted, #9AA4B2)', 'max wait': 'var(--nano-warn, #E8B04B)' }
 
 /** The debounce prototype's view of one debouncer: its queue, hatch, batches, and quiet and max-wait settings. */
 export class DebounceEl extends PlacedElement {
@@ -86,31 +86,31 @@ export class DebounceEl extends PlacedElement {
     const dx = (this.#fit.w - BOX.w * k) / 2 - BOX.x * k, dy = Math.max(0, (this.#fit.h - BOX.h * k) / 2)
     const slider = (name: string, min: number, max: number, step: number, value: number, elapsed: number, color: string, set: typeof Debounce.ops.setQuiet) => html`
       <label style="display:flex; flex-direction:column; gap:6px; width:180px">
-        <span style="display:flex; justify-content:space-between"><span>${name}</span><span style="color:#E6EAF0">${Math.round(Math.min(elapsed, value))} / ${value} ms</span></span>
-        <span style="display:block; height:6px; border-radius:3px; background:#222933; overflow:hidden"><span style="display:block; height:6px; width:${Math.round(clamp01(elapsed / value) * 100)}%; background:${color}"></span></span>
+        <span style="display:flex; justify-content:space-between"><span>${name}</span><span style="color:var(--nano-fg, #E6EAF0)">${Math.round(Math.min(elapsed, value))} / ${value} ms</span></span>
+        <span style="display:block; height:6px; border-radius:3px; background:var(--nano-surface-2, #222933); overflow:hidden"><span style="display:block; height:6px; width:${Math.round(clamp01(elapsed / value) * 100)}%; background:${color}"></span></span>
         <input type="range" min=${min} max=${max} step=${step} .value=${String(value)} @input=${(e: Event) => this.act(set, Number((e.target as HTMLInputElement).value))} aria-label=${name === 'quiet' ? 'Quiet period in milliseconds' : 'Maximum wait in milliseconds'} style="width:180px; margin:0; accent-color:${color}">
       </label>`
-    return html`<div style="box-sizing:border-box; height:100%; padding:12px 16px; display:flex; flex-direction:column; gap:12px; background:#0E1116; color:#E6EAF0; font-family:Inter, system-ui, sans-serif; overflow:hidden">
-  <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px 20px; flex-wrap:wrap; font-family:${MONO}; font-size:12px; color:#9AA4B2">
+    return html`<div style="box-sizing:border-box; height:100%; padding:12px 16px; display:flex; flex-direction:column; gap:12px; background:var(--nano-bg, #0E1116); color:var(--nano-fg, #E6EAF0); font-family:Inter, system-ui, sans-serif; overflow:hidden">
+  <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px 20px; flex-wrap:wrap; font-family:${MONO}; font-size:12px; color:var(--nano-muted, #9AA4B2)">
     <div style="display:flex; gap:20px">
-      <div style="display:flex; flex-direction:column; gap:4px"><span>in → out</span><span class="ratio" style="color:#E6EAF0; font-size:14px">${total} → ${batches} batches</span></div>
-      <div style="display:flex; flex-direction:column; gap:4px"><span>avg batch</span><span style="color:#E6EAF0; font-size:14px">${this.batchSeq ? (this.committed / this.batchSeq).toFixed(1) + ' values' : '—'}</span></div>
+      <div style="display:flex; flex-direction:column; gap:4px"><span>in → out</span><span class="ratio" style="color:var(--nano-fg, #E6EAF0); font-size:14px">${total} → ${batches} batches</span></div>
+      <div style="display:flex; flex-direction:column; gap:4px"><span>avg batch</span><span style="color:var(--nano-fg, #E6EAF0); font-size:14px">${this.batchSeq ? (this.committed / this.batchSeq).toFixed(1) + ' values' : '—'}</span></div>
     </div>
-    <div style="display:flex; gap:12px 20px; flex-wrap:wrap">${slider('quiet', 100, 5000, 50, quiet, quietElapsed, '#8FB3FF', Debounce.ops.setQuiet)}${slider('max wait', 200, 10000, 100, maxWait, maxElapsed, '#E8B04B', Debounce.ops.setMaxWait)}</div>
+    <div style="display:flex; gap:12px 20px; flex-wrap:wrap">${slider('quiet', 100, 5000, 50, quiet, quietElapsed, 'var(--nano-accent, #8FB3FF)', Debounce.ops.setQuiet)}${slider('max wait', 200, 10000, 100, maxWait, maxElapsed, 'var(--nano-warn, #E8B04B)', Debounce.ops.setMaxWait)}</div>
   </div>
-  ${this.problem ? html`<div style="color:#FFB4A8; font-size:13px">${this.problem}</div>` : ''}
+  ${this.problem ? html`<div style="color:var(--nano-bad, #FFB4A8); font-size:13px">${this.problem}</div>` : ''}
   <div class="fit" style="flex:1; min-height:0; position:relative; overflow:hidden"><div style="position:absolute; left:0; top:0; width:1200px; height:610px; transform:translate(${dx}px, ${dy}px) scale(${k}); transform-origin:0 0">
     ${track()}
-    ${overflow ? html`<div style="position:absolute; left:100px; top:70px; font-family:${MONO}; font-size:12px; color:#E8B04B">+${overflow} queued</div>` : ''}
-    <div class="status" style="position:absolute; left:660px; top:214px; width:400px; text-align:right; font-family:${MONO}; font-size:13px; color:#9AA4B2">${status}</div>
-    <div style="position:absolute; left:1146px; top:210px; font-family:${MONO}; font-size:11px; letter-spacing:0.08em; color:#9AA4B2">HATCH</div>
-    <div style="position:absolute; left:1082px; top:206px; width:28px; height:6px; border-radius:2px; background:#E8B04B; transform-origin:0 50%; transform:rotate(${doorDeg}deg); z-index:2"></div>
-    <div style="position:absolute; left:1110px; top:206px; width:28px; height:6px; border-radius:2px; background:#E8B04B; transform-origin:100% 50%; transform:rotate(${-doorDeg}deg); z-index:2"></div>
-    ${items.map(it => html`<div class="item" style="position:absolute; left:${Math.round(it.x - 20)}px; top:${Math.round(it.y - 20)}px; width:40px; height:40px; box-sizing:border-box; border-radius:10px; border:1.5px solid ${colorOf(it.v)}; background:${rgba(colorOf(it.v), 0.16)}; color:${colorOf(it.v)}; display:flex; align-items:center; justify-content:center; z-index:3; font-family:${MONO}; font-size:11px; overflow:hidden">${label(it.v, 4)}</div>`)}
+    ${overflow ? html`<div style="position:absolute; left:100px; top:70px; font-family:${MONO}; font-size:12px; color:var(--nano-warn, #E8B04B)">+${overflow} queued</div>` : ''}
+    <div class="status" style="position:absolute; left:660px; top:214px; width:400px; text-align:right; font-family:${MONO}; font-size:13px; color:var(--nano-muted, #9AA4B2)">${status}</div>
+    <div style="position:absolute; left:1146px; top:210px; font-family:${MONO}; font-size:11px; letter-spacing:0.08em; color:var(--nano-muted, #9AA4B2)">HATCH</div>
+    <div style="position:absolute; left:1082px; top:206px; width:28px; height:6px; border-radius:2px; background:var(--nano-warn, #E8B04B); transform-origin:0 50%; transform:rotate(${doorDeg}deg); z-index:2"></div>
+    <div style="position:absolute; left:1110px; top:206px; width:28px; height:6px; border-radius:2px; background:var(--nano-warn, #E8B04B); transform-origin:100% 50%; transform:rotate(${-doorDeg}deg); z-index:2"></div>
+    ${items.map(it => html`<div class="item" style="position:absolute; left:${Math.round(it.x - 20)}px; top:${Math.round(it.y - 20)}px; width:40px; height:40px; box-sizing:border-box; border-radius:10px; border:1.5px solid ${colorOf(it.v)}; background:${tint(colorOf(it.v), 0.16)}; color:${colorOf(it.v)}; display:flex; align-items:center; justify-content:center; z-index:3; font-family:${MONO}; font-size:11px; overflow:hidden">${label(it.v, 4)}</div>`)}
     <div style="position:absolute; left:0; top:0; width:1200px; height:610px; transform:translateX(${Math.round(G.pitch * (1 - ease))}px); pointer-events:none">
       ${this.batches.slice().reverse().map((b, i) => bucket(bucketView(b.events), G.xEnd - G.pitch * (i + 1) - G.pitch / 2, i + 1 >= G.history ? Math.round((1 - ease) * 100) / 100 : 1, '#' + b.id, b.reason, REASON_COLOR[b.reason], false))}
     </div>
-    ${bucket(live, 1049, 1, '#' + (this.batchSeq + 1), f ? 'filling · ' + f.reason : 'next batch', '#9AA4B2', true, f ? '#E8B04B' : '#3A4350')}
+    ${bucket(live, 1049, 1, '#' + (this.batchSeq + 1), f ? 'filling · ' + f.reason : 'next batch', 'var(--nano-muted, #9AA4B2)', true, f ? 'var(--nano-warn, #E8B04B)' : 'var(--nano-border-strong, #3A4350)')}
   </div></div>
 </div>`
   }
@@ -118,25 +118,25 @@ export class DebounceEl extends PlacedElement {
 
 /** The switchback track the queue runs along, from the entry at the top-left down to the hatch. */
 const track = () => html`
-  <div style="position:absolute; left:100px; top:12px; width:80px; height:48px; border-radius:24px 0 0 24px; background:#131820"></div>
-  <div style="position:absolute; left:114px; top:28px; font-family:${MONO}; font-size:12px; color:#9AA4B2">in →</div>
-  <div style="position:absolute; left:164px; top:12px; width:974px; height:48px; border-radius:24px; background:#161B22"></div>
-  <div style="position:absolute; left:1086px; top:36px; width:48px; height:70px; background:#161B22"></div>
-  <div style="position:absolute; left:164px; top:82px; width:974px; height:48px; border-radius:24px; background:#161B22"></div>
-  <div style="position:absolute; left:168px; top:106px; width:48px; height:70px; background:#161B22"></div>
-  <div style="position:absolute; left:164px; top:152px; width:974px; height:48px; border-radius:24px; background:#161B22"></div>
-  <div style="position:absolute; left:1082px; top:176px; width:56px; height:114px; background:#161B22"></div>`
+  <div style="position:absolute; left:100px; top:12px; width:80px; height:48px; border-radius:24px 0 0 24px; background:var(--nano-surface, #131820)"></div>
+  <div style="position:absolute; left:114px; top:28px; font-family:${MONO}; font-size:12px; color:var(--nano-muted, #9AA4B2)">in →</div>
+  <div style="position:absolute; left:164px; top:12px; width:974px; height:48px; border-radius:24px; background:var(--nano-surface-2, #161B22)"></div>
+  <div style="position:absolute; left:1086px; top:36px; width:48px; height:70px; background:var(--nano-surface-2, #161B22)"></div>
+  <div style="position:absolute; left:164px; top:82px; width:974px; height:48px; border-radius:24px; background:var(--nano-surface-2, #161B22)"></div>
+  <div style="position:absolute; left:168px; top:106px; width:48px; height:70px; background:var(--nano-surface-2, #161B22)"></div>
+  <div style="position:absolute; left:164px; top:152px; width:974px; height:48px; border-radius:24px; background:var(--nano-surface-2, #161B22)"></div>
+  <div style="position:absolute; left:1082px; top:176px; width:56px; height:114px; background:var(--nano-surface-2, #161B22)"></div>`
 
 /** A batch bucket: its count, its cells stacked from the bottom, and its id and reason underneath. The live one is
  * the bucket under the hatch. */
-function bucket(v: ReturnType<typeof bucketView>, left: number, opacity: number, id: string, reason: string, reasonColor: string, live: boolean, border = '#2A313C') {
+function bucket(v: ReturnType<typeof bucketView>, left: number, opacity: number, id: string, reason: string, reasonColor: string, live: boolean, border = 'var(--nano-border, #2A313C)') {
   return html`<div class=${live ? 'live' : 'batch'} style="position:absolute; left:${left}px; top:0; width:122px; height:610px; opacity:${opacity}; pointer-events:none">
-    ${v.n ? html`<div style="position:absolute; left:0; top:${v.countTop}px; width:122px; text-align:center; font-family:${MONO}; font-size:13px; color:#E6EAF0">${v.n}</div>` : ''}
-    <div style="position:absolute; left:15px; top:290px; width:92px; height:270px; box-sizing:border-box; border:${live ? '2px solid ' + border : '1px ' + (v.solid ? 'solid' : 'dashed') + ' #2A313C'}; border-top:none; border-radius:0 0 10px 10px; padding:${live ? 3 : 4}px; display:flex; flex-direction:column-reverse; gap:${v.gap}px; overflow:hidden${live ? '; background:#12171E' : ''}">
+    ${v.n ? html`<div style="position:absolute; left:0; top:${v.countTop}px; width:122px; text-align:center; font-family:${MONO}; font-size:13px; color:var(--nano-fg, #E6EAF0)">${v.n}</div>` : ''}
+    <div style="position:absolute; left:15px; top:290px; width:92px; height:270px; box-sizing:border-box; border:${live ? '2px solid ' + border : '1px ' + (v.solid ? 'solid' : 'dashed') + ' var(--nano-border, #2A313C)'}; border-top:none; border-radius:0 0 10px 10px; padding:${live ? 3 : 4}px; display:flex; flex-direction:column-reverse; gap:${v.gap}px; overflow:hidden${live ? '; background:var(--nano-surface, #12171E)' : ''}">
       ${v.cells.map(c => html`<div class="cell" style="flex:none; height:${c.h}px; box-sizing:border-box; border-radius:3px; background:${c.bg}; border:1px solid ${c.color}; color:${c.color}; display:flex; align-items:center; justify-content:center; font-family:${MONO}; font-size:10px; overflow:hidden">${c.text}</div>`)}
     </div>
     <div style="position:absolute; left:0; top:568px; width:122px; display:flex; flex-direction:column; align-items:center; gap:3px; font-family:${MONO}; font-size:12px">
-      <span style="color:${live ? '#E8B04B' : '#E6EAF0'}">${id}</span><span style="color:${reasonColor}">${reason}</span>
+      <span style="color:${live ? 'var(--nano-warn, #E8B04B)' : 'var(--nano-fg, #E6EAF0)'}">${id}</span><span style="color:${reasonColor}">${reason}</span>
     </div>
   </div>`
 }

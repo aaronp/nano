@@ -18,7 +18,7 @@ export class PlatformEl extends ModelElement {
   static styles = [base, css`
     .tree { display: flex; flex-direction: column; gap: 2px } .indent { padding-left: 16px }
     .op .connect { visibility: hidden } .op:hover .connect { visibility: visible }
-    .toggle { border: 0; padding: 2px 4px; width: 22px } .plain { border-color: transparent; background: none } .types { padding-left: 40px; color: #A3AAB8 }`]
+    .toggle { border: 0; padding: 2px 4px; width: 22px } .plain { border-color: transparent; background: none } .types { padding-left: 40px; color: var(--nano-muted, #A3AAB8) }`]
   static properties = { ...ModelElement.properties, mode: { state: true }, filter: { state: true }, open: { state: true }, form: { state: true }, target: { state: true } }
   declare mode: 'system' | 'component'
   declare filter: string

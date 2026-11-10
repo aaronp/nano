@@ -13,9 +13,9 @@ test('the build writes the module, manifest and preview; the module carries no c
   expect(js).not.toContain('ReactiveElement')   // lit's base class
   expect(js).not.toContain('TypeBox')           // typebox's own code
   const manifest = await Bun.file(join(dist, 'manifest.json')).json()
-  expect(manifest.components.map((c: { tag: string }) => c.tag)).toEqual(['nano-timer'])
+  expect(manifest.components.map((c: { tag: string }) => c.tag)).toEqual(['nano-timer', 'nano-picker'])
   const html = await Bun.file(join(dist, 'index.html')).text()
-  expect(html).toContain('"@pritzlaff/nano-core": "https://esm.sh/*@pritzlaff/nano-core@^0.1.0"')
+  expect(html).toContain('"@pritzlaff/nano-core": "https://esm.sh/*@pritzlaff/nano-core@^0.2.0"')
   // exactly the host's shared imports (anything else is bundled in), so what passes the preview imports into a host
   const map = JSON.parse(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)![1]!).imports as Record<string, string>
   expect(Object.keys(map).sort()).toEqual([...SHARED_IMPORTS].sort())
@@ -23,3 +23,15 @@ test('the build writes the module, manifest and preview; the module carries no c
   expect(map['lit/decorators.js']).toBe('https://esm.sh/lit@^3.0.0/decorators.js')
   expect(html).not.toContain('%IMPORTMAP%')
 }, 30000)
+
+test('the preview is themed: a swatch per theme, the components, and the kit on show', async () => {
+  const { THEMES } = await import('../preview/themes')
+  const html = await Bun.file(join(dist, 'index.html')).text()   // built by the test above
+  expect(html).not.toContain('%THEMES%')
+  const themes = JSON.parse(html.match(/<script type="application\/json" id="themes">([\s\S]*?)<\/script>/)![1]!)
+  expect(themes.map((t: { id: string }) => t.id)).toEqual(THEMES.map(t => t.id))
+  for (const t of themes) expect(t.vars.accent, t.id).toMatch(/^#/)
+  expect(html).toContain('role="group" aria-label="Theme"')
+  for (const tag of ['<nano-timer name="timer">', '<nano-picker name="speed"', '<nano-select multiple', '<nano-date-picker', '<nano-data-table', '<nano-tool', 'toast('])
+    expect(html, tag).toContain(tag)
+})

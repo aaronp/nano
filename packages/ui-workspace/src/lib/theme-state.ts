@@ -5,7 +5,8 @@
  * every component and plain page CSS sees it. Pickers stay in sync through the "app-theme-change" event.
  * The choice is remembered in localStorage when the browser allows it.
  */
-import { isMode, isThemeId, resolveScheme, themeVars, type Mode, type ThemeId } from './themes.ts';
+import { nanoVars } from './nano-vars.ts';
+import { THEMES, isMode, isThemeId, resolveScheme, themeVars, type Mode, type ThemeId } from './themes.ts';
 
 export interface ThemeChoice { readonly theme: ThemeId; readonly mode: Mode }
 
@@ -39,6 +40,8 @@ export const applyChoice = (doc: Document, choice: ThemeChoice): void => {
   const root = doc.documentElement;
   const scheme = resolveScheme(choice.theme, choice.mode, systemDark());
   for (const [k, v] of Object.entries(themeVars(choice.theme, scheme))) root.style.setProperty(k, v);
+  for (const [k, v] of Object.entries(nanoVars(choice.theme, scheme))) root.style.setProperty(k, v);   // widgets' tokens
+  root.style.setProperty('--page-bg', (THEMES[choice.theme] as { background?: string }).background ?? 'none');
   root.dataset['theme'] = choice.theme;
   root.dataset['mode'] = choice.mode;
   root.dataset['scheme'] = scheme;

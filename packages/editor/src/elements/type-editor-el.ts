@@ -36,7 +36,7 @@ export class TypeEditorEl extends ModelElement {
           <select name="field-type" @change=${(e: Event) => { this.field = { name: this.field?.name ?? '', type: (e.target as HTMLSelectElement).value } }}>${typeOptions(this.types ?? [], this.field?.type ?? 'string')}</select>
           <button class="dashed" @click=${this.addField}>+ Field</button></div>` : ''}
       ${builtin ? '' : html`<div class="row">${PRESET_ORDER.map(id => html`<button aria-label=${PRESET_LABELS[id]} @click=${() => this.act(E.ops.setLook, { ...look, shape: presetShape(id) })}>
-        ${svg`<svg width="40" height="30" viewBox="0 0 40 30"><path d=${presetIcon(presetShape(id))} fill="#A3AAB8"></path></svg>`}</button>`)}</div>
+        ${svg`<svg width="40" height="30" viewBox="0 0 40 30"><path d=${presetIcon(presetShape(id))} style="fill: var(--nano-muted, #A3AAB8)"></path></svg>`}</button>`)}</div>
       <div class="row">${SWATCHES.map(c => html`<button aria-label="Colour ${c}" style="width:24px;height:24px;padding:0;background:${c}" @click=${() => this.act(E.ops.setLook, { ...look, colour: c })}></button>`)}</div>
       <div class="row"><button @click=${() => this.act(E.ops.resetLook)}>Regenerate from hash</button></div>`}
       ${this.problem ? html`<div class="problem">${this.problem}</div>` : ''}

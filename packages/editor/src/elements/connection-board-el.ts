@@ -1,4 +1,5 @@
 // The board: a grid of pieces drawn with their types' looks. Pick an op in the list, then click a cell to place it.
+import { NO_LOOK, ON_SWATCH } from '../model/looks'
 import { html, svg } from 'lit'
 import { Ops } from '@pritzlaff/nano-core'
 import type { Entry, Selection } from '../components/component-list'
@@ -27,7 +28,7 @@ export class ConnectionBoardEl extends ModelElement {
     const cells = Array.from({ length: rows }, (_, r) => Array.from({ length: cols }, (_, c) => ({ c, r }))).flat()
     const focused = this.picked && pieceAt(pieces, this.picked)
     return html`<div class="col">
-      <div style="display:grid;grid-template-columns:repeat(${cols},${SIZE}px);gap:0;background:#0D0F13;border:1px solid #2A303C;border-radius:8px;padding:8px;width:max-content">
+      <div style="display:grid;grid-template-columns:repeat(${cols},${SIZE}px);gap:0;background:var(--nano-bg, #0D0F13);border:1px solid var(--nano-border, #2A303C);border-radius:var(--nano-radius, 8px);padding:8px;width:max-content">
         ${cells.map(cell => this.cell(cell, pieceAt(pieces, cell)))}
       </div>
       ${focused ? html`<div class="row"><span class="mono">${focused.instance} · ${focused.op.name}</span>
@@ -39,7 +40,7 @@ export class ConnectionBoardEl extends ModelElement {
 
   cell(cell: Cell, piece?: Piece) {
     const click = () => (piece ? (this.picked = cell) : this.place(cell))
-    const box = `width:${SIZE}px;height:${SIZE}px;cursor:pointer;outline:${piece && this.picked?.c === cell.c && this.picked?.r === cell.r ? '1px solid #6FA8FF' : '1px dashed #1E232D'}`
+    const box = `width:${SIZE}px;height:${SIZE}px;cursor:pointer;outline:${piece && this.picked?.c === cell.c && this.picked?.r === cell.r ? '1px solid var(--nano-accent, #6FA8FF)' : '1px dashed var(--nano-border, #1E232D)'}`
     return html`<div data-cell="${cell.c},${cell.r}" style=${box} @click=${click}>${piece ? this.tile(piece) : ''}</div>`
   }
 
@@ -48,9 +49,9 @@ export class ConnectionBoardEl extends ModelElement {
     const d = tilePath({ T: 'flat', B: 'flat', L: inLook ? 'hole' : 'flat', R: outLook ? 'knob' : 'flat' }, { L: inLook?.shape, R: outLook?.shape })
     const v = CELL + 2 * PAD
     return svg`<svg width=${SIZE} height=${SIZE} viewBox="0 0 ${v} ${v}">
-      <path d=${d} fill=${(outLook ?? inLook)?.colour ?? '#3A4150'} stroke="#0D0F13" stroke-width="3"></path>
-      <text x=${v / 2} y=${v / 2} text-anchor="middle" font-size="18" font-family="Inter, sans-serif" fill="#0D0F13">${p.op.name}</text>
-      <text x=${v / 2} y=${v / 2 + 22} text-anchor="middle" font-size="14" font-family="Inter, sans-serif" fill="#0D0F13">${p.instance}</text></svg>`
+      <path d=${d} fill=${(outLook ?? inLook)?.colour ?? NO_LOOK} stroke=${ON_SWATCH} stroke-width="3"></path>
+      <text x=${v / 2} y=${v / 2} text-anchor="middle" font-size="18" font-family="Inter, sans-serif" fill=${ON_SWATCH}>${p.op.name}</text>
+      <text x=${v / 2} y=${v / 2 + 22} text-anchor="middle" font-size="14" font-family="Inter, sans-serif" fill=${ON_SWATCH}>${p.instance}</text></svg>`
   }
 
   place(cell: Cell) {

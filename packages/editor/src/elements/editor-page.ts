@@ -10,7 +10,7 @@ import { base, ModelElement, providedRegistry } from '@pritzlaff/nano-elements'
 /** Lays out one editor: give it the `registry` and the `ids` from `addEditor`. Without them it uses the provided
  * registry, and the editor there (adding one if there is none). */
 export class EditorPage extends ModelElement {
-  static styles = [base, css`:host { background: #0D0F13; padding: 16px } .tabs button { flex: 1 }`]
+  static styles = [base, css`:host { background: var(--nano-bg, #0D0F13); padding: 16px } .tabs button { flex: 1 }`]
   static properties = { ...ModelElement.properties, ids: { attribute: false }, tab: { state: true } }
   declare ids?: Ids
   declare tab: 'elements' | 'types'

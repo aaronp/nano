@@ -10,9 +10,9 @@
     "preview": "bun scripts/build.ts && bun scripts/serve.ts"
   },
   "dependencies": {
-    "@pritzlaff/nano-core": "^0.1.0",
-    "@pritzlaff/nano-elements": "^0.1.0",
-    "@pritzlaff/nano-runes": "^0.1.0",
+    "@pritzlaff/nano-core": "^0.2.0",
+    "@pritzlaff/nano-elements": "^0.2.0",
+    "@pritzlaff/nano-runes": "^0.2.0",
     "lit": "^3.0.0",
     "typebox": "^1.4.0"
   },

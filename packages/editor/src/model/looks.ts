@@ -105,3 +105,6 @@ export function lookOf(bytes: number[]): Look {
 
 /** The look a type is drawn with: its hand-picked one, or the one derived from its hash. */
 export const lookFor = (e: TypeEntry): Look => e.look ?? lookOf(hashBytes(e.type))
+
+/** A piece's text on a swatch (dark on every swatch), and a piece with no look: data colours, the same in every theme. */
+export const ON_SWATCH = '#0D0F13', NO_LOOK = '#3A4150'
