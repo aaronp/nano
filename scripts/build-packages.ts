@@ -35,9 +35,10 @@ for (const dir of PUBLISHED) {
     files: ['src/index.ts'],
   }))
   try { await $`${join(root, 'node_modules/.bin/tsc')} -p ${config}` } finally { rmSync(config) }
-  for (const f of readdirSync(out).filter(f => f.endsWith('.d.ts'))) {
+  // (in subfolders too; `from '…'`, `import('…')` and side-effect `import '…'`)
+  for (const f of readdirSync(out, { recursive: true, encoding: 'utf8' }).filter(f => f.endsWith('.d.ts'))) {
     const text = await Bun.file(join(out, f)).text()
-    await Bun.write(join(out, f), text.replace(/(from\s+|import\()(['"])(\.\.?\/[^'"]+?)(?<!\.js)\2/g, '$1$2$3.js$2'))
+    await Bun.write(join(out, f), text.replace(/(from\s+|import\s*\(|import\s+)(['"])(\.\.?\/[^'"]+?)(?<!\.js)\2/g, '$1$2$3.js$2'))
   }
 
   const deps = src.dependencies ?? {}
