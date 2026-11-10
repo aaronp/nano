@@ -98,3 +98,13 @@ test('runtimeOf finds a system\'s runtime through the platform', async () => {
   expect(runtimeOf(host.registry, 'host')).toBe(host)
   expect(runtimeOf(host.registry, 'nope')).toBeUndefined()
 })
+
+test('components the platform creates or adds are owned by the platform', async () => {
+  const { host, call } = setup()
+  await call(P.createSystem, 'lab')
+  await call(P.createComponent, { kind: 'range', name: 'r', system: 'host' })
+  await call(P.addToSystem, { instance: 'r', from: 'host', to: 'lab' })
+  const owner = { kind: 'platform', name: 'platform' }
+  expect(host.registry.snapshot().instances.find(i => i.id === 'r')!.owner).toEqual(owner)
+  expect(runtimeOf(host.registry, 'lab')!.registry.snapshot().instances.find(i => i.id === 'r')!.owner).toEqual(owner)
+})

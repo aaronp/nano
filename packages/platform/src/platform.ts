@@ -1,7 +1,7 @@
 // Systems as a component: it holds the registries (host first), creates components from a catalog, adds them to
 // systems, connects their actions, and publishes every change in any system.
 import { Type } from 'typebox'
-import { Components, Ops, Registries, Runtimes, type Component, type Environment, type Registry, type Runtime, type Snapshot } from '@pritzlaff/nano-core'
+import { Components, Ops, Registries, Runtimes, type Component, type Environment, type Owner, type Registry, type Runtime, type Snapshot } from '@pritzlaff/nano-core'
 
 const NS = 'composable/platform', any = Type.Unknown(), str = Type.String()
 
@@ -25,8 +25,10 @@ export const PlatformOps = {
 }
 const P = PlatformOps
 
-type State = { systems: Map<string, Runtime>; selected: Selection; env: Environment; watch(rt: Runtime): void; changed(id: string, delta: unknown): void }
+type State = { host: string; systems: Map<string, Runtime>; selected: Selection; env: Environment; watch(rt: Runtime): void; changed(id: string, delta: unknown): void }
 
+// what the platform adds, it owns: named by its own id in the host
+const owner = (s: State): Owner => ({ kind: 'platform', name: s.env.handles().find(h => h.coord.registry === s.host)?.coord.instance ?? 'platform' })
 const must = <A>(r: { value: A } | { error: string }): A => { if ('error' in r) throw new Error(r.error); return r.value }
 const system = (s: State, id: string): Registry => {
   const rt = s.systems.get(id)
@@ -44,7 +46,7 @@ const opOf = (reg: Registry, instance: string, key: string) => {
 export function platform(host: Runtime, catalog: Record<string, { component: Component }>): Component<State> {
   const c = Components.create<State>({ ns: 'composable', name: 'platform' }, env => {
     const s: State = {
-      systems: new Map([[host.registry.id, host]]), selected: null, env, changed: () => {},
+      host: host.registry.id, systems: new Map([[host.registry.id, host]]), selected: null, env, changed: () => {},
       watch: rt => { rt.registry.listen(delta => changed(rt.registry.id, delta)) },
     }
     // every change is told at once; the snapshots go out once per burst (adding an element makes several deltas)
@@ -70,12 +72,12 @@ export function platform(host: Runtime, catalog: Record<string, { component: Com
   c.action(P.createComponent, (s, { kind, name, system: id }) => {
     const def = catalog[kind]
     if (!def) throw new Error(`no component kind ${kind}`)
-    must(system(s, id).add(name, Components.instantiate(def.component)))
+    must(system(s, id).add(name, Components.instantiate(def.component), owner(s)))
   })
   c.action(P.addToSystem, (s, { instance, from, to }) => {
     const inst = system(s, from).get(instance)
     if (!inst) throw new Error(`no ${instance} in ${from}`)
-    must(system(s, to).add(instance, inst))
+    must(system(s, to).add(instance, inst, owner(s)))
   })
   c.action(P.removeFromSystem, (s, { instance, system: id }) => {
     const self = s.env.handles().find(h => h.coord.registry === id)?.coord.instance

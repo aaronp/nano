@@ -23,7 +23,7 @@ export const catalog: Catalog = { ...bundle, ...editor }
 /** The page's runtime and its registry, `host`. */
 export const host = Runtimes.create(Registries.create('host'))
 provide(document, host.registry)
-host.registry.add('platform', Components.instantiate(platform(host, catalog)))
+host.registry.add('platform', Components.instantiate(platform(host, catalog)), { kind: 'app', name: 'ui-workspace' })
 
 const ask = async (op: Op, arg: unknown) => {
   const r = await host.call({ registry: 'host', instance: 'workspace' }, 'platform', Ops.key(op), arg)

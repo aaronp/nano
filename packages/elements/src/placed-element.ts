@@ -26,7 +26,7 @@ export abstract class PlacedElement extends ModelElement {
     const reg = this.registry
     if (reg && !reg.get(this.model)) {
       const inst = Components.instantiate((this.constructor as typeof PlacedElement).component)
-      if (!('error' in reg.add(this.model, inst))) this.#mine = { id: this.model, inst, registry: reg }
+      if (!('error' in reg.add(this.model, inst, { kind: 'widget', name: this.localName }))) this.#mine = { id: this.model, inst, registry: reg }
     }
     super.connectedCallback()
   }

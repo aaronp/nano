@@ -63,3 +63,9 @@ test('mounting adds exactly one view', async () => {
   expect(added).toBe(1)
   el.remove()
 })
+
+test("an element's hidden view instance is owned by the element, as a view", async () => {
+  const { reg } = await mount()
+  const view = reg.snapshot().instances.find(i => i.id.startsWith('counter~view'))!
+  expect(view.owner).toEqual({ kind: 'view', name: 'count-el' })
+})

@@ -78,3 +78,9 @@ test('an element with keep never removes its instance (a closed dock panel sends
   expect(ids()).toContain('kept')
   reg.remove('kept')
 })
+
+test('a placed element owns the instance it creates, as a widget', async () => {
+  const el = await place('owned')
+  expect(reg.snapshot().instances.find(i => i.id === 'owned')!.owner).toEqual({ kind: 'widget', name: 'note-el' })
+  el.remove(); await tick()
+})
