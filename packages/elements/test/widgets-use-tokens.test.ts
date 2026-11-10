@@ -6,7 +6,7 @@ import { join } from 'node:path'
 const root = join(import.meta.dir, '../..')
 const WIDGETS = ['bundle/src/elements/elements.ts', 'bundle/src/elements/debounce-el.ts', 'bundle/src/elements/debounce-model.ts', 'platform/src/view.ts',
   'editor/src/elements/connection-board-el.ts', 'editor/src/elements/type-editor-el.ts', 'editor/src/elements/editor-page.ts',
-  ...['select', 'calendar', 'overlays', 'data-table'].map(f => `elements/src/kit/${f}.ts`), 'elements/src/agent/parts.ts', 'elements/src/agent/timeline.ts']   // (editor/src/model/looks.ts holds data colours: a type's chosen swatch, the same in every theme)
+  ...['select', 'calendar', 'overlays', 'data-table', 'tree'].map(f => `elements/src/kit/${f}.ts`), 'elements/src/agent/parts.ts', 'elements/src/agent/timeline.ts']   // (editor/src/model/looks.ts holds data colours: a type's chosen swatch, the same in every theme)
 
 test('no widget uses a colour except as a --nano-* fallback', async () => {
   for (const f of WIDGETS) {
