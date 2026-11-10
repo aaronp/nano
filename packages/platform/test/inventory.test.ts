@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import type { Snapshot } from '@pritzlaff/nano-core'
-import { inventory, matches, UNREGISTERED, type Filters, type Kind, type Row } from '../src'
+import { examplesOf, inventory, matches, UNREGISTERED, type Filters, type Kind, type Row } from '../src'
 
 const inst = (id: string, component: string, owner?: { kind: string; name: string }) => ({ id, component, ...(owner && { owner }), ops: [] })
 const SYSTEMS: Snapshot[] = [
@@ -17,7 +17,7 @@ const at = (system: string, instance: string) => rows.find(r => r.system === sys
 
 test('one row per system and instance; a shared instance appears in each with its own owner', () => {
   expect(rows.map(r => `${r.system}/${r.instance}`)).toEqual(['host/r', 'host/p', 'host/p~view-0', 'lab/r', '—/—'])
-  expect(at('host', 'r')).toEqual({ system: 'host', component: 'range', instance: 'r', name: 'composable/range', owner: 'widget · c-range' })
+  expect(at('host', 'r')).toEqual({ system: 'host', component: 'range', instance: 'r', name: 'composable/range', owner: 'widget · c-range', description: '' })
   expect(at('lab', 'r')!.owner).toBe('platform · platform')
 })
 
@@ -30,7 +30,7 @@ test('an instance with no owner shows unknown', () => {
 })
 
 test('a kind with no instance gets one — row', () => {
-  expect(rows.at(-1)).toEqual({ system: '—', component: 'log', instance: '—', name: 'composable/log', owner: '—' })
+  expect(rows.at(-1)).toEqual({ system: '—', component: 'log', instance: '—', name: 'composable/log', owner: '—', description: '' })
 })
 
 test('kinds sharing a component id are listed together', () => {
@@ -54,4 +54,17 @@ test('free text matches any column, case-insensitively', () => {
   const none: Filters = { systems: [], components: [] }
   expect(rows.filter((r: Row) => matches(r, 'WIDGET', none)).map(r => `${r.system}/${r.instance}`)).toEqual(['host/r'])
   expect(rows.filter((r: Row) => matches(r, '  ', none))).toHaveLength(5)
+})
+
+test("rows carry the component's description; a never-made kind its kind's", () => {
+  const described: Snapshot[] = [{ id: 's', subscriptions: [], instances: [{ ...inst('x', 'composable/range'), description: 'A range' }] }]
+  const rows = inventory(described, [...KINDS.slice(0, 1), { kind: 'log', component: 'composable/log', title: 'Log', description: 'A log' }])
+  expect(rows.map(r => r.description)).toEqual(['A range', 'A log'])
+  expect(inventory(SYSTEMS, KINDS).find(r => r.instance === 'p')!.description).toBe('')
+})
+
+test('examplesOf takes two examples, as JSON, each cut to 40 characters', () => {
+  expect(examplesOf(undefined)).toBe('')
+  expect(examplesOf({ examples: [1, 'a', 3] } as never)).toBe('1, "a"')
+  expect(examplesOf({ examples: ['x'.repeat(60)] } as never)).toBe(`"${'x'.repeat(38)}…`)
 })

@@ -117,7 +117,7 @@ test('kinds lists each catalog kind with its component id, title and tag', async
   const kinds = (await call(P.kinds)).value as any[]
   expect(kinds.map(k => k.kind)).toEqual(Object.keys(catalog))
   const r = catalog.range!
-  expect(kinds.find(k => k.kind === 'range')).toEqual({ kind: 'range', component: idOf(r.component), title: r.title, ...(r.tag && { tag: r.tag }) })
+  expect(kinds.find(k => k.kind === 'range')).toEqual({ kind: 'range', component: idOf(r.component), title: r.title, ...(r.tag && { tag: r.tag }), description: r.component.description })
 })
 
 test('after catalog-changed, a kind added to the catalog object is published in kinds', async () => {

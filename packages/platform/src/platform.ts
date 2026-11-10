@@ -20,6 +20,7 @@ export type Selection = Static<typeof SelectionSchema>
 export const KindSchema = Type.Object({
   kind: str('Its catalog name', ['range']), component: str("Its component's id, ns/name", ['composable.bundle/range']),
   title: str('What to call it', ['Range']), tag: Type.Optional(str("Its element's tag, if it has one", ['c-range'])),
+  description: Type.Optional(str('What it is for', ['A number between bounds'])),
 }, { title: 'Kind', description: 'A kind of component the platform can make' })
 export type Kind = Static<typeof KindSchema>
 
@@ -69,7 +70,8 @@ const opOf = (reg: Registry, instance: string, key: string) => {
 export function platform(host: Runtime, catalog: Record<string, { component: Component; title?: string; tag?: string }>): Component<State> {
   // read at call time: the host adds imported packages' kinds to this same object, then calls catalog-changed
   const kinds = (): Kind[] => Object.entries(catalog).map(([kind, e]) =>
-    ({ kind, component: `${e.component.id.ns}/${e.component.id.name}`, title: e.title ?? kind, ...(e.tag && { tag: e.tag }) }))
+    ({ kind, component: `${e.component.id.ns}/${e.component.id.name}`, title: e.title ?? kind, ...(e.tag && { tag: e.tag }),
+      ...(e.component.description && { description: e.component.description }) }))
   const c = Components.create<State>({ ns: 'composable', name: 'platform' }, env => {
     const s: State = {
       host: host.registry.id, systems: new Map([[host.registry.id, host]]), selected: null, env, changed: () => {},

@@ -142,3 +142,19 @@ test('a component in several systems: a badge, "Also in" buttons that select it 
   expect(item('c:host/l')).toBeNull()
   expect(item('c:host/r')).not.toBeNull()
 })
+
+test("an op's row shows its description and examples; the filter matches descriptions", async () => {
+  const { item, type } = await mount()
+  await type('input[name="filter"]', 'clamped into')   // only in set's description
+  const set = item(`o:host/r/${Ops.key(Range.ops.set)}`)!
+  expect(set.textContent).toContain(Range.ops.set.description!)
+  expect(set.textContent).toContain('e.g. 42')
+  expect(item(`o:host/r/${Ops.key(Range.ops.min)}`)).toBeNull()
+})
+
+test("a component's row shows its description, and the filter finds it", async () => {
+  const { item, type } = await mount()
+  await type('input[name="filter"]', 'between bounds')
+  expect(item('c:host/r')!.textContent).toContain(catalog.range!.component.description!)
+  expect(item('c:host/l')).toBeNull()
+})

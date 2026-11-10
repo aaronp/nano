@@ -5,6 +5,7 @@ import type { TSchema } from 'typebox'
 import { Ops, type Op, type Snapshot, type Subscription } from '@pritzlaff/nano-core'
 import { base, ModelElement, providedRegistry, type NanoTree, type TreeNode } from '@pritzlaff/nano-elements'
 import { PlatformOps as P, type Selection } from './platform'
+import { examplesOf } from './inventory'
 
 type Inst = Snapshot['instances'][number]
 const shown = (i: Inst) => i.id !== 'registry' && !i.id.includes('~view')
@@ -12,6 +13,8 @@ const typeLabel = (s?: TSchema): string => {
   const t = s as { title?: string; type?: string; items?: TSchema } | undefined
   return !t ? '·' : t.title ?? (t.type === 'array' ? `${typeLabel(t.items)}[]` : t.type ?? 'any')
 }
+// an op's examples, input's first (an action is given them) else output's: e.g. 42
+const eg = (o: Op) => { const e = examplesOf(o.input) || examplesOf(o.output); return e ? html`<div class="eg mono">e.g. ${e}</div>` : '' }
 /** The tree row a selection is: a component `c:<system>/<id>`, or an op `o:<system>/<id>/<key>`. */
 const rowOf = (sel: Selection) => !sel ? null : sel.op ? `o:${sel.system}/${sel.instance}/${sel.op}` : `c:${sel.system}/${sel.instance}`
 /** Each component's systems, in order. */
@@ -23,7 +26,7 @@ const membership = (systems: Snapshot[]) => {
 
 /** The platform's view. Uses the provided registry and the instance `platform` unless told otherwise. */
 export class PlatformEl extends ModelElement {
-  static styles = [base, css`.filter { flex: 1; min-width: 160px } nano-tree { margin-top: 4px }`]
+  static styles = [base, css`.filter { flex: 1; min-width: 160px } nano-tree { margin-top: 4px }`]   // .desc/.eg sit in the tree's rows: styled there
   static properties = { ...ModelElement.properties, mode: { state: true }, filter: { state: true }, sharedOnly: { state: true }, form: { state: true }, target: { state: true } }
   declare mode: 'system' | 'component'
   declare filter: string
@@ -91,8 +94,9 @@ export class PlatformEl extends ModelElement {
       this.renderRoot.querySelector<NanoTree>('nano-tree')?.reveal(`c:${to}/${i.id}`)
     }
     return {
-      id, label: i.id, kind: 'component', badge: others.length ? `↗ ${in_.length} systems` : undefined,
-      body: others.length ? html`<div class="row">Also in ${others.map(o => html`<button class="btn small" data-also="${o}/${i.id}" @click=${() => jump(o)}>↗ ${o}</button>`)}</div>` : undefined,
+      id, label: i.id, kind: 'component', badge: others.length ? `↗ ${in_.length} systems` : undefined, terms: i.description ? [i.description] : undefined,
+      body: i.description || others.length ? html`${i.description ? html`<div class="desc">${i.description}</div>` : ''}${others.length
+        ? html`<div class="row">Also in ${others.map(o => html`<button class="btn small" data-also="${o}/${i.id}" @click=${() => jump(o)}>↗ ${o}</button>`)}</div>` : ''}` : undefined,
       children: i.ops.map(o => this.#op(s, i, o)),
     }
   }
@@ -104,8 +108,8 @@ export class PlatformEl extends ModelElement {
     const from = sel?.op && sel.system === s.id ? s.instances.find(x => x.id === sel.instance)?.ops.find(x => Ops.key(x) === sel.op) : undefined
     const fits = !!from && !chosen && Ops.fits(from, o)
     return {
-      id, label: o.name, kind: o.input ? 'action' : 'source', terms: [typeLabel(o.input), typeLabel(o.output)],
-      body: html`<span class="mono">${typeLabel(o.input)} → ${typeLabel(o.output)}</span>`,
+      id, label: o.name, kind: o.input ? 'action' : 'source', terms: [typeLabel(o.input), typeLabel(o.output), ...(o.description ? [o.description] : [])],
+      body: html`<span class="mono">${typeLabel(o.input)} → ${typeLabel(o.output)}</span>${o.description ? html`<div class="desc">${o.description}</div>` : ''}${eg(o)}`,
       end: fits ? html`<button class="btn small" data-connect=${at} title="Connect" aria-label="Connect to ${i.id} · ${o.name}"
         @click=${() => this.act(P.connect, { system: s.id, source: sel!.instance, op: sel!.op, listener: i.id, target: key })}>⇢</button>` : undefined,
     }

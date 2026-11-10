@@ -2,15 +2,19 @@
 // a component (its coordinates, kind, jacks and connections) or one of its actions (its op, schemas and connections).
 import { html } from 'lit'
 import { Ops, type Op, type Subscription } from '@pritzlaff/nano-core'
-import { runtimeOf } from '@composable/platform'
+import { examplesOf, runtimeOf } from '@composable/platform'
 import type { Vals } from './render-root'
 import type { Wires } from './wires'
 
 const name = (key: string) => key.slice(key.lastIndexOf('/') + 1)
 const row = (label: string, value: unknown) => html`<div style="display:grid; grid-template-columns:96px 1fr; gap:8px"><span style="color:#8B96A5">${label}</span><span class="mono" style="overflow-wrap:anywhere">${value}</span></div>`
 const h3 = (text: string) => html`<h3 style="margin:8px 0 2px; font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#8B96A5">${text}</h3>`
+const about = (s: unknown) => {
+  const d = (s as { description?: string } | undefined)?.description, e = examplesOf(s as never)
+  return html`${d ? html`<div>${d}</div>` : ''}${e ? html`<div class="mono" style="color:#8B96A5">e.g. ${e}</div>` : ''}`
+}
 const schema = (s: unknown) => s === undefined ? html`<span class="mono" style="color:#8B96A5">none</span>`
-  : html`<pre class="mono" style="margin:0; padding:8px; border-radius:6px; background:#0A0D11; border:1px solid #1F252E; font-size:11px; max-height:160px; overflow:auto">${JSON.stringify(s, null, 2)}</pre>`
+  : html`${about(s)}<pre class="mono" style="margin:0; padding:8px; border-radius:6px; background:#0A0D11; border:1px solid #1F252E; font-size:11px; max-height:160px; overflow:auto">${JSON.stringify(s, null, 2)}</pre>`
 const cord = (c: Subscription) => html`<div class="mono">${c.source}.${name(c.op)} → ${c.listener}.${name(c.target)}</div>`
 
 export function renderDetail(el: Wires, d: Vals) {
@@ -42,6 +46,7 @@ function action(system: string, instance: string, op: Op | undefined, key: strin
   const mine = subs.filter(c => (c.source === instance && c.op === key) || (c.listener === instance && c.target === key))
   return html`
     ${row('Coordinates', `${system} / ${instance}`)}${row('Op', Ops.key(op))}${row('Kind', op.input ? 'action' : 'source')}
+    ${op.description ? row('Description', op.description) : ''}
     ${h3('Input')}${schema(op.input)}${h3('Output')}${schema(op.output)}
     ${h3('Connections')}${mine.length ? mine.map(cord) : html`<span style="color:#8B96A5">none</span>`}`
 }

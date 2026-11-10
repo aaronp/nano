@@ -299,6 +299,8 @@ test('clicking a jack on the back selects its action, and Detail shows its op, s
   expect(card).toContain('source')
   expect(card).toContain('"type": "number"')
   expect(card).toContain('r.value → d.enqueue')
+  expect(card).toContain(Range.ops.value.description!)   // what it is, then each schema's description and examples
+  expect(card).toContain('e.g. 50')
 })
 
 test('clicking a panel selects its component: coordinates, kind, jacks and connections', async () => {

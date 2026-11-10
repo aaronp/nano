@@ -37,6 +37,7 @@ export class PlatformTableEl extends ModelElement {
     } },
     { key: 'name', label: 'Name', sortable: true },
     { key: 'owner', label: 'Owner', sortable: true },
+    { key: 'description', label: 'Description', sortable: true },
   ]
 
   #toggle(group: keyof Filters, v: string) {

@@ -30,7 +30,7 @@ const mount = async () => {
 
 test('lists every instance, including views, with owners', async () => {
   const { rows } = await mount()
-  expect(rows().find(r => r.system === 'host' && r.instance === 'r')).toEqual({ system: 'host', component: 'range', instance: 'r', name: 'composable.bundle/range', owner: 'platform · platform' })
+  expect(rows().find(r => r.system === 'host' && r.instance === 'r')).toEqual({ system: 'host', component: 'range', instance: 'r', name: 'composable.bundle/range', owner: 'platform · platform', description: catalog.range!.component.description! })
   expect(rows().some(r => r.instance.includes('~view') && r.owner === 'view · c-platform-table')).toBe(true)
   expect(rows().some(r => r.system === '—' && r.component === 'debounce')).toBe(true)
 })
@@ -98,4 +98,10 @@ test("the table's colours come from the kit's tokens, with the kit's fallbacks",
   for (const light of ['#2563EB', '#E2E5EA', '#6B7280', '#fff']) expect(css).not.toContain(light)   // no hand-written light fallbacks
   for (const k of ['accent', 'border', 'muted'] as const) expect(css).toContain(String(t(k)))
   expect(css).toContain(String(t('on-accent')))
+})
+
+test("the Description column shows each component's description", async () => {
+  const { rows, at } = await mount()
+  expect(rows().find(r => r.system === 'host' && r.instance === 'r')!.description).toBe(catalog.range!.component.description!)
+  expect(at('th[data-key="description"]')).not.toBeNull()
 })

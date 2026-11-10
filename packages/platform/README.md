@@ -30,3 +30,7 @@ to another system, or create one with `+ Add`.
 owner), then one per kind nothing has been made of. Filter by text, or open Filters to pick systems (or
 Unregistered) and components as pills; pills OR within a group and AND across. Click an instance to select it.
 `inventory(systems, kinds)` and `matches(row, q, filters)` are the same, without the element.
+
+Every op has a schema and a description (`Op.description`), and examples where a value means something. The tree
+shows an op's description and `e.g.` examples under its types, and a component's description under it; its filter
+matches descriptions too. The table has a Description column. `examplesOf(schema)` formats examples the same way.
