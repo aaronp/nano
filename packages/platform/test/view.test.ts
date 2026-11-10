@@ -24,36 +24,59 @@ const mount = async () => {
   const $$ = (sel: string) => [...el.shadowRoot!.querySelectorAll(sel)] as HTMLElement[]
   const button = (text: string) => $$('button').find(b => b.textContent!.trim() === text)!
   const type = async (sel: string, v: string, ev = 'input') => { const i = $(sel) as HTMLInputElement; i.value = v; i.dispatchEvent(new Event(ev)); await settle() }
-  return { host, el, call, settle, $, $$, button, type }
+  // the tree's rows live in <nano-tree>'s shadow root
+  const tree = () => $('nano-tree') as HTMLElement & { shadowRoot: ShadowRoot }
+  const t$ = (sel: string) => tree().shadowRoot.querySelector(sel) as HTMLElement | null
+  const t$$ = (sel: string) => [...tree().shadowRoot.querySelectorAll(sel)] as HTMLElement[]
+  const item = (id: string) => t$(`[role="treeitem"][data-id="${id}"]`)
+  const row = (id: string) => item(id)!.querySelector('.line') as HTMLElement
+  return { host, el, call, settle, $, $$, button, type, tree, t$, t$$, item, row }
 }
 
 test('the filter hides what does not match', async () => {
-  const { $, type } = await mount()
-  expect($('[data-instance="host/r"]')).not.toBeNull()
+  const { item, type } = await mount()
+  expect(item('c:host/r')).not.toBeNull()
   await type('input[name="filter"]', 'warn')
-  expect($('[data-instance="host/r"]')).toBeNull()
-  expect($('[data-instance="host/l"]')).not.toBeNull()
-  expect($(`[data-op="host/l/${Ops.key(Log.ops.warn)}"]`)).not.toBeNull()
+  expect(item('c:host/r')).toBeNull()
+  expect(item('c:host/l')).not.toBeNull()
+  expect(item(`o:host/l/${Ops.key(Log.ops.warn)}`)).not.toBeNull()
 })
 
-test('select an action, then connect it to a fitting one; ones that do not fit get no connect button', async () => {
-  const { host, $, settle, type } = await mount()
-  await type('input[name="filter"]', ' ')   // a blank filter opens everything
-  $(`[data-op="host/r/${Ops.key(Range.ops.value)}"]`)!.click(); await settle()
-  expect($(`[data-connect="host/l/${Ops.key(Log.ops.info)}"]`)).not.toBeNull()
-  expect($(`[data-connect="host/l/${Ops.key(Log.ops.entries)}"]`)).toBeNull()
-  $(`[data-connect="host/l/${Ops.key(Log.ops.info)}"]`)!.click(); await settle()
-  expect(host.registry.snapshot().subscriptions.some(s => s.source === 'r' && s.listener === 'l')).toBe(true)
-  expect($('.connection')).not.toBeNull()
+test('systems show their components and count; components their ops (kind and types); systems start open', async () => {
+  const { item, row, settle } = await mount()
+  expect(item('s:host')!.getAttribute('aria-expanded')).toBe('true')
+  expect(row('s:host').querySelector('.count')!.textContent).toBe('3')   // the platform, r and l
+  expect(item('c:host/r')!.getAttribute('aria-expanded')).toBe('false')
+  row('c:host/r').click(); await settle()
+  const value = item(`o:host/r/${Ops.key(Range.ops.value)}`)!
+  expect(value.querySelector('.kind')!.textContent).toBe('source')
+  ;(value.querySelector('.chev') as HTMLElement).click(); await settle()
+  expect(item(`o:host/r/${Ops.key(Range.ops.value)}`)!.querySelector('.body')!.textContent).toContain('→')
+})
+
+test('select an action, then connect it to a fitting one; ones that do not fit get no connect button; disconnect', async () => {
+  const { host, item, row, t$, settle } = await mount()
+  row('c:host/r').click(); await settle()
+  row(`o:host/r/${Ops.key(Range.ops.value)}`).click(); await settle()
+  ;(item('c:host/l')!.querySelector('.chev') as HTMLElement).click(); await settle()
+  expect(t$(`[data-connect="host/l/${Ops.key(Log.ops.info)}"]`)).not.toBeNull()
+  expect(t$(`[data-connect="host/l/${Ops.key(Log.ops.entries)}"]`)).toBeNull()
+  t$(`[data-connect="host/l/${Ops.key(Log.ops.info)}"]`)!.click(); await settle()
+  const linked = () => host.registry.snapshot().subscriptions.some(s => s.source === 'r' && s.listener === 'l')
+  expect(linked()).toBe(true)
+  const conn = t$('[data-id^="x:host/"]')!
+  expect(conn.textContent).toContain('r · ')
+  ;(conn.querySelector('[aria-label="Disconnect"]') as HTMLElement).click(); await settle()
+  expect(linked()).toBe(false)
 })
 
 test('by component: add a component to another system', async () => {
-  const { call, button, $, settle } = await mount()
+  const { call, button, t$, settle } = await mount()
   button('By component').click(); await settle()
-  $('[data-toggle="c:r"]')!.click(); await settle()
-  const pick = $('select[name="add-to-r"]') as HTMLSelectElement
+  t$('[data-toggle="c:r"]')!.click(); await settle()
+  const pick = t$('select[name="add-to-r"]') as HTMLSelectElement
   pick.value = 'lab'; pick.dispatchEvent(new Event('change')); await settle()
-  $('[aria-label="Add r to system"]')!.click(); await settle()
+  t$('[aria-label="Add r to system"]')!.click(); await settle()
   const lab = (await call(P.systems)).value[1]
   expect(lab.instances.map((i: any) => i.id)).toContain('r')
 })
@@ -69,29 +92,52 @@ test('Add creates a component from the catalog', async () => {
 })
 
 test('the tree lists connections, not the hidden subscriptions of views', async () => {
-  const { $$ } = await mount()
-  expect($$('.connection')).toHaveLength(0)   // <c-platform> itself subscribes to the platform, in host
+  const { t$$ } = await mount()
+  expect(t$$('[data-id^="x:"]')).toHaveLength(0)   // <c-platform> itself subscribes to the platform, in host
 })
 
 test('by component: the add button never targets a system the component is already in', async () => {
-  const { call, button, $, settle } = await mount()
+  const { call, button, t$, settle } = await mount()
   button('By component').click(); await settle()
-  $('[data-toggle="c:r"]')!.click(); await settle()
-  const pick = $('select[name="add-to-r"]') as HTMLSelectElement
+  t$('[data-toggle="c:r"]')!.click(); await settle()
+  const pick = t$('select[name="add-to-r"]') as HTMLSelectElement
   pick.value = 'lab'; pick.dispatchEvent(new Event('change')); await settle()
-  $('[aria-label="Add r to system"]')!.click(); await settle()
+  t$('[aria-label="Add r to system"]')!.click(); await settle()
   await call(P.createSystem, 'third'); await settle()
-  $('[aria-label="Add r to system"]')!.click(); await settle()   // 'lab' already holds r: this goes to 'third'
+  t$('[aria-label="Add r to system"]')!.click(); await settle()   // 'lab' already holds r: this goes to 'third'
   const systems = (await call(P.systems)).value
   expect(systems[2].instances.map((i: any) => i.id)).toContain('r')
 })
 
-test('a component can be selected; a selection made elsewhere opens the tree to it', async () => {
-  const { call, settle, $ } = await mount()
-  ;($('[data-component="host/r"]') as HTMLButtonElement).click(); await settle()
+test('a component can be selected and unselected; a selection made elsewhere opens the tree to it, without taking focus', async () => {
+  const { call, settle, item, row, tree } = await mount()
+  row('c:host/r').click(); await settle()
   expect((await call(P.selected)).value).toEqual({ system: 'host', instance: 'r' })
-  expect($('[data-component="host/r"]')!.getAttribute('aria-pressed')).toBe('true')
-  expect($(`[data-op="host/l/${Ops.key(Log.ops.info)}"]`)).toBeNull()   // l is closed
+  expect(item('c:host/r')!.getAttribute('aria-selected')).toBe('true')
+  expect(item(`o:host/l/${Ops.key(Log.ops.info)}`)).toBeNull()   // l is closed
+  ;(tree().shadowRoot.activeElement as HTMLElement | null)?.blur()
   await call(P.select, { system: 'host', instance: 'l', op: Ops.key(Log.ops.info) }); await settle()
-  expect($(`[data-op="host/l/${Ops.key(Log.ops.info)}"]`)!.getAttribute('aria-pressed')).toBe('true')
+  expect(item(`o:host/l/${Ops.key(Log.ops.info)}`)!.getAttribute('aria-selected')).toBe('true')
+  expect(tree().shadowRoot.activeElement).toBeNull()
+  row(`o:host/l/${Ops.key(Log.ops.info)}`).click(); await settle()
+  expect((await call(P.selected)).value).toBeNull()
+})
+
+test('a component in several systems: a badge, "Also in" buttons that select it there, and Shared only', async () => {
+  const { call, settle, item, row, t$, $, type } = await mount()
+  await call(P.addToSystem, { instance: 'r', from: 'host', to: 'lab' }); await settle()
+  expect(item('c:host/r')!.querySelector('.tag')!.textContent).toBe('↗ 2 systems')
+  expect(item('c:host/l')!.querySelector('.tag')).toBeNull()
+  await type('input[name="filter"]', 'r')
+  row('c:host/r')   // shown, and open while filtering
+  const jump = t$('[data-also="lab/r"]')!
+  expect(jump.textContent).toContain('lab')
+  jump.click(); await settle()
+  expect((await call(P.selected)).value).toEqual({ system: 'lab', instance: 'r' })
+  expect(($('input[name="filter"]') as HTMLInputElement).value).toBe('')   // cleared, so it shows
+  expect(item('c:lab/r')!.getAttribute('aria-selected')).toBe('true')
+  const shared = $('input[name="shared"]') as HTMLInputElement
+  shared.checked = true; shared.dispatchEvent(new Event('change')); await settle()
+  expect(item('c:host/l')).toBeNull()
+  expect(item('c:host/r')).not.toBeNull()
 })

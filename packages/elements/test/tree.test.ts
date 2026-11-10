@@ -116,3 +116,11 @@ test('reveal opens the way to a node and focuses it', async () => {
   expect(visible()).toEqual(['commerce', 'billing', 'billing/payments', 'billing/payments/refund', 'analytics'])
   expect(focused()).toBe('billing/payments/refund')
 })
+
+test('reveal without focus opens the way, and moves the tab stop, but leaves focus where it is', async () => {
+  const { t, visible, focused } = await tree()
+  t.reveal('commerce/orders/place', { focus: false }); await settle(t)
+  expect(visible()).toContain('commerce/orders/place')
+  expect(focused()).toBeUndefined()
+  expect([...t.shadowRoot!.querySelectorAll('[tabindex="0"]')].map(e => (e as HTMLElement).dataset.id)).toEqual(['commerce/orders/place'])
+})

@@ -67,6 +67,7 @@ Elements, defined on import:
 | `<nano-hover-card>` (`open-delay`, `close-delay`) | content, and a `card` slot | |
 | `<nano-data-table>` (`filter`, `selectable`, `page-size`) | `columns` (`{ key, label, sortable?, align?, render? }`), `rows` | `selection` (the rows) |
 | `<nano-code-block>` (`language`) | `code` | |
+| `<nano-tree>` (`open-depth`); `reveal(id, { focus? })` | `nodes` (`{ id, label, kind?, count?, badge?, terms?, end?, body?, children? }`), `query`, `selected` | `select` (`{ id }`; cancel it to keep `selected` yours) |
 | `toast(title, { description?, variant?, duration? })` | shows in one `<nano-toaster>`, made on first use | |
 
 Agent pieces, display only, on the AI SDK's data shapes: `<nano-tool>` (`.tool`: a tool part — `type`, `state`,

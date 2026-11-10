@@ -7,7 +7,8 @@ provided on the document, plus the platform that holds every system) and a few l
 know nothing about each other.
 
 - **Build time:** `<c-range name="slider">` on the Overview page places itself in `host` when the page loads.
-- **Systems:** `<c-platform>` shows every system by system or by component; select an action and connect it to
+- **Systems:** `<c-platform>` shows every system as a tree (`<nano-tree>`), by system or by component, with "Also in" for
+  a component in several systems and a "Shared only" filter; select an action and connect it to
   one that fits. Below it, a worked example made by `composable.ts` (range → debounce → log, input → map → log).
 - **Runtime:** the drawer's Workspace entries add panels to the dock; each panel places a new instance and
   removes it when closed.

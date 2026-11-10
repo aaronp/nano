@@ -61,18 +61,19 @@ export class NanoTree extends LitElement {
   #flip(id: string) { const f = new Set(this.flipped); f.has(id) ? f.delete(id) : f.add(id); this.flipped = f }
   #setOpen(row: Row, open: boolean) { if (row.can && row.open !== open && !this.#q) this.#flip(row.id) }
 
-  /** Opens the way to a node, focuses it and scrolls it into view. */
-  reveal(id: string) {
+  /** Opens the way to a node and scrolls it into view; focuses it unless `focus` is false (say, for a selection made elsewhere). */
+  reveal(id: string, { focus = true } = {}) {
     const path = pathTo(this.nodes, id)
     path.slice(0, -1).forEach((a, depth) => { if (!this.#isOpen(a, depth)) this.#flip(a) })
-    if (path.length) void this.#focus(id)
+    if (path.length) void this.#focus(id, focus)
   }
 
-  async #focus(id: string) {
+  async #focus(id: string, focus = true) {
     this.focused = id
     await this.updateComplete
     const li = this.renderRoot.querySelector<HTMLElement>(`[role='treeitem'][data-id="${CSS.escape(id)}"]`)
-    li?.focus(); li?.querySelector('.line')?.scrollIntoView?.({ block: 'nearest' })
+    if (focus) li?.focus()
+    li?.querySelector('.line')?.scrollIntoView?.({ block: 'nearest' })
   }
 
   #choose(id: string) {
