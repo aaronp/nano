@@ -11,8 +11,6 @@ import './components/component-drawer.ts';
 import './components/import-dialog.ts';
 import './components/gallery.ts';
 import './components/theme-picker.ts';
-import './components/puzzle-prototype.ts';
-import './components/puzzle-port.ts';
 import './widgets/widgets.ts';
 import './widgets/notes-panel.ts';
 import './components/workspace-dock.ts';

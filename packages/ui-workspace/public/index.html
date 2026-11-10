@@ -37,8 +37,6 @@
   <!-- Navigation: one link per <app-route> below, in order. -->
   <a slot="nav" href="#/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/></svg>Overview</a>
   <a slot="nav" href="#/systems"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6v5H4zM14 13h6v5h-6zM10 8.5h2a2 2 0 0 1 2 2V15.5"/></svg>Systems</a>
-  <a slot="nav" href="#/puzzle-prototype"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v4a2 2 0 1 0 0 4v4H4zM13 8h7v12h-7v-4a2 2 0 1 1 0-4z"/></svg>Puzzle Prototype</a>
-  <a slot="nav" href="#/puzzle-port"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v4a2 2 0 1 0 0 4v4H4zM13 8h7v12h-7v-4a2 2 0 1 1 0-4z"/></svg>Puzzle Port</a>
   <!-- Workspaces: each runs in a system (a registry and runtime); + makes a new one. Saved ones are added under Main. -->
   <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspaces</a><button type="button" data-toggle-drawer aria-pressed="true" aria-label="Components drawer" title="Show or hide the components drawer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM9 4v16"/></svg></button><button type="button" data-new-workspace aria-label="New workspace" title="New workspace">+</button></div>
   <a slot="nav" data-sub href="#/workspace">Main</a>
@@ -98,8 +96,6 @@
         <!-- @composable components, added at runtime: each panel places a new instance and removes it on close.
              composable.ts adds one per catalog kind that has an element, before these. -->
         <template data-widget="c-platform" data-title="Systems"><c-platform></c-platform></template>
-        <template data-widget="puzzle-prototype" data-title="Puzzle Prototype" data-flush><puzzle-prototype></puzzle-prototype></template>
-        <template data-widget="puzzle-port" data-title="Puzzle Port" data-flush><puzzle-port></puzzle-port></template>
         <template data-widget="c-editor" data-title="Puzzle editor"><editor-page></editor-page></template>
         <template data-widget="nano-gallery" data-title="Components gallery"><nano-gallery></nano-gallery></template>
       </workspace-dock>
@@ -127,16 +123,6 @@
   <!-- Components: the widgets' component library under the chosen theme, or every theme side by side. -->
   <app-route path="/components">
     <nano-gallery></nano-gallery>
-  </app-route>
-
-  <!-- The original puzzle prototype, exactly as designed (its own runtime, in a frame). -->
-  <app-route path="/puzzle-prototype" bleed>
-    <puzzle-prototype></puzzle-prototype>
-  </app-route>
-
-  <!-- The same prototype ported to a Lit element: its own markup and styles, no theme. -->
-  <app-route path="/puzzle-port" bleed>
-    <puzzle-port></puzzle-port>
   </app-route>
 
   <app-route path="/settings">
