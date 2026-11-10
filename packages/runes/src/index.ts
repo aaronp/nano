@@ -69,11 +69,13 @@ export type ActionSpec = { in?: TSchema; out?: TSchema; description: string }
 type Fn = (...a: any[]) => any
 /** What `component()` takes for each key: a schema for a getter or event (its output), a spec for an action. */
 export type Schemas<A> = { [K in keyof A]: A[K] extends { readonly [EVENT]: EventMark } ? TSchema : A[K] extends Fn ? ActionSpec : TSchema }
+type Arg<V> = V extends (d: infer D) => any ? D : never
 // each given schema must agree with the code: a getter's schema describes its value, an action's `in` its argument
 type Agrees<V, S> =
-  V extends { readonly [EVENT]: EventMark } ? S
-  : V extends Fn ? (S extends { in: infer I extends TSchema } ? ([Static<I>] extends [Parameters<V>[0]] ? S : { in: 'does not match the parameter type' }) : S)
-  : S extends TSchema ? ([V] extends [Static<S>] ? S : 'schema does not match the getter type') : S   // every value it returns fits the schema
+  // [V] keeps a union whole: every member must agree, not just one
+  [V] extends [{ readonly [EVENT]: EventMark }] ? (S extends TSchema ? (unknown extends Arg<V> ? S : [Arg<V>] extends [Static<S>] ? S : 'schema does not match the event type') : S)
+  : [V] extends [Fn] ? (S extends { in: infer I extends TSchema } ? ([Static<I>] extends [Parameters<V>[0]] ? S : { in: 'does not match the parameter type' }) : S)
+  : S extends TSchema ? ([V] extends [Static<S> | (S extends { '~optional': true } ? undefined : never)] ? S : 'schema does not match the getter type') : S   // every value it returns fits the schema
 type Checked<A, S> = { [K in keyof S]: K extends keyof A ? Agrees<A[K], S[K]> : never }
 
 const IGNORED = Type.Unknown({ description: 'Ignored: any value triggers it' })

@@ -19,9 +19,11 @@ export const canonical = (value: unknown): string => JSON.stringify(sorted(value
 
 /** Keys that describe a schema without constraining it: `fits` ignores them (a title still names a type). */
 const ANNOTATIONS = new Set(['description', 'examples', '$comment'])
-const bare = (v: unknown): unknown =>
-  Array.isArray(v) ? v.map(bare)
-  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => !ANNOTATIONS.has(k)).map(([k, x]) => [k, bare(x)]))
+/** Keys whose values are maps of names to schemas: a name there is a property, never an annotation. */
+const NAMED = new Set(['properties', 'patternProperties', '$defs'])
+const bare = (v: unknown, named = false): unknown =>
+  Array.isArray(v) ? v.map(x => bare(x))
+  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => named || !ANNOTATIONS.has(k)).map(([k, x]) => [k, bare(x, !named && NAMED.has(k))]))
   : v
 
 /** A schema that accepts any value: no constraints besides, at most, a name and annotations. */

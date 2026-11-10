@@ -240,5 +240,11 @@ const typeChecks = () => {
   component('t/bad', () => ({ get n() { return 1 } }), { n: Type.String() })
   // @ts-expect-error a string input for a number parameter
   component('t/bad2', () => ({ set: (n: number) => { void n } }), { set: { in: Type.String(), description: 'x' } })
+  // @ts-expect-error a number schema for a getter that may return a string
+  component('t/bad3', () => ({ get n(): number | string { return 1 } }), { n: Type.Number() })
+  // @ts-expect-error a number schema for a string event
+  component('t/bad4', () => ({ done: event(Type.String()) }), { done: Type.Number() })
+  // an event with no schema of its own takes any described schema
+  component('t/ok', () => ({ done: event() }), { done: Type.Number() })
 }
 void typeChecks

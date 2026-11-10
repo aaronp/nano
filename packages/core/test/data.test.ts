@@ -45,3 +45,9 @@ test('ops carry a description when given', () => {
   expect(Ops.sink('t', 'x', Type.Number(), { description: 's' }).description).toBe('s')
   expect('description' in Ops.source('t', 'x', Type.Number())).toBe(false)
 })
+
+test('a property named like an annotation is still a property', () => {
+  const from = Ops.source('t', 'a', Type.Object({ description: Type.String(), examples: Type.String() }))
+  expect(Ops.fits(from, Ops.sink('t', 'b', Type.Object({ description: Type.Number(), examples: Type.String() })))).toBe(false)
+  expect(Ops.fits(from, Ops.sink('t', 'b', Type.Object({ description: Type.String({ description: 'd' }), examples: Type.String() })))).toBe(true)
+})
