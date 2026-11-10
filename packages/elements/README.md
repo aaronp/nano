@@ -44,3 +44,32 @@ Bare `button`, `input`, `select` and `textarea` are styled; and the classes: `.b
 `.small`), `.icon-btn`, `.badge` (`.good` `.bad` `.warn` `.accent`), `.chip`, `.pill`, `.card`, `.alert` (`.good`
 `.bad`), `.problem`, `.field`, `.input`, `.meter` (a `span` inside, width = value), `.table`, `.tabs`
 (`button[aria-selected]`), `.list-row`, `.kicker`, `.display-s/m/l`, `.muted`, `.mono`, `.row`, `.col`, `.grid-auto`.
+
+Where the browser allows it (`appearance: base-select`), a bare `select`'s open list takes the theme too. Set
+`color-scheme` (light or dark) on the page, so the browser's own pickers and scrollbars match.
+
+## The kit (`kit`), in shadcn's look
+
+CSS only (`static styles = [base, kit]`, or a page's `document.adoptedStyleSheets`): `.avatar` (`.small` `.large`)
+and `.avatar-stack`, `.bubble` (`.mine`), `.kbd`, `.code`, `.input-group` (with `.addon`s and buttons), `.toggle`
+(`aria-pressed`) and `.toggle-group`, `input[type=checkbox].switch`, `dialog.dialog` and `dialog.drawer` (`.bottom`)
+for native `<dialog>`s (`showModal()`; a `<form method="dialog">` closes one), `.pop` (a `[popover]` surface),
+`.menu-item`, `.menu-sep`, `.menu-label`, `.shortcut`, `.toast`.
+
+Elements, defined on import:
+
+| Element | Takes | Emits |
+| --- | --- | --- |
+| `<nano-select>` (`multiple`, `placeholder`) | `options` (strings or `{ value, label?, group?, disabled? }`), `value` (string, or array when multiple) | `change` |
+| `<nano-command>` | `items` (`{ value, label?, group?, shortcut? }`), `selected` | `pick` (the item) |
+| `<nano-calendar>`, `<nano-date-picker>` | `value` (ISO `YYYY-MM-DD`) | `change` |
+| `<nano-menu>` (wraps content; right-click opens it) | `items` (`{ label, shortcut?, danger?, disabled? }`, `{ separator: true }`, `{ heading }`) | `select` (the item) |
+| `<nano-hover-card>` (`open-delay`, `close-delay`) | content, and a `card` slot | |
+| `<nano-data-table>` (`filter`, `selectable`, `page-size`) | `columns` (`{ key, label, sortable?, align?, render? }`), `rows` | `selection` (the rows) |
+| `<nano-code-block>` (`language`) | `code` | |
+| `toast(title, { description?, variant?, duration? })` | shows in one `<nano-toaster>`, made on first use | |
+
+Agent pieces, display only, on the AI SDK's data shapes: `<nano-tool>` (`.tool`: a tool part — `type`, `state`,
+`input`, `output`, `errorText`), `<nano-task>` (`.task`), `<nano-subagent>` (`.agent`: name, status, its tool
+parts), `<nano-cli>` (`.runs`: command, output, exit code), `<nano-trace>` (`.spans`: OpenTelemetry-style `spanId`,
+`parentSpanId`, `startTime`, `endTime`, `status`) and `<nano-test-results>` (`.results`: summary and suites).
