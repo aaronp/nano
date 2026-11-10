@@ -4,8 +4,6 @@ A micro-frontend platform.
 
 View it [here](https://aaronp.github.io/nano/)
 
-Packages include `@composable/sdk` and `@composable/connections` (connections as data, and an orchestrator).
-
 ## Published packages
 
 `@pritzlaff/nano-core` (ops, components, registries, runtimes), `@pritzlaff/nano-runes` (components written as
