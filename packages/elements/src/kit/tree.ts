@@ -100,7 +100,7 @@ export class NanoTree extends LitElement {
     else if (k === 'Home') to(rows[0])
     else if (k === 'End') to(rows.at(-1))
     else if (k === 'ArrowRight') row.can && !row.open ? this.#setOpen(row, true) : rows[i + 1]?.parent === row.id && to(rows[i + 1])
-    else if (k === 'ArrowLeft') row.can && row.open ? this.#setOpen(row, false) : to(rows.find(r => r.id === row.parent))
+    else if (k === 'ArrowLeft') row.can && row.open && !this.#q ?this.#setOpen(row, false) : to(rows.find(r => r.id === row.parent))
     else if (k === 'Enter' || k === ' ') this.#choose(row.id)
     else if (k.length === 1 && k.trim()) {
       const c = k.toLowerCase()

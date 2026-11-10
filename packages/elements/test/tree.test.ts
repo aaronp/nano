@@ -124,3 +124,10 @@ test('reveal without focus opens the way, and moves the tab stop, but leaves foc
   expect(focused()).toBeUndefined()
   expect([...t.shadowRoot!.querySelectorAll('[tabindex="0"]')].map(e => (e as HTMLElement).dataset.id)).toEqual(['commerce/orders/place'])
 })
+
+test('while filtering, ← goes to the parent (rows can\'t be closed then)', async () => {
+  const { t, key, focused } = await tree()
+  t.query = 'refund'; await settle(t)
+  t.reveal('billing/payments'); await settle(t)   // open, as everything is while filtering
+  await key('ArrowLeft'); expect(focused()).toBe('billing')
+})

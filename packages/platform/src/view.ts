@@ -84,7 +84,12 @@ export class PlatformEl extends ModelElement {
   #component(s: Snapshot, i: Inst, in_: string[]): TreeNode {
     const id = `c:${s.id}/${i.id}`, others = in_.filter(x => x !== s.id)
     this.#picks.set(id, { system: s.id, instance: i.id })
-    const jump = (to: string) => { this.filter = ''; void this.act(P.select, { system: to, instance: i.id }) }
+    // select it there, and take focus to its row (a jump the person made, unlike a selection made elsewhere)
+    const jump = async (to: string) => {
+      this.filter = ''
+      await this.act(P.select, { system: to, instance: i.id }); await this.updateComplete
+      this.renderRoot.querySelector<NanoTree>('nano-tree')?.reveal(`c:${to}/${i.id}`)
+    }
     return {
       id, label: i.id, kind: 'component', badge: others.length ? `↗ ${in_.length} systems` : undefined,
       body: others.length ? html`<div class="row">Also in ${others.map(o => html`<button class="btn small" data-also="${o}/${i.id}" @click=${() => jump(o)}>↗ ${o}</button>`)}</div>` : undefined,

@@ -124,7 +124,7 @@ test('a component can be selected and unselected; a selection made elsewhere ope
 })
 
 test('a component in several systems: a badge, "Also in" buttons that select it there, and Shared only', async () => {
-  const { call, settle, item, row, t$, $, type } = await mount()
+  const { call, settle, item, row, t$, $, type, tree } = await mount()
   await call(P.addToSystem, { instance: 'r', from: 'host', to: 'lab' }); await settle()
   expect(item('c:host/r')!.querySelector('.tag')!.textContent).toBe('↗ 2 systems')
   expect(item('c:host/l')!.querySelector('.tag')).toBeNull()
@@ -136,6 +136,7 @@ test('a component in several systems: a badge, "Also in" buttons that select it 
   expect((await call(P.selected)).value).toEqual({ system: 'lab', instance: 'r' })
   expect(($('input[name="filter"]') as HTMLInputElement).value).toBe('')   // cleared, so it shows
   expect(item('c:lab/r')!.getAttribute('aria-selected')).toBe('true')
+  expect((tree().shadowRoot.activeElement as HTMLElement | null)?.dataset.id).toBe('c:lab/r')   // focus follows the jump
   const shared = $('input[name="shared"]') as HTMLInputElement
   shared.checked = true; shared.dispatchEvent(new Event('change')); await settle()
   expect(item('c:host/l')).toBeNull()
