@@ -1,11 +1,11 @@
 /**
  * <theme-picker>: choose the theme and light/dark. State lives in src/lib/theme-state.ts.
  *
- *   <theme-picker></theme-picker>                compact: theme select + light/dark/system (app bar)
+ *   <theme-picker></theme-picker>                compact: a swatch per theme + light/dark/system (app bar)
  *   <theme-picker layout="cards"></theme-picker> large cards with previews (settings page)
  */
 import { LitElement, html, css } from 'lit';
-import { THEMES, THEME_IDS, isThemeId, schemesOf, themeVars } from '../lib/themes.ts';
+import { THEMES, THEME_IDS, schemesOf, themeVars } from '../lib/themes.ts';
 import { DEFAULT_CHOICE, THEME_EVENT, applyChoice, currentChoice, type ThemeChoice } from '../lib/theme-state.ts';
 import { requestBus, type Bus } from '../lib/bus.ts';
 
@@ -18,14 +18,23 @@ export class ThemePicker extends LitElement {
   static override styles = css`
     :host { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
     :host([layout='cards']) { display: block; }
-    select, button { font: inherit; color: inherit; }
-    select { padding: 6px 8px; border-radius: var(--radius); border: 1px solid color-mix(in srgb, currentColor 35%, transparent); background: transparent; }
-    select option { color: #000; }
+    button { font: inherit; color: inherit; }
+    .themes { display: flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); border-radius: 10px;
+      overflow-x: auto; scrollbar-width: none; max-width: min(100%, 70vw); }
+    .lbl { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; padding: 0 6px 0 8px; }
+    .theme-btn { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 36px; min-width: 36px; padding: 0 9px; border: 0; border-radius: 7px;
+      background: transparent; font-weight: 600; white-space: nowrap; cursor: pointer; }
+    .theme-btn:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+    .theme-btn[aria-pressed='true'] { background: color-mix(in srgb, currentColor 20%, transparent); }
+    .swatch { position: relative; flex: none; width: 20px; height: 20px; border-radius: 50%; overflow: hidden; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, currentColor 55%, transparent); }
+    .theme-btn[aria-pressed='true'] .swatch { box-shadow: inset 0 0 0 1.5px currentColor; }
+    .swatch > span { position: absolute; right: 0; top: 0; width: 10px; height: 20px; }
+    .swatch > i { position: absolute; left: 4px; bottom: 4px; width: 5px; height: 5px; border-radius: 50%; }
     .seg { display: inline-flex; border: 1px solid color-mix(in srgb, currentColor 35%, transparent); border-radius: 999px; overflow: hidden; }
     .seg button { border: 0; background: transparent; padding: 5px 10px; cursor: pointer; }
     .seg button[aria-pressed='true'] { background: color-mix(in srgb, currentColor 22%, transparent); font-weight: 600; }
     .seg button:disabled { opacity: .45; cursor: default; }
-    button:focus-visible, select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
     .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
     .card { display: flex; flex-direction: column; gap: 10px; padding: 0; border: 2px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--fg);
       text-align: left; cursor: pointer; overflow: hidden; }
@@ -46,7 +55,6 @@ export class ThemePicker extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    this.bus ??= requestBus(this);
     this.choice = currentChoice(document);
     document.addEventListener(THEME_EVENT, this.onChange);
   }
@@ -60,7 +68,7 @@ export class ThemePicker extends LitElement {
 
   private pick(next: ThemeChoice) {
     applyChoice(document, next);
-    if (!this.bus) throw new Error('bug: theme picked before the picker was connected');
+    this.bus ??= requestBus(this);   // asked for on use, so the picker can render outside a shell (throws there if picked)
     this.bus.publish('theme:changed', { theme: next.theme, mode: next.mode, scheme: document.documentElement.dataset['scheme'] }, 'theme-picker');
   }
 
@@ -89,9 +97,18 @@ export class ThemePicker extends LitElement {
       })}</div>
       <div class="modes"><span>Appearance</span>${this.modes()}</div>`;
     }
-    return html`<label><span class="lbl">Theme</span> <select aria-label="Theme" .value=${this.choice.theme}
-        @change=${(e: Event) => { const v = (e.target as HTMLSelectElement).value; if (!isThemeId(v)) throw new Error(`bug: unknown theme ${v}`); this.pick({ ...this.choice, theme: v }); }}>
-        ${THEME_IDS.map((id) => html`<option value=${id} ?selected=${this.choice.theme === id}>${THEMES[id].label}</option>`)}</select></label>
+    // A swatch per theme, as in the Decision Ledger: its page, its text (right half) and its accent (the dot),
+    // in the scheme now showing when the theme has it.
+    const shown = document.documentElement.dataset['scheme'];
+    return html`<div class="themes" role="group" aria-label="Theme"><span class="lbl">Theme</span>${THEME_IDS.map((id) => {
+        const on = this.choice.theme === id;
+        const s = schemesOf(id).find((x) => x === shown) ?? schemesOf(id)[0]!;
+        const v = themeVars(id, s);
+        return html`<button type="button" class="theme-btn" aria-pressed=${String(on)} aria-label=${`${THEMES[id].label} theme`} title=${THEMES[id].label}
+          @click=${() => this.pick({ ...this.choice, theme: id })}>
+          <span class="swatch" aria-hidden="true" style=${`background:${v['--bg']}`}><span style=${`background:${v['--fg']}`}></span><i style=${`background:${v['--accent']}`}></i></span>
+          ${on ? html`<span>${THEMES[id].label}</span>` : ''}</button>`;
+      })}</div>
       ${this.modes()}`;
   }
 }
