@@ -110,3 +110,16 @@ test('the names an import must not take include the page\'s own widgets', async 
   const { loadedNames } = await import('../src/composable.ts')
   expect(loadedNames().kinds).toEqual(expect.arrayContaining(['notes', 'chart', 'activity', 'range']))
 })
+
+test('importing a package republishes the platform\'s kinds', async () => {
+  const { addCatalog } = await import('../src/composable.ts')
+  const { Components: C, Ops: O } = await import('@pritzlaff/nano-core')
+  const heard: { kind: string }[][] = []
+  const spy = C.create({ ns: 't', name: 'kinds-spy' }, () => heard)
+  spy.action(O.sink('t', 'take', P.kinds.output!), (h, x) => { h.push(x as { kind: string }[]) })
+  host.registry.add('kinds-spy', C.instantiate(spy))
+  host.registry.subscribe({ source: 'platform', op: O.key(P.kinds), listener: 'kinds-spy', target: 't/take' })
+  addCatalog({ clock: { component: C.create({ ns: 't', name: 'clock' }, () => ({})), title: 'Clock' } }, { name: 'clocks', url: 'https://x/clocks.json' })
+  await new Promise(r => setTimeout(r, 0))
+  expect(heard.at(-1)?.map(k => k.kind)).toContain('clock')
+})

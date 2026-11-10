@@ -8,11 +8,16 @@ const NS = 'composable/platform', any = Type.Unknown(), str = Type.String()
 /** What is selected in the platform: an instance in a system, and maybe one of its ops. */
 export type Selection = { system: string; instance: string; op?: string } | null
 
+/** A kind the platform can make: its catalog name, its component's id (`ns/name`), title and element tag. */
+export type Kind = { kind: string; component: string; title: string; tag?: string }
+
 /** The platform's ops. */
 export const PlatformOps = {
   systems: Ops.source(NS, 'systems', Type.Array(any)),
   selected: Ops.source(NS, 'selected', any),
   catalog: Ops.source(NS, 'catalog', Type.Array(str)),
+  kinds: Ops.source(NS, 'kinds', Type.Array(any)),
+  catalogChanged: Ops.action(NS, 'catalog-changed', any, any),
   selectionChanged: Ops.source(NS, 'selection-changed', any),
   stateChanged: Ops.source(NS, 'state-changed', any),
   createSystem: Ops.action(NS, 'create-system', str, any),
@@ -43,7 +48,10 @@ const opOf = (reg: Registry, instance: string, key: string) => {
 }
 
 /** The platform over `host`, able to create the kinds of component in `catalog` (a host's merged catalogs). */
-export function platform(host: Runtime, catalog: Record<string, { component: Component }>): Component<State> {
+export function platform(host: Runtime, catalog: Record<string, { component: Component; title?: string; tag?: string }>): Component<State> {
+  // read at call time: the host adds imported packages' kinds to this same object, then calls catalog-changed
+  const kinds = (): Kind[] => Object.entries(catalog).map(([kind, e]) =>
+    ({ kind, component: `${e.component.id.ns}/${e.component.id.name}`, title: e.title ?? kind, ...(e.tag && { tag: e.tag }) }))
   const c = Components.create<State>({ ns: 'composable', name: 'platform' }, env => {
     const s: State = {
       host: host.registry.id, systems: new Map([[host.registry.id, host]]), selected: null, env, changed: () => {},
@@ -62,6 +70,8 @@ export function platform(host: Runtime, catalog: Record<string, { component: Com
   c.action(P.systems, s => snapshots(s))
   c.action(P.selected, s => s.selected)
   c.action(P.catalog, () => Object.keys(catalog))
+  c.action(P.kinds, () => kinds())
+  c.action(P.catalogChanged, s => { void s.env.notify(P.kinds, kinds()); void s.env.notify(P.catalog, Object.keys(catalog)) })
   c.action(P.selectionChanged); c.action(P.stateChanged)
   c.action(P.createSystem, (s, name) => {
     if (s.systems.has(name)) throw new Error(`${name} already exists`)

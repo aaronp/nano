@@ -69,6 +69,7 @@ export function addCatalog(entries: Catalog, from: { name: string; url: string }
     t.dataset.package = from.name; t.dataset.packageUrl = from.url
     if (dock.addTemplate) dock.addTemplate(t); else dock.append(t)   // not defined yet: read when it connects
   }
+  void ask(P.catalogChanged, null)   // views of the platform hear the new kinds
   document.dispatchEvent(new CustomEvent('catalog:changed', { detail: from }))
 }
 
