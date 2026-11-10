@@ -39,26 +39,12 @@ test('the page elements attach to the example instead of making their own', asyn
   expect(host.registry.snapshot().instances.filter(i => i.id === 'ex-range')).toHaveLength(1)
 })
 
-test('<puzzle-prototype> shows the original prototype page, served beside the app', async () => {
-  await import('../src/components/puzzle-prototype.ts')
-  const el = document.createElement('puzzle-prototype')
-  document.body.append(el)
-  const frame = el.shadowRoot!.querySelector('iframe')!
-  expect(frame.getAttribute('src')).toBe('./puzzle-prototype/PuzzlePrototype.dc.html')
-  for (const f of ['PuzzlePrototype.dc.html', 'support.js', 'vendor/react.js', 'vendor/react-dom.js'])
-    expect(await Bun.file(new URL(`../public/puzzle-prototype/${f}`, import.meta.url)).exists()).toBe(true)
-  expect(document.querySelector('a[href="#/puzzle-prototype"]')).not.toBeNull()
-  el.remove()
-})
-
-test('<puzzle-port> is on its own page and in the dock, rendering the ported artboard', async () => {
-  await import('../src/components/puzzle-port.ts')
-  const port = document.querySelector('app-route[path="/puzzle-port"] puzzle-port') as HTMLElement & { updateComplete: Promise<boolean> }
-  expect(port).not.toBeNull()
-  await port.updateComplete
-  expect(port.shadowRoot!.innerHTML.length).toBeGreaterThan(1000)
-  expect(document.querySelector('a[href="#/puzzle-port"]')).not.toBeNull()
-  expect(document.querySelector('template[data-widget="puzzle-port"]')).not.toBeNull()
+test('the puzzle prototype and port are gone: no page, nav item, dock widget or served files (they can be imported packages)', async () => {
+  for (const id of ['puzzle-prototype', 'puzzle-port']) {
+    for (const sel of [`a[href="#/${id}"]`, `app-route[path="/${id}"]`, `template[data-widget="${id}"]`])
+      expect(document.querySelector(sel) !== null, sel).toBe(false)   // (a boolean: a failure prints the selector, not the DOM)
+  }
+  expect(await Bun.file(new URL('../public/puzzle-prototype/PuzzlePrototype.dc.html', import.meta.url)).exists()).toBe(false)
 })
 
 test('the dock can add every catalog type that has an element (marked for the drawer), and + Add can make every type', async () => {

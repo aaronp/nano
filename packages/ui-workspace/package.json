@@ -20,7 +20,6 @@
     "@composable/bundle": "workspace:*",
     "@composable/platform": "workspace:*",
     "@composable/editor": "workspace:*",
-    "@composable/puzzle-port": "workspace:*",
     "@composable/wires": "workspace:*"
   },
   "devDependencies": {
