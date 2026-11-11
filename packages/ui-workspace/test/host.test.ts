@@ -132,3 +132,34 @@ test('the example wiring still connects, with every op typed and described', () 
 test('the host defines <c-sandboxed>, which dock panels of sandboxed kinds use', () => {
   expect(!!customElements.get('c-sandboxed')).toBe(true)
 })
+
+const route = (path: string) => document.querySelector(`app-route[path="${path}"]`)!
+
+test('the app bar holds <nano-profile> showing Systems and Themes, and no theme picker', async () => {
+  const el = document.querySelector('[slot="actions"]') as any
+  expect(el.localName).toBe('nano-profile')
+  expect(!!document.querySelector('[slot="actions"] theme-picker, theme-picker[slot="actions"]')).toBe(false)
+  await el.updateComplete
+  el.shadowRoot.querySelector('button').click(); await el.updateComplete
+  const links = [...el.shadowRoot.querySelectorAll('nav a')].map((a: any) => [a.textContent, a.getAttribute('href')])
+  expect(links).toEqual([['Systems', '#/systems'], ['Themes', '#/themes']])
+})
+
+test('the sidebar has no Systems link; #/systems still exists', () => {
+  expect(!!document.querySelector('a[slot="nav"][href="#/systems"]')).toBe(false)
+  expect(!!route('/systems')).toBe(true)
+})
+
+test('#/themes has the theme cards; Settings keeps Layout and no theme picker', () => {
+  expect(!!route('/themes').querySelector('theme-picker[layout="cards"]')).toBe(true)
+  expect(!!route('/settings').querySelector('theme-picker')).toBe(false)
+  expect(!!route('/settings').querySelector('#reset-splits')).toBe(true)
+})
+
+test('the profile instance is in the host system, owned by the app, labelled nano/deploy host', async () => {
+  const [hostSystem] = (await call('platform', P.systems)).value
+  const p = hostSystem.instances.find((i: any) => i.id === 'profile')
+  expect(p.owner).toEqual({ kind: 'platform', name: 'platform' })   // as the ex-* examples: made through the app's platform
+  expect(p.labels['nano/deploy']).toBe('host')
+  expect(host.registry.snapshot().instances.filter(i => i.id === 'profile')).toHaveLength(1)
+})

@@ -32,11 +32,10 @@
 <body>
 <app-shell>
   <span slot="title">Nano</span>
-  <theme-picker slot="actions"></theme-picker>
+  <nano-profile name="profile" slot="actions"></nano-profile>
 
   <!-- Navigation: one link per <app-route> below, in order. -->
   <a slot="nav" href="#/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/></svg>Overview</a>
-  <a slot="nav" href="#/systems"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6v5H4zM14 13h6v5h-6zM10 8.5h2a2 2 0 0 1 2 2V15.5"/></svg>Systems</a>
   <!-- Workspaces: each runs in a system (a registry and runtime); + makes a new one. Saved ones are added under Main. -->
   <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspaces</a><button type="button" data-toggle-drawer aria-pressed="true" aria-label="Components drawer" title="Show or hide the components drawer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM9 4v16"/></svg></button><button type="button" data-new-workspace aria-label="New workspace" title="New workspace">+</button></div>
   <a slot="nav" data-sub href="#/workspace">Main</a>
@@ -127,15 +126,22 @@
     <nano-gallery></nano-gallery>
   </app-route>
 
-  <app-route path="/settings">
+  <app-route path="/themes">
     <header class="page-head">
-      <h1>Settings</h1>
+      <h1>Themes</h1>
       <p>Themes are sets of CSS custom properties in <code>src/lib/themes.ts</code>. Your choice is remembered in this browser.</p>
     </header>
     <section class="panel">
       <h2>Theme</h2>
       <theme-picker layout="cards"></theme-picker>
     </section>
+  </app-route>
+
+  <app-route path="/settings">
+    <header class="page-head">
+      <h1>Settings</h1>
+      <p>How the workspace remembers its layout.</p>
+    </header>
     <section class="panel">
       <h2>Layout</h2>
       <p>Resizable areas remember their sizes, and the workspace remembers a layout when you press Save layout.</p>

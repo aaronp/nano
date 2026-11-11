@@ -12,6 +12,7 @@ import { Components, Ops, Registries, Runtimes, type Op } from '@pritzlaff/nano-
 import { provide } from '@pritzlaff/nano-elements'
 import { catalog as bundle, Debounce, defineBundle, Input, Log, Map, Range } from '@composable/bundle'
 import { catalog as editor } from '@composable/editor'
+import { catalog as shell, defineShell, Profile } from '@composable/shell'
 import type { Catalog } from '@pritzlaff/nano-elements'
 import { definePlatform, definePlatformTable, platform, PlatformOps as P } from '@composable/platform'
 import { defineElements as defineEditor } from '@composable/editor/elements'
@@ -20,7 +21,7 @@ import { defineSandboxed, provideDeploy } from './sandbox/sandboxed-el.ts'
 import { deploy, deployIn, type AppCatalog, type Mode } from './sandbox/deploy.ts'
 
 /** Every kind of component this host offers: its packages' catalogs, merged. Add a package, add its catalog. */
-export const catalog: AppCatalog = Object.fromEntries(Object.entries({ ...bundle, ...editor } as Catalog).map(([k, e]) => [k, { ...e, modes: ['host'] as Mode[], trust: 'trusted' as const }]))
+export const catalog: AppCatalog = Object.fromEntries(Object.entries({ ...bundle, ...editor, ...shell } as Catalog).map(([k, e]) => [k, { ...e, modes: ['host'] as Mode[], trust: 'trusted' as const }]))
 
 /** The page's runtime and its registry, `host`. */
 export const host = Runtimes.create(Registries.create('host'))
@@ -38,6 +39,7 @@ const ask = async (op: Op, arg: unknown) => {
 }
 for (const [kind, name] of [['range', 'ex-range'], ['debounce', 'ex-debounce'], ['log', 'ex-log'], ['input', 'ex-input'], ['map', 'ex-map']])
   await ask(P.createComponent, { kind, name, system: 'host' })
+await ask(P.createComponent, { kind: 'profile', name: 'profile', system: 'host' })
 const wire = (source: string, op: Op, listener: string, target: Op) =>
   ask(P.connect, { system: 'host', source, op: Ops.key(op), listener, target: Ops.key(target) })
 await wire('ex-range', Range.ops.value, 'ex-debounce', Debounce.ops.enqueue)
@@ -47,6 +49,8 @@ await wire('ex-map', Map.ops.mapped, 'ex-log', Log.ops.info)
 const set = (id: string, op: Op, arg: unknown) => host.call({ registry: 'host', instance: 'workspace' }, id, Ops.key(op), arg)
 await set('ex-map', Map.ops.setCode, 'return x * 2')
 await set('ex-input', Input.ops.setKind, 'number')
+await set('profile', Profile.ops.setUser, { name: 'Nano' })
+await set('profile', Profile.ops.setEntries, [{ label: 'Systems', href: '#/systems' }, { label: 'Themes', href: '#/themes' }])
 
 // The dock can add every kind that has an element: a panel template each (marked as the catalog's, for the components
 // drawer), before the hand-written ones.
@@ -92,6 +96,7 @@ document.addEventListener('wires:open-panel', e => {
 defineBundle()
 definePlatform(); definePlatformTable(); defineSandboxed()
 defineEditor()
+defineShell()
 defineWires()
 // the wiring view over the Workspace dock: it shows and edits the host system, and offers the merged catalog
 for (const w of document.querySelectorAll('c-wires')) Object.assign(w, { runtime: host, catalog })
