@@ -157,6 +157,8 @@ export class StatusLine extends BusWidget {
     return [bus.subscribe('*', (m) => { this.last = m; })];
   }
   override render() {
+    const message = (this.last?.payload as { message?: unknown } | null | undefined)?.message;
+    if (typeof message === 'string') return html`${message}`;
     return this.last ? html`Last event: <code>${this.last.topic}</code> from ${this.last.source}` : html`Ready`;
   }
 }

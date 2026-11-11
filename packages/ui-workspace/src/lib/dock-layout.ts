@@ -47,9 +47,13 @@ export const readWidgetMode = (state: unknown): string | undefined => {
 
 /** A panel's saved state: its widget, the instance its element shows (if it shows one), to reattach to, and the deploy mode it shows it in. */
 export const panelState = (widget: string, shown: { model?: unknown; name?: unknown; mode?: unknown } | null): { widget: string; name?: string; mode?: string } => {
-  const name = [shown?.model, shown?.name].find((n): n is string => typeof n === 'string' && !!n);
+  const name = shownInstance(shown);
   return { widget, ...(name && { name }), ...(typeof shown?.mode === 'string' && shown.mode && { mode: shown.mode }) };
 };
+
+/** The instance a panel's element shows (its model, else its name), if any. */
+export const shownInstance = (shown: { model?: unknown; name?: unknown } | null): string | undefined =>
+  [shown?.model, shown?.name].find((n): n is string => typeof n === 'string' && !!n);
 
 /** A starting layout: the given entries arranged side by side, stacked, as tabs, or in a two-column grid. With no
  * entries the workspace starts empty. */
@@ -83,8 +87,8 @@ export const panelIds = (item: { readonly type: string; readonly content?: reado
   return (item.content ?? []).flatMap((c) => panelIds(c as { type: string; content?: readonly unknown[]; componentState?: unknown }));
 };
 
-/** How panels are framed: with tabs, or distraction free (a lone panel has no tab, and its controls show on hover). */
-export const WINDOW_STYLES = [{ id: 'tabs', title: 'Tabs' }, { id: 'focus', title: 'Distraction free' }] as const;
+/** How panels are framed: with tabs, or clear (a lone panel has no tab, and its controls show on hover). */
+export const WINDOW_STYLES = [{ id: 'tabs', title: 'Tabs' }, { id: 'focus', title: 'Clear' }] as const;
 export type WindowStyle = (typeof WINDOW_STYLES)[number]['id'];
 
 /** The remembered window style for one dock (by its storage key); anything unknown reads as tabs. */
