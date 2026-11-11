@@ -1,5 +1,6 @@
 // <c-sandboxed name>: shows the sandboxed instance at `name` by placing its iframe (which lives in the layer) over itself.
 import { LitElement, css, html } from 'lit'
+import { hasRuntime, type Owner, type Registry, type Result } from '@pritzlaff/nano-core'
 import { providedRegistry } from '@pritzlaff/nano-elements'
 import type { Frame } from './stand-in'
 
@@ -7,10 +8,14 @@ import type { Frame } from './stand-in'
 const viewers = new WeakMap<Frame, SandboxedElement>()
 
 export class SandboxedElement extends LitElement {
-  static properties = { name: {}, note: { state: true } }
+  static properties = { name: {}, kind: {}, mode: {}, note: { state: true } }
   static styles = css`:host { display: block; min-height: 4rem; } p { margin: 0; padding: .5rem; font: inherit; opacity: .7; }`
   declare name?: string
   declare note?: string
+  declare kind?: string
+  declare mode?: string
+  /** The system the instance lives in; unset, the page's provided registry (a dock hands its own). */
+  declare registry?: Registry
   #frame?: Frame
   #ro = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(() => this.#place())
   #place = () => {
@@ -22,8 +27,20 @@ export class SandboxedElement extends LitElement {
 
   connectedCallback() {
     super.connectedCallback()
-    const v = (providedRegistry(this.ownerDocument)?.get(this.name ?? '')?.value ?? undefined) as Frame | undefined
-    this.#frame = v?.port ? v : undefined
+    const reg = this.registry ??= providedRegistry(this.ownerDocument)
+    this.name ??= this.getAttribute('name') ?? `c-sandboxed-${n++}`
+    this.kind ??= this.getAttribute('kind') ?? undefined
+    this.mode ??= this.getAttribute('mode') ?? 'isolated-sandbox'
+    const owner = { kind: 'widget', name: 'c-sandboxed' }
+    const deployer = deployers.get(this.ownerDocument)
+    if (reg && !reg.get(this.name) && this.kind && deployer) {
+      const r = deployer(reg, this.name, this.kind, this.mode, owner)
+      if ('error' in r) { this.note = r.error; return }
+    }
+    // a guarded instance is a wrapper: its stand-in (same id) is inside
+    let v: unknown = reg?.get(this.name)?.value
+    while (hasRuntime(v)) v = v.runtime.registry.get(this.name)?.value
+    this.#frame = (v as Frame | undefined)?.port ? (v as Frame) : undefined
     const f = this.#frame
     if (!f) { this.note = `no sandboxed instance "${this.name}"`; return }
     const holder = viewers.get(f)
@@ -45,5 +62,11 @@ export class SandboxedElement extends LitElement {
 
   protected render() { return html`${this.note ? html`<p>${this.note}</p>` : ''}` }
 }
+
+const deployers = new WeakMap<Document, DeployFn>()
+let n = 0
+/** Provides how `doc`'s <c-sandboxed> elements create the instance they show (when none is at their `name`). */
+export const provideDeploy = (doc: Document, fn: DeployFn) => { deployers.set(doc, fn) }
+export type DeployFn = (registry: Registry, id: string, kind: string, mode: string, owner: Owner) => Result<void>
 
 export const defineSandboxed = () => { if (!customElements.get('c-sandboxed')) customElements.define('c-sandboxed', SandboxedElement) }

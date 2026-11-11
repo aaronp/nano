@@ -13,9 +13,10 @@ import { provide } from '@pritzlaff/nano-elements'
 import { catalog as bundle, Debounce, defineBundle, Input, Log, Map, Range } from '@composable/bundle'
 import { catalog as editor } from '@composable/editor'
 import type { Catalog } from '@pritzlaff/nano-elements'
-import { definePlatform, definePlatformTable, platform, PlatformOps as P } from '@composable/platform'
+import { definePlatform, definePlatformTable, platform, runtimeOf, PlatformOps as P } from '@composable/platform'
 import { defineElements as defineEditor } from '@composable/editor/elements'
 import { defineWires } from '@composable/wires'
+import { provideDeploy } from './sandbox/sandboxed-el.ts'
 import { deploy, type AppCatalog, type Mode } from './sandbox/deploy.ts'
 
 /** Every kind of component this host offers: its packages' catalogs, merged. Add a package, add its catalog. */
@@ -27,6 +28,9 @@ provide(document, host.registry)
 host.registry.add('platform', Components.instantiate(platform(host, catalog, {
   deploy: (system, id, kind, mode, owner, outward) => deploy(system, id, kind, (mode ?? 'host') as Mode, { catalog, owner, ...(outward && { outward }) }),
 })), { kind: 'app', name: 'ui-workspace' })
+// <c-sandboxed> creates its instance in the registry it shows (a dock's system, or the page's) through the same deploy
+provideDeploy(document, (registry, id, kind, mode, owner) =>
+  deploy(registry === host.registry ? host : runtimeOf(host.registry, registry.id) ?? host, id, kind, mode as Mode, { catalog, owner }))
 
 const ask = async (op: Op, arg: unknown) => {
   const r = await host.call({ registry: 'host', instance: 'workspace' }, 'platform', Ops.key(op), arg)

@@ -39,9 +39,17 @@ export const readWidgetName = (state: unknown): string | undefined => {
   return typeof n === 'string' && n ? n : undefined;
 };
 
-/** A panel's saved state: its widget, and the instance its element shows (if it shows one), to reattach to. */
-export const panelState = (widget: string, shown: { model?: unknown } | null): { widget: string; name?: string } =>
-  typeof shown?.model === 'string' && shown.model ? { widget, name: shown.model } : { widget };
+/** The deploy mode a panel was saved with, if it has one (missing: the panel shows the host's element as before). */
+export const readWidgetMode = (state: unknown): string | undefined => {
+  const m = typeof state === 'object' && state !== null ? (state as Record<string, unknown>)['mode'] : undefined;
+  return typeof m === 'string' && m ? m : undefined;
+};
+
+/** A panel's saved state: its widget, the instance its element shows (if it shows one), to reattach to, and the deploy mode it shows it in. */
+export const panelState = (widget: string, shown: { model?: unknown; name?: unknown; mode?: unknown } | null): { widget: string; name?: string; mode?: string } => {
+  const name = [shown?.model, shown?.name].find((n): n is string => typeof n === 'string' && !!n);
+  return { widget, ...(name && { name }), ...(typeof shown?.mode === 'string' && shown.mode && { mode: shown.mode }) };
+};
 
 /** A starting layout: the given entries arranged side by side, stacked, as tabs, or in a two-column grid. With no
  * entries the workspace starts empty. */

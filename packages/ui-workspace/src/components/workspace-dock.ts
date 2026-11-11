@@ -20,9 +20,11 @@
  */
 import { GoldenLayout, LayoutConfig, type ComponentContainer, type JsonValue, type ResolvedLayoutConfig } from 'golden-layout';
 import baseCss from 'golden-layout/dist/css/goldenlayout-base.css';
+import type { Registry } from '@pritzlaff/nano-core';
+import { providedRegistry } from '@pritzlaff/nano-elements';
 import { provideBus, requestBus, type Bus } from '../lib/bus.ts';
-import { panelContent } from '../lib/panel-content.ts';
-import { ARRANGEMENTS, PALETTE_ID, WINDOW_STYLES, windowStyle, type WindowStyle, initialLayout, panelIds, readWidgetId, readWidgetName, panelState, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
+import { panelContent, withMode } from '../lib/panel-content.ts';
+import { ARRANGEMENTS, PALETTE_ID, WINDOW_STYLES, windowStyle, type WindowStyle, initialLayout, panelIds, readWidgetId, readWidgetName, readWidgetMode, panelState, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
 
 const STYLE_ID = 'workspace-dock-styles';
 /** The tab bar's height: the CSS draws it, and golden-layout must size panels for it too (saved layouts included). */
@@ -243,8 +245,11 @@ export class WorkspaceDock extends HTMLElement {
     if (!this.bus) throw new Error('bug: panel mounted before the workspace was connected');
     provideBus(container.element, this.bus);
     // upgraded at once, with placed elements in the dock's system (if it has one)
-    const content = panelContent(this.ownerDocument, def.template, this.registry);
     const name = readWidgetName(state);
+    const reg = (this.registry ?? providedRegistry(this.ownerDocument)) as Registry | undefined;
+    // the saved mode, else the instance's own; a template that is already <c-sandboxed> carries the kind's first mode
+    const mode = readWidgetMode(state) ?? (name ? reg?.labels(name)['nano/deploy'] : undefined);
+    const content = withMode(panelContent(this.ownerDocument, def.template, this.registry), id, mode, name);
     const shown = content.firstElementChild as (Element & { model?: unknown }) | null;
     if (name) shown?.setAttribute('name', name);   // before it connects, so it attaches to that instance
     container.element.append(content);
