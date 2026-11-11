@@ -168,3 +168,19 @@ test('applyApp always resolves: a throwing consent, throwing stores and a throwi
   const dead = await applyApp(doc, 'replace', { ...a.deps, host: { ...a.host, call: () => { throw new Error('gone') } } as never })
   expect(Array.isArray(dead)).toBe(true)
 })
+
+test('the saved workspaces order round-trips through snapshot and apply', async () => {
+  const ws = (id: string) => ({ id, title: id, system: 'host', icon: 'box', layout: null })
+  const d = { ...doc, workspaces: [ws('/c'), ws('/a'), ws('/b')] }
+  const a = await fresh()
+  expect(await applyApp(d, 'replace', a.deps)).toEqual([])
+  expect(a.st.workspaces.map((w: any) => w.path)).toEqual(['/c', '/a', '/b'])
+  const { savedWorkspaces } = await import('../src/lib/saved-workspaces.ts')
+  const mem = { v: JSON.stringify(a.st.workspaces), getItem() { return this.v }, setItem(_: string, v: string) { this.v = v } }
+  savedWorkspaces(mem).move('/c', 1)
+  a.st.workspaces = savedWorkspaces(mem).list()
+  expect((await snapshotApp({ host: a.host, stores: a.stores })).workspaces.map(w => w.id)).toEqual(['/a', '/c', '/b'])
+  const b = await fresh()
+  await applyApp(await snapshotApp({ host: a.host, stores: a.stores }), 'replace', b.deps)
+  expect(b.st.workspaces.map((w: any) => w.path)).toEqual(['/a', '/c', '/b'])
+}, 10_000)

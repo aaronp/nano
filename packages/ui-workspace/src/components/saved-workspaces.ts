@@ -15,18 +15,18 @@ const mainDock = (doc: Document) => doc.querySelector<HTMLElement>('workspace-do
 /** Where a saved workspace's dock keeps its layout. */
 export const keyFor = (doc: Document, path: string) => `${mainDock(doc)?.getAttribute('storage-key') ?? 'workspace'}.saved.${path}`;
 
-/** Adds a saved workspace's nav item (under Workspaces, after the others) and its page (after the other workspaces'):
+/** Adds a saved workspace's nav item (top-level, after the others) and its page (after the other workspaces'):
  * a components drawer beside a dock of the same widgets, in the workspace's system. */
 export function mountWorkspace(doc: Document, ws: SavedWorkspace) {
   const main = mainDock(doc), shell = doc.querySelector('app-shell');
   if (!main || !shell) return;
   const a = doc.createElement('a');
-  a.slot = 'nav'; a.href = `#${ws.path}`; a.dataset.sub = ''; a.dataset.saved = '';
+  a.slot = 'nav'; a.href = `#${ws.path}`; a.dataset.saved = ws.path; a.setAttribute('draggable', 'true');
   a.innerHTML = icon(ws.icon);
   a.append(ws.title);
-  const group = shell.querySelector(':scope > [data-workspaces]');
-  let last: Element | null = group;
-  while (last?.nextElementSibling?.hasAttribute('data-sub')) last = last.nextElementSibling;
+  // top-level, after the last saved one, else after Main (else the Workspaces row)
+  const savedItems = shell.querySelectorAll(':scope > a[data-saved]');
+  const last = savedItems[savedItems.length - 1] ?? shell.querySelector(':scope > a[slot="nav"][href="#/workspace"]') ?? shell.querySelector(':scope > [data-workspaces]');
   if (last) last.after(a); else shell.append(a);
 
   const route = doc.createElement('app-route');
@@ -61,6 +61,50 @@ export function bootSavedWorkspaces(doc: Document) {
   for (const ws of saved.list()) mountWorkspace(doc, ws);
   const taken = () => [...doc.querySelectorAll('app-route')].map((r) => r.getAttribute('path') ?? '');
   const open = (ws: SavedWorkspace) => { mountWorkspace(doc, ws); location.hash = `#${ws.path}`; doc.dispatchEvent(new CustomEvent('nano:changed')); };
+
+  // Reorder: Alt+↑/↓ on a focused item, or drag one onto another. The stored order is the truth; the nav follows it.
+  const item = (t: EventTarget | null) => (t as Element | null)?.closest?.('a[data-saved]') as HTMLAnchorElement | null;
+  const live = doc.createElement('div');
+  live.setAttribute('aria-live', 'polite'); live.setAttribute('role', 'status');
+  live.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)';
+  const shell = doc.querySelector('app-shell') ?? doc.body;   // listeners live on the shell, not the document
+  shell.append(live);
+  const arrange = () => {
+    let prev: Element | null = null;
+    for (const w of saved.list()) {
+      const a = doc.querySelector(`a[data-saved="${w.path}"]`);
+      if (!a) continue;
+      if (prev && prev.nextElementSibling !== a) prev.after(a);
+      prev = a;
+    }
+  };
+  const moveBy = (path: string, by: -1 | 1) => {
+    if (!saved.move(path, by)) return false;
+    arrange(); doc.dispatchEvent(new CustomEvent('nano:changed'));
+    return true;
+  };
+  shell.addEventListener('keydown', (e) => {
+    const a = item(e.target), k = (e as KeyboardEvent).key;
+    if (!a || !(e as KeyboardEvent).altKey || (k !== 'ArrowUp' && k !== 'ArrowDown')) return;
+    e.preventDefault();
+    const up = k === 'ArrowUp';
+    if (moveBy(a.dataset.saved!, up ? -1 : 1)) { a.focus(); live.textContent = `Moved ${a.textContent} ${up ? 'up' : 'down'}`; }
+  });
+  let dragged = '';
+  shell.addEventListener('dragstart', (e) => {
+    const a = item(e.target); if (!a) return;
+    dragged = a.dataset.saved!;
+    (e as DragEvent).dataTransfer?.setData('text/plain', dragged);
+  });
+  shell.addEventListener('dragover', (e) => { if (dragged && item(e.target)) e.preventDefault(); });
+  shell.addEventListener('drop', (e) => {
+    const a = item(e.target); if (!dragged || !a) return;
+    e.preventDefault();   // dropping a link must not navigate
+    const paths = saved.list().map((w) => w.path), from = paths.indexOf(dragged), to = paths.indexOf(a.dataset.saved!);
+    dragged = '';
+    for (let i = from; i !== to && from >= 0 && to >= 0; i += Math.sign(to - from)) moveBy(paths[from]!, Math.sign(to - from) as -1 | 1);
+  });
+  shell.addEventListener('dragend', () => { dragged = ''; });
 
   // Save workspace… (from a dock): its layout, in the dock's own system
   doc.addEventListener('dock:save-as', async (e) => {
