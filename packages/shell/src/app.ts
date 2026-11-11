@@ -3,7 +3,8 @@ import { Type, type Static } from 'typebox'
 import { Value } from 'typebox/value'
 import { safeAvatar, safeHref } from './profile'
 
-const ID = '^[a-z0-9][a-z0-9-]*$', KIND = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$', PATH = '^/[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*$'
+// ids are free text from the platform: non-empty, no '/', whitespace or control characters
+const ID = '^[^/\\s\\x00-\\x1f\\x7f]+$', KIND = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$', PATH = '^/[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*$'
 const s = (max: number, description: string, extra: object = {}) => Type.String({ maxLength: max, description, ...extra })
 const list = <T extends import('typebox').TSchema>(t: T, maxItems: number, description: string) => Type.Array(t, { maxItems, description })
 
@@ -29,7 +30,7 @@ export const NanoAppSchema = Type.Object({
       allow: Type.Optional(list(s(200, 'A guard selector'), 50, 'Allowed ops')), deny: Type.Optional(list(s(200, 'A guard selector'), 50, 'Denied ops')),
       config: Type.Optional(Type.Unknown({ description: 'What the component needs to be recreated' })),
     }), 200, 'The system\'s instances'),
-    subscriptions: list(Type.Object({ source: s(64, 'Publisher, or *'), op: s(200, 'Published op key'), listener: s(64, 'Listener instance'), target: s(200, 'Listener action key') }), 500, 'Connections'),
+    subscriptions: list(Type.Object({ source: s(64, 'Publisher, or *', { pattern: ID }), op: s(200, 'Published op key'), listener: s(64, 'Listener instance', { pattern: ID }), target: s(200, 'Listener action key') }), 500, 'Connections'),
   }), 50, 'The systems'),
   workspaces: list(Type.Object({
     id: s(120, 'The workspace path', { pattern: PATH }), title: s(120, 'The workspace title'), system: s(64, 'Its system', { pattern: ID }),
@@ -41,8 +42,12 @@ export type NanoApp = Static<typeof NanoAppSchema>
 /** Ids the host owns: never written, skipped on load. */
 export const RESERVED = (id: string): boolean => id === 'platform' || id === 'registry' || id === 'profile' || id.startsWith('ex-')
 
-const depth = (v: unknown, n = 0): number => (n > MAX_DEPTH ? n : v && typeof v === 'object' ? Math.max(n, ...Object.values(v).map(x => depth(x, n + 1))) : n)
-const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)))
+const depth = (v: unknown, n = 0): number => {
+  if (n > MAX_DEPTH || !v || typeof v !== 'object') return n
+  let m = n
+  for (const x of Object.values(v)) m = Math.max(m, depth(x, n + 1))
+  return m
+}
 const pick = <T extends object>(o: T, keys: (keyof T)[]) => Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]])) as T
 
 /** A document from untrusted data, or a short reason it was refused. Never throws. */
@@ -52,11 +57,11 @@ export function checkApp(x: unknown): NanoApp | string {
     try { text = JSON.stringify(x) } catch { return 'not JSON (cyclic or unserialisable)' }
     if (text === undefined) return 'not JSON'
     if (new TextEncoder().encode(text).length > MAX_BYTES) return 'larger than 1 MB'
-    if (!Value.Check(NanoAppSchema, x)) {
-      const e = Value.Errors(NanoAppSchema, x)[0]
+    const a = JSON.parse(text) as NanoApp   // one plain copy: everything below validates and rebuilds from it
+    if (!Value.Check(NanoAppSchema, a)) {
+      const e = Value.Errors(NanoAppSchema, a)[0]
       return `not a nano.json version 1 document${e ? `: ${e.instancePath || '/'} ${e.message}` : ''}`
     }
-    const a = x as NanoApp
     for (const e of a.profile?.entries ?? []) if (!safeHref(e.href)) return `profile href ${JSON.stringify(e.href)} must start with #, /, http:, https: or mailto:`
     const av = a.profile?.user.avatar
     if (av !== undefined && !safeAvatar(av)) return 'profile avatar must be an http(s): or data:image/ URL'
@@ -69,10 +74,10 @@ export function checkApp(x: unknown): NanoApp | string {
       imports: a.imports.map(i => ({ url: i.url, trust: i.trust })),
       systems: a.systems.map(sys => ({
         id: sys.id,
-        instances: sys.instances.map(i => { const o = pick(i, ['id', 'kind', 'mode', 'allow', 'deny']); if (i.config !== undefined) o.config = clone(i.config); return o }),
+        instances: sys.instances.map(i => { const o = pick(i, ['id', 'kind', 'mode', 'allow', 'deny']); if (i.config !== undefined) o.config = i.config; return o }),
         subscriptions: sys.subscriptions.map(u => ({ source: u.source, op: u.op, listener: u.listener, target: u.target })),
       })),
-      workspaces: a.workspaces.map(w => ({ ...pick(w, ['id', 'title', 'system', 'icon']), layout: clone(w.layout) })),
+      workspaces: a.workspaces.map(w => ({ ...pick(w, ['id', 'title', 'system', 'icon']), layout: w.layout })),
     }
     return out
   } catch (e) { return `could not be read: ${e instanceof Error ? e.message : 'unknown error'}` }

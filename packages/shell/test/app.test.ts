@@ -46,3 +46,29 @@ test('RESERVED matches platform/registry/profile/ex-*', () => {
   for (const id of ['platform', 'registry', 'profile', 'ex-range', 'ex-']) expect(RESERVED(id)).toBe(true)
   for (const id of ['host', 'my-ex-range', 'profiles', 'r1']) expect(RESERVED(id)).toBe(false)
 })
+
+test('free-text ids are accepted; slashes, spaces, empty and control characters refused', () => {
+  for (const id of ['Range1', 'my_range', 'Lab', 'c-sandboxed-3']) {
+    expect(typeof bad(a => { a.systems[0].id = id; a.systems[0].instances[0].id = id; a.workspaces[0].system = id; a.systems[0].subscriptions[0].source = '*'; a.systems[0].subscriptions[0].listener = id })).toBe('object')
+  }
+  for (const id of ['a/b', 'a b', '', 'a\u0001b']) {
+    expect(typeof bad(a => { a.systems[0].instances[0].id = id })).toBe('string')
+    expect(typeof bad(a => { a.systems[0].id = id })).toBe('string')
+    expect(typeof bad(a => { a.systems[0].subscriptions[0].listener = id })).toBe('string')
+  }
+})
+
+test('the cap counts UTF-8 bytes, not UTF-16 units', () => {
+  const t = '\u20ac'.repeat(400_000); expect(t.length).toBeLessThan(1_000_000)
+  expect(checkApp({ ...full(), title: t, pad: t })).toBe('larger than 1 MB')
+})
+
+test('deep config, long label and too many entries are refused', () => {
+  expect(typeof bad(a => { let d: any = {}; const r = d; for (let i = 0; i < 40; i++) d = d.n = {}; a.systems[0].instances[0].config = r })).toBe('string')
+  expect(typeof bad(a => { a.profile.entries[0].label = 'x'.repeat(41) })).toBe('string')
+  expect(typeof bad(a => { a.profile.entries = Array(21).fill(a.profile.entries[0]) })).toBe('string')
+})
+
+test('a very wide config does not throw', () => {
+  expect(typeof bad(a => { a.systems[0].instances[0].config = Array(300_000).fill(1) })).toBe('object')
+})
