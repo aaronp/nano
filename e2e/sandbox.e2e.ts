@@ -141,7 +141,7 @@ test("a Store keeps values in its origin's storage: localStorage in the host, me
   await expect(iso.locator('nano-store .backing')).toHaveText('memory')
   await iso.locator('nano-store input[name="key"]').fill('theme')
   await iso.locator('nano-store input[name="value"]').fill('dark')
-  await iso.locator('nano-store button[type="submit"]').click()
+  await iso.locator('nano-store button.save').click()
   await expect(iso.locator('nano-store tbody')).toContainText('dark')
   // nothing it stored reached the host's storage
   expect(await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('nano.template/store:')))).toEqual([])

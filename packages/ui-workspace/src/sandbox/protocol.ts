@@ -27,7 +27,11 @@ const obj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'o
 const optStr = (v: unknown) => v === undefined || typeof v === 'string'
 
 /** Whether a schema (any depth) has a regex-running keyword: the iframe controls schema and data, so a backtracking pattern would freeze the host. */
-const hasRegex = (x: unknown): boolean => !!x && typeof x === 'object' && Object.entries(x).some(([k, v]) => k === 'pattern' || k === 'patternProperties' || k === 'format' || hasRegex(v))
+// TypeBox's own Record key patterns (string, number, integer keys): linear, so safe to run on any key
+const RECORD_KEYS = new Set(['^.*$', '^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$', '^-?(?:0|[1-9][0-9]*)$'])
+const safeKeys = (v: unknown) => !!v && typeof v === 'object' && Object.keys(v).every(k => RECORD_KEYS.has(k))
+const hasRegex = (x: unknown): boolean => !!x && typeof x === 'object' && Object.entries(x).some(([k, v]) =>
+  k === 'pattern' || k === 'format' || (k === 'patternProperties' && !safeKeys(v)) || hasRegex(v))
 
 /** The entry if `x` is one, else why not. */
 export function checkEntry(x: unknown): SerialEntry | string {

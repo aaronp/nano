@@ -191,3 +191,10 @@ test('checkEntry rejects patterns and formats at any depth, and passes a plain s
   expect(typeof checkEntry(e({ type: 'object', patternProperties: { a: {} } }))).toBe('string')
   expect(typeof checkEntry(e({ type: 'object', properties: { x: { type: 'string' } } }))).toBe('object')
 })
+
+test("checkEntry passes TypeBox's own Record key patterns (linear), still refusing any other and a regex in a value", () => {
+  const e = (output: unknown) => ({ id: { ns: 'a', name: 'b' }, title: 't', ops: [{ ns: 'a/b', name: 'o', output }] })
+  for (const key of [Type.String(), Type.Number(), Type.Integer()]) expect(typeof checkEntry(e(Type.Record(key, Type.String())))).toBe('object')
+  expect(typeof checkEntry(e({ type: 'object', patternProperties: { '^(a+)+$': {} } }))).toBe('string')
+  expect(typeof checkEntry(e({ type: 'object', patternProperties: { '^.*$': { type: 'string', pattern: '^(a+)+$' } } }))).toBe('string')
+})
