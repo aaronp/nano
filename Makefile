@@ -4,8 +4,9 @@ export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
 endif
 
+# Each package's tests in its own folder (its own bunfig preloads), stopping at the first that fails.
 test:
-	bun test
+	@for p in packages/*/; do echo "== $$p"; (cd $$p && bun test --isolate) || exit 1; done
 
 # Browser tests (e2e/*.e2e.ts) in your Chrome; starts `make ui` and `make serve-template` unless they're running.
 test-ui:
