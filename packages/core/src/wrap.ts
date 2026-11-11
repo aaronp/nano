@@ -5,7 +5,7 @@ import { Components, type Instance } from './component'
 import { err, isOk, ok, Ops, type Owner, type Result } from './data'
 import type { Environment } from './env'
 import { Registries } from './registry'
-import { Runtimes, type Runtime } from './runtime'
+import { Runtimes, type Runtime, type Trace } from './runtime'
 
 /** A value that owns a runtime: its parts, which anyone holding the value can replace, rewire, call or watch. */
 export type HasRuntime = { runtime: Runtime }
@@ -65,15 +65,31 @@ export const WrapperOps = {
 type Wrapper = HasRuntime & { strategy: Strategy; owner?: Owner }
 const partsOf = (rt: Runtime) => rt.registry.snapshot().instances.map(i => i.id).filter(i => i !== 'registry')
 
+/** Which outward calls an instance may make: coordinates (`registry/target/op`, `*` matches anything) allowed, then denied. */
+export type Selectors = { allow?: string[]; deny?: string[] }
+/** Whether `coord` matches `selector`: literal, apart from `*`. */
+export const matches = (selector: string, coord: string): boolean =>
+  new RegExp(`^${selector.split('*').map(s => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`).test(coord)
+const permitted = (g: Selectors | undefined, coord: string) => !g || ((!g.allow || g.allow.some(s => matches(s, coord))) && !g.deny?.some(s => matches(s, coord)))
+
 /** Puts a wrapper at `id`, with the instance that was there as its one part (under the same id). */
-export function wrap(outer: Runtime, id: string, strategy: Strategy, opts: { map?: Record<string, { part: string; op: string }>; owner?: Owner } = {}): Result<HasRuntime> {
+export function wrap(outer: Runtime, id: string, strategy: Strategy, opts: { map?: Record<string, { part: string; op: string }>; owner?: Owner; outward?: Selectors } = {}): Result<HasRuntime> {
   const x: Instance | undefined = outer.registry.get(id)
   if (!x) return err(`no instance ${id} in ${outer.registry.id}`)
   const from = { registry: outer.registry.id, instance: id }
   // a part's call to something not inside (or to the registry) goes on to the outer runtime, as if from the wrapper
+  const refusals = new Set<(t: Trace) => void>()   // refusals happen in the policy, so it traces them itself
   const inner = Runtimes.create(Registries.create(`${outer.registry.id}/${id}`), rt => ({
     ...rt,
-    call: (f, t, op, arg) => (t === 'registry' || !rt.registry.get(t) ? outer.call(from, t, op, arg) : rt.call(f, t, op, arg)),
+    listen: fn => { const off = rt.listen(fn); refusals.add(fn); return () => { off(); refusals.delete(fn) } },
+    async call(f, t, op, arg) {
+      if (t !== 'registry' && rt.registry.get(t)) return rt.call(f, t, op, arg)
+      const coord = `${outer.registry.id}/${t}/${op}`
+      if (permitted(opts.outward, coord)) return outer.call(from, t, op, arg)
+      const result = err(`${id} may not call ${coord}`)
+      refusals.forEach(fn => { try { fn({ kind: 'call', time: Date.now(), from: f, target: t, op, data: arg, result }) } catch { /* an observer can't change the call */ } })
+      return result
+    },
   }))
   const call: Call = (part, op, arg) => (part !== 'registry' && inner.registry.get(part) ? inner.call(from, part, op, arg) : Promise.resolve(err(`no part ${part} in ${id}`)))
   // ponytail: one set for the whole wrapper, so a call may also wait for a concurrent call's publishes
@@ -122,3 +138,6 @@ export function unwrap(outer: Runtime, id: string): Result<void> {
   w.runtime.registry.remove(parts[0]!)   // first: the part loses its inner handle...
   return outer.registry.replace(id, part, (w as Partial<Wrapper>).owner)   // ...then gets its outer one (and owner) back
 }
+
+/** Wraps the instance at `id` in a one-part forwarding wrapper that may call outward only as `outward` allows. */
+export const guard = (outer: Runtime, id: string, outward: Selectors): Result<HasRuntime> => wrap(outer, id, Strategies.forward, { outward })
