@@ -72,7 +72,7 @@ test('clicking Clear calls setStyle', async () => {
 test('takes the app bar colour', () => {
   const text = (WorkspaceControlsEl.styles as any[]).at(-1).cssText
   expect(text).toContain('color: inherit')
-  expect(text.split('\n').filter(l => l.includes('--nano-fg') && !l.includes('.panel'))).toEqual([])
+  expect(text.split('\n').filter((l: string) => l.includes('--nano-fg') && !l.includes('.panel'))).toEqual([])
 })
 
 test('narrow: the buttons fold into a ⋯ menu', async () => {

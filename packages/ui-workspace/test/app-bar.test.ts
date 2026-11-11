@@ -38,7 +38,7 @@ BarSpy.action(Ops.sink('t', 'focus', AppGateway.ops.focus.output!), (_, arg, env
   const f = arg as { system: string; instance: string } | null, own = env.handles()[0]!
   if (f && f.system === own.coord.registry && f.instance === own.coord.instance) void own.call('app', AppGateway.ops.setAppBarComponent, { system: f.system, instance: f.instance })
 })
-customElements.define('x-bar-spy', class extends HTMLElement {})
+customElements.define('x-bar-spy', class extends HTMLElement { get model() { return this.getAttribute('name') } })
 ;(catalog as Record<string, unknown>)['bar-spy'] = { component: BarSpy, title: 'Bar spy', tag: 'x-bar-spy', modes: ['host'], trust: 'trusted' }
 const addSpy = (reg: typeof host.registry, id: string) => {
   reg.add(id, Components.instantiate(BarSpy))
@@ -89,4 +89,21 @@ test('an unresolvable target shows nothing and says so', async () => {
   await host.call(me, 'app', Ops.key(AppGateway.ops.setAppBarComponent), { system: 'host', instance: 'nope' })
   expect(await until(() => bar().children.length === 0)).toBe(true)
   expect(await until(() => document.querySelector('[data-nano-status]')?.textContent?.includes('nope has no element to show in the app bar') ?? false)).toBe(true)
+})
+
+test('after a page change, clicking the panel that had focus puts its controls up again', async () => {
+  await go('#/workspace')
+  const dock = document.querySelector('workspace-dock#workspace') as HTMLElement & { addTemplate(t: HTMLTemplateElement): void; addWidget(id: string, name?: string): void }
+  const t = Object.assign(document.createElement('template'), { innerHTML: '<x-bar-spy keep></x-bar-spy>' })
+  t.dataset.widget = 'bar-spy'; t.dataset.title = 'Bar spy'
+  dock.addTemplate(t); dock.addWidget('bar-spy', 'spy-1'); await tick()
+  const click = () => dock.querySelector('x-bar-spy[name="spy-1"]')!.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+  click()
+  expect(await until(() => shown().join() === 'x-bar-spy[spy-1]')).toBe(true)
+  await go('#/settings')
+  expect(await until(() => bar().children.length === 0)).toBe(true)
+  await go('#/workspace')
+  expect(await until(() => shown().join() === controls('workspace'))).toBe(true)
+  click()
+  expect(await until(() => shown().join() === 'x-bar-spy[spy-1]')).toBe(true)
 })

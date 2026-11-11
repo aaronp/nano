@@ -19,7 +19,7 @@
  *   `dock:connections` DOM event; whatever wraps the dock (the wiring view) decides what it means.
  * Clicking into a panel focuses it (golden-layout marks its header lm_focused); a change of focused panel fires a
  * bubbling, composed `dock:focus` DOM event {system, instance, widget}, or null when the focused panel shows no
- * instance or nothing is focused (empty space clicked, the panel closed).
+ * instance or nothing is focused (empty space clicked, the panel closed, the page changed: `route:changed` on the bus).
  * Light DOM, because golden-layout positions its drag proxy in document.body.
  */
 import { GoldenLayout, LayoutConfig, type ComponentContainer, type ComponentItem, type JsonValue, type ResolvedLayoutConfig } from 'golden-layout';
@@ -99,7 +99,11 @@ export class WorkspaceDock extends HTMLElement {
   connectedCallback() {
     if (this.layout) return; /* already built (re-insertion) */
     ensureStyles(this.ownerDocument);
-    this.bus ??= requestBus(this);
+    if (!this.bus) {
+      this.bus = requestBus(this);
+      /* a page change clears focus: coming back, clicking the same panel reports it again */
+      this.bus.subscribe('route:changed', () => this.layout?.clearComponentFocus());
+    }
     if (!this.id) throw new Error('<workspace-dock> needs an id so drawer items can target it');
     this.defs = this.readPalette();
 

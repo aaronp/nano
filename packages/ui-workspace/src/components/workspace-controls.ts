@@ -12,7 +12,8 @@ export const controlsId = (dockId: string) => `ws-controls-${dockId}`
 type Dock = HTMLElement & { windowStyle: WindowStyle; setWindowStyle(s: WindowStyle): void; connections(): void; saveAs(): void; save(): void; restore(): void; reset(): void }
 type Command = 'connections' | 'saveAs' | 'save' | 'restore' | 'reset'
 
-const Style_ = Type.Union(WINDOW_STYLES.map(s => Type.Literal(s.id)), { description: 'How the dock shows its windows: tabs, or clear (no tab for a lone panel)', examples: ['tabs'] })
+// WINDOW_STYLES' ids, spelled out so the schema's type is exact (a mapped array widens it)
+const Style_ = Type.Union([Type.Literal('tabs'), Type.Literal('focus')], { description: 'How the dock shows its windows: tabs, or clear (no tab for a lone panel)', examples: ['tabs'] })
 const DockId_ = Type.String({ description: 'The id of the workspace dock these controls drive', examples: ['workspace'] })
 
 export const WorkspaceControls = component('composable.ui-workspace/workspace-controls', () => {
