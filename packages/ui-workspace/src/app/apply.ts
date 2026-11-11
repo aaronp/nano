@@ -8,7 +8,7 @@ import { Profile, RESERVED, type NanoApp } from '@composable/shell'
 import { isThemeId } from '../lib/themes.ts'
 import { ICONS } from '../lib/saved-workspaces.ts'
 import type { AppCatalog } from '../sandbox/deploy.ts'
-import { HOST_ENTRIES, MAIN, value, type Stores } from './snapshot.ts'
+import { HOST_DRIVEN, HOST_ENTRIES, MAIN, value, type Stores } from './snapshot.ts'
 
 export interface ApplyDeps {
   host: Runtime
@@ -120,8 +120,8 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
     if (!rt) { if (sys.subscriptions.length) notes.push(`system ${sys.id}: its subscriptions were skipped`); continue }
     for (const s of sys.subscriptions) {
       const what = `${sys.id}: ${s.source} ${s.op} -> ${s.listener} ${s.target}`
-      // the platform's and registry's ops create and wire things: a document never drives them
-      if (s.listener === 'platform' || s.listener === 'registry') { notes.push(`${what}: ${s.listener} is reserved by the host, skipped`); continue }
+      // the platform's and registry's ops create and wire things, the gateway's and controls' drive the host's UI: a document never drives them
+      if (HOST_DRIVEN(s.listener)) { notes.push(`${what}: ${s.listener} is reserved by the host, skipped`); continue }
       const missing = [s.source === '*' ? undefined : s.source, s.listener].find(x => x !== undefined && !rt.registry.get(x))
       if (missing) { notes.push(`${what}: ${missing} is not there, skipped`); continue }
       // a subscription into a code-taking op (setCode, configure) would feed the document's data to code: needs the same consent

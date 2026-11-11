@@ -8,6 +8,8 @@ import type { ImportRecord } from '../lib/imports.ts'
 import type { SavedWorkspace } from '../lib/saved-workspaces.ts'
 
 /** The profile menu's links to the host's own pages: always in the menu after a document's own entries, never written to one. */
+/** Listeners whose ops create and wire things, or drive the host's UI: a document never wires into them. */
+export const HOST_DRIVEN = (id: string): boolean => id === 'platform' || id === 'registry' || id === 'app' || id.startsWith('ws-controls-')
 export const HOST_ENTRIES = [{ label: 'Components', href: '#/components' }, { label: 'Settings', href: '#/settings' }, { label: 'Systems', href: '#/systems' }, { label: 'Themes', href: '#/themes' }]
 
 /** The host's stores, as far as a document needs them; tests pass fakes. `set` replaces the whole list. */
@@ -62,7 +64,7 @@ export async function snapshotApp({ host, stores }: { host: Runtime; stores: Sto
     const written = new Set(instances.map(i => i.id))
     const known = (x: string) => written.has(x) || (RESERVED(x) && live.has(x))
     const subscriptions = snap.subscriptions
-      .filter(s => !viewOwned.has(s.listener) && !viewOwned.has(s.source) && (s.source === '*' || known(s.source)) && known(s.listener) && (written.has(s.source) || written.has(s.listener)))
+      .filter(s => !HOST_DRIVEN(s.listener) && !viewOwned.has(s.listener) && !viewOwned.has(s.source) && (s.source === '*' || known(s.source)) && known(s.listener) && (written.has(s.source) || written.has(s.listener)))
       .map(s => ({ source: s.source, op: s.op, listener: s.listener, target: s.target }))
     if (snap.id === host.registry.id && !instances.length && !subscriptions.length) continue   // the host's own built-ins only
     systems.push({ id: snap.id, instances, subscriptions })

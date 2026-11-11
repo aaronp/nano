@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { Ops } from '@pritzlaff/nano-core'
+import { Components, Ops } from '@pritzlaff/nano-core'
 import { Log, Range, Map as MapC } from '@composable/bundle'
 import { PlatformOps as P, runtimeOf } from '@composable/platform'
 import type { NanoApp } from '@composable/shell'
@@ -203,6 +203,19 @@ test("the platform and a built-in's code op are never wired, even with consent; 
   expect(notes.every(n => n.includes('reserved'))).toBe(true)
   const wired = a.host.registry.snapshot().subscriptions.filter(s => s.source === 'm0').map(s => s.listener).sort()
   expect(wired).toEqual(['ex-log'])
+})
+
+test('a document never drives the app gateway or a dock\'s controls', async () => {
+  const a = await fresh()
+  a.host.registry.add('ws-controls-workspace', Components.instantiate(Log), { kind: 'app', name: 'test' })   // a stand-in for the controls
+  const focus = 'nano.shell/app-gateway/focus'
+  const notes = await applyApp(sys([], [
+    { source: '*', op: focus, listener: 'ws-controls-workspace', target: Ops.key(Log.ops.info) },
+    { source: '*', op: focus, listener: 'app', target: 'nano.shell/app-gateway/setAppBarComponent' },
+  ]), 'replace', a.deps)
+  expect(notes).toHaveLength(2)
+  expect(notes.every(n => n.includes('reserved'))).toBe(true)
+  expect(a.host.registry.snapshot().subscriptions.filter(s => s.op === focus)).toEqual([])
 })
 
 test('configures that never answer run together under one bound', async () => {

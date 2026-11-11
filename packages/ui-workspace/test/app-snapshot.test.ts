@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { Ops } from '@pritzlaff/nano-core'
+import { Components, Ops } from '@pritzlaff/nano-core'
 import { Range, Map as MapC, Log } from '@composable/bundle'
 import { PlatformOps as P, runtimeOf } from '@composable/platform'
 import { checkApp } from '@composable/shell'
@@ -63,4 +63,15 @@ test('the gateway is never written, in host or a workspace system', async () => 
   expect(runtimeOf(host.registry, 'lab')!.registry.get('app')).toBeDefined()
   const app = await snapshotApp({ host, stores })
   expect(app.systems.flatMap(s => s.instances).map(i => i.id)).not.toContain('app')
+})
+
+test('wires into the app gateway or a dock\'s controls are never written', async () => {
+  const { host, stores } = await world()
+  const lab = runtimeOf(host.registry, 'lab')!
+  lab.registry.add('ws-controls-x', Components.instantiate(Log), { kind: 'app', name: 'test' })   // a stand-in for the controls
+  for (const [listener, target] of [['app', 'nano.shell/app-gateway/setAppBarComponent'], ['ws-controls-x', Ops.key(Log.ops.info)]]) {
+    expect('error' in lab.registry.subscribe({ source: 'r1', op: Ops.key(Range.ops.value), listener: listener!, target: target! })).toBe(false)
+  }
+  const app = await snapshotApp({ host, stores })
+  expect(app.systems.find(s => s.id === 'lab')!.subscriptions.map(s => s.listener)).toEqual(['m1'])
 })
