@@ -13,7 +13,7 @@ import { askWorkspace, type WorkspaceChoice } from './workspace-dialog.ts';
 const icon = (name: string) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] ?? ''}"/></svg>`;
 const mainDock = (doc: Document) => doc.querySelector<HTMLElement>('workspace-dock#workspace') ?? doc.querySelector<HTMLElement>('workspace-dock');
 /** Where a saved workspace's dock keeps its layout. */
-const keyFor = (doc: Document, path: string) => `${mainDock(doc)?.getAttribute('storage-key') ?? 'workspace'}.saved.${path}`;
+export const keyFor = (doc: Document, path: string) => `${mainDock(doc)?.getAttribute('storage-key') ?? 'workspace'}.saved.${path}`;
 
 /** Adds a saved workspace's nav item (under Workspaces, after the others) and its page (after the other workspaces'):
  * a components drawer beside a dock of the same widgets, in the workspace's system. */

@@ -18,7 +18,7 @@ export interface SavedWorkspace { readonly path: string; readonly title: string;
 /** A system's name, as a registry id. */
 export const SYSTEM = /^[a-z0-9][a-z0-9-]*$/;
 
-const KEY = 'workspace-starter.saved-workspaces';
+export const KEY = 'workspace-starter.saved-workspaces';
 export const PATH = /^\/[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)*$/;
 
 /** The saved workspaces in storage: list them, check one, or add one (a refusal is returned as a sentence). */

@@ -1,0 +1,111 @@
+import { expect, test } from 'bun:test'
+import { Ops } from '@pritzlaff/nano-core'
+import { Range, Map as MapC } from '@composable/bundle'
+import { PlatformOps as P, runtimeOf } from '@composable/platform'
+import type { NanoApp } from '@composable/shell'
+import { applyApp } from '../src/app/apply'
+import { snapshotApp } from '../src/app/snapshot'
+import { appHost, memoryStores, Profile, tick } from './fixtures/app-host'
+
+const doc: NanoApp = {
+  nano: 1, title: 'Doc', theme: { id: 'terminal', mode: 'dark' },
+  profile: { user: { name: 'Ada' }, entries: [{ label: 'Home', href: '#/' }] },
+  imports: [{ url: 'https://x.test/m.json', trust: 'sandboxed' }],
+  systems: [{
+    id: 'lab',
+    instances: [
+      { id: 'r1', kind: 'range', mode: 'host', allow: ['host/log/*'], deny: ['host/platform/*'], config: { min: 0, max: 10, step: 0.5, value: 4 } },
+      { id: 'm1', kind: 'map', mode: 'host', config: { code: 'return x * 2' } },
+      { id: 'b1', kind: 'boxed', mode: 'isolated-sandbox' },
+    ],
+    subscriptions: [{ source: 'r1', op: Ops.key(Range.ops.value), listener: 'm1', target: Ops.key(MapC.ops.map) }],
+  }],
+  workspaces: [{ id: '/lab', title: 'Lab', system: 'lab', icon: 'rocket', layout: { root: 1 } }],
+}
+const fresh = async (init = {}) => {
+  const h = appHost(), s = memoryStores(init)
+  await h.call('platform', P.createComponent, { kind: 'profile', name: 'profile', system: 'host' })
+  const imported: string[] = []
+  const deps = { host: h.host, stores: s.stores, catalog: h.catalog, consentCode: () => true, importPackage: async (url: string) => { imported.push(url); return {} } }
+  return { ...h, ...s, imported, deps }
+}
+
+test('apply(replace) of a snapshot onto a fresh host reproduces it', async () => {
+  const a = await fresh()
+  expect(await applyApp(doc, 'replace', a.deps)).toEqual([])
+  await tick()
+  expect(a.imported).toEqual(['https://x.test/m.json'])
+  const first = await snapshotApp({ host: a.host, stores: a.stores })
+  expect(first).toEqual(doc)
+  const b = await fresh()
+  expect(await applyApp(first, 'replace', b.deps)).toEqual([])
+  await tick()
+  expect(await snapshotApp({ host: b.host, stores: b.stores })).toEqual(first)
+  expect(b.st.title).toBe('Doc')
+}, 10_000)
+
+test('apply(merge) adds only new ids and returns clash notes; leaves title/theme/profile', async () => {
+  const a = await fresh({ title: 'Mine' })
+  await applyApp({ ...doc, systems: [{ id: 'lab', instances: [{ id: 'r1', kind: 'range' }], subscriptions: [] }] }, 'replace', a.deps)
+  a.st.title = 'Mine'; a.st.theme = { theme: 'enterprise', mode: 'light' }
+  await a.call('profile', Profile.ops.setUser, { name: 'Me' })
+  const notes = await applyApp(doc, 'merge', a.deps)
+  expect(notes.some(n => n.includes('lab/r1') && n.includes('already exists'))).toBe(true)
+  expect(notes.some(n => n.includes('workspace /lab already exists'))).toBe(true)
+  const app = await snapshotApp({ host: a.host, stores: a.stores })
+  expect(app.title).toBe('Mine'); expect(app.theme).toEqual({ id: 'enterprise', mode: 'light' }); expect(app.profile?.user.name).toBe('Me')
+  expect(app.systems[0]!.instances.map(i => i.id).sort()).toEqual(['b1', 'm1', 'r1'])
+  expect(app.systems[0]!.instances.find(i => i.id === 'r1')!.config).toMatchObject({ max: 100 })   // the existing r1 is untouched
+  expect(app.systems[0]!.subscriptions).toHaveLength(1)
+  expect(app.workspaces).toHaveLength(1)
+}, 10_000)
+
+test('unknown kinds and subscriptions with missing ends are skipped with notes', async () => {
+  const a = await fresh()
+  const notes = await applyApp({ ...doc, systems: [{ id: 'lab', instances: [{ id: 'x', kind: 'nope' }, { id: 'y', kind: '__proto__' }, { id: 'r1', kind: 'range' }],
+    subscriptions: [{ source: 'r1', op: 'a/b/c', listener: 'ghost', target: 'a/b/d' }] }], workspaces: [] }, 'replace', a.deps)
+  expect(notes).toEqual(expect.arrayContaining([expect.stringContaining('no component kind nope'), expect.stringContaining('no component kind __proto__'), expect.stringContaining('ghost is not there')]))
+  expect(runtimeOf(a.host.registry, 'lab')!.registry.get('r1')).toBeDefined()
+})
+
+test('reserved ids are skipped', async () => {
+  const a = await fresh()
+  const notes = await applyApp({ ...doc, workspaces: [], systems: [{ id: 'host', instances: [{ id: 'platform', kind: 'log' }, { id: 'ex-new', kind: 'log' }, { id: 'ok', kind: 'log' }], subscriptions: [] }] }, 'replace', a.deps)
+  expect(notes.filter(n => n.includes('reserved'))).toHaveLength(2)
+  expect(a.host.registry.get('ex-new')).toBeUndefined()
+  expect(a.host.registry.get('ok')).toBeDefined()
+})
+
+test('a kind imported sandboxed but asked host/sandbox is deployed isolated-sandbox, with a note', async () => {
+  const a = await fresh()
+  const notes = await applyApp({ ...doc, workspaces: [], systems: [{ id: 'host', instances: [{ id: 'b1', kind: 'boxed', mode: 'host' }, { id: 'b2', kind: 'boxed', mode: 'sandbox' }], subscriptions: [] }] }, 'replace', a.deps)
+  expect(a.deployed.filter(d => d.id.startsWith('b'))).toEqual([{ id: 'b1', mode: 'isolated-sandbox' }, { id: 'b2', mode: 'isolated-sandbox' }])
+  expect(notes.filter(n => n.includes('isolated-sandbox instead of'))).toHaveLength(2)
+}, 10_000)
+
+test('a throwing configure is a note; the instance stays', async () => {
+  const a = await fresh()
+  const notes = await applyApp({ ...doc, workspaces: [], systems: [{ id: 'host', instances: [{ id: 'r1', kind: 'range', config: { min: 5, max: 1, step: 1, value: 2 } }], subscriptions: [] }] }, 'replace', a.deps)
+  expect(notes).toEqual([expect.stringContaining('host/r1 configure')])
+  expect(a.host.registry.get('r1')).toBeDefined()
+})
+
+test('a code config (map, filter) is applied only with consent; the instance is created either way', async () => {
+  const a = await fresh()
+  const d = { ...doc, workspaces: [], systems: [{ id: 'host', instances: [{ id: 'm1', kind: 'map', config: { code: 'return 1' } }, { id: 'm2', kind: 'map', config: { code: 'return 2' } }], subscriptions: [] }] }
+  const notes = await applyApp(d, 'replace', { ...a.deps, consentCode: (_s, i) => i === 'm2' })
+  expect(notes).toEqual([expect.stringContaining('host/m1: its map code was not applied')])
+  expect((await a.call('m1', MapC.ops.code)).value).toBe('return x')
+  expect((await a.call('m2', MapC.ops.code)).value).toBe('return 2')
+  const b = await fresh()   // by default a document's code is not run
+  await applyApp(d, 'replace', { host: b.host, stores: b.stores, catalog: b.catalog, importPackage: async () => ({}) })
+  expect((await b.call('m2', MapC.ops.code)).value).toBe('return x')
+})
+
+test('a failed import is a note, its kinds are skipped, the rest loads; an unknown theme is a note', async () => {
+  const a = await fresh()
+  const notes = await applyApp({ ...doc, theme: { id: 'nope' }, systems: [{ id: 'host', instances: [{ id: 'q', kind: 'quux' }, { id: 'l', kind: 'log' }], subscriptions: [] }] }, 'replace',
+    { ...a.deps, importPackage: async () => ({ error: 'offline' }) })
+  expect(notes).toEqual(expect.arrayContaining([expect.stringContaining('offline'), expect.stringContaining('unknown theme nope'), expect.stringContaining('no component kind quux')]))
+  expect(a.st.theme.theme).toBe('enterprise'); expect(a.host.registry.get('l')).toBeDefined(); expect(a.st.imports).toEqual([])
+})

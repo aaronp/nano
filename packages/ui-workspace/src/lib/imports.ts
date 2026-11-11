@@ -72,7 +72,7 @@ export function catalogMismatch(m: Manifest, catalog: Catalog): string | null {
 
 /** A remembered import. */
 export interface ImportRecord { url: string; name: string; version: string; trust?: 'trusted' | 'sandboxed' }
-const KEY = 'workspace-starter.imports';
+export const KEY = 'workspace-starter.imports';
 
 /** The imports kept in storage: one record per manifest URL. */
 export function importsStore(storage: Pick<Storage, 'getItem' | 'setItem'>) {

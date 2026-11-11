@@ -8,7 +8,7 @@ import { standIn } from './stand-in'
 
 export type Mode = 'host' | 'sandbox' | 'isolated-sandbox'
 /** A catalog entry the app holds: the element's, with its trust, the modes it may be deployed in (the first is the default) and the package module it came from. */
-export type AppEntry = CatalogEntry & { modes: Mode[]; trust: 'trusted' | 'sandboxed'; source?: { url: string } }
+export type AppEntry = CatalogEntry & { modes: Mode[]; trust: 'trusted' | 'sandboxed'; source?: { url: string }; /** its `config` is JavaScript that runs where the instance runs (map, filter): a document's needs consent */ code?: boolean }
 export type AppCatalog = Record<string, AppEntry>
 export type DeployStrategy = (kind: string, mode: Mode) => Component
 
@@ -23,7 +23,7 @@ export const deployStrategy = (catalog: AppCatalog, open: typeof openFrame = ope
   return standIn(serialEntry(e), () => open({ url, kind, mode, render: !!e.tag }))
 }
 
-/** Adds `kind` as `id` to `registry` in `mode`, labelled `nano/deploy` and `nano/trust`; an iframe mode (or given `outward`)
+/** Adds `kind` as `id` to `registry` in `mode`, labelled `nano/deploy` and `nano/trust` (and `nano/allow`/`nano/deny`, as JSON, when given); an iframe mode (or given `outward`)
  * is guarded too (`nano/guarded`), by default allowed no outward calls. */
 export function deploy(runtime: Runtime, id: string, kind: string, mode: Mode,
   opts: { catalog: AppCatalog; open?: typeof openFrame; owner?: Owner; outward?: Selectors }): Result<void> {
@@ -34,6 +34,9 @@ export function deploy(runtime: Runtime, id: string, kind: string, mode: Mode,
   const added = registry.add(id, Components.instantiate(component), opts.owner)
   if (!isOk(added)) return added
   registry.label(id, { 'nano/deploy': mode, 'nano/trust': opts.catalog[kind]!.trust })
+  // the guard selectors are kept as labels, so a snapshot can read them back
+  if (opts.outward?.allow) registry.label(id, { 'nano/allow': JSON.stringify(opts.outward.allow) })
+  if (opts.outward?.deny) registry.label(id, { 'nano/deny': JSON.stringify(opts.outward.deny) })
   if (mode !== 'host' || opts.outward) {
     const g = guard(runtime, id, { allow: [], ...opts.outward })   // deny-only stays deny-all plus the deny
     if (!isOk(g)) { registry.remove(id); return g }
