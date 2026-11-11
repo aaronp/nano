@@ -25,8 +25,13 @@ export async function fetchManifest(url: string, deps: ImportDeps = pageDeps): P
   try { json = await deps.fetchJson(url); } catch (e) { return { error: `Couldn't fetch ${url}: ${(e as Error).message}` }; }
   const m = parseManifest(json);
   if (typeof m === 'string') return { error: m };
+  return { manifest: m, clashes: clashesNow(m) };
+}
+
+/** What the manifest would clash with among what is loaded right now (read again just before adding: an import in flight may have added it). */
+function clashesNow(m: Manifest): string[] {
   const taken = loadedNames();
-  return { manifest: m, clashes: [...clashes(m, taken), ...m.components.flatMap((c) => (c.tag && !taken.tags.includes(c.tag) && customElements.get(c.tag) ? [`element <${c.tag}>`] : []))] };
+  return [...clashes(m, taken), ...m.components.flatMap((c) => (c.tag && !taken.tags.includes(c.tag) && customElements.get(c.tag) ? [`element <${c.tag}>`] : []))];
 }
 
 /** Loads a package and adds it to the host, or says why not (and adds nothing). */
@@ -47,6 +52,8 @@ export async function loadPackage(url: string, deps: ImportDeps = pageDeps, trus
     }
     const mismatch = catalogMismatch(m, entries);
     if (mismatch) return { error: mismatch };
+    const late = clashesNow(m);
+    if (late.length) return { error: `${m.name} clashes with what is loaded: ${late.join(', ')}.` };
     addCatalog(entries, { name: m.name, url, module }, 'sandboxed');
     return { manifest: m };
   }
@@ -56,6 +63,8 @@ export async function loadPackage(url: string, deps: ImportDeps = pageDeps, trus
   if (!catalog || typeof catalog !== 'object' || typeof define !== 'function') return { error: `${m.name}'s module doesn't export a catalog and define().` };
   const mismatch = catalogMismatch(m, catalog);
   if (mismatch) return { error: mismatch };
+  const late = clashesNow(m);   // synchronously before define(): another import may have added the same kind while this one loaded
+  if (late.length) return { error: `${m.name} clashes with what is loaded: ${late.join(', ')}.` };
   try { (define as () => void)(); } catch (e) { return { error: `${m.name}'s define() failed: ${(e as Error).message}` }; }
   addCatalog(catalog, { name: m.name, url, module });
   return { manifest: m };

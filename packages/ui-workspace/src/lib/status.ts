@@ -8,5 +8,7 @@ export function showStatus(doc: Document, text: string) {
     b.type = 'button'; b.textContent = 'Dismiss'; b.addEventListener('click', () => el!.remove())
     el.append(msg, b); doc.body.append(el)
   }
-  el.firstElementChild!.textContent = text
+  // the region exists empty first, so a screen reader announces the text set on the next frame
+  const msg = el.firstElementChild!, set = () => { msg.textContent = text }
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(set); else setTimeout(set, 16)
 }

@@ -32,10 +32,16 @@ export async function restoreApp({ host, stores, app, catalog, importPackage, wa
     const e = app.stash('bad', raw)
     return { restored: false, protect: true, notes: [], failed: [], say: `The saved working copy could not be read, so this started from the default app.${e ? ` It could not be kept either: ${e}` : ' The unreadable copy is kept in this browser as nano.working.bad.'}` }
   }
+  /** Keeps the copy as `unrestored` unless one is there already: the first is the complete one, a later copy may have been degraded by a partial restore. */
+  const keep = () => {
+    if (app.stashed('unrestored') !== null) return 'An earlier complete copy is already kept in this browser as nano.working.unrestored (this one was not kept over it).'
+    const e = app.stash('unrestored', raw)
+    return e ? `The complete copy could not be kept: ${e}` : 'The complete copy is kept in this browser as nano.working.unrestored.'
+  }
   const failed: { url: string; error: string }[] = []
   let notes: string[]
+  const before = (() => { try { return stores.imports.list() } catch { return [] } })()
   try {
-    const before = stores.imports.list()
     stores.imports.set([])
     notes = await applyApp(w, 'replace', { host, stores, catalog, consentCode: () => true, waits,
       importPackage: async (url, trust) => { const r = await importPackage(url, trust); if (r.error) failed.push({ url, error: r.error }); return r } })
@@ -43,12 +49,11 @@ export async function restoreApp({ host, stores, app, catalog, importPackage, wa
     stores.imports.set(w.imports.map(i => kept.find(k => k.url === i.url) ?? before.find(b => b.url === i.url) ?? { url: i.url, name: i.url, version: '', trust: i.trust }))
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    app.stash('unrestored', raw)
-    return { restored: false, protect: true, notes: [`stopped: ${msg}`], failed, say: `Your saved app could not be restored (${msg}); the page started as usual and the saved copy is kept as nano.working.unrestored.` }
+    try { stores.imports.set(before) } catch { /* the same failure again */ }
+    return { restored: false, protect: true, notes: [`stopped: ${msg}`], failed, say: `Your saved app could not be restored (${msg}); the page started as usual. ${keep()}` }
   }
   if (!notes.length && !failed.length) return { restored: true, protect: false, notes, failed }
-  app.stash('unrestored', raw)
-  return { restored: true, protect: true, notes, failed, say: `Your saved app was restored with ${notes.length} problem${notes.length === 1 ? '' : 's'} (first: ${notes[0] ?? failed[0]!.error}). The complete copy is kept in this browser as nano.working.unrestored.` }
+  return { restored: true, protect: true, notes, failed, say: `Your saved app was restored with ${notes.length} problem${notes.length === 1 ? '' : 's'} (first: ${notes[0] ?? failed[0]!.error}). ${keep()}` }
 }
 
 const CHANGES = ['nano:changed', 'catalog:changed', 'app-theme-change', 'imports:remove']
@@ -93,11 +98,11 @@ export function autosave({ host, stores, app, doc, delay = 500, initial = true, 
   }
   // on close: write the last finished snapshot at once, and start a new one
   // ponytail: an async snapshot cannot finish during unload, so changes in the last <500 ms can be lost; a sync snapshot path would close the gap
-  const flush = () => { if (timer && last) { app.setWorking(last) } if (timer) { clearTimeout(timer); void run() } }
+  const flush = () => { if (stopped) return; if (timer && last) { app.setWorking(last) } if (timer) { clearTimeout(timer); void run() } }
   const hide = () => { if (doc.visibilityState === 'hidden') flush() }
   for (const e of CHANGES) doc.addEventListener(e, schedule)
   win?.addEventListener('pagehide', flush); doc.addEventListener('visibilitychange', hide)
   if (initial) schedule()   // without a working copy, the first snapshot becomes it
   else void watch()
-  return { stop() { stopped = true; clearTimeout(timer); for (const e of CHANGES) doc.removeEventListener(e, schedule); doc.removeEventListener('visibilitychange', hide); offs.forEach(off => off()) }, flush }
+  return { stop() { stopped = true; clearTimeout(timer); for (const e of CHANGES) doc.removeEventListener(e, schedule); doc.removeEventListener('visibilitychange', hide); win?.removeEventListener('pagehide', flush); offs.forEach(off => off()) }, flush }
 }

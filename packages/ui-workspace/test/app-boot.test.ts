@@ -90,6 +90,21 @@ test('an unreadable working copy is kept as nano.working.bad, the person is told
   b.auto.stop()
 })
 
+test('two partial restores in a row keep the first complete copy', async () => {
+  const storage = memory(), app = appStore(storage)
+  const first = { nano: 1 as const, title: 'First', imports: [{ url: 'https://dead/m.json', trust: 'sandboxed' as const }], systems: [], workspaces: [] }
+  app.setWorking(first)
+  const once = async () => { const h = appHost(), stores = realStores(document, storage as never, titleStore(storage, document)); return restoreApp({ host: h.host, stores, app, catalog: h.catalog, importPackage: async () => ({ error: 'down' }) }) }
+  const raw = storage.getItem('nano.working')
+  await once()
+  app.setWorking({ ...first, title: 'Degraded' })   // a later change after the partial restore
+  const second = await once(); await once()
+  expect(storage.getItem('nano.working.unrestored')).toBe(raw)
+  app.setWorking({ ...first, imports: [{ url: 'https://dead2/m.json', trust: 'sandboxed' }] })
+  expect((await once()).say).toContain('earlier complete copy')
+  expect(second.say).toBeDefined()
+})
+
 test('restoreApp never throws: a failing store falls back to a normal start, protected and kept', async () => {
   const storage = memory(), app = appStore(storage)
   app.setWorking({ nano: 1, title: 'T', imports: [], systems: [], workspaces: [] })
@@ -98,6 +113,21 @@ test('restoreApp never throws: a failing store falls back to a normal start, pro
   const r = await restoreApp({ host: h.host, stores, app, catalog: h.catalog, importPackage: async () => ({}) })
   expect(r).toMatchObject({ restored: false, protect: true }); expect(r.say).toContain('quota')
   expect(storage.getItem('nano.working.unrestored')).toBe(storage.getItem('nano.working'))
+})
+
+test('a restore that throws puts the imports store back; a stopped autosave ignores pagehide', async () => {
+  const storage = memory(), app = appStore(storage)
+  app.setWorking({ nano: 1, title: 'T', imports: [{ url: 'https://a/m.json', trust: 'sandboxed' }], systems: [], workspaces: [] })
+  storage.m.set('workspace-starter.imports', JSON.stringify([{ url: 'https://old/m.json', name: 'old', version: '1' }]))
+  const h = appHost(), stores = realStores(document, storage as never, titleStore(storage, document))
+  const real = stores.imports.set; let n = 0
+  stores.imports.set = xs => { if (++n === 3) throw new Error('quota'); real(xs) }   // the first empties it; apply's own write is the second (a note); the rebuild is the third and fails
+  const r = await restoreApp({ host: h.host, stores, app, catalog: h.catalog, importPackage: async () => ({}) })
+  expect(r.restored).toBe(false)
+  expect(JSON.parse(storage.getItem('workspace-starter.imports')!).map((x: any) => x.url)).toEqual(['https://old/m.json'])
+  const b = await boot(memory()); await tick(700); b.auto.stop()
+  const w0 = (b as any).app.working(); let wrote = 0; const sw = b.app.setWorking; (b.app as any).setWorking = (a: never) => { wrote++; return sw(a) }
+  window.dispatchEvent(new Event('pagehide')); await tick(50); expect(wrote).toBe(0); expect(w0).not.toBeNull()
 })
 
 test('a busy burst does not starve autosave: it writes within the max wait', async () => {
@@ -135,6 +165,8 @@ test('showStatus makes one dismissible role=status message', async () => {
   const { showStatus } = await import('../src/lib/status')
   document.body.innerHTML = ''
   showStatus(document, 'one'); showStatus(document, 'two')
+  expect(document.querySelector('[role="status"]')!.textContent).toContain('Dismiss')   // empty until the next frame
+  await tick(50)
   const els = document.querySelectorAll('[role="status"]'); expect(els).toHaveLength(1); expect(els[0]!.textContent).toContain('two')
   els[0]!.querySelector('button')!.click(); expect(document.querySelector('[role="status"]')).toBeNull()
 })

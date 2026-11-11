@@ -175,3 +175,13 @@ test('a kind named like an Object.prototype member is an error, not a crash', as
   expect(await loadPackage('https://j/m.json', noImport(m, { 'https://j/index.js': {} }).deps)).toHaveProperty('error')
   expect(await loadTrusted('https://j/m.json', web(m, { 'https://j/index.js': fixture }))).toHaveProperty('error')
 })
+
+test('two packages sharing a kind imported at once: one loads, the other is refused, nothing is overwritten', async () => {
+  const pkg3 = new URL('./fixtures/pkg3/index.ts', import.meta.url).href
+  const mm = (name: string) => manifest({ name, components: [{ kind: 'twin', id: 'fixture.pkg3/twin', title: 'Twin', tag: 'fixture-twin' }] })
+  const d = { ...web({ 'https://p1/m.json': mm('one'), 'https://p2/m.json': mm('two') }), importModule: async () => { await new Promise(r => setTimeout(r, 20)); return import(pkg3) } }
+  const results = await Promise.all([loadTrusted('https://p1/m.json', d), loadTrusted('https://p2/m.json', d)])
+  expect(results.filter(r => 'error' in r)).toHaveLength(1)
+  expect((results.find(r => 'error' in r) as { error: string }).error).toContain('clashes')
+  expect(catalog.twin!.source).toEqual({ url: 'https://p1/index.js' })   // the first one's, not replaced
+})

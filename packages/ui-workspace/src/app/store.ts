@@ -20,6 +20,7 @@ export const appStore = (storage: Store) => {
     /** The working copy's text as stored, valid or not. */
     rawWorking: (): string | null => { try { return storage.getItem(WORKING) } catch { return null } },
     /** Keeps text a restore could not use, beside the working copy: 'bad' (unreadable) or 'unrestored' (partly applied); the newest wins. */
+    stashed: (which: 'bad' | 'unrestored'): string | null => { try { return storage.getItem(`${WORKING}.${which}`) } catch { return null } },
     stash: (which: 'bad' | 'unrestored', text: string) => put(`${WORKING}.${which}`, text),
     working: (): NanoApp | null => { const a = checkApp(read(WORKING)); return typeof a === 'string' ? null : a },
     setWorking: (a: NanoApp) => put(WORKING, JSON.stringify(a)),
