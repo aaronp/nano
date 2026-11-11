@@ -172,6 +172,11 @@ describe('sandbox protocol', () => {
     expect(e!.ops.map(o => `${o.ns}/${o.name}`)).toContain('t/deep/ask')
   })
 
+  test('checkEntry returns only the known fields', () => {
+    const r = checkEntry({ id: { ns: 'a', name: 'b', x: 1 }, title: 't', ops: [{ ns: 'a', name: 'o', evil: 1 }], component: {}, extra: 1 }) as unknown as Record<string, unknown>
+    expect(r).toEqual({ id: { ns: 'a', name: 'b' }, title: 't', ops: [{ ns: 'a', name: 'o' }] })
+  })
+
   test('checkEntry rejects malformed entries', () => {
     for (const bad of [null, 'x', {}, { ...entry, id: { ns: 1, name: 'a' } }, { ...entry, title: 3 }, { ...entry, tag: 3 }, { ...entry, ops: 'no' },
       { ...entry, ops: [{ ns: 't' }] }, { ...entry, ops: [{ ns: 't', name: 'a', input: 'str' }] },

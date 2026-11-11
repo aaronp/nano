@@ -43,7 +43,11 @@ export function checkEntry(x: unknown): SerialEntry | string {
     if (!optStr(op.description)) return `op ${op.ns}/${op.name} description is not a string`
     for (const k of ['input', 'output']) if (op[k] !== undefined && !obj(op[k])) return `op ${op.ns}/${op.name} ${k} is not a schema object`
   }
-  return x as SerialEntry
+  return {
+    id: { ns: id.ns, name: id.name }, title: x.title,
+    ...(x.tag !== undefined && { tag: x.tag }), ...(x.description !== undefined && { description: x.description }),
+    ops: (x.ops as Record<string, unknown>[]).map(o => ({ ns: o.ns, name: o.name, ...(o.input !== undefined && { input: o.input }), ...(o.output !== undefined && { output: o.output }), ...(o.description !== undefined && { description: o.description }) }) as Op),
+  }
 }
 
 /** A result off the wire, if it is one. */

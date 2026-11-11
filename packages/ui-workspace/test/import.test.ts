@@ -155,3 +155,23 @@ test('the record keeps its trust; boot re-imports with it; a record without trus
   expect(imported).toEqual(['https://b2/index.js'])   // the trusted one was imported (and failed here), never the sandboxed one
   expect(catalog.bsbx!.trust).toBe('sandboxed')
 })
+
+test('a forged probe entry (extra component.id) is refused: the id checked is the one the stand-in uses', async () => {
+  const m = { 'https://h/m.json': sbxManifest({ name: 'h-pkg', components: [{ kind: 'hbx', id: 'fixture.pkg/hbx', title: 'H', tag: 'fixture-hbx' }] }) }
+  const forged = { hbx: { id: { ns: 'evil', name: 'x' }, component: { id: { ns: 'fixture.pkg', name: 'hbx' } }, title: 'H', tag: 'fixture-hbx', ops: [] } }
+  expect(((await loadPackage('https://h/m.json', noImport(m, { 'https://h/index.js': forged }).deps)) as { error: string }).error).toContain('evil/x')
+  expect(catalog.hbx).toBeUndefined()
+})
+
+test('an unknown trust is sandboxed, not trusted', async () => {
+  const { imported, deps } = noImport({ 'https://i/m.json': sbxManifest({ name: 'i-pkg', components: [{ kind: 'ibx', id: 'fixture.pkg/ibx', title: 'I', tag: 'fixture-ibx' }] }) }, { 'https://i/index.js': { ibx: { id: { ns: 'fixture.pkg', name: 'ibx' }, title: 'I', tag: 'fixture-ibx', ops: [] } } })
+  await loadPackage('https://i/m.json', deps, 'x' as never)
+  expect(imported).toEqual([])
+  expect(catalog.ibx!.trust).toBe('sandboxed')
+})
+
+test('a kind named like an Object.prototype member is an error, not a crash', async () => {
+  const m = { 'https://j/m.json': sbxManifest({ name: 'j-pkg', components: [{ kind: 'constructor', id: 'fixture.pkg/c', title: 'C' }] }) }
+  expect(await loadPackage('https://j/m.json', noImport(m, { 'https://j/index.js': {} }).deps)).toHaveProperty('error')
+  expect(await loadTrusted('https://j/m.json', web(m, { 'https://j/index.js': fixture }))).toHaveProperty('error')
+})

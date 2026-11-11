@@ -36,17 +36,16 @@ export async function loadPackage(url: string, deps: ImportDeps = pageDeps, trus
   const { manifest: m, clashes: taken } = got;
   if (taken.length) return { error: `${m.name} clashes with what is loaded: ${taken.join(', ')}.` };
   const module = new URL(m.module, url).href;
-  if (trust === 'sandboxed') {   // the host never imports this module: its catalog comes from an isolated probe
+  if (trust !== 'trusted') {   // anything but an explicit 'trusted' is sandboxed; the host never imports this module: its catalog comes from an isolated probe
     const probed = await deps.probe(module);
     if ('error' in probed) return { error: `Couldn't probe ${m.name}: ${probed.error}` };
     const entries: Catalog = {};
     for (const [kind, raw] of Object.entries(probed)) {
       const e = checkEntry(raw);
       if (typeof e === 'string') return { error: `${m.name}'s ${kind}: ${e}` };
-      probed[kind] = e;
       entries[kind] = { component: standIn(e, () => { throw new Error(`${kind} is sandboxed: deploy it as isolated-sandbox`); }), title: e.title, ...(e.tag && { tag: e.tag }) };
     }
-    const mismatch = catalogMismatch(m, probed as Record<string, SerialEntry>);
+    const mismatch = catalogMismatch(m, entries);
     if (mismatch) return { error: mismatch };
     addCatalog(entries, { name: m.name, url, module }, 'sandboxed');
     return { manifest: m };

@@ -50,13 +50,6 @@ test('the loaded catalog must match its manifest', () => {
   expect(catalogMismatch(manifest as any, { timer: { component: Timer, title: 'Timer', tag: 'other-tag' } } as any)).toContain('nano-timer')
 })
 
-test('catalogMismatch also checks serial (probed) entries', () => {
-  const e = { id: { ns: 'nano.template', name: 'timer' }, title: 'Timer', tag: 'nano-timer', ops: [] }
-  expect(catalogMismatch(manifest as any, { timer: e })).toBeNull()
-  expect(catalogMismatch(manifest as any, { timer: { ...e, tag: 'other-tag' } })).toContain('nano-timer')
-  expect(catalogMismatch(manifest as any, { timer: { ...e, id: { ns: 'a', name: 'b' } } })).toContain('a/b')
-})
-
 test('the imports store keeps one record per URL, and forgets on remove', () => {
   const m = new Map<string, string>(), store = importsStore({ getItem: k => m.get(k) ?? null, setItem: (k, v) => { m.set(k, v) } })
   store.put({ url: 'https://a/manifest.json', name: 'a', version: '0.1.0' })
