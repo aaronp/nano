@@ -49,6 +49,9 @@ async function connect(page: Page, source: string, listener: string) {
 const openPanel = (page: Page, kind: string, name: string) =>
   page.evaluate(([kind, name]) => document.dispatchEvent(new CustomEvent('wires:open-panel', { detail: { kind, name }, bubbles: true })), [kind, name])
 
+/** Brings a dock panel's tab to the front (new panels open as tabs of one stack; a hidden one can't be used). */
+const showTab = (page: Page, title: string) => page.locator('workspace-dock .lm_tab').getByText(title, { exact: true }).first().click()
+
 async function pick(root: Page | FrameLocator | Locator, value: string) {
   await root.locator('nano-picker [role="combobox"]').first().click()
   await root.locator(`nano-picker [role="option"][data-value="${value}"]`).first().click()
@@ -76,10 +79,11 @@ test('a picker in each deploy mode, wired to one log', async ({ page }) => {
   await page.goto('/#/workspace')
   for (const name of Object.keys(MODES)) await openPanel(page, 'picker', name)
   await openPanel(page, 'log', 'L')
-  await pick(page.locator('workspace-dock'), 'normal')                    // host: the element is in the page
-  await pick(sandboxFrame(page, 'allow-scripts allow-same-origin'), 'fast')   // sandbox
-  await pick(sandboxFrame(page, 'allow-scripts'), 'normal')                   // isolated-sandbox
+  await showTab(page, 'p-host'); await pick(page.locator('workspace-dock'), 'normal')               // host: the element is in the page
+  await showTab(page, 'p-sbx'); await pick(sandboxFrame(page, 'allow-scripts allow-same-origin'), 'fast')   // sandbox
+  await showTab(page, 'p-iso'); await pick(sandboxFrame(page, 'allow-scripts'), 'normal')                   // isolated-sandbox
 
+  await showTab(page, 'L')
   const log = page.locator('workspace-dock c-log[name="L"]')
   await expect(log).toContainText('3 entries')
   for (const v of ['"normal"', '"fast"']) await expect(log).toContainText(v)
