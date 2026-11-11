@@ -185,15 +185,16 @@ test('the saved workspaces order round-trips through snapshot and apply', async 
   expect(b.st.workspaces.map((w: any) => w.path)).toEqual(['/a', '/c', '/b'])
 }, 10_000)
 
-test("a host built-in's code op is never wired, even with consent; its other ops are", async () => {
+test("the platform and a built-in's code op are never wired, even with consent; a built-in's other ops are", async () => {
   const a = await fresh()
   for (const [kind, name] of [['map', 'ex-map'], ['log', 'ex-log']]) await a.call('platform', P.createComponent, { kind, name, system: 'host' })
   const notes = await applyApp(sys([{ id: 'm0', kind: 'map' }], [
     { source: 'm0', op: Ops.key(MapC.ops.mapped), listener: 'ex-map', target: Ops.key(MapC.ops.setCode) },
     { source: 'm0', op: Ops.key(MapC.ops.mapped), listener: 'ex-log', target: Ops.key(Log.ops.info) },
+    { source: 'm0', op: Ops.key(MapC.ops.mapped), listener: 'platform', target: Ops.key(P.connect) },
   ]), 'replace', a.deps)
-  expect(notes).toHaveLength(1)
-  expect(notes[0]).toContain('reserved')
+  expect(notes).toHaveLength(2)
+  expect(notes.every(n => n.includes('reserved'))).toBe(true)
   const wired = a.host.registry.snapshot().subscriptions.filter(s => s.source === 'm0').map(s => s.listener).sort()
   expect(wired).toEqual(['ex-log'])
 })
