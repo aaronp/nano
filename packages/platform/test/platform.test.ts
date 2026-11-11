@@ -156,3 +156,14 @@ test('kinds carry modes', async () => {
   expect(kinds.find((k: any) => k.kind === 'range').modes).toEqual(['host', 'sandbox'])
   expect(kinds.find((k: any) => k.kind === 'log').modes).toBeUndefined()
 })
+
+test('createComponent without a mode uses the kind\'s first allowed mode', async () => {
+  const seen: unknown[] = []
+  const host = Runtimes.create(Registries.create('host'))
+  host.registry.add('platform', Components.instantiate(platform(host, { range: { ...catalog.range!, modes: ['isolated-sandbox', 'host'] }, log: catalog.log! }, {
+    deploy: (_rt, id, _k, mode) => { seen.push([id, mode]); return { value: undefined } },
+  })))
+  const call = (arg: unknown) => host.call({ registry: 'host', instance: 't' }, 'platform', Ops.key(P.createComponent), arg)
+  await call({ kind: 'range', name: 'a', system: 'host' }); await call({ kind: 'range', name: 'b', system: 'host', mode: 'host' }); await call({ kind: 'log', name: 'c', system: 'host' })
+  expect(seen).toEqual([['a', 'isolated-sandbox'], ['b', 'host'], ['c', undefined]])
+})

@@ -1,13 +1,13 @@
 // DeployStrategy: the Component to instantiate for a kind in a mode, and a deploy that adds it, labels it and guards it.
-import { Components, err, guard, isOk, ok, type Component, type Owner, type Registry, type Result, type Runtime, type Selectors } from '@pritzlaff/nano-core'
+import { Components, err, guard, isOk, ok, type Component, type Owner, type Result, type Runtime, type Selectors } from '@pritzlaff/nano-core'
 import type { CatalogEntry } from '@pritzlaff/nano-elements'
 import { openFrame } from './frames'
 import { serialEntry } from './protocol'
 import { standIn } from './stand-in'
 
 export type Mode = 'host' | 'sandbox' | 'isolated-sandbox'
-/** A catalog entry the app holds: the element's, with the modes it may be deployed in and the package module it came from. */
-export type AppEntry = CatalogEntry & { modes: Mode[]; source?: { url: string } }
+/** A catalog entry the app holds: the element's, with its trust, the modes it may be deployed in (the first is the default) and the package module it came from. */
+export type AppEntry = CatalogEntry & { modes: Mode[]; trust: 'trusted' | 'sandboxed'; source?: { url: string } }
 export type AppCatalog = Record<string, AppEntry>
 export type DeployStrategy = (kind: string, mode: Mode) => Component
 
@@ -24,16 +24,17 @@ export const deployStrategy = (catalog: AppCatalog, open: typeof openFrame = ope
 
 /** Adds `kind` as `id` to `registry` in `mode`, labelled `nano/deploy` and `nano/trust`; an iframe mode (or given `outward`)
  * is guarded too (`nano/guarded`), by default allowed no outward calls. */
-export function deploy(runtime: Runtime, registry: Registry, id: string, kind: string, mode: Mode,
+export function deploy(runtime: Runtime, id: string, kind: string, mode: Mode,
   opts: { catalog: AppCatalog; open?: typeof openFrame; owner?: Owner; outward?: Selectors }): Result<void> {
+  const registry = runtime.registry
+  if (registry.get(id)) return err(`${id} already exists in ${registry.id}`)   // before instantiating: that opens the frame
   let component: Component
   try { component = deployStrategy(opts.catalog, opts.open)(kind, mode) } catch (e) { return err(e instanceof Error ? e.message : String(e)) }
   const added = registry.add(id, Components.instantiate(component), opts.owner)
   if (!isOk(added)) return added
-  const trust = opts.catalog[kind]!.modes.includes('host') ? 'trusted' : 'sandboxed'
-  registry.label(id, { 'nano/deploy': mode, 'nano/trust': trust })
+  registry.label(id, { 'nano/deploy': mode, 'nano/trust': opts.catalog[kind]!.trust })
   if (mode !== 'host' || opts.outward) {
-    const g = guard(runtime, id, opts.outward ?? { allow: [] })
+    const g = guard(runtime, id, { allow: [], ...opts.outward })   // deny-only stays deny-all plus the deny
     if (!isOk(g)) { registry.remove(id); return g }
     registry.label(id, { 'nano/guarded': 'true' })
   }

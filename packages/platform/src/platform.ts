@@ -21,7 +21,7 @@ export const KindSchema = Type.Object({
   kind: str('Its catalog name', ['range']), component: str("Its component's id, ns/name", ['composable.bundle/range']),
   title: str('What to call it', ['Range']), tag: Type.Optional(str("Its element's tag, if it has one", ['c-range'])),
   description: Type.Optional(str('What it is for', ['A number between bounds'])),
-  modes: Type.Optional(Type.Array(Type.String({ description: 'A deploy mode', examples: ['host'] }), { description: 'The modes it can be deployed in, the first by default: host, sandbox, isolated-sandbox' })),
+  modes: Type.Optional(Type.Array(Type.String({ description: 'A deploy mode', examples: ['host'] }), { description: 'The modes it can be deployed in, the first is the default: host, sandbox, isolated-sandbox' })),
 }, { title: 'Kind', description: 'A kind of component the platform can make' })
 export type Kind = Static<typeof KindSchema>
 
@@ -36,7 +36,7 @@ export const PlatformOps = {
   stateChanged: Ops.source(NS, 'state-changed', Type.Object({ system: systemId, delta: DeltaSchema }, { description: 'Which system changed, and how' }), { description: 'Every change in any system, as it happens' }),
   createSystem: Ops.action(NS, 'create-system', str('The new system id', ['lab']), none, { description: 'Makes a new, empty system with its own runtime' }),
   createComponent: Ops.action(NS, 'create-component', Type.Object({ kind: str('A catalog kind', ['range']), name: str('The new instance id', ['r1']), system: systemId,
-    mode: Type.Optional(str("How to deploy it, one of the kind's modes (default: host)", ['isolated-sandbox'])),
+    mode: Type.Optional(str("How to deploy it, one of the kind's modes (default: the kind's first mode)", ['isolated-sandbox'])),
     allow: Type.Optional(Type.Array(Type.String({ description: 'A selector, registry/target/op, * matches anything', examples: ['host/log/*'] }), { description: 'Outward calls it may make; guards it' })),
     deny: Type.Optional(Type.Array(Type.String({ description: 'A selector, registry/target/op, * matches anything', examples: ['host/platform/*'] }), { description: 'Outward calls it may not make; guards it' })) },
     { description: 'What to make, what to call it, where, and optionally how' }), none, { description: 'Makes an instance of a catalog kind in a system' }),
@@ -110,7 +110,7 @@ export function platform(host: Runtime, catalog: Record<string, { component: Com
     if (opts.deploy) {
       const rt = s.systems.get(id)
       if (!rt) throw new Error(`no system ${id}`)
-      return must(opts.deploy(rt, name, kind, mode, owner(s), allow || deny ? { ...(allow && { allow }), ...(deny && { deny }) } : undefined))
+      return must(opts.deploy(rt, name, kind, mode ?? def.modes?.[0], owner(s), allow || deny ? { ...(allow && { allow }), ...(deny && { deny }) } : undefined))
     }
     must(system(s, id).add(name, Components.instantiate(def.component), owner(s)))
   })

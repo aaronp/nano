@@ -19,13 +19,13 @@ import { defineWires } from '@composable/wires'
 import { deploy, type AppCatalog, type Mode } from './sandbox/deploy.ts'
 
 /** Every kind of component this host offers: its packages' catalogs, merged. Add a package, add its catalog. */
-export const catalog: AppCatalog = Object.fromEntries(Object.entries({ ...bundle, ...editor } as Catalog).map(([k, e]) => [k, { ...e, modes: ['host'] as Mode[] }]))
+export const catalog: AppCatalog = Object.fromEntries(Object.entries({ ...bundle, ...editor } as Catalog).map(([k, e]) => [k, { ...e, modes: ['host'] as Mode[], trust: 'trusted' as const }]))
 
 /** The page's runtime and its registry, `host`. */
 export const host = Runtimes.create(Registries.create('host'))
 provide(document, host.registry)
 host.registry.add('platform', Components.instantiate(platform(host, catalog, {
-  deploy: (system, id, kind, mode, owner, outward) => deploy(system, system.registry, id, kind, (mode ?? 'host') as Mode, { catalog, owner, ...(outward && { outward }) }),
+  deploy: (system, id, kind, mode, owner, outward) => deploy(system, id, kind, (mode ?? 'host') as Mode, { catalog, owner, ...(outward && { outward }) }),
 })), { kind: 'app', name: 'ui-workspace' })
 
 const ask = async (op: Op, arg: unknown) => {
@@ -65,9 +65,8 @@ export function loadedNames() {
 
 /** Adds an imported package's catalog to the running host: the platform can make its kinds (it holds this catalog),
  * every dock gets a panel template per kind with an element, and drawers hear `catalog:changed`. */
-export function addCatalog(entries: Catalog, from: { name: string; url: string; module?: string }) {
-  // ponytail: every import is trusted until the import dialog passes a trust (sandboxed imports: ['isolated-sandbox'])
-  for (const [kind, e] of Object.entries(entries)) catalog[kind] = { ...e, modes: ['host', 'sandbox', 'isolated-sandbox'], source: { url: from.module ?? from.url } }
+export function addCatalog(entries: Catalog, from: { name: string; url: string; module?: string }, trust: 'trusted' | 'sandboxed' = 'trusted') {
+    for (const [kind, e] of Object.entries(entries)) catalog[kind] = { ...e, trust, modes: trust === 'trusted' ? ['host', 'sandbox', 'isolated-sandbox'] : ['isolated-sandbox'], source: { url: from.module ?? from.url } }
   for (const [kind, e] of Object.entries(entries)) if (e.tag) for (const dock of document.querySelectorAll<HTMLElement & { addTemplate?(t: HTMLTemplateElement): void }>('workspace-dock')) {
     const t = templateFor(kind, e)
     t.dataset.package = from.name; t.dataset.packageUrl = from.url
