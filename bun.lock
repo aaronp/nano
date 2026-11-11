@@ -80,6 +80,20 @@
         "typebox": "^1.4.0",
       },
     },
+    "packages/shell": {
+      "name": "@composable/shell",
+      "version": "0.1.0",
+      "dependencies": {
+        "@pritzlaff/nano-core": "workspace:*",
+        "@pritzlaff/nano-elements": "workspace:*",
+        "@pritzlaff/nano-runes": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+    },
     "packages/ui-workspace": {
       "name": "@composable/ui-workspace",
       "version": "0.1.0",
@@ -121,6 +135,8 @@
     "@composable/editor": ["@composable/editor@workspace:packages/editor"],
 
     "@composable/platform": ["@composable/platform@workspace:packages/platform"],
+
+    "@composable/shell": ["@composable/shell@workspace:packages/shell"],
 
     "@composable/ui-workspace": ["@composable/ui-workspace@workspace:packages/ui-workspace"],
 
