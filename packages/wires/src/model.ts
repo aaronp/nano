@@ -1,6 +1,7 @@
 // The view model, as pure functions: from a registry snapshot, the dock's panel geometry and the catalog, the
 // prototype's chassis, jacks (ports), rack modules and blocks, wires and routes.
 import { Ops, type Op, type Snapshot } from '@pritzlaff/nano-core'
+import { viewIds } from '@composable/platform'
 import { BLOCK_DY, BLOCK_H, BLOCK_JACK_DY, JACK_W, MOD_H, PALETTE, ROW_STEP, ROW_Y } from './constants'
 
 /** A rectangle in the dock's (front) coordinates. */
@@ -32,11 +33,11 @@ export const portKey = (instance: string, op: string) => instance + ' ' + op
 export const dirOf = (op: Op): 'in' | 'out' | null => (op.input ? 'in' : op.output ? 'out' : null)
 const jacksOf = (ops: Op[]) => [...ops.filter(o => dirOf(o) === 'in'), ...ops.filter(o => dirOf(o) === 'out')]
 /** Instances that are never shown: the registry itself, element views, and the platform. */
-export const hidden = (id: string, platform: string) => id === 'registry' || id.includes('~view') || id === platform
+export const hidden = (id: string, platform: string, views: Set<string>) => id === 'registry' || views.has(id) || id === platform
 
 /** Builds the model. Panels are given in front coordinates; the back face mirrors x. */
 export function buildModel({ snapshot, panels, W, H, platform, kinds = {}, titles = {} }: ModelInput): Model {
-  const opsOf = new Map(snapshot.instances.map(i => [i.id, i.ops]))
+  const opsOf = new Map(snapshot.instances.map(i => [i.id, i.ops])), views = viewIds(snapshot)
   const P: Record<string, Port> = {}
   const chassis: Chassis[] = []
   const placed = new Set<string>()
@@ -59,7 +60,7 @@ export function buildModel({ snapshot, panels, W, H, platform, kinds = {}, title
   const rack: RackItem[] = []
   let x = 20, row = 0
   for (const inst of snapshot.instances) {
-    if (placed.has(inst.id) || hidden(inst.id, platform)) continue
+    if (placed.has(inst.id) || hidden(inst.id, platform, views)) continue
     const jacks = jacksOf(inst.ops)
     const block = !jacks.some(o => dirOf(o) === 'out')
     const kind = kinds[inst.id]
@@ -76,7 +77,7 @@ export function buildModel({ snapshot, panels, W, H, platform, kinds = {}, title
     x += w + 15
   }
 
-  const subs = snapshot.subscriptions.filter(s => !s.listener.includes('~view') && P[portKey(s.source, s.op)] && P[portKey(s.listener, s.target)])
+  const subs = snapshot.subscriptions.filter(s => !views.has(s.listener) && P[portKey(s.source, s.op)] && P[portKey(s.listener, s.target)])
   const { routeOf, routes } = routesOf(subs, chassis)
   const wires = subs.map(s => ({ id: s.id, route: routeOf.get(s.id)!, from: portKey(s.source, s.op), to: portKey(s.listener, s.target) }))
   return { W, H, chassis, rack, P, wires, routes, rackH: 128 + row * 132 }

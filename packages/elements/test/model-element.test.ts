@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { html } from 'lit'
 import { Type } from 'typebox'
-import { Components, Registries, Runtimes } from '@pritzlaff/nano-core'
+import { Components, Registries, Runtimes, Strategies, unwrap, wrap } from '@pritzlaff/nano-core'
 import { component, state } from '@pritzlaff/nano-runes'
 import { ModelElement } from '../src'
 const tick = () => new Promise(r => setTimeout(r, 0))
@@ -17,14 +17,14 @@ class CountEl extends ModelElement {
 customElements.define('count-el', CountEl)
 
 const mount = async () => {
-  const reg = Runtimes.create(Registries.create('r')).registry
+  const rt = Runtimes.create(Registries.create('r')), reg = rt.registry
   reg.add('counter', Components.instantiate(Counter))
   const el = document.createElement('count-el') as CountEl
   el.registry = reg; el.model = 'counter'
   document.body.append(el)
   await tick(); await el.updateComplete
   const text = (sel: string) => el.shadowRoot!.querySelector(sel)!.textContent
-  return { reg, el, text }
+  return { rt, reg, el, text }
 }
 
 test('an element shows the model, and re-renders when it publishes', async () => {
@@ -68,4 +68,14 @@ test("an element's hidden view instance is owned by the element, as a view", asy
   const { reg } = await mount()
   const view = reg.snapshot().instances.find(i => i.id.startsWith('counter~view'))!
   expect(view.owner).toEqual({ kind: 'view', name: 'count-el' })
+})
+
+test('a view keeps updating across wrap and unwrap', async () => {
+  const { rt, el, text } = await mount()
+  wrap(rt, 'counter', Strategies.forward)
+  await el.act(Counter.ops.add, 2); await tick(); await el.updateComplete
+  expect(text('b')).toBe('2')
+  unwrap(rt, 'counter')
+  await el.act(Counter.ops.add, 3); await tick(); await el.updateComplete
+  expect(text('b')).toBe('5')
 })

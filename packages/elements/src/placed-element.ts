@@ -1,9 +1,15 @@
 // An element that places its own component: by its `name`, in the registry provided for its document.
-import { Components, type Component, type Instance, type Registry } from '@pritzlaff/nano-core'
+import { Components, hasRuntime, type Component, type Instance, type Registry } from '@pritzlaff/nano-core'
 import { ModelElement } from './model-element'
 
 const provided = new WeakMap<Document, Registry>()
 let n = 0
+
+/** Whether `id` in `reg` is `inst`, or a wrapper around it (however deep): a wrapped instance is still this element's. */
+const holds = (reg: Registry, id: string, inst: Instance): boolean => {
+  const at = reg.get(id)
+  return at === inst || (!!at && hasRuntime(at.value) && holds(at.value.runtime.registry, id, inst))
+}
 
 /** Sets the registry that placed elements in `doc` use. */
 export const provide = (doc: Document, registry: Registry) => { provided.set(doc, registry) }
@@ -37,7 +43,7 @@ export abstract class PlacedElement extends ModelElement {
     queueMicrotask(() => {
       const mine = this.#mine
       if (this.isConnected || !mine || this.hasAttribute('keep')) return
-      if (mine.registry.get(mine.id) === mine.inst) mine.registry.remove(mine.id)   // not one that replaced it
+      if (holds(mine.registry, mine.id, mine.inst)) mine.registry.remove(mine.id)   // not one that replaced it
       this.#mine = undefined
     })
   }

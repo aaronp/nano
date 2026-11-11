@@ -2,7 +2,7 @@
 // a component (its coordinates, kind, jacks and connections) or one of its actions (its op, schemas and connections).
 import { html } from 'lit'
 import { Ops, type Op, type Subscription } from '@pritzlaff/nano-core'
-import { examplesOf, runtimeOf } from '@composable/platform'
+import { examplesOf, runtimeOf, viewIds } from '@composable/platform'
 import type { Vals } from './render-root'
 import type { Wires } from './wires'
 
@@ -21,7 +21,8 @@ export function renderDetail(el: Wires, d: Vals) {
   // the selection may be in any system: look it up through the platform, where the tree lives too
   const sel = d.s.picked, home = (el.host ?? el.runtime)?.registry
   const reg = sel && home ? runtimeOf(home, sel.system, el.platform)?.registry : el.runtime?.registry
-  const subs = (reg?.snapshot().subscriptions ?? []).filter(c => !c.listener.includes('~view'))
+  const snap = reg?.snapshot(), views = snap ? viewIds(snap) : new Set<string>()
+  const subs = (snap?.subscriptions ?? []).filter(c => !views.has(c.listener))
   const inst = sel && reg?.get(sel.instance)
   const card = !sel ? html`<p style="margin:0; color:#8B96A5">Click a panel, module or jack on the back, or an item in the tree.</p>`
     : !inst ? html`<p style="margin:0; color:#8B96A5">${sel.instance} is no longer in ${sel.system}.</p>`

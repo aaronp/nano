@@ -8,7 +8,9 @@ import { PlatformOps as P, type Selection } from './platform'
 import { examplesOf } from './inventory'
 
 type Inst = Snapshot['instances'][number]
-const shown = (i: Inst) => i.id !== 'registry' && !i.id.includes('~view')
+/** The ids of a registry's entries owned by a view (an element's hidden subscriber): never shown. */
+export const viewIds = (s: Snapshot): Set<string> => new Set(s.instances.filter(i => i.owner?.kind === 'view').map(i => i.id))
+const shown = (i: Inst) => i.id !== 'registry' && i.owner?.kind !== 'view'
 const typeLabel = (s?: TSchema): string => {
   const t = s as { title?: string; type?: string; items?: TSchema } | undefined
   return !t ? '·' : t.title ?? (t.type === 'array' ? `${typeLabel(t.items)}[]` : t.type ?? 'any')
@@ -79,7 +81,7 @@ export class PlatformEl extends ModelElement {
     return systems.flatMap(s => {
       const insts = s.instances.filter(shown), listed = insts.filter(i => !this.sharedOnly || where.get(i.id)!.length > 1)
       if (this.sharedOnly && !listed.length) return []
-      const conns = s.subscriptions.filter(sub => !sub.listener.includes('~view')).map(sub => this.#connection(s.id, sub))
+      const views = viewIds(s), conns = s.subscriptions.filter(sub => !views.has(sub.listener)).map(sub => this.#connection(s.id, sub))
       return [{ id: `s:${s.id}`, label: s.id, kind: 'system', count: insts.length, children: [...listed.map(i => this.#component(s, i, where.get(i.id)!)), ...conns] }]
     })
   }

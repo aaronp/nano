@@ -158,3 +158,15 @@ test("a component's row shows its description, and the filter finds it", async (
   expect(item('c:host/r')!.textContent).toContain(catalog.range!.component.description!)
   expect(item('c:host/l')).toBeNull()
 })
+
+test('an instance owned by a view is hidden whatever its id; one named ~view but owned otherwise is shown', async () => {
+  const { host, el, settle, item, t$$ } = await mount()
+  const blank = () => Components.instantiate(Components.create({ ns: 't', name: 'blank' }, () => null))
+  host.registry.add('watcher', blank(), { kind: 'view', name: 'some-el' })
+  host.registry.add('x~view-9', blank(), { kind: 'widget', name: 'w' })
+  host.registry.subscribe({ source: 'r', op: Ops.key(Range.ops.value), listener: 'watcher', target: 't/x' })
+  ;(el as unknown as { requestUpdate(): void }).requestUpdate(); await settle()
+  expect(!!item('c:host/watcher')).toBe(false)
+  expect(!!item('c:host/x~view-9')).toBe(true)
+  expect(t$$('[data-id^="x:"]')).toHaveLength(0)
+})
