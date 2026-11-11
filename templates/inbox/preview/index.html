@@ -36,16 +36,24 @@
     <div class="themes" role="group" aria-label="Theme"><span class="lbl">Theme</span></div>
   </header>
 
-  <section class="card"><h2>Folders</h2><inbox-folders name="folders"></inbox-folders></section>
+  <div class="cols">
+    <section class="card"><h2>Folders</h2><inbox-folders name="folders"></inbox-folders></section>
+    <section class="card"><h2>Messages</h2><inbox-list name="list"></inbox-list></section>
+    <section class="card"><h2>Reader</h2><inbox-reader name="reader"></inbox-reader></section>
+  </div>
 </main>
 <script type="module">
-  import { Registries, Runtimes } from '@pritzlaff/nano-core'
+  import { Ops, Registries, Runtimes } from '@pritzlaff/nano-core'
   import { provide } from '@pritzlaff/nano-elements'
-  import { define } from './index.js'
+  import { define, Folders, List, Reader } from './index.js'
   // a registry and runtime for the page, as a host has; elements place their components in it
   const runtime = Runtimes.create(Registries.create('preview'))
   provide(document, runtime.registry)
   define()
+  // folders → list → reader: ordinary subscriptions, as a host's nano.json would make them
+  const reg = runtime.registry
+  reg.subscribe({ source: 'folders', op: Ops.key(Folders.ops.selected), listener: 'list', target: Ops.key(List.ops.show) })
+  reg.subscribe({ source: 'list', op: Ops.key(List.ops.opened), listener: 'reader', target: Ops.key(Reader.ops.read) })
 
   // the theme picker: sets a theme's --nano-* tokens on the page, and remembers the choice in this browser
   const themes = JSON.parse(document.getElementById('themes').textContent)

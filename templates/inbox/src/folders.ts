@@ -2,8 +2,8 @@
 import { Type } from 'typebox'
 import { component, event, state } from '@pritzlaff/nano-runes'
 import { FOLDERS } from './sample-data'
+import { FolderId } from './schemas'
 
-const FolderId = Type.String({ maxLength: 40, description: 'A folder id', examples: ['inbox'] })
 const Folder = Type.Object({ id: FolderId, name: Type.String({ maxLength: 100, description: 'What the folder is called', examples: ['Inbox'] }) }, { description: 'A folder' })
 
 /** The folders and which one is current. `select` refuses an id that isn't a folder; new folders (at least one, unique ids) keep the current one if it still exists, else the first is current.
