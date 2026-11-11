@@ -3,6 +3,7 @@ import type { Catalog } from '@pritzlaff/nano-elements'
 import { Profile } from './profile'
 
 export { Profile }
+export { AppGateway, type Focus, type Target } from './app-gateway'
 export { initials, safeAvatar, type Entry, type User } from './profile'
 export { defineShell, ProfileEl } from './profile-el'
 export { FileMenuEl } from './file-menu-el'
