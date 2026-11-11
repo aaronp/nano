@@ -7,9 +7,10 @@ import type { Frame } from './stand-in'
 /** Which element shows each frame: an iframe is one view. */
 const viewers = new WeakMap<Frame, SandboxedElement>()
 
+/** Fills its container (a dock panel), so the iframe placed over it has room for menus and lists. */
 export class SandboxedElement extends LitElement {
   static properties = { name: {}, kind: {}, mode: {}, note: { state: true } }
-  static styles = css`:host { display: block; min-height: 4rem; } p { margin: 0; padding: .5rem; font: inherit; opacity: .7; }`
+  static styles = css`:host { display: block; height: 100%; min-height: 4rem; } p { margin: 0; padding: .5rem; font: inherit; opacity: .7; }`
   declare name?: string
   declare note?: string
   declare kind?: string

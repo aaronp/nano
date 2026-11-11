@@ -84,7 +84,12 @@ test('a picker in each deploy mode, wired to one log', async ({ page }) => {
   await openPanel(page, 'log', 'L')
   await showTab(page, 'p-host'); await pick(page.locator('workspace-dock'), 'normal')               // host: the element is in the page
   await showTab(page, 'p-sbx'); await pick(sandboxFrame(page, 'allow-scripts allow-same-origin'), 'fast')   // sandbox
-  await showTab(page, 'p-iso'); await pick(sandboxFrame(page, 'allow-scripts'), 'normal')                   // isolated-sandbox
+  // isolated-sandbox: its iframe fills the panel, so its list opens inside the frame and takes a click, as a user would
+  await showTab(page, 'p-iso')
+  const iso = page.locator('iframe[sandbox="allow-scripts"]').first(), panel = page.locator('workspace-dock .lm_content:visible').first()
+  await expect.poll(async () => (await iso.boundingBox())!.height).toBeGreaterThan((await panel.boundingBox())!.height - 40)
+  await sandboxFrame(page, 'allow-scripts').locator('nano-picker [role="combobox"]').first().click()
+  await sandboxFrame(page, 'allow-scripts').locator('nano-picker [role="option"][data-value="normal"]').first().click()
 
   await showTab(page, 'L')
   const log = page.locator('workspace-dock c-log[name="L"]')
