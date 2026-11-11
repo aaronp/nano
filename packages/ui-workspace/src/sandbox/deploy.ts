@@ -1,6 +1,7 @@
 // DeployStrategy: the Component to instantiate for a kind in a mode, and a deploy that adds it, labels it and guards it.
-import { Components, err, guard, isOk, ok, type Component, type Owner, type Result, type Runtime, type Selectors } from '@pritzlaff/nano-core'
+import { Components, err, guard, isOk, ok, type Component, type Owner, type Registry, type Result, type Runtime, type Selectors } from '@pritzlaff/nano-core'
 import type { CatalogEntry } from '@pritzlaff/nano-elements'
+import { runtimeOf } from '@composable/platform'
 import { openFrame } from './frames'
 import { serialEntry } from './protocol'
 import { standIn } from './stand-in'
@@ -39,4 +40,11 @@ export function deploy(runtime: Runtime, id: string, kind: string, mode: Mode,
     registry.label(id, { 'nano/guarded': 'true' })
   }
   return ok(undefined)
+}
+
+/** Deploys into whichever runtime owns `registry`: the host's, or a system the platform made. Any other registry is an error. */
+export function deployIn(host: Runtime, catalog: AppCatalog, registry: Registry, id: string, kind: string, mode: Mode, owner?: Owner,
+  open?: typeof openFrame): Result<void> {
+  const rt = registry === host.registry ? host : runtimeOf(host.registry, registry.id)
+  return rt ? deploy(rt, id, kind, mode, { catalog, owner, open }) : err(`no runtime for registry ${registry.id}`)
 }
