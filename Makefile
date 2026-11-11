@@ -1,4 +1,4 @@
-.PHONY: test test-ui install ui dev serve-template packages smoke publish template-check template-export
+.PHONY: test test-ui install ui dev serve-template serve-inbox link-templates packages smoke publish template-check template-export
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
@@ -31,6 +31,15 @@ dev:
 TEMPLATE_PORT ?= 5174
 serve-template:
 	$(MAKE) -C templates/nano-template serve PORT=$(TEMPLATE_PORT)
+
+# Build the inbox package and serve it on another origin (http://localhost:5175/manifest.json; INBOX_PORT=5175 by default).
+INBOX_PORT ?= 5175
+serve-inbox:
+	$(MAKE) -C templates/inbox serve PORT=$(INBOX_PORT)
+
+# Point the templates' @pritzlaff/nano-* at this repo's packages (after a `bun install` in each).
+link-templates:
+	bun scripts/link-local.ts templates/nano-template templates/inbox
 
 # Build the published packages (@pritzlaff/nano-core, -runes, -elements) into packages/*/dist, ready for npm.
 packages:
