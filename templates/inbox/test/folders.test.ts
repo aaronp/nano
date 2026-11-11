@@ -39,3 +39,17 @@ test('setFolders replaces them, keeping the selection if it still exists', async
   expect(await value(Folders.ops.current)).toBe('spam'); expect(got).toEqual(['spam'])
   expect((await call(Folders.ops.setFolders, [{ id: 'x' }])).error).toBeTruthy()
 })
+
+test('folder ids are bounded to 40 characters', async () => {
+  const { call } = page()
+  expect((await call(Folders.ops.select, 'x'.repeat(41))).error).toBeTruthy()
+  expect((await call(Folders.ops.setFolders, [{ id: 'x'.repeat(41), name: 'Long' }])).error).toBeTruthy()
+  expect((await call(Folders.ops.setFolders, [{ id: 'x'.repeat(40), name: 'Ok' }])).error).toBeFalsy()
+})
+
+test('setFolders refuses duplicate ids and an empty list, changing nothing', async () => {
+  const { call, value, got } = page()
+  expect((await call(Folders.ops.setFolders, [{ id: 'a', name: 'A' }, { id: 'a', name: 'B' }])).error).toContain('a')
+  expect((await call(Folders.ops.setFolders, [])).error).toBeTruthy()
+  expect((await value(Folders.ops.folders)).length).toBe(3); expect(await value(Folders.ops.current)).toBe('inbox'); expect(got).toEqual([])
+})

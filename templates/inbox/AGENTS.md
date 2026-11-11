@@ -66,6 +66,8 @@ carrying the widget's own CSS across.
   own.
 - **No `<form>` submit.** A host may run your element in a sandboxed iframe, where forms are blocked and `submit` never
   fires: save on a button's click and on Enter instead.
+- **Untrusted ids.** Ids and keys from data are compared (`===`, `includes`), never used as plain-object keys: use a
+  `Map` or `Object.hasOwn`, as nano-template's `store.ts` does.
 - **Accessibility.** Label inputs (`aria-label` or a `<label>`), use real `<button>`s, keep keyboard use working.
 - **Don't edit** `dist/` (built), or `preview/themes.ts` (generated from the nano workspace's themes).
 - **Don't change** a released component's id or ops without a new major version: hosts' saved connections name

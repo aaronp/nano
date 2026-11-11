@@ -12,7 +12,9 @@ export function linkLocal(dir: string, repo: string): string[] {
   mkdirSync(scope, { recursive: true })
   return PACKAGES.map(p => {
     const link = join(scope, `nano-${p}`)
-    try { lstatSync(link); rmSync(link, { recursive: true, force: true }) } catch {}   // only the entry we own
+    let there = true
+    try { lstatSync(link) } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; there = false }
+    if (there) rmSync(link, { recursive: true, force: true })   // only the entry we own; a failure throws
     symlinkSync(relative(dirname(link), join(resolve(repo), 'packages', p)), link)
     return link
   })
