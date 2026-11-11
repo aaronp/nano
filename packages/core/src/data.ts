@@ -68,7 +68,7 @@ export const SubscriptionSchema = Type.Object({
 export type Subscription = Static<typeof SubscriptionSchema>
 
 /** Who added an instance to a registry: the one that will remove it (a record only; nothing acts on it). */
-export const OwnerSchema = Type.Object({ kind: str('What kind of thing owns it', ['platform', 'widget', 'view', 'editor', 'app']), name: str('Which one', ['platform', 'c-range']) },
+export const OwnerSchema = Type.Object({ kind: str('What kind of thing owns it', ['platform', 'widget', 'view', 'editor', 'app', 'wrapper']), name: str('Which one', ['platform', 'c-range']) },
   { title: 'Owner', description: 'Who added an instance to a registry' })
 export type Owner = Static<typeof OwnerSchema>
 
@@ -77,6 +77,8 @@ const instance = str('The instance id', ['ex-range']), ops = Type.Array(Type.Str
 export const DeltaSchemas = {
   'instance-added': Type.Object({ type: Type.Literal('instance-added'), instance, ops, component: str('Its component id, ns/name', ['composable.bundle/range']),
     description: Type.Optional(str("Its component's description")), owner: Type.Optional(OwnerSchema) }, { description: 'An instance was added' }),
+  'instance-replaced': Type.Object({ type: Type.Literal('instance-replaced'), instance, ops, component: str('Its component id, ns/name', ['composable.bundle/range']),
+    description: Type.Optional(str("Its component's description")), owner: Type.Optional(OwnerSchema) }, { description: 'The instance at an id was replaced; its subscriptions stay' }),
   'instance-removed': Type.Object({ type: Type.Literal('instance-removed'), instance, ops }, { description: 'An instance was removed' }),
   'op-added': Type.Object({ type: Type.Literal('op-added'), instance, op: str('The op, by key') }, { description: 'An instance gained an op' }),
   'op-removed': Type.Object({ type: Type.Literal('op-removed'), instance, op: str('The op, by key') }, { description: 'An instance lost an op' }),

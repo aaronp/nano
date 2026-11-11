@@ -182,9 +182,27 @@ const undescribedAny = (s: unknown) => !!s && typeof s === 'object' && !['type',
 
 test('every registry op has a description and no undescribed Unknown', () => {
   const ops = [...Object.values(RegistryOps).filter(o => 'ns' in o), ...Object.values(RegistryOps.deltas)] as Op[]
-  expect(ops.length).toBe(11)
+  expect(ops.length).toBe(13)
   for (const op of ops) {
     expect(op.description, Ops.key(op)).toBeTruthy()
     for (const s of [op.input, op.output]) if (s) expect(undescribedAny(s), `${Ops.key(op)} ${JSON.stringify(s)}`).toBe(false)
   }
+})
+
+test('after replace the new instance publishes and receives; the old one does not', async () => {
+  const { rt, reg, log, sub } = setup()
+  const old = counter(); reg.add('c', old); sub('c', Ops.key(Updated))
+  const fresh = counter()
+  reg.replace('c', fresh)
+  expect(old.env.handles()).toHaveLength(0)
+  expect(fresh.env.handles().map(h => h.coord)).toEqual([{ registry: 'r', instance: 'c' }])
+  expect(await rt.call(me, 'c', Ops.key(Inc), null)).toMatchObject({ value: 1 })
+  expect(log.value).toEqual([1])
+  expect(old.value).toEqual({ n: 0 })
+})
+
+test('replace is a registry op', async () => {
+  const { rt, reg } = setup()
+  reg.add('c', counter())
+  expect(isOk(await rt.call(me, 'registry', Ops.key(RegistryOps.replace), { id: 'c', instance: counter() }))).toBe(true)
 })

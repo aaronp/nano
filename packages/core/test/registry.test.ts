@@ -104,3 +104,27 @@ test("a snapshot and instance-added carry the component's description, when it h
   expect('description' in r.snapshot().instances[1]!).toBe(false)
   expect((seen[0] as { description?: string }).description).toBe('Described')
 })
+
+test('replace keeps subscriptions both ways and the owner, and emits instance-replaced only', () => {
+  const { r, seen } = watched()
+  r.add('a', thing()); r.add('b', thing(), { kind: 'widget', name: 'w' })
+  r.subscribe({ source: 'a', op: 't/ping', listener: 'b', target: 't/ping' })
+  r.subscribe({ source: 'b', op: 't/ping', listener: 'a', target: 't/ping' })
+  seen.length = 0
+  const c = Components.create({ ns: 't', name: 'other' }, () => ({})); c.action(Ping, () => {})
+  const other = Components.instantiate(c)
+  expect(isOk(r.replace('b', other))).toBe(true)
+  expect(r.get('b')).toBe(other)
+  expect(r.snapshot().subscriptions).toHaveLength(2)
+  expect(r.snapshot().instances.find(i => i.id === 'b')!.owner).toEqual({ kind: 'widget', name: 'w' })
+  expect(seen.map(d => d.type)).toEqual(['instance-replaced'])
+  expect((seen[0] as { component: string }).component).toBe('t/other')
+})
+
+test('replace with an owner sets it; replace of an unknown id errors', () => {
+  const { r } = watched()
+  r.add('a', thing())
+  r.replace('a', thing(), { kind: 'wrapper', name: 'a' })
+  expect(r.snapshot().instances[0]!.owner).toEqual({ kind: 'wrapper', name: 'a' })
+  expect(isOk(r.replace('nope', thing()))).toBe(false)
+})
