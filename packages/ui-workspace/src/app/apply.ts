@@ -120,12 +120,14 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
     if (!rt) { if (sys.subscriptions.length) notes.push(`system ${sys.id}: its subscriptions were skipped`); continue }
     for (const s of sys.subscriptions) {
       const what = `${sys.id}: ${s.source} ${s.op} -> ${s.listener} ${s.target}`
-      if (RESERVED(s.listener)) { notes.push(`${what}: ${s.listener} is reserved by the host, skipped`); continue }
       const missing = [s.source === '*' ? undefined : s.source, s.listener].find(x => x !== undefined && !rt.registry.get(x))
       if (missing) { notes.push(`${what}: ${missing} is not there, skipped`); continue }
       // a subscription into a code-taking op (setCode, configure) would feed the document's data to code: needs the same consent
       const lc = rt.registry.snapshot().instances.find(x => x.id === s.listener)?.component
-      if (codeTarget(deps.catalog, lc === undefined ? undefined : kindOfComponent.get(lc), s.target) && !consent(sys.id, s.listener)) { notes.push(`${what}: it feeds code and was not applied (not agreed to)`); continue }
+      const feedsCode = codeTarget(deps.catalog, lc === undefined ? undefined : kindOfComponent.get(lc), s.target)
+      // the host's own code (ex-map's setCode) is never the document's to change; wires into a built-in's other ops are kept
+      if (feedsCode && RESERVED(s.listener)) { notes.push(`${what}: ${s.listener}'s code is reserved by the host, skipped`); continue }
+      if (feedsCode && !consent(sys.id, s.listener)) { notes.push(`${what}: it feeds code and was not applied (not agreed to)`); continue }
       if (rt.registry.snapshot().subscriptions.some(x => x.source === s.source && x.op === s.op && x.listener === s.listener && x.target === s.target)) { notes.push(`${what}: already wired, skipped`); continue }
       // the platform's connect needs a named source; a '*' one goes straight to the registry
       try {
