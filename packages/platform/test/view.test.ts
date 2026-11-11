@@ -170,3 +170,30 @@ test('an instance owned by a view is hidden whatever its id; one named ~view but
   expect(!!item('c:host/x~view-9')).toBe(true)
   expect(t$$('[data-id^="x:"]')).toHaveLength(0)
 })
+
+test('the Add form offers only the kind\'s modes and selector fields, and sends them', async () => {
+  const host = Runtimes.create(Registries.create('host'))
+  const sent: unknown[] = []
+  host.registry.add('platform', Components.instantiate(platform(host, { range: { ...catalog.range!, modes: ['isolated-sandbox'] }, log: { ...catalog.log!, modes: ['host', 'sandbox'] }, input: catalog.input! }, {
+    deploy: (_rt, id, kind, mode, _o, outward) => { sent.push({ id, kind, mode, outward }); return { value: undefined } },
+  })))
+  provide(document, host.registry)
+  document.body.innerHTML = '<c-platform></c-platform>'
+  const el = document.querySelector('c-platform') as El
+  const settle = async () => { for (let i = 0; i < 4; i++) { await tick(); await el.updateComplete } }
+  const $ = (sel: string) => el.shadowRoot!.querySelector(sel) as HTMLInputElement | null
+  const pick = async (v: string) => { const k = $('select[name="kind"]')!; k.value = v; k.dispatchEvent(new Event('change')); await settle() }
+  const type = async (sel: string, v: string) => { const i = $(sel)!; i.value = v; i.dispatchEvent(new Event('input')); await settle() }
+  await settle()
+  ;[...el.shadowRoot!.querySelectorAll('button')].find(b => b.textContent!.trim() === '+ Add')!.click(); await settle()
+  await pick('input')
+  expect($('select[name="mode"]')).toBeNull()   // a kind with no modes: no choice, nothing sent
+  await pick('log')
+  expect([...$('select[name="mode"]')!.querySelectorAll('option')].map(o => o.textContent)).toEqual(['host', 'sandbox'])
+  expect($('input[name="allow"]')).toBeNull()   // host by default: no selectors
+  await pick('range')
+  expect([...$('select[name="mode"]')!.querySelectorAll('option')].map(o => o.textContent)).toEqual(['isolated-sandbox'])
+  await type('input[name="name"]', 'r1'); await type('input[name="allow"]', 'host/log/*, host/x/y'); await type('input[name="deny"]', 'host/platform/*')
+  ;[...el.shadowRoot!.querySelectorAll('button')].find(b => b.textContent!.trim() === 'Create')!.click(); await settle()
+  expect(sent).toEqual([{ id: 'r1', kind: 'range', mode: 'isolated-sandbox', outward: { allow: ['host/log/*', 'host/x/y'], deny: ['host/platform/*'] } }])
+})

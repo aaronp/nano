@@ -4,7 +4,7 @@ import { css, html } from 'lit'
 import type { TSchema } from 'typebox'
 import { Ops, type Op, type Snapshot, type Subscription } from '@pritzlaff/nano-core'
 import { base, ModelElement, providedRegistry, type NanoTree, type TreeNode } from '@pritzlaff/nano-elements'
-import { PlatformOps as P, type Selection } from './platform'
+import { PlatformOps as P, type Kind, type Selection } from './platform'
 import { examplesOf } from './inventory'
 
 type Inst = Snapshot['instances'][number]
@@ -33,7 +33,7 @@ export class PlatformEl extends ModelElement {
   declare mode: 'system' | 'component'
   declare filter: string
   declare sharedOnly: boolean
-  declare form?: { kind: string; name: string; system: string }
+  declare form?: { kind: string; name: string; system: string; mode?: string; allow?: string; deny?: string }
   declare target: Record<string, string>
   #picks = new Map<string, Selection>()   // what each selectable row selects, from the last render
   constructor() { super(); this.mode = 'system'; this.filter = ''; this.sharedOnly = false; this.target = {} }
@@ -142,11 +142,20 @@ export class PlatformEl extends ModelElement {
 
   #addForm(systems: Snapshot[]) {
     const kinds = this.read<string[]>(P.catalog) ?? [], f = this.form!, set = (k: keyof typeof f) => (e: Event) => { this.form = { ...this.form!, [k]: (e.target as HTMLInputElement).value } }
+    const modes = this.read<Kind[]>(P.kinds)?.find(k => k.kind === f.kind)?.modes ?? [], mode = f.mode && modes.includes(f.mode) ? f.mode : modes[0]
+    const lines = (v?: string) => (v ?? '').split(/[\n,]/).map(x => x.trim()).filter(Boolean)
+    const create = () => {
+      const { allow, deny, mode: _, ...base } = f, a = lines(allow), d = lines(deny)
+      return { ...base, ...(mode && { mode }), ...(mode && mode !== 'host' && a.length && { allow: a }), ...(mode && mode !== 'host' && d.length && { deny: d }) }
+    }
     return html`<div class="row card">
       <select name="kind" @change=${set('kind')}><option value="">kind…</option>${kinds.map(k => html`<option ?selected=${k === f.kind}>${k}</option>`)}</select>
       <input name="name" placeholder="name" @input=${set('name')}>
+      ${modes.length ? html`<select name="mode" aria-label="Deploy mode" @change=${set('mode')}>${modes.map(m => html`<option ?selected=${m === mode}>${m}</option>`)}</select>` : ''}
+      ${mode && mode !== 'host' ? html`<input name="allow" placeholder="allow: registry/target/op, …" @input=${set('allow')}>
+        <input name="deny" placeholder="deny: registry/target/op, …" @input=${set('deny')}>` : ''}
       <select name="system" @change=${set('system')}>${systems.map(s => html`<option ?selected=${s.id === f.system}>${s.id}</option>`)}</select>
-      <button class="primary" @click=${async () => { if ('value' in await this.act(P.createComponent, this.form)) this.form = undefined }}>Create</button>
+      <button class="primary" @click=${async () => { if ('value' in await this.act(P.createComponent, create())) this.form = undefined }}>Create</button>
       <input name="new-system" placeholder="new system" @keydown=${async (e: KeyboardEvent) => {
         const i = e.target as HTMLInputElement
         if (e.key === 'Enter' && i.value && 'value' in await this.act(P.createSystem, i.value)) i.value = ''

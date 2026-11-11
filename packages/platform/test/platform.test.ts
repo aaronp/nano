@@ -132,3 +132,27 @@ test('after catalog-changed, a kind added to the catalog object is published in 
   await host.call({ registry: 'host', instance: 'test' }, 'platform', Ops.key(P.catalogChanged), null); await tick()
   expect(heard.at(-1)!.find(k => k.kind === 'extra')).toEqual({ kind: 'extra', component: 't/extra', title: 'Extra' })
 })
+
+test('createComponent with a mode goes through deploy; without deploy, unchanged', async () => {
+  const seen: unknown[][] = []
+  const host = Runtimes.create(Registries.create('host'))
+  host.registry.add('platform', Components.instantiate(platform(host, catalog, {
+    deploy: (rt, id, kind, mode, owner, outward) => { seen.push([rt.registry.id, id, kind, mode, owner.kind, outward]); return { value: undefined } },
+  })))
+  const call = (op: Op, arg: unknown) => host.call({ registry: 'host', instance: 't' }, 'platform', Ops.key(op), arg) as Promise<any>
+  await call(P.createComponent, { kind: 'range', name: 'r', system: 'host', mode: 'sandbox', allow: ['a/*'], deny: ['b/*'] })
+  await call(P.createComponent, { kind: 'range', name: 'q', system: 'host' })
+  expect(seen).toEqual([['host', 'r', 'range', 'sandbox', 'platform', { allow: ['a/*'], deny: ['b/*'] }], ['host', 'q', 'range', undefined, 'platform', undefined]])
+  expect('error' in await call(P.createComponent, { kind: 'nope', name: 'x', system: 'host' })).toBe(true)
+  const plain = setup()   // no deploy: instantiates the catalog's component, mode ignored
+  await plain.call(P.createComponent, { kind: 'range', name: 'p', system: 'host', mode: 'sandbox' })
+  expect(plain.host.registry.get('p')).toBeDefined()
+})
+
+test('kinds carry modes', async () => {
+  const host = Runtimes.create(Registries.create('host'))
+  host.registry.add('platform', Components.instantiate(platform(host, { range: { ...catalog.range!, modes: ['host', 'sandbox'] }, log: catalog.log! })))
+  const kinds = (await host.call({ registry: 'host', instance: 't' }, 'platform', Ops.key(P.kinds), null) as any).value
+  expect(kinds.find((k: any) => k.kind === 'range').modes).toEqual(['host', 'sandbox'])
+  expect(kinds.find((k: any) => k.kind === 'log').modes).toBeUndefined()
+})

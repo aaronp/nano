@@ -38,7 +38,7 @@ export async function loadPackage(url: string, deps: ImportDeps = pageDeps): Pro
   const mismatch = catalogMismatch(m, catalog);
   if (mismatch) return { error: mismatch };
   try { (define as () => void)(); } catch (e) { return { error: `${m.name}'s define() failed: ${(e as Error).message}` }; }
-  addCatalog(catalog, { name: m.name, url });
+  addCatalog(catalog, { name: m.name, url, module: new URL(m.module, url).href });
   return { manifest: m };
 }
 
