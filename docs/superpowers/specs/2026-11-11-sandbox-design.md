@@ -36,6 +36,8 @@ an iframe and whose actions forward to it. Nothing that creates or wires instanc
 4. **The mode is chosen in the UI** where instances are created: the platform's Add form and the dock's add-panel flow.
    Default: `host` for trusted and built-in kinds, `isolated-sandbox` for sandboxed ones (the only choice).
 5. A sandboxed instance looks like any other to its neighbours, the inventory, the tree and the wires view.
+7. **Which instances are sandboxed, and how, is O(1) to ask and visible in the views**: registry entries carry
+   labels; deploys label what they make; the tree, table and wires can highlight by label on demand.
 6. **Guards, separate from sandboxing**: allow / deny selectors over the coordinates an instance may call, applied by
    a wrapper, so they work for any instance, in an iframe or not. Sandboxed deploys use one by convention.
 
@@ -135,6 +137,31 @@ from the real entry and `sandboxed(...)` from the package URL the app recorded i
 - `host` deploys are not guarded unless selectors are given (the same field, optional).
 - The selectors are saved with the panel, like the mode.
 
+### Labels: how an instance was deployed, as data (core)
+
+- A registry entry carries `labels: Record<string, string>`, like its owner: per entry, so one instance shared by two
+  registries can be labelled differently in each. Generic (Kubernetes-style), not sandbox-specific.
+- `Registry.label(id, labels: Record<string, string | null>): Result<void>` merges (a `null` value removes that key),
+  and emits a new delta `instance-labelled { instance, labels }` (the entry's labels after the change). Errors for an
+  unknown id. A `label` registry op, typed and described. `add` is unchanged (label after adding).
+- `Registry.labels(id): Record<string, string>` and `Registry.labelled(key: string, value?: string): ReadonlySet<string>`
+  — the ids with that key (and value). Both O(1): the registry keeps an index `key → value → Set<id>`, updated on
+  label, replace (labels stay with the entry) and remove.
+- The snapshot's instances carry `labels?` (omitted when empty); `SnapshotSchema` and the `instance-added`/`-replaced`
+  deltas gain it.
+- **Deploy labels** (set by the app's deploy path): `nano/deploy: host | sandbox | isolated-sandbox`; `nano/trust:
+  trusted | sandboxed` (the package's); `nano/guarded: true` when a guard wraps it. Built-ins get
+  `nano/deploy: host` too, so "everything not in the host" is one lookup.
+
+### Highlighting by label (platform, wires)
+
+- Rows and modules carry their labels as data: tree rows, table rows and wires modules get
+  `data-deploy="…"` (from `nano/deploy`), so CSS can style them.
+- Each view gets a **Highlight sandboxed** toggle (off by default): on, entries whose `nano/deploy` isn't `host` are
+  marked (a tinted row / outlined module, theme tokens). The table also gets a **Deploy** column and a pill filter
+  over it, like System and Component.
+- The toggle is view state (not saved); the labels are the data.
+
 ### Showing a sandboxed instance: one generic element, iframes that never move
 
 - **One host element, `<c-sandboxed name="…">`**, shows the sandboxed instance at `name` in the provided registry, for
@@ -194,6 +221,9 @@ from the real entry and `sandboxed(...)` from the package URL the app recorded i
 - Import: a sandboxed import never calls `importModule` in the host (stub deps), records its trust, and adds kinds
   whose components are sandboxed; boot re-imports with the recorded trust.
 - Platform: `createComponent` with `mode` goes through `deploy`; without `deploy`, unchanged.
+- Labels: set, merge, remove with `null`; `labelled` by key and by key+value; the index follows replace and remove;
+  snapshot and deltas carry them; a shared instance labelled differently in two registries.
+- Views: `data-deploy` on rows/modules; the toggle marks exactly the non-host entries; the table's Deploy filter.
 - Guards: allow-only, deny-only, deny beating allow, `*` patterns, `registry` targets, a refused call traced, and a
   guarded sandboxed stand-in whose outcall is refused.
 - Iframes themselves (srcdoc, sandbox attribute, CORS) are checked in a real browser; happy-dom can't run them.
@@ -211,3 +241,5 @@ from the real entry and `sandboxed(...)` from the package URL the app recorded i
 - 10 s to become ready; no per-call timeout.
 - Guards are an `outward` option on `wrap` (plus a `guard()` helper), not a new mechanism; outward calls only in v1.
 - A sandboxed deploy with no selectors given may call nothing.
+- Deploy info is generic registry labels (per entry, indexed), not a sandbox field: the same mechanism serves later
+  queries (blueprints, selectors, tags-driven deploy policies).
