@@ -5,7 +5,7 @@ import { expect, test } from 'bun:test'
 
 const { Ops } = await import('@pritzlaff/nano-core')
 const { Debounce, Log, Range } = await import('@composable/bundle')
-const { PlatformOps: P } = await import('@composable/platform')
+const { PlatformOps: P, runtimeOf } = await import('@composable/platform')
 const { Profile } = await import('@composable/shell')
 await import('../src/boot-theme.ts')   // as main.ts does first: the theme is on <html> before any element upgrades
 const page = await Bun.file(new URL('../public/index.html', import.meta.url)).text()
@@ -23,6 +23,12 @@ test('the platform lists the host system with the worked example, wired', async 
   const ids = hostSystem.instances.map((i: any) => i.id)
   expect(ids).toEqual(expect.arrayContaining(['platform', 'ex-range', 'ex-debounce', 'ex-log', 'ex-input', 'ex-map']))
   expect(hostSystem.subscriptions.filter((s: any) => !s.listener.includes('~view'))).toHaveLength(4)   // views subscribe too
+})
+
+test('the app gateway is in host and in every system the platform makes', async () => {
+  expect(host.registry.get('app')).toBeDefined()
+  await call('platform', P.createSystem, 'g1')
+  expect(runtimeOf(host.registry, 'g1')!.registry.get('app')).toBeDefined()
 })
 
 test('moving the example range flows through the debounce into the log', async () => {

@@ -12,7 +12,7 @@ import { Components, Ops, Registries, Runtimes, type Op } from '@pritzlaff/nano-
 import { provide } from '@pritzlaff/nano-elements'
 import { catalog as bundle, Debounce, defineBundle, Input, Log, Map, Range } from '@composable/bundle'
 import { catalog as editor } from '@composable/editor'
-import { catalog as shell, defineShell, Profile } from '@composable/shell'
+import { AppGateway, catalog as shell, defineShell, Profile } from '@composable/shell'
 import type { Catalog } from '@pritzlaff/nano-elements'
 import { definePlatform, definePlatformTable, platform, PlatformOps as P } from '@composable/platform'
 import { defineElements as defineEditor } from '@composable/editor/elements'
@@ -27,7 +27,9 @@ export const catalog: AppCatalog = Object.fromEntries(Object.entries({ ...bundle
 /** The page's runtime and its registry, `host`. */
 export const host = Runtimes.create(Registries.create('host'))
 provide(document, host.registry)
+host.registry.add('app', Components.instantiate(AppGateway), { kind: 'app', name: 'ui-workspace' })   // focus and the app bar: in every system (a gateway), never written
 host.registry.add('platform', Components.instantiate(platform(host, catalog, {
+  gateways: ['app'], locked: id => id.startsWith('ws-controls-'),
   deploy: (system, id, kind, mode, owner, outward) => deploy(system, id, kind, (mode ?? 'host') as Mode, { catalog, owner, ...(outward && { outward }) }),
 })), { kind: 'app', name: 'ui-workspace' })
 // <c-sandboxed> creates its instance in the registry it shows (a dock's system, or the page's) through the same deploy

@@ -4,7 +4,7 @@ import { Components, Ops, Registries, Runtimes } from '@pritzlaff/nano-core'
 import { Type } from 'typebox'
 import { component } from '@pritzlaff/nano-runes'
 import { catalog as bundle } from '@composable/bundle'
-import { catalog as shell, Profile } from '@composable/shell'
+import { AppGateway, catalog as shell, Profile } from '@composable/shell'
 import { platform } from '@composable/platform'
 import { deploy, type AppCatalog, type Mode } from '../../src/sandbox/deploy'
 import type { Stores } from '../../src/app/snapshot'
@@ -17,7 +17,9 @@ export function appHost() {
   const host = Runtimes.create(Registries.create('host'))
   const deployed: { id: string; mode: string }[] = []
   const open = (() => ({ port: new MessageChannel().port1, ready: new Promise<void>(() => {}), dispose() {} })) as never
+  host.registry.add('app', Components.instantiate(AppGateway), { kind: 'app', name: 'test' })
   host.registry.add('platform', Components.instantiate(platform(host, catalog, {
+    gateways: ['app'], locked: id => id.startsWith('ws-controls-'),
     deploy: (system, id, kind, mode, owner, outward) => { deployed.push({ id, mode: mode ?? 'host' }); return deploy(system, id, kind, (mode ?? 'host') as Mode, { catalog, owner, open, ...(outward && { outward }) }) },
   })), { kind: 'app', name: 'test' })
   const me = { registry: 'host', instance: 'test' }

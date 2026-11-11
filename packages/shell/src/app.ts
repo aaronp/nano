@@ -40,7 +40,7 @@ export const NanoAppSchema = Type.Object({
 export type NanoApp = Static<typeof NanoAppSchema>
 
 /** Ids the host owns: never written, skipped on load. */
-export const RESERVED = (id: string): boolean => id === 'platform' || id === 'registry' || id === 'profile' || id.startsWith('ex-')
+export const RESERVED = (id: string): boolean => id === 'platform' || id === 'app' || id.startsWith('ws-controls-') || id === 'registry' || id === 'profile' || id.startsWith('ex-')
 
 const depth = (v: unknown, n = 0): number => {
   if (n > MAX_DEPTH || !v || typeof v !== 'object') return n

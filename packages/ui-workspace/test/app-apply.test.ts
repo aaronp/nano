@@ -44,6 +44,12 @@ test('apply(replace) of a snapshot onto a fresh host reproduces it', async () =>
   expect(b.st.title).toBe('Doc')
 }, 10_000)
 
+test('applying a document gives the replaced system the app gateway', async () => {
+  const a = await fresh()
+  await applyApp(doc, 'replace', a.deps)
+  expect(runtimeOf(a.host.registry, 'lab')!.registry.get('app')).toBeDefined()
+})
+
 test('apply(merge) adds only new ids and returns clash notes; leaves title/theme/profile', async () => {
   const a = await fresh({ title: 'Mine' })
   await applyApp({ ...doc, systems: [{ id: 'lab', instances: [{ id: 'r1', kind: 'range' }], subscriptions: [] }] }, 'replace', a.deps)

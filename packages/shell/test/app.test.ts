@@ -43,8 +43,8 @@ test('hostile documents are refused with a reason, never thrown', () => {
 })
 
 test('RESERVED matches platform/registry/profile/ex-*', () => {
-  for (const id of ['platform', 'registry', 'profile', 'ex-range', 'ex-']) expect(RESERVED(id)).toBe(true)
-  for (const id of ['host', 'my-ex-range', 'profiles', 'r1']) expect(RESERVED(id)).toBe(false)
+  for (const id of ['platform', 'registry', 'profile', 'ex-range', 'ex-', 'app', 'ws-controls-workspace']) expect(RESERVED(id)).toBe(true)
+  for (const id of ['host', 'my-ex-range', 'profiles', 'r1', 'apps']) expect(RESERVED(id)).toBe(false)
 })
 
 test('free-text ids are accepted; slashes, spaces, empty and control characters refused', () => {

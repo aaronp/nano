@@ -57,3 +57,10 @@ test('reserved ids, view-owned listeners and the Main workspace are never writte
   expect(app.systems.flatMap(s => s.instances).map(i => i.id)).not.toContain('~view-1')
   expect(app.workspaces).toEqual([])
 })
+
+test('the gateway is never written, in host or a workspace system', async () => {
+  const { host, stores } = await world()
+  expect(runtimeOf(host.registry, 'lab')!.registry.get('app')).toBeDefined()
+  const app = await snapshotApp({ host, stores })
+  expect(app.systems.flatMap(s => s.instances).map(i => i.id)).not.toContain('app')
+})
