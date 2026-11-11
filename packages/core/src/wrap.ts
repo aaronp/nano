@@ -20,10 +20,39 @@ export type Call = (part: string, op: string, arg: unknown) => Promise<Result>
 /** Where one call to the wrapper goes. `pause`/`resume` are for strategies that hold calls back. */
 export type Strategy = ((op: string, arg: unknown, parts: string[], call: Call) => Promise<Result>) & { pause?(): void; resume?(): Promise<void> }
 
+const forward: Strategy = (op, arg, parts, call) => (parts[0] === undefined ? Promise.resolve(err('no parts')) : call(parts[0], op, arg))
+
 /** Built-in strategies. */
 export const Strategies = {
   /** To the first part. */
-  forward: ((op, arg, parts, call) => (parts[0] === undefined ? Promise.resolve(err('no parts')) : call(parts[0], op, arg))) as Strategy,
+  forward,
+  /** To every part; the first success is the value, every result the detail. An error only if every part fails. */
+  broadcast: (async (op, arg, parts, call) => {
+    const all = await Promise.all(parts.map(p => call(p, op, arg))), won = all.find(isOk)
+    return won ? ok(won.value, all) : err('every part failed', all)
+  }) as Strategy,
+  /** To every part at once; the first success wins, the rest run to the end and are ignored. */
+  race: (async (op, arg, parts, call) => {
+    try { return ok((await Promise.any(parts.map(p => call(p, op, arg).then(r => (isOk(r) ? r : Promise.reject(r)))))).value) }
+    catch (e) { return err('every part failed', (e as AggregateError).errors ?? []) }
+  }) as Strategy,
+  /** `inner`, except while paused: then calls queue, and resume sends them on in order before any new one. */
+  buffer(inner: Strategy = forward): Strategy {
+    let paused = false, draining = false
+    const queue: (() => Promise<void>)[] = []
+    // ponytail: unbounded queue, no timeout; add a cap when a long pause is real
+    const s: Strategy = (op, arg, parts, call) => (paused || draining
+      ? new Promise(res => { queue.push(async () => res(await inner(op, arg, parts, call))) })
+      : inner(op, arg, parts, call))
+    s.pause = () => { paused = true }
+    s.resume = async () => {
+      if (draining) return
+      paused = false; draining = true
+      while (queue.length) await queue.shift()!()
+      draining = false
+    }
+    return s
+  },
 }
 
 const IGNORED = Type.Unknown({ description: 'Ignored: any value triggers it' })
