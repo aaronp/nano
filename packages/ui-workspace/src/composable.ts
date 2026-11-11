@@ -14,6 +14,7 @@ import { catalog as bundle, Debounce, defineBundle, Input, Log, Map, Range } fro
 import { catalog as editor } from '@composable/editor'
 import { AppGateway, catalog as shell, defineShell, Profile } from '@composable/shell'
 import type { Catalog } from '@pritzlaff/nano-elements'
+import { defineWorkspaceControls } from './components/workspace-controls.ts'
 import { definePlatform, definePlatformTable, platform, PlatformOps as P } from '@composable/platform'
 import { defineElements as defineEditor } from '@composable/editor/elements'
 import { defineWires } from '@composable/wires'
@@ -99,7 +100,7 @@ document.addEventListener('wires:open-panel', e => {
 defineBundle()
 definePlatform(); definePlatformTable(); defineSandboxed()
 defineEditor()
-defineShell()
+defineShell(); defineWorkspaceControls()
 defineWires()
 // the wiring view over the Workspace dock: it shows and edits the host system, and offers the merged catalog
 for (const w of document.querySelectorAll('c-wires')) Object.assign(w, { runtime: host, catalog })
