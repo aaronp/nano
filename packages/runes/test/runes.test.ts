@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { Components, Ops, Registries, Runtimes, type Component, type Op } from '@pritzlaff/nano-core'
+import { Components, Ops, Registries, Runtimes, Strategies, WrapperOps, wrap, type Component, type Op } from '@pritzlaff/nano-core'
 import { component, event, state } from '../src'
 
 const tick = () => new Promise(r => setTimeout(r, 0))
@@ -25,7 +25,7 @@ const page = () => {
   const add = (id: string, c: Component) => { const i = Components.instantiate(c); reg.add(id, i); return i }
   const wire = (source: string, op: Op, listener: string, target: Op) => reg.subscribe({ source, op: Ops.key(op), listener, target: Ops.key(target) })
   const call = async (id: string, op: Op, arg: unknown = null) => rt.call({ registry: 'page', instance: 'me' }, id, Ops.key(op), arg) as Promise<any>
-  return { reg, add, wire, call }
+  return { rt, reg, add, wire, call }
 }
 
 test('a counter: increment is an action, count is published when it changes', async () => {
@@ -248,3 +248,14 @@ const typeChecks = () => {
   component('t/ok', () => ({ done: event() }), { done: Type.Number() })
 }
 void typeChecks
+
+test('a runes component publishing to a paused wrapper keeps updating its own state', async () => {
+  const { rt, add, wire, call } = page()
+  add('counter', Counter); add('log', Log)
+  wire('counter', Counter.ops.count, 'log', Log.ops.log)
+  wrap(rt, 'log', Strategies.buffer())
+  await call('log', WrapperOps.pause)
+  await call('counter', Counter.ops.increment); await tick()
+  await call('counter', Counter.ops.increment); await tick()
+  expect((await call('counter', Counter.ops.count)).value).toBe(2)
+})

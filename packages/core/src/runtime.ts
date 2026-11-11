@@ -30,6 +30,8 @@ export type Policy = (inner: Runtime) => Runtime
 export const RegistryOps = {
   add: Ops.action('composable', 'add', Type.Object({ id: Type.String({ description: 'The id to add it as', examples: ['ex-range'] }), instance: Type.Unknown({ description: 'A made instance (Components.instantiate)' }) }),
     Type.Void(), { description: 'Adds an instance to the registry' }),
+  replace: Ops.action('composable', 'replace', Type.Object({ id: Type.String({ description: 'The id in use', examples: ['ex-range'] }), instance: Type.Unknown({ description: 'A made instance to put there (Components.instantiate)' }) }),
+    Type.Void(), { description: 'Puts an instance at an id in use, keeping its subscriptions' }),
   remove: Ops.action('composable', 'remove', Type.String({ description: 'The instance id', examples: ['ex-range'] }), Type.Void(), { description: 'Removes an instance, closing the subscriptions it listens on' }),
   subscribe: Ops.action('composable', 'subscribe', Type.Omit(SubscriptionSchema, ['id']), SubscriptionSchema, { description: 'Connects a published op to an action' }),
   unsubscribe: Ops.action('composable', 'unsubscribe', Type.String({ description: 'The subscription id' }), Type.Void(), { description: 'Closes a subscription' }),
@@ -43,6 +45,7 @@ const must = <A>(r: Result<A>): A => { if (!isOk(r)) throw new Error(r.error); r
 function registryComponent(registry: Registry) {
   const c = Components.create({ ns: 'composable', name: 'registry' }, () => registry)
   c.action(RegistryOps.add, (r, a) => must(r.add(a.id, a.instance as Instance)))
+  c.action(RegistryOps.replace, (r, a) => must(r.replace(a.id, a.instance as Instance)))
   c.action(RegistryOps.remove, (r, id) => must(r.remove(id)))
   c.action(RegistryOps.subscribe, (r, s) => must(r.subscribe(s)) as Subscription)
   c.action(RegistryOps.unsubscribe, (r, id) => must(r.unsubscribe(id)))
@@ -95,15 +98,18 @@ function create(registry: Registry, policy?: Policy): Runtime {
   }
   const outer = policy ? policy(base) : base
   const envs = new Map<string, Environment>()
+  /** Gives the instance at `id` its handle on this runtime. */
+  const attach = (id: string) => {
+    const env = registry.get(id)!.env, coord = at(id)
+    envs.set(id, env)
+    env.added(
+      { coord, notify: (op, data, correlation) => outer.notify({ from: coord, op: Ops.key(op), data, correlation }), call: (t, op, arg) => outer.call(coord, t, Ops.key(op), arg) },
+      (type, op) => { registry.announce(id, type, op) },
+    )
+  }
   registry.listen(d => {
-    if (d.type === 'instance-added') {
-      const env = registry.get(d.instance)!.env, coord = at(d.instance)
-      envs.set(d.instance, env)
-      env.added(
-        { coord, notify: (op, data, correlation) => outer.notify({ from: coord, op: Ops.key(op), data, correlation }), call: (t, op, arg) => outer.call(coord, t, Ops.key(op), arg) },
-        (type, op) => { registry.announce(d.instance, type, op) },
-      )
-    }
+    if (d.type === 'instance-added') attach(d.instance)
+    if (d.type === 'instance-replaced') { envs.get(d.instance)?.removed(at(d.instance)); attach(d.instance) }
     if (d.type === 'instance-removed') { envs.get(d.instance)?.removed(at(d.instance)); envs.delete(d.instance) }
     void outer.notify({ from: at('registry'), op: `composable/${d.type}`, data: d })
   })

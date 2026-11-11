@@ -26,6 +26,8 @@ export type Registry = {
   get(id: string): Instance | undefined
   /** `owner` belongs to this entry: one instance shared by two registries can have a different owner in each. */
   add(id: string, inst: Instance, owner?: Owner): Result<void>
+  /** Puts `inst` at an id already in use, keeping its subscriptions and (unless `owner` is given) its owner. */
+  replace(id: string, inst: Instance, owner?: Owner): Result<void>
   remove(id: string): Result<void>
   subscribe(s: Omit<Subscription, 'id'>): Result<Subscription>
   unsubscribe(id: string): Result<void>
@@ -59,6 +61,14 @@ export const Registries = {
         instances.set(i, inst)
         if (owner) owners.set(i, owner)
         emit({ type: 'instance-added', instance: i, ops: keys(inst), component: componentOf(inst), ...about(inst), ...(owner && { owner }) })
+        return ok(undefined)
+      },
+      replace(i, inst, owner) {
+        if (!instances.has(i)) return err(`no instance ${i} in ${id}`)
+        instances.set(i, inst)
+        if (owner) owners.set(i, owner)
+        const o = owners.get(i)
+        emit({ type: 'instance-replaced', instance: i, ops: keys(inst), component: componentOf(inst), ...about(inst), ...(o && { owner: o }) })
         return ok(undefined)
       },
       remove(i) {

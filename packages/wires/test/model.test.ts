@@ -22,7 +22,7 @@ test('panels become mirrored chassis with jacks: outs along the top, ins along t
 
 test('the rack holds instances with no panel, but not the registry, views or the platform', async () => {
   const { host } = await setup()
-  host.registry.add('l~view-0', Components.instantiate(Components.create({ ns: 't', name: 'view' }, () => null)))
+  host.registry.add('watcher', Components.instantiate(Components.create({ ns: 't', name: 'view' }, () => null)), { kind: 'view', name: 'el' })
   const store = Components.create({ ns: 't', name: 'store' }, () => null)
   store.action(Ops.sink('t', 'put', Type.Unknown()), () => {})
   host.registry.add('s', Components.instantiate(store))
@@ -34,8 +34,8 @@ test('the rack holds instances with no panel, but not the registry, views or the
 
 test('subscriptions are wires, grouped into named, coloured routes; view listeners are left out', async () => {
   const { host, call, s1, s2 } = await setup()
-  host.registry.add('r~view-1', Components.instantiate(Components.create({ ns: 't', name: 'view' }, () => null)))
-  host.registry.subscribe({ source: 'r', op: Ops.key(Range.ops.value), listener: 'r~view-1', target: 'x' })
+  host.registry.add('watcher', Components.instantiate(Components.create({ ns: 't', name: 'view' }, () => null)), { kind: 'view', name: 'el' })
+  host.registry.subscribe({ source: 'r', op: Ops.key(Range.ops.value), listener: 'watcher', target: 'x' })
   let m = model(host)
   expect(m.wires).toEqual([
     { id: s1.id, route: s1.id, from: k('r', Range.ops.value), to: k('d', Debounce.ops.enqueue) },
@@ -66,4 +66,10 @@ test('the puzzle lays a route out as a chain, and a fork where one output feeds 
   pz = buildPuzzle(model(host))
   expect(Object.values(pz.descs)).toEqual(['r.value → d → fork(l.info | m)'])
   expect(pz.pieces.find(p => p.kind === 'fork')!.tabs).toEqual([20, 66])
+})
+
+test('an instance named ~view but owned by a widget is in the rack', async () => {
+  const { host } = await setup()
+  host.registry.add('x~view-9', Components.instantiate(Components.create({ ns: 't', name: 'thing' }, () => null)), { kind: 'widget', name: 'w' })
+  expect(model(host).rack.map(r => r.id)).toContain('x~view-9')
 })

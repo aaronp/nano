@@ -1,7 +1,7 @@
 import { Type } from 'typebox'
 import { expect, test } from 'bun:test'
 import { html } from 'lit'
-import { Components, Registries, Runtimes } from '@pritzlaff/nano-core'
+import { Components, Registries, Runtimes, Strategies, wrap } from '@pritzlaff/nano-core'
 import { component, state } from '@pritzlaff/nano-runes'
 import { PlacedElement, provide } from '../src'
 
@@ -13,7 +13,7 @@ class NoteEl extends PlacedElement {
 }
 customElements.define('note-el', NoteEl)
 
-const reg = Runtimes.create(Registries.create('page')).registry
+const rt = Runtimes.create(Registries.create('page')), reg = rt.registry
 provide(document, reg)
 const ids = () => reg.snapshot().instances.map(i => i.id).filter(i => !i.includes('~view') && i !== 'registry')
 const place = async (name?: string, parent: Element = document.body) => {
@@ -84,4 +84,11 @@ test('a placed element owns the instance it creates, as a widget', async () => {
   const el = await place('owned')
   expect(reg.snapshot().instances.find(i => i.id === 'owned')!.owner).toEqual({ kind: 'widget', name: 'note-el' })
   el.remove(); await tick()
+})
+
+test('closing a widget whose instance was wrapped removes the wrapper', async () => {
+  const el = await place('wrapped')
+  wrap(rt, 'wrapped', Strategies.forward)
+  el.remove(); await tick()
+  expect(ids()).not.toContain('wrapped')
 })
