@@ -128,3 +128,61 @@ test('replace with an owner sets it; replace of an unknown id errors', () => {
   expect(r.snapshot().instances[0]!.owner).toEqual({ kind: 'wrapper', name: 'a' })
   expect(isOk(r.replace('nope', thing()))).toBe(false)
 })
+
+test('label merges, null removes, and emits instance-labelled', () => {
+  const { r, seen } = watched()
+  r.add('a', thing())
+  expect(isOk(r.label('a', { mode: 'worker', tier: '1' }))).toBe(true)
+  r.label('a', { tier: null, trust: 'low' })
+  expect(r.labels('a')).toEqual({ mode: 'worker', trust: 'low' })
+  expect(seen.filter(d => d.type === 'instance-labelled')).toEqual([
+    { type: 'instance-labelled', instance: 'a', labels: { mode: 'worker', tier: '1' } },
+    { type: 'instance-labelled', instance: 'a', labels: { mode: 'worker', trust: 'low' } },
+  ])
+})
+
+test('labelled finds ids by key and by key and value', () => {
+  const { r } = watched()
+  r.add('a', thing()); r.add('b', thing()); r.add('c', thing())
+  r.label('a', { mode: 'worker' }); r.label('b', { mode: 'iframe' }); r.label('c', { other: 'x' })
+  expect([...r.labelled('mode')].sort()).toEqual(['a', 'b'])
+  expect([...r.labelled('mode', 'iframe')]).toEqual(['b'])
+  expect(r.labelled('mode', 'nope').size).toBe(0)
+  r.label('a', { mode: null })
+  expect([...r.labelled('mode')]).toEqual(['b'])
+})
+
+test('labels stay with the entry across replace and go with remove (index too)', () => {
+  const { r, seen } = watched()
+  r.add('a', thing()); r.label('a', { mode: 'worker' })
+  r.replace('a', thing())
+  expect(r.labels('a')).toEqual({ mode: 'worker' })
+  expect(seen.at(-1)).toMatchObject({ type: 'instance-replaced', labels: { mode: 'worker' } })
+  r.remove('a')
+  expect(r.labels('a')).toEqual({})
+  expect(r.labelled('mode').size).toBe(0)
+  r.add('a', thing())
+  expect(r.labels('a')).toEqual({})
+})
+
+test('a shared instance is labelled per registry', () => {
+  const r1 = Registries.create('r1'), r2 = Registries.create('r2'), shared = thing()
+  r1.add('s', shared); r2.add('s', shared)
+  r1.label('s', { mode: 'worker' })
+  expect(r1.labels('s')).toEqual({ mode: 'worker' })
+  expect(r2.labels('s')).toEqual({})
+})
+
+test('label of an unknown id errors', () => {
+  const { r } = watched()
+  expect(isOk(r.label('ghost', { a: 'b' }))).toBe(false)
+  expect(r.labels('ghost')).toEqual({})
+})
+
+test('the snapshot carries labels, omitted when empty', () => {
+  const { r } = watched()
+  r.add('a', thing()); r.add('b', thing()); r.label('a', { mode: 'worker' })
+  const [a, b] = r.snapshot().instances
+  expect(a!.labels).toEqual({ mode: 'worker' })
+  expect('labels' in b!).toBe(false)
+})

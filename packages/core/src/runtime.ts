@@ -33,6 +33,8 @@ export const RegistryOps = {
   replace: Ops.action('composable', 'replace', Type.Object({ id: Type.String({ description: 'The id in use', examples: ['ex-range'] }), instance: Type.Unknown({ description: 'A made instance to put there (Components.instantiate)' }) }),
     Type.Void(), { description: 'Puts an instance at an id in use, keeping its subscriptions' }),
   remove: Ops.action('composable', 'remove', Type.String({ description: 'The instance id', examples: ['ex-range'] }), Type.Void(), { description: 'Removes an instance, closing the subscriptions it listens on' }),
+  label: Ops.action('composable', 'label', Type.Object({ id: Type.String({ description: 'The instance id', examples: ['ex-range'] }), labels: Type.Record(Type.String(), Type.Union([Type.String(), Type.Null()]), { description: 'Labels to set; null removes a key' }) }),
+    Type.Void(), { description: "Merges labels into an instance's labels" }),
   subscribe: Ops.action('composable', 'subscribe', Type.Omit(SubscriptionSchema, ['id']), SubscriptionSchema, { description: 'Connects a published op to an action' }),
   unsubscribe: Ops.action('composable', 'unsubscribe', Type.String({ description: 'The subscription id' }), Type.Void(), { description: 'Closes a subscription' }),
   snapshot: Ops.action('composable', 'snapshot', Type.Null({ description: 'Nothing' }), SnapshotSchema, { description: 'What the registry holds now' }),
@@ -47,6 +49,7 @@ function registryComponent(registry: Registry) {
   c.action(RegistryOps.add, (r, a) => must(r.add(a.id, a.instance as Instance)))
   c.action(RegistryOps.replace, (r, a) => must(r.replace(a.id, a.instance as Instance)))
   c.action(RegistryOps.remove, (r, id) => must(r.remove(id)))
+  c.action(RegistryOps.label, (r, a) => must(r.label(a.id, a.labels)))
   c.action(RegistryOps.subscribe, (r, s) => must(r.subscribe(s)) as Subscription)
   c.action(RegistryOps.unsubscribe, (r, id) => must(r.unsubscribe(id)))
   c.action(RegistryOps.snapshot, r => r.snapshot())

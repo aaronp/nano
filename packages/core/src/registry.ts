@@ -1,7 +1,7 @@
 // One place holding instances by id, and the subscriptions between them. Data only: it never runs an action.
 import type { Instance } from './component'
 import { Type, type Static } from 'typebox'
-import { err, ok, Ops, OwnerSchema, SubscriptionSchema, type Delta, type Op, type Owner, type Result, type Subscription } from './data'
+import { err, LabelsSchema, ok, Ops, OwnerSchema, SubscriptionSchema, type Delta, type Op, type Owner, type Result, type Subscription } from './data'
 
 // ops are data with schemas inside: described, not checked; typed as Op
 const OpSchema = Type.Unsafe<Op>(Type.Unknown({ description: 'An op: its ns, name, input and output schemas, and description' }))
@@ -14,6 +14,7 @@ export const SnapshotSchema = Type.Object({
     component: Type.String({ description: 'Its component id, ns/name', examples: ['composable.bundle/range'] }),
     description: Type.Optional(Type.String({ description: "Its component's description" })),
     owner: Type.Optional(OwnerSchema),
+    labels: Type.Optional(LabelsSchema),
     ops: Type.Array(OpSchema, { description: 'What it offers' }),
   }), { description: 'Every instance, in the order added' }),
   subscriptions: Type.Array(SubscriptionSchema, { description: 'Every subscription' }),
@@ -29,6 +30,12 @@ export type Registry = {
   /** Puts `inst` at an id already in use, keeping its subscriptions and (unless `owner` is given) its owner. */
   replace(id: string, inst: Instance, owner?: Owner): Result<void>
   remove(id: string): Result<void>
+  /** Merges `labels` into this entry's labels (null removes a key); refused for an unknown id. Labels belong to the entry, like its owner. */
+  label(id: string, labels: Record<string, string | null>): Result<void>
+  /** The entry's labels; `{}` for an unknown id. */
+  labels(id: string): Record<string, string>
+  /** The ids labelled `key`, or `key` = `value`. */
+  labelled(key: string, value?: string): ReadonlySet<string>
   subscribe(s: Omit<Subscription, 'id'>): Result<Subscription>
   unsubscribe(id: string): Result<void>
   /** The subscriptions a publish of `op` by `source` reaches. */
@@ -42,12 +49,23 @@ export type Registry = {
 /** Makes an empty registry. */
 export const Registries = {
   create(id: string): Registry {
-    const instances = new Map<string, Instance>(), owners = new Map<string, Owner>(), subs = new Map<string, Subscription>()
+    const instances = new Map<string, Instance>(), owners = new Map<string, Owner>(), tags = new Map<string, Record<string, string>>(), subs = new Map<string, Subscription>()
     const listeners = new Set<(d: Delta) => void>()
     // subscriptions by `source op`, so a publish looks at its matches only; seq keeps them in subscription order
     const index = new Map<string, Set<Subscription>>(), seq = new Map<Subscription, number>()
     let n = 0
     const bucket = (source: string, op: string) => index.get(`${source} ${op}`) ?? index.set(`${source} ${op}`, new Set()).get(`${source} ${op}`)!
+    // ids by label key (then value), so labelled() doesn't scan
+    const byKey = new Map<string, Set<string>>(), byValue = new Map<string, Map<string, Set<string>>>()
+    const unindex = (i: string, k: string, v: string) => {
+      byKey.get(k)?.delete(i); byValue.get(k)?.get(v)?.delete(i)
+    }
+    const addIndex = (i: string, k: string, v: string) => {
+      (byKey.get(k) ?? byKey.set(k, new Set()).get(k)!).add(i)
+      const vs = byValue.get(k) ?? byValue.set(k, new Map()).get(k)!
+      ;(vs.get(v) ?? vs.set(v, new Set()).get(v)!).add(i)
+    }
+    const labelsOf = (i: string) => tags.get(i)
     const emit = (d: Delta) => listeners.forEach(fn => fn(d))
     const keys = (inst: Instance) => [...inst.actions.keys()]
     const componentOf = (inst: Instance) => `${inst.component.id.ns}/${inst.component.id.name}`
@@ -67,8 +85,8 @@ export const Registries = {
         if (!instances.has(i)) return err(`no instance ${i} in ${id}`)
         instances.set(i, inst)
         if (owner) owners.set(i, owner)
-        const o = owners.get(i)
-        emit({ type: 'instance-replaced', instance: i, ops: keys(inst), component: componentOf(inst), ...about(inst), ...(o && { owner: o }) })
+        const o = owners.get(i), l = labelsOf(i)
+        emit({ type: 'instance-replaced', instance: i, ops: keys(inst), component: componentOf(inst), ...about(inst), ...(o && { owner: o }), ...(l && { labels: { ...l } }) })
         return ok(undefined)
       },
       remove(i) {
@@ -76,9 +94,24 @@ export const Registries = {
         if (!inst) return err(`no instance ${i} in ${id}`)
         for (const s of [...subs.values()]) if (s.listener === i) close(s)
         instances.delete(i); owners.delete(i)
+        for (const [k, v] of Object.entries(labelsOf(i) ?? {})) unindex(i, k, v)
+        tags.delete(i)
         emit({ type: 'instance-removed', instance: i, ops: keys(inst) })
         return ok(undefined)
       },
+      label(i, change) {
+        if (!instances.has(i)) return err(`no instance ${i} in ${id}`)
+        const now = { ...labelsOf(i) }
+        for (const [k, v] of Object.entries(change)) {
+          if (k in now) unindex(i, k, now[k]!)
+          if (v === null) delete now[k]; else { now[k] = v; addIndex(i, k, v) }
+        }
+        if (Object.keys(now).length) tags.set(i, now); else tags.delete(i)
+        emit({ type: 'instance-labelled', instance: i, labels: { ...now } })
+        return ok(undefined)
+      },
+      labels: i => ({ ...labelsOf(i) }),
+      labelled: (k, v) => new Set(v === undefined ? byKey.get(k) : byValue.get(k)?.get(v)),
       subscribe(s) {
         if (!instances.has(s.listener)) return err(`no listener ${s.listener} in ${id}`)
         const sub = { id: crypto.randomUUID(), ...s }
@@ -100,7 +133,7 @@ export const Registries = {
       matching: (source, op) => [...(index.get(`* ${op}`) ?? []), ...(source === '*' ? [] : index.get(`${source} ${op}`) ?? [])].sort((a, b) => seq.get(a)! - seq.get(b)!),
       snapshot: () => ({
         id,
-        instances: [...instances].map(([i, inst]) => ({ id: i, component: componentOf(inst), ...about(inst), ...(owners.has(i) && { owner: owners.get(i) }), ops: [...inst.actions.values()].map(a => a.op) })),
+        instances: [...instances].map(([i, inst]) => ({ id: i, component: componentOf(inst), ...about(inst), ...(owners.has(i) && { owner: owners.get(i) }), ...(tags.has(i) && { labels: { ...tags.get(i) } }), ops: [...inst.actions.values()].map(a => a.op) })),
         subscriptions: [...subs.values()],
       }),
       listen(fn) { listeners.add(fn); return () => { listeners.delete(fn) } },

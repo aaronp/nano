@@ -72,13 +72,17 @@ export const OwnerSchema = Type.Object({ kind: str('What kind of thing owns it',
   { title: 'Owner', description: 'Who added an instance to a registry' })
 export type Owner = Static<typeof OwnerSchema>
 
+/** Free-form key/value tags on an instance, per registry; indexed so views and deploy can find by key or value. */
+export const LabelsSchema = Type.Record(Type.String(), Type.String(), { description: 'Labels on an instance: key to value', examples: [{ mode: 'worker' }] })
+
 const instance = str('The instance id', ['ex-range']), ops = Type.Array(Type.String(), { description: "The instance's ops, by key" })
 /** Each kind of change to a registry, as published by the registry itself. */
 export const DeltaSchemas = {
   'instance-added': Type.Object({ type: Type.Literal('instance-added'), instance, ops, component: str('Its component id, ns/name', ['composable.bundle/range']),
-    description: Type.Optional(str("Its component's description")), owner: Type.Optional(OwnerSchema) }, { description: 'An instance was added' }),
+    description: Type.Optional(str("Its component's description")), owner: Type.Optional(OwnerSchema), labels: Type.Optional(LabelsSchema) }, { description: 'An instance was added' }),
   'instance-replaced': Type.Object({ type: Type.Literal('instance-replaced'), instance, ops, component: str('Its component id, ns/name', ['composable.bundle/range']),
-    description: Type.Optional(str("Its component's description")), owner: Type.Optional(OwnerSchema) }, { description: 'The instance at an id was replaced; its subscriptions stay' }),
+    description: Type.Optional(str("Its component's description")), owner: Type.Optional(OwnerSchema), labels: Type.Optional(LabelsSchema) }, { description: 'The instance at an id was replaced; its subscriptions and labels stay' }),
+  'instance-labelled': Type.Object({ type: Type.Literal('instance-labelled'), instance, labels: LabelsSchema }, { description: "An instance's labels changed; labels is the full set after the change" }),
   'instance-removed': Type.Object({ type: Type.Literal('instance-removed'), instance, ops }, { description: 'An instance was removed' }),
   'op-added': Type.Object({ type: Type.Literal('op-added'), instance, op: str('The op, by key') }, { description: 'An instance gained an op' }),
   'op-removed': Type.Object({ type: Type.Literal('op-removed'), instance, op: str('The op, by key') }, { description: 'An instance lost an op' }),
