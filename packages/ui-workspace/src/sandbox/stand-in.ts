@@ -32,6 +32,8 @@ export function standIn(entry: SerialEntry, open: () => Frame): Component<Frame>
     }
     const drop = (why: string) => console.warn(`sandbox ${name()}: dropped message: ${why}`)
     frame.ready.catch(e => fail(message(e)))
+    const removed = env.removed   // the last registry letting go of the instance lets go of the frame
+    env.removed = coord => { removed(coord); if (!env.handles().length) frame.dispose() }
     links.set(frame, {
       async call(key, arg) {
         await Promise.race([frame.ready, gate]).catch(() => {})

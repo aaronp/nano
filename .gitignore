@@ -5,3 +5,4 @@ packages/ui-workspace/public/main.js*
 packages/ui-workspace/public/chunks
 packages/ui-workspace/public/shared
 packages/ui-workspace/public/main-*.js*
+packages/ui-workspace/public/sandbox
