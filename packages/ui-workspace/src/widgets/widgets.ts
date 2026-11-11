@@ -5,7 +5,7 @@
  *   <stat-card index="0">          a figure with a sparkline (data from sample-data.ts)
  *   <line-chart>                   weekly chart; follows stat:select
  *   <bus-log pattern="*" limit="8"> recent bus messages
- *   <status-line>                  the latest bus message, for the status bar
+ *   <status-line>                  the latest bus message (or status message), for the status bar
  *   <file-list> <code-pane>        the Editor page (file:open, file:saved)
  */
 import { LitElement, html, css, svg } from 'lit';
@@ -148,17 +148,22 @@ export class BusLog extends BusWidget {
 }
 
 export class StatusLine extends BusWidget {
-  static override properties = { last: { state: true } };
+  static override properties = { last: { state: true }, message: { state: true } };
   declare last: BusMessage | null;
+  /** The last string `message` any payload carried: shown until the next one, whatever else goes by. */ declare message: string | null;
   static override styles = css`:host { font-variant-numeric: tabular-nums; } code { font: 12px var(--mono); }`;
-  constructor() { super(); this.last = null; }
+  constructor() { super(); this.last = null; this.message = null; }
   protected override subscriptions(bus: Bus) {
-    this.last = bus.history().at(-1) ?? null;
-    return [bus.subscribe('*', (m) => { this.last = m; })];
+    const take = (m: BusMessage) => {
+      this.last = m;
+      const message = (m.payload as { message?: unknown } | null | undefined)?.message;
+      if (typeof message === 'string') this.message = message;
+    };
+    bus.history().forEach(take);
+    return [bus.subscribe('*', take)];
   }
   override render() {
-    const message = (this.last?.payload as { message?: unknown } | null | undefined)?.message;
-    if (typeof message === 'string') return html`${message}`;
+    if (this.message !== null) return html`${this.message}`;
     return this.last ? html`Last event: <code>${this.last.topic}</code> from ${this.last.source}` : html`Ready`;
   }
 }

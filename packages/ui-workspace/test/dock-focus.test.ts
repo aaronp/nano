@@ -103,13 +103,26 @@ test('say goes to the bus as dock:status', async () => {
   expect(bus.history().filter(m => m.topic === 'dock:status').map(m => m.payload)).toEqual([{ message: 'Layout saved.' }])
 })
 
-test('<status-line> shows a message\'s text', async () => {
+test('<status-line> shows the last event until a message comes, then the latest message', async () => {
   const bus = createBus()
   const app = document.createElement('div'); provideBus(app, bus)
   const line = document.createElement('status-line') as HTMLElement & { updateComplete: Promise<boolean> }
   app.append(line); document.body.append(app)
-  bus.publish('dock:status', { message: 'Layout saved.' }, 'workspace-dock'); await line.updateComplete
-  expect(line.shadowRoot!.textContent!.trim()).toBe('Layout saved.')
   bus.publish('dock:opened', { widget: 'x' }, 'workspace-dock'); await line.updateComplete
   expect(line.shadowRoot!.textContent).toContain('Last event')
+  bus.publish('dock:status', { message: 'Layout saved.' }, 'workspace-dock'); await line.updateComplete
+  expect(line.shadowRoot!.textContent!.trim()).toBe('Layout saved.')
+  bus.publish('dock:status', { message: 'Layout reset.' }, 'workspace-dock'); await line.updateComplete
+  expect(line.shadowRoot!.textContent!.trim()).toBe('Layout reset.')
+})
+
+test('the status line keeps the dock\'s last message through other bus traffic', async () => {
+  const { bus, dock } = await mount()
+  const line = document.createElement('status-line') as HTMLElement & { updateComplete: Promise<unknown> }
+  dock.parentElement!.append(line); await tick()
+  dock.addWidget('shown'); await tick()
+  dock.save()
+  bus.publish('dock:saved', {}, 'ws'); bus.publish('route:changed', { path: '/x' }, 'nav')
+  await line.updateComplete
+  expect(line.shadowRoot!.textContent).toContain('Layout saved.')
 })
