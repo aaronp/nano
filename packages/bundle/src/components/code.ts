@@ -1,4 +1,6 @@
 // Map and Filter: a function body over `x`, typed in by the user. Not for untrusted input: it runs as code.
+// That includes `setCode` and `configure`: the code runs where the instance runs, and a loaded nano.json can carry it
+// (hosts confirm before applying one).
 import { Type } from 'typebox'
 import { component, event, state } from '@pritzlaff/nano-runes'
 

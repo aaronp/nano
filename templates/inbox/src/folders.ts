@@ -15,26 +15,29 @@ export const Folders = component('nano.inbox/folders', () => {
   const s = state({ folders: FOLDERS.map(f => ({ ...f })), current: 'inbox' })
   const selected = event(FolderId)
   const set = (id: string) => { if (id !== s.current) { s.current = id; selected(id) } }
+  const unique = (list: { id: string }[]) => {
+    const dup = list.find((f, i) => list.findIndex(g => g.id === f.id) !== i)
+    if (dup) throw new Error(`duplicate folder id ${JSON.stringify(dup.id)}`)
+  }
+  const setFolders = (list: { id: string; name: string }[]) => {
+    unique(list)
+    s.folders = list.map(f => ({ id: f.id, name: f.name }))
+    if (!list.some(f => f.id === s.current)) set(list[0]?.id ?? '')
+  }
   return {
     get folders() { return s.folders }, get current() { return s.current },
     selected,
     get config() { return { folders: s.folders, current: s.current } },
     configure: (c: { folders: { id: string; name: string }[]; current: string }) => {
       if (!c.folders.some(f => f.id === c.current)) throw new Error(`${JSON.stringify(c.current)} is not one of the folders`)
-      const dup = c.folders.find((f, i) => c.folders.findIndex(g => g.id === f.id) !== i)
-      if (dup) throw new Error(`duplicate folder id ${JSON.stringify(dup.id)}`)
+      unique(c.folders)
       s.folders = c.folders.map(f => ({ id: f.id, name: f.name })); set(c.current)
     },
     select: (id: string) => {
       if (!s.folders.some(f => f.id === id)) throw new Error(`${JSON.stringify(id)} is not a folder`)
       set(id)
     },
-    setFolders: (list: { id: string; name: string }[]) => {
-      const dup = list.find((f, i) => list.findIndex(g => g.id === f.id) !== i)
-      if (dup) throw new Error(`duplicate folder id ${JSON.stringify(dup.id)}`)
-      s.folders = list.map(f => ({ id: f.id, name: f.name }))
-      if (!list.some(f => f.id === s.current)) set(list[0]?.id ?? '')
-    },
+    setFolders,
   }
 }, {
   folders: Type.Array(Folder, { maxItems: 200, description: 'The folders, in order', examples: [[{ id: 'inbox', name: 'Inbox' }]] }),

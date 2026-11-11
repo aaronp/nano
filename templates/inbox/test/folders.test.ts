@@ -66,3 +66,5 @@ test('config is the folders and the current one; configure replaces them; a bad 
     expect((await b.call(Folders.ops.configure, bad)).error).toBeTruthy()
   expect(await b.value(Folders.ops.config)).toEqual(cfg)
 })
+
+test('config and configure share a schema', () => { expect(Ops.fits(Folders.ops.config, Folders.ops.configure)).toBe(true) })

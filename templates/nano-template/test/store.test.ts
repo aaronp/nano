@@ -87,3 +87,40 @@ test('config is the entries; configure replaces them (and storage), and a bad co
   expect(await fresh.value(Store.ops.config)).toEqual({})
   expect(localStorage.length).toBe(0)
 })
+
+test('config and configure share a schema', () => { expect(Ops.fits(Store.ops.config, Store.ops.configure)).toBe(true) })
+
+test('configure replaces this store\'s entries: it removes the keys it knows, and leaves other keys in the origin alone', async () => {
+  const a = page('a'), b = page('b')   // two stores, one origin
+  await a.call(Store.ops.set, { key: 'x', value: '1' })
+  const late = page('c')               // loaded after x was set, before b sets y
+  await b.call(Store.ops.set, { key: 'y', value: '2' })
+  await late.call(Store.ops.configure, { z: '9' })
+  expect(localStorage.getItem('nano.template/store:x')).toBeNull()   // late knew x: removed
+  expect(localStorage.getItem('nano.template/store:y')).toBe('2')    // late never saw y: untouched
+  expect(localStorage.getItem('nano.template/store:z')).toBe('9')
+  expect(await late.value(Store.ops.config)).toEqual({ z: '9' })
+})
+
+test('configure accepts a __proto__ key as an ordinary entry', async () => {
+  const { call, value } = page()
+  await call(Store.ops.configure, JSON.parse('{"__proto__":"p","a":"1"}'))
+  const cfg = await value(Store.ops.config)
+  expect(Object.keys(cfg).sort()).toEqual(['__proto__', 'a']); expect(Object.getOwnPropertyDescriptor(cfg, '__proto__')?.value).toBe('p')
+  expect(({} as any).p).toBeUndefined()
+})
+
+test('entries in origin storage outside the schema bounds are left in storage but kept out of the store', async () => {
+  localStorage.setItem('nano.template/store:ok', 'fine')
+  localStorage.setItem('nano.template/store:' + 'k'.repeat(201), 'v')
+  localStorage.setItem('nano.template/store:big', 'v'.repeat(10_001))
+  const { value } = page()
+  expect(await value(Store.ops.config)).toEqual({ ok: 'fine' })
+  expect(localStorage.getItem('nano.template/store:big')).toBe('v'.repeat(10_001))
+})
+
+test('more than 1000 entries in storage: only the first 1000 are loaded, so config fits its schema', async () => {
+  for (let i = 0; i < 1100; i++) localStorage.setItem('nano.template/store:k' + i, 'v')
+  const { value } = page()
+  expect(Object.keys(await value(Store.ops.config)).length).toBe(1000)
+})

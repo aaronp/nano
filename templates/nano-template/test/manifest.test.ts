@@ -15,10 +15,10 @@ test('the manifest lists the package, the shared packages, and the Timer, Picker
     shared: { '@pritzlaff/nano-core': '^0.1.0', '@pritzlaff/nano-runes': '^0.1.0', '@pritzlaff/nano-elements': '^0.1.0', lit: '^3.0.0', typebox: '^1.4.0' },
     components: [{
       kind: 'timer', id: 'nano.template/timer', title: 'Timer', tag: 'nano-timer',
-      ops: [source('count'), source('running'), source('interval'), source('tick'), action('start'), action('stop'), action('reset'), action('setInterval')],
+      ops: [source('count'), source('running'), source('interval'), source('tick'), source('config'), action('configure'), action('start'), action('stop'), action('reset'), action('setInterval')],
     }, {
       kind: 'picker', id: 'nano.template/picker', title: 'Picker', tag: 'nano-picker',
-      ops: [source('options'), source('value'), source('changed'), action('pick'), action('setOptions')],
+      ops: [source('options'), source('value'), source('changed'), action('pick'), source('config'), action('configure'), action('setOptions')],
     }, {
       kind: 'store', id: 'nano.template/store', title: 'Store', tag: 'nano-store',
       ops: [source('entries'), source('backing'), source('changed'), source('config'), action('configure'), action('get'), action('set'), action('remove')],

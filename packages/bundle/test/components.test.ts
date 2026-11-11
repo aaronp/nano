@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import { catalog, Debounce, Filter, Input, Log, Map as MapC, Range } from '../src'
+import { Ops } from '@pritzlaff/nano-core'
 import { page, tick } from './fixtures'
 
 test('input: set the kind and value; submit publishes the value', async () => {
@@ -111,3 +112,13 @@ test('range: config is min, max, step and value; min >= max is refused', async (
   await roundTrip(Range, async c => { await c(Range.ops.setBounds, { min: 0, max: 10, step: 2 }); await c(Range.ops.set, 6) }, { min: 0, max: 10, step: 2, value: 6 }, { min: 5, max: 1, step: 1, value: 3 })
 })
 test('log has no settings, so no config', () => { expect('config' in Log.ops).toBe(false) })
+
+test('config and configure share a schema in every opted-in component', () => {
+  for (const c of [MapC, Filter, Input, Debounce, Range]) expect(Ops.fits((c.ops as any).config, (c.ops as any).configure)).toBe(true)
+})
+test('range: configure sets the value once (observers never see an intermediate one)', async () => {
+  const { add, call, spy } = page(); add('r', Range)
+  const got = spy('r', Range.ops.value)
+  await call('r', Range.ops.configure, { min: 0, max: 10, step: 1, value: 7 }); await tick()
+  expect(got).toEqual([7])
+})

@@ -75,3 +75,13 @@ test('a running timer removed from its registry never throws', async () => {
     expect(errors).toEqual([])
   } finally { globalThis.reportError = report }
 })
+
+test('timer: config is the interval; configure on a fresh timer reproduces it; a bad one changes nothing', async () => {
+  expect(Ops.fits(Timer.ops.config, Timer.ops.configure)).toBe(true)
+  const a = page(); await a.call(Timer.ops.setInterval, 250)
+  const cfg = await a.value(Timer.ops.config); expect(cfg).toEqual({ interval: 250 })
+  const b = page(); expect((await b.call(Timer.ops.configure, cfg)).error).toBeUndefined()
+  expect(await b.value(Timer.ops.config)).toEqual(cfg)
+  expect((await b.call(Timer.ops.configure, { interval: 1 })).error).toBeTruthy()
+  expect(await b.value(Timer.ops.config)).toEqual(cfg)
+})

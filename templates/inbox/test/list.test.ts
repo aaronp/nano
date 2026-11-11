@@ -70,3 +70,5 @@ test('config is the messages and the folder shown; configure replaces them; a ba
     expect((await b.call(List.ops.configure, bad)).error).toBeTruthy()
   expect(await b.value(List.ops.config)).toEqual(cfg)
 })
+
+test('config and configure share a schema', () => { expect(Ops.fits(List.ops.config, List.ops.configure)).toBe(true) })
