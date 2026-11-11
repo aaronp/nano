@@ -11,16 +11,17 @@
     "test": "bun test --isolate"
   },
   "dependencies": {
+    "@composable/bundle": "workspace:*",
+    "@composable/editor": "workspace:*",
+    "@composable/platform": "workspace:*",
+    "@composable/shell": "workspace:*",
+    "@composable/wires": "workspace:*",
+    "@pritzlaff/nano-core": "workspace:*",
+    "@pritzlaff/nano-elements": "workspace:*",
+    "@pritzlaff/nano-runes": "workspace:*",
     "golden-layout": "^2.6.0",
     "lit": "^3.3.3",
-    "typebox": "^1.4.0",
-    "@pritzlaff/nano-core": "workspace:*",
-    "@pritzlaff/nano-runes": "workspace:*",
-    "@pritzlaff/nano-elements": "workspace:*",
-    "@composable/bundle": "workspace:*",
-    "@composable/platform": "workspace:*",
-    "@composable/editor": "workspace:*",
-    "@composable/wires": "workspace:*"
+    "typebox": "^1.4.0"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^21.0.4"

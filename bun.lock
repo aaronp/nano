@@ -101,6 +101,7 @@
         "@composable/bundle": "workspace:*",
         "@composable/editor": "workspace:*",
         "@composable/platform": "workspace:*",
+        "@composable/shell": "workspace:*",
         "@composable/wires": "workspace:*",
         "@pritzlaff/nano-core": "workspace:*",
         "@pritzlaff/nano-elements": "workspace:*",
