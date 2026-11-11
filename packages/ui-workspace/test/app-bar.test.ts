@@ -86,6 +86,7 @@ test('the same component in a workspace system reaches the gateway', async () =>
 })
 
 test('an unresolvable target shows nothing and says so', async () => {
+  focus({ system: 'host', instance: 'nope', widget: 'workspace' }); await tick()   // a target is taken only from the focused system
   await host.call(me, 'app', Ops.key(AppGateway.ops.setAppBarComponent), { system: 'host', instance: 'nope' })
   expect(await until(() => bar().children.length === 0)).toBe(true)
   expect(await until(() => document.querySelector('[data-nano-status]')?.textContent?.includes('nope has no element to show in the app bar') ?? false)).toBe(true)

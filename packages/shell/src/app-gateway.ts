@@ -33,7 +33,8 @@ export const AppGateway = component('nano.shell/app-gateway', () => {
       s.appBar = s.fallback; s.focused = f
       focus(f)
     },
-    setAppBarComponent: (t: Target) => { s.appBar = t },
+    // a component puts up controls only from the focused view's system (null clears the bar)
+    setAppBarComponent: (t: Target) => { if (t === null || t.system === s.focused?.system) s.appBar = t },
     setAppBarDefault: (t: Target) => {
       if (JSON.stringify(s.appBar) === JSON.stringify(s.fallback)) s.appBar = t
       s.fallback = t
@@ -44,6 +45,6 @@ export const AppGateway = component('nano.shell/app-gateway', () => {
   appBar: Target_,
   focus: Focus_,
   setFocus: { in: Focus_, description: 'Moves focus (a no-op if unchanged): the app bar returns to its default, then focus is published' },
-  setAppBarComponent: { in: Target_, description: 'Sets the component whose controls the app bar shows, until focus next changes' },
+  setAppBarComponent: { in: Target_, description: 'Sets the component whose controls the app bar shows, until focus next changes; ignored unless null or in the focused view\'s system' },
   setAppBarDefault: { in: Target_, description: 'Sets the app bar component shown when no focused component overrides it' },
 }, { description: 'Which view is focused and whose controls the app bar shows' })

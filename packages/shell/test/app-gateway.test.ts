@@ -21,13 +21,15 @@ const setup = () => {
 
 test('setFocus resets the bar to the default, then publishes focus', async () => {
   const { call, value, seen } = setup()
+  const p2 = { system: 'host', instance: 'p2', widget: 'workspace' }
   await call('g', AppGateway.ops.setAppBarDefault, dflt)
-  await call('g', AppGateway.ops.setAppBarComponent, { system: 'host', instance: 'x' })
   await call('g', AppGateway.ops.setFocus, p1)
+  await call('g', AppGateway.ops.setAppBarComponent, { system: 'host', instance: 'x' })
+  await call('g', AppGateway.ops.setFocus, p2)
   await tick()
-  expect(seen).toEqual([{ focus: p1, appBar: dflt }])
+  expect(seen.at(-1)).toEqual({ focus: p2, appBar: dflt })
   expect(await value('g', AppGateway.ops.appBar)).toEqual(dflt)
-  expect(await value('g', AppGateway.ops.focused)).toEqual(p1)
+  expect(await value('g', AppGateway.ops.focused)).toEqual(p2)
 })
 
 test('the same focus again is a no-op', async () => {
@@ -51,6 +53,7 @@ test('setAppBarDefault while nothing overrides it shows at once', async () => {
 test('setAppBarDefault does not displace a panel override', async () => {
   const { call, value } = setup()
   await call('g', AppGateway.ops.setAppBarDefault, dflt)
+  await call('g', AppGateway.ops.setFocus, p1)
   await call('g', AppGateway.ops.setAppBarComponent, { system: 'host', instance: 'x' })
   await call('g', AppGateway.ops.setAppBarDefault, null)
   expect(await value('g', AppGateway.ops.appBar)).toEqual({ system: 'host', instance: 'x' })
@@ -64,6 +67,20 @@ test('setFocus(null) publishes null and shows the default', async () => {
   await tick()
   expect(seen.at(-1)).toEqual({ focus: null, appBar: dflt })
   expect(await value('g', AppGateway.ops.focused)).toBeNull()
+})
+
+test('setAppBarComponent takes only null or a target in the focused system', async () => {
+  const { call, value } = setup()
+  await call('g', AppGateway.ops.setAppBarDefault, dflt)
+  await call('g', AppGateway.ops.setAppBarComponent, { system: 'host', instance: 'x' })   // nothing focused
+  expect(await value('g', AppGateway.ops.appBar)).toEqual(dflt)
+  await call('g', AppGateway.ops.setFocus, p1)
+  await call('g', AppGateway.ops.setAppBarComponent, { system: 'lab', instance: 'x' })   // another system
+  expect(await value('g', AppGateway.ops.appBar)).toEqual(dflt)
+  await call('g', AppGateway.ops.setAppBarComponent, { system: 'host', instance: 'x' })
+  expect(await value('g', AppGateway.ops.appBar)).toEqual({ system: 'host', instance: 'x' })
+  await call('g', AppGateway.ops.setAppBarComponent, null)
+  expect(await value('g', AppGateway.ops.appBar)).toBeNull()
 })
 
 test('every op is described', () => {
