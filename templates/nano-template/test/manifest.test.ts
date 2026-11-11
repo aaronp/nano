@@ -21,7 +21,7 @@ test('the manifest lists the package, the shared packages, and the Timer, Picker
       ops: [source('options'), source('value'), source('changed'), action('pick'), action('setOptions')],
     }, {
       kind: 'store', id: 'nano.template/store', title: 'Store', tag: 'nano-store',
-      ops: [source('entries'), source('backing'), source('changed'), action('get'), action('set'), action('remove')],
+      ops: [source('entries'), source('backing'), source('changed'), source('config'), action('configure'), action('get'), action('set'), action('remove')],
     }],
   })
 })

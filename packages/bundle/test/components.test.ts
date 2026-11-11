@@ -84,3 +84,30 @@ test('the catalog names every component, with a title and the element that shows
   expect(catalog.range).toEqual({ component: Range, title: 'Range', tag: 'c-range' })
   for (const e of Object.values(catalog)) expect(e.tag).toStartWith('c-')
 })
+
+// config / configure: the settings a component needs to be recreated (not its data)
+const roundTrip = async (c: any, set: (call: any) => Promise<void>, expected: unknown, bad: unknown) => {
+  const a = page(); a.add('a', c); await set((op: any, arg: unknown) => a.call('a', op, arg))
+  const cfg = await a.value('a', c.ops.config)
+  expect(cfg).toEqual(expected)
+  const b = page(); b.add('b', c)
+  expect('error' in await b.call('b', c.ops.configure, cfg)).toBe(false)
+  expect(await b.value('b', c.ops.config)).toEqual(expected)
+  expect('error' in await b.call('b', c.ops.configure, bad)).toBe(true)
+  expect(await b.value('b', c.ops.config)).toEqual(expected)
+}
+
+test('map and filter: config is the code', async () => {
+  await roundTrip(MapC, c => c(MapC.ops.setCode, 'return x + 1'), { code: 'return x + 1' }, { code: 5 })
+  await roundTrip(Filter, c => c(Filter.ops.setCode, 'return x > 1'), { code: 'return x > 1' }, {})
+})
+test('input: config is the kind', async () => {
+  await roundTrip(Input, c => c(Input.ops.setKind, 'number'), { kind: 'number' }, { kind: 'colour' })
+})
+test('debounce: config is quiet and maxWait', async () => {
+  await roundTrip(Debounce, async c => { await c(Debounce.ops.setQuiet, 20); await c(Debounce.ops.setMaxWait, 90) }, { quiet: 20, maxWait: 90 }, { quiet: -1, maxWait: 5 })
+})
+test('range: config is min, max, step and value; min >= max is refused', async () => {
+  await roundTrip(Range, async c => { await c(Range.ops.setBounds, { min: 0, max: 10, step: 2 }); await c(Range.ops.set, 6) }, { min: 0, max: 10, step: 2, value: 6 }, { min: 5, max: 1, step: 1, value: 3 })
+})
+test('log has no settings, so no config', () => { expect('config' in Log.ops).toBe(false) })

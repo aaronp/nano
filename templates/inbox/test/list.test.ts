@@ -57,3 +57,16 @@ test('setMessages refuses duplicate ids, changing nothing', async () => {
   expect((await call(List.ops.setMessages, [msg('a'), msg('a')])).error).toContain('a')
   expect((await value(List.ops.messages)).length).toBe(5)
 })
+
+test('config is the messages and the folder shown; configure replaces them; a bad config changes nothing', async () => {
+  const a = page()
+  await a.call(List.ops.setMessages, [msg('x', 'sent'), msg('y')]); await a.call(List.ops.show, 'sent')
+  const cfg = await a.value(List.ops.config)
+  expect(cfg).toEqual({ messages: [msg('x', 'sent'), msg('y')], folder: 'sent' })
+  const b = page()
+  expect((await b.call(List.ops.configure, cfg)).error).toBeUndefined()
+  expect(await b.value(List.ops.config)).toEqual(cfg)
+  for (const bad of [{ messages: [msg('x'), msg('x')], folder: 'inbox' }, { messages: [{ id: 1 }], folder: 'inbox' }, {}])
+    expect((await b.call(List.ops.configure, bad)).error).toBeTruthy()
+  expect(await b.value(List.ops.config)).toEqual(cfg)
+})

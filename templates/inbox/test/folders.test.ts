@@ -53,3 +53,16 @@ test('setFolders refuses duplicate ids and an empty list, changing nothing', asy
   expect((await call(Folders.ops.setFolders, [])).error).toBeTruthy()
   expect((await value(Folders.ops.folders)).length).toBe(3); expect(await value(Folders.ops.current)).toBe('inbox'); expect(got).toEqual([])
 })
+
+test('config is the folders and the current one; configure replaces them; a bad config changes nothing', async () => {
+  const a = page()
+  await a.call(Folders.ops.setFolders, [{ id: 'x', name: 'X' }, { id: 'y', name: 'Y' }]); await a.call(Folders.ops.select, 'y')
+  const cfg = await a.value(Folders.ops.config)
+  expect(cfg).toEqual({ folders: [{ id: 'x', name: 'X' }, { id: 'y', name: 'Y' }], current: 'y' })
+  const b = page()
+  expect((await b.call(Folders.ops.configure, cfg)).error).toBeUndefined()
+  expect(await b.value(Folders.ops.config)).toEqual(cfg)
+  for (const bad of [{ folders: [], current: '' }, { folders: cfg.folders, current: 'z' }, { folders: [cfg.folders[0], cfg.folders[0]], current: 'x' }, {}])
+    expect((await b.call(Folders.ops.configure, bad)).error).toBeTruthy()
+  expect(await b.value(Folders.ops.config)).toEqual(cfg)
+})

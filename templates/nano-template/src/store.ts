@@ -22,6 +22,9 @@ const load = (s: Storage | undefined): Record<string, string> => {
 // own properties only, so a key like __proto__ or toString is an ordinary entry
 const without = (o: Record<string, string>, key: string) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== key))
 
+const Entries = Type.Record(Type.String({ minLength: 1, maxLength: 200 }), Type.String({ maxLength: 10_000 }),
+  { maxProperties: 1000, description: 'Every key and its value', examples: [{ theme: 'dark' }] })
+
 /** Key/value pairs. Every store in one origin shares them (a later store sees what an earlier one set). */
 export const Store = component('nano.template/store', () => {
   const storage = originStorage()
@@ -36,12 +39,20 @@ export const Store = component('nano.template/store', () => {
     get entries() { return s.entries },
     get backing() { return storage ? 'localStorage' : 'memory' },
     changed,
+    get config() { return s.entries },
+    configure: (e: Record<string, string>) => {
+      if (Object.keys(e).some(k => !k || k.length > 200)) throw new Error('keys are 1 to 200 characters')   // the record schema does not check keys
+      for (const k of Object.keys(s.entries)) if (!Object.hasOwn(e, k)) write(k, null)
+      for (const [k, v] of Object.entries(e)) if (s.entries[k] !== v || !Object.hasOwn(s.entries, k)) write(k, v)
+    },
     get: (key: string): string | null => (Object.hasOwn(s.entries, key) ? s.entries[key]! : null),
     set: (e: { key: string; value: string }) => { write(e.key, e.value) },
     remove: (key: string) => { if (Object.hasOwn(s.entries, key)) write(key, null) },
   }
 }, {
   entries: Type.Record(Type.String(), Type.String(), { description: 'Every key and its value', examples: [{ theme: 'dark' }] }),
+  config: Entries,
+  configure: { in: Entries, description: 'Replaces every entry with these (the store is its entries); entries not listed are deleted' },
   backing: Type.Union([Type.Literal('localStorage'), Type.Literal('memory')], { description: "Where values are kept: this origin's localStorage, or memory where there is none (an isolated sandbox)", examples: ['localStorage'] }),
   changed: Type.Object({ key: Type.String(), value: Type.Union([Type.String(), Type.Null()]) },
     { description: 'A key that was set (its new value) or removed (null)', examples: [{ key: 'theme', value: 'dark' }] }),

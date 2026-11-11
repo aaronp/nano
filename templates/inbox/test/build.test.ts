@@ -15,9 +15,9 @@ test('the build writes the module, manifest and preview; the module carries no c
   const manifest = await Bun.file(join(dist, 'manifest.json')).json()
   expect(manifest.name).toBe('nano-inbox')
   expect(manifest.components.map((c: { tag: string }) => c.tag)).toEqual(['inbox-folders', 'inbox-list', 'inbox-reader'])
-  expect(manifest.components[0].ops.map((o: { name: string }) => o.name)).toEqual(['folders', 'current', 'selected', 'select', 'setFolders'])
+  expect(manifest.components[0].ops.map((o: { name: string }) => o.name)).toEqual(['folders', 'current', 'selected', 'config', 'configure', 'select', 'setFolders'])
   expect(manifest.components.map((c: { id: string }) => c.id)).toEqual(['nano.inbox/folders', 'nano.inbox/list', 'nano.inbox/reader'])
-  expect(manifest.components[1].ops.map((o: { name: string }) => o.name)).toEqual(['messages', 'folder', 'shown', 'opened', 'show', 'setMessages', 'open'])
+  expect(manifest.components[1].ops.map((o: { name: string }) => o.name)).toEqual(['messages', 'folder', 'shown', 'opened', 'config', 'configure', 'show', 'setMessages', 'open'])
   expect(manifest.components[2].ops.map((o: { name: string }) => o.name)).toEqual(['message', 'read'])
   const html = await Bun.file(join(dist, 'index.html')).text()
   const map = JSON.parse(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)![1]!).imports as Record<string, string>
