@@ -8,3 +8,5 @@ packages/ui-workspace/public/main-*.js*
 packages/ui-workspace/public/sandbox
 test-results/
 playwright-report/
+
+.superpowers/
