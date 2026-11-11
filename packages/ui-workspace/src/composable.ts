@@ -47,8 +47,10 @@ await set('ex-input', Input.ops.setKind, 'number')
 // The dock can add every kind that has an element: a panel template each (marked as the catalog's, for the components
 // drawer), before the hand-written ones.
 /** A panel template for a kind: its element, kept when the panel closes (closing sends it to the rack). */
-const templateFor = (kind: string, e: { title: string; tag?: string }) => {
-  const t = Object.assign(document.createElement('template'), { innerHTML: `<${e.tag} keep></${e.tag}>` })
+const templateFor = (kind: string, e: { title: string; tag?: string }, trust: 'trusted' | 'sandboxed' = 'trusted') => {
+  // a sandboxed kind has no element in the host: <c-sandboxed> deploys it in its frame
+  const html = trust === 'sandboxed' ? `<c-sandboxed keep kind="${kind}" mode="isolated-sandbox"></c-sandboxed>` : `<${e.tag} keep></${e.tag}>`
+  const t = Object.assign(document.createElement('template'), { innerHTML: html })
   t.dataset.widget = kind; t.dataset.title = e.title; t.dataset.catalog = ''
   return t
 }
@@ -68,7 +70,7 @@ export function loadedNames() {
 export function addCatalog(entries: Catalog, from: { name: string; url: string; module?: string }, trust: 'trusted' | 'sandboxed' = 'trusted') {
     for (const [kind, e] of Object.entries(entries)) catalog[kind] = { ...e, trust, modes: trust === 'trusted' ? ['host', 'sandbox', 'isolated-sandbox'] : ['isolated-sandbox'], source: { url: from.module ?? from.url } }
   for (const [kind, e] of Object.entries(entries)) if (e.tag) for (const dock of document.querySelectorAll<HTMLElement & { addTemplate?(t: HTMLTemplateElement): void }>('workspace-dock')) {
-    const t = templateFor(kind, e)
+    const t = templateFor(kind, e, trust)
     t.dataset.package = from.name; t.dataset.packageUrl = from.url
     if (dock.addTemplate) dock.addTemplate(t); else dock.append(t)   // not defined yet: read when it connects
   }

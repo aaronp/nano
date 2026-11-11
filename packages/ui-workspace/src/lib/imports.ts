@@ -1,6 +1,7 @@
 /** Importing a package of components by its manifest URL: the pure parts. The manifest is version 1, as the template
  * builds it; the module's own `catalog` is the authority once loaded. */
 import type { Catalog } from '@pritzlaff/nano-elements';
+import type { SerialEntry } from '../sandbox/protocol.ts';
 
 /** A package's manifest (version 1). `module` is relative to the manifest's URL. */
 export interface Manifest {
@@ -58,12 +59,12 @@ export function clashes(m: Manifest, loaded: { kinds: string[]; ids: string[]; t
 }
 
 /** Why a loaded module's catalog doesn't match its manifest, or null if it does. */
-export function catalogMismatch(m: Manifest, catalog: Catalog): string | null {
+export function catalogMismatch(m: Manifest, catalog: Catalog | Record<string, SerialEntry>): string | null {
   for (const c of m.components) {
     const e = catalog[c.kind];
     if (!e) return `The module has no ${c.kind}, which its manifest lists.`;
     if ((e.tag ?? undefined) !== (c.tag ?? undefined)) return `The module's ${c.kind} has element ${e.tag ?? 'none'}, but its manifest says ${c.tag ?? 'none'}.`;
-    const id = `${e.component.id.ns}/${e.component.id.name}`;
+    const eid = 'component' in e ? e.component.id : e.id, id = `${eid.ns}/${eid.name}`;
     if (id !== c.id) return `The module's ${c.kind} is ${id}, but its manifest says ${c.id}.`;
   }
   const extra = Object.keys(catalog).filter((k) => !m.components.some((c) => c.kind === k));
@@ -71,7 +72,7 @@ export function catalogMismatch(m: Manifest, catalog: Catalog): string | null {
 }
 
 /** A remembered import. */
-export interface ImportRecord { url: string; name: string; version: string }
+export interface ImportRecord { url: string; name: string; version: string; trust?: 'trusted' | 'sandboxed' }
 const KEY = 'workspace-starter.imports';
 
 /** The imports kept in storage: one record per manifest URL. */
