@@ -78,17 +78,18 @@ export function bootSavedWorkspaces(doc: Document) {
       prev = a;
     }
   };
-  const moveBy = (path: string, by: -1 | 1) => {
-    if (!saved.move(path, by)) return false;
-    arrange(); doc.dispatchEvent(new CustomEvent('nano:changed'));
-    return true;
-  };
+  const changed = (moved: boolean) => { if (moved) { arrange(); doc.dispatchEvent(new CustomEvent('nano:changed')); } return moved; };
   shell.addEventListener('keydown', (e) => {
     const a = item(e.target), k = (e as KeyboardEvent).key;
-    if (!a || !(e as KeyboardEvent).altKey || (k !== 'ArrowUp' && k !== 'ArrowDown')) return;
+    const ke = e as KeyboardEvent;
+    if (!a || !ke.altKey || ke.ctrlKey || ke.shiftKey || ke.metaKey || (k !== 'ArrowUp' && k !== 'ArrowDown')) return;
     e.preventDefault();
     const up = k === 'ArrowUp';
-    if (moveBy(a.dataset.saved!, up ? -1 : 1)) { a.focus(); live.textContent = `Moved ${a.textContent} ${up ? 'up' : 'down'}`; }
+    if (changed(saved.move(a.dataset.saved!, up ? -1 : 1))) {
+      a.focus();
+      live.textContent = '';   // cleared first so a repeat is announced again
+      setTimeout(() => { live.textContent = `Moved ${a.textContent} ${up ? 'up' : 'down'}`; }, 50);
+    }
   });
   let dragged = '';
   shell.addEventListener('dragstart', (e) => {
@@ -96,15 +97,24 @@ export function bootSavedWorkspaces(doc: Document) {
     dragged = a.dataset.saved!;
     (e as DragEvent).dataTransfer?.setData('text/plain', dragged);
   });
-  shell.addEventListener('dragover', (e) => { if (dragged && item(e.target)) e.preventDefault(); });
+  const clear = () => { for (const x of doc.querySelectorAll('[data-drop]')) x.removeAttribute('data-drop'); };
+  shell.addEventListener('dragover', (e) => {
+    const a = item(e.target);
+    if (!dragged || !a) return;
+    e.preventDefault();
+    const paths = saved.list().map((w) => w.path);
+    clear();
+    // it lands where the target is: above it when coming from below, below it when coming from above
+    if (a.dataset.saved !== dragged) a.dataset.drop = paths.indexOf(dragged) > paths.indexOf(a.dataset.saved!) ? 'before' : 'after';
+  });
+  shell.addEventListener('dragleave', (e) => { if (!shell.contains((e as DragEvent).relatedTarget as Node | null)) clear(); else item(e.target)?.removeAttribute('data-drop'); });
   shell.addEventListener('drop', (e) => {
     const a = item(e.target); if (!dragged || !a) return;
     e.preventDefault();   // dropping a link must not navigate
-    const paths = saved.list().map((w) => w.path), from = paths.indexOf(dragged), to = paths.indexOf(a.dataset.saved!);
-    dragged = '';
-    for (let i = from; i !== to && from >= 0 && to >= 0; i += Math.sign(to - from)) moveBy(paths[from]!, Math.sign(to - from) as -1 | 1);
+    changed(saved.moveTo(dragged, saved.list().findIndex((w) => w.path === a.dataset.saved)));
+    dragged = ''; clear();
   });
-  shell.addEventListener('dragend', () => { dragged = ''; });
+  shell.addEventListener('dragend', () => { dragged = ''; clear(); });
 
   // Save workspace… (from a dock): its layout, in the dock's own system
   doc.addEventListener('dock:save-as', async (e) => {

@@ -49,5 +49,13 @@ export const savedWorkspaces = (storage: Pick<Storage, 'getItem' | 'setItem'>) =
     storage.setItem(KEY, JSON.stringify(xs));
     return true;
   };
-  return { list, refusal, add, move };
+  /** Moves one to a place in the order: one splice, one write; false if unchanged or unknown. */
+  const moveTo = (path: string, index: number): boolean => {
+    const xs = list(), i = xs.findIndex((w) => w.path === path);
+    if (i < 0 || index < 0 || index >= xs.length || index === i) return false;
+    xs.splice(index, 0, ...xs.splice(i, 1));
+    storage.setItem(KEY, JSON.stringify(xs));
+    return true;
+  };
+  return { list, refusal, add, move, moveTo };
 };

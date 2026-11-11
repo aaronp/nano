@@ -37,9 +37,9 @@
 
   <!-- Navigation: one link per <app-route> below, in order. -->
   <a slot="nav" href="#/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/></svg>Overview</a>
-  <!-- Workspaces: each runs in a system (a registry and runtime); + makes a new one. Saved ones are added under Main. -->
+  <!-- Workspaces: each runs in a system (a registry and runtime); + makes a new one. Main is the host's own, fixed first; saved ones follow it as top-level items, in their stored order. -->
   <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspaces</a><button type="button" data-toggle-drawer aria-pressed="true" aria-label="Components drawer" title="Show or hide the components drawer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM9 4v16"/></svg></button><button type="button" data-new-workspace aria-label="New workspace" title="New workspace">+</button></div>
-  <a slot="nav" href="#/workspace">Main</a>
+  <a slot="nav" data-main href="#/workspace" title="Main: the host's own workspace, always first"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8M5 10v10h14V10M10 20v-6h4v6"/></svg>Main</a>
   <a slot="nav" href="#/components"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM16.5 13v7M13 16.5h7"/></svg>Components</a>
   <a slot="nav" href="#/settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Settings</a>
   <div slot="drawer-footer" class="drawer-foot">Nano · v0.1</div>

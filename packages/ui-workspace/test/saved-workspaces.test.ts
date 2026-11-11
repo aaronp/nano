@@ -132,6 +132,8 @@ test('Alt+ArrowDown moves an item down and the order is stored; focus stays; ann
   expect(order()).toEqual(['Workspaces+', 'Main', 'B', 'A', 'C', 'Inbox'])
   expect(document.activeElement).toBe(a)
   expect(w.changed()).toBe(1)
+  expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('')   // cleared first, set after a beat
+  await new Promise(r => setTimeout(r, 80))
   expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('Moved A down')
   a.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true }))
   a.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true }))   // at the end: nothing
@@ -145,12 +147,43 @@ test('a drag-and-drop reorder is stored, and the drop does not navigate', async 
   const over = new Event('dragover', { bubbles: true, cancelable: true })
   document.querySelector('a[href="#/a"]')!.dispatchEvent(over)
   expect(over.defaultPrevented).toBe(true)
+  expect(document.querySelector('a[href="#/a"]')!.getAttribute('data-drop')).toBe('before')   // lands above A
   const drop = new Event('drop', { bubbles: true, cancelable: true })
   document.querySelector('a[href="#/a"]')!.dispatchEvent(drop)
   expect(drop.defaultPrevented).toBe(true)
   expect(w.store.list().map(x => x.path)).toEqual(['/c', '/a', '/b'])
   expect(order()).toEqual(['Workspaces+', 'Main', 'C', 'A', 'B', 'Inbox'])
-  expect(w.changed()).toBeGreaterThan(0)
+  expect(w.changed()).toBe(1)   // one drop, one change
+  expect(document.querySelector('[data-drop]')).toBeNull()   // indicator cleared
+})
+
+test('dragstart puts the path on the DataTransfer; dragend clears the indicator', async () => {
+  await reorderWorld()
+  const set: string[][] = []
+  const start = Object.assign(new Event('dragstart', { bubbles: true }), { dataTransfer: { setData: (t: string, v: string) => set.push([t, v]) } })
+  document.querySelector('a[href="#/a"]')!.dispatchEvent(start)
+  expect(set).toEqual([['text/plain', '/a']])
+  document.querySelector('a[href="#/c"]')!.dispatchEvent(new Event('dragover', { bubbles: true, cancelable: true }))
+  expect(document.querySelector('a[href="#/c"]')!.getAttribute('data-drop')).toBe('after')
+  document.querySelector('a[href="#/a"]')!.dispatchEvent(new Event('dragend', { bubbles: true }))
+  expect(document.querySelector('[data-drop]')).toBeNull()
+})
+
+test('moveTo is one splice and one write; Alt with Ctrl/Shift/Meta does nothing', async () => {
+  const w = await reorderWorld()
+  let writes = 0
+  const counting = { getItem: (k: string) => localStorage.getItem(k), setItem: (k: string, v: string) => { writes++; localStorage.setItem(k, v) } }
+  const s = savedWorkspaces(counting)
+  expect(s.moveTo('/a', 2)).toBe(true)
+  expect(writes).toBe(1)
+  expect(s.list().map(x => x.path)).toEqual(['/b', '/c', '/a'])
+  expect(s.moveTo('/a', 2)).toBe(false)
+  expect(s.moveTo('/zzz', 0)).toBe(false)
+  expect(writes).toBe(1)
+  const b = document.querySelector('a[href="#/b"]') as HTMLAnchorElement
+  for (const mod of ['ctrlKey', 'shiftKey', 'metaKey'])
+    b.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, [mod]: true, bubbles: true, cancelable: true }))
+  expect(w.store.list().map(x => x.path)).toEqual(['/b', '/c', '/a'])
 })
 
 test('Main stays first and is not reorderable', async () => {
