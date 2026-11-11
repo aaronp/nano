@@ -60,7 +60,7 @@ export function bootSavedWorkspaces(doc: Document) {
   const saved = savedWorkspaces(localStorage);
   for (const ws of saved.list()) mountWorkspace(doc, ws);
   const taken = () => [...doc.querySelectorAll('app-route')].map((r) => r.getAttribute('path') ?? '');
-  const open = (ws: SavedWorkspace) => { mountWorkspace(doc, ws); location.hash = `#${ws.path}`; };
+  const open = (ws: SavedWorkspace) => { mountWorkspace(doc, ws); location.hash = `#${ws.path}`; doc.dispatchEvent(new CustomEvent('nano:changed')); };
 
   // Save workspace… (from a dock): its layout, in the dock's own system
   doc.addEventListener('dock:save-as', async (e) => {

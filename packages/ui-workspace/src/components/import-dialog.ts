@@ -51,6 +51,7 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
     const got = await loadPackage(url, deps, trust);
     if ('error' in got) return say(got.error);
     importsStore(localStorage).put({ url, name: got.manifest.name, version: got.manifest.version, trust });
+    document.dispatchEvent(new CustomEvent('nano:changed'));
     d.close();
   });
   d.addEventListener('close', () => d.remove());

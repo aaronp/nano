@@ -288,6 +288,7 @@ export class WorkspaceDock extends HTMLElement {
       return;
     }
     this.say('Layout saved.');
+    this.ownerDocument.dispatchEvent(new CustomEvent('nano:changed'));   // the working copy follows
     this.send('dock:saved', { panels: this.openIds().length });
   }
 
