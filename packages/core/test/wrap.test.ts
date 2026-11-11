@@ -274,3 +274,16 @@ test("guarding keeps the entry's labels", () => {
   must(guard(rt, 'c', { allow: [] }))
   expect(reg.labels('c')).toEqual({ 'nano/deploy': 'host' })
 })
+
+test('* matches line terminators too, so a deny cannot be dodged with a newline', async () => {
+  expect(matches('r/log/*', 'r/log/a\nb')).toBe(true)
+  expect(matches('r/log/*', 'r/log/a\r b')).toBe(true)
+  const { ping, log } = guarded({ deny: ['r/log/*'] }, [['log', 'com.acme/log\nx']])
+  expect(logged(await ping())[0]).toHaveProperty('error'); expect(log.value).toEqual([])
+})
+
+test('regex specials in a selector match only literally', () => {
+  expect(matches('a.b(c)+', 'a.b(c)+')).toBe(true)
+  expect(matches('a.b(c)+', 'aXb(c)+')).toBe(false)
+  expect(matches('a.b(c)+', 'a.bcc')).toBe(false)
+})

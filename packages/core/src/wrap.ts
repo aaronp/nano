@@ -69,7 +69,7 @@ const partsOf = (rt: Runtime) => rt.registry.snapshot().instances.map(i => i.id)
 export type Selectors = { allow?: string[]; deny?: string[] }
 /** Whether `coord` matches `selector`: literal, apart from `*`. */
 export const matches = (selector: string, coord: string): boolean =>
-  new RegExp(`^${selector.split('*').map(s => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`).test(coord)
+  new RegExp(`^${selector.split('*').map(s => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`, 's').test(coord)
 const permitted = (g: Selectors | undefined, coord: string) => !g || ((!g.allow || g.allow.some(s => matches(s, coord))) && !g.deny?.some(s => matches(s, coord)))
 
 /** Puts a wrapper at `id`, with the instance that was there as its one part (under the same id). */
