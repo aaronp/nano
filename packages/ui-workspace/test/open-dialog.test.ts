@@ -24,13 +24,13 @@ test('a URL is fetched without credentials and opened; a bad document stays in t
 
 test('a saved app opens by name; Cancel gives null; kept copies can be opened (checked) or discarded', async () => {
   const p = openDialog(document, { mode: 'open', apps: { one: a('One') } })
-  $('[data-app="0"]').click(); expect(await p).toEqual({ app: a('One'), name: 'one' })
+  $('[data-app="0"]').click(); expect(await p).toEqual({ app: a('One'), name: 'one', own: true })
   const q = openDialog(document, { mode: 'import', apps: {} }); $('[data-cancel]').click(); expect(await q).toBeNull()
   const gone: string[] = []
   const r = openDialog(document, { mode: 'open', apps: {}, kept: [{ key: 'bad', text: 'nope' }, { key: 'unrestored', text: JSON.stringify(a('Kept')) }], discard: k => gone.push(k) })
   $('[data-kopen="bad"]').click(); expect($('[role="alert"]').textContent).toContain('not JSON')
   $('[data-kdiscard="bad"]').click(); expect(gone).toEqual(['bad']); expect(dlg().querySelector('[data-kopen="bad"]')).toBeNull()
-  $('[data-kopen="unrestored"]').click(); expect(await r).toEqual({ app: a('Kept') })
+  $('[data-kopen="unrestored"]').click(); expect(await r).toEqual({ app: a('Kept'), own: true, kept: 'unrestored' })
 })
 
 test('the imports confirmation: trusted unticked by default, sandboxed and already-imported have no tick; Cancel gives null', async () => {

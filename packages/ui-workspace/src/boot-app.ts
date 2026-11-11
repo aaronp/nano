@@ -23,6 +23,7 @@ if (r.restored) setImportFailures(r.failed)
 for (const n of r.notes) console.warn('working copy:', n)
 if (r.say) showStatus(document, r.say)
 export const restored = r.restored
-let auto: ReturnType<typeof autosave> | undefined
-export const startAutosave = () => { auto = autosave({ host, stores, app, doc: document, initial: !r.protect, onError: why => showStatus(document, `Your work could not be saved in this browser: ${why}`), onWrite: () => document.dispatchEvent(new CustomEvent('nano:working-saved')) }) }
-export const stopAutosave = () => auto?.stop()
+let auto: ReturnType<typeof autosave> | undefined, stopped = false
+// a stop (Open/New/?src=) also prevents a later start: module order does not guarantee which runs first
+export const startAutosave = () => { if (stopped) return; auto = autosave({ host, stores, app, doc: document, initial: !r.protect, onError: why => showStatus(document, `Your work could not be saved in this browser: ${why}`), onWrite: () => document.dispatchEvent(new CustomEvent('nano:working-saved')) }) }
+export const stopAutosave = () => { stopped = true; auto?.stop() }

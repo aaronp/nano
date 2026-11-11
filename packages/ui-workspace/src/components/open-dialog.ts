@@ -27,7 +27,7 @@ export function openDialog(doc: Document, opts: { mode: 'open' | 'import'; apps:
   return ask<Opened | null>(doc, `${verb} an app`, html, (d, done) => {
     const $ = <T extends HTMLElement>(s: string) => d.querySelector<T>(s)!;
     const say = (t: string) => { $('[role="alert"]').textContent = t; };
-    const give = (r: NanoApp | string, name?: string) => { if (typeof r === 'string') say(`Not opened: ${r}.`); else done({ app: r, ...(name !== undefined && { name }) }); };
+    const give = (r: NanoApp | string, kept?: Kept['key']) => { if (typeof r === 'string') say(`Not opened: ${r}.`); else done({ app: r, ...(kept && { own: true, kept }) }); };
     const url = $<HTMLInputElement>('input[name="url"]'), file = $<HTMLInputElement>('input[type="file"]');
     const fromFile = async (f: File | undefined) => {
       if (!f) return say('Drop or choose a .json file.');
@@ -47,13 +47,13 @@ export function openDialog(doc: Document, opts: { mode: 'open' | 'import'; apps:
     drop.addEventListener('drop', (e) => { e.preventDefault(); void fromFile((e as DragEvent).dataTransfer?.files?.[0]); });
     $('[data-url]').addEventListener('click', () => void fromUrl());
     url.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); void fromUrl(); } });
-    d.querySelectorAll<HTMLButtonElement>('[data-app]').forEach((b) => b.addEventListener('click', () => { const n = names[Number(b.dataset.app)]!; done({ app: apps[n]!, name: n }); }));
+    d.querySelectorAll<HTMLButtonElement>('[data-app]').forEach((b) => b.addEventListener('click', () => { const n = names[Number(b.dataset.app)]!; done({ app: apps[n]!, name: n, own: true }); }));
     const showKept = () => {
       $('[data-kept]').innerHTML = kept.length ? `<h3>Kept at the last start-up</h3><ul>${kept.map((k) => `<li>${esc(WHAT[k.key])} <button type="button" data-kopen="${k.key}">Open</button> <button type="button" data-kdiscard="${k.key}">Discard</button></li>`).join('')}</ul>` : '';
       d.querySelectorAll<HTMLButtonElement>('[data-kopen]').forEach((b) => b.addEventListener('click', () => {
         const k = kept.find((x) => x.key === b.dataset.kopen)!;
         let v: unknown; try { v = JSON.parse(k.text); } catch { return say('Not opened: that copy is not JSON.'); }
-        give(checkApp(v));
+        give(checkApp(v), k.key);
       }));
       d.querySelectorAll<HTMLButtonElement>('[data-kdiscard]').forEach((b) => b.addEventListener('click', () => { discard?.(b.dataset.kdiscard as Kept['key']); kept = kept.filter((x) => x.key !== b.dataset.kdiscard); showKept(); }));
     };

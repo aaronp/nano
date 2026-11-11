@@ -3,7 +3,7 @@ import { host, catalog } from './composable.ts'
 import { showStatus } from './lib/status.ts'
 import { applyApp } from './app/apply.ts'
 import { snapshotApp } from './app/snapshot.ts'
-import { fileCommands } from './app/file.ts'
+import { fileCommands, showNotes } from './app/file.ts'
 import { app, stores, importPackage, stopAutosave } from './boot-app.ts'
 import { mountWorkspace } from './components/saved-workspaces.ts'
 import { openDialog } from './components/open-dialog.ts'
@@ -12,7 +12,7 @@ import { askConfirm, askName } from './components/name-dialog.ts'
 
 const keptCopies = () => (['unrestored', 'bad'] as const).flatMap(key => { const text = app.stashed(key); return text === null ? [] : [{ key, text }] })
 const cmds = fileCommands({
-  app, catalog, snapshot: () => snapshotApp({ host, stores }),
+  doc: document, app, catalog, snapshot: () => snapshotApp({ host, stores }),
   imports: () => stores.imports.list(),
   merge: (a, consentCode) => applyApp(a, 'merge', { host, stores, catalog, importPackage, consentCode }),
   workspaces: () => stores.workspaces.list(), mount: ws => mountWorkspace(document, ws),
@@ -27,6 +27,9 @@ const cmds = fileCommands({
 })
 const menu = () => document.querySelector('nano-file-menu') as HTMLElement & { dirty: boolean }
 const refresh = () => { const w = app.working(); menu().dirty = !w || app.dirty(w) }
+// the baseline for "unsaved changes": a fresh page, or a document just opened, is read back from the running app
+if (app.needsBase()) app.setBase(await snapshotApp({ host, stores }))
+showNotes(app, t => showStatus(document, t))
 for (const c of Object.keys(cmds) as (keyof typeof cmds)[]) if (c !== 'src') document.addEventListener(`file:${c}`, () => void cmds[c]())
 document.addEventListener('nano:working-saved', refresh)
 refresh()

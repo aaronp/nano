@@ -9,7 +9,8 @@ import type { appStore } from './store.ts'
 /** An instance whose code (or config, or a wiring into a code op) would run in the host page. */
 export type CodeUse = { system: string; instance: string; kind: string }
 export type Pick = { imports: { url: string; trust: 'trusted' | 'sandboxed' }[]; code: string[] }   // code: "system/instance" keys agreed to
-export type Opened = { app: NanoApp; name?: string }
+/** `own`: one of this browser's saved apps or kept copies, which needs no confirmation (like the restored working copy); `kept`: which kept copy it was, discarded once applied. */
+export type Opened = { app: NanoApp; name?: string; own?: boolean; kept?: 'bad' | 'unrestored' }
 export type Ui = {
   open(opts: { mode: 'open' | 'import' }): Promise<Opened | null>
   confirmImports(app: NanoApp, already: string[], code: CodeUse[]): Promise<Pick | null>
@@ -17,6 +18,7 @@ export type Ui = {
   confirm(message: string, ok: string): Promise<boolean>
 }
 export interface FileDeps {
+  doc: Document
   app: ReturnType<typeof appStore>
   snapshot(): Promise<NanoApp>
   catalog: AppCatalog
@@ -35,6 +37,10 @@ export interface FileDeps {
   changed(snapshot: NanoApp): void
   ui: Ui
 }
+
+/** Shows (once) what the last Open/New left out or downgraded, after the reload. */
+export const showNotes = (app: Pick2, say: (t: string) => void) => { const n = app.takeNotes(); if (n.length) say(`When the app was opened: ${n.join(' · ')}`) }
+type Pick2 = { takeNotes(): string[] }
 
 export const emptyApp = (): NanoApp => ({ nano: 1, title: 'Untitled', theme: { id: 'enterprise' }, imports: [], systems: [], workspaces: [] })
 
@@ -105,45 +111,53 @@ const fileName = (s: string) => `${s.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').
 
 export function fileCommands(d: FileDeps) {
   const { app, ui } = d
-  const unsaved = async () => { const s = await d.snapshot(); return app.dirty(s) }
+  const unsaved = async () => app.dirty(await d.snapshot())
 
   /** Whether replacing the app may go ahead: yes when nothing is unsaved, or the person agrees. */
   const mayReplace = async () => !(await unsaved()) || ui.confirm('This app has changes that are not saved. Replace it anyway? (Save or Download first to keep them.)', 'Replace')
 
-  /** Writes the document as the working copy (the name, if any, as the current one) and reloads. false: it could not be written. */
-  function replaceWith(doc: NanoApp, name: string | null): boolean {
-    const e = app.setWorking(doc)   // before anything stops: a failed write changes nothing
+  /** Writes the document as the working copy with its name, baseline and notes (all or none), and reloads. false: nothing was changed. */
+  function replaceWith(doc: NanoApp, name: string | null, notes: string[] = []): boolean {
+    const e = app.adopt(doc, name, notes)   // before anything stops: a failed write changes nothing
     if (e) { d.say(e); return false }
-    d.stopAutosave(); app.setName(name); d.reload()
+    d.stopAutosave(); d.reload()
     return true
   }
 
-  /** Confirms the imports and code of a document, then replaces or merges. 'cancelled' changes nothing. */
-  async function load(o: Opened, how: 'replace' | 'merge', hooks: { keep?: () => string | null; written?: () => void } = {}): Promise<'applied' | 'cancelled' | 'failed'> {
+  /** Confirms the imports and code of a document (not an `own` one), then replaces or merges. 'cancelled' changes nothing. */
+  async function load(o: Opened, how: 'replace' | 'merge', hooks: { keep?: () => Promise<string | null>; written?: () => void } = {}): Promise<'applied' | 'cancelled' | 'failed'> {
     let doc = o.app
     const have = d.imports()
     const already = doc.imports.filter(i => have.some(h => h.url === i.url && (h.trust ?? 'sandboxed') === i.trust)).map(i => i.url)
     const code = codeUses(doc, d.catalog)
-    let consent = new Set<string>()
-    if (doc.imports.some(i => !already.includes(i.url)) || code.length) {
+    let consent = new Set(code.map(key))
+    const notes: string[] = []
+    if (!o.own && (doc.imports.some(i => !already.includes(i.url)) || code.length)) {
       const r = await ui.confirmImports(doc, already, code)
       if (!r) return 'cancelled'
       // anything not explicitly kept trusted is sandboxed
-      doc = { ...doc, imports: doc.imports.map(i => ({ url: i.url, trust: already.includes(i.url) || (i.trust === 'trusted' && r.imports.find(x => x.url === i.url)?.trust === 'trusted') ? i.trust : 'sandboxed' })) }
+      doc = { ...doc, imports: doc.imports.map(i => {
+        const keepTrusted = already.includes(i.url) || (i.trust === 'trusted' && r.imports.find(x => x.url === i.url)?.trust === 'trusted')
+        if (i.trust === 'trusted' && !keepTrusted) notes.push(`${i.url} was imported sandboxed, not trusted`)
+        return { url: i.url, trust: keepTrusted ? i.trust : 'sandboxed' as const }
+      }) }
       consent = new Set(r.code)
     }
+    const declined = code.filter(c => !consent.has(key(c)))
+    for (const c of declined) notes.push(`${key(c)}: its ${c.kind} code was not applied (not agreed to)`)
     if (how === 'replace') {
-      const why = hooks.keep?.(); if (why) { d.say(why); return 'failed' }
-      doc = withoutCode(doc, code.filter(c => !consent.has(key(c))), d.catalog)
-      if (!replaceWith(doc, o.name ?? null)) return 'failed'
+      const why = await hooks.keep?.(); if (why) { d.say(why); return 'failed' }
+      if (!replaceWith(withoutCode(doc, declined, d.catalog), o.name ?? null, notes)) return 'failed'
+      if (o.kept) app.discard(o.kept)
       hooks.written?.()
       return 'applied'
     }
     const before = new Set(d.workspaces().map(w => w.path))
-    const notes = await d.merge(doc, (s, i) => consent.has(`${s}/${i}`))
+    const merged = await d.merge(doc, (s, i) => consent.has(`${s}/${i}`))
     for (const ws of d.workspaces()) if (!before.has(ws.path)) d.mount(ws)
-    document.dispatchEvent(new CustomEvent('nano:changed'))
-    d.say(notes.length ? `Imported, with ${notes.length} note${notes.length === 1 ? '' : 's'}: ${notes.join(' · ')}` : 'Imported.')
+    d.doc.dispatchEvent(new CustomEvent('nano:changed'))
+    const all = [...notes.filter(n => !n.includes('not agreed to')), ...merged]
+    d.say(all.length ? `Imported, with ${all.length} note${all.length === 1 ? '' : 's'}: ${all.join(' · ')}` : 'Imported.')
     return 'applied'
   }
 
@@ -154,10 +168,12 @@ export function fileCommands(d: FileDeps) {
     const snap = await d.snapshot()
     const e = app.save(n, snap)
     if (e) return d.say(e)
-    app.setName(n); d.changed(snap)
+    const e2 = app.setName(n) ?? app.setBase(snap)
+    if (e2) return d.say(e2)
+    d.changed(snap)
   }
 
-  return {
+  const cmds = {
     new: async () => { if (await mayReplace()) replaceWith(emptyApp(), null) },
     open: async () => { if (!(await mayReplace())) return; const o = await ui.open({ mode: 'open' }); if (o) await load(o, 'replace') },
     import: async () => { const o = await ui.open({ mode: 'import' }); if (o) await load(o, 'merge') },
@@ -167,7 +183,8 @@ export function fileCommands(d: FileDeps) {
       const snap = await d.snapshot()
       if (!app.dirty(snap)) return
       const e = app.save(n, snap)
-      if (e) d.say(e); else d.changed(snap)
+      const e2 = e ?? app.setBase(snap)
+      if (e2) d.say(e2); else d.changed(snap)
     },
     'save-as': saveAs,
     download: async () => { const s = await d.snapshot(); d.download(fileName(app.name() ?? s.title), JSON.stringify(s, null, 2)) },
@@ -180,9 +197,9 @@ export function fileCommands(d: FileDeps) {
       const got = await fetchApp(url, base, fetchFn)
       if (typeof got === 'string') return d.say(`Could not open ${url}: ${got}`)
       const u = new URL(url, base)
-      const keep = () => {
-        const w = app.working()
-        if (!w || !app.dirty(w)) return null
+      const keep = async () => {
+        const w = await d.snapshot()   // the live app, not the stored copy (up to 500 ms behind)
+        if (!app.dirty(w)) return null
         const apps = app.apps(), base0 = `Before opening ${u.host}${u.pathname}`
         let name = base0
         for (let n = 2; Object.hasOwn(apps, name); n++) name = `${base0} (${n})`
@@ -193,4 +210,8 @@ export function fileCommands(d: FileDeps) {
       if (r === 'cancelled') clearSrc()
     },
   }
+  // one command at a time: a second click (or file:* event) while one is running, a dialog open, is ignored
+  let busy = false
+  const once = <A extends unknown[]>(f: (...a: A) => Promise<unknown>) => async (...a: A) => { if (busy) return; busy = true; try { await f(...a) } finally { busy = false } }
+  return { new: once(cmds.new), open: once(cmds.open), import: once(cmds.import), save: once(cmds.save), 'save-as': once(cmds['save-as']), download: once(cmds.download), src: once(cmds.src) }
 }

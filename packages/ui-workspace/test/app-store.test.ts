@@ -20,14 +20,13 @@ test('the working copy, named apps and the current name are kept, and read back 
   s.m.set('nano.apps', JSON.stringify({ ok: a('Ok'), bad: { nano: 9 } })); expect(Object.keys(st.apps())).toEqual(['ok'])
 })
 
-test('dirty: no name, a missing name, or a difference is unsaved; the same document (any key order) is not', () => {
+test('dirty: no baseline or a difference is unsaved; the same document (any key order) is not', () => {
   const st = appStore(memory())
-  expect(st.dirty(a('X'))).toBe(true)
-  st.save('x', a('X')); st.setName('x')
+  expect(st.dirty(a('X'))).toBe(true); expect(st.needsBase()).toBe(true)
+  st.setBase(a('X')); expect(st.needsBase()).toBe(false)
   expect(st.dirty(a('X'))).toBe(false)
   expect(st.dirty({ workspaces: [], systems: [], imports: [], title: 'X', nano: 1 })).toBe(false)
   expect(st.dirty(a('Y'))).toBe(true)
-  st.setName('gone'); expect(st.dirty(a('X'))).toBe(true)
 })
 
 test('a quota error is reported and nothing changes', () => {
