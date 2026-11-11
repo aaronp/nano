@@ -122,6 +122,9 @@ export function wrap(outer: Runtime, id: string, strategy: Strategy, opts: { map
     republishing.add(p)
   })
 
+  // a wrapper that loses its last handle takes its parts with it (a replace hand-over regains one within the tick)
+  const removed = env!.removed
+  env!.removed = co => { removed(co); queueMicrotask(() => { if (!env!.handles().length) for (const p of partsOf(inner)) inner.registry.remove(p) }) }
   const r = outer.registry.replace(id, wrapper, opts.owner)   // first: X loses its outer handle...
   if (!isOk(r)) return r
   inner.registry.add(id, x, { kind: 'wrapper', name: id })    // ...then gains the inner one, never both
@@ -136,7 +139,9 @@ export function unwrap(outer: Runtime, id: string): Result<void> {
   if (parts.length !== 1) return err(`${id} has ${parts.length} parts; unwrap needs exactly one`)
   const part = w.runtime.registry.get(parts[0]!)!
   w.runtime.registry.remove(parts[0]!)   // first: the part loses its inner handle...
-  return outer.registry.replace(id, part, (w as Partial<Wrapper>).owner)   // ...then gets its outer one (and owner) back
+  const r = outer.registry.replace(id, part, (w as Partial<Wrapper>).owner)   // ...then gets its outer one (and owner) back
+  if (isOk(r)) outer.registry.label(id, { 'nano/guarded': null })
+  return r
 }
 
 /** Wraps the instance at `id` in a one-part forwarding wrapper that may call outward only as `outward` allows. */

@@ -118,6 +118,7 @@ export function platform(host: Runtime, catalog: Record<string, { component: Com
     const inst = system(s, from).get(instance)
     if (!inst) throw new Error(`no ${instance} in ${from}`)
     must(system(s, to).add(instance, inst, owner(s)))
+    must(system(s, to).label(instance, system(s, from).labels(instance)))   // a sandboxed instance stays one
   })
   c.action(P.removeFromSystem, (s, { instance, system: id }) => {
     const self = s.env.handles().find(h => h.coord.registry === id)?.coord.instance

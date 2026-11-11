@@ -22,7 +22,30 @@ export class SandboxedElement extends LitElement {
     const el = this.#frame?.element
     if (!el || viewers.get(this.#frame!) !== this) return
     const r = this.getBoundingClientRect()
-    el.style.cssText += `;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;display:block`
+    Object.assign(el.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, display: 'block' })
+  }
+  /** The frame of the instance at `name` (a guarded one is a wrapper: its stand-in, same id, is inside). */
+  #find(): Frame | undefined {
+    let v: unknown = this.registry?.get(this.name!)?.value
+    while (hasRuntime(v)) v = v.runtime.registry.get(this.name!)?.value
+    return (v as Frame | undefined)?.port ? (v as Frame) : undefined
+  }
+  // a placeholder can move without resizing (a dock tab or drag), which no observer reports: re-measure every frame while shown
+  // ponytail: one getBoundingClientRect per frame per shown sandbox; use the dock's layout event if it grows one
+  #last = ''
+  #raf = 0
+  #watch = () => {
+    const f = this.#frame
+    if (!f) return
+    if (this.#find() !== f) {   // the instance was removed: its frame is disposed
+      if (viewers.get(f) === this) viewers.delete(f)
+      if (f.element) f.element.style.display = 'none'
+      this.#frame = undefined; this.note = 'removed'; this.#ro?.disconnect()
+      return
+    }
+    const r = this.getBoundingClientRect(), k = `${r.left},${r.top},${r.width},${r.height}`
+    if (k !== this.#last) { this.#last = k; this.#place() }
+    this.#raf = requestAnimationFrame(this.#watch)
   }
 
   connectedCallback() {
@@ -37,10 +60,7 @@ export class SandboxedElement extends LitElement {
       const r = deployer(reg, this.name, this.kind, this.mode, owner)
       if ('error' in r) { this.note = r.error; return }
     }
-    // a guarded instance is a wrapper: its stand-in (same id) is inside
-    let v: unknown = reg?.get(this.name)?.value
-    while (hasRuntime(v)) v = v.runtime.registry.get(this.name)?.value
-    this.#frame = (v as Frame | undefined)?.port ? (v as Frame) : undefined
+    this.#frame = this.#find()
     const f = this.#frame
     if (!f) { this.note = `no sandboxed instance "${this.name}"`; return }
     const holder = viewers.get(f)
@@ -50,10 +70,12 @@ export class SandboxedElement extends LitElement {
     this.#ro?.observe(this)
     addEventListener('scroll', this.#place, true); addEventListener('resize', this.#place)
     this.#place()
+    this.#raf = requestAnimationFrame(this.#watch)
   }
 
   disconnectedCallback() {
     super.disconnectedCallback()
+    cancelAnimationFrame(this.#raf)
     this.#ro?.disconnect()
     removeEventListener('scroll', this.#place, true); removeEventListener('resize', this.#place)
     const f = this.#frame

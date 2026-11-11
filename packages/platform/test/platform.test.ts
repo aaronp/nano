@@ -167,3 +167,12 @@ test('createComponent without a mode uses the kind\'s first allowed mode', async
   await call({ kind: 'range', name: 'a', system: 'host' }); await call({ kind: 'range', name: 'b', system: 'host', mode: 'host' }); await call({ kind: 'log', name: 'c', system: 'host' })
   expect(seen).toEqual([['a', 'isolated-sandbox'], ['b', 'host'], ['c', undefined]])
 })
+
+test('add-to-system carries the instance\'s labels', async () => {
+  const { host, call } = setup()
+  await call(P.createSystem, 'lab')
+  await call(P.createComponent, { kind: 'range', name: 'r', system: 'host' })
+  host.registry.label('r', { 'nano/deploy': 'sandbox', 'nano/guarded': 'true' })
+  await call(P.addToSystem, { instance: 'r', from: 'host', to: 'lab' })
+  expect(runtimeOf(host.registry, 'lab')!.registry.labels('r')).toEqual({ 'nano/deploy': 'sandbox', 'nano/guarded': 'true' })
+})

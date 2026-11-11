@@ -93,3 +93,12 @@ test('nano/trust comes from the entry, not its modes', () => {
   deploy(rt, 'a', 'pkg2', 'isolated-sandbox', { catalog: { ...cat, pkg2: { ...cat.pkg!, modes: ['isolated-sandbox'] } }, open })
   expect(rt.registry.labels('a')['nano/trust']).toBe('trusted')
 })
+
+test('removing a deployed isolated instance disposes its frame', async () => {
+  const rt = Runtimes.create(Registries.create('host')), ch = new MessageChannel()
+  let disposed = 0
+  const open = (() => ({ port: ch.port1, ready: new Promise<void>(() => {}), dispose() { disposed++ } }) as Frame) as never
+  deploy(rt, 'b', 'boxed', 'isolated-sandbox', { catalog: cat, open })
+  rt.registry.remove('b'); await tick()
+  expect(disposed).toBe(1)
+})

@@ -132,3 +132,13 @@ function world(f: ReturnType<typeof openFrame>) {
   rt.registry.add('box', Components.instantiate(standIn({ id: { ns: 't', name: 'thing' }, title: 'T', ops: [] }, () => f)))
   return { rt }
 }
+
+test('<c-sandboxed> drops its frame and says removed once its instance is gone', async () => {
+  const f = openFrame({ ...opts, mode: 'sandbox' })
+  const w = world(f); provide(document, w.rt.registry)
+  const el = document.createElement('c-sandboxed'); el.setAttribute('name', 'box')
+  document.body.append(el); await tick()
+  w.rt.registry.remove('box'); await tick(50)
+  expect((el as any).shadowRoot.textContent).toContain('removed')
+  f.dispose()
+})

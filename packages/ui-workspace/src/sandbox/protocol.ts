@@ -26,6 +26,9 @@ export const serialEntry = (e: CatalogEntry): SerialEntry => ({
 const obj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
 const optStr = (v: unknown) => v === undefined || typeof v === 'string'
 
+/** Whether a schema (any depth) has a regex-running keyword: the iframe controls schema and data, so a backtracking pattern would freeze the host. */
+const hasRegex = (x: unknown): boolean => !!x && typeof x === 'object' && Object.entries(x).some(([k, v]) => k === 'pattern' || k === 'patternProperties' || k === 'format' || hasRegex(v))
+
 /** The entry if `x` is one, else why not. */
 export function checkEntry(x: unknown): SerialEntry | string {
   if (!obj(x)) return 'entry is not an object'
@@ -42,6 +45,7 @@ export function checkEntry(x: unknown): SerialEntry | string {
     seen.add(`${op.ns}/${op.name}`)
     if (!optStr(op.description)) return `op ${op.ns}/${op.name} description is not a string`
     for (const k of ['input', 'output']) if (op[k] !== undefined && !obj(op[k])) return `op ${op.ns}/${op.name} ${k} is not a schema object`
+    for (const k of ['input', 'output']) if (hasRegex(op[k])) return `op ${op.ns}/${op.name} ${k} uses pattern or format`
   }
   return {
     id: { ns: id.ns, name: id.name }, title: x.title,

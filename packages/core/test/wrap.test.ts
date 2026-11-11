@@ -287,3 +287,37 @@ test('regex specials in a selector match only literally', () => {
   expect(matches('a.b(c)+', 'aXb(c)+')).toBe(false)
   expect(matches('a.b(c)+', 'a.bcc')).toBe(false)
 })
+
+test('removing a wrapper removes its parts (after a microtask); unwrap and wrap-a-wrapper are unaffected', async () => {
+  const { rt, reg } = setup()
+  const w = must(wrap(rt, 'c', Strategies.forward)) as HasRuntime
+  reg.remove('c')
+  await flush()
+  expect(w.runtime.registry.snapshot().instances.map(i => i.id)).toEqual(['registry'])
+  const s2 = setup()
+  const outer = must(wrap(s2.rt, 'c', Strategies.forward)) as HasRuntime
+  const outer2 = must(wrap(s2.rt, 'c', Strategies.forward)) as HasRuntime
+  await flush()
+  expect(outer2.runtime.registry.get('c')!.value).toBe(outer)   // handed over, not removed
+  expect(outer.runtime.registry.get('c')).toBeDefined()
+})
+
+test('unwrap drops nano/guarded from the restored entry', () => {
+  const { rt, reg } = setup()
+  must(wrap(rt, 'c', Strategies.forward)); reg.label('c', { 'nano/guarded': 'true', k: 'v' })
+  must(unwrap(rt, 'c'))
+  expect(reg.labels('c')).toEqual({ k: 'v' })
+})
+
+test('a schema that throws is an error result, for a call, a refused publish and a delivery', async () => {
+  const Bad = Ops.action('com.acme', 'bad', Type.String({ pattern: '(' }), Type.Null())
+  const BadOut = Ops.source('com.acme', 'bad-out', Type.String({ pattern: '(' }))
+  const c = Components.create({ ns: 'com.acme', name: 'bad' }, e => e)
+  c.action(Bad, () => null); c.action(BadOut, () => 'x')
+  c.action(Ops.action('com.acme', 'pub', Type.Null(), Type.Null()), async e => { await e.notify(BadOut, 'x'); return null }, { emits: [BadOut] })
+  const rt = Runtimes.create(Registries.create('r')); rt.registry.add('bad', Components.instantiate(c))
+  const r = await rt.call(me, 'bad', Ops.key(Bad), 'x')
+  expect(isOk(r)).toBe(false)
+  const n = await rt.notify({ from: { registry: 'r', instance: 'bad' }, op: Ops.key(BadOut), data: 'x' })
+  expect(isOk(n)).toBe(false)
+})

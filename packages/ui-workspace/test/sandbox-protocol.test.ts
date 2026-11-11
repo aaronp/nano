@@ -183,3 +183,11 @@ describe('sandbox protocol', () => {
       { ...entry, ops: [{ ns: 't', name: '' }] }, { ...entry, ops: [{ ns: 't', name: 'a/b' }] }, { ...entry, ops: [{ ns: 't', name: 'a' }, { ns: 't', name: 'a' }] }]) expect(typeof checkEntry(bad)).toBe('string')
   })
 })
+
+test('checkEntry rejects patterns and formats at any depth, and passes a plain schema', () => {
+  const e = (input: unknown) => ({ id: { ns: 'a', name: 'b' }, title: 't', ops: [{ ns: 'a', name: 'o', input }] })
+  expect(typeof checkEntry(e({ type: 'object', properties: { x: { type: 'string', pattern: '^(a+)+$' } } }))).toBe('string')
+  expect(typeof checkEntry(e({ type: 'array', items: { type: 'string', format: 'email' } }))).toBe('string')
+  expect(typeof checkEntry(e({ type: 'object', patternProperties: { a: {} } }))).toBe('string')
+  expect(typeof checkEntry(e({ type: 'object', properties: { x: { type: 'string' } } }))).toBe('object')
+})
