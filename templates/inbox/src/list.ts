@@ -14,7 +14,11 @@ export const List = component('nano.inbox/list', () => {
     get shown() { return s.messages.filter(m => m.folder === s.folder) },
     opened,
     show: (folder: string) => { s.folder = folder },
-    setMessages: (list: Message[]) => { s.messages = list.map(m => ({ id: m.id, folder: m.folder, from: m.from, subject: m.subject, date: m.date, body: m.body })) },
+    setMessages: (list: Message[]) => {
+      const dup = list.find((m, i) => list.findIndex(x => x.id === m.id) !== i)
+      if (dup) throw new Error(`duplicate message id ${JSON.stringify(dup.id)}`)
+      s.messages = list.map(m => ({ id: m.id, folder: m.folder, from: m.from, subject: m.subject, date: m.date, body: m.body }))
+    },
     open: (id: string) => {
       const m = s.messages.find(x => x.id === id)
       if (!m) throw new Error(`${JSON.stringify(id)} is not a message`)
@@ -26,7 +30,7 @@ export const List = component('nano.inbox/list', () => {
   folder: Type.String({ maxLength: 40, description: 'The id of the folder shown', examples: ['inbox'] }),
   shown: Type.Array(MessageSchema, { maxItems: 5000, description: 'The messages in the folder shown, newest first', examples: [[]] }),
   opened: MessageSchema,
-  show: { in: FolderId, description: 'Shows the messages of a folder (wire a folders component\'s selected event to it)' },
-  setMessages: { in: Type.Array(MessageSchema, { maxItems: 5000, description: 'The new messages, newest first' }), description: 'Replaces all the messages' },
+  show: { in: FolderId, description: 'Shows the messages of a folder (wire a folders component\'s selected event to it); a folder with no messages, or no such folder, shows an empty list' },
+  setMessages: { in: Type.Array(MessageSchema, { maxItems: 5000, description: 'The new messages, newest first' }), description: 'Replaces all the messages; refuses duplicate ids, changing nothing' },
   open: { in: Type.String({ maxLength: 40, description: 'A message id', examples: ['m1'] }), description: 'Opens a message, publishing it whole as opened; refuses an id that is not a message' },
 }, { description: 'A list of messages in one folder; opening one publishes it' })

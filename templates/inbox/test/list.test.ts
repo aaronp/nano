@@ -51,3 +51,9 @@ test('setMessages replaces them; inputs are bounded', async () => {
   expect((await call(List.ops.show, 'x'.repeat(41))).error).toBeTruthy()
   expect((await value(List.ops.messages)).length).toBe(2)
 })
+
+test('setMessages refuses duplicate ids, changing nothing', async () => {
+  const { call, value } = page()
+  expect((await call(List.ops.setMessages, [msg('a'), msg('a')])).error).toContain('a')
+  expect((await value(List.ops.messages)).length).toBe(5)
+})

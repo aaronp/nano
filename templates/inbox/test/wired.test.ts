@@ -14,3 +14,8 @@ test('in one registry, folders.selected → list.show and list.opened → reader
   await call('list', List.ops.open, 'm5')
   expect((await call('reader', Reader.ops.message)).value.subject).toBe('Re: Quarterly plan')
 })
+
+test('the wiring fits: opened fits read, selected fits show', () => {
+  expect(Ops.fits(List.ops.opened, Reader.ops.read)).toBe(true)
+  expect(Ops.fits(Folders.ops.selected, List.ops.show)).toBe(true)
+})
