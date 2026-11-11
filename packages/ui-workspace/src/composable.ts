@@ -19,6 +19,7 @@ import { defineElements as defineEditor } from '@composable/editor/elements'
 import { defineWires } from '@composable/wires'
 import { defineSandboxed, provideDeploy } from './sandbox/sandboxed-el.ts'
 import { deploy, deployIn, type AppCatalog, type Mode } from './sandbox/deploy.ts'
+import { HOST_ENTRIES } from './app/snapshot.ts'
 
 /** Every kind of component this host offers: its packages' catalogs, merged. Add a package, add its catalog. */
 export const catalog: AppCatalog = Object.fromEntries(Object.entries({ ...bundle, ...editor, ...shell } as Catalog).map(([k, e]) => [k, { ...e, modes: ['host'] as Mode[], trust: 'trusted' as const, ...(k === 'map' || k === 'filter' ? { code: ['setCode', 'configure'] } : {}) }]))
@@ -50,7 +51,7 @@ const set = (id: string, op: Op, arg: unknown) => host.call({ registry: 'host', 
 await set('ex-map', Map.ops.setCode, 'return x * 2')
 await set('ex-input', Input.ops.setKind, 'number')
 await set('profile', Profile.ops.setUser, { name: 'You' })
-await set('profile', Profile.ops.setEntries, [{ label: 'Systems', href: '#/systems' }, { label: 'Themes', href: '#/themes' }])
+await set('profile', Profile.ops.setEntries, HOST_ENTRIES)
 
 // The dock can add every kind that has an element: a panel template each (marked as the catalog's, for the components
 // drawer), before the hand-written ones.

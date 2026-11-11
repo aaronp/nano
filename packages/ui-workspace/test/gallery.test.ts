@@ -62,9 +62,8 @@ test('each compare column sets its colour scheme, so native pickers match it', a
   expect(cols.find(c => c.dataset.theme === 'paper/light')!.style.colorScheme).toBe('light')
 })
 
-test('the page has a Components route, nav item and dock widget for it', async () => {
+test('the page has a Components route and dock widget for it', async () => {
   const page = await Bun.file(new URL('../public/index.html', import.meta.url)).text()
-  expect(page).toContain('<a slot="nav" href="#/components">')
   expect(page).toMatch(/<app-route path="\/components"[^>]*>\s*<nano-gallery>/)
   expect(page).toContain('<template data-widget="nano-gallery" data-title="Components gallery"><nano-gallery></nano-gallery></template>')
 })

@@ -7,6 +7,9 @@ import type { ThemeChoice } from '../lib/theme-state.ts'
 import type { ImportRecord } from '../lib/imports.ts'
 import type { SavedWorkspace } from '../lib/saved-workspaces.ts'
 
+/** The profile menu's links to the host's own pages: always in the menu after a document's own entries, never written to one. */
+export const HOST_ENTRIES = [{ label: 'Components', href: '#/components' }, { label: 'Settings', href: '#/settings' }, { label: 'Systems', href: '#/systems' }, { label: 'Themes', href: '#/themes' }]
+
 /** The host's stores, as far as a document needs them; tests pass fakes. `set` replaces the whole list. */
 export interface Stores {
   imports: { list(): ImportRecord[]; set(xs: ImportRecord[]): void }
@@ -72,7 +75,7 @@ export async function snapshotApp({ host, stores }: { host: Runtime; stores: Sto
   const t = stores.theme.get()
   return {
     nano: 1, title: stores.title.get(), theme: { id: t.theme, mode: t.mode },
-    ...(user && entries && { profile: { user: { name: user.name, ...(user.avatar !== undefined && { avatar: user.avatar }) }, entries: entries.map(e => ({ label: e.label, href: e.href })) } }),
+    ...(user && entries && { profile: { user: { name: user.name, ...(user.avatar !== undefined && { avatar: user.avatar }) }, entries: entries.filter(e => !HOST_ENTRIES.some(h => h.href === e.href)).map(e => ({ label: e.label, href: e.href })) } }),
     imports: stores.imports.list().map(r => ({ url: r.url, trust: r.trust ?? 'trusted' })),
     systems, workspaces,
   }

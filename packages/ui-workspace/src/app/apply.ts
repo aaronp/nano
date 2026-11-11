@@ -8,7 +8,7 @@ import { Profile, RESERVED, type NanoApp } from '@composable/shell'
 import { isThemeId } from '../lib/themes.ts'
 import { ICONS } from '../lib/saved-workspaces.ts'
 import type { AppCatalog } from '../sandbox/deploy.ts'
-import { MAIN, value, type Stores } from './snapshot.ts'
+import { HOST_ENTRIES, MAIN, value, type Stores } from './snapshot.ts'
 
 export interface ApplyDeps {
   host: Runtime
@@ -59,7 +59,7 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
     }
     if (app.profile) {
       const u = await call('profile', Profile.ops.setUser, app.profile.user); if ('error' in u) fail('profile', u)
-      else { const e = await call('profile', Profile.ops.setEntries, app.profile.entries); if ('error' in e) fail('profile entries', e) }
+      else { const e = await call('profile', Profile.ops.setEntries, [...app.profile.entries, ...HOST_ENTRIES.filter(h => !app.profile!.entries.some(e => e.href === h.href))]); if ('error' in e) fail('profile entries', e) }
     }
   }
 

@@ -217,3 +217,11 @@ test('a throwing "*"-source subscribe is that step\'s note', async () => {
   expect(notes).toEqual([expect.stringContaining('-> l')])
   expect(notes[0]).not.toContain('stopped')
 })
+
+test('a restored profile keeps the host\'s own menu links after its own (an older working copy cannot hide Settings)', async () => {
+  const { HOST_ENTRIES } = await import('../src/app/snapshot.ts')
+  const a = await fresh()
+  await applyApp(doc, 'replace', a.deps)
+  const entries = (await a.call('profile', Profile.ops.entries)).value as { href: string }[]
+  expect(entries.map(e => e.href)).toEqual(['#/', ...HOST_ENTRIES.map(e => e.href)])
+})

@@ -81,11 +81,13 @@ test('the Workspace dock sits inside <c-wires>, which has the host runtime and t
   expect(wires.flipped).toBe(true)
 })
 
-test('the nav has a Workspaces group with + and Main, and no component items; Main is a drawer beside its dock', () => {
+test('the nav has a Workspaces group with +, no Overview/Main/Components/Settings links; the workspace is a drawer beside an empty dock', () => {
   const group = document.querySelector('app-shell > [data-workspaces]')!
   expect(group.querySelector('a')!.getAttribute('href')).toBe('#/workspace')
   expect(group.querySelector('button[data-new-workspace]')).not.toBeNull()
-  expect(group.nextElementSibling!.textContent!.trim()).toBe('Main')
+  expect([...document.querySelectorAll('a[slot="nav"]')].map(a => a.getAttribute('href')).filter(h => ['#/', '#/components', '#/settings'].includes(h!))).toEqual([])
+  expect(document.querySelector('[data-main]')).toBeNull()
+  expect(document.querySelector('workspace-dock#workspace')!.getAttribute('open')).toBe('')
   expect([...document.querySelectorAll('a[slot="nav"]')].filter(a => a.textContent!.trim().startsWith('+'))).toEqual([])
   expect(document.querySelector('app-route[path="/workspace"] .ws-page > component-drawer')!.getAttribute('for')).toBe('workspace')
 })
@@ -136,14 +138,14 @@ test('the host defines <c-sandboxed>, which dock panels of sandboxed kinds use',
 
 const route = (path: string) => document.querySelector(`app-route[path="${path}"]`)!
 
-test('the app bar holds <nano-profile> showing Systems and Themes, and no theme picker', async () => {
+test('the app bar holds <nano-profile> showing Components, Settings, Systems and Themes, and no theme picker', async () => {
   const el = document.querySelector('[slot="actions"]') as any
   expect(el.localName).toBe('nano-profile')
   expect(!!document.querySelector('[slot="actions"] theme-picker, theme-picker[slot="actions"]')).toBe(false)
   await el.updateComplete
   el.shadowRoot.querySelector('button').click(); await el.updateComplete
   const links = [...el.shadowRoot.querySelectorAll('nav a')].map((a: any) => [a.textContent, a.getAttribute('href')])
-  expect(links).toEqual([['Systems', '#/systems'], ['Themes', '#/themes']])
+  expect(links).toEqual([['Components', '#/components'], ['Settings', '#/settings'], ['Systems', '#/systems'], ['Themes', '#/themes']])
 })
 
 test('the sidebar has no Systems link; #/systems still exists', () => {
