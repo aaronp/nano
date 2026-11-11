@@ -18,14 +18,15 @@ export class FileMenuEl extends LitElement {
   static properties = { open: { state: true }, dirty: { type: Boolean } }
   static styles = [base, css`
     :host { display: inline-block; position: relative }
-    button { font: inherit; color: var(--nano-fg, #E6EAF0); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 4px 10px; cursor: pointer }
-    button:hover:not(:disabled) { background: var(--nano-surface-2, #222933) }
+    button { font: inherit; color: inherit; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 4px 10px; cursor: pointer }
+    button:hover:not(:disabled) { background: color-mix(in srgb, currentColor 12%, transparent) }
     button:focus-visible { outline: 2px solid var(--nano-accent, #8FB3FF); outline-offset: 2px }
     button:disabled { opacity: 0.5; cursor: default }
     .panel { position: absolute; left: 0; top: calc(100% + 4px); z-index: 10; min-width: 10rem; display: flex; flex-direction: column; padding: 4px;
       background: var(--nano-surface, #131820); border: 1px solid var(--nano-border, #2A303C); border-radius: 8px }
     .panel[hidden] { display: none }
-    .panel button { justify-content: flex-start; gap: 8px; border: 0 }
+    .panel button { justify-content: flex-start; gap: 8px; border: 0; color: var(--nano-fg, #E6EAF0) }
+    .panel button:hover:not(:disabled) { background: var(--nano-surface-2, #222933) }
     .panel svg { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }`]
   declare open: boolean
   declare dirty: boolean
