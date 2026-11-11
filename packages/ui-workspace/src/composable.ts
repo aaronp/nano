@@ -21,7 +21,7 @@ import { defineSandboxed, provideDeploy } from './sandbox/sandboxed-el.ts'
 import { deploy, deployIn, type AppCatalog, type Mode } from './sandbox/deploy.ts'
 
 /** Every kind of component this host offers: its packages' catalogs, merged. Add a package, add its catalog. */
-export const catalog: AppCatalog = Object.fromEntries(Object.entries({ ...bundle, ...editor, ...shell } as Catalog).map(([k, e]) => [k, { ...e, modes: ['host'] as Mode[], trust: 'trusted' as const, ...(k === 'map' || k === 'filter' ? { code: true } : {}) }]))
+export const catalog: AppCatalog = Object.fromEntries(Object.entries({ ...bundle, ...editor, ...shell } as Catalog).map(([k, e]) => [k, { ...e, modes: ['host'] as Mode[], trust: 'trusted' as const, ...(k === 'map' || k === 'filter' ? { code: ['setCode', 'configure'] } : {}) }]))
 
 /** The page's runtime and its registry, `host`. */
 export const host = Runtimes.create(Registries.create('host'))

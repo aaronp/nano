@@ -45,16 +45,17 @@ export async function snapshotApp({ host, stores }: { host: Runtime; stores: Sto
     const rt = snap.id === host.registry.id ? host : runtimeOf(host.registry, snap.id)
     const viewOwned = new Set(snap.instances.filter(i => i.owner?.kind === 'view').map(i => i.id))
     const live = new Set(snap.instances.map(i => i.id))
-    const instances: NanoApp['systems'][number]['instances'] = []
-    for (const i of snap.instances) {
+    // each instance's config is read at once: N hung frames cost one wait, not N
+    const found = await Promise.all(snap.instances.map(async i => {
       const kind = kindOf.get(i.component)
-      if (RESERVED(i.id) || viewOwned.has(i.id) || !kind) continue   // the host's own, a view's listener, or something no kind can recreate
+      if (RESERVED(i.id) || viewOwned.has(i.id) || !kind) return undefined   // the host's own, a view's listener, or something no kind can recreate
       const l = i.labels ?? {}, mode = l['nano/deploy'], allow = list(l['nano/allow']), deny = list(l['nano/deny'])
       const hasConfig = i.ops.some(o => Ops.key(o) === `${i.component}/config`)
       const config = hasConfig && rt ? await value(rt, from, i.id, `${i.component}/config`) : undefined
-      instances.push({ id: i.id, kind, ...(mode === 'host' || mode === 'sandbox' || mode === 'isolated-sandbox' ? { mode } : {}),
-        ...(allow && { allow }), ...(deny && { deny }), ...(config !== undefined && { config }) })
-    }
+      return { id: i.id, kind, ...(mode === 'host' || mode === 'sandbox' || mode === 'isolated-sandbox' ? { mode } : {}),
+        ...(allow && { allow }), ...(deny && { deny }), ...(config !== undefined && { config }) } as NanoApp['systems'][number]['instances'][number]
+    }))
+    const instances = found.filter(x => x !== undefined)
     const written = new Set(instances.map(i => i.id))
     const known = (x: string) => written.has(x) || (RESERVED(x) && live.has(x))
     const subscriptions = snap.subscriptions

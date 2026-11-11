@@ -109,3 +109,62 @@ test('a failed import is a note, its kinds are skipped, the rest loads; an unkno
   expect(notes).toEqual(expect.arrayContaining([expect.stringContaining('offline'), expect.stringContaining('unknown theme nope'), expect.stringContaining('no component kind quux')]))
   expect(a.st.theme.theme).toBe('enterprise'); expect(a.host.registry.get('l')).toBeDefined(); expect(a.st.imports).toEqual([])
 })
+
+const sys = (instances: NanoApp['systems'][number]['instances'], subscriptions: NanoApp['systems'][number]['subscriptions'] = []): NanoApp => ({ ...doc, imports: [], workspaces: [], systems: [{ id: 'host', instances, subscriptions }] })
+
+test('a configure on a sandbox frame that never answers is a note, and apply finishes', async () => {
+  const a = await fresh()
+  const t = Date.now()
+  const notes = await applyApp(sys([{ id: 'b1', kind: 'boxed', mode: 'isolated-sandbox', config: {} }, { id: 'l', kind: 'log' }]), 'replace', { ...a.deps, waits: { configure: 50 } })
+  expect(notes).toEqual([expect.stringContaining('host/b1 configure: configure timed out')])
+  expect(Date.now() - t).toBeLessThan(2000)
+  expect(a.host.registry.get('l')).toBeDefined()
+}, 3000)
+
+test('an import that never answers or rejects is a note', async () => {
+  const a = await fresh()
+  const hang = await applyApp({ ...doc, systems: [], workspaces: [] }, 'replace', { ...a.deps, importPackage: () => new Promise(() => {}), waits: { import: 50 } })
+  expect(hang).toEqual([expect.stringContaining('timed out')])
+  const rej = await applyApp({ ...doc, systems: [], workspaces: [] }, 'replace', { ...a.deps, importPackage: async () => { throw new Error('boom') } })
+  expect(rej).toEqual([expect.stringContaining('boom')])
+}, 3000)
+
+const feed = [{ id: 'm0', kind: 'map' as const }, { id: 'm1', kind: 'map' as const, mode: 'host' as const }]
+const into = (op: { ns: string; name: string }) => [{ source: 'm0', op: Ops.key(op === MapC.ops.setCode ? MapC.ops.code : MapC.ops.config), listener: 'm1', target: Ops.key(op) }]
+
+test('a subscription into setCode/configure of a code kind needs consent, in a new system and in a merge', async () => {
+  const a = await fresh()
+  for (const op of [MapC.ops.setCode, MapC.ops.configure]) {
+    const rt = () => a.host.registry.snapshot().subscriptions.filter(s => s.target === Ops.key(op))
+    const notes = await applyApp(sys(feed, into(op)), 'replace', { ...a.deps, consentCode: () => false })
+    expect(notes.some(n => n.includes('feeds code'))).toBe(true)
+    expect(rt()).toHaveLength(0)
+    await applyApp(sys([], into(op)), 'merge', { ...a.deps, consentCode: () => false })   // into the existing m1
+    expect(rt()).toHaveLength(0)
+    expect(await applyApp(sys([], into(op)), 'merge', { ...a.deps, consentCode: (_s, i) => i === 'm1' })).toEqual([])
+    expect(rt()).toHaveLength(1)
+    a.host.registry.unsubscribe(rt()[0]!.id)
+  }
+})
+
+test('a "*" source subscription round-trips', async () => {
+  const a = await fresh()
+  await applyApp(sys([{ id: 'l1', kind: 'log' }]), 'replace', a.deps)
+  a.host.registry.subscribe({ source: '*', op: Ops.key(Range.ops.value), listener: 'l1', target: 'composable.bundle/log/info' })
+  const snap = await snapshotApp({ host: a.host, stores: a.stores })
+  expect(snap.systems[0]!.subscriptions).toHaveLength(1)
+  const b = await fresh()
+  expect(await applyApp(snap, 'replace', b.deps)).toEqual([])
+  expect(await snapshotApp({ host: b.host, stores: b.stores })).toEqual(snap)
+})
+
+test('applyApp always resolves: a throwing consent, throwing stores and a throwing host become notes', async () => {
+  const a = await fresh()
+  const boom = () => { throw new Error('quota') }
+  const stores = { ...a.stores, title: { get: () => '', set: boom }, theme: { get: () => ({ theme: 'enterprise', mode: 'system' }) as never, set: boom }, imports: { list: () => [], set: boom }, workspaces: { list: () => [], set: boom }, layouts: { get: () => null, set: boom } }
+  const notes = await applyApp(doc, 'replace', { ...a.deps, stores, consentCode: boom })
+  for (const w of ['title', 'theme', 'imports', 'workspaces', 'layout of /lab']) expect(notes.some(n => n.startsWith(w + ': quota'))).toBe(true)
+  expect(notes.some(n => n.includes('m1') && n.includes('not agreed'))).toBe(true)   // consent that throws is no consent
+  const dead = await applyApp(doc, 'replace', { ...a.deps, host: { ...a.host, call: () => { throw new Error('gone') } } as never })
+  expect(Array.isArray(dead)).toBe(true)
+})

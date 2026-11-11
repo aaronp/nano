@@ -1,6 +1,7 @@
 // A host for the snapshot/apply tests: a runtime with the platform over a catalog (bundle, shell's profile, and a
 // sandboxed-only kind), a built-in profile and example, and in-memory stores.
 import { Components, Ops, Registries, Runtimes } from '@pritzlaff/nano-core'
+import { Type } from 'typebox'
 import { component } from '@pritzlaff/nano-runes'
 import { catalog as bundle } from '@composable/bundle'
 import { catalog as shell, Profile } from '@composable/shell'
@@ -11,8 +12,8 @@ import type { Stores } from '../../src/app/snapshot'
 export const tick = (ms = 0) => new Promise(r => setTimeout(r, ms))
 
 export function appHost() {
-  const catalog: AppCatalog = Object.fromEntries(Object.entries({ ...bundle, ...shell }).map(([k, e]) => [k, { ...e, modes: ['host'] as Mode[], trust: 'trusted' as const, ...(k === 'map' || k === 'filter' ? { code: true } : {}) }]))
-  catalog.boxed = { component: component('t.test/boxed', () => ({}), {}), title: 'Boxed', modes: ['isolated-sandbox'], trust: 'sandboxed', source: { url: 'https://x.test/p.js' } }
+  const catalog: AppCatalog = Object.fromEntries(Object.entries({ ...bundle, ...shell }).map(([k, e]) => [k, { ...e, modes: ['host'] as Mode[], trust: 'trusted' as const, ...(k === 'map' || k === 'filter' ? { code: ['setCode', 'configure'] } : {}) }]))
+  catalog.boxed = { component: component('t.test/boxed', () => ({ configure: (_: unknown) => {} }), { configure: { in: Type.Unknown(), description: 'Takes anything' } }), title: 'Boxed', modes: ['isolated-sandbox'], trust: 'sandboxed', source: { url: 'https://x.test/p.js' } }
   const host = Runtimes.create(Registries.create('host'))
   const deployed: { id: string; mode: string }[] = []
   const open = (() => ({ port: new MessageChannel().port1, ready: new Promise<void>(() => {}), dispose() {} })) as never

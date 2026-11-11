@@ -8,7 +8,7 @@ import { standIn } from './stand-in'
 
 export type Mode = 'host' | 'sandbox' | 'isolated-sandbox'
 /** A catalog entry the app holds: the element's, with its trust, the modes it may be deployed in (the first is the default) and the package module it came from. */
-export type AppEntry = CatalogEntry & { modes: Mode[]; trust: 'trusted' | 'sandboxed'; source?: { url: string }; /** its `config` is JavaScript that runs where the instance runs (map, filter): a document's needs consent */ code?: boolean }
+export type AppEntry = CatalogEntry & { modes: Mode[]; trust: 'trusted' | 'sandboxed'; source?: { url: string }; /** names of the ops that take JavaScript, which runs where the instance runs (map, filter: setCode, configure): a document needs consent to use them */ code?: string[] }
 export type AppCatalog = Record<string, AppEntry>
 export type DeployStrategy = (kind: string, mode: Mode) => Component
 
