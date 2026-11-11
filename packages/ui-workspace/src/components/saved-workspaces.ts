@@ -42,7 +42,6 @@ export function mountWorkspace(doc: Document, ws: SavedWorkspace) {
   if (mainWires) Object.assign(wires, { runtime: rt, host, catalog: mainWires.catalog });
   if (rt) Object.assign(dock, { registry: rt.registry });
   dock.id = id;
-  dock.setAttribute('label', ws.title);
   dock.setAttribute('storage-key', keyFor(doc, ws.path));
   dock.setAttribute('system', ws.system ?? 'host');
   dock.setAttribute('open', '');   // a new workspace starts empty; a saved layout, if any, wins

@@ -16,3 +16,4 @@ import './components/theme-picker.ts';
 import './widgets/widgets.ts';
 import './widgets/notes-panel.ts';
 import './components/workspace-dock.ts';
+import './boot-app-bar.ts';   // after the shell (its bus) and the dock: the app bar follows the page and panel focus

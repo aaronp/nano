@@ -4,6 +4,7 @@
  *   <app-shell>
  *     <span slot="title">Name</span>              app bar title
  *     <nano-file-menu slot="title-actions">      beside the title
+ *     <nano-app-bar name="app" slot="title-actions"> after it: the page's or focused panel's controls (the app bar sits above the content, so their menus aren't covered)
  *     <nano-profile name="profile" slot="actions"></nano-profile> app bar controls (right side)
  *     <a slot="nav" href="#/workspace">Workspace</a>       one per page, in order (icons welcome)
  *     <a slot="nav" data-sub href="…">…</a>        a sub-item listed under the item before it
@@ -37,14 +38,14 @@ export class AppShell extends LitElement {
   static override styles = css`
     :host { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100vh; height: 100dvh; background: var(--bg); color: var(--fg);
       font: 15px/1.5 var(--font); }
-    .bar { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 12px 0 6px; background: var(--appbar-bg); color: var(--appbar-fg);
+    .bar { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 12px 0 6px; background: var(--appbar-bg); color: var(--appbar-fg);
       border-bottom: 1px solid var(--line); }
     .bar ::slotted([slot='title']) { flex: 0 1 auto; min-width: 0; margin: 0; font: 600 18px/1.2 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .spacer { flex: 1; }
     .menu { flex: none; width: 44px; height: 44px; border: 0; border-radius: var(--radius); background: transparent; color: inherit; display: grid; place-items: center; cursor: pointer; }
     .menu:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
     button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-    .frame { display: grid; grid-template-columns: auto minmax(0, 1fr); min-height: 0; }
+    .frame { isolation: isolate; display: grid; grid-template-columns: auto minmax(0, 1fr); min-height: 0; }
     .content { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
     main { overflow: auto; padding: 24px; min-height: 0; }
     ::slotted(app-route) { display: block; }

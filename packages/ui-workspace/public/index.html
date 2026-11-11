@@ -33,6 +33,7 @@
 <app-shell>
   <span slot="title">Nano</span>
   <nano-file-menu slot="title-actions"></nano-file-menu>
+  <nano-app-bar name="app" slot="title-actions"></nano-app-bar>
   <nano-profile name="profile" slot="actions"></nano-profile>
 
   <!-- Navigation: one link per <app-route> below, in order. -->
@@ -104,7 +105,7 @@
     </header>
     <section class="panel">
       <h2>Layout</h2>
-      <p>Resizable areas remember their sizes, and the workspace remembers a layout when you press Save layout.</p>
+      <p>Resizable areas remember their sizes, and the workspace remembers a layout when you press Save layout in the app bar.</p>
       <button type="button" class="btn" id="reset-splits">Forget pane sizes and the saved workspace</button>
     </section>
   </app-route>
