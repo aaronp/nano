@@ -165,3 +165,20 @@ test('the profile instance is in the host system, owned by the platform, labelle
   expect(host.registry.snapshot().instances.filter(i => i.id === 'profile')).toHaveLength(1)
   expect((await call('profile', Profile.ops.user)).value).toEqual({ name: 'You' })
 })
+
+test('the host has no Inbox: no #/inbox route, nav link, mail widgets or Messages dock widget', async () => {
+  expect(!!document.querySelector('app-route[path="/inbox"]')).toBe(false)
+  expect(!!document.querySelector('a[href="#/inbox"]')).toBe(false)
+  expect(!!document.querySelector('template[data-widget="messages"]')).toBe(false)
+  const widgets = await Bun.file(new URL('../src/widgets/widgets.ts', import.meta.url)).text()
+  expect(/mail-|Mail(Folders|List|Reader)|mail:/.test(widgets)).toBe(false)
+})
+
+test('a saved layout naming "messages" is ignored: the dock keeps only layouts whose widgets it still has, so the default workspace opens', async () => {
+  // (golden-layout needs a browser, so this checks what <workspace-dock>.readSaved checks: panelIds against the page's templates)
+  const { panelIds } = await import('../src/lib/dock-layout.ts')
+  const has = new Set([...document.querySelectorAll('#workspace > template')].map(t => (t as HTMLElement).dataset.widget))
+  const saved = { type: 'stack', content: [{ type: 'component', componentState: { widget: 'notes' } }, { type: 'component', componentState: { widget: 'messages' } }] }
+  expect(panelIds(saved as never).filter(id => !has.has(id))).toEqual(['messages'])
+  expect(has.has('notes') && has.has('activity')).toBe(true)
+})

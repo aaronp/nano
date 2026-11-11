@@ -40,7 +40,6 @@
   <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspaces</a><button type="button" data-toggle-drawer aria-pressed="true" aria-label="Components drawer" title="Show or hide the components drawer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM9 4v16"/></svg></button><button type="button" data-new-workspace aria-label="New workspace" title="New workspace">+</button></div>
   <a slot="nav" data-sub href="#/workspace">Main</a>
   <a slot="nav" href="#/components"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM16.5 13v7M13 16.5h7"/></svg>Components</a>
-  <a slot="nav" href="#/inbox"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 13h5l2 3h4l2-3h5"/></svg>Inbox</a>
   <a slot="nav" href="#/settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Settings</a>
   <div slot="drawer-footer" class="drawer-foot">Nano · v0.1</div>
   <status-line slot="footer"></status-line>
@@ -71,15 +70,6 @@
     </split-pane>
   </app-route>
 
-  <!-- Inbox: three resizable columns that fill the page. -->
-  <app-route path="/inbox" bleed>
-    <split-pane direction="row" sizes="18,32,50" min="160" collapse-below="700" storage-key="inbox">
-      <mail-folders></mail-folders>
-      <mail-list></mail-list>
-      <mail-reader></mail-reader>
-    </split-pane>
-  </app-route>
-
   <!-- Workspace: a golden-layout dock. Each <template> is a widget the drawer can add. -->
   <app-route path="/workspace" bleed>
     <!-- The components drawer beside the dock; <c-wires> tilts the live dock to show the connections behind it. -->
@@ -90,7 +80,6 @@
         <template data-widget="notes" data-title="Notes"><notes-panel></notes-panel></template>
         <template data-widget="chart" data-title="Chart" data-flush><line-chart style="border:0;border-radius:0;box-shadow:none"></line-chart></template>
         <template data-widget="metrics" data-title="Metrics"><div class="cards"><stat-card index="0"></stat-card><stat-card index="1"></stat-card><stat-card index="2"></stat-card><stat-card index="3"></stat-card></div></template>
-        <template data-widget="messages" data-title="Messages" data-flush><mail-list></mail-list></template>
         <template data-widget="activity" data-title="Activity"><bus-log limit="40"></bus-log></template>
         <!-- @composable components, added at runtime: each panel places a new instance and removes it on close.
              composable.ts adds one per catalog kind that has an element, before these. -->
