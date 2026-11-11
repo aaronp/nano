@@ -49,7 +49,7 @@ await wire('ex-map', Map.ops.mapped, 'ex-log', Log.ops.info)
 const set = (id: string, op: Op, arg: unknown) => host.call({ registry: 'host', instance: 'workspace' }, id, Ops.key(op), arg)
 await set('ex-map', Map.ops.setCode, 'return x * 2')
 await set('ex-input', Input.ops.setKind, 'number')
-await set('profile', Profile.ops.setUser, { name: 'Nano' })
+await set('profile', Profile.ops.setUser, { name: 'You' })
 await set('profile', Profile.ops.setEntries, [{ label: 'Systems', href: '#/systems' }, { label: 'Themes', href: '#/themes' }])
 
 // The dock can add every kind that has an element: a panel template each (marked as the catalog's, for the components

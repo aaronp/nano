@@ -6,6 +6,7 @@ import { expect, test } from 'bun:test'
 const { Ops } = await import('@pritzlaff/nano-core')
 const { Debounce, Log, Range } = await import('@composable/bundle')
 const { PlatformOps: P } = await import('@composable/platform')
+const { Profile } = await import('@composable/shell')
 await import('../src/boot-theme.ts')   // as main.ts does first: the theme is on <html> before any element upgrades
 const page = await Bun.file(new URL('../public/index.html', import.meta.url)).text()
 // the page first, as in a browser (module scripts run after parsing): composable.ts adds the dock's entries to it
@@ -156,10 +157,11 @@ test('#/themes has the theme cards; Settings keeps Layout and no theme picker', 
   expect(!!route('/settings').querySelector('#reset-splits')).toBe(true)
 })
 
-test('the profile instance is in the host system, owned by the app, labelled nano/deploy host', async () => {
+test('the profile instance is in the host system, owned by the platform, labelled nano/deploy host', async () => {
   const [hostSystem] = (await call('platform', P.systems)).value
   const p = hostSystem.instances.find((i: any) => i.id === 'profile')
   expect(p.owner).toEqual({ kind: 'platform', name: 'platform' })   // as the ex-* examples: made through the app's platform
   expect(p.labels['nano/deploy']).toBe('host')
   expect(host.registry.snapshot().instances.filter(i => i.id === 'profile')).toHaveLength(1)
+  expect((await call('profile', Profile.ops.user)).value).toEqual({ name: 'You' })
 })
