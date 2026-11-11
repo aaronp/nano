@@ -128,3 +128,7 @@ test('the example wiring still connects, with every op typed and described', () 
   const wired = host.registry.snapshot().subscriptions.filter(s => !s.listener.includes('~view') && s.listener !== 'kinds-spy')
   expect(wired.map(s => `${s.source}→${s.listener}`).sort()).toEqual(['ex-debounce→ex-log', 'ex-input→ex-map', 'ex-map→ex-log', 'ex-range→ex-debounce'])
 })
+
+test('the host defines <c-sandboxed>, which dock panels of sandboxed kinds use', () => {
+  expect(!!customElements.get('c-sandboxed')).toBe(true)
+})

@@ -16,7 +16,7 @@ import type { Catalog } from '@pritzlaff/nano-elements'
 import { definePlatform, definePlatformTable, platform, PlatformOps as P } from '@composable/platform'
 import { defineElements as defineEditor } from '@composable/editor/elements'
 import { defineWires } from '@composable/wires'
-import { provideDeploy } from './sandbox/sandboxed-el.ts'
+import { defineSandboxed, provideDeploy } from './sandbox/sandboxed-el.ts'
 import { deploy, deployIn, type AppCatalog, type Mode } from './sandbox/deploy.ts'
 
 /** Every kind of component this host offers: its packages' catalogs, merged. Add a package, add its catalog. */
@@ -90,7 +90,7 @@ document.addEventListener('wires:open-panel', e => {
 })
 
 defineBundle()
-definePlatform(); definePlatformTable()
+definePlatform(); definePlatformTable(); defineSandboxed()
 defineEditor()
 defineWires()
 // the wiring view over the Workspace dock: it shows and edits the host system, and offers the merged catalog
