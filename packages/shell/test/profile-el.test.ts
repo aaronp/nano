@@ -34,10 +34,10 @@ test('a javascript: avatar shows initials', async () => {
 test('the button opens the menu (aria-expanded true) listing entries as links in order', async () => {
   const el = await place('c', { name: 'Cy' }, [{ label: 'Systems', href: '#/systems' }, { label: 'Themes', href: '#/themes' }])
   const btn = q(el, 'button')
-  expect(btn.getAttribute('aria-haspopup')).toBe('menu'); expect(btn.getAttribute('aria-expanded')).toBe('false')
+  expect(btn.hasAttribute('aria-haspopup')).toBe(false); expect(btn.getAttribute('aria-controls')).toBe(q(el, 'nav')!.id); expect(btn.getAttribute('aria-expanded')).toBe('false')
   btn.click(); await settle(el)
   expect(btn.getAttribute('aria-expanded')).toBe('true')
-  const links = [...el.shadowRoot!.querySelectorAll('[role=menu] a')] as HTMLAnchorElement[]
+  const links = [...el.shadowRoot!.querySelectorAll('nav a')] as HTMLAnchorElement[]
   expect(links.map(a => [a.textContent!.trim(), a.getAttribute('href')])).toEqual([['Systems', '#/systems'], ['Themes', '#/themes']])
 })
 
@@ -45,10 +45,24 @@ test('Escape closes and focus returns to the button; a click outside closes', as
   const el = await place('d', { name: 'Di' }, [{ label: 'Systems', href: '#/systems' }])
   const btn = q(el, 'button')
   btn.click(); await settle(el)
-  ;(q(el, '[role=menu] a') as HTMLElement).focus()
-  q(el, '[role=menu]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true })); await settle(el)
+  ;(q(el, 'nav a') as HTMLElement).focus()
+  q(el, 'nav').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true })); await settle(el)
   expect(btn.getAttribute('aria-expanded')).toBe('false'); expect(el.shadowRoot!.activeElement).toBe(btn)
   btn.click(); await settle(el)
   document.body.dispatchEvent(new MouseEvent('click', { bubbles: true })); await settle(el)
+  expect(btn.getAttribute('aria-expanded')).toBe('false')
+})
+
+test('Escape with focus on the button closes the menu and keeps focus there', async () => {
+  const el = await place('e', { name: 'Ed' }, [{ label: 'Systems', href: '#/systems' }])
+  const btn = q(el, 'button'); btn.click(); await settle(el); btn.focus()
+  btn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true })); await settle(el)
+  expect(btn.getAttribute('aria-expanded')).toBe('false'); expect(el.shadowRoot!.activeElement).toBe(btn)
+})
+
+test('focus leaving the component closes the menu', async () => {
+  const el = await place('f', { name: 'Fy' }, [{ label: 'Systems', href: '#/systems' }])
+  const btn = q(el, 'button'); btn.click(); await settle(el)
+  btn.dispatchEvent(new FocusEvent('focusout', { bubbles: true, composed: true, relatedTarget: document.body })); await settle(el)
   expect(btn.getAttribute('aria-expanded')).toBe('false')
 })

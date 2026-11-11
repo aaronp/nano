@@ -36,3 +36,12 @@ test('safeAvatar keeps https and data:image, drops the rest', () => {
   expect(safeAvatar('data:image/png;base64,AAAA')).toBe('data:image/png;base64,AAAA')
   for (const u of ['javascript:alert(1)', 'data:text/html,<b>', '', undefined]) expect(safeAvatar(u)).toBeUndefined()
 })
+
+test('setEntries refuses hrefs that are not #, /, http(s): or mailto:', async () => {
+  const { add, call, value } = page(); add('p', Profile)
+  for (const href of ['javascript:alert(1)', ' JavaScript:x', 'data:text/html,x', 'vbscript:x'])
+    expect('error' in await call('p', Profile.ops.setEntries, [{ label: 'a', href }])).toBe(true)
+  const ok = ['#/x', '/x', 'https://x.test', 'HTTP://x.test', 'mailto:a@b.c'].map(href => ({ label: 'a', href }))
+  await call('p', Profile.ops.setEntries, ok)
+  expect(await value('p', Profile.ops.entries)).toEqual(ok)
+})

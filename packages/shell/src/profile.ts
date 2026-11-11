@@ -12,6 +12,9 @@ export const initials = (name: string): string =>
 /** The avatar URL if it is an http(s) or data:image/ one, else undefined: anything else (javascript:) never reaches `src`. */
 export const safeAvatar = (url?: string): string | undefined => (url && /^(https?:\/\/|data:image\/)/i.test(url) ? url : undefined)
 
+/** Whether a link target is safe to follow: #…, /…, http(s): or mailto: (anything else, javascript: above all, is not). */
+const safeHref = (href: string) => /^(#|\/|https?:|mailto:)/i.test(href.trim())
+
 const User_ = Type.Object({
   name: Type.String({ maxLength: 80, description: 'The name shown (and whose initials stand in for a missing avatar)', examples: ['Ada Lovelace'] }),
   avatar: Type.Optional(Type.String({ maxLength: 100_000, description: 'An image URL (https: or data:image/); without one the initials show', examples: ['https://example.com/ada.png'] })),
@@ -27,11 +30,15 @@ export const Profile = component('nano.shell/profile', () => {
   return {
     get user() { return s.user }, get entries() { return s.entries },
     setUser: (user: User) => { s.user = user },
-    setEntries: (entries: Entry[]) => { s.entries = entries },
+    setEntries: (entries: Entry[]) => {
+      const bad = entries.find(e => !safeHref(e.href))
+      if (bad) throw new Error(`href ${JSON.stringify(bad.href)} must start with #, /, http:, https: or mailto:`)
+      s.entries = entries
+    },
   }
 }, {
   user: User_,
   entries: Entries,
   setUser: { in: User_, description: 'Replaces the user' },
-  setEntries: { in: Entries, description: 'Replaces the menu entries' },
+  setEntries: { in: Entries, description: 'Replaces the menu entries; refuses an href that is not #…, /…, http(s): or mailto:' },
 }, { description: 'A user and the menu of links under their avatar' })
