@@ -115,6 +115,53 @@ describe('sandbox protocol', () => {
     expect(later).toEqual({ error: 'box: boom' })
   })
 
+  test('a failed message while ready is pending fails the waiting call', async () => {
+    const d = deferred(), h = host(d.p)
+    const p = h.call('t/double', 1)
+    h.far.postMessage({ type: 'failed', error: 'bad module' })
+    expect(await p).toEqual({ error: 'box: bad module' })
+    expect(await h.call('t/double', 1)).toEqual({ error: 'box: bad module' })
+  })
+
+  test('a ready message releases waiting calls while frame.ready is pending', async () => {
+    const d = deferred(), h = host(d.p), got: Msg[] = []
+    h.far.onmessage = e => got.push(e.data)
+    const p = h.call('t/double', 1)
+    h.far.postMessage({ type: 'ready' })
+    await new Promise(r => setTimeout(r, 20))
+    expect(got).toEqual([{ type: 'call', id: 1, op: 't/double', arg: 1 }])
+    h.far.postMessage({ type: 'result', id: 1, result: { value: 2 } })
+    expect(await p).toEqual({ value: 2 })
+  })
+
+  test('a schema that makes the check throw resolves the call with an error and drops the publish', async () => {
+    const warn = quiet(), ch = channel(), rt = Runtimes.create(Registries.create('h')), traces: Trace[] = []
+    rt.listen(t => traces.push(t))
+    const evil = { ...entry, ops: [{ ...entry.ops.find(o => o.name === 'double')!, output: { type: 'string', pattern: '(' } }, ...entry.ops.filter(o => o.name === 'tick').map(o => ({ ...o, output: { type: 'string', pattern: '(' } }))] }
+    rt.registry.add('box', Components.instantiate(standIn(evil as never, () => ({ port: ch.port1, ready: Promise.resolve(), dispose: () => {} }))))
+    ch.port2.onmessage = e => ch.port2.postMessage({ type: 'result', id: e.data.id, result: { value: 'a' } })
+    const r = await rt.call({ registry: 'h', instance: 't' }, 'box', 't/double', 1)
+    expect(isOk(r)).toBe(false)
+    ch.port2.postMessage({ type: 'publish', op: 't/tick', data: 'a' })
+    await rt.call({ registry: 'h', instance: 't' }, 'box', 't/double', 1)
+    expect(traces.some(t => t.kind === 'publish' && t.op === 't/tick')).toBe(false)
+    warn.mockRestore()
+  })
+
+  test('after a failure publish and outcall messages are ignored', async () => {
+    const warn = quiet(), h = host()
+    h.far.postMessage({ type: 'failed', error: 'x' })
+    h.far.postMessage({ type: 'publish', op: 't/tick', data: 1 })
+    h.far.postMessage({ type: 'outcall', id: 1, target: 'other', op: 'x/y/twice', arg: 1 })
+    const got: Msg[] = []
+    h.far.onmessage = e => got.push(e.data)
+    await new Promise(r => setTimeout(r, 20))
+    await h.call('t/double', 1)
+    expect(h.traces.some(t => t.kind === 'publish' && t.op === 't/tick')).toBe(false)
+    expect(got).toEqual([])
+    warn.mockRestore()
+  })
+
   test('probe posts the catalog as data and checkEntry accepts it', async () => {
     const ch = channel()
     probe(ch.port2, catalog)
@@ -127,6 +174,7 @@ describe('sandbox protocol', () => {
 
   test('checkEntry rejects malformed entries', () => {
     for (const bad of [null, 'x', {}, { ...entry, id: { ns: 1, name: 'a' } }, { ...entry, title: 3 }, { ...entry, tag: 3 }, { ...entry, ops: 'no' },
-      { ...entry, ops: [{ ns: 't' }] }, { ...entry, ops: [{ ns: 't', name: 'a', input: 'str' }] }]) expect(typeof checkEntry(bad)).toBe('string')
+      { ...entry, ops: [{ ns: 't' }] }, { ...entry, ops: [{ ns: 't', name: 'a', input: 'str' }] },
+      { ...entry, ops: [{ ns: 't', name: '' }] }, { ...entry, ops: [{ ns: 't', name: 'a/b' }] }, { ...entry, ops: [{ ns: 't', name: 'a' }, { ns: 't', name: 'a' }] }]) expect(typeof checkEntry(bad)).toBe('string')
   })
 })

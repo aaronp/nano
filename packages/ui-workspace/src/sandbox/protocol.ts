@@ -34,8 +34,12 @@ export function checkEntry(x: unknown): SerialEntry | string {
   if (typeof x.title !== 'string') return 'entry title is not a string'
   if (!optStr(x.tag) || !optStr(x.description)) return 'entry tag or description is not a string'
   if (!Array.isArray(x.ops)) return 'entry ops is not an array'
+  const seen = new Set<string>()
   for (const op of x.ops) {
     if (!obj(op) || typeof op.ns !== 'string' || typeof op.name !== 'string') return 'an op needs ns and name'
+    if (!op.name || op.name.includes('/')) return `op name ${op.name} must be non-empty and have no /`
+    if (seen.has(`${op.ns}/${op.name}`)) return `duplicate op ${op.ns}/${op.name}`
+    seen.add(`${op.ns}/${op.name}`)
     if (!optStr(op.description)) return `op ${op.ns}/${op.name} description is not a string`
     for (const k of ['input', 'output']) if (op[k] !== undefined && !obj(op[k])) return `op ${op.ns}/${op.name} ${k} is not a schema object`
   }
