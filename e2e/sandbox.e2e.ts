@@ -2,7 +2,7 @@
 // isolated-sandbox (opaque-origin iframe) must behave the same to their neighbours, and differ only in what they reach.
 import { expect, test, type Frame, type FrameLocator, type Locator, type Page } from '@playwright/test'
 
-const MANIFEST = 'http://localhost:5174/manifest.json'
+const MANIFEST = 'http://localhost:5210/manifest.json'   // playwright.config.ts serves the template here
 const MODES = { 'p-host': 'host', 'p-sbx': 'sandbox', 'p-iso': 'isolated-sandbox' } as const
 const CHANGED = 'nano.template/picker/changed', INFO = 'composable.bundle/log/info'
 
@@ -10,13 +10,15 @@ const platform = (page: Page) => page.locator('section.panel c-platform')
 const table = (page: Page) => page.locator('section.panel c-platform-table')
 
 async function importTemplate(page: Page, trust: 'trusted' | 'sandboxed') {
-  await page.getByRole('button', { name: 'Import', exact: true }).first().click()
+  await page.goto('/#/workspace')   // the components drawer, with Import, is on the workspace page
+  await page.locator('[data-import-open]').first().click()
   const dialog = page.getByRole('dialog', { name: 'Import components' })
   await dialog.getByLabel('Manifest URL').fill(MANIFEST)
   await dialog.locator('[data-fetch]').click()
   await dialog.locator(`input[name="trust"][value="${trust}"]`).check()
   await dialog.locator('[data-import]').click()
   await expect(dialog).toBeHidden()
+  await page.goto('/#/systems')
 }
 
 async function add(page: Page, kind: string, name: string, mode?: string) {
@@ -94,7 +96,7 @@ test('an isolated sandbox reaches nothing of the host; a same-origin one does', 
 
 test('a sandboxed import never loads the module in the host page', async ({ page }) => {
   const hostLoads: string[] = []
-  page.on('request', r => { if (r.url().startsWith('http://localhost:5174/') && r.url().endsWith('.js') && r.frame() === page.mainFrame()) hostLoads.push(r.url()) })
+  page.on('request', r => { if (r.url().startsWith('http://localhost:5210/') && r.url().endsWith('.js') && r.frame() === page.mainFrame()) hostLoads.push(r.url()) })
   await page.goto('/#/systems')
   await importTemplate(page, 'sandboxed')
 
