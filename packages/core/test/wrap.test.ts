@@ -169,3 +169,46 @@ test('wrapping a wrapper, then unwrapping twice, restores the original and its s
   await rt.call(me, 'c', Ops.key(Inc), null); await flush()
   expect(log.value).toEqual([1, 2])
 })
+
+test('a buffered call whose part is gone errors instead of hanging; map never reaches outside', async () => {
+  const { rt } = setup()
+  const w = must(wrap(rt, 'c', Strategies.buffer()))
+  await rt.call(me, 'c', Ops.key(WrapperOps.pause), null)
+  const queued = rt.call(me, 'c', Ops.key(Inc), null)
+  w.runtime.registry.remove('c')
+  await rt.call(me, 'c', Ops.key(WrapperOps.resume), null)
+  expect(isOk(await queued)).toBe(false)
+  const { rt: rt2 } = setup()
+  must(wrap(rt2, 'c', Strategies.forward, { map: { [Ops.key(Inc)]: { part: 'log', op: Ops.key(Inc) } } }))
+  expect(isOk(await rt2.call(me, 'c', Ops.key(Inc), null))).toBe(false)
+})
+
+test('a throw in the inner strategy does not wedge the buffer', async () => {
+  let n = 0
+  const b = Strategies.buffer((async () => { if (n++ === 0) throw new Error('boom'); return { value: 'ok' } }) as never)
+  const call = () => Promise.resolve({ value: null })
+  b.pause!()
+  const first = b('o', 0, ['a'], call)
+  await b.resume!()
+  expect(isOk(await first)).toBe(false)
+  expect(await b('o', 0, ['a'], call)).toEqual({ value: 'ok' })
+})
+
+test('a call to a wrapped instance resolves after its subscribers have heard', async () => {
+  const { rt, reg } = setup()
+  const slow = Components.create({ ns: 'com.acme', name: 'slow' }, () => [] as unknown[])
+  slow.action(Log, async (l, x) => { await flush(); l.push(x) })
+  const s = Components.instantiate(slow); reg.add('slow', s)
+  reg.subscribe({ source: 'c', op: Ops.key(Updated), listener: 'slow', target: Ops.key(Log) })
+  must(wrap(rt, 'c', Strategies.forward))
+  await rt.call(me, 'c', Ops.key(Inc), null)
+  expect(s.value).toEqual([1])
+})
+
+test('unwrap restores the owner it had before wrap', () => {
+  const rt = Runtimes.create(Registries.create('r'))
+  rt.registry.add('c', counter(), { kind: 'widget', name: 'w' })
+  must(wrap(rt, 'c', Strategies.forward, { owner: { kind: 'app', name: 'a' } }))
+  must(unwrap(rt, 'c'))
+  expect(rt.registry.snapshot().instances.find(i => i.id === 'c')!.owner).toEqual({ kind: 'widget', name: 'w' })
+})

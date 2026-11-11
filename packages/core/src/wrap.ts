@@ -42,14 +42,13 @@ export const Strategies = {
     const queue: (() => Promise<void>)[] = []
     // ponytail: unbounded queue, no timeout; add a cap when a long pause is real
     const s: Strategy = (op, arg, parts, call) => (paused || draining
-      ? new Promise(res => { queue.push(async () => res(await inner(op, arg, parts, call))) })
+      ? new Promise(res => { queue.push(() => inner(op, arg, parts, call).then(res, e => res(err(e instanceof Error ? e.message : String(e))))) })
       : inner(op, arg, parts, call))
     s.pause = () => { paused = true }
     s.resume = async () => {
       if (draining) return
       paused = false; draining = true
-      while (queue.length) await queue.shift()!()
-      draining = false
+      try { while (queue.length) await queue.shift()!() } finally { draining = false }
     }
     return s
   },
@@ -63,7 +62,7 @@ export const WrapperOps = {
   parts: Ops.action('composable/wrapper', 'parts', Type.Null({ description: 'Nothing' }), Type.Array(Type.String(), { description: 'The part ids, in order added' }), { description: "The wrapper's parts" }),
 }
 
-type Wrapper = HasRuntime & { strategy: Strategy }
+type Wrapper = HasRuntime & { strategy: Strategy; owner?: Owner }
 const partsOf = (rt: Runtime) => rt.registry.snapshot().instances.map(i => i.id).filter(i => i !== 'registry')
 
 /** Puts a wrapper at `id`, with the instance that was there as its one part (under the same id). */
@@ -76,16 +75,23 @@ export function wrap(outer: Runtime, id: string, strategy: Strategy, opts: { map
     ...rt,
     call: (f, t, op, arg) => (t === 'registry' || !rt.registry.get(t) ? outer.call(from, t, op, arg) : rt.call(f, t, op, arg)),
   }))
-  const call: Call = (part, op, arg) => inner.call(from, part, op, arg)
+  const call: Call = (part, op, arg) => (part !== 'registry' && inner.registry.get(part) ? inner.call(from, part, op, arg) : Promise.resolve(err(`no part ${part} in ${id}`)))
+  // ponytail: one set for the whole wrapper, so a call may also wait for a concurrent call's publishes
+  const republishing = new Set<Promise<unknown>>()
   const unwrapped = (r: Result) => { if (!isOk(r)) throw new Error(r.error); return r.value }
 
+  const before = outer.registry.snapshot().instances.find(i => i.id === id)?.owner
   let env: Environment | undefined
-  const c = Components.create<Wrapper>(x.component.id, e => { env = e; return { runtime: inner, strategy } },
+  const c = Components.create<Wrapper>(x.component.id, e => { env = e; return { runtime: inner, strategy, ...(before && { owner: before }) } },
     x.component.description === undefined ? {} : { description: x.component.description })
   for (const [key, a] of x.actions) {
     if (!a.run) { c.action(a.op); continue }   // a source only: published through the republish below
     const m = opts.map?.[key]
-    c.action(a.op, async (_, arg) => unwrapped(await strategy(m?.op ?? key, arg, m ? [m.part] : partsOf(inner), call)))
+    c.action(a.op, async (_, arg) => {
+      const r = await strategy(m?.op ?? key, arg, m ? [m.part] : partsOf(inner), call)
+      await Promise.all(republishing)   // as an unwrapped call would: its publishes are delivered before it returns
+      return unwrapped(r)
+    })
   }
   c.action(WrapperOps.pause, w => { w.strategy.pause?.() })
   c.action(WrapperOps.resume, async w => { await w.strategy.resume?.() })
@@ -95,7 +101,9 @@ export function wrap(outer: Runtime, id: string, strategy: Strategy, opts: { map
   // what a part publishes, of the ops the wrapper offers, comes out from the wrapper
   inner.listen(t => {
     const a = wrapper.actions.get(t.kind === 'publish' ? t.op : '')
-    if (t.kind === 'publish' && isOk(t.result) && t.from.instance !== 'registry' && a) void env?.notify(a.op, t.data)
+    if (t.kind !== 'publish' || !isOk(t.result) || t.from.instance === 'registry' || !a || !env) return
+    const p = env.notify(a.op, t.data).finally(() => republishing.delete(p))
+    republishing.add(p)
   })
 
   const r = outer.registry.replace(id, wrapper, opts.owner)   // first: X loses its outer handle...
@@ -112,5 +120,5 @@ export function unwrap(outer: Runtime, id: string): Result<void> {
   if (parts.length !== 1) return err(`${id} has ${parts.length} parts; unwrap needs exactly one`)
   const part = w.runtime.registry.get(parts[0]!)!
   w.runtime.registry.remove(parts[0]!)   // first: the part loses its inner handle...
-  return outer.registry.replace(id, part)   // ...then gets its outer one back
+  return outer.registry.replace(id, part, (w as Partial<Wrapper>).owner)   // ...then gets its outer one (and owner) back
 }
