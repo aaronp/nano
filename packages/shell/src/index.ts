@@ -5,6 +5,8 @@ import { Profile } from './profile'
 export { Profile }
 export { initials, safeAvatar, type Entry, type User } from './profile'
 export { defineShell, ProfileEl } from './profile-el'
+export { FileMenuEl } from './file-menu-el'
+export { NanoAppSchema, checkApp, canonicalApp, RESERVED, type NanoApp } from './app'
 
 /** The shell's kinds of component, for a host to list (and the platform to make). */
 export const catalog = {

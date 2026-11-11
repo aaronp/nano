@@ -13,7 +13,7 @@ export const initials = (name: string): string =>
 export const safeAvatar = (url?: string): string | undefined => (url && /^(https?:\/\/|data:image\/)/i.test(url) ? url : undefined)
 
 /** Whether a link target is safe to follow: #…, /…, http(s): or mailto: (anything else, javascript: above all, is not). */
-const safeHref = (href: string) => /^(#|\/|https?:|mailto:)/i.test(href.trim())
+export const safeHref = (href: string) => /^(#|\/|https?:|mailto:)/i.test(href.trim())
 
 const User_ = Type.Object({
   name: Type.String({ maxLength: 80, description: 'The name shown (and whose initials stand in for a missing avatar)', examples: ['Ada Lovelace'] }),

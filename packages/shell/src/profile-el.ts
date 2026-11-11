@@ -1,6 +1,7 @@
 // <nano-profile name="…">: an avatar button (image or initials) that opens a menu of the entries as links.
 import { css, html } from 'lit'
 import { base, PlacedElement } from '@pritzlaff/nano-elements'
+import { FileMenuEl } from './file-menu-el'
 import { initials, Profile, safeAvatar, type Entry, type User } from './profile'
 
 export class ProfileEl extends PlacedElement {
@@ -39,7 +40,8 @@ export class ProfileEl extends PlacedElement {
   }
 }
 
-/** Registers `<nano-profile>`. */
+/** Registers `<nano-profile>` and `<nano-file-menu>`. */
 export function defineShell() {
   if (!customElements.get('nano-profile')) customElements.define('nano-profile', ProfileEl as unknown as CustomElementConstructor)
+  if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl)
 }
