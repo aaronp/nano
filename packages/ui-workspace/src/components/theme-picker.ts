@@ -1,7 +1,7 @@
 /**
  * <theme-picker>: choose the theme and light/dark. State lives in src/lib/theme-state.ts.
  *
- *   <theme-picker></theme-picker>                compact: a swatch per theme + light/dark/system (not in the app bar: the profile menu is)
+ *   <theme-picker></theme-picker>                compact: a swatch per theme + light/dark/system (for small spaces)
  *   <theme-picker layout="cards"></theme-picker> large cards with previews (the Themes page)
  */
 import { LitElement, html, css } from 'lit';

@@ -66,3 +66,10 @@ test('focus leaving the component closes the menu', async () => {
   btn.dispatchEvent(new FocusEvent('focusout', { bubbles: true, composed: true, relatedTarget: document.body })); await settle(el)
   expect(btn.getAttribute('aria-expanded')).toBe('false')
 })
+
+test('focusout with no related target (Safari link mousedown) keeps the menu open', async () => {
+  const el = await place('f2', { name: 'Fy' }, [{ label: 'Systems', href: '#/systems' }])
+  const btn = q(el, 'button'); btn.click(); await settle(el)
+  btn.dispatchEvent(new FocusEvent('focusout', { bubbles: true, composed: true, relatedTarget: null })); await settle(el)
+  expect(btn.getAttribute('aria-expanded')).toBe('true')
+})

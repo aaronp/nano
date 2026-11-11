@@ -39,7 +39,7 @@ bun run preview   # build and serve dist/ at http://localhost:4000 (the preview 
 3. `src/<thing>-el.ts`: the element. `test/<thing>-el.test.ts`: render it in the happy-dom page (preloaded by
    `bunfig.toml`), click and type, and check the component's state, as `test/folders-el.test.ts` does.
 4. `src/index.ts`: export both, and add the kind to `catalog` and its element to `ELEMENTS`. Tags need a dash.
-5. Update the expectations in `test/manifest.test.ts` (its ops) and `test/build.test.ts` (the tags), and add the
+5. Update the expectations in `test/build.test.ts` (the manifest's ops and the tags), and add the
    element to `preview/index.html`.
 
 ## Payloads

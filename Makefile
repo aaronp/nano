@@ -8,7 +8,8 @@ endif
 test:
 	@for p in packages/*/; do echo "== $$p"; (cd $$p && bun test --isolate) || exit 1; done
 
-# Browser tests (e2e/*.e2e.ts) in your Chrome; starts `make ui` and `make serve-template` unless they're running.
+# Browser tests (e2e/*.e2e.ts) in your Chrome; starts `make ui`, `make serve-template` and `make serve-inbox` unless they're running.
+# templates/inbox needs `bun install` there and `make link-templates` once.
 test-ui:
 	bunx playwright test
 

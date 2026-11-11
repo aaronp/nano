@@ -4,7 +4,7 @@
  *   <app-shell>
  *     <span slot="title">Name</span>              app bar title
  *     <nano-profile name="profile" slot="actions"></nano-profile> app bar controls (right side)
- *     <a slot="nav" href="#/inbox">Inbox</a>       one per page, in order (icons welcome)
+ *     <a slot="nav" href="#/workspace">Workspace</a>       one per page, in order (icons welcome)
  *     <a slot="nav" data-sub href="…">…</a>        a sub-item listed under the item before it
  *     <div slot="drawer-footer">…</div>            bottom of the drawer
  *     <span slot="footer">…</span>                 status bar

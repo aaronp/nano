@@ -23,7 +23,7 @@ export class ProfileEl extends PlacedElement {
 
   firstUpdated() {
     this.addEventListener('keydown', e => { if (e.key === 'Escape' && this.open) this.#close(true) })
-    this.addEventListener('focusout', e => { if (this.open && !(e.relatedTarget instanceof Node && this.contains(e.relatedTarget))) this.open = false })
+    this.addEventListener('focusout', e => { if (this.open && e.relatedTarget instanceof Node && !this.contains(e.relatedTarget)) this.open = false })   // null target: Safari/Firefox-mac don't focus links on click; outside clicks close via the document handler
   }
   connectedCallback() { super.connectedCallback(); document.addEventListener('click', this.#outside) }
   disconnectedCallback() { super.disconnectedCallback(); document.removeEventListener('click', this.#outside) }

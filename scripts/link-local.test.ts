@@ -43,3 +43,10 @@ test('touches nothing else in node_modules', () => {
   expect(lstatSync(join(scope, 'other')).isDirectory()).toBe(true)
   expect(lstatSync(join(dir, 'node_modules', 'lit')).isDirectory()).toBe(true)
 })
+
+test('refuses a directory without node_modules, creating nothing', () => {
+  const { repo } = fixture(), typo = join(realpathSync(mkdtempSync(join(tmpdir(), 'link-local-'))), 'nope')
+  mkdirSync(typo)
+  expect(() => linkLocal(typo, repo)).toThrow()
+  expect(readdirSync(typo)).toEqual([])
+})

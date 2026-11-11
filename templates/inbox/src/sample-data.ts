@@ -7,7 +7,7 @@ export const FOLDERS: { id: string; name: string }[] = [
 
 export const MESSAGES: Message[] = [
   { id: 'm1', folder: 'inbox', from: '[Sender name]', subject: 'Welcome to the app starter', date: '09:12',
-    body: 'Drag the dividers between these three panes to resize them. Focus a divider and use the arrow keys for small steps (hold Shift for bigger ones), or double-click it to reset.\n\nEach split is a <split-pane> element. Nest them to build any grid of resizable columns and rows.' },
+    body: 'This is the Inbox package: three components, folders, list and reader, each a nano component you place on a workspace.\n\nThey are wired by subscriptions: the folders\' selected event feeds the list\'s show, and the list\'s opened event feeds the reader\'s read.' },
   { id: 'm2', folder: 'inbox', from: '[Team]', subject: 'Weekly report is ready', date: '08:40', body: '[Summary of the report goes here.]\n\n[Second paragraph.]' },
   { id: 'm3', folder: 'inbox', from: '[Customer]', subject: 'Question about my order', date: 'Mon', body: '[Message body.]' },
   { id: 'm4', folder: 'archive', from: '[Colleague]', subject: 'Design review notes', date: 'Fri', body: '[Notes body.]' },
