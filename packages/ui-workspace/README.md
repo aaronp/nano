@@ -14,7 +14,7 @@ know nothing about each other.
 - **Runtime:** the drawer's Workspace entries add panels to the dock; each panel places a new instance and
   removes it when closed.
 
-`bun run build` (then `bun run serve`) builds `public/main.js` with Bun instead of esbuild. The rest of this
+`bun run build` (then `bun run serve`) builds `public/main.js` with Bun instead of esbuild. Isolated sandboxes (opaque-origin iframes) fetch modules cross-origin, so the host must send `Access-Control-Allow-Origin` (`serve` runs with `--cors`; GitHub Pages sends it). The rest of this
 README is the starter's.
 
 # Workspace starter

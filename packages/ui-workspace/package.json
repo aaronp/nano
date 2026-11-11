@@ -7,7 +7,7 @@
   "scripts": {
     "build": "bun scripts/prebuild.ts && bun build src/main.ts src/shared/*.ts --outdir public --root src --splitting --chunk-naming chunks/[name]-[hash].[ext] --format esm --minify --sourcemap=linked --loader .css:text && bun build src/sandbox/boot.ts --outdir public/sandbox --format esm --external '@pritzlaff/*' --external lit --external 'lit/*' --external typebox --external 'typebox/*'",
     "dev": "bun scripts/prebuild.ts && bun build src/sandbox/boot.ts --outdir public/sandbox --format esm --external '@pritzlaff/*' --external lit --external 'lit/*' --external typebox --external 'typebox/*' && bun build src/main.ts src/shared/*.ts --outdir public --root src --splitting --chunk-naming chunks/[name]-[hash].[ext] --format esm --sourcemap=linked --loader .css:text --watch",
-    "serve": "bunx serve public",
+    "serve": "bunx serve public --cors",
     "test": "bun test --isolate"
   },
   "dependencies": {

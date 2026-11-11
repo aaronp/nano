@@ -3,9 +3,9 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { afterEach, expect, test } from 'bun:test'
 
-const { Components, Registries, Runtimes } = await import('@pritzlaff/nano-core')
+const { Components, Registries, Runtimes, guard, unwrap } = await import('@pritzlaff/nano-core')
 const { provide } = await import('@pritzlaff/nano-elements')
-const { READY_MS, srcdoc, openFrame, layer } = await import('../src/sandbox/frames')
+const { READY_MS, srcdoc, openFrame, layer, probeFrame } = await import('../src/sandbox/frames')
 const { defineSandboxed } = await import('../src/sandbox/sandboxed-el')
 const { standIn } = await import('../src/sandbox/stand-in')
 defineSandboxed()
@@ -87,10 +87,44 @@ test('removing the instance from its last registry disposes the frame; from one 
   const a = Runtimes.create(Registries.create('a')), b = Runtimes.create(Registries.create('b'))
   const inst = Components.instantiate(c)
   a.registry.add('box', inst); b.registry.add('box', inst)
-  a.registry.remove('box')
+  a.registry.remove('box'); await tick()
   expect(disposed).toBe(0)
-  b.registry.remove('box')
+  b.registry.remove('box'); await tick()
   expect(disposed).toBe(1)
+})
+
+test('guarding or unwrapping a live stand-in keeps its frame', async () => {
+  let disposed = 0
+  const f = { ...openFrame({ ...opts, mode: 'sandbox' }), dispose() { disposed++ } }
+  const rt = Runtimes.create(Registries.create('h'))
+  rt.registry.add('box', Components.instantiate(standIn({ id: { ns: 't', name: 'thing' }, title: 'T', ops: [] }, () => f)))
+  expect('error' in guard(rt, 'box', { allow: ['*'] })).toBe(false); await tick()
+  expect(disposed).toBe(0)
+  expect('error' in unwrap(rt, 'box')).toBe(false); await tick()
+  expect(disposed).toBe(0)
+  rt.registry.remove('box'); await tick()
+  expect(disposed).toBe(1)
+})
+
+test('ready rejects when the iframe reports failed', async () => {
+  const ch = new MessageChannel()
+  const f = openFrame({ ...opts, mode: 'sandbox', channel: ch })
+  ch.port2.postMessage({ type: 'failed', error: 'x' })
+  await expect(f.ready).rejects.toThrow('x')
+  f.dispose(); ch.port2.close()
+})
+
+test('probeFrame returns the catalog, or an error for a malformed catalog, a failure or silence', async () => {
+  const probe = async (msg: unknown, ms = 1000) => {
+    const ch = new MessageChannel(), p = probeFrame(opts.url, ms, ch)
+    if (msg) ch.port2.postMessage(msg)
+    const r = await p; ch.port2.close(); return r
+  }
+  expect(await probe({ type: "catalog", entries: { k: { id: 1 } } })).toEqual({ k: { id: 1 } } as never)
+  expect(await probe({ type: 'catalog' })).toEqual({ error: expect.any(String) })
+  expect(await probe({ type: 'catalog', entries: [] })).toEqual({ error: expect.any(String) })
+  expect(await probe({ type: 'failed', error: 'boom' })).toEqual({ error: 'boom' })
+  expect(await probe(undefined, 5)).toEqual({ error: expect.stringContaining('did not answer') })
 })
 
 function world(f: ReturnType<typeof openFrame>) {
