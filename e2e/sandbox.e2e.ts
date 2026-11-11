@@ -30,8 +30,16 @@ async function add(page: Page, kind: string, name: string, mode?: string) {
   await p.getByRole('button', { name: 'Create' }).click()
 }
 
+/** Opens a tree row (a component starts closed), leaving an open one open. */
+async function expand(p: Locator, id: string) {
+  const row = p.locator(`li[role="treeitem"][data-id="${id}"]`).first()
+  if (await row.getAttribute('aria-expanded') === 'false') await p.locator(`.chev[data-toggle="${id}"]`).first().click()
+  await expect(row).toHaveAttribute('aria-expanded', 'true')
+}
+
 async function connect(page: Page, source: string, listener: string) {
   const p = platform(page)
+  await expand(p, `c:host/${source}`); await expand(p, `c:host/${listener}`)
   await p.locator(`[role="treeitem"][data-id="o:host/${source}/${CHANGED}"] .line`).first().click()
   await p.locator(`[data-connect="host/${listener}/${INFO}"]`).click()
   await p.locator(`[role="treeitem"][data-id="o:host/${source}/${CHANGED}"] .line`).first().click()   // unselect
