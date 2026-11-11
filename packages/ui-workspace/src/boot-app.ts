@@ -16,10 +16,13 @@ export const app = appStore(localStorage)
 const stores = realStores(document, localStorage, title)
 title.show()
 
-const r = await restoreApp({ host, stores, app, catalog,
-  importPackage: async (url, trust) => { const got = await loadPackage(url, undefined, trust); return 'error' in got ? { error: got.error } : { name: got.manifest.name, version: got.manifest.version } } })
+export const importPackage = async (url: string, trust: 'trusted' | 'sandboxed') => { const got = await loadPackage(url, undefined, trust); return 'error' in got ? { error: got.error } : { name: got.manifest.name, version: got.manifest.version } }
+export { stores }
+const r = await restoreApp({ host, stores, app, catalog, importPackage })
 if (r.restored) setImportFailures(r.failed)
 for (const n of r.notes) console.warn('working copy:', n)
 if (r.say) showStatus(document, r.say)
 export const restored = r.restored
-export const startAutosave = () => autosave({ host, stores, app, doc: document, initial: !r.protect, onError: why => showStatus(document, `Your work could not be saved in this browser: ${why}`) })
+let auto: ReturnType<typeof autosave> | undefined
+export const startAutosave = () => { auto = autosave({ host, stores, app, doc: document, initial: !r.protect, onError: why => showStatus(document, `Your work could not be saved in this browser: ${why}`), onWrite: () => document.dispatchEvent(new CustomEvent('nano:working-saved')) }) }
+export const stopAutosave = () => auto?.stop()

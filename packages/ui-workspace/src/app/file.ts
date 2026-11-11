@@ -1,0 +1,196 @@
+// What the File menu's commands do, over injected deps (boot-file.ts passes the page's real ones, tests pass fakes).
+// Open and New replace the app by writing the working copy and reloading (imports can't be unloaded); Import
+// merges into the running app. A document is untrusted data: it is checked, its imports and code are confirmed.
+import { checkApp, MAX_BYTES, RESERVED, type NanoApp } from '@composable/shell'
+import type { AppCatalog } from '../sandbox/deploy.ts'
+import type { SavedWorkspace } from '../lib/saved-workspaces.ts'
+import type { appStore } from './store.ts'
+
+/** An instance whose code (or config, or a wiring into a code op) would run in the host page. */
+export type CodeUse = { system: string; instance: string; kind: string }
+export type Pick = { imports: { url: string; trust: 'trusted' | 'sandboxed' }[]; code: string[] }   // code: "system/instance" keys agreed to
+export type Opened = { app: NanoApp; name?: string }
+export type Ui = {
+  open(opts: { mode: 'open' | 'import' }): Promise<Opened | null>
+  confirmImports(app: NanoApp, already: string[], code: CodeUse[]): Promise<Pick | null>
+  askName(suggested: string): Promise<string | null>
+  confirm(message: string, ok: string): Promise<boolean>
+}
+export interface FileDeps {
+  app: ReturnType<typeof appStore>
+  snapshot(): Promise<NanoApp>
+  catalog: AppCatalog
+  /** The imports now in this page, for "already imported". */
+  imports(): { url: string; trust?: string }[]
+  /** Import: applies a document to the running app, giving its notes. */
+  merge(app: NanoApp, consentCode: (system: string, instance: string) => boolean): Promise<string[]>
+  workspaces(): SavedWorkspace[]
+  mount(ws: SavedWorkspace): void
+  /** Stops autosave: it must not write over the working copy Open/New are about to leave for the reload. */
+  stopAutosave(): void
+  reload(): void
+  say(text: string): void
+  download(filename: string, text: string): void
+  /** Called after a save or a name change, so the menu can show whether there are unsaved changes. */
+  changed(snapshot: NanoApp): void
+  ui: Ui
+}
+
+export const emptyApp = (): NanoApp => ({ nano: 1, title: 'Untitled', theme: { id: 'enterprise' }, imports: [], systems: [], workspaces: [] })
+
+/** A document from text, or why not. The size is checked before parsing. */
+export function parseApp(text: string): NanoApp | string {
+  if (text.length > MAX_BYTES) return 'larger than 1 MB'
+  let v: unknown
+  try { v = JSON.parse(text) } catch { return 'not JSON' }
+  return checkApp(v)
+}
+
+/** A document from a URL (absolute, or relative to the page), without credentials, read up to 1 MB; or why not. */
+export async function fetchApp(url: string, base: string, fetchFn: typeof fetch = fetch): Promise<NanoApp | string> {
+  let u: URL
+  try { u = new URL(url, base) } catch { return 'not a URL' }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return 'only http: and https: URLs can be opened'
+  try {
+    const r = await fetchFn(u.href, { credentials: 'omit', redirect: 'follow' })
+    if (!r.ok) return `${r.status} ${r.statusText}`.trim()
+    const len = Number(r.headers.get('content-length'))
+    if (len > MAX_BYTES) return 'larger than 1 MB'
+    // read at most 1 MB, so a huge response is not held in memory
+    const reader = r.body?.getReader()
+    if (!reader) return parseApp(await r.text())
+    const chunks: Uint8Array[] = []
+    let n = 0
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      n += value.length
+      if (n > MAX_BYTES) { void reader.cancel(); return 'larger than 1 MB' }
+      chunks.push(value)
+    }
+    const all = new Uint8Array(n); let at = 0
+    for (const c of chunks) { all.set(c, at); at += c.length }
+    return parseApp(new TextDecoder().decode(all))
+  } catch (e) { return `could not be fetched (${e instanceof Error ? e.message : String(e)})` }
+}
+
+/** The instances of a document that would run code: of a kind with code-taking ops, with a config, or wired into one. */
+export function codeUses(app: NanoApp, catalog: AppCatalog): CodeUse[] {
+  const out: CodeUse[] = []
+  for (const sys of app.systems) for (const i of sys.instances) {
+    const ops = !RESERVED(i.id) && Object.hasOwn(catalog, i.kind) ? catalog[i.kind]!.code : undefined
+    if (ops?.length && (i.config !== undefined || sys.subscriptions.some(s => s.listener === i.id && ops.some(o => s.target.endsWith(`/${o}`)))))
+      out.push({ system: sys.id, instance: i.id, kind: i.kind })
+  }
+  return out
+}
+
+/** The document without the code of `declined` instances: their config, and the wirings into their code ops. */
+export function withoutCode(app: NanoApp, declined: CodeUse[], catalog: AppCatalog): NanoApp {
+  if (!declined.length) return app
+  const no = (s: string, i: string) => declined.some(d => d.system === s && d.instance === i)
+  return { ...app, systems: app.systems.map(sys => ({
+    ...sys,
+    instances: sys.instances.map(i => { if (!no(sys.id, i.id)) return i; const { config: _, ...rest } = i; return rest }),
+    subscriptions: sys.subscriptions.filter(s => {
+      if (!no(sys.id, s.listener)) return true
+      const kind = sys.instances.find(i => i.id === s.listener)?.kind
+      return !(kind !== undefined && Object.hasOwn(catalog, kind) && catalog[kind]!.code?.some(o => s.target.endsWith(`/${o}`)))
+    }),
+  })) }
+}
+
+const key = (c: { system: string; instance: string }) => `${c.system}/${c.instance}`
+const fileName = (s: string) => `${s.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').trim().slice(0, 100) || 'nano'}.json`
+
+export function fileCommands(d: FileDeps) {
+  const { app, ui } = d
+  const unsaved = async () => { const s = await d.snapshot(); return app.dirty(s) }
+
+  /** Whether replacing the app may go ahead: yes when nothing is unsaved, or the person agrees. */
+  const mayReplace = async () => !(await unsaved()) || ui.confirm('This app has changes that are not saved. Replace it anyway? (Save or Download first to keep them.)', 'Replace')
+
+  /** Writes the document as the working copy (the name, if any, as the current one) and reloads. false: it could not be written. */
+  function replaceWith(doc: NanoApp, name: string | null): boolean {
+    const e = app.setWorking(doc)   // before anything stops: a failed write changes nothing
+    if (e) { d.say(e); return false }
+    d.stopAutosave(); app.setName(name); d.reload()
+    return true
+  }
+
+  /** Confirms the imports and code of a document, then replaces or merges. 'cancelled' changes nothing. */
+  async function load(o: Opened, how: 'replace' | 'merge', hooks: { keep?: () => string | null; written?: () => void } = {}): Promise<'applied' | 'cancelled' | 'failed'> {
+    let doc = o.app
+    const have = d.imports()
+    const already = doc.imports.filter(i => have.some(h => h.url === i.url && (h.trust ?? 'sandboxed') === i.trust)).map(i => i.url)
+    const code = codeUses(doc, d.catalog)
+    let consent = new Set<string>()
+    if (doc.imports.some(i => !already.includes(i.url)) || code.length) {
+      const r = await ui.confirmImports(doc, already, code)
+      if (!r) return 'cancelled'
+      // anything not explicitly kept trusted is sandboxed
+      doc = { ...doc, imports: doc.imports.map(i => ({ url: i.url, trust: already.includes(i.url) || (i.trust === 'trusted' && r.imports.find(x => x.url === i.url)?.trust === 'trusted') ? i.trust : 'sandboxed' })) }
+      consent = new Set(r.code)
+    }
+    if (how === 'replace') {
+      const why = hooks.keep?.(); if (why) { d.say(why); return 'failed' }
+      doc = withoutCode(doc, code.filter(c => !consent.has(key(c))), d.catalog)
+      if (!replaceWith(doc, o.name ?? null)) return 'failed'
+      hooks.written?.()
+      return 'applied'
+    }
+    const before = new Set(d.workspaces().map(w => w.path))
+    const notes = await d.merge(doc, (s, i) => consent.has(`${s}/${i}`))
+    for (const ws of d.workspaces()) if (!before.has(ws.path)) d.mount(ws)
+    document.dispatchEvent(new CustomEvent('nano:changed'))
+    d.say(notes.length ? `Imported, with ${notes.length} note${notes.length === 1 ? '' : 's'}: ${notes.join(' · ')}` : 'Imported.')
+    return 'applied'
+  }
+
+  async function saveAs() {
+    const n = await ui.askName(app.name() ?? (await d.snapshot()).title)
+    if (n === null) return
+    if (Object.hasOwn(app.apps(), n) && n !== app.name() && !(await ui.confirm(`There is already a saved app called "${n}". Replace it?`, 'Replace'))) return
+    const snap = await d.snapshot()
+    const e = app.save(n, snap)
+    if (e) return d.say(e)
+    app.setName(n); d.changed(snap)
+  }
+
+  return {
+    new: async () => { if (await mayReplace()) replaceWith(emptyApp(), null) },
+    open: async () => { if (!(await mayReplace())) return; const o = await ui.open({ mode: 'open' }); if (o) await load(o, 'replace') },
+    import: async () => { const o = await ui.open({ mode: 'import' }); if (o) await load(o, 'merge') },
+    save: async () => {
+      const n = app.name()
+      if (n === null) return saveAs()
+      const snap = await d.snapshot()
+      if (!app.dirty(snap)) return
+      const e = app.save(n, snap)
+      if (e) d.say(e); else d.changed(snap)
+    },
+    'save-as': saveAs,
+    download: async () => { const s = await d.snapshot(); d.download(fileName(app.name() ?? s.title), JSON.stringify(s, null, 2)) },
+    /**
+     * `?src=`: fetches the document and opens it like Open, after the imports confirmation. Unsaved work is first
+     * kept as a saved app "Before opening <host+path>" (deduplicated); the document has no name; `clearSrc` removes
+     * `?src=` from the address bar once it is applied (or declined), not when it could not be fetched.
+     */
+    src: async (url: string, base: string, clearSrc: () => void, fetchFn?: typeof fetch) => {
+      const got = await fetchApp(url, base, fetchFn)
+      if (typeof got === 'string') return d.say(`Could not open ${url}: ${got}`)
+      const u = new URL(url, base)
+      const keep = () => {
+        const w = app.working()
+        if (!w || !app.dirty(w)) return null
+        const apps = app.apps(), base0 = `Before opening ${u.host}${u.pathname}`
+        let name = base0
+        for (let n = 2; Object.hasOwn(apps, name); n++) name = `${base0} (${n})`
+        const e = app.save(name, w)
+        return e ? `Your unsaved work could not be kept, so ${url} was not opened: ${e}` : null
+      }
+      const r = await load({ app: got }, 'replace', { keep, written: clearSrc })
+      if (r === 'cancelled') clearSrc()
+    },
+  }
+}

@@ -68,8 +68,8 @@ const MAX_WAIT = 5000
  * configuration, and are ignored). The snapshot's own calls come from 'app' and are ignored.
  * `initial: false` writes nothing until the next real change (after a partial restore). `onError` hears a failed write.
  */
-export function autosave({ host, stores, app, doc, delay = 500, initial = true, onError, maxWait = MAX_WAIT, win = doc.defaultView }: Pick<Deps, 'host' | 'stores' | 'app'> & {
-  doc: Document; delay?: number; maxWait?: number; initial?: boolean; onError?(why: string): void; win?: Window | null }) {
+export function autosave({ host, stores, app, doc, delay = 500, initial = true, onError, onWrite, maxWait = MAX_WAIT, win = doc.defaultView }: Pick<Deps, 'host' | 'stores' | 'app'> & {
+  doc: Document; delay?: number; maxWait?: number; initial?: boolean; onError?(why: string): void; onWrite?(): void; win?: Window | null }) {
   let timer: ReturnType<typeof setTimeout> | undefined, first = 0, busy = false, again = false, stopped = false, last: NanoApp | undefined
   const seen = new WeakSet<Runtime>(), offs = new Set<() => void>()
   const schedule = () => {
@@ -93,7 +93,8 @@ export function autosave({ host, stores, app, doc, delay = 500, initial = true, 
     try {
       await watch()
       last = await snapshotApp({ host, stores })
-      const e = app.setWorking(last); if (e) onError?.(e)
+      if (stopped) return   // Open/New wrote the next working copy: a snapshot of the old app must not land over it
+      const e = app.setWorking(last); if (e) onError?.(e); else onWrite?.()
     } catch { /* the next change tries again */ } finally { busy = false; if (again) { again = false; schedule() } }
   }
   // on close: write the last finished snapshot at once, and start a new one

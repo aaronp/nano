@@ -3,6 +3,7 @@
  *
  *   <app-shell>
  *     <span slot="title">Name</span>              app bar title
+ *     <nano-file-menu slot="title-actions">      beside the title
  *     <nano-profile name="profile" slot="actions"></nano-profile> app bar controls (right side)
  *     <a slot="nav" href="#/workspace">Workspace</a>       one per page, in order (icons welcome)
  *     <a slot="nav" data-sub href="…">…</a>        a sub-item listed under the item before it
@@ -38,7 +39,8 @@ export class AppShell extends LitElement {
       font: 15px/1.5 var(--font); }
     .bar { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 12px 0 6px; background: var(--appbar-bg); color: var(--appbar-fg);
       border-bottom: 1px solid var(--line); }
-    .bar ::slotted([slot='title']) { flex: 1; min-width: 0; margin: 0; font: 600 18px/1.2 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar ::slotted([slot='title']) { flex: 0 1 auto; min-width: 0; margin: 0; font: 600 18px/1.2 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .spacer { flex: 1; }
     .menu { flex: none; width: 44px; height: 44px; border: 0; border-radius: var(--radius); background: transparent; color: inherit; display: grid; place-items: center; cursor: pointer; }
     .menu:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
     button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -143,7 +145,7 @@ export class AppShell extends LitElement {
         <button class="menu" aria-label=${this.narrow ? 'Open menu' : this.collapsed ? 'Show menu' : 'Hide menu'} aria-expanded=${String(!this.narrow && !this.collapsed)}
           @click=${() => this.toggleDrawer()}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-        <slot name="title"></slot><slot name="actions"></slot>
+        <slot name="title"></slot><slot name="title-actions"></slot><span class="spacer"></span><slot name="actions"></slot>
       </header>
       <div class="frame">
         ${this.narrow ? html`<span></span>` : drawer}
