@@ -11,7 +11,7 @@ export type Panel = { instance: string | null; rect: Rect; tag: string }
 /** A jack. `kind` is where it sits: a panel's back (chassis), a rack module, or a rack block. */
 export type Port = { key: string; owner: string; op: Op; x: number; y: number; dir: 'in' | 'out'; label: string; kind: 'chassis' | 'module' | 'block' }
 /** A panel's back, mirrored into back-face coordinates. */
-export type Chassis = { id: string; instance: string | null; label: string; tag: string; x: number; y: number; w: number; h: number }
+export type Chassis = { id: string; instance: string | null; deploy?: string; label: string; tag: string; x: number; y: number; w: number; h: number }
 /** A component in the rack: an operator module, or (with no out jack) a store block. */
 export type RackItem = { id: string; title: string; sub: string; kind?: string; deploy: string; block: boolean; x: number; y: number; w: number; h: number }
 /** A subscription drawn as a cord from an out jack to an in jack. */
@@ -37,13 +37,13 @@ export const hidden = (id: string, platform: string, views: Set<string>) => id =
 
 /** Builds the model. Panels are given in front coordinates; the back face mirrors x. */
 export function buildModel({ snapshot, panels, W, H, platform, kinds = {}, titles = {} }: ModelInput): Model {
-  const opsOf = new Map(snapshot.instances.map(i => [i.id, i.ops])), views = viewIds(snapshot)
+  const opsOf = new Map(snapshot.instances.map(i => [i.id, i.ops])), deployOf = new Map(snapshot.instances.map(i => [i.id, i.labels?.['nano/deploy'] ?? 'host'])), views = viewIds(snapshot)
   const P: Record<string, Port> = {}
   const chassis: Chassis[] = []
   const placed = new Set<string>()
   panels.forEach((p, n) => {
     const instance = p.instance !== null && opsOf.has(p.instance) && !placed.has(p.instance) ? p.instance : null
-    const c = { id: 'panel-' + n, instance, label: p.instance ?? p.tag, tag: '<' + p.tag + '>', x: W - p.rect.x - p.rect.w, y: p.rect.y, w: p.rect.w, h: p.rect.h }
+    const c = { id: 'panel-' + n, instance, ...(instance !== null && { deploy: deployOf.get(instance) }), label: p.instance ?? p.tag, tag: '<' + p.tag + '>', x: W - p.rect.x - p.rect.w, y: p.rect.y, w: p.rect.w, h: p.rect.h }
     chassis.push(c)
     if (instance === null) return
     placed.add(instance)

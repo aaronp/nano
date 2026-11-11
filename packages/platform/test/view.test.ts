@@ -199,7 +199,7 @@ test('the Add form offers only the kind\'s modes and selector fields, and sends 
 })
 
 test('tree rows carry data-deploy; the toggle marks exactly the non-host entries, and is off by default', async () => {
-  const { host, item, button, settle, tree, $ } = await mount()
+  const { host, item, settle, tree, $ } = await mount()
   host.registry.label('l', { 'nano/deploy': 'isolated-sandbox' }); await settle()
   expect(item('c:host/l')!.dataset.deploy).toBe('isolated-sandbox')
   expect(item('c:host/r')!.dataset.deploy).toBe('host')
@@ -211,5 +211,4 @@ test('tree rows carry data-deploy; the toggle marks exactly the non-host entries
   expect(toggle().getAttribute('aria-pressed')).toBe('true')
   expect(item('c:host/l')!.hasAttribute('data-mark')).toBe(true)
   expect(item('c:host/r')!.hasAttribute('data-mark')).toBe(false)
-  expect(button).toBeDefined()
 })

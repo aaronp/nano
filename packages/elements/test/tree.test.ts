@@ -141,3 +141,10 @@ test('a node\'s data is carried as data-* on its row', async () => {
   t.nodes = [{ id: 'a', label: 'A', data: { deploy: 'host' } }, { id: 'b', label: 'B' }]; await settle(t)
   expect(item('a')!.hasAttribute('data-mark')).toBe(false)   // gone from the data, gone from the row
 })
+
+test('a data key that is not a valid attribute name is skipped, not thrown on', async () => {
+  const { t, item } = await tree()
+  t.nodes = [{ id: 'a', label: 'A', data: { 'bad key': 'x', 'a=b': 'y', ok: 'z' } }]; await settle(t)
+  expect(item('a')!.dataset.ok).toBe('z')
+  expect(item('a')!.getAttributeNames().filter(n => n.startsWith('data-')).sort()).toEqual(['data-id', 'data-ok'])
+})

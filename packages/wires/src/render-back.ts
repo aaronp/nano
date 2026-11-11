@@ -34,7 +34,7 @@ export function renderBack(el: Wires, d: Vals) {
   const chassis = m.chassis.map(c => {
     const onSel = selRoute !== null && c.instance !== null && wires.some(w => w.route === selId && (P[w.from]!.owner === c.instance || P[w.to]!.owner === c.instance))
     const hot = c.instance !== null && (el.recent(s.flashes[c.instance]) || el.recent(s.hits[c.instance]))
-    return { ...c, border: onSel ? selRoute!.color : hot ? '#E6EDF3' : '#3A4554' }
+    return { ...c, mark: s.hl && c.deploy !== undefined && c.deploy !== 'host', border: onSel ? selRoute!.color : hot ? '#E6EDF3' : '#3A4554' }
   })
 
   const jackRoute: Record<string, string> = {}
@@ -95,7 +95,7 @@ export function renderBack(el: Wires, d: Vals) {
   })
 
   return html`<div class="plate-bg" style="position:absolute; left:0; top:0; width:${W}px; height:${H}px; overflow:visible; backface-visibility:hidden; -webkit-backface-visibility:hidden">
-  ${chassis.map(c => html`<div style="position:absolute; left:${c.x}px; top:${c.y}px; width:${c.w}px; height:${c.h}px; box-sizing:border-box; border:1px dashed ${c.border}; border-radius:4px; background:rgba(22,27,34,0.72); padding:10px 12px; display:flex; flex-direction:column; gap:2px">
+  ${chassis.map(c => html`<div data-chassis=${c.id} data-deploy=${c.deploy ?? nothing} data-mark=${c.mark ? '' : nothing} style="position:absolute; left:${c.x}px; top:${c.y}px; width:${c.w}px; height:${c.h}px; box-sizing:border-box; border:1px dashed ${c.border}; ${c.mark ? 'outline:2px solid #F5A524; outline-offset:2px; ' : ''}border-radius:4px; background:rgba(22,27,34,0.72); padding:10px 12px; display:flex; flex-direction:column; gap:2px">
     <span style="font-size:12px; font-weight:600; color:#C9D1D9">${c.label}</span>
     <span class="mono" style="font-size:11px; color:#8B96A5">${c.tag}</span>
   </div>`)}

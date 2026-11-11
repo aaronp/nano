@@ -72,7 +72,7 @@ export function renderBlocks(d: Vals) {
     const face = recent(s.hits[r.id]) ? '#33404F' : '#252D39'
     const edge = r.id === s.selMod ? '#E6EDF3' : selId === null ? (recent(s.hits[r.id]) ? '#E6EDF3' : '#4A5564') : touches ? selRoute!.color : '#2F3845'
     const bd = 64
-    return html`<div data-block=${r.id} style="position:absolute; left:${r.x}px; top:${r.y}px; width:${r.w}px; height:82px; transform-style:preserve-3d; pointer-events:none">
+    return html`<div data-block=${r.id} data-deploy=${r.deploy} style="position:absolute; left:${r.x}px; top:${r.y}px; width:${r.w}px; height:82px; transform-style:preserve-3d; pointer-events:none">
   <div style="position:absolute; left:0; top:0; width:${r.w}px; height:${bd}px; background:#36404E; transform-origin:50% 0; transform:rotateX(90deg); opacity:${blockOp}"></div>
   <div style="position:absolute; left:0; top:82px; width:${r.w}px; height:${bd}px; background:#10141A; transform-origin:50% 0; transform:rotateX(90deg); opacity:${blockOp}"></div>
   <div style="position:absolute; left:0; top:0; width:${bd}px; height:82px; background:#1A2029; transform-origin:0 50%; transform:rotateY(-90deg); opacity:${blockOp}"></div>

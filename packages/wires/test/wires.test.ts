@@ -379,3 +379,16 @@ test('modules carry data-deploy; the toggle marks exactly the non-host ones, and
   expect(toggle().getAttribute('aria-pressed')).toBe('true')
   expect([...root.querySelectorAll('[data-mark]')].map(e => e.getAttribute('data-module'))).toEqual(['d'])
 })
+
+test('a docked panel\'s chassis carries data-deploy and is marked by the toggle', async () => {
+  const { host, root, flip, settle } = await mount()
+  host.registry.label('r', { 'nano/deploy': 'isolated-sandbox' })
+  await flip()
+  const chassis = (id: string) => root.querySelector(`[data-chassis="${id}"]`) as HTMLElement
+  expect(chassis('panel-0').getAttribute('data-deploy')).toBe('isolated-sandbox')   // r
+  expect(chassis('panel-1').getAttribute('data-deploy')).toBe('host')               // l
+  expect(chassis('panel-2').hasAttribute('data-deploy')).toBe(false)                // no instance
+  expect(root.querySelectorAll('[data-chassis][data-mark]').length).toBe(0)
+  ;(root.querySelector('button.highlight') as HTMLElement).click(); await settle()
+  expect([...root.querySelectorAll('[data-chassis][data-mark]')].map(e => e.getAttribute('data-chassis'))).toEqual(['panel-0'])
+})
