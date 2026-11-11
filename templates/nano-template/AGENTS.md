@@ -14,8 +14,8 @@ is what to do, and what not to.
 - **The catalog** (`src/index.ts`) lists each kind: its component, title and element tag. `define()` defines the
   elements. The manifest is generated from the catalog.
 
-`src/timer.ts` + `src/timer-el.ts` and `src/picker.ts` + `src/picker-el.ts` are the worked examples. Copy their
-shape.
+`src/timer.ts` + `src/timer-el.ts`, `src/picker.ts` + `src/picker-el.ts` and `src/store.ts` + `src/store-el.ts` are the
+worked examples. Copy their shape.
 
 ## Commands
 

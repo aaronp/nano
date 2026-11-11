@@ -125,3 +125,24 @@ test('a sandboxed import never loads the module in the host page', async ({ page
   await expect(platform(page).locator('select[name="mode"] option')).toHaveText(['isolated-sandbox'])
   expect(hostLoads).toEqual([])
 })
+
+test("a Store keeps values in its origin's storage: localStorage in the host, memory in an isolated sandbox", async ({ page }) => {
+  await page.goto('/#/systems')
+  await importTemplate(page, 'trusted')
+  await add(page, 'store', 'st-host', 'host')
+  await add(page, 'store', 'st-iso', 'isolated-sandbox')
+  await page.goto('/#/workspace')
+  await openPanel(page, 'store', 'st-host'); await openPanel(page, 'store', 'st-iso')
+
+  await showTab(page, 'st-host')
+  await expect(page.locator('workspace-dock nano-store .backing').first()).toHaveText('localStorage')
+  await showTab(page, 'st-iso')
+  const iso = sandboxFrame(page, 'allow-scripts')
+  await expect(iso.locator('nano-store .backing')).toHaveText('memory')
+  await iso.locator('nano-store input[name="key"]').fill('theme')
+  await iso.locator('nano-store input[name="value"]').fill('dark')
+  await iso.locator('nano-store button[type="submit"]').click()
+  await expect(iso.locator('nano-store tbody')).toContainText('dark')
+  // nothing it stored reached the host's storage
+  expect(await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('nano.template/store:')))).toEqual([])
+})
