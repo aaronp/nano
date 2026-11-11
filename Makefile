@@ -1,4 +1,4 @@
-.PHONY: test install ui dev packages smoke publish template-check template-export
+.PHONY: test install ui dev serve-template packages smoke publish template-check template-export
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
@@ -20,6 +20,12 @@ ui:
 dev:
 	cd packages/ui-workspace && bun run build
 	(cd packages/ui-workspace && bun run dev) & trap 'kill $$!' EXIT; bun scripts/serve.ts packages/ui-workspace/public $(PORT) --live
+
+# Build the template package and serve it on another origin, to import into `make ui`
+# (http://localhost:5174/manifest.json; TEMPLATE_PORT=5174 by default).
+TEMPLATE_PORT ?= 5174
+serve-template:
+	$(MAKE) -C templates/nano-template serve PORT=$(TEMPLATE_PORT)
 
 # Build the published packages (@pritzlaff/nano-core, -runes, -elements) into packages/*/dist, ready for npm.
 packages:
