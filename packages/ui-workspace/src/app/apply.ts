@@ -61,9 +61,12 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
   // imports, in order; a failed one is a note and its kinds are skipped below
   const have = new Map(stores.imports.list().map(r => [r.url, r]))
   const imports = replace ? [] : [...have.values()]
-  for (const i of app.imports) {
+  // loaded in parallel (each bounded by its own wait), recorded in the document's order
+  const loaded = await Promise.all(app.imports.map(i => have.has(i.url) ? undefined
+    : within(deps.importPackage(i.url, i.trust), deps.waits?.import ?? 15_000, 'import').catch((e: unknown) => ({ error: msg(e) } as { error?: string; name?: string; version?: string }))))
+  for (const [n, i] of app.imports.entries()) {
     if (have.has(i.url)) { if (replace) imports.push(have.get(i.url)!); else notes.push(`import ${i.url} is already there`); continue }
-    const r = await within(deps.importPackage(i.url, i.trust), deps.waits?.import ?? 15_000, 'import').catch((e: unknown) => ({ error: msg(e) } as { error?: string; name?: string; version?: string }))
+    const r = loaded[n]!
     if (r.error) notes.push(`import ${i.url}: ${r.error}`)
     else imports.push({ url: i.url, name: r.name ?? i.url, version: r.version ?? '', trust: i.trust })
   }

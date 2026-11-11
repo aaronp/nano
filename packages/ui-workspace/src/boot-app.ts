@@ -6,6 +6,7 @@
 import { host, catalog } from './composable.ts'
 import { loadPackage } from './imports.ts'
 import { setImportFailures } from './lib/import-failures.ts'
+import { showStatus } from './lib/status.ts'
 import { realStores } from './app/stores.ts'
 import { appStore, titleStore } from './app/store.ts'
 import { autosave, restoreApp } from './app/boot.ts'
@@ -17,9 +18,8 @@ title.show()
 
 const r = await restoreApp({ host, stores, app, catalog,
   importPackage: async (url, trust) => { const got = await loadPackage(url, undefined, trust); return 'error' in got ? { error: got.error } : { name: got.manifest.name, version: got.manifest.version } } })
-if (r.restored) {
-  setImportFailures(r.failed)
-  for (const n of r.notes) console.warn('working copy:', n)
-}
+if (r.restored) setImportFailures(r.failed)
+for (const n of r.notes) console.warn('working copy:', n)
+if (r.say) showStatus(document, r.say)
 export const restored = r.restored
-export const startAutosave = () => autosave({ host, stores, app, doc: document })
+export const startAutosave = () => autosave({ host, stores, app, doc: document, initial: !r.protect, onError: why => showStatus(document, `Your work could not be saved in this browser: ${why}`) })
