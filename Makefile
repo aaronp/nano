@@ -1,4 +1,4 @@
-.PHONY: test install ui dev serve-template packages smoke publish template-check template-export
+.PHONY: test test-ui install ui dev serve-template packages smoke publish template-check template-export
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
@@ -6,6 +6,10 @@ endif
 
 test:
 	bun test
+
+# Browser tests (e2e/*.e2e.ts) in your Chrome; starts `make ui` and `make serve-template` unless they're running.
+test-ui:
+	bunx playwright test
 
 install:
 	bun install
