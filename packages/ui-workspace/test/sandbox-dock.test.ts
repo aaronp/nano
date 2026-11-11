@@ -82,4 +82,7 @@ test('deployIn deploys into the host, into a platform system, and errors for a r
   const foreign = Registries.create('foreign')
   expect(deployIn(host, cat, foreign, 'c', 'range', 'host')).toEqual({ error: 'no runtime for registry foreign' })
   expect(host.registry.get('c')).toBeUndefined()
+  const imposter = Registries.create('lab')   // same id as a platform system, not its registry
+  expect(deployIn(host, cat, imposter, 'd', 'range', 'host')).toEqual({ error: 'no runtime for registry lab' })
+  expect(lab.registry.get('d')).toBeUndefined(); expect(imposter.get('d')).toBeUndefined()
 })

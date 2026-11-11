@@ -46,5 +46,5 @@ export function deploy(runtime: Runtime, id: string, kind: string, mode: Mode,
 export function deployIn(host: Runtime, catalog: AppCatalog, registry: Registry, id: string, kind: string, mode: Mode, owner?: Owner,
   open?: typeof openFrame): Result<void> {
   const rt = registry === host.registry ? host : runtimeOf(host.registry, registry.id)
-  return rt ? deploy(rt, id, kind, mode, { catalog, owner, open }) : err(`no runtime for registry ${registry.id}`)
+  return rt?.registry === registry ? deploy(rt, id, kind, mode, { catalog, owner, open }) : err(`no runtime for registry ${registry.id}`)
 }
