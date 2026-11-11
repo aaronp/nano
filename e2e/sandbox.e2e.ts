@@ -53,8 +53,11 @@ const openPanel = (page: Page, kind: string, name: string) =>
 const showTab = (page: Page, title: string) => page.locator('workspace-dock .lm_tab').getByText(title, { exact: true }).first().click()
 
 async function pick(root: Page | FrameLocator | Locator, value: string) {
+  // by keyboard: a sandboxed picker's list can extend past its iframe's box, where a click lands on the host page
   await root.locator('nano-picker [role="combobox"]').first().click()
-  await root.locator(`nano-picker [role="option"][data-value="${value}"]`).first().click()
+  const search = root.locator('nano-picker input[role="combobox"]').first()
+  await search.fill(value)
+  await search.press('Enter')
 }
 
 const sandboxFrame = (page: Page, attr: string) => page.frameLocator(`iframe[sandbox="${attr}"]`).first()
