@@ -176,3 +176,34 @@ test('add-to-system carries the instance\'s labels', async () => {
   await call(P.addToSystem, { instance: 'r', from: 'host', to: 'lab' })
   expect(runtimeOf(host.registry, 'lab')!.registry.labels('r')).toEqual({ 'nano/deploy': 'sandbox', 'nano/guarded': 'true' })
 })
+
+const withGateway = (o: Parameters<typeof platform>[2] = {}) => {
+  const host = Runtimes.create(Registries.create('host'))
+  host.registry.add('app', Components.instantiate(Components.create({ ns: 't', name: 'app' }, () => ({}))))
+  host.registry.add('platform', Components.instantiate(platform(host, catalog, o)))
+  const call = (op: Op, arg: unknown = null) => host.call({ registry: 'host', instance: 'test' }, 'platform', Ops.key(op), arg) as Promise<any>
+  return { host, call }
+}
+
+test('a new system gets each gateway: the same instance, in both registries', async () => {
+  const { host, call } = withGateway({ gateways: ['app'] })
+  await call(P.createSystem, 'lab')
+  expect(runtimeOf(host.registry, 'lab')!.registry.get('app')!.value).toBe(host.registry.get('app')!.value)
+})
+
+test('a gateway cannot be removed from a system', async () => {
+  const { call } = withGateway({ gateways: ['app'] })
+  await call(P.createSystem, 'lab')
+  for (const system of ['lab', 'host']) expect((await call(P.removeFromSystem, { instance: 'app', system })).error).toContain("can't be removed")
+})
+
+test('a locked instance cannot be removed', async () => {
+  const { host, call } = withGateway({ locked: id => id.startsWith('ws-controls-') })
+  host.registry.add('ws-controls-x', Components.instantiate(Components.create({ ns: 't', name: 'c' }, () => ({}))))
+  expect('error' in await call(P.removeFromSystem, { instance: 'ws-controls-x', system: 'host' })).toBe(true)
+})
+
+test('a gateway missing from the host is skipped, not an error', async () => {
+  const { call } = withGateway({ gateways: ['nope'] })
+  expect('error' in await call(P.createSystem, 'lab')).toBe(false)
+})

@@ -72,11 +72,18 @@ const opOf = (reg: Registry, instance: string, key: string) => {
 
 /** The platform over `host`, able to create the kinds of component in `catalog` (a host's merged catalogs). */
 export function platform(host: Runtime, catalog: Record<string, { component: Component; title?: string; tag?: string; modes?: readonly string[] }>,
-  opts: { deploy?: (system: Runtime, id: string, kind: string, mode: string | undefined, owner: Owner, outward?: Selectors) => Result<void> } = {}): Component<State> {
+  opts: { gateways?: readonly string[]; locked?: (id: string) => boolean; deploy?: (system: Runtime, id: string, kind: string, mode: string | undefined, owner: Owner, outward?: Selectors) => Result<void> } = {}): Component<State> {
   // read at call time: the host adds imported packages' kinds to this same object, then calls catalog-changed
   const kinds = (): Kind[] => Object.entries(catalog).map(([kind, e]) =>
     ({ kind, component: `${e.component.id.ns}/${e.component.id.name}`, title: e.title ?? kind, ...(e.tag && { tag: e.tag }), ...(e.modes && { modes: [...e.modes] }),
       ...(e.component.description && { description: e.component.description }) }))
+  // the same instance, owned by the platform, keeping its labels (a sandboxed instance stays one)
+  const share = (s: State, instance: string, from: string, to: string) => {
+    const inst = system(s, from).get(instance)
+    if (!inst) throw new Error(`no ${instance} in ${from}`)
+    must(system(s, to).add(instance, inst, owner(s)))
+    must(system(s, to).label(instance, system(s, from).labels(instance)))
+  }
   const c = Components.create<State>({ ns: 'composable', name: 'platform' }, env => {
     const s: State = {
       host: host.registry.id, systems: new Map([[host.registry.id, host]]), selected: null, env, changed: () => {},
@@ -102,6 +109,7 @@ export function platform(host: Runtime, catalog: Record<string, { component: Com
     if (s.systems.has(name)) throw new Error(`${name} already exists`)
     const rt = Runtimes.create(Registries.create(name))
     s.systems.set(name, rt); s.watch(rt)
+    for (const g of opts.gateways ?? []) if (host.registry.get(g)) share(s, g, s.host, name)   // the same instance in every system
     s.changed(name, { type: 'system-created' })
   })
   c.action(P.createComponent, (s, { kind, name, system: id, mode, allow, deny }) => {
@@ -114,15 +122,10 @@ export function platform(host: Runtime, catalog: Record<string, { component: Com
     }
     must(system(s, id).add(name, Components.instantiate(def.component), owner(s)))
   })
-  c.action(P.addToSystem, (s, { instance, from, to }) => {
-    const inst = system(s, from).get(instance)
-    if (!inst) throw new Error(`no ${instance} in ${from}`)
-    must(system(s, to).add(instance, inst, owner(s)))
-    must(system(s, to).label(instance, system(s, from).labels(instance)))   // a sandboxed instance stays one
-  })
+  c.action(P.addToSystem, (s, { instance, from, to }) => { share(s, instance, from, to) })
   c.action(P.removeFromSystem, (s, { instance, system: id }) => {
     const self = s.env.handles().find(h => h.coord.registry === id)?.coord.instance
-    if (instance === 'registry' || instance === self) throw new Error(`${instance} can't be removed from ${id}`)
+    if (instance === 'registry' || instance === self || opts.gateways?.includes(instance) || opts.locked?.(instance)) throw new Error(`${instance} can't be removed from ${id}`)
     const reg = system(s, id)
     // gone from the system means gone from its wiring too: core keeps a source's subscriptions, the platform doesn't
     for (const sub of reg.snapshot().subscriptions) if (sub.source === instance) reg.unsubscribe(sub.id)
