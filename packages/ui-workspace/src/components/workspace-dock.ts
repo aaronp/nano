@@ -275,6 +275,7 @@ export class WorkspaceDock extends HTMLElement {
 
   /** A remembered layout, if storage works and it only names widgets this palette still has. */
   private load(config: LayoutConfig) {
+    this.requireLayout().clearComponentFocus();   // the focused panel is about to go: dock:focus null, not a stale panel
     this.requireLayout().loadLayout({ ...config, dimensions: { ...config.dimensions, headerHeight: HEADER_H } });
   }
 

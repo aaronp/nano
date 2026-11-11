@@ -28,7 +28,7 @@ const mount = async () => {
   document.body.append(app)
   const dock = app.querySelector('workspace-dock') as Dock
   const focus: unknown[] = []
-  document.addEventListener('dock:focus', (e) => focus.push((e as CustomEvent).detail))
+  dock.addEventListener('dock:focus', (e) => focus.push((e as CustomEvent).detail))
   const panel = (i = 0) => dock.querySelectorAll<HTMLElement>('.dock-panel')[i]!
   const down = (el: Element) => el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
   return { bus, dock, focus, panel, down }
@@ -70,6 +70,21 @@ test('clicking the dock\'s empty space clears focus', async () => {
   down(dock.querySelector('.dock-area')!); await tick()
   expect(focus).toEqual([{ system: 'host', instance: 'inst-1', widget: 'ws' }, null])
   expect(dock.querySelector('.lm_header')!.classList.contains('lm_focused')).toBe(false)
+})
+
+test('reset and restore with a panel focused send dock:focus null', async () => {
+  const { dock, focus, panel, down } = await mount()
+  dock.addWidget('shown'); await tick()
+  dock.save()
+  down(panel()); await tick()
+  ;(dock as Dock & { reset(): void }).reset(); await tick()
+  expect(focus.at(-1)).toBeNull()
+  // the starting layout is empty: restore the saved one, focus its panel, and restore again
+  ;(dock as Dock & { restore(): void }).restore(); await tick()
+  down(panel()); await tick()
+  expect(focus.at(-1)).toEqual({ system: 'host', instance: 'inst-1', widget: 'ws' })
+  ;(dock as Dock & { restore(): void }).restore(); await tick()
+  expect(focus.at(-1)).toBeNull()
 })
 
 test('setWindowStyle remembers the style and sets chrome', async () => {
