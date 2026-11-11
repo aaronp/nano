@@ -8,13 +8,14 @@ import { loadPackage } from './imports.ts'
 import { setImportFailures } from './lib/import-failures.ts'
 import { showStatus } from './lib/status.ts'
 import { realStores } from './app/stores.ts'
-import { appStore, titleStore } from './app/store.ts'
+import { appStore, editableTitle, titleStore } from './app/store.ts'
 import { autosave, restoreApp } from './app/boot.ts'
 
 export const title = titleStore(localStorage, document)
 export const app = appStore(localStorage)
 const stores = realStores(document, localStorage, title)
 title.show()
+editableTitle(document, title)
 
 export const importPackage = async (url: string, trust: 'trusted' | 'sandboxed') => { const got = await loadPackage(url, undefined, trust); return 'error' in got ? { error: got.error } : { name: got.manifest.name, version: got.manifest.version } }
 export { stores }

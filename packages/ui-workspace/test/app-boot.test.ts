@@ -5,7 +5,7 @@ import { expect, test } from 'bun:test'
 import { PlatformOps as P } from '@composable/platform'
 import { snapshotApp } from '../src/app/snapshot'
 import { realStores } from '../src/app/stores'
-import { appStore, titleStore } from '../src/app/store'
+import { appStore, editableTitle, titleStore } from '../src/app/store'
 import { autosave, rebase, restoreApp } from '../src/app/boot'
 import { appHost, Profile, tick } from './fixtures/app-host'
 
@@ -211,4 +211,16 @@ test('a partial restore is not rebased as the baseline', async () => {
   expect(app.dirty(live)).toBe(true)
   await rebase(app, { protect: false }, async () => live)
   expect(app.dirty(live)).toBe(false)
+})
+
+test('clicking the title edits it: Enter or leaving keeps it (trimmed, at most 120), Escape or empty keeps the old one', () => {
+  document.body.innerHTML = '<span slot="title">Untitled</span>'
+  const title = titleStore(memory(), document), el = document.querySelector<HTMLElement>('[slot="title"]')!
+  editableTitle(document, title)
+  const edit = (text: string, key: string) => { el.click(); el.textContent = text; el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })) }
+  el.click(); expect(el.isContentEditable || el.getAttribute('contenteditable') === 'plaintext-only').toBe(true)
+  edit('  Inbox demo ', 'Enter'); expect(title.get()).toBe('Inbox demo'); expect(el.getAttribute('contenteditable')).toBeNull()
+  edit('Other', 'Escape'); expect(title.get()).toBe('Inbox demo'); expect(el.textContent).toBe('Inbox demo')
+  edit('   ', 'Enter'); expect(title.get()).toBe('Inbox demo'); expect(el.textContent).toBe('Inbox demo')
+  el.click(); el.textContent = 'x'.repeat(200); el.dispatchEvent(new Event('blur')); expect(title.get()).toBe('x'.repeat(120))
 })

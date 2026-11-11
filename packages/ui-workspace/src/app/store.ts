@@ -65,3 +65,27 @@ export const titleStore = (storage: Store, doc: Document) => {
     set: (t: string) => { try { storage.setItem(TITLE, t) } catch { /* shown, not kept */ } show(t); doc.dispatchEvent(new CustomEvent('nano:changed')) },
   }
 }
+
+/** Click the app bar title to rename the app: Enter or leaving keeps it, Escape (or nothing typed) puts the old one back. */
+export function editableTitle(doc: Document, title: ReturnType<typeof titleStore>) {
+  const el = doc.querySelector<HTMLElement>('[slot="title"]')
+  if (!el) return
+  el.title = 'Click to rename'; el.style.cursor = 'text'; el.tabIndex = 0
+  let editing = false
+  const done = (keep: boolean) => {
+    if (!editing) return
+    editing = false; el.removeAttribute('contenteditable')
+    const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 120)   // nano.json caps the title at 120
+    if (keep && t && t !== title.get()) title.set(t); else title.show()
+  }
+  const start = () => {
+    if (editing) return
+    editing = true; el.setAttribute('contenteditable', 'plaintext-only'); el.focus()
+    doc.getSelection()?.selectAllChildren(el)
+  }
+  el.addEventListener('click', start)
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); if (editing) done(true); else start() } else if (e.key === 'Escape') done(false)
+  })
+  el.addEventListener('blur', () => done(true))
+}
