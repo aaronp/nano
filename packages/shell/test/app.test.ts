@@ -42,7 +42,7 @@ test('hostile documents are refused with a reason, never thrown', () => {
   expect(typeof checkApp(top)).toBe('string')
 })
 
-test('RESERVED matches platform/registry/profile/ex-*', () => {
+test('RESERVED matches platform/registry/profile/app/ws-controls-*/ex-*', () => {
   for (const id of ['platform', 'registry', 'profile', 'ex-range', 'ex-', 'app', 'ws-controls-workspace']) expect(RESERVED(id)).toBe(true)
   for (const id of ['host', 'my-ex-range', 'profiles', 'r1', 'apps']) expect(RESERVED(id)).toBe(false)
 })

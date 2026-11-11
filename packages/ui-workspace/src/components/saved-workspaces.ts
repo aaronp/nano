@@ -1,5 +1,5 @@
 /**
- * Saved workspaces on the page, each in a system. The dock's "Save workspace…" button fires `dock:save-as` with its
+ * Saved workspaces on the page, each in a system. The app bar's "Save as workspace…" control fires `dock:save-as` (from the dock) with its
  * layout, and + (beside Workspaces) makes an empty one in an existing or new system; a dialog
  * asks for a route, title and icon, and the workspace becomes a nav item with its own page: a dock with the same
  * widgets, starting from that layout. Its panels show the same live components (they are named in the layout).
@@ -115,7 +115,7 @@ export function bootSavedWorkspaces(doc: Document) {
   });
   shell.addEventListener('dragend', () => { dragged = ''; clear(); });
 
-  // Save workspace… (from a dock): its layout, in the dock's own system
+  // Save as workspace… (the app bar's control, through a dock): its layout, in the dock's own system
   doc.addEventListener('dock:save-as', async (e) => {
     const { layout, system } = (e as CustomEvent<{ layout: unknown; system?: string }>).detail;
     for (let error = '', prev: WorkspaceChoice | undefined; ;) {
