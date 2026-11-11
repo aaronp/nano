@@ -30,7 +30,7 @@ const mount = async () => {
 
 test('lists every instance, including views, with owners', async () => {
   const { rows } = await mount()
-  expect(rows().find(r => r.system === 'host' && r.instance === 'r')).toEqual({ system: 'host', component: 'range', instance: 'r', name: 'composable.bundle/range', owner: 'platform · platform', description: catalog.range!.component.description! })
+  expect(rows().find(r => r.system === 'host' && r.instance === 'r')).toEqual({ system: 'host', component: 'range', instance: 'r', name: 'composable.bundle/range', owner: 'platform · platform', description: catalog.range!.component.description!, deploy: 'host' })
   expect(rows().some(r => r.instance.includes('~view') && r.owner === 'view · c-platform-table')).toBe(true)
   expect(rows().some(r => r.system === '—' && r.component === 'debounce')).toBe(true)
 })
@@ -104,4 +104,35 @@ test("the Description column shows each component's description", async () => {
   const { rows, at } = await mount()
   expect(rows().find(r => r.system === 'host' && r.instance === 'r')!.description).toBe(catalog.range!.component.description!)
   expect(at('th[data-key="description"]')).not.toBeNull()
+})
+
+test('the table has a Deploy column and a Deploy pill filter', async () => {
+  const { host, $, at, settle, rows } = await mount()
+  host.registry.label('l', { 'nano/deploy': 'sandbox' }); await settle()
+  expect(rows().find(r => r.instance === 'l')!.deploy).toBe('sandbox')
+  expect(rows().find(r => r.instance === 'r')!.deploy).toBe('host')
+  expect(!!at('th[data-key="deploy"]')).toBe(true)
+  $('button.filters')!.click(); await settle()
+  $('[data-deploy="sandbox"]')!.click(); await settle()
+  expect(rows().map(r => r.instance)).toEqual(['l'])
+  expect($('.badge')!.textContent).toBe('1')
+})
+
+test('table rows carry data-deploy; the toggle marks exactly the non-host ones, and is off by default', async () => {
+  const { host, $, at, settle } = await mount()
+  host.registry.label('l', { 'nano/deploy': 'sandbox' }); await settle()
+  const tr = (i: string) => at(`tr:has(button[data-select="host/${i}"])`)!
+  expect(tr('l').getAttribute('data-deploy')).toBe('sandbox')
+  expect(tr('r').getAttribute('data-deploy')).toBe('host')
+  const toggle = $('button.highlight')!
+  expect(toggle.textContent).toBe('Highlight sandboxed')
+  expect(toggle.getAttribute('aria-pressed')).toBe('false')
+  expect(!!at('tr[data-mark]')).toBe(false)
+  toggle.click(); await settle()
+  expect($('button.highlight')!.getAttribute('aria-pressed')).toBe('true')
+  expect([...at('tbody')!.querySelectorAll('tr[data-mark]')].map(r => r.getAttribute('data-deploy')).every(d => d !== 'host')).toBe(true)
+  expect(tr('l').hasAttribute('data-mark')).toBe(true)
+  expect(tr('r').hasAttribute('data-mark')).toBe(false)
+  $('button.highlight')!.click(); await settle()
+  expect(!!at('tr[data-mark]')).toBe(false)
 })

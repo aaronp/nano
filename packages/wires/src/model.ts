@@ -13,7 +13,7 @@ export type Port = { key: string; owner: string; op: Op; x: number; y: number; d
 /** A panel's back, mirrored into back-face coordinates. */
 export type Chassis = { id: string; instance: string | null; label: string; tag: string; x: number; y: number; w: number; h: number }
 /** A component in the rack: an operator module, or (with no out jack) a store block. */
-export type RackItem = { id: string; title: string; sub: string; kind?: string; block: boolean; x: number; y: number; w: number; h: number }
+export type RackItem = { id: string; title: string; sub: string; kind?: string; deploy: string; block: boolean; x: number; y: number; w: number; h: number }
 /** A subscription drawn as a cord from an out jack to an in jack. */
 export type Wire = { id: string; route: string; from: string; to: string }
 /** A connected group of components, with its generated name and colour. */
@@ -68,7 +68,7 @@ export function buildModel({ snapshot, panels, W, H, platform, kinds = {}, title
     const w = Math.max(110, jacks.length * JACK_W, Math.ceil(inst.id.length * 7.4 + 24))
     if (x + w > W && x > 20) { x = 20; row += 1 }
     const y = H + ROW_Y + row * ROW_STEP
-    const m: RackItem = { id: inst.id, title: inst.id, sub, kind, block, x, y: block ? y + BLOCK_DY : y, w, h: block ? BLOCK_H : MOD_H }
+    const m: RackItem = { id: inst.id, title: inst.id, sub, kind, deploy: inst.labels?.['nano/deploy'] ?? 'host', block, x, y: block ? y + BLOCK_DY : y, w, h: block ? BLOCK_H : MOD_H }
     rack.push(m)
     jacks.forEach((op, i) => {
       const key = portKey(inst.id, Ops.key(op))

@@ -1,14 +1,17 @@
 // <nano-tree>: nodes in a tree, in shadcn's look, with WAI-ARIA's tree keyboard. A `query` keeps what matches (and
 // the way to it); rows can carry a kind, a count, a badge, buttons at their end, and a body shown while open.
 import { LitElement, css, html, nothing } from 'lit'
+import { ref } from 'lit/directives/ref.js'
+import { setAttrs } from '../attrs'
 import { base } from '../styles'
 import { kit } from '../kit'
 import { t } from '../tokens'
 
-/** A node. `end` sits at the row's end (buttons); `body` shows inside it while open; `terms` are more text to match. */
+/** A node. `end` sits at the row's end (buttons); `body` shows inside it while open; `terms` are more text to match;
+ * `data` becomes `data-*` attributes on its row (`data-mark` is drawn as a tinted row). */
 export interface TreeNode {
   id: string; label: string; kind?: string; count?: number; badge?: string; terms?: string[]
-  end?: unknown; body?: unknown; children?: TreeNode[]
+  end?: unknown; body?: unknown; data?: Record<string, string>; children?: TreeNode[]
 }
 type Shown = { node: TreeNode; kids: Shown[] }
 type Row = { id: string; label: string; parent?: string; can: boolean; open: boolean }
@@ -42,6 +45,7 @@ export class NanoTree extends LitElement {
     .line { display: flex; align-items: center; gap: 6px; padding: 5px 8px; margin: 1px 0; border-radius: ${t('radius-s')}; cursor: pointer; min-width: 0 }
     .line:hover { background: ${t('surface-2')} } li[aria-selected='true'] > .line { background: ${t('accent-soft')} }
     .chev { flex: none; width: 16px; text-align: center; color: ${t('muted')}; transition: transform .15s; user-select: none }
+    li[data-mark] > .line { background: ${t('warn-bg')}; box-shadow: inset 3px 0 ${t('warn')} } li[data-mark][aria-selected='true'] > .line { background: ${t('accent-soft')} }
     li[aria-expanded='true'] > .line .chev { transform: rotate(90deg) }
     .label { overflow-wrap: anywhere } .kind { color: ${t('muted')}; font-size: 11px; letter-spacing: .06em; text-transform: uppercase }
     .count { color: ${t('muted')}; font-size: 11px; font-variant-numeric: tabular-nums }
@@ -117,7 +121,8 @@ export class NanoTree extends LitElement {
   #item(s: Shown, depth: number, byId: Map<string, Row>, tab: string | undefined): unknown {
     const n = s.node, row = byId.get(n.id)!, { can, open } = row
     return html`<li role="treeitem" data-id=${n.id} aria-level=${depth + 1} aria-expanded=${can ? String(open) : nothing}
-        aria-selected=${this.selected === n.id ? 'true' : nothing} tabindex=${n.id === tab ? 0 : -1}>
+        aria-selected=${this.selected === n.id ? 'true' : nothing} tabindex=${n.id === tab ? 0 : -1}
+        ${ref(el => setAttrs(el, n.data && Object.fromEntries(Object.entries(n.data).map(([k, v]) => [`data-${k}`, v]))))}>
       <div class="line" @click=${(e: MouseEvent) => this.#click(e, row)}>
         <span class="chev" data-toggle=${n.id} aria-hidden="true">${can ? '▸' : ''}</span>
         <span class="label">${this.#label(n.label)}</span>

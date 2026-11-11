@@ -197,3 +197,19 @@ test('the Add form offers only the kind\'s modes and selector fields, and sends 
   ;[...el.shadowRoot!.querySelectorAll('button')].find(b => b.textContent!.trim() === 'Create')!.click(); await settle()
   expect(sent).toEqual([{ id: 'r1', kind: 'range', mode: 'isolated-sandbox', outward: { allow: ['host/log/*', 'host/x/y'], deny: ['host/platform/*'] } }])
 })
+
+test('tree rows carry data-deploy; the toggle marks exactly the non-host entries, and is off by default', async () => {
+  const { host, item, button, settle, tree, $ } = await mount()
+  host.registry.label('l', { 'nano/deploy': 'isolated-sandbox' }); await settle()
+  expect(item('c:host/l')!.dataset.deploy).toBe('isolated-sandbox')
+  expect(item('c:host/r')!.dataset.deploy).toBe('host')
+  const toggle = () => $('button.highlight')!
+  expect(toggle().textContent).toBe('Highlight sandboxed')
+  expect(toggle().getAttribute('aria-pressed')).toBe('false')
+  expect(tree().shadowRoot.querySelectorAll('[data-mark]').length).toBe(0)
+  toggle().click(); await settle()
+  expect(toggle().getAttribute('aria-pressed')).toBe('true')
+  expect(item('c:host/l')!.hasAttribute('data-mark')).toBe(true)
+  expect(item('c:host/r')!.hasAttribute('data-mark')).toBe(false)
+  expect(button).toBeDefined()
+})

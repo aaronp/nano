@@ -1,6 +1,6 @@
 // The back plate: panel chassis, the service rack and its modules, jacks, cords, packets, the live cord, and (in
 // puzzle mode) the dashed leaders and their packets.
-import { html, svg } from 'lit'
+import { html, nothing, svg } from 'lit'
 import { ERR_COLOR, OK_COLOR, TRAVEL_MS, clamp } from './constants'
 import { bezierAt, cordD, cordGeo, polylineAt } from './geometry'
 import { checkConnect } from './model'
@@ -79,8 +79,9 @@ export function renderBack(el: Wires, d: Vals) {
   const modules = m.rack.filter(r => !r.block).map(r => {
     const route = routeOfOwner(r.id)
     const st = s.stats[r.id] ?? { in: 0, out: 0 }
+    const mark = s.hl && r.deploy !== 'host'
     return {
-      ...r, stat: 'in ' + st.in + ' · out ' + st.out,
+      ...r, mark, stat: 'in ' + st.in + ' · out ' + st.out,
       op: selId === null || route === selId ? 1 : 0.35,
       border: r.id === s.selMod || r.id === s.lift ? '2px solid #E6EDF3' : el.recent(s.hits[r.id]) ? '1px solid #E6EDF3' : route === null ? '1px dashed #4A5564' : '1px solid #303946',
     }
@@ -103,7 +104,7 @@ export function renderBack(el: Wires, d: Vals) {
     <span class="mono" style="position:absolute; left:14px; bottom:8px; font-size:10px; color:#6E7987; letter-spacing:0.08em">SERVICE RACK</span>
   </div>
 
-  ${isRelay ? modules.map(r => html`<div data-module=${r.id} style="position:absolute; left:${r.x}px; top:${r.y}px; width:${r.w}px; height:92px; box-sizing:border-box; border-radius:6px; background:#1B212A; border:${r.border}; opacity:${r.op}">
+  ${isRelay ? modules.map(r => html`<div data-module=${r.id} data-deploy=${r.deploy} data-mark=${r.mark ? '' : nothing} style="position:absolute; left:${r.x}px; top:${r.y}px; width:${r.w}px; height:92px; box-sizing:border-box; border-radius:6px; background:#1B212A; border:${r.border}; ${r.mark ? 'outline:2px solid #F5A524; outline-offset:2px; ' : ''}opacity:${r.op}">
     <div style="position:absolute; left:0; right:0; bottom:7px; display:flex; flex-direction:column; align-items:center; gap:1px">
       <span style="font-size:11px; font-weight:600; color:#E6EDF3">${r.title}</span>
       <span class="mono" style="font-size:10px; color:#8B96A5">${r.sub}</span>

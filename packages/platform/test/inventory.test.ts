@@ -17,7 +17,7 @@ const at = (system: string, instance: string) => rows.find(r => r.system === sys
 
 test('one row per system and instance; a shared instance appears in each with its own owner', () => {
   expect(rows.map(r => `${r.system}/${r.instance}`)).toEqual(['host/r', 'host/p', 'host/p~view-0', 'lab/r', '—/—'])
-  expect(at('host', 'r')).toEqual({ system: 'host', component: 'range', instance: 'r', name: 'composable/range', owner: 'widget · c-range', description: '' })
+  expect(at('host', 'r')).toEqual({ system: 'host', component: 'range', instance: 'r', name: 'composable/range', owner: 'widget · c-range', description: '', deploy: 'host' })
   expect(at('lab', 'r')!.owner).toBe('platform · platform')
 })
 
@@ -30,7 +30,7 @@ test('an instance with no owner shows unknown', () => {
 })
 
 test('a kind with no instance gets one — row', () => {
-  expect(rows.at(-1)).toEqual({ system: '—', component: 'log', instance: '—', name: 'composable/log', owner: '—', description: '' })
+  expect(rows.at(-1)).toEqual({ system: '—', component: 'log', instance: '—', name: 'composable/log', owner: '—', description: '', deploy: '—' })
 })
 
 test('kinds sharing a component id are listed together', () => {
@@ -40,7 +40,7 @@ test('kinds sharing a component id are listed together', () => {
 })
 
 test('filters: OR within a group, AND across', () => {
-  const keep = (f: Partial<Filters>) => rows.filter(r => matches(r, '', { systems: [], components: [], ...f })).map(r => `${r.system}/${r.instance}`)
+  const keep = (f: Partial<Filters>) => rows.filter(r => matches(r, '', { systems: [], components: [], deploys: [], ...f })).map(r => `${r.system}/${r.instance}`)
   expect(keep({})).toHaveLength(5)
   expect(keep({ systems: ['host'] })).toEqual(['host/r', 'host/p', 'host/p~view-0'])
   expect(keep({ systems: ['host', UNREGISTERED] })).toEqual(['host/r', 'host/p', 'host/p~view-0', '—/—'])
@@ -51,7 +51,7 @@ test('filters: OR within a group, AND across', () => {
 })
 
 test('free text matches any column, case-insensitively', () => {
-  const none: Filters = { systems: [], components: [] }
+  const none: Filters = { systems: [], components: [], deploys: [] }
   expect(rows.filter((r: Row) => matches(r, 'WIDGET', none)).map(r => `${r.system}/${r.instance}`)).toEqual(['host/r'])
   expect(rows.filter((r: Row) => matches(r, '  ', none))).toHaveLength(5)
 })
@@ -67,4 +67,19 @@ test('examplesOf takes two examples, as JSON, each cut to 40 characters', () => 
   expect(examplesOf(undefined)).toBe('')
   expect(examplesOf({ examples: [1, 'a', 3] } as never)).toBe('1, "a"')
   expect(examplesOf({ examples: ['x'.repeat(60)] } as never)).toBe(`"${'x'.repeat(38)}…`)
+})
+
+test('rows read nano/deploy, host when unlabelled; a never-made kind shows —', () => {
+  const labelled: Snapshot[] = [{ id: 's', subscriptions: [], instances: [
+    { ...inst('a', 'composable/range'), labels: { 'nano/deploy': 'sandbox' } }, inst('b', 'composable/range'), { ...inst('c', 'composable/range'), labels: { x: 'y' } }] }]
+  expect(inventory(labelled, KINDS).map(r => r.deploy)).toEqual(['sandbox', 'host', 'host', '—'])
+})
+
+test('filters by deploy like system and component', () => {
+  const labelled: Snapshot[] = [{ id: 's', subscriptions: [], instances: [
+    { ...inst('a', 'composable/range'), labels: { 'nano/deploy': 'sandbox' } }, inst('b', 'composable/range'), { ...inst('c', 'composable/range'), labels: { 'nano/deploy': 'isolated-sandbox' } }] }]
+  const rs = inventory(labelled, KINDS), keep = (deploys: string[]) => rs.filter(r => matches(r, '', { systems: [], components: [], deploys })).map(r => r.instance)
+  expect(keep(['sandbox'])).toEqual(['a'])
+  expect(keep(['host', 'isolated-sandbox'])).toEqual(['b', 'c'])
+  expect(keep([])).toEqual(['a', 'b', 'c', '—'])
 })

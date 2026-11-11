@@ -364,3 +364,18 @@ test('over another system: cords connect in that system, through the platform in
   expect(el.s.picked).toEqual({ system: 'lab', instance: 'lr', op: Ops.key(Range.ops.value) })
   expect(el.shadowRoot!.querySelector('.detail')!.textContent).toContain('lab / lr')
 })
+
+test('modules carry data-deploy; the toggle marks exactly the non-host ones, and is off by default', async () => {
+  const { host, root, flip, settle } = await mount()
+  host.registry.label('d', { 'nano/deploy': 'sandbox' })
+  await flip()
+  expect(root.querySelector('[data-module="d"]')!.getAttribute('data-deploy')).toBe('sandbox')
+  expect(root.querySelector('[data-module="m"]')!.getAttribute('data-deploy')).toBe('host')
+  const toggle = () => root.querySelector('button.highlight') as HTMLElement
+  expect(toggle().textContent).toBe('Highlight sandboxed')
+  expect(toggle().getAttribute('aria-pressed')).toBe('false')
+  expect(root.querySelectorAll('[data-mark]').length).toBe(0)
+  toggle().click(); await settle()
+  expect(toggle().getAttribute('aria-pressed')).toBe('true')
+  expect([...root.querySelectorAll('[data-mark]')].map(e => e.getAttribute('data-module'))).toEqual(['d'])
+})

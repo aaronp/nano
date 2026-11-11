@@ -16,7 +16,7 @@ export type Cord = { anchor: string; picked: string | null; x: number; y: number
 export type Packet = { id: number; wire: string; born: number; label: string }
 /** All of the view's state. */
 export interface State {
-  ry: number; rx: number; dragging: boolean; mode: 'relay' | 'puzzle'; sel: string | null; depth: number; editing: boolean; entering: boolean; leaving: boolean
+  ry: number; rx: number; dragging: boolean; mode: 'relay' | 'puzzle'; sel: string | null; depth: number; editing: boolean; entering: boolean; leaving: boolean; hl: boolean
   /** Zoom (1 = fitted) and pan (screen px) on top of the camera; `zooming` makes them follow the wheel without easing. */
   zoom: number; panX: number; panY: number; zooming: boolean
   /** The drawer's tab, and what is selected (the platform's selection, kept in step through the trace). */
@@ -67,7 +67,7 @@ export class Wires extends LitElement {
   declare platform: string
   declare system: string
   declare flipped: boolean
-  s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, entering: false, leaving: false, zoom: 1, panX: 0, panY: 0, zooming: false, tab: 'view', picked: null, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
+  s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, entering: false, leaving: false, hl: false, zoom: 1, panX: 0, panY: 0, zooming: false, tab: 'view', picked: null, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
   model: Model = empty()
   puzzle = buildPuzzle(this.model)
   stage = { w: 0, h: 0 }
