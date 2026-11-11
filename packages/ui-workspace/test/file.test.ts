@@ -198,12 +198,20 @@ test('a command is ignored while another is running (a double-click does not sta
 })
 
 test('codeUses lists instances with config or wiring into a code op; withoutCode removes exactly that', () => {
-  const cat = appHost().catalog
+  const cat = appHost().catalog, { ns, name } = cat.map!.component.id, op = (o: string) => `${ns}/${name}/${o}`
   const app = doc('W', { systems: [{ id: 'host', instances: [{ id: 'm1', kind: 'map' }, { id: 'f1', kind: 'filter', config: 'return true' }, { id: 'l1', kind: 'log' }, { id: 'ex-m', kind: 'map', config: 'x' }],
-    subscriptions: [{ source: 'l1', op: 'log/x', listener: 'm1', target: 'c-map/setCode' }, { source: 'l1', op: 'log/x', listener: 'm1', target: 'c-map/map' }] }] })
+    subscriptions: [{ source: 'l1', op: 'log/x', listener: 'm1', target: op('setCode') }, { source: 'l1', op: 'log/x', listener: 'm1', target: op('map') }] }] })
   expect(codeUses(app, cat).map(c => c.instance)).toEqual(['m1', 'f1'])   // m1 only by its wiring; ex-* reserved
   const out = withoutCode(app, codeUses(app, cat), cat)
   expect(out.systems[0]!.instances.find(i => i.id === 'f1')).not.toHaveProperty('config')
-  expect(out.systems[0]!.subscriptions.map(x => x.target)).toEqual(['c-map/map'])
+  expect(out.systems[0]!.subscriptions.map(x => x.target)).toEqual([op('map')])
   expect(out.systems[0]!.instances.find(i => i.id === 'ex-m')!.config).toBe('x')
+})
+
+test('?src= is cleared before the reload, not after', async () => {
+  const s = setup(doc('Unsaved'), { confirmImports: async () => ({ imports: [], code: [] }) }); s.app.setBase(doc('Base'))
+  const order: string[] = []
+  s.deps.reload = () => { order.push('reload') }
+  await s.cmds.src('https://x.test/a/nano.json', 'https://h/', () => order.push('clear'), src(trusted))
+  expect(order).toEqual(['clear', 'reload'])
 })

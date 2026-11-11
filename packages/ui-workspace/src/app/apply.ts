@@ -27,6 +27,11 @@ const within = <T>(p: Promise<T>, ms: number, what: string): Promise<T> => {
   let t: unknown
   return Promise.race([p, new Promise<never>((_, no) => { t = setTimeout(() => no(new Error(`${what} timed out after ${ms / 1000} s`)), ms) })]).finally(() => clearTimeout(t as never))
 }
+/** Whether `target` (ns/name/op) is a code-taking op of `kind`: the one match for what needs consent. */
+export const codeTarget = (catalog: AppCatalog, kind: string | undefined, target: string): boolean => {
+  const e = kind !== undefined && Object.hasOwn(catalog, kind) ? catalog[kind]! : undefined
+  return !!e?.code?.some(o => target === `${e.component.id.ns}/${e.component.id.name}/${o}`)
+}
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 /** Never throws or hangs for long: every failure is a note. */
@@ -79,6 +84,7 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
   // the systems there are, fetched once and kept current
   const existing = new Set((((await value(host, from, 'platform', Ops.key(P.systems))) ?? []) as { id: string }[]).map(s => s.id))
 
+  const configuring: Promise<void>[] = []   // started together: a frame that never answers costs one wait, not one each
   const ok = new Set<string>()   // systems that exist
   for (const sys of app.systems) {
     if (!existing.has(sys.id)) {
@@ -103,25 +109,29 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
       if ('error' in made) { fail(what, made); continue }
       if (i.config === undefined) continue
       if (codeOps(i.kind) && !consent(sys.id, i.id)) { notes.push(`${what}: its ${i.kind} code was not applied (not agreed to)`); continue }
-      const c = await within(rt.call(from, i.id, `${k.component}/configure`, i.config), deps.waits?.configure ?? 5000, 'configure').catch((e: unknown) => ({ error: msg(e) }))
-      if ('error' in c) fail(`${what} configure`, c)
+      configuring.push(within(rt.call(from, i.id, `${k.component}/configure`, i.config), deps.waits?.configure ?? 5000, 'configure').catch((e: unknown) => ({ error: msg(e) }))
+        .then(c => { if ('error' in c) fail(`${what} configure`, c) }))
     }
   }
+  await Promise.all(configuring)
 
   for (const sys of app.systems) {
     const rt = ok.has(sys.id) ? (sys.id === host.registry.id ? host : runtimeOf(host.registry, sys.id)) : undefined
     if (!rt) { if (sys.subscriptions.length) notes.push(`system ${sys.id}: its subscriptions were skipped`); continue }
     for (const s of sys.subscriptions) {
       const what = `${sys.id}: ${s.source} ${s.op} -> ${s.listener} ${s.target}`
+      if (RESERVED(s.listener)) { notes.push(`${what}: ${s.listener} is reserved by the host, skipped`); continue }
       const missing = [s.source === '*' ? undefined : s.source, s.listener].find(x => x !== undefined && !rt.registry.get(x))
       if (missing) { notes.push(`${what}: ${missing} is not there, skipped`); continue }
       // a subscription into a code-taking op (setCode, configure) would feed the document's data to code: needs the same consent
-      const lc = rt.registry.snapshot().instances.find(x => x.id === s.listener)?.component, ops = codeOps(lc === undefined ? undefined : kindOfComponent.get(lc))
-      if (ops?.some(o => s.target === `${lc}/${o}`) && !consent(sys.id, s.listener)) { notes.push(`${what}: it feeds code and was not applied (not agreed to)`); continue }
+      const lc = rt.registry.snapshot().instances.find(x => x.id === s.listener)?.component
+      if (codeTarget(deps.catalog, lc === undefined ? undefined : kindOfComponent.get(lc), s.target) && !consent(sys.id, s.listener)) { notes.push(`${what}: it feeds code and was not applied (not agreed to)`); continue }
       if (rt.registry.snapshot().subscriptions.some(x => x.source === s.source && x.op === s.op && x.listener === s.listener && x.target === s.target)) { notes.push(`${what}: already wired, skipped`); continue }
       // the platform's connect needs a named source; a '*' one goes straight to the registry
-      const r = s.source === '*' ? rt.registry.subscribe(s) : await call('platform', P.connect, { system: sys.id, ...s })
-      if ('error' in r) fail(what, r)
+      try {
+        const r = s.source === '*' ? rt.registry.subscribe(s) : await call('platform', P.connect, { system: sys.id, ...s })
+        if ('error' in r) fail(what, r)
+      } catch (e) { notes.push(`${what}: ${msg(e)}`) }
     }
   }
 

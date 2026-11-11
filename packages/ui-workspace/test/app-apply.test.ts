@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { Ops } from '@pritzlaff/nano-core'
-import { Range, Map as MapC } from '@composable/bundle'
+import { Log, Range, Map as MapC } from '@composable/bundle'
 import { PlatformOps as P, runtimeOf } from '@composable/platform'
 import type { NanoApp } from '@composable/shell'
 import { applyApp } from '../src/app/apply'
@@ -184,3 +184,29 @@ test('the saved workspaces order round-trips through snapshot and apply', async 
   await applyApp(await snapshotApp({ host: a.host, stores: a.stores }), 'replace', b.deps)
   expect(b.st.workspaces.map((w: any) => w.path)).toEqual(['/a', '/c', '/b'])
 }, 10_000)
+
+test('a subscription whose listener is a reserved id is never wired, even with consent', async () => {
+  const a = await fresh()
+  const notes = await applyApp(sys([{ id: 'm0', kind: 'map' }], [{ source: 'm0', op: Ops.key(MapC.ops.mapped), listener: 'profile', target: Ops.key(Profile.ops.setUser) }]), 'replace', a.deps)
+  expect(notes.some(n => n.includes('reserved'))).toBe(true)
+  expect(a.host.registry.snapshot().subscriptions.filter(s => s.listener === 'profile')).toHaveLength(0)
+})
+
+test('configures that never answer run together under one bound', async () => {
+  const a = await fresh()
+  const t = Date.now()
+  const hung = (id: string) => ({ id, kind: 'boxed', mode: 'isolated-sandbox' as const, config: {} })
+  const notes = await applyApp(sys([hung('b1'), hung('b2'), hung('b3'), hung('b4')]), 'replace', { ...a.deps, waits: { configure: 300 } })
+  expect(notes).toHaveLength(4)
+  expect(Date.now() - t).toBeLessThan(700)
+}, 3000)
+
+test('a throwing "*"-source subscribe is that step\'s note', async () => {
+  const a = await fresh()
+  const rt = a.host.registry as any, orig = rt.subscribe.bind(rt)
+  rt.subscribe = () => { throw new Error('nope') }
+  const notes = await applyApp(sys([{ id: 'l', kind: 'log' }], [{ source: '*', op: 'x/y', listener: 'l', target: Ops.key(Log.ops.info) }]), 'replace', a.deps)
+  rt.subscribe = orig
+  expect(notes).toEqual([expect.stringContaining('-> l')])
+  expect(notes[0]).not.toContain('stopped')
+})

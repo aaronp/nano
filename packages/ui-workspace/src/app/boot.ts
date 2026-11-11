@@ -56,6 +56,9 @@ export async function restoreApp({ host, stores, app, catalog, importPackage, wa
   return { restored: true, protect: true, notes, failed, say: `Your saved app was restored with ${notes.length} problem${notes.length === 1 ? '' : 's'} (first: ${notes[0] ?? failed[0]!.error}). ${keep()}` }
 }
 
+/** The baseline is read back from the running app, unless the restore was partial: then it stays the document opened, so the degraded app shows as changed. */
+export async function rebase(app: Deps['app'], r: Pick<Restore, 'protect'>, snapshot: () => Promise<NanoApp>) { if (!r.protect && app.needsBase()) app.setBase(await snapshot()) }
+
 const CHANGES = ['nano:changed', 'catalog:changed', 'app-theme-change', 'imports:remove']
 const SETTING = /\/(configure|set[A-Za-z]*)$/
 const MAX_WAIT = 5000

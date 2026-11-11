@@ -6,7 +6,7 @@ import { PlatformOps as P } from '@composable/platform'
 import { snapshotApp } from '../src/app/snapshot'
 import { realStores } from '../src/app/stores'
 import { appStore, titleStore } from '../src/app/store'
-import { autosave, restoreApp } from '../src/app/boot'
+import { autosave, rebase, restoreApp } from '../src/app/boot'
 import { appHost, Profile, tick } from './fixtures/app-host'
 
 const memory = () => {
@@ -202,3 +202,13 @@ test('the title applies to the app bar and document.title, on start-up and on ch
   expect(document.title).toBe('Mine'); expect(document.querySelector('[slot="title"]')!.textContent).toBe('Mine')
   c.auto.stop()
 }, 10_000)
+
+test('a partial restore is not rebased as the baseline', async () => {
+  const app = appStore(memory()), base = { nano: 1 as const, title: 'B', imports: [], systems: [], workspaces: [] }
+  app.setBase(base); app.adopt(base, null)
+  const live = { ...base, title: 'Degraded' }
+  await rebase(app, { protect: true }, async () => live)
+  expect(app.dirty(live)).toBe(true)
+  await rebase(app, { protect: false }, async () => live)
+  expect(app.dirty(live)).toBe(false)
+})

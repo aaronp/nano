@@ -3,8 +3,9 @@ import { host, catalog } from './composable.ts'
 import { showStatus } from './lib/status.ts'
 import { applyApp } from './app/apply.ts'
 import { snapshotApp } from './app/snapshot.ts'
+import { rebase } from './app/boot.ts'
 import { fileCommands, showNotes } from './app/file.ts'
-import { app, stores, importPackage, stopAutosave } from './boot-app.ts'
+import { app, stores, protect, importPackage, stopAutosave } from './boot-app.ts'
 import { mountWorkspace } from './components/saved-workspaces.ts'
 import { openDialog } from './components/open-dialog.ts'
 import { confirmImports } from './components/imports-confirm.ts'
@@ -28,7 +29,7 @@ const cmds = fileCommands({
 const menu = () => document.querySelector('nano-file-menu') as HTMLElement & { dirty: boolean }
 const refresh = () => { const w = app.working(); menu().dirty = !w || app.dirty(w) }
 // the baseline for "unsaved changes": a fresh page, or a document just opened, is read back from the running app
-if (app.needsBase()) app.setBase(await snapshotApp({ host, stores }))
+await rebase(app, { protect }, () => snapshotApp({ host, stores }))
 showNotes(app, t => showStatus(document, t))
 for (const c of Object.keys(cmds) as (keyof typeof cmds)[]) if (c !== 'src') document.addEventListener(`file:${c}`, () => void cmds[c]())
 document.addEventListener('nano:working-saved', refresh)

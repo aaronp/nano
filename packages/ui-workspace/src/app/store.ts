@@ -21,7 +21,7 @@ export const appStore = (storage: Store) => {
   return {
     /** The working copy's text as stored, valid or not. */
     rawWorking: (): string | null => { try { return storage.getItem(WORKING) } catch { return null } },
-    /** Keeps text a restore could not use, beside the working copy: 'bad' (unreadable) or 'unrestored' (partly applied); the newest wins. */
+    /** Keeps text a restore could not use, beside the working copy: 'bad' (unreadable) or 'unrestored' (partly applied); the first one kept stays. */
     stashed: (which: 'bad' | 'unrestored'): string | null => { try { return storage.getItem(`${WORKING}.${which}`) } catch { return null } },
     stash: (which: 'bad' | 'unrestored', text: string) => put(`${WORKING}.${which}`, text),
     discard: (which: 'bad' | 'unrestored') => { try { storage.removeItem(`${WORKING}.${which}`) } catch { /* it stays */ } },

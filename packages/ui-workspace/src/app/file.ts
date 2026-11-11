@@ -2,6 +2,7 @@
 // Open and New replace the app by writing the working copy and reloading (imports can't be unloaded); Import
 // merges into the running app. A document is untrusted data: it is checked, its imports and code are confirmed.
 import { checkApp, MAX_BYTES, RESERVED, type NanoApp } from '@composable/shell'
+import { codeTarget } from './apply.ts'
 import type { AppCatalog } from '../sandbox/deploy.ts'
 import type { SavedWorkspace } from '../lib/saved-workspaces.ts'
 import type { appStore } from './store.ts'
@@ -85,7 +86,7 @@ export function codeUses(app: NanoApp, catalog: AppCatalog): CodeUse[] {
   const out: CodeUse[] = []
   for (const sys of app.systems) for (const i of sys.instances) {
     const ops = !RESERVED(i.id) && Object.hasOwn(catalog, i.kind) ? catalog[i.kind]!.code : undefined
-    if (ops?.length && (i.config !== undefined || sys.subscriptions.some(s => s.listener === i.id && ops.some(o => s.target.endsWith(`/${o}`)))))
+    if (ops?.length && (i.config !== undefined || sys.subscriptions.some(s => s.listener === i.id && codeTarget(catalog, i.kind, s.target))))
       out.push({ system: sys.id, instance: i.id, kind: i.kind })
   }
   return out
@@ -101,7 +102,7 @@ export function withoutCode(app: NanoApp, declined: CodeUse[], catalog: AppCatal
     subscriptions: sys.subscriptions.filter(s => {
       if (!no(sys.id, s.listener)) return true
       const kind = sys.instances.find(i => i.id === s.listener)?.kind
-      return !(kind !== undefined && Object.hasOwn(catalog, kind) && catalog[kind]!.code?.some(o => s.target.endsWith(`/${o}`)))
+      return !codeTarget(catalog, kind, s.target)
     }),
   })) }
 }
@@ -117,10 +118,10 @@ export function fileCommands(d: FileDeps) {
   const mayReplace = async () => !(await unsaved()) || ui.confirm('This app has changes that are not saved. Replace it anyway? (Save or Download first to keep them.)', 'Replace')
 
   /** Writes the document as the working copy with its name, baseline and notes (all or none), and reloads. false: nothing was changed. */
-  function replaceWith(doc: NanoApp, name: string | null, notes: string[] = []): boolean {
+  function replaceWith(doc: NanoApp, name: string | null, notes: string[] = [], written?: () => void): boolean {
     const e = app.adopt(doc, name, notes)   // before anything stops: a failed write changes nothing
     if (e) { d.say(e); return false }
-    d.stopAutosave(); d.reload()
+    d.stopAutosave(); written?.(); d.reload()   // `written` (clearing ?src=) first: the reload keeps the URL it was called with
     return true
   }
 
@@ -147,9 +148,8 @@ export function fileCommands(d: FileDeps) {
     for (const c of declined) notes.push(`${key(c)}: its ${c.kind} code was not applied (not agreed to)`)
     if (how === 'replace') {
       const why = await hooks.keep?.(); if (why) { d.say(why); return 'failed' }
-      if (!replaceWith(withoutCode(doc, declined, d.catalog), o.name ?? null, notes)) return 'failed'
+      if (!replaceWith(withoutCode(doc, declined, d.catalog), o.name ?? null, notes, hooks.written)) return 'failed'
       if (o.kept) app.discard(o.kept)
-      hooks.written?.()
       return 'applied'
     }
     const before = new Set(d.workspaces().map(w => w.path))
