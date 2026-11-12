@@ -19,7 +19,7 @@
     "@pritzlaff/nano-core": "workspace:*",
     "@pritzlaff/nano-elements": "workspace:*",
     "@pritzlaff/nano-runes": "workspace:*",
-    "golden-layout": "^2.6.0",
+    "golden-layout": "2.6.0",
     "lit": "^3.3.3",
     "typebox": "^1.4.0"
   },
