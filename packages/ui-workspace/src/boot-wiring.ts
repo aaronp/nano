@@ -24,7 +24,10 @@ export function bootWiring(doc: Document, screens: () => Promise<{ id: string }[
     const flip = armed === path ? path : null
     armed = null   // any route change spends the arm
     void arrive(path)
-    if (flip) requestAnimationFrame(() => doc.querySelector<Dock>(`app-route[path="${flip}"] workspace-dock`)?.connections?.())   // after layout
+    if (flip) requestAnimationFrame(() => {   // after layout; connections() toggles, so never on an already-flipped dock
+      if ((doc.querySelector(`app-route[path="${flip}"] c-wires`) as { flipped?: boolean } | null)?.flipped) return
+      doc.querySelector<Dock>(`app-route[path="${flip}"] workspace-dock`)?.connections?.()
+    })
   })
   const now = doc.querySelector('app-shell > app-route:not([hidden])')?.getAttribute('path')   // the shell may have routed already
   if (now) void arrive(now)

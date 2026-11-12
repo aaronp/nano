@@ -46,7 +46,7 @@ let packetId = 0
 
 /** The wiring view: slot the live `<workspace-dock>`; its `dock:connections` event flips it to show the back. */
 export class Wires extends LitElement {
-  static properties = { runtime: { attribute: false }, host: { attribute: false }, catalog: { attribute: false }, application: {}, screen: {}, system: {}, flipped: { type: Boolean, reflect: true } }
+  static properties = { runtime: { attribute: false }, host: { attribute: false }, catalog: { attribute: false }, application: {}, system: {}, flipped: { type: Boolean, reflect: true } }
   static styles = css`
     :host { display: block; height: 100% }
     .stage-bg{background-color:#0B0E12;background-image:radial-gradient(#1C222B 1px, transparent 1px);background-size:22px 22px}
@@ -66,8 +66,6 @@ export class Wires extends LitElement {
   declare catalog: Catalog
   /** The instance the Application lives in (its ops are called as the view). */
   declare application: string
-  /** The screen the dock shows (its route path); with none, the dock's enclosing `app-route[path]`. */
-  declare screen?: string
   declare system: string
   declare flipped: boolean
   s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, entering: false, leaving: false, hl: false, zoom: 1, panX: 0, panY: 0, zooming: false, tab: 'view', picked: null, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
@@ -79,8 +77,6 @@ export class Wires extends LitElement {
   #timer?: ReturnType<typeof setInterval>
   #layout = ''
   #pending = false
-  #placed: Set<string> | null = null
-  #placedKey = ''
 
   constructor() {
     super()
@@ -141,8 +137,7 @@ export class Wires extends LitElement {
     // only panels that are showing: an inactive tab has no size or place, and its component waits in the rack
     return [...dock.querySelectorAll<HTMLElement>('.dock-panel')].filter(p => p.offsetWidth > 0 && p.offsetHeight > 0).map(p => {
       const el = modelIn(p), id = el?.model ?? null
-      // on screen only if the Application places it there; ponytail: with no placements known (screen not registered yet) the DOM decides
-      return { instance: id !== null && this.#placed && !this.#placed.has(id) ? null : id, rect: rectIn(p, dock), tag: (el ?? p.firstElementChild ?? p).localName }
+      return { instance: id, rect: rectIn(p, dock), tag: (el ?? p.firstElementChild ?? p).localName }
     })
   }
   rebuild() {
@@ -152,21 +147,9 @@ export class Wires extends LitElement {
     for (const i of snapshot.instances) { const k = this.kindOf(i.id); if (k) kinds[i.id] = k }
     const titles = Object.fromEntries(Object.entries(this.catalog).map(([k, e]) => [k, e.title]))
     this.#layout = JSON.stringify(panels)
-    void this.#refreshPlacements()
     this.model = buildModel({ snapshot, panels, W: this.model.W, H: this.model.H, application: this.application, kinds, titles })
     this.puzzle = buildPuzzle(this.model)
     this.requestUpdate()
-  }
-  /** Asks the Application which instances its screen places; rebuilds when that changed. */
-  async #refreshPlacements() {
-    const at = this.host ?? this.runtime, screen = this.screen ?? this.closest('app-route[path]')?.getAttribute('path') ?? undefined
-    if (!at) return
-    const r = await at.call({ registry: at.registry.id, instance: 'wires' }, this.application, Ops.key(P.placements), screen ? { screen } : {})
-    const list = 'error' in r ? [] : (r.value as { instance: string }[])
-    const ids = list.map(p => p.instance).sort(), key = ids.join('\n')
-    if (key === this.#placedKey) return
-    this.#placedKey = key; this.#placed = ids.length ? new Set(ids) : null
-    this.rebuild()
   }
   /** The catalog kind an instance was made from: the entry whose component is the instance's. */
   kindOf(id: string) {

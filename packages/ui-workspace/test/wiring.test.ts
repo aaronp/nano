@@ -46,6 +46,16 @@ test('Connections flips the dock once, when the target route is shown', async ()
   expect(t.flips()).toBe(1)
 })
 
+test('Connections leaves an already-flipped dock alone', async () => {
+  const t = setup()
+  document.querySelector('app-route[path="/workspace"]')!.insertAdjacentHTML('beforeend', '<c-wires></c-wires>')
+  Object.assign(document.querySelector('c-wires')!, { flipped: true })
+  await t.go('/workspace'); await t.go('/wiring')
+  t.link.click()
+  await t.go('/workspace'); await frame(); await tick()
+  expect(t.flips()).toBe(0)
+})
+
 test('a modified click does not arm, and an unrelated navigation spends the arm', async () => {
   const t = setup()
   await t.go('/workspace'); await t.go('/wiring')

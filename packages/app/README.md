@@ -25,7 +25,7 @@ later, then call `catalog-changed`). Optional: `gateways`, `locked(id)`, `regist
 | `app` | `app` | The `AppGateway`; `createApplication` adds it. Focus and the app bar's target; the host's dock sets focus. |
 | `alerts` | `alerts` | `alerts(show)` builds it: the host decides how a message reaches the user. Add it to the host registry. |
 | `deploy` | option | `(system, id, kind, mode, owner, outward?) => Result`: puts a kind's component in a system. The default deploys in the host only and rejects other modes. |
-| `placementsOf` | option | `(layout) => { panel, instance }[]`: reads which instances a screen's opaque layout places. Without it, no screen places anything. |
+| `placementsOf` | option | `(layout) => { panel, instance, box?, tab? }[]`: reads which instances a screen's opaque layout places; `box` is the panel's rectangle as fractions of the page, `tab` is `{ group, active }` when it shares a tab group. Without it, no screen places anything. |
 
 A component contract the host does not implement (say `alerts`) is just an absent instance: a call to it fails with
 the runtime's `no instance alerts in host`, which callers should treat as a result, not a crash.

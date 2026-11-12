@@ -394,13 +394,12 @@ test('a docked panel\'s chassis carries data-deploy and is marked by the toggle'
   expect([...root.querySelectorAll('[data-chassis][data-mark]')].map(e => e.getAttribute('data-chassis'))).toEqual(['panel-0'])
 })
 
-test('on-screen membership comes from the Application placements', async () => {
+test('a live panel stays on its chassis even when the Application has not saved it', async () => {
   const { el, dock, call, flip, settle } = await mount(l => l.p)
   await call(P.setScreen, { id: '/x', title: 'X', system: 'host', layout: { p: [{ panel: 'a', instance: 'r' }] } })
-  el.screen = '/x'
   await flip()
   await settle()
-  expect(el.model.chassis.map(c => c.instance)).toEqual(['r', null, null])
-  expect(el.model.rack.map(r => r.id)).toContain('l')
+  expect(el.model.chassis.map(c => c.instance)).toEqual(['r', 'l', null])
+  expect(el.model.rack.map(r => r.id)).not.toContain('l')
   expect(dock.querySelectorAll('.dock-panel').length).toBe(3)
 })

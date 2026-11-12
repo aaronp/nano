@@ -190,8 +190,8 @@ export class Circuit extends LitElement {
       this.s = { ...this.s, panX: this.s.panX + m.clientX - this.#drag.x, panY: this.s.panY + m.clientY - this.#drag.y }
       this.#drag = { x: m.clientX, y: m.clientY }; this.requestUpdate()
     }
-    const up = () => { this.#drag = null; this.dragging = false; window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); this.requestUpdate() }
-    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up)
+    const up = () => { this.#drag = null; this.dragging = false; window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); this.requestUpdate() }
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up)
   }
   /** Centres the view on the world point clicked in the minimap. */
   panFromMinimap(e: MouseEvent) {
