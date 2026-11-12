@@ -18,3 +18,6 @@ export const TAB_W = 88, TAB_H = 20
 export const SIDE_W = 280, SIDE_GAP = 140, BLOCK_HEAD = 30, BLOCK_GAP = 28, ITEM_GAP = 12
 export const ZOOM_MIN = 0.3, ZOOM_MAX = 2.5
 export const MARGIN = 60
+
+/** Covers: the lifted position of the toggle, how far a cover floats per unit of lift, and how far a drag hides it. */
+export const LIFT_ON = 0.85, LIFT_Z = 120, HIDE_DIST = 160

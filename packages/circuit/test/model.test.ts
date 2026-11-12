@@ -74,3 +74,8 @@ test('a placement missing from the snapshot still yields a bare footprint', () =
   const f = build([pl('/a', 'ghost')]).layers[0]!.footprints[0]!
   expect([f.instance, f.title, f.pads]).toEqual(['ghost', 'ghost', []])
 })
+
+test('a pad carries its op schema', () => {
+  const pads = build().side[0]!.items.find(i => i.instance === 'ex-log')!.pads
+  expect(pads.every(p => (p.schema as { type?: string } | undefined)?.type !== undefined)).toBe(true)
+})

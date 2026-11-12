@@ -5,8 +5,8 @@ import { padTypeOf, type Cable, type CableEnd, type Circuit, type Footprint, typ
 
 const padOf = (system: string, instance: string, op: Op): Pad | null => {
   const key = `${system}/${instance} ${Ops.key(op)}`, base = { key, instance, op: Ops.key(op), label: op.name, ...(op.description !== undefined && { description: op.description }) }
-  if (op.input) return { ...base, dir: 'in', kind: op.output ? 'call' : 'event', type: padTypeOf(op.input) }
-  if (op.output) return { ...base, dir: 'out', kind: 'event', type: padTypeOf(op.output) }
+  if (op.input) return { ...base, dir: 'in', kind: op.output ? 'call' : 'event', type: padTypeOf(op.input), schema: op.input }
+  if (op.output) return { ...base, dir: 'out', kind: 'event', type: padTypeOf(op.output), schema: op.output }
   return null
 }
 

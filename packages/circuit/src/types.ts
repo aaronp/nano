@@ -15,7 +15,7 @@ export function padTypeOf(schema: TSchema | undefined): PadType {
 }
 
 /** An event is round, a call a rounded square; an input is hollow, an output filled. */
-export type Pad = { key: string; instance: string; op: string; label: string; dir: 'in' | 'out'; kind: 'event' | 'call'; type: PadType; description?: string }
+export type Pad = { key: string; instance: string; op: string; label: string; dir: 'in' | 'out'; kind: 'event' | 'call'; type: PadType; description?: string; schema?: TSchema }
 export type Footprint = { system: string; instance: string; kind?: string; title: string; box: Box; tab?: { group: string; active: boolean }; shared: boolean; pads: Pad[] }
 export type Layer = { screen: string; title: string; icon?: string; system: string; footprints: Footprint[] }
 export type SideItem = { system: string; instance: string; kind?: string; title: string; pads: Pad[] }
