@@ -39,4 +39,4 @@ const server = Bun.serve({
     return new Response(file, { headers: cors })
   },
 })
-console.log(`serving ${dir} at ${server.url}${live ? ' (live reload)' : ''}`)
+console.log(`\n  nano  serving ${dir}${live ? ', rebuilding and reloading on change' : ''}\n\n  ➜  Local:   ${server.url}\n  ➜  press Ctrl+C to stop\n`)
