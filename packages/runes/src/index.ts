@@ -1,6 +1,6 @@
 // Rune-style sugar over @pritzlaff/nano-core: write plain state and functions; get an ordinary core Component.
 import { Type, type Static, type TSchema, type TUnknown } from 'typebox'
-import { Components, Ops, type Component, type Environment, type Op } from '@pritzlaff/nano-core'
+import { clients, Components, Ops, type Clients, type Component, type Environment, type Interface, type Op } from '@pritzlaff/nano-core'
 
 /** The instance whose `make` is running: what state writes mark dirty, and where events publish. */
 type Making = { dirty(): void; env?: Environment }
@@ -86,10 +86,13 @@ const about = (s?: TSchema) => { const d = (s as { description?: string } | unde
  * A component from a function returning its surface: functions become actions, getters become sources published
  * when their value changes, and `event()` members become sources. `make` runs once here to read the shape.
  */
-export function component<A extends object, S extends Schemas<A> = Schemas<A>>(id: string, make: () => A, schemas: S & Checked<A, S>,
-  opts: { description?: string } = {}): Component<A> & { ops: { [K in keyof A]: Op } } {
+export function component<A extends object, S extends Schemas<A> = Schemas<A>, N extends Record<string, Interface> = {}>(id: string, make: (deps: Clients<N>) => A, schemas: S & Checked<A, S>,
+  opts: { description?: string; needs?: N; implements?: Interface } = {}): Component<A> & { ops: { [K in keyof A]: Op } } {
   const kinds = new Map<string, Kind>(), ops: Record<string, Op> = {}
-  for (const [k, d] of Object.entries(Object.getOwnPropertyDescriptors(run(make, { dirty() {} })))) {
+  const needs = opts.needs ?? {} as N
+  const unavailable = Object.fromEntries(Object.entries(needs).map(([n, i]) => [n, Object.fromEntries(Object.keys(i.ops).map(k =>
+    [k, async () => { throw new Error('needs are not available while reading the shape') }]))])) as unknown as Clients<N>
+  for (const [k, d] of Object.entries(Object.getOwnPropertyDescriptors(run(() => make(unavailable), { dirty() {} })))) {
     const given = (schemas as Record<string, TSchema | ActionSpec | undefined>)[k], mark = d.value?.[EVENT] as EventMark | undefined
     const schema = isSchema(given) ? given : undefined
     if (d.get) { kinds.set(k, 'getter'); const out = schema ?? Type.Unknown(); ops[k] = Ops.source(id, k, out, about(out)) }
@@ -99,6 +102,8 @@ export function component<A extends object, S extends Schemas<A> = Schemas<A>>(i
       const spec: Partial<ActionSpec> = (given as ActionSpec | undefined) ?? {}
       ops[k] = Ops.action(id, k, spec.in ?? IGNORED, spec.out ?? Type.Void(), spec.description === undefined ? {} : { description: spec.description })
     }
+    const given_ = opts.implements?.ops[k]
+    if (given_ && kinds.has(k)) ops[k] = given_   // an interface op is used as-is
   }
   const getters = [...kinds].filter(([, kind]) => kind === 'getter').map(([k]) => k)
   const at = id.lastIndexOf('/')
@@ -116,11 +121,11 @@ export function component<A extends object, S extends Schemas<A> = Schemas<A>>(i
         }
       } finally { pending = false }   // after the loop: writes made by getters don't schedule another flush
     }
-    const api = run(make, { env, dirty: () => { if (!pending) { pending = true; queueMicrotask(flush) } } })
+    const api = run(() => make(clients(env, needs)), { env, dirty: () => { if (!pending) { pending = true; queueMicrotask(flush) } } })
     for (const k of getters) { try { last.set(k, read(k)) } catch {} }
     for (const [k, kind] of kinds) if (kind === 'event') ((api as any)[k][EVENT] as EventMark).bind(ops[k]!)
     return api
-  }, opts)
+  }, { ...(opts.description !== undefined && { description: opts.description }), ...(opts.needs && { needs: opts.needs }), ...(opts.implements && { implements: [opts.implements] }) })
   for (const [k, kind] of kinds) {
     if (kind === 'getter') c.action(ops[k]!, a => copy(JSON.stringify((a as any)[k])))
     else if (kind === 'event') c.action(ops[k]!)

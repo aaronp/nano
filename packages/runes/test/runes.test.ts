@@ -259,3 +259,37 @@ test('a runes component publishing to a paused wrapper keeps updating its own st
   await call('counter', Counter.ops.increment); await tick()
   expect((await call('counter', Counter.ops.count)).value).toBe(2)
 })
+
+// needs and implements
+import { iface, type Clients } from '@pritzlaff/nano-core'
+const Db = iface('example/db', { save: { in: Type.String(), out: Type.String() }, load: { in: Type.String(), out: Type.String() } })
+
+test('a runes component with needs calls its dependency through the binding', async () => {
+  const Store = component('example/store', () => {
+    const m = new Map<string, string>()
+    return { save: (k: string) => { m.set(k, 'v-' + k); return k }, load: (k: string) => m.get(k) ?? '' }
+  }, untyped, { implements: Db })
+  const User = component('example/user', (deps: Clients<{ db: typeof Db }>) => ({ async fetch(k: string) { await deps.db.save(k); return deps.db.load(k) } }),
+    { fetch: { in: Type.String(), out: Type.String(), description: 'x' } }, { needs: { db: Db } })
+  expect(User.needs).toEqual({ db: Db })
+  const a = Runtimes.create(Registries.create('a'), undefined, { peers: r => (r === 'b' ? b : a) }), b = Runtimes.create(Registries.create('b'))
+  a.registry.add('user', Components.instantiate(User)); b.registry.add('store', Components.instantiate(Store))
+  a.registry.bind('user', 'db', { registry: 'b', instance: 'store' })
+  const r = await a.call({ registry: 'a', instance: 'ui' }, 'user', Ops.key(User.ops.fetch), 'k')
+  expect(r).toEqual({ value: 'v-k' })
+})
+
+test('the shape-reading run gets clients that throw', () => {
+  let err = ''
+  component('example/peek', ({ db }) => { db.save('x').catch(e => { err = e.message }); return { go: () => {} } }, untyped, { needs: { db: Db } })
+  return tick().then(() => expect(err).toBe('needs are not available while reading the shape'))
+})
+
+test("implements puts the interface's ops under its id", () => {
+  const C = component('example/impl', () => ({ get entries() { return [] as string[] }, save: (k: string) => k, load: (k: string) => k }),
+    { entries: Type.Array(Type.String()) } as never, { implements: Db })
+  const keys = [...C.actions.keys()]
+  expect(keys).toContain('example/db/save')
+  expect(keys).toContain('example/impl/entries')
+  expect(C.implements).toEqual([Db])
+})
