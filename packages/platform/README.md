@@ -8,7 +8,7 @@ an import).
 
 ```ts
 const host = Runtimes.create(Registries.create('host'))
-host.registry.add('platform', Components.instantiate(platform(host, { ...bundle.catalog, ...editor.catalog })))
+host.registry.add('application', Components.instantiate(application(host, { ...bundle.catalog, ...editor.catalog })))
 ```
 
 | Action | Does |

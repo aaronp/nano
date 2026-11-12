@@ -1,6 +1,7 @@
 // Systems as a component: it holds the registries (host first), creates components from a catalog, adds them to
 // systems, connects their actions, and publishes every change in any system.
 import { Type, type Static } from 'typebox'
+import type { AppCatalog } from './catalog'
 import { Components, DeltaSchema, Ops, SnapshotSchema, SubscriptionSchema, Registries, Runtimes, type Component, type Environment, type Owner, type Registry, type Result, type Runtime, type Selectors, type Snapshot } from '@pritzlaff/nano-core'
 
 const NS = 'nano.app/application', none = Type.Void()
@@ -8,7 +9,7 @@ const str = (description: string, examples: string[]) => Type.String({ descripti
 const systemId = str('A system (registry) id', ['host', 'lab']), instance = str('An instance id', ['ex-range'])
 const ignored = Type.Unknown({ description: 'Ignored: any value triggers it' })
 
-/** What is selected in the platform: an instance in a system, and maybe one of its ops; null when nothing is. */
+/** What is selected in the application: an instance in a system, and maybe one of its ops; null when nothing is. */
 export const SelectionSchema = Type.Union([
   Type.Object({ system: systemId, instance, op: Type.Optional(str('One of its ops, by key', ['composable.bundle/range/value'])) }),
   Type.Null(),
@@ -16,13 +17,13 @@ export const SelectionSchema = Type.Union([
   examples: [{ system: 'host', instance: 'ex-range' }, null] })
 export type Selection = Static<typeof SelectionSchema>
 
-/** A kind the platform can make: its catalog name, its component's id (`ns/name`), title and element tag. */
+/** A kind the application can make: its catalog name, its component's id (`ns/name`), title and element tag. */
 export const KindSchema = Type.Object({
   kind: str('Its catalog name', ['range']), component: str("Its component's id, ns/name", ['composable.bundle/range']),
   title: str('What to call it', ['Range']), tag: Type.Optional(str("Its element's tag, if it has one", ['c-range'])),
   description: Type.Optional(str('What it is for', ['A number between bounds'])),
   modes: Type.Optional(Type.Array(Type.String({ description: 'A deploy mode', examples: ['host'] }), { description: 'The modes it can be deployed in, the first is the default: host, sandbox, isolated-sandbox' })),
-}, { title: 'Kind', description: 'A kind of component the platform can make' })
+}, { title: 'Kind', description: 'A kind of component the application can make' })
 export type Kind = Static<typeof KindSchema>
 
 /** The application's ops. */
@@ -55,7 +56,7 @@ const P = ApplicationOps
 
 type State = { host: string; systems: Map<string, Runtime>; selected: Selection; env: Environment; watch(rt: Runtime): void; changed(id: string, delta: unknown): void }
 
-// what the platform adds, it owns: named by its own id in the host
+// what the application adds, it owns: named by its own id in the host
 const owner = (s: State): Owner => ({ kind: 'platform', name: s.env.handles().find(h => h.coord.registry === s.host)?.coord.instance ?? 'application' })
 const must = <A>(r: { value: A } | { error: string }): A => { if ('error' in r) throw new Error(r.error); return r.value }
 const system = (s: State, id: string): Registry => {
@@ -71,13 +72,13 @@ const opOf = (reg: Registry, instance: string, key: string) => {
 }
 
 /** The application over `host`, able to create the kinds of component in `catalog` (a host's merged catalogs). */
-export function application(host: Runtime, catalog: Record<string, { component: Component; title?: string; tag?: string; modes?: readonly string[] }>,
+export function application(host: Runtime, catalog: AppCatalog,
   opts: { gateways?: readonly string[]; locked?: (id: string) => boolean; deploy?: (system: Runtime, id: string, kind: string, mode: string | undefined, owner: Owner, outward?: Selectors) => Result<void> } = {}): Component<State> {
   // read at call time: the host adds imported packages' kinds to this same object, then calls catalog-changed
   const kinds = (): Kind[] => Object.entries(catalog).map(([kind, e]) =>
     ({ kind, component: `${e.component.id.ns}/${e.component.id.name}`, title: e.title ?? kind, ...(e.tag && { tag: e.tag }), ...(e.modes && { modes: [...e.modes] }),
       ...(e.component.description && { description: e.component.description }) }))
-  // the same instance, owned by the platform, keeping its labels (a sandboxed instance stays one)
+  // the same instance, owned by the application, keeping its labels (a sandboxed instance stays one)
   const share = (s: State, instance: string, from: string, to: string) => {
     const inst = system(s, from).get(instance)
     if (!inst) throw new Error(`no ${instance} in ${from}`)
@@ -98,7 +99,7 @@ export function application(host: Runtime, catalog: Record<string, { component: 
     s.changed = changed
     s.watch(host)
     return s
-  }, { description: "The systems: makes components from the catalog, adds them to systems, connects their actions, and publishes every change" })
+  }, { description: "The application: its systems, makes components from the catalog, adds them to systems, connects their actions, and publishes every change" })
   c.action(P.systems, s => snapshots(s))
   c.action(P.selected, s => s.selected)
   c.action(P.catalog, () => Object.keys(catalog))
@@ -127,7 +128,7 @@ export function application(host: Runtime, catalog: Record<string, { component: 
     const self = s.env.handles().find(h => h.coord.registry === id)?.coord.instance
     if (instance === 'registry' || instance === self || opts.gateways?.includes(instance) || opts.locked?.(instance)) throw new Error(`${instance} can't be removed from ${id}`)
     const reg = system(s, id)
-    // gone from the system means gone from its wiring too: core keeps a source's subscriptions, the platform doesn't
+    // gone from the system means gone from its wiring too: core keeps a source's subscriptions, the application doesn't
     for (const sub of reg.snapshot().subscriptions) if (sub.source === instance) reg.unsubscribe(sub.id)
     must(reg.remove(instance))
   })
@@ -145,7 +146,7 @@ export function application(host: Runtime, catalog: Record<string, { component: 
   return c
 }
 
-/** A system's runtime, from the platform instance in `registry` (the platform owns the runtimes it creates). */
+/** A system's runtime, from the application instance in `registry` (the application owns the runtimes it creates). */
 export function runtimeOf(registry: Registry, system: string, id = 'application'): Runtime | undefined {
   return (registry.get(id)?.value as State | undefined)?.systems.get(system)
 }

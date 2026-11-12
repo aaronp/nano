@@ -168,7 +168,7 @@ test('#/themes has the theme cards; Settings keeps Layout and no theme picker', 
 test('the profile instance is in the host system, owned by the platform, labelled nano/deploy host', async () => {
   const [hostSystem] = (await call('application', P.systems)).value
   const p = hostSystem.instances.find((i: any) => i.id === 'profile')
-  expect(p.owner).toEqual({ kind: 'platform', name: 'application' })   // as the ex-* examples: made through the app's platform
+  expect(p.owner).toEqual({ kind: 'platform', name: 'application' })   // as the ex-* examples: made through the app's application
   expect(p.labels['nano/deploy']).toBe('host')
   expect(host.registry.snapshot().instances.filter(i => i.id === 'profile')).toHaveLength(1)
   expect((await call('profile', Profile.ops.user)).value).toEqual({ name: 'You' })
