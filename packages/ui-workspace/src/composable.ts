@@ -21,6 +21,7 @@ import { definePlatform, definePlatformTable } from '@composable/platform'
 import { ApplicationOps as P } from '@pritzlaff/nano-app'
 import { defineElements as defineEditor } from '@composable/editor/elements'
 import { defineWires } from '@composable/wires'
+import { defineCircuit } from '@composable/circuit'
 import { defineSandboxed, provideDeploy } from './sandbox/sandboxed-el.ts'
 import { deploy, deployIn, type AppCatalog, type Mode } from './sandbox/deploy.ts'
 import { HOST_ENTRIES } from './app/stores.ts'
@@ -110,6 +111,7 @@ defineBundle()
 definePlatform(); definePlatformTable(); defineSandboxed()
 defineEditor()
 defineShell(); defineWorkspaceControls()
-defineWires()
+defineWires(); defineCircuit()
 // the wiring view over the Workspace dock: it shows and edits the host system, and offers the merged catalog
 for (const w of document.querySelectorAll('c-wires')) Object.assign(w, { runtime: host, catalog })
+for (const c of document.querySelectorAll('c-circuit')) Object.assign(c, { runtime: host })

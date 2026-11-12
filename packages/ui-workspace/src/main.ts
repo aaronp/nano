@@ -17,3 +17,7 @@ import './widgets/widgets.ts';
 import './widgets/notes-panel.ts';
 import './components/workspace-dock.ts';
 import './boot-app-bar.ts';   // after the shell (its bus) and the dock: the app bar follows the page and panel focus
+import { bootWiring } from './boot-wiring.ts';   // after the shell (its bus)
+import { host } from './composable.ts';
+import { screensOf } from './lib/screens.ts';
+bootWiring(document, () => screensOf(host));

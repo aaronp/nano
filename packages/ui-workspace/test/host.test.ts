@@ -144,14 +144,14 @@ test('the host defines <c-sandboxed>, which dock panels of sandboxed kinds use',
 
 const route = (path: string) => document.querySelector(`app-route[path="${path}"]`)!
 
-test('the app bar holds <nano-profile> showing Components, Settings, Systems and Themes, and no theme picker', async () => {
+test('the app bar holds <nano-profile> showing Components, Settings, Systems, Themes and Wiring, and no theme picker', async () => {
   const el = document.querySelector('[slot="actions"]') as any
   expect(el.localName).toBe('nano-profile')
   expect(!!document.querySelector('[slot="actions"] theme-picker, theme-picker[slot="actions"]')).toBe(false)
   await el.updateComplete
   el.shadowRoot.querySelector('button').click(); await el.updateComplete
   const links = [...el.shadowRoot.querySelectorAll('nav a')].map((a: any) => [a.textContent, a.getAttribute('href')])
-  expect(links).toEqual([['Components', '#/components'], ['Settings', '#/settings'], ['Systems', '#/systems'], ['Themes', '#/themes']])
+  expect(links).toEqual([['Components', '#/components'], ['Settings', '#/settings'], ['Systems', '#/systems'], ['Themes', '#/themes'], ['Wiring', '#/wiring']])
 })
 
 test('the sidebar has no Systems link; #/systems still exists', () => {

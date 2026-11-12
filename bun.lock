@@ -127,6 +127,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@composable/bundle": "workspace:*",
+        "@composable/circuit": "workspace:*",
         "@composable/editor": "workspace:*",
         "@composable/platform": "workspace:*",
         "@composable/shell": "workspace:*",

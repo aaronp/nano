@@ -5,7 +5,7 @@ import type { HostStores } from '@pritzlaff/nano-app'
 
 export type Stores = HostStores
 /** The profile menu's links to the host's own pages. */
-export const HOST_ENTRIES = [{ label: 'Components', href: '#/components' }, { label: 'Settings', href: '#/settings' }, { label: 'Systems', href: '#/systems' }, { label: 'Themes', href: '#/themes' }]
+export const HOST_ENTRIES = [{ label: 'Components', href: '#/components' }, { label: 'Settings', href: '#/settings' }, { label: 'Systems', href: '#/systems' }, { label: 'Themes', href: '#/themes' }, { label: 'Wiring', href: '#/wiring' }]
 
 /** `title` is the host's title store (Task 4's), since the app bar and `document.title` follow it. */
 export const realStores = (doc: Document, storage: Storage, title: Stores['title']): Stores => ({
