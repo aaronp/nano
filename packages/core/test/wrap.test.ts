@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { Components, hasRuntime, isOk, Ops, Registries, Runtimes, Strategies, unwrap, wrap, WrapperOps, type HasRuntime, type Trace } from '../src'
+import { Components, guard, hasRuntime, matches, isOk, Ops, Registries, Runtimes, Strategies, unwrap, wrap, WrapperOps, type HasRuntime, type Trace } from '../src'
 
 const flush = () => new Promise(r => setTimeout(r, 0))
 const Updated = Ops.source('com.acme', 'counter-updated', Type.Number())
@@ -211,4 +211,113 @@ test('unwrap restores the owner it had before wrap', () => {
   must(wrap(rt, 'c', Strategies.forward, { owner: { kind: 'app', name: 'a' } }))
   must(unwrap(rt, 'c'))
   expect(rt.registry.snapshot().instances.find(i => i.id === 'c')!.owner).toEqual({ kind: 'widget', name: 'w' })
+})
+
+// guards
+const Ping = Ops.action('com.acme', 'ping', Type.Null(), Type.Unknown())
+const callerOf = (targets: [string, string][]) => {
+  const c = Components.create({ ns: 'com.acme', name: 'caller' }, () => ({}))
+  c.action(Ping, async (_, __, env) => {
+    const h = env.handles()[0]!, out: unknown[] = []
+    for (const [t, op] of targets) out.push(await h.call(t, Ops.action(...(op.split('/') as [string, string]), Type.Unknown(), Type.Unknown()), 'x'))
+    return out
+  })
+  return Components.instantiate(c)
+}
+const guarded = (outward: Parameters<typeof guard>[2], targets: [string, string][] = [['log', 'com.acme/log']]) => {
+  const s = setup()
+  s.reg.add('caller', callerOf(targets))
+  const w = must(guard(s.rt, 'caller', outward))
+  return { ...s, w, ping: () => s.rt.call(me, 'caller', Ops.key(Ping), null) }
+}
+const logged = (r: unknown) => (r as { value: { value?: unknown }[] }).value
+
+test('a guard with allow lets only matching calls out', async () => {
+  const { ping, log } = guarded({ allow: ['r/log/*'] }, [['log', 'com.acme/log'], ['c', 'com.acme/inc']])
+  const r = logged(await ping())
+  expect(r[0]).toMatchObject({ value: undefined }); expect(log.value).toEqual(['x'])
+  expect(r[1]).toMatchObject({ error: expect.stringContaining('r/c/com.acme/inc') })
+})
+
+test('deny beats allow', async () => {
+  const { ping, log } = guarded({ allow: ['r/*'], deny: ['r/log/*'] })
+  expect(logged(await ping())[0]).toHaveProperty('error'); expect(log.value).toEqual([])
+})
+
+test('an empty allow list refuses every outward call', async () => {
+  const { ping } = guarded({ allow: [] })
+  expect(logged(await ping())[0]).toHaveProperty('error')
+})
+
+test('a refused call errors naming its coordinate, and is traced', async () => {
+  const { ping, w } = guarded({ allow: [] }), seen: Trace[] = []
+  w.runtime.listen(t => { seen.push(t) })
+  const r = logged(await ping())
+  expect((r[0] as { error: string }).error).toContain('r/log/com.acme/log')
+  expect(seen.some(t => t.kind === 'call' && t.target === 'log' && !isOk(t.result))).toBe(true)
+})
+
+test('selectors match literally apart from *', () => {
+  expect(matches('host/log/composable.bundle/*', 'host/log/composable.bundle/log/info')).toBe(true)
+  expect(matches('host/log/composable.bundle/*', 'host/log/composableXbundle/log/info')).toBe(false)
+  expect(matches('a/b', 'a/bc')).toBe(false)
+})
+
+test('calls to registry are guarded too (coordinate r/registry/…)', async () => {
+  const { ping } = guarded({ allow: ['r/log/*'] }, [['registry', 'composable/snapshot']])
+  expect((logged(await ping())[0] as { error: string }).error).toContain('r/registry/composable/snapshot')
+})
+
+test("guarding keeps the entry's labels", () => {
+  const { rt, reg } = setup()
+  reg.label('c', { 'nano/deploy': 'host' })
+  must(guard(rt, 'c', { allow: [] }))
+  expect(reg.labels('c')).toEqual({ 'nano/deploy': 'host' })
+})
+
+test('* matches line terminators too, so a deny cannot be dodged with a newline', async () => {
+  expect(matches('r/log/*', 'r/log/a\nb')).toBe(true)
+  expect(matches('r/log/*', 'r/log/a\r b')).toBe(true)
+  const { ping, log } = guarded({ deny: ['r/log/*'] }, [['log', 'com.acme/log\nx']])
+  expect(logged(await ping())[0]).toHaveProperty('error'); expect(log.value).toEqual([])
+})
+
+test('regex specials in a selector match only literally', () => {
+  expect(matches('a.b(c)+', 'a.b(c)+')).toBe(true)
+  expect(matches('a.b(c)+', 'aXb(c)+')).toBe(false)
+  expect(matches('a.b(c)+', 'a.bcc')).toBe(false)
+})
+
+test('removing a wrapper removes its parts (after a microtask); unwrap and wrap-a-wrapper are unaffected', async () => {
+  const { rt, reg } = setup()
+  const w = must(wrap(rt, 'c', Strategies.forward)) as HasRuntime
+  reg.remove('c')
+  await flush()
+  expect(w.runtime.registry.snapshot().instances.map(i => i.id)).toEqual(['registry'])
+  const s2 = setup()
+  const outer = must(wrap(s2.rt, 'c', Strategies.forward)) as HasRuntime
+  const outer2 = must(wrap(s2.rt, 'c', Strategies.forward)) as HasRuntime
+  await flush()
+  expect(outer2.runtime.registry.get('c')!.value).toBe(outer)   // handed over, not removed
+  expect(outer.runtime.registry.get('c')).toBeDefined()
+})
+
+test('unwrap drops nano/guarded from the restored entry', () => {
+  const { rt, reg } = setup()
+  must(wrap(rt, 'c', Strategies.forward)); reg.label('c', { 'nano/guarded': 'true', k: 'v' })
+  must(unwrap(rt, 'c'))
+  expect(reg.labels('c')).toEqual({ k: 'v' })
+})
+
+test('a schema that throws is an error result, for a call, a refused publish and a delivery', async () => {
+  const Bad = Ops.action('com.acme', 'bad', Type.String({ pattern: '(' }), Type.Null())
+  const BadOut = Ops.source('com.acme', 'bad-out', Type.String({ pattern: '(' }))
+  const c = Components.create({ ns: 'com.acme', name: 'bad' }, e => e)
+  c.action(Bad, () => null); c.action(BadOut, () => 'x')
+  c.action(Ops.action('com.acme', 'pub', Type.Null(), Type.Null()), async e => { await e.notify(BadOut, 'x'); return null }, { emits: [BadOut] })
+  const rt = Runtimes.create(Registries.create('r')); rt.registry.add('bad', Components.instantiate(c))
+  const r = await rt.call(me, 'bad', Ops.key(Bad), 'x')
+  expect(isOk(r)).toBe(false)
+  const n = await rt.notify({ from: { registry: 'r', instance: 'bad' }, op: Ops.key(BadOut), data: 'x' })
+  expect(isOk(n)).toBe(false)
 })

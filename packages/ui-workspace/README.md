@@ -14,7 +14,7 @@ know nothing about each other.
 - **Runtime:** the drawer's Workspace entries add panels to the dock; each panel places a new instance and
   removes it when closed.
 
-`bun run build` (then `bun run serve`) builds `public/main.js` with Bun instead of esbuild. The rest of this
+`bun run build` (then `bun run serve`) builds `public/main.js` with Bun instead of esbuild. Isolated sandboxes (opaque-origin iframes) fetch modules cross-origin, so the host must send `Access-Control-Allow-Origin` (`serve` runs with `--cors`; GitHub Pages sends it). The rest of this
 README is the starter's.
 
 # Workspace starter
@@ -50,6 +50,7 @@ In `public/index.html`:
 
 - `open` lists the panels shown at first; `arrangement` is `row`, `column`, `stack` (tabs) or `grid`.
 - Each panel is a fresh copy of its template, and every panel is on the app's event bus.
+- The workspace's controls sit in the app bar, after File (`<nano-app-bar>`; a focused panel with controls of its own shows those instead): **View** (Tabs | Clear), Connections, Save as workspace…, Save layout, Restore and Reset (under ⋯ on narrow screens).
 - **Save layout** remembers the arrangement in this browser and it opens automatically next time; **Restore** goes back to it and **Reset** to the starting layout. A saved layout that names widgets you have since removed is ignored, with a message.
 - `data-flush` on a template removes the panel padding (for charts and lists that draw their own edges).
 

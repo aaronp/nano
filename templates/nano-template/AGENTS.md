@@ -14,8 +14,8 @@ is what to do, and what not to.
 - **The catalog** (`src/index.ts`) lists each kind: its component, title and element tag. `define()` defines the
   elements. The manifest is generated from the catalog.
 
-`src/timer.ts` + `src/timer-el.ts` and `src/picker.ts` + `src/picker-el.ts` are the worked examples. Copy their
-shape.
+`src/timer.ts` + `src/timer-el.ts`, `src/picker.ts` + `src/picker-el.ts` and `src/store.ts` + `src/store-el.ts` are the
+worked examples. Copy their shape.
 
 ## Commands
 
@@ -61,6 +61,8 @@ carrying the widget's own CSS across.
   (`@pritzlaff/nano-elements`: `.btn`, `.badge`, `.card`, `.field`, `.input-group`…) and its kit elements
   (`<nano-select>`, `<nano-date-picker>`, `<nano-data-table>`, `toast()`…) before writing CSS or widgets of your
   own.
+- **No `<form>` submit.** A host may run your element in a sandboxed iframe, where forms are blocked and `submit` never
+  fires: save on a button's click and on Enter instead.
 - **Accessibility.** Label inputs (`aria-label` or a `<label>`), use real `<button>`s, keep keyboard use working.
 - **Don't edit** `dist/` (built), or `preview/themes.ts` (generated from the nano workspace's themes).
 - **Don't change** a released component's id or ops without a new major version: hosts' saved connections name

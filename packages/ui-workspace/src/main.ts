@@ -4,7 +4,9 @@
  */
 import './boot-theme.ts';
 import './composable.ts';
+import './boot-app.ts';   // the title and the working copy, before saved workspaces mount
 import './boot-saved-workspaces.ts';   // saved workspaces' routes exist before <app-shell> reads them
+import './boot-file.ts';   // the File menu's commands and ?src=
 import './components/app-shell.ts';
 import './components/split-pane.ts';
 import './components/component-drawer.ts';
@@ -14,3 +16,4 @@ import './components/theme-picker.ts';
 import './widgets/widgets.ts';
 import './widgets/notes-panel.ts';
 import './components/workspace-dock.ts';
+import './boot-app-bar.ts';   // after the shell (its bus) and the dock: the app bar follows the page and panel focus

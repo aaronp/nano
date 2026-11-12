@@ -22,9 +22,16 @@ export function askWorkspace(doc: Document, opts: { heading: string; systems?: s
     <label style="${field}">Nav title<input name="title" required placeholder="My Workspace" style="${input}"></label>
     <label style="${field}">Route<input name="path" required placeholder="/my-workspace" style="${input}"></label>
     <fieldset style="border:0; padding:0; margin:0 0 12px"><legend style="margin-bottom:6px">Nav icon</legend>
-      <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px">${Object.keys(ICONS).map((k, i) => `<label title="${k}" style="display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px; border-radius:6px; cursor:pointer; font-size:11px; color:var(--muted)">
-        <input type="radio" name="icon" value="${k}" ${i === 0 ? 'checked' : ''} style="margin:0">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICONS[k]}"/></svg>${k}</label>`).join('')}</div>
+      <style>
+        .icon-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(44px, 1fr)); gap:6px; max-height:236px; overflow-y:auto; padding:2px }
+        .icon-grid label { display:grid; place-items:center; aspect-ratio:1; border-radius:10px; border:1px solid transparent; background:var(--surface-2); cursor:pointer }
+        .icon-grid input { position:absolute; opacity:0; pointer-events:none }
+        .icon-grid label:has(input:checked) { border-color:var(--accent); color:var(--accent) }
+        .icon-grid label:has(input:focus-visible) { outline:2px solid var(--focus, var(--accent)); outline-offset:1px }
+      </style>
+      <div class="icon-grid">${Object.keys(ICONS).map((k, i) => `<label title="${k}">
+        <input type="radio" name="icon" value="${k}" aria-label="${k}" ${i === 0 ? 'checked' : ''}>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICONS[k]}"/></svg></label>`).join('')}</div>
     </fieldset>
     ${systems ? `<label style="${field}">System (the runtime its components run in)<select name="system" style="${input}">
         ${systems.map((s) => `<option value="${escape(s)}">${escape(s)}</option>`).join('')}<option value="new">New system…</option></select></label>

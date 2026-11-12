@@ -17,6 +17,8 @@ a[slot='nav'][data-sub] svg { width: 16px; height: 16px; }
 .nav-row [data-toggle-drawer] { display: grid; place-items: center; padding: 0; }
 .nav-row [data-toggle-drawer] svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .nav-row [data-toggle-drawer][aria-pressed='true'] { background: var(--accent-soft); }
+/* The drawer as an icon rail: only the row's link icon shows. */
+app-shell[collapsed]:not([narrow]) .nav-row button { display: none; }
 html[data-drawers-hidden] component-drawer { display: none; }
 
 /* A workspace page: the components drawer beside the dock. */
@@ -82,3 +84,7 @@ html[data-theme='retro'] .page-head a { color: #FFFF9E; }
 .import-dialog .ops { margin-top: 2px; display: flex; flex-wrap: wrap; gap: 4px; font-size: 12px; color: var(--muted); }
 .import-dialog [role='alert'] { min-height: 1em; color: var(--danger, #c33); }
 .import-dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Dragging a saved workspace: a line where it will land. */
+a[slot='nav'][data-drop='before'] { box-shadow: 0 -2px 0 var(--nano-accent, var(--focus, #36c)); }
+a[slot='nav'][data-drop='after'] { box-shadow: 0 2px 0 var(--nano-accent, var(--focus, #36c)); }

@@ -2,6 +2,9 @@
 import { Type } from 'typebox'
 import { component, event, state } from '@pritzlaff/nano-runes'
 
+const Interval = Type.Number({ minimum: 10, maximum: 2 ** 31 - 1, description: 'ms between ticks', examples: [250, 1000] })
+const Config = Type.Object({ interval: Interval }, { description: 'The settings: the interval', examples: [{ interval: 250 }] })
+
 /** A clock you can start, stop and reset. `count` goes up by one every `interval` ms while `running`. */
 export const Timer = component('nano.template/timer', () => {
   const s = state({ count: 0, running: false, interval: 1000 })
@@ -16,6 +19,8 @@ export const Timer = component('nano.template/timer', () => {
   return {
     get count() { return s.count }, get running() { return s.running }, get interval() { return s.interval },
     tick,
+    get config() { return { interval: s.interval } },
+    configure: (c: { interval: number }) => { s.interval = c.interval; run() },
     start: () => { if (!s.running) { s.running = true; run() } },
     stop: () => { s.running = false; run() },
     reset: () => { s.count = 0 },
@@ -26,9 +31,11 @@ export const Timer = component('nano.template/timer', () => {
   running: Type.Boolean({ description: 'Whether it is counting', examples: [true] }),
   interval: Type.Number({ description: 'ms between ticks', examples: [1000] }),
   tick: Type.Integer({ minimum: 1, description: 'Each new count, as it happens', examples: [1, 2, 3] }),
+  config: Config,
+  configure: { in: Config, description: 'Replaces the settings (the interval)' },
   start: { description: 'Starts counting; does nothing if running' },
   stop: { description: 'Stops counting' },
   reset: { description: 'Sets the count back to 0' },
   // longer delays are clamped to ~1ms by timers
-  setInterval: { in: Type.Number({ minimum: 10, maximum: 2 ** 31 - 1, description: 'ms between ticks', examples: [250, 1000] }), description: 'Changes how often it ticks' },
+  setInterval: { in: Interval, description: 'Changes how often it ticks' },
 }, { description: 'A clock you can start, stop and reset; it publishes each count' })

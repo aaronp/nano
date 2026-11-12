@@ -5,14 +5,13 @@
  *   <stat-card index="0">          a figure with a sparkline (data from sample-data.ts)
  *   <line-chart>                   weekly chart; follows stat:select
  *   <bus-log pattern="*" limit="8"> recent bus messages
- *   <status-line>                  the latest bus message, for the status bar
- *   <mail-folders> <mail-list> <mail-reader>   the Inbox page (mail:folder, mail:open)
+ *   <status-line>                  the latest bus message (or status message), for the status bar
  *   <file-list> <code-pane>        the Editor page (file:open, file:saved)
  */
 import { LitElement, html, css, svg } from 'lit';
 import { requestBus, type Bus, type BusMessage, type Unsubscribe } from '../lib/bus.ts';
 import { areaPath, changePct, linePath, scalePoints } from '../lib/chart.ts';
-import { DAYS, FILES, FOLDERS, MESSAGES, STATS, type Message } from './sample-data.ts';
+import { DAYS, FILES, STATS } from './sample-data.ts';
 
 /** Base class: keeps the bus from the first connection and tears down subscriptions. */
 abstract class BusWidget extends LitElement {
@@ -149,93 +148,23 @@ export class BusLog extends BusWidget {
 }
 
 export class StatusLine extends BusWidget {
-  static override properties = { last: { state: true } };
+  static override properties = { last: { state: true }, message: { state: true } };
   declare last: BusMessage | null;
+  /** The last string `message` any payload carried: shown until the next one, whatever else goes by. */ declare message: string | null;
   static override styles = css`:host { font-variant-numeric: tabular-nums; } code { font: 12px var(--mono); }`;
-  constructor() { super(); this.last = null; }
+  constructor() { super(); this.last = null; this.message = null; }
   protected override subscriptions(bus: Bus) {
-    this.last = bus.history().at(-1) ?? null;
-    return [bus.subscribe('*', (m) => { this.last = m; })];
+    const take = (m: BusMessage) => {
+      this.last = m;
+      const message = (m.payload as { message?: unknown } | null | undefined)?.message;
+      if (typeof message === 'string') this.message = message;
+    };
+    bus.history().forEach(take);
+    return [bus.subscribe('*', take)];
   }
   override render() {
+    if (this.message !== null) return html`${this.message}`;
     return this.last ? html`Last event: <code>${this.last.topic}</code> from ${this.last.source}` : html`Ready`;
-  }
-}
-
-/* ------------------------------------------------------------------ inbox */
-
-export class MailFolders extends BusWidget {
-  static override properties = { folder: { state: true } };
-  declare folder: Message['folder'];
-  static override styles = css`
-    :host { display: block; height: 100%; box-sizing: border-box; padding: 16px 10px; background: var(--surface); }
-    h2 { margin: 0 8px 10px; font: 600 12px var(--font); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
-    button { all: unset; box-sizing: border-box; display: flex; justify-content: space-between; width: 100%; padding: 7px 10px; border-radius: var(--radius); cursor: pointer; }
-    button:hover { background: var(--surface-2); }
-    button[aria-current='true'] { background: var(--accent-soft); font-weight: 600; }
-    button:focus-visible { outline: 2px solid var(--focus); }
-    .n { color: var(--muted); font-variant-numeric: tabular-nums; }
-  `;
-  constructor() { super(); this.folder = 'inbox'; }
-  override render() {
-    return html`<h2>Folders</h2>${FOLDERS.map((f) => {
-      const unread = MESSAGES.filter((m) => m.folder === f.id && m.unread).length;
-      return html`<button type="button" aria-current=${String(this.folder === f.id)} @click=${() => { this.folder = f.id; this.send('mail:folder', { folder: f.id }); }}>
-        <span>${f.label}</span><span class="n">${unread || ''}</span></button>`;
-    })}`;
-  }
-}
-
-export class MailList extends BusWidget {
-  static override properties = { folder: { state: true }, open: { state: true } };
-  declare folder: Message['folder'];
-  declare open: string | null;
-  static override styles = css`
-    :host { display: block; height: 100%; background: var(--bg); }
-    ul { margin: 0; padding: 0; list-style: none; }
-    button { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; width: 100%; padding: 12px 16px;
-      border-bottom: 1px solid var(--line); cursor: pointer; }
-    button:hover { background: var(--surface-2); }
-    button[aria-current='true'] { background: var(--accent-soft); }
-    button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-    .from { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .unread .from::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 99px; background: var(--accent); }
-    .when { color: var(--muted); font-size: 12px; }
-    .subject, .preview { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .preview { color: var(--muted); font-size: 13px; }
-    .empty { padding: 24px 16px; color: var(--muted); }
-  `;
-  constructor() { super(); this.folder = 'inbox'; this.open = null; }
-  protected override subscriptions(bus: Bus) {
-    return [bus.subscribe('mail:folder', (m) => { this.folder = (m.payload as { folder: Message['folder'] }).folder; })];
-  }
-  override render() {
-    const list = MESSAGES.filter((m) => m.folder === this.folder);
-    if (list.length === 0) return html`<p class="empty">Nothing in this folder.</p>`;
-    return html`<ul aria-label="Messages">${list.map((m) => html`<li><button type="button" class=${m.unread ? 'unread' : ''} aria-current=${String(this.open === m.id)}
-      @click=${() => { this.open = m.id; this.send('mail:open', { id: m.id }); }}>
-      <span class="from">${m.from}</span><span class="when">${m.when}</span><span class="subject">${m.subject}</span><span class="preview">${m.preview}</span></button></li>`)}</ul>`;
-  }
-}
-
-export class MailReader extends BusWidget {
-  static override properties = { messageId: { state: true } };
-  declare messageId: string | null;
-  static override styles = css`
-    :host { display: block; height: 100%; box-sizing: border-box; padding: 24px 28px; background: var(--surface); }
-    h2 { margin: 0 0 6px; font: 600 22px/1.25 var(--display); text-wrap: balance; }
-    .meta { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
-    p { max-width: 64ch; }
-    .empty { color: var(--muted); display: grid; place-items: center; height: 100%; text-align: center; }
-  `;
-  constructor() { super(); this.messageId = null; }
-  protected override subscriptions(bus: Bus) {
-    return [bus.subscribe('mail:open', (m) => { this.messageId = (m.payload as { id: string }).id; })];
-  }
-  override render() {
-    const m = MESSAGES.find((x) => x.id === this.messageId);
-    if (!m) return html`<div class="empty"><p>Select a message to read it here.<br>Drag the dividers to resize the three panes.</p></div>`;
-    return html`<article><h2>${m.subject}</h2><div class="meta">From ${m.from} · ${m.when}</div>${m.body.map((p) => html`<p>${p}</p>`)}</article>`;
   }
 }
 
@@ -293,9 +222,6 @@ customElements.define('stat-card', StatCard);
 customElements.define('line-chart', LineChart);
 customElements.define('bus-log', BusLog);
 customElements.define('status-line', StatusLine);
-customElements.define('mail-folders', MailFolders);
-customElements.define('mail-list', MailList);
-customElements.define('mail-reader', MailReader);
 customElements.define('file-list', FileList);
 customElements.define('code-pane', CodePane);
 

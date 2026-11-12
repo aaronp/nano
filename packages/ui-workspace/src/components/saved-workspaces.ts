@@ -1,5 +1,5 @@
 /**
- * Saved workspaces on the page, each in a system. The dock's "Save workspace…" button fires `dock:save-as` with its
+ * Saved workspaces on the page, each in a system. The app bar's "Save as workspace…" control fires `dock:save-as` (from the dock) with its
  * layout, and + (beside Workspaces) makes an empty one in an existing or new system; a dialog
  * asks for a route, title and icon, and the workspace becomes a nav item with its own page: a dock with the same
  * widgets, starting from that layout. Its panels show the same live components (they are named in the layout).
@@ -13,20 +13,20 @@ import { askWorkspace, type WorkspaceChoice } from './workspace-dialog.ts';
 const icon = (name: string) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] ?? ''}"/></svg>`;
 const mainDock = (doc: Document) => doc.querySelector<HTMLElement>('workspace-dock#workspace') ?? doc.querySelector<HTMLElement>('workspace-dock');
 /** Where a saved workspace's dock keeps its layout. */
-const keyFor = (doc: Document, path: string) => `${mainDock(doc)?.getAttribute('storage-key') ?? 'workspace'}.saved.${path}`;
+export const keyFor = (doc: Document, path: string) => `${mainDock(doc)?.getAttribute('storage-key') ?? 'workspace'}.saved.${path}`;
 
-/** Adds a saved workspace's nav item (under Workspaces, after the others) and its page (after the other workspaces'):
+/** Adds a saved workspace's nav item (top-level, after the others) and its page (after the other workspaces'):
  * a components drawer beside a dock of the same widgets, in the workspace's system. */
 export function mountWorkspace(doc: Document, ws: SavedWorkspace) {
   const main = mainDock(doc), shell = doc.querySelector('app-shell');
   if (!main || !shell) return;
   const a = doc.createElement('a');
-  a.slot = 'nav'; a.href = `#${ws.path}`; a.dataset.sub = ''; a.dataset.saved = '';
+  a.slot = 'nav'; a.href = `#${ws.path}`; a.dataset.saved = ws.path; a.setAttribute('draggable', 'true');
   a.innerHTML = icon(ws.icon);
   a.append(ws.title);
-  const group = shell.querySelector(':scope > [data-workspaces]');
-  let last: Element | null = group;
-  while (last?.nextElementSibling?.hasAttribute('data-sub')) last = last.nextElementSibling;
+  // top-level, after the last saved one, else after Main (else the Workspaces row)
+  const savedItems = shell.querySelectorAll(':scope > a[data-saved]');
+  const last = savedItems[savedItems.length - 1] ?? shell.querySelector(':scope > a[slot="nav"][href="#/workspace"]') ?? shell.querySelector(':scope > [data-workspaces]');
   if (last) last.after(a); else shell.append(a);
 
   const route = doc.createElement('app-route');
@@ -42,7 +42,6 @@ export function mountWorkspace(doc: Document, ws: SavedWorkspace) {
   if (mainWires) Object.assign(wires, { runtime: rt, host, catalog: mainWires.catalog });
   if (rt) Object.assign(dock, { registry: rt.registry });
   dock.id = id;
-  dock.setAttribute('label', ws.title);
   dock.setAttribute('storage-key', keyFor(doc, ws.path));
   dock.setAttribute('system', ws.system ?? 'host');
   dock.setAttribute('open', '');   // a new workspace starts empty; a saved layout, if any, wins
@@ -60,9 +59,63 @@ export function bootSavedWorkspaces(doc: Document) {
   const saved = savedWorkspaces(localStorage);
   for (const ws of saved.list()) mountWorkspace(doc, ws);
   const taken = () => [...doc.querySelectorAll('app-route')].map((r) => r.getAttribute('path') ?? '');
-  const open = (ws: SavedWorkspace) => { mountWorkspace(doc, ws); location.hash = `#${ws.path}`; };
+  const open = (ws: SavedWorkspace) => { mountWorkspace(doc, ws); location.hash = `#${ws.path}`; doc.dispatchEvent(new CustomEvent('nano:changed')); };
 
-  // Save workspace… (from a dock): its layout, in the dock's own system
+  // Reorder: Alt+↑/↓ on a focused item, or drag one onto another. The stored order is the truth; the nav follows it.
+  const item = (t: EventTarget | null) => (t as Element | null)?.closest?.('a[data-saved]') as HTMLAnchorElement | null;
+  const live = doc.createElement('div');
+  live.setAttribute('aria-live', 'polite'); live.setAttribute('role', 'status');
+  live.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)';
+  const shell = doc.querySelector('app-shell') ?? doc.body;   // listeners live on the shell, not the document
+  shell.append(live);
+  const arrange = () => {
+    let prev: Element | null = null;
+    for (const w of saved.list()) {
+      const a = doc.querySelector(`a[data-saved="${w.path}"]`);
+      if (!a) continue;
+      if (prev && prev.nextElementSibling !== a) prev.after(a);
+      prev = a;
+    }
+  };
+  const changed = (moved: boolean) => { if (moved) { arrange(); doc.dispatchEvent(new CustomEvent('nano:changed')); } return moved; };
+  shell.addEventListener('keydown', (e) => {
+    const a = item(e.target), k = (e as KeyboardEvent).key;
+    const ke = e as KeyboardEvent;
+    if (!a || !ke.altKey || ke.ctrlKey || ke.shiftKey || ke.metaKey || (k !== 'ArrowUp' && k !== 'ArrowDown')) return;
+    e.preventDefault();
+    const up = k === 'ArrowUp';
+    if (changed(saved.move(a.dataset.saved!, up ? -1 : 1))) {
+      a.focus();
+      live.textContent = '';   // cleared first so a repeat is announced again
+      setTimeout(() => { live.textContent = `Moved ${a.textContent} ${up ? 'up' : 'down'}`; }, 50);
+    }
+  });
+  let dragged = '';
+  shell.addEventListener('dragstart', (e) => {
+    const a = item(e.target); if (!a) return;
+    dragged = a.dataset.saved!;
+    (e as DragEvent).dataTransfer?.setData('text/plain', dragged);
+  });
+  const clear = () => { for (const x of doc.querySelectorAll('[data-drop]')) x.removeAttribute('data-drop'); };
+  shell.addEventListener('dragover', (e) => {
+    const a = item(e.target);
+    if (!dragged || !a) return;
+    e.preventDefault();
+    const paths = saved.list().map((w) => w.path);
+    clear();
+    // it lands where the target is: above it when coming from below, below it when coming from above
+    if (a.dataset.saved !== dragged) a.dataset.drop = paths.indexOf(dragged) > paths.indexOf(a.dataset.saved!) ? 'before' : 'after';
+  });
+  shell.addEventListener('dragleave', (e) => { if (!shell.contains((e as DragEvent).relatedTarget as Node | null)) clear(); else item(e.target)?.removeAttribute('data-drop'); });
+  shell.addEventListener('drop', (e) => {
+    const a = item(e.target); if (!dragged || !a) return;
+    e.preventDefault();   // dropping a link must not navigate
+    changed(saved.moveTo(dragged, saved.list().findIndex((w) => w.path === a.dataset.saved)));
+    dragged = ''; clear();
+  });
+  shell.addEventListener('dragend', () => { dragged = ''; clear(); });
+
+  // Save as workspace… (the app bar's control, through a dock): its layout, in the dock's own system
   doc.addEventListener('dock:save-as', async (e) => {
     const { layout, system } = (e as CustomEvent<{ layout: unknown; system?: string }>).detail;
     for (let error = '', prev: WorkspaceChoice | undefined; ;) {

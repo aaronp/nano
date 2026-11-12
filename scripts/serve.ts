@@ -33,8 +33,10 @@ const server = Bun.serve({
     if (live && path === '/__live') return stream()
     const found = Bun.file(join(dir, path === '/' ? 'index.html' : path))
     const file = (await found.exists()) ? found : Bun.file(join(dir, 'index.html'))
-    if (live && file.type.startsWith('text/html')) return new Response((await file.text()).replace('</body>', RELOAD + '</body>'), { headers: { 'content-type': file.type } })
-    return new Response(file)
+    // any origin may fetch: an isolated-sandbox iframe (an opaque origin) loads boot.js and the shared modules from here
+    const cors = { 'access-control-allow-origin': '*' }
+    if (live && file.type.startsWith('text/html')) return new Response((await file.text()).replace('</body>', RELOAD + '</body>'), { headers: { 'content-type': file.type, ...cors } })
+    return new Response(file, { headers: cors })
   },
 })
-console.log(`serving ${dir} at ${server.url}${live ? ' (live reload)' : ''}`)
+console.log(`\n  nano  serving ${dir}${live ? ', rebuilding and reloading on change' : ''}\n\n  ➜  Local:   ${server.url}\n  ➜  press Ctrl+C to stop\n`)

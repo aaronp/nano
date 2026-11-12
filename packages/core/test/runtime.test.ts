@@ -182,7 +182,7 @@ const undescribedAny = (s: unknown) => !!s && typeof s === 'object' && !['type',
 
 test('every registry op has a description and no undescribed Unknown', () => {
   const ops = [...Object.values(RegistryOps).filter(o => 'ns' in o), ...Object.values(RegistryOps.deltas)] as Op[]
-  expect(ops.length).toBe(13)
+  expect(ops.length).toBe(15)
   for (const op of ops) {
     expect(op.description, Ops.key(op)).toBeTruthy()
     for (const s of [op.input, op.output]) if (s) expect(undescribedAny(s), `${Ops.key(op)} ${JSON.stringify(s)}`).toBe(false)
@@ -205,4 +205,12 @@ test('replace is a registry op', async () => {
   const { rt, reg } = setup()
   reg.add('c', counter())
   expect(isOk(await rt.call(me, 'registry', Ops.key(RegistryOps.replace), { id: 'c', instance: counter() }))).toBe(true)
+})
+
+test('label is a registry op', async () => {
+  const { rt, reg } = setup()
+  reg.add('c', counter())
+  expect(isOk(await rt.call(me, 'registry', Ops.key(RegistryOps.label), { id: 'c', labels: { mode: 'x' } }))).toBe(true)
+  expect(reg.labels('c')).toEqual({ mode: 'x' })
+  expect(isOk(await rt.call(me, 'registry', Ops.key(RegistryOps.label), { id: 'ghost', labels: {} }))).toBe(false)
 })

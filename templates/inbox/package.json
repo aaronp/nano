@@ -1,0 +1,24 @@
+{
+  "name": "nano-inbox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "An Inbox for nano hosts: folders, a message list and a reader, wired folders \u2192 list \u2192 reader. Build it and import its manifest.json by URL.",
+  "scripts": {
+    "test": "bun test",
+    "build": "bun scripts/build.ts",
+    "preview": "bun scripts/build.ts && bun scripts/serve.ts"
+  },
+  "dependencies": {
+    "@pritzlaff/nano-core": "^0.2.0",
+    "@pritzlaff/nano-elements": "^0.2.0",
+    "@pritzlaff/nano-runes": "^0.2.0",
+    "lit": "^3.0.0",
+    "typebox": "^1.4.0"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "^21.0.4",
+    "@types/bun": "^1.3.0",
+    "typescript": "^7.0.2"
+  }
+}

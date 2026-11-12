@@ -5,7 +5,8 @@ import { expect, test } from 'bun:test'
 
 const { Ops } = await import('@pritzlaff/nano-core')
 const { Debounce, Log, Range } = await import('@composable/bundle')
-const { PlatformOps: P } = await import('@composable/platform')
+const { PlatformOps: P, runtimeOf } = await import('@composable/platform')
+const { Profile } = await import('@composable/shell')
 await import('../src/boot-theme.ts')   // as main.ts does first: the theme is on <html> before any element upgrades
 const page = await Bun.file(new URL('../public/index.html', import.meta.url)).text()
 // the page first, as in a browser (module scripts run after parsing): composable.ts adds the dock's entries to it
@@ -22,6 +23,12 @@ test('the platform lists the host system with the worked example, wired', async 
   const ids = hostSystem.instances.map((i: any) => i.id)
   expect(ids).toEqual(expect.arrayContaining(['platform', 'ex-range', 'ex-debounce', 'ex-log', 'ex-input', 'ex-map']))
   expect(hostSystem.subscriptions.filter((s: any) => !s.listener.includes('~view'))).toHaveLength(4)   // views subscribe too
+})
+
+test('the app gateway is in host and in every system the platform makes', async () => {
+  expect(host.registry.get('app')).toBeDefined()
+  await call('platform', P.createSystem, 'g1')
+  expect(runtimeOf(host.registry, 'g1')!.registry.get('app')).toBeDefined()
 })
 
 test('moving the example range flows through the debounce into the log', async () => {
@@ -80,11 +87,13 @@ test('the Workspace dock sits inside <c-wires>, which has the host runtime and t
   expect(wires.flipped).toBe(true)
 })
 
-test('the nav has a Workspaces group with + and Main, and no component items; Main is a drawer beside its dock', () => {
+test('the nav has a Workspaces group with +, no Overview/Main/Components/Settings links; the workspace is a drawer beside an empty dock', () => {
   const group = document.querySelector('app-shell > [data-workspaces]')!
   expect(group.querySelector('a')!.getAttribute('href')).toBe('#/workspace')
   expect(group.querySelector('button[data-new-workspace]')).not.toBeNull()
-  expect(group.nextElementSibling!.textContent!.trim()).toBe('Main')
+  expect([...document.querySelectorAll('a[slot="nav"]')].map(a => a.getAttribute('href')).filter(h => ['#/', '#/components', '#/settings'].includes(h!))).toEqual([])
+  expect(document.querySelector('[data-main]')).toBeNull()
+  expect(document.querySelector('workspace-dock#workspace')!.getAttribute('open')).toBe('')
   expect([...document.querySelectorAll('a[slot="nav"]')].filter(a => a.textContent!.trim().startsWith('+'))).toEqual([])
   expect(document.querySelector('app-route[path="/workspace"] .ws-page > component-drawer')!.getAttribute('for')).toBe('workspace')
 })
@@ -127,4 +136,57 @@ test('importing a package republishes the platform\'s kinds', async () => {
 test('the example wiring still connects, with every op typed and described', () => {
   const wired = host.registry.snapshot().subscriptions.filter(s => !s.listener.includes('~view') && s.listener !== 'kinds-spy')
   expect(wired.map(s => `${s.source}→${s.listener}`).sort()).toEqual(['ex-debounce→ex-log', 'ex-input→ex-map', 'ex-map→ex-log', 'ex-range→ex-debounce'])
+})
+
+test('the host defines <c-sandboxed>, which dock panels of sandboxed kinds use', () => {
+  expect(!!customElements.get('c-sandboxed')).toBe(true)
+})
+
+const route = (path: string) => document.querySelector(`app-route[path="${path}"]`)!
+
+test('the app bar holds <nano-profile> showing Components, Settings, Systems and Themes, and no theme picker', async () => {
+  const el = document.querySelector('[slot="actions"]') as any
+  expect(el.localName).toBe('nano-profile')
+  expect(!!document.querySelector('[slot="actions"] theme-picker, theme-picker[slot="actions"]')).toBe(false)
+  await el.updateComplete
+  el.shadowRoot.querySelector('button').click(); await el.updateComplete
+  const links = [...el.shadowRoot.querySelectorAll('nav a')].map((a: any) => [a.textContent, a.getAttribute('href')])
+  expect(links).toEqual([['Components', '#/components'], ['Settings', '#/settings'], ['Systems', '#/systems'], ['Themes', '#/themes']])
+})
+
+test('the sidebar has no Systems link; #/systems still exists', () => {
+  expect(!!document.querySelector('a[slot="nav"][href="#/systems"]')).toBe(false)
+  expect(!!route('/systems')).toBe(true)
+})
+
+test('#/themes has the theme cards; Settings keeps Layout and no theme picker', () => {
+  expect(!!route('/themes').querySelector('theme-picker[layout="cards"]')).toBe(true)
+  expect(!!route('/settings').querySelector('theme-picker')).toBe(false)
+  expect(!!route('/settings').querySelector('#reset-splits')).toBe(true)
+})
+
+test('the profile instance is in the host system, owned by the platform, labelled nano/deploy host', async () => {
+  const [hostSystem] = (await call('platform', P.systems)).value
+  const p = hostSystem.instances.find((i: any) => i.id === 'profile')
+  expect(p.owner).toEqual({ kind: 'platform', name: 'platform' })   // as the ex-* examples: made through the app's platform
+  expect(p.labels['nano/deploy']).toBe('host')
+  expect(host.registry.snapshot().instances.filter(i => i.id === 'profile')).toHaveLength(1)
+  expect((await call('profile', Profile.ops.user)).value).toEqual({ name: 'You' })
+})
+
+test('the host has no Inbox: no #/inbox route, nav link, mail widgets or Messages dock widget', async () => {
+  expect(!!document.querySelector('app-route[path="/inbox"]')).toBe(false)
+  expect(!!document.querySelector('a[href="#/inbox"]')).toBe(false)
+  expect(!!document.querySelector('template[data-widget="messages"]')).toBe(false)
+  const widgets = await Bun.file(new URL('../src/widgets/widgets.ts', import.meta.url)).text()
+  expect(/mail-|Mail(Folders|List|Reader)|mail:/.test(widgets)).toBe(false)
+})
+
+test('a saved layout naming "messages" is ignored: the dock keeps only layouts whose widgets it still has, so the default workspace opens', async () => {
+  // (golden-layout needs a browser, so this checks what <workspace-dock>.readSaved checks: panelIds against the page's templates)
+  const { panelIds } = await import('../src/lib/dock-layout.ts')
+  const has = new Set([...document.querySelectorAll('#workspace > template')].map(t => (t as HTMLElement).dataset.widget))
+  const saved = { type: 'stack', content: [{ type: 'component', componentState: { widget: 'notes' } }, { type: 'component', componentState: { widget: 'messages' } }] }
+  expect(panelIds(saved as never).filter(id => !has.has(id))).toEqual(['messages'])
+  expect(has.has('notes') && has.has('activity')).toBe(true)
 })

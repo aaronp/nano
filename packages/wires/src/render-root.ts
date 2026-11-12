@@ -44,6 +44,7 @@ export function renderRoot(el: Wires) {
     <span class="mono" style="display:flex; align-items:center; gap:8px; font-size:12px; color:${OK_COLOR}"><span style="width:8px; height:8px; border-radius:50%; background:${OK_COLOR}"></span>LIVE</span>
     <p class="mono" style="margin:0; font-size:12px; color:#8B96A5">${'yaw ' + norm(s.ry) + '°  pitch ' + norm(s.rx) + '°'}</p>
     <span style="font-size:12px; font-weight:600; padding:6px 10px; border-radius:999px; border:1px solid ${s.editing ? OK_COLOR : '#2F3845'}; color:${facingColor}">${facing}</span>
+    <button type="button" class="highlight" aria-pressed=${s.hl ? 'true' : 'false'} @click=${() => el.setState({ hl: !s.hl })} style="height:36px; padding:0 12px; border-radius:6px; border:1px solid ${s.hl ? '#F5A524' : '#2F3845'}; background:#161B22; color:#E6EDF3; font:inherit; font-size:12px; cursor:pointer">Highlight sandboxed</button>
     <button type="button" class="sidebtn" aria-label="Back to the workspace" @click=${() => el.close()} style="height:36px; padding:0 12px; border-radius:6px; border:1px solid #2F3845; background:#161B22; color:#E6EDF3; font:inherit; font-size:12px; cursor:pointer">Done</button>
   </header>
   ${renderStage(el, d)}${renderAside(el, d)}

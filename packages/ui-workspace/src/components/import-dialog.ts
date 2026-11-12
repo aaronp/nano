@@ -23,6 +23,9 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
   d.className = 'import-dialog';
   d.innerHTML = `<h2>Import components</h2>
     <form class="row"><input name="url" type="url" required placeholder="https://…/manifest.json" aria-label="Manifest URL"><button type="submit" data-fetch>Fetch</button></form>
+    <fieldset class="trust"><legend>Trust</legend>
+      <label><input type="radio" name="trust" value="sandboxed" checked> Sandboxed: runs in an isolated frame</label>
+      <label><input type="radio" name="trust" value="trusted"> Trusted: runs in this page</label></fieldset>
     <div class="preview"></div><p role="alert"></p>
     <div class="actions"><button type="button" data-cancel>Cancel</button><button type="button" data-import disabled>Import</button></div>`;
   const $ = <T extends HTMLElement>(s: string) => d.querySelector(s) as T;
@@ -44,9 +47,11 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
   $('[data-cancel]').addEventListener('click', () => d.close());
   $('[data-import]').addEventListener('click', async () => {
     $<HTMLButtonElement>('[data-import]').disabled = true;
-    const got = await loadPackage(url, deps);
+    const trust = $<HTMLInputElement>('input[value="trusted"]').checked ? 'trusted' : 'sandboxed';
+    const got = await loadPackage(url, deps, trust);
     if ('error' in got) return say(got.error);
-    importsStore(localStorage).put({ url, name: got.manifest.name, version: got.manifest.version });
+    importsStore(localStorage).put({ url, name: got.manifest.name, version: got.manifest.version, trust });
+    document.dispatchEvent(new CustomEvent('nano:changed'));
     d.close();
   });
   d.addEventListener('close', () => d.remove());

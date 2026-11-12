@@ -5,22 +5,23 @@
   "type": "module",
   "description": "Host site: the workspace shell starter, hosting @composable components at build time (in markup) and at runtime (in the dock).",
   "scripts": {
-    "build": "bun scripts/prebuild.ts && bun build src/main.ts src/shared/*.ts --outdir public --root src --splitting --chunk-naming chunks/[name]-[hash].[ext] --format esm --minify --sourcemap=linked --loader .css:text",
-    "dev": "bun scripts/prebuild.ts && bun build src/main.ts src/shared/*.ts --outdir public --root src --splitting --chunk-naming chunks/[name]-[hash].[ext] --format esm --sourcemap=linked --loader .css:text --watch",
-    "serve": "bunx serve public",
+    "build": "bun scripts/prebuild.ts && bun build src/main.ts src/shared/*.ts --outdir public --root src --splitting --chunk-naming chunks/[name]-[hash].[ext] --format esm --minify --sourcemap=linked --loader .css:text && bun build src/sandbox/boot.ts --outdir public/sandbox --format esm --external '@pritzlaff/*' --external lit --external 'lit/*' --external typebox --external 'typebox/*'",
+    "dev": "bun scripts/prebuild.ts && bun build src/sandbox/boot.ts --outdir public/sandbox --format esm --external '@pritzlaff/*' --external lit --external 'lit/*' --external typebox --external 'typebox/*' && bun build src/main.ts src/shared/*.ts --outdir public --root src --splitting --chunk-naming chunks/[name]-[hash].[ext] --format esm --sourcemap=linked --loader .css:text --watch",
+    "serve": "bunx serve public --cors",
     "test": "bun test --isolate"
   },
   "dependencies": {
-    "golden-layout": "^2.6.0",
-    "lit": "^3.3.3",
-    "typebox": "^1.4.0",
-    "@pritzlaff/nano-core": "workspace:*",
-    "@pritzlaff/nano-runes": "workspace:*",
-    "@pritzlaff/nano-elements": "workspace:*",
     "@composable/bundle": "workspace:*",
-    "@composable/platform": "workspace:*",
     "@composable/editor": "workspace:*",
-    "@composable/wires": "workspace:*"
+    "@composable/platform": "workspace:*",
+    "@composable/shell": "workspace:*",
+    "@composable/wires": "workspace:*",
+    "@pritzlaff/nano-core": "workspace:*",
+    "@pritzlaff/nano-elements": "workspace:*",
+    "@pritzlaff/nano-runes": "workspace:*",
+    "golden-layout": "2.6.0",
+    "lit": "^3.3.3",
+    "typebox": "^1.4.0"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^21.0.4"

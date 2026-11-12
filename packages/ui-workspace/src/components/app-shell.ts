@@ -3,16 +3,19 @@
  *
  *   <app-shell>
  *     <span slot="title">Name</span>              app bar title
- *     <theme-picker slot="actions"></theme-picker> app bar controls (right side)
- *     <a slot="nav" href="#/inbox">Inbox</a>       one per page, in order (icons welcome)
+ *     <nano-file-menu slot="title-actions">      beside the title
+ *     <nano-app-bar name="app" slot="title-actions"> after it: the page's or focused panel's controls (the app bar sits above the content, so their menus aren't covered)
+ *     <nano-profile name="profile" slot="actions"></nano-profile> app bar controls (right side)
+ *     <a slot="nav" href="#/workspace">Workspace</a>       one per page, in order (icons welcome)
  *     <a slot="nav" data-sub href="…">…</a>        a sub-item listed under the item before it
  *     <div slot="drawer-footer">…</div>            bottom of the drawer
  *     <span slot="footer">…</span>                 status bar
  *     <app-route path="/inbox">…</app-route>       pages; path="*" is the not-found page
  *   </app-shell>
  *
- * Wide screens (> 840px) show a persistent drawer that the menu button collapses; narrow screens use a
- * modal drawer. <app-route bleed> removes the content padding (for split panes and workspaces).
+ * Wide screens (> 840px) show a persistent drawer that the menu button slides down to an icon rail (the host gets
+ * [collapsed], so light-DOM styles can hide a nav item's extras); narrow screens use a modal drawer. The app bar shows
+ * the current page's nav icon and label beside the title. <app-route bleed> removes the content padding (for split panes and workspaces).
  * Bus topics: route:changed {path} · shell:drawer {open}.
  * Theme: reads the tokens from src/lib/themes.ts (var(--bg), var(--accent), …).
  */
@@ -25,35 +28,54 @@ export class AppRoute extends HTMLElement {}
 const NARROW = '(max-width: 840px)';
 
 export class AppShell extends LitElement {
-  static override properties = { narrow: { state: true }, collapsed: { state: true }, route: { state: true } };
+  static override properties = { narrow: { type: Boolean, reflect: true }, collapsed: { type: Boolean, reflect: true }, route: { state: true }, page: { state: true } };
   declare narrow: boolean;
   declare collapsed: boolean;
   declare route: string;
+  /** The current page's nav item, shown in the app bar: its label and a copy of its icon. */
+  declare page: { href: string; label: string; icon: Node | null } | null;
   readonly bus: Bus = createBus();
   private stopProviding: Unsubscribe | null = null;
   private readonly mq = matchMedia(NARROW);
 
   static override styles = css`
-    :host { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100vh; height: 100dvh; background: var(--bg); color: var(--fg);
+    :host { --drawer-w: 248px; display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100vh; height: 100dvh; background: var(--bg); color: var(--fg);
       font: 15px/1.5 var(--font); }
-    .bar { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 12px 0 6px; background: var(--appbar-bg); color: var(--appbar-fg);
+    .bar { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 12px 0 0; background: var(--appbar-bg); color: var(--appbar-fg);
       border-bottom: 1px solid var(--line); }
-    .bar ::slotted([slot='title']) { flex: 1; min-width: 0; margin: 0; font: 600 18px/1.2 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* the bar's colour reaches what's slotted in it (the File menu, the view's controls): their own :host rules (a
+       shared base sets color: --nano-fg) lose to this outer one, so nothing in the bar takes the page's text colour */
+    .bar ::slotted(*) { color: inherit; }
+    .bar ::slotted([slot='title']) { flex: 0 1 auto; min-width: 0; margin: 0; font: 600 18px/1.2 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* the menu button and title sit over the drawer and take its width, so the page heading lines up with the content */
+    .brand { flex: none; align-self: stretch; display: flex; align-items: center; gap: 10px; box-sizing: border-box; width: var(--drawer-w); padding-left: 12px;
+      margin-right: 10px; border-right: 1px solid var(--line); overflow: hidden; transition: width .2s ease; }
+    :host([narrow]) .brand { width: auto; padding-right: 14px; }
+    :host([collapsed]:not([narrow])) .brand ::slotted([slot='title']) { display: none; }
+    .page { display: flex; align-items: center; gap: 10px; min-width: 0; margin-right: 24px; font: 600 16px/1.2 var(--display); white-space: nowrap; }
+    .page .tile { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--accent); color: var(--on-accent); }
+    .page svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .spacer { flex: 1; }
     .menu { flex: none; width: 44px; height: 44px; border: 0; border-radius: var(--radius); background: transparent; color: inherit; display: grid; place-items: center; cursor: pointer; }
     .menu:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
     button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-    .frame { display: grid; grid-template-columns: auto minmax(0, 1fr); min-height: 0; }
+    .frame { isolation: isolate; display: grid; grid-template-columns: auto minmax(0, 1fr); min-height: 0; }
     .content { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
     main { overflow: auto; padding: 24px; min-height: 0; }
     ::slotted(app-route) { display: block; }
     ::slotted(app-route[hidden]) { display: none; }
     ::slotted(app-route[bleed]) { margin: -24px; height: calc(100% + 48px); }
+    :host([collapsed]:not([narrow])) { --drawer-w: 68px; }
     footer { padding: 6px 16px; border-top: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 13px; }
-    .drawer { display: flex; flex-direction: column; gap: 2px; width: 248px; box-sizing: border-box; padding: 12px 10px; background: var(--drawer-bg);
-      border-right: 1px solid var(--line); overflow: auto; }
-    .drawer[hidden] { display: none; }
+    .drawer { display: flex; flex-direction: column; gap: 2px; width: var(--drawer-w); box-sizing: border-box; padding: 12px 10px; background: var(--drawer-bg);
+      border-right: 1px solid var(--line); overflow: auto; overflow-x: hidden; transition: width .2s ease; }
+    /* the rail: items keep their place and the drawer's edge clips their labels, so the icons stay put as it slides */
+    :host([collapsed]:not([narrow])) .drawer ::slotted([slot='nav']) { overflow: hidden; }
+    :host([collapsed]:not([narrow])) .drawer ::slotted([slot='nav'][data-sub]) { padding: 9px 14px; }
+    :host([collapsed]:not([narrow])) .drawer ::slotted([slot='drawer-footer']) { visibility: hidden; }
+    @media (prefers-reduced-motion: reduce) { .drawer, .brand { transition: none; } }
     nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
-    ::slotted([slot='nav']) { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-radius: var(--radius); color: inherit; text-decoration: none; }
+    ::slotted([slot='nav']) { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-radius: var(--radius); color: inherit; text-decoration: none; white-space: nowrap; }
     ::slotted([slot='nav']:hover) { background: var(--surface-2); }
     ::slotted([slot='nav']:focus-visible) { outline: 2px solid var(--focus); outline-offset: 1px; }
     ::slotted([slot='nav'][aria-current='page']) { background: var(--accent-soft); color: var(--fg); font-weight: 600; }
@@ -69,7 +91,7 @@ export class AppShell extends LitElement {
 
   constructor() {
     super();
-    this.narrow = this.mq.matches; this.collapsed = false; this.route = '';
+    this.narrow = this.mq.matches; this.collapsed = false; this.route = ''; this.page = null;
   }
 
   override connectedCallback() {
@@ -113,6 +135,15 @@ export class AppShell extends LitElement {
       if (!a.hasAttribute('data-dock-add') && isCurrent(a.getAttribute('href'), this.route)) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     }
+    // the app bar's page: the nav link (top-level, or in a nav row) for the route; the rail's tooltips are the labels
+    let page: AppShell['page'] = null;
+    for (const a of this.querySelectorAll<HTMLAnchorElement>(':scope > a[slot="nav"], :scope > [slot="nav"] a[href]')) {
+      const label = (a.textContent ?? '').trim();
+      if (label && !a.title) a.title = label;
+      if (!page && !a.hasAttribute('data-dock-add') && isCurrent(a.getAttribute('href'), this.route))
+        page = { href: a.getAttribute('href')!, label, icon: a.querySelector('svg')?.cloneNode(true) ?? null };
+    }
+    if (page?.href !== this.page?.href || page?.label !== this.page?.label) this.page = page;
   }
 
   private dialog(): HTMLDialogElement | null { return this.renderRoot.querySelector('dialog'); }
@@ -135,15 +166,17 @@ export class AppShell extends LitElement {
   }
 
   override render() {
-    const drawer = html`<div class="drawer" ?hidden=${!this.narrow && this.collapsed}>
+    const drawer = html`<div class="drawer">
       <nav aria-label="Main"><slot name="nav" @slotchange=${() => this.markNav()}></slot></nav>
       <slot name="drawer-footer"></slot></div>`;
     return html`
       <header class="bar">
-        <button class="menu" aria-label=${this.narrow ? 'Open menu' : this.collapsed ? 'Show menu' : 'Hide menu'} aria-expanded=${String(!this.narrow && !this.collapsed)}
+        <span class="brand"><button class="menu" aria-label=${this.narrow ? 'Open menu' : this.collapsed ? 'Expand menu' : 'Collapse menu'} aria-expanded=${String(!this.narrow && !this.collapsed)}
           @click=${() => this.toggleDrawer()}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-        <slot name="title"></slot><slot name="actions"></slot>
+        <slot name="title"></slot></span>
+        ${this.page ? html`<span class="page"><span class="tile">${this.page.icon}</span>${this.page.label}</span>` : ''}
+        <slot name="title-actions"></slot><span class="spacer"></span><slot name="actions"></slot>
       </header>
       <div class="frame">
         ${this.narrow ? html`<span></span>` : drawer}

@@ -4,6 +4,8 @@ import { LitElement, css, html, nothing, type TemplateResult } from 'lit'
 import { base } from '../styles'
 import { kit } from '../kit'
 import { t } from '../tokens'
+import { ref } from 'lit/directives/ref.js'
+import { setAttrs } from '../attrs'
 
 type Row = Record<string, unknown>
 /** `width` is a column's starting width in px; `minWidth` (default 60) the narrowest a resize takes it. */
@@ -15,20 +17,20 @@ const compare = (a: unknown, b: unknown) => (typeof a === 'number' && typeof b =
 /** Emits `selection` (detail: the selected rows) when `selectable` rows are ticked. */
 export class NanoDataTable extends LitElement {
   static override properties = {
-    columns: { attribute: false }, rows: { attribute: false }, filter: { type: Boolean }, selectable: { type: Boolean },
+    columns: { attribute: false }, rowAttrs: { attribute: false }, rows: { attribute: false }, filter: { type: Boolean }, selectable: { type: Boolean },
     pageSize: { type: Number, attribute: 'page-size' }, widths: { state: true }, q: { state: true }, sort: { state: true }, page: { state: true }, picked: { state: true },
   }
   static override styles = [base, kit, css`
     .frame { border: 1px solid ${t('border')}; border-radius: ${t('radius')}; overflow: auto }
     .table { margin: 0 } .table tr:last-child td { border-bottom: 0 } .table tbody tr:hover { background: ${t('surface-2')} }
-    .table tr[aria-selected='true'] { background: ${t('surface-2')} } .table .right { text-align: right } .table .tick { width: 28px }
+    .table tr[data-mark] { background: ${t('warn-bg')}; box-shadow: inset 3px 0 ${t('warn')} } .table tr[aria-selected='true'] { background: ${t('surface-2')} } .table .right { text-align: right } .table .tick { width: 28px }
     th button { border: 0; padding: 0; background: none; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit }
     .filter { width: min(280px, 100%); margin-bottom: 10px } .empty { text-align: center; padding: 24px; color: ${t('muted')} }
     th { position: relative } .fixed { table-layout: fixed } .fixed td, .fixed th { overflow: hidden; text-overflow: ellipsis }
     .resize { position: absolute; top: 0; right: 0; bottom: 0; width: 6px; cursor: col-resize; touch-action: none }
     .resize:hover, .resize:focus-visible { background: ${t('border')}; outline: none }
     .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; color: ${t('muted')}; font-size: 12px }`]
-  declare columns: Column[]; declare rows: Row[]; declare filter: boolean; declare selectable: boolean; declare pageSize: number
+  declare columns: Column[]; declare rowAttrs?: (row: Row) => Record<string, string | undefined>; declare rows: Row[]; declare filter: boolean; declare selectable: boolean; declare pageSize: number
   declare widths: Record<string, number>; declare q: string; declare sort: { key: string; dir: 1 | -1 } | undefined; declare page: number; declare picked: Set<Row>
   constructor() { super(); this.columns = []; this.rows = []; this.filter = false; this.selectable = false; this.pageSize = 0; this.widths = {}; this.q = ''; this.page = 0; this.picked = new Set() }
 
@@ -96,7 +98,7 @@ export class NanoDataTable extends LitElement {
         ${this.columns.map((c) => html`<col style="width: ${this.widthOf(c)}px">`)}</colgroup>` : nothing}<thead><tr>
         ${this.selectable ? html`<th class="tick"><input type="checkbox" aria-label="Select all" .checked=${allPicked} @click=${() => this.pick(rows, !allPicked)}></th>` : nothing}
         ${this.columns.map(head)}</tr></thead><tbody>
-        ${rows.length ? rows.map((r) => html`<tr aria-selected=${this.selectable ? String(this.picked.has(r)) : nothing}>
+        ${rows.length ? rows.map((r) => html`<tr aria-selected=${this.selectable ? String(this.picked.has(r)) : nothing} ${ref(el => setAttrs(el, this.rowAttrs?.(r)))}>
           ${this.selectable ? html`<td class="tick"><input type="checkbox" aria-label="Select row" .checked=${this.picked.has(r)} @click=${() => this.pick([r], !this.picked.has(r))}></td>` : nothing}
           ${this.columns.map((c) => html`<td data-key=${c.key} class=${c.align ?? ''}>${c.render ? c.render(r) : cell(r, c.key)}</td>`)}</tr>`)
         : html`<tr><td class="empty" colspan=${this.columns.length + (this.selectable ? 1 : 0)}>No results.</td></tr>`}</tbody></table></div>

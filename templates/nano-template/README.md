@@ -10,7 +10,10 @@ It ships two examples to start from:
   `<nano-timer>` (`src/timer-el.ts`), built from the component library's buttons, badge and input group;
 - a **Picker** (`src/picker.ts`), one choice from a list of options (`pick`, `setOptions`), published as `changed`,
   and its element `<nano-picker label="…">` (`src/picker-el.ts`), which shows it in the kit's filterable
-  `<nano-select>`.
+  `<nano-select>`;
+- a **Store** (`src/store.ts`), key/value pairs (`get`, `set`, `remove`, each change published as `changed`) kept
+  in the storage of the origin it runs in: the host's `localStorage`, or memory in an isolated sandbox (`backing`
+  says which), and its element `<nano-store>` (`src/store-el.ts`).
 
 ## Make it yours
 

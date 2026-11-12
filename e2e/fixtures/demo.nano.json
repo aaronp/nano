@@ -1,0 +1,19 @@
+{
+  "nano": 1,
+  "title": "Demo",
+  "imports": [{ "url": "http://localhost:5210/manifest.json", "trust": "trusted" }],
+  "systems": [{
+    "id": "host",
+    "instances": [
+      { "id": "p1", "kind": "picker", "mode": "isolated-sandbox" },
+      { "id": "L", "kind": "log" }
+    ],
+    "subscriptions": [
+      { "source": "p1", "op": "nano.template/picker/changed", "listener": "L", "target": "composable.bundle/log/info" }
+    ]
+  }],
+  "workspaces": [
+    { "id": "/zeta", "title": "Zeta", "icon": "star", "system": "host", "layout": null },
+    { "id": "/alpha", "title": "Alpha", "icon": "box", "system": "host", "layout": null }
+  ]
+}

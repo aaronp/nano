@@ -1,11 +1,17 @@
-.PHONY: test install ui dev packages smoke publish template-check template-export
+.PHONY: test test-ui install ui dev serve-template serve-inbox link-templates packages smoke publish template-check template-export
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
 endif
 
+# Each package's tests in its own folder (its own bunfig preloads), stopping at the first that fails.
 test:
-	bun test
+	@for p in packages/*/; do echo "== $$p"; (cd $$p && bun test --isolate) || exit 1; done
+
+# Browser tests (e2e/*.e2e.ts) in your Chrome; starts `make ui`, `make serve-template` and `make serve-inbox` unless they're running.
+# templates/inbox needs `bun install` there and `make link-templates` once.
+test-ui:
+	bunx playwright test
 
 install:
 	bun install
@@ -13,13 +19,28 @@ install:
 # Build the ui-workspace host and serve it (PORT=3000 by default).
 PORT ?= 3000
 ui:
-	cd packages/ui-workspace && bun run build
-	bun scripts/serve.ts packages/ui-workspace/public $(PORT)
+	@cd packages/ui-workspace && bun ../../scripts/quiet.ts bun run --silent build
+	@bun scripts/serve.ts packages/ui-workspace/public $(PORT)
 
 # Like ui, but rebuilds on every source change and reloads the page.
 dev:
-	cd packages/ui-workspace && bun run build
-	(cd packages/ui-workspace && bun run dev) & trap 'kill $$!' EXIT; bun scripts/serve.ts packages/ui-workspace/public $(PORT) --live
+	@cd packages/ui-workspace && bun ../../scripts/quiet.ts bun run --silent build
+	@(cd packages/ui-workspace && bun ../../scripts/quiet.ts bun run --silent dev) & trap 'kill $$!' EXIT; bun scripts/serve.ts packages/ui-workspace/public $(PORT) --live
+
+# Build the template package and serve it on another origin, to import into `make ui`
+# (http://localhost:5174/manifest.json; TEMPLATE_PORT=5174 by default).
+TEMPLATE_PORT ?= 5174
+serve-template:
+	$(MAKE) -C templates/nano-template serve PORT=$(TEMPLATE_PORT)
+
+# Build the inbox package and serve it on another origin (http://localhost:5175/manifest.json; INBOX_PORT=5175 by default).
+INBOX_PORT ?= 5175
+serve-inbox:
+	$(MAKE) -C templates/inbox serve PORT=$(INBOX_PORT)
+
+# Point the templates' @pritzlaff/nano-* at this repo's packages (after a `bun install` in each).
+link-templates:
+	bun scripts/link-local.ts templates/nano-template templates/inbox
 
 # Build the published packages (@pritzlaff/nano-core, -runes, -elements) into packages/*/dist, ready for npm.
 packages:

@@ -1,0 +1,15 @@
+{
+  "name": "@composable/shell", "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Host-page pieces any host can reuse: the profile menu.",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@pritzlaff/nano-core": "workspace:*",
+    "@pritzlaff/nano-elements": "workspace:*",
+    "@pritzlaff/nano-runes": "workspace:*",
+    "lit": "^3.0.0",
+    "typebox": "^1.4.0"
+  },
+  "devDependencies": { "@happy-dom/global-registrator": "^21.0.4" }
+}

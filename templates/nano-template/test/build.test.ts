@@ -13,7 +13,7 @@ test('the build writes the module, manifest and preview; the module carries no c
   expect(js).not.toContain('ReactiveElement')   // lit's base class
   expect(js).not.toContain('TypeBox')           // typebox's own code
   const manifest = await Bun.file(join(dist, 'manifest.json')).json()
-  expect(manifest.components.map((c: { tag: string }) => c.tag)).toEqual(['nano-timer', 'nano-picker'])
+  expect(manifest.components.map((c: { tag: string }) => c.tag)).toEqual(['nano-timer', 'nano-picker', 'nano-store'])
   const html = await Bun.file(join(dist, 'index.html')).text()
   expect(html).toContain('"@pritzlaff/nano-core": "https://esm.sh/*@pritzlaff/nano-core@^0.2.0"')
   // exactly the host's shared imports (anything else is bundled in), so what passes the preview imports into a host
@@ -32,6 +32,6 @@ test('the preview is themed: a swatch per theme, the components, and the kit on 
   expect(themes.map((t: { id: string }) => t.id)).toEqual(THEMES.map(t => t.id))
   for (const t of themes) expect(t.vars.accent, t.id).toMatch(/^#/)
   expect(html).toContain('role="group" aria-label="Theme"')
-  for (const tag of ['<nano-timer name="timer">', '<nano-picker name="speed"', '<nano-select multiple', '<nano-date-picker', '<nano-data-table', '<nano-tool', 'toast('])
+  for (const tag of ['<nano-timer name="timer">', '<nano-picker name="speed"', '<nano-store name="prefs"', '<nano-select multiple', '<nano-date-picker', '<nano-data-table', '<nano-tool', 'toast('])
     expect(html, tag).toContain(tag)
 })

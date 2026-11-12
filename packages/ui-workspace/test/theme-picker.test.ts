@@ -1,4 +1,4 @@
-// <theme-picker> in the app bar: a row of swatches, as in the Decision Ledger; the chosen one shows its name.
+// <theme-picker>: a row of swatches (cards on the Themes page), as in the Decision Ledger; the chosen one shows its name.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'

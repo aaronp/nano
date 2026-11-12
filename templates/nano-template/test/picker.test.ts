@@ -46,3 +46,14 @@ test('new options keep the value when it is still one, otherwise pick (and publi
   expect(await value(Picker.ops.value)).toBe('')
   expect((await call(Picker.ops.setOptions, 'nope')).error).toBeTruthy()   // checked: a list of strings
 })
+
+test('picker: config is the options; configure keeps the value if still an option; a bad one changes nothing', async () => {
+  expect(Ops.fits(Picker.ops.config, Picker.ops.configure)).toBe(true)
+  const a = page(); await a.call(Picker.ops.setOptions, ['red', 'green'])
+  const cfg = await a.value(Picker.ops.config); expect(cfg).toEqual({ options: ['red', 'green'] })
+  const b = page(); await b.call(Picker.ops.setOptions, ['x', 'green']); await b.call(Picker.ops.pick, 'green')
+  expect((await b.call(Picker.ops.configure, cfg)).error).toBeUndefined()
+  expect(await b.value(Picker.ops.config)).toEqual(cfg); expect(await b.value(Picker.ops.value)).toBe('green')
+  expect((await b.call(Picker.ops.configure, { options: [1] })).error).toBeTruthy()
+  expect(await b.value(Picker.ops.config)).toEqual(cfg)
+})

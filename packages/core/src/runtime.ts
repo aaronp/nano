@@ -33,6 +33,8 @@ export const RegistryOps = {
   replace: Ops.action('composable', 'replace', Type.Object({ id: Type.String({ description: 'The id in use', examples: ['ex-range'] }), instance: Type.Unknown({ description: 'A made instance to put there (Components.instantiate)' }) }),
     Type.Void(), { description: 'Puts an instance at an id in use, keeping its subscriptions' }),
   remove: Ops.action('composable', 'remove', Type.String({ description: 'The instance id', examples: ['ex-range'] }), Type.Void(), { description: 'Removes an instance, closing the subscriptions it listens on' }),
+  label: Ops.action('composable', 'label', Type.Object({ id: Type.String({ description: 'The instance id', examples: ['ex-range'] }), labels: Type.Record(Type.String(), Type.Union([Type.String(), Type.Null()]), { description: 'Labels to set; null removes a key' }) }),
+    Type.Void(), { description: "Merges labels into an instance's labels" }),
   subscribe: Ops.action('composable', 'subscribe', Type.Omit(SubscriptionSchema, ['id']), SubscriptionSchema, { description: 'Connects a published op to an action' }),
   unsubscribe: Ops.action('composable', 'unsubscribe', Type.String({ description: 'The subscription id' }), Type.Void(), { description: 'Closes a subscription' }),
   snapshot: Ops.action('composable', 'snapshot', Type.Null({ description: 'Nothing' }), SnapshotSchema, { description: 'What the registry holds now' }),
@@ -47,6 +49,7 @@ function registryComponent(registry: Registry) {
   c.action(RegistryOps.add, (r, a) => must(r.add(a.id, a.instance as Instance)))
   c.action(RegistryOps.replace, (r, a) => must(r.replace(a.id, a.instance as Instance)))
   c.action(RegistryOps.remove, (r, id) => must(r.remove(id)))
+  c.action(RegistryOps.label, (r, a) => must(r.label(a.id, a.labels)))
   c.action(RegistryOps.subscribe, (r, s) => must(r.subscribe(s)) as Subscription)
   c.action(RegistryOps.unsubscribe, (r, id) => must(r.unsubscribe(id)))
   c.action(RegistryOps.snapshot, r => r.snapshot())
@@ -61,11 +64,13 @@ function create(registry: Registry, policy?: Policy): Runtime {
   const listeners = new Set<(t: Trace) => void>()
   // an observer can't change what happens: its error is reported, never thrown into the call or the delivery loop
   const tell = (t: Trace) => listeners.forEach(fn => { try { fn(t) } catch (e) { reportError(e) } })
+  /** Whether `data` fits `schema`; a schema that throws (a bad pattern) doesn't fit. */
+  const fits = (schema: TSchema, data: unknown) => { try { return Value.Check(schema, data) } catch { return false } }
   /** Runs `op` on `target`: the lookup and input check every call and delivery share. */
   const run = async (target: string, op: string, arg: unknown): Promise<Result> => {
     const inst = registry.get(target), a = inst?.actions.get(op)
     if (!inst || !a) return err(inst ? `unknown op ${op}` : `no instance ${target} in ${registry.id}`)
-    if (a.op.input && !Value.Check(a.op.input, arg)) return err(`invalid input for ${op}`)
+    if (a.op.input && !fits(a.op.input, arg)) return err(`invalid input for ${op}`)
     return Components.invoke(inst, op, arg)
   }
   const base: Runtime = {
@@ -84,7 +89,7 @@ function create(registry: Registry, policy?: Policy): Runtime {
         return result
       }
       if (e.from.registry !== registry.id || !a) return refuse(`${e.from.instance} does not publish ${e.op} in ${registry.id}`)
-      if (a.op.output && !Value.Check(a.op.output, e.data)) return refuse(`invalid data for ${e.op}`)
+      if (a.op.output && !fits(a.op.output, e.data)) return refuse(`invalid data for ${e.op}`)
       const results: Result[] = []   // a delivery is a call: same lookup, same input check
       for (const s of registry.matching(e.from.instance, e.op)) {
         const result = await run(s.listener, s.target, e.data)

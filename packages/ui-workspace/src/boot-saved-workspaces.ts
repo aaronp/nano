@@ -10,8 +10,11 @@ import { host } from './composable.ts'
 import { bootSavedWorkspaces } from './components/saved-workspaces.ts'
 import { savedWorkspaces } from './lib/saved-workspaces.ts'
 import { bootImports } from './imports.ts'
+import { restored, startAutosave } from './boot-app.ts'
 
 for (const system of new Set(savedWorkspaces(localStorage).list().map(ws => ws.system ?? 'host')))
   if (!runtimeOf(host.registry, system)) await host.call({ registry: 'host', instance: 'workspace' }, 'platform', Ops.key(P.createSystem), system)
-await bootImports()   // remembered imports first: their kinds are in Main's palette before saved docks copy it
+// remembered imports first: their kinds are in Main's palette before saved docks copy it (a restored working copy already imported its own)
+if (!restored) await bootImports()
 bootSavedWorkspaces(document)
+startAutosave()

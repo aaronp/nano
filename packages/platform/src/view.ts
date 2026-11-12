@@ -4,8 +4,8 @@ import { css, html } from 'lit'
 import type { TSchema } from 'typebox'
 import { Ops, type Op, type Snapshot, type Subscription } from '@pritzlaff/nano-core'
 import { base, ModelElement, providedRegistry, type NanoTree, type TreeNode } from '@pritzlaff/nano-elements'
-import { PlatformOps as P, type Selection } from './platform'
-import { examplesOf } from './inventory'
+import { PlatformOps as P, type Kind, type Selection } from './platform'
+import { deployOf, examplesOf, sandboxed } from './inventory'
 
 type Inst = Snapshot['instances'][number]
 /** The ids of a registry's entries owned by a view (an element's hidden subscriber): never shown. */
@@ -29,14 +29,15 @@ const membership = (systems: Snapshot[]) => {
 /** The platform's view. Uses the provided registry and the instance `platform` unless told otherwise. */
 export class PlatformEl extends ModelElement {
   static styles = [base, css`.filter { flex: 1; min-width: 160px } nano-tree { margin-top: 4px }`]   // .desc/.eg sit in the tree's rows: styled there
-  static properties = { ...ModelElement.properties, mode: { state: true }, filter: { state: true }, sharedOnly: { state: true }, form: { state: true }, target: { state: true } }
+  static properties = { ...ModelElement.properties, mode: { state: true }, filter: { state: true }, sharedOnly: { state: true }, highlight: { state: true }, form: { state: true }, target: { state: true } }
   declare mode: 'system' | 'component'
   declare filter: string
   declare sharedOnly: boolean
-  declare form?: { kind: string; name: string; system: string }
+  declare highlight: boolean   // view state: mark the sandboxed entries
+  declare form?: { kind: string; name: string; system: string; mode?: string; allow?: string; deny?: string }
   declare target: Record<string, string>
   #picks = new Map<string, Selection>()   // what each selectable row selects, from the last render
-  constructor() { super(); this.mode = 'system'; this.filter = ''; this.sharedOnly = false; this.target = {} }
+  constructor() { super(); this.mode = 'system'; this.filter = ''; this.sharedOnly = false; this.highlight = false; this.target = {} }
 
   connectedCallback() { this.registry ??= providedRegistry(this.ownerDocument); this.model ??= 'platform'; super.connectedCallback() }
 
@@ -67,6 +68,7 @@ export class PlatformEl extends ModelElement {
           .value=${this.filter} @input=${(e: Event) => { this.filter = (e.target as HTMLInputElement).value }}>
         ${tab('system', 'By system')}${tab('component', 'By component')}
         <label class="row"><input type="checkbox" name="shared" .checked=${this.sharedOnly} @change=${(e: Event) => { this.sharedOnly = (e.target as HTMLInputElement).checked }}>Shared only</label>
+        <button class="highlight" aria-pressed=${this.highlight} @click=${() => { this.highlight = !this.highlight }}>Highlight sandboxed</button>
         <button @click=${() => { this.form = this.form ? undefined : { kind: '', name: '', system: systems[0]?.id ?? '' } }}>+ Add</button></div>
       ${this.form ? this.#addForm(systems) : ''}
       <nano-tree open-depth=${this.mode === 'system' ? 1 : 0} .nodes=${nodes} .query=${this.filter} .selected=${this.mode === 'system' ? rowOf(sel) : null}
@@ -96,12 +98,15 @@ export class PlatformEl extends ModelElement {
       this.renderRoot.querySelector<NanoTree>('nano-tree')?.reveal(`c:${to}/${i.id}`)
     }
     return {
-      id, label: i.id, kind: 'component', badge: others.length ? `↗ ${in_.length} systems` : undefined, terms: i.description ? [i.description] : undefined,
+      id, label: i.id, kind: 'component', data: this.#data(i), badge: others.length ? `↗ ${in_.length} systems` : undefined, terms: i.description ? [i.description] : undefined,
       body: i.description || others.length ? html`${i.description ? html`<div class="desc">${i.description}</div>` : ''}${others.length
         ? html`<div class="row">Also in ${others.map(o => html`<button class="btn small" data-also="${o}/${i.id}" @click=${() => jump(o)}>↗ ${o}</button>`)}</div>` : ''}` : undefined,
       children: i.ops.map(o => this.#op(s, i, o)),
     }
   }
+
+  // how it is deployed, for CSS; with Highlight sandboxed on, the sandboxed ones are marked
+  #data(i: Inst): Record<string, string> { const deploy = deployOf(i); return this.highlight && sandboxed(deploy) ? { deploy, mark: '' } : { deploy } }
 
   #op(s: Snapshot, i: Inst, o: Op): TreeNode {
     const sel = this.read<Selection>(P.selected), key = Ops.key(o), at = `${s.id}/${i.id}/${key}`, id = `o:${at}`
@@ -130,7 +135,7 @@ export class PlatformEl extends ModelElement {
       const others = systems.map(s => s.id).filter(s => !in_.includes(s))
       const to = others.includes(this.target[id] ?? '') ? this.target[id]! : others[0]   // a pick it is already in no longer counts
       return {
-        id: `c:${id}`, label: id, kind: 'component', badge: in_.length > 1 ? `↗ ${in_.length} systems` : undefined, terms: in_,
+        id: `c:${id}`, label: id, kind: 'component', data: this.#data(systems.flatMap(s => s.instances).find(i => i.id === id)!), badge: in_.length > 1 ? `↗ ${in_.length} systems` : undefined, terms: in_,
         body: others.length ? html`<div class="row"><select name="add-to-${id}" aria-label="System to add ${id} to"
             @change=${(e: Event) => { this.target = { ...this.target, [id]: (e.target as HTMLSelectElement).value } }}>
             ${others.map(s => html`<option ?selected=${s === to}>${s}</option>`)}</select>
@@ -142,11 +147,20 @@ export class PlatformEl extends ModelElement {
 
   #addForm(systems: Snapshot[]) {
     const kinds = this.read<string[]>(P.catalog) ?? [], f = this.form!, set = (k: keyof typeof f) => (e: Event) => { this.form = { ...this.form!, [k]: (e.target as HTMLInputElement).value } }
+    const modes = this.read<Kind[]>(P.kinds)?.find(k => k.kind === f.kind)?.modes ?? [], mode = f.mode && modes.includes(f.mode) ? f.mode : modes[0]
+    const lines = (v?: string) => (v ?? '').split(/[\n,]/).map(x => x.trim()).filter(Boolean)
+    const create = () => {
+      const { allow, deny, mode: _, ...base } = f, a = lines(allow), d = lines(deny)
+      return { ...base, ...(mode && { mode }), ...(mode && mode !== 'host' && a.length && { allow: a }), ...(mode && mode !== 'host' && d.length && { deny: d }) }
+    }
     return html`<div class="row card">
       <select name="kind" @change=${set('kind')}><option value="">kind…</option>${kinds.map(k => html`<option ?selected=${k === f.kind}>${k}</option>`)}</select>
       <input name="name" placeholder="name" @input=${set('name')}>
+      ${modes.length ? html`<select name="mode" aria-label="Deploy mode" @change=${set('mode')}>${modes.map(m => html`<option ?selected=${m === mode}>${m}</option>`)}</select>` : ''}
+      ${mode && mode !== 'host' ? html`<input name="allow" placeholder="allow: registry/target/op, …" @input=${set('allow')}>
+        <input name="deny" placeholder="deny: registry/target/op, …" @input=${set('deny')}>` : ''}
       <select name="system" @change=${set('system')}>${systems.map(s => html`<option ?selected=${s.id === f.system}>${s.id}</option>`)}</select>
-      <button class="primary" @click=${async () => { if ('value' in await this.act(P.createComponent, this.form)) this.form = undefined }}>Create</button>
+      <button class="primary" @click=${async () => { if ('value' in await this.act(P.createComponent, create())) this.form = undefined }}>Create</button>
       <input name="new-system" placeholder="new system" @keydown=${async (e: KeyboardEvent) => {
         const i = e.target as HTMLInputElement
         if (e.key === 'Enter' && i.value && 'value' in await this.act(P.createSystem, i.value)) i.value = ''

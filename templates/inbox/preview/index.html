@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>nano-inbox preview</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;600&family=Bricolage+Grotesque:wght@500;600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap">
+  <!-- The shared packages, which a host would provide: filled in by scripts/build.ts from package.json. -->
+  <script type="importmap">%IMPORTMAP%</script>
+  <!-- A few themes' --nano-* tokens (preview/themes.ts), as a host would set them. -->
+  <script type="application/json" id="themes">%THEMES%</script>
+  <style>
+    body { margin: 0; padding: 24px; background: var(--nano-bg, #0D0F13); color: var(--nano-fg, #E7E9EE); font: 14px var(--nano-font, system-ui, sans-serif) }
+    main { max-width: 880px; margin: 0 auto; display: grid; gap: 18px }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap }
+    h1 { margin: 0; font: 600 22px var(--nano-font-display, system-ui) } h2 { margin: 0 0 10px; font: 600 15px var(--nano-font-display, system-ui) }
+    p { margin: 4px 0 0; color: var(--nano-muted, #A3AAB8) } a { color: var(--nano-accent, #6FA8FF) }
+    .card { background: var(--nano-surface, #14171D); border: 1px solid var(--nano-border, #2A303C); border-radius: var(--nano-radius, 8px); padding: 16px }
+    .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap }
+    button.btn { font: inherit; font-size: 12px; color: inherit; background: none; border: 1px solid var(--nano-border-strong, #3A4150); border-radius: var(--nano-radius-s, 6px); padding: 5px 10px; cursor: pointer }
+    /* the theme picker: a swatch per theme (its page, its text and its accent); the chosen one shows its name */
+    .themes { display: flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--nano-border, #2A303C); border-radius: 10px; overflow-x: auto }
+    .themes .lbl { font: 11px var(--nano-font-mono, monospace); letter-spacing: .08em; text-transform: uppercase; color: var(--nano-muted, #A3AAB8); padding: 0 6px 0 8px }
+    .themes button { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 36px; min-width: 36px; padding: 0 9px; border: 0; border-radius: 7px;
+      background: none; color: inherit; font: 600 13px inherit; white-space: nowrap; cursor: pointer }
+    .themes button[aria-pressed='true'] { background: var(--nano-surface-2, #212632) }
+    .swatch { position: relative; width: 20px; height: 20px; border-radius: 50%; overflow: hidden; box-shadow: inset 0 0 0 1.5px var(--nano-muted, #A3AAB8) }
+    .swatch > span { position: absolute; right: 0; top: 0; width: 10px; height: 20px } .swatch > i { position: absolute; left: 4px; bottom: 4px; width: 5px; height: 5px; border-radius: 50% }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div><h1>nano-inbox</h1><p>This package's components, running on their own. A host imports them from <a href="manifest.json"><code>manifest.json</code></a>.</p></div>
+    <div class="themes" role="group" aria-label="Theme"><span class="lbl">Theme</span></div>
+  </header>
+
+  <div class="cols">
+    <section class="card"><h2>Folders</h2><inbox-folders name="folders"></inbox-folders></section>
+    <section class="card"><h2>Messages</h2><inbox-list name="list"></inbox-list></section>
+    <section class="card"><h2>Reader</h2><inbox-reader name="reader"></inbox-reader></section>
+  </div>
+</main>
+<script type="module">
+  import { Ops, Registries, Runtimes } from '@pritzlaff/nano-core'
+  import { provide } from '@pritzlaff/nano-elements'
+  import { define, Folders, List, Reader } from './index.js'
+  // a registry and runtime for the page, as a host has; elements place their components in it
+  const runtime = Runtimes.create(Registries.create('preview'))
+  provide(document, runtime.registry)
+  define()
+  // folders → list → reader: ordinary subscriptions, as a host's nano.json would make them
+  const reg = runtime.registry
+  reg.subscribe({ source: 'folders', op: Ops.key(Folders.ops.selected), listener: 'list', target: Ops.key(List.ops.show) })
+  reg.subscribe({ source: 'list', op: Ops.key(List.ops.opened), listener: 'reader', target: Ops.key(Reader.ops.read) })
+
+  // the theme picker: sets a theme's --nano-* tokens on the page, and remembers the choice in this browser
+  const themes = JSON.parse(document.getElementById('themes').textContent)
+  const group = document.querySelector('.themes')
+  const apply = (id) => {
+    const t = themes.find((x) => x.id === id) ?? themes[0]
+    for (const [k, v] of Object.entries(t.vars)) document.documentElement.style.setProperty(`--nano-${k}`, v)
+    document.documentElement.style.colorScheme = t.scheme
+    for (const b of group.querySelectorAll('button')) {
+      const on = b.dataset.theme === t.id
+      b.setAttribute('aria-pressed', String(on)); b.querySelector('.name').textContent = on ? t.label : ''
+    }
+    try { localStorage.setItem('nano-inbox.theme', t.id) } catch {}
+  }
+  for (const t of themes) {
+    const b = document.createElement('button')
+    b.type = 'button'; b.dataset.theme = t.id; b.title = t.label; b.setAttribute('aria-label', `${t.label} theme`)
+    b.innerHTML = `<span class="swatch" aria-hidden="true" style="background:${t.vars.bg}"><span style="background:${t.vars.fg}"></span><i style="background:${t.vars.accent}"></i></span><span class="name"></span>`
+    b.addEventListener('click', () => apply(t.id))
+    group.append(b)
+  }
+  let saved = null; try { saved = localStorage.getItem('nano-inbox.theme') } catch {}
+  apply(saved)
+</script>
+</body>
+</html>
