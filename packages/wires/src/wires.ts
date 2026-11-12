@@ -3,7 +3,7 @@
 // system through the platform. The render-* files draw it, as the prototype's template does from renderVals.
 import { LitElement, css } from 'lit'
 import { Ops, type Op, type Result, type Runtime, type Trace } from '@pritzlaff/nano-core'
-import { PlatformOps, PlatformOps as P, type Selection } from '@composable/platform'
+import { ApplicationOps, ApplicationOps as P, type Selection } from '@pritzlaff/nano-app'
 import type { Catalog } from '@pritzlaff/nano-elements'
 import { FLASH_MS, FONTS, FRAME_MS, MAX_PACKETS, TRAVEL_MS, TURN_MS, VIEWS, short, type View } from './constants'
 import { buildModel, type Model, type Panel } from './model'
@@ -227,15 +227,15 @@ export class Wires extends LitElement {
   }
   async connect(from: string, to: string) {
     const a = this.model.P[from]!, b = this.model.P[to]!
-    return this.call(PlatformOps.connect, { system: this.sys, source: a.owner, op: Ops.key(a.op), listener: b.owner, target: Ops.key(b.op) })
+    return this.call(ApplicationOps.connect, { system: this.sys, source: a.owner, op: Ops.key(a.op), listener: b.owner, target: Ops.key(b.op) })
   }
-  disconnect(id: string) { return this.call(PlatformOps.disconnect, { system: this.sys, id }) }
-  removeComponent(instance: string) { return this.call(PlatformOps.removeFromSystem, { instance, system: this.sys }) }
+  disconnect(id: string) { return this.call(ApplicationOps.disconnect, { system: this.sys, id }) }
+  removeComponent(instance: string) { return this.call(ApplicationOps.removeFromSystem, { instance, system: this.sys }) }
   /** Adds a component of `kind` to the rack, under a fresh name; returns the name, or null if refused. */
   async create(kind: string) {
     let n = 1
     while (this.runtime?.registry.get(kind + '-' + n)) n += 1
-    const r = await this.call(PlatformOps.createComponent, { kind, name: kind + '-' + n, system: this.sys })
+    const r = await this.call(ApplicationOps.createComponent, { kind, name: kind + '-' + n, system: this.sys })
     return 'error' in r ? null : kind + '-' + n
   }
   /** Asks the workspace to open a rack component as a panel again, with the element of the kind it was made from. */

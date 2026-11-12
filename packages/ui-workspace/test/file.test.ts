@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
-import { checkApp, type NanoApp } from '@composable/shell'
+import { checkApp, type NanoApp } from '@pritzlaff/nano-app'
 import { appStore } from '../src/app/store'
 import { codeUses, fileCommands, showNotes, withoutCode, type FileDeps, type Pick } from '../src/app/file'
 import { appHost } from './fixtures/app-host'

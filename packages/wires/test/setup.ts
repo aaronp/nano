@@ -1,13 +1,13 @@
 // A real host: runtime, platform and the bundle's catalog, with range → debounce → log connected and a map unwired.
 import { Components, Ops, Registries, Runtimes, type Op } from '@pritzlaff/nano-core'
 import { catalog, Debounce, Log, Range } from '@composable/bundle'
-import { platform, PlatformOps as P } from '@composable/platform'
+import { application, ApplicationOps as P } from '@pritzlaff/nano-app'
 
 export const tick = () => new Promise(r => setTimeout(r, 0))
 
 export async function setup() {
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('application', Components.instantiate(platform(host, catalog)))
+  host.registry.add('application', Components.instantiate(application(host, catalog)))
   const call = (op: Op, arg: unknown) => host.call({ registry: 'host', instance: 'test' }, 'application', Ops.key(op), arg) as Promise<any>
   for (const [kind, name] of [['range', 'r'], ['debounce', 'd'], ['log', 'l'], ['map', 'm']]) await call(P.createComponent, { kind, name, system: 'host' })
   const s1 = (await call(P.connect, { system: 'host', source: 'r', op: Ops.key(Range.ops.value), listener: 'd', target: Ops.key(Debounce.ops.enqueue) })).value

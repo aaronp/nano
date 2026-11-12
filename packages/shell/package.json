@@ -2,7 +2,7 @@
   "name": "@composable/shell", "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Host-page pieces any host can reuse: the profile menu.",
+  "description": "The host UI kit: reusable Lit pieces any host can use — profile and File menus",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
     "@pritzlaff/nano-app": "workspace:*",

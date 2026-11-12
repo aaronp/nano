@@ -70,9 +70,9 @@ test('palette adds use the kind\'s first allowed mode', async () => {
 test('deployIn deploys into the host, into a platform system, and errors for a registry nobody owns', async () => {
   const { deployIn } = await import('../src/sandbox/deploy.ts')
   const { Components, Ops } = await import('@pritzlaff/nano-core')
-  const { platform, PlatformOps: P } = await import('@composable/platform')
+  const { application, ApplicationOps: P } = await import('@pritzlaff/nano-app')
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('application', Components.instantiate(platform(host, bundle as never)))
+  host.registry.add('application', Components.instantiate(application(host, bundle as never)))
   await host.call({ registry: 'host', instance: 'workspace' }, 'application', Ops.key(P.createSystem), 'lab')
   const lab = (host.registry.get('application')!.value as { systems: Map<string, { registry: typeof host.registry }> }).systems.get('lab')!
   expect(deployIn(host, cat, host.registry, 'a', 'range', 'host')).toEqual({ value: undefined })

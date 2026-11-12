@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
-import type { NanoApp } from '@composable/shell'
+import type { NanoApp } from '@pritzlaff/nano-app'
 import { openDialog } from '../src/components/open-dialog'
 import { confirmImports } from '../src/components/imports-confirm'
 import { askName } from '../src/components/name-dialog'

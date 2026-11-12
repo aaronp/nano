@@ -2,7 +2,7 @@
  * KEY (never the main workspace), each saved one's dock layout under `<main dock's storage-key>.saved.<path>`. The main
  * workspace's layout stays under its dock's own storage-key: read here at start, written only by that dock. */
 import { Ops, type Runtime } from '@pritzlaff/nano-core'
-import { PlatformOps as P, type Screen } from '@composable/platform'
+import { ApplicationOps as P, type Screen } from '@pritzlaff/nano-app'
 import { KEY, savedWorkspaces, type SavedWorkspace } from './saved-workspaces.ts'
 
 /** The main workspace's route: a screen, first, but never in the saved list or a document. */

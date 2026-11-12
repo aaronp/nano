@@ -2,7 +2,8 @@
 // a component (its coordinates, kind, jacks and connections) or one of its actions (its op, schemas and connections).
 import { html } from 'lit'
 import { Ops, type Op, type Subscription } from '@pritzlaff/nano-core'
-import { examplesOf, runtimeOf, viewIds } from '@composable/platform'
+import { examplesOf, viewIds } from '@composable/platform'
+import { runtimeOf } from '@pritzlaff/nano-app'
 import type { Vals } from './render-root'
 import type { Wires } from './wires'
 

@@ -6,7 +6,7 @@
  * Saved ones are mounted at start, before <app-shell> reads its routes.
  */
 import { Ops, type Op, type Runtime } from '@pritzlaff/nano-core';
-import { PlatformOps as P, runtimeOf } from '@composable/platform';
+import { ApplicationOps as P, runtimeOf } from '@pritzlaff/nano-app';
 import { ICONS, SYSTEM, savedWorkspaces, type SavedWorkspace } from '../lib/saved-workspaces.ts';
 import { layoutKey, moveScreen, savedScreens, setScreen } from '../lib/screens.ts';
 import { askWorkspace, type WorkspaceChoice } from './workspace-dialog.ts';

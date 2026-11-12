@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { Ops, Registries, Runtimes } from '@pritzlaff/nano-core'
 import { provide } from '@pritzlaff/nano-elements'
 import { defineShell, Profile } from '../src'
-import { tick } from './fixtures'
+import { tick } from '../../app/test/fixtures'
 
 defineShell()
 const rt = Runtimes.create(Registries.create('page')), reg = rt.registry

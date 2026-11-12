@@ -4,8 +4,9 @@ import { Components, Ops, Registries, Runtimes } from '@pritzlaff/nano-core'
 import { Type } from 'typebox'
 import { component } from '@pritzlaff/nano-runes'
 import { catalog as bundle } from '@composable/bundle'
-import { AppGateway, catalog as shell, Profile } from '@composable/shell'
-import { platform } from '@composable/platform'
+import { catalog as shell, Profile } from '@composable/shell'
+import { AppGateway } from '@pritzlaff/nano-app'
+import { application } from '@pritzlaff/nano-app'
 import { deploy, type AppCatalog, type Mode } from '../../src/sandbox/deploy'
 import { placementsOf } from '../../src/lib/dock-layout'
 import { HOST_ENTRIES, type Stores } from '../../src/app/stores'
@@ -19,7 +20,7 @@ export function appHost() {
   const deployed: { id: string; mode: string }[] = []
   const open = (() => ({ port: new MessageChannel().port1, ready: new Promise<void>(() => {}), dispose() {} })) as never
   host.registry.add('app', Components.instantiate(AppGateway), { kind: 'app', name: 'test' })
-  host.registry.add('application', Components.instantiate(platform(host, catalog, {
+  host.registry.add('application', Components.instantiate(application(host, catalog, {
     gateways: ['app'], locked: id => id.startsWith('ws-controls-'), placementsOf,
     deploy: (system, id, kind, mode, owner, outward) => { deployed.push({ id, mode: mode ?? 'host' }); return deploy(system, id, kind, (mode ?? 'host') as Mode, { catalog, owner, open, ...(outward && { outward }) }) },
   })), { kind: 'app', name: 'test' })

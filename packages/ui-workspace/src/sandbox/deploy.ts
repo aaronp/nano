@@ -1,7 +1,7 @@
 // DeployStrategy: the Component to instantiate for a kind in a mode, and a deploy that adds it, labels it and guards it.
 import { Components, err, guard, isOk, ok, type Component, type Owner, type Registry, type Result, type Runtime, type Selectors } from '@pritzlaff/nano-core'
 import type { CatalogEntry } from '@pritzlaff/nano-elements'
-import { runtimeOf } from '@composable/platform'
+import { runtimeOf } from '@pritzlaff/nano-app'
 import { openFrame } from './frames'
 import { serialEntry } from './protocol'
 import { standIn } from './stand-in'

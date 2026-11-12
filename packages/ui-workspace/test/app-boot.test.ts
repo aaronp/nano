@@ -3,7 +3,7 @@ import { snapshotApp } from '@pritzlaff/nano-app'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
-import { PlatformOps as P } from '@composable/platform'
+import { ApplicationOps as P } from '@pritzlaff/nano-app'
 import { realStores } from '../src/app/stores'
 import { appStore, editableTitle, titleStore } from '../src/app/store'
 import { autosave, rebase, restoreApp } from '../src/app/boot'

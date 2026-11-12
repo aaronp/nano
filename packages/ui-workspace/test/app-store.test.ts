@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import type { NanoApp } from '@composable/shell'
+import type { NanoApp } from '@pritzlaff/nano-app'
 import { appStore } from '../src/app/store'
 
 const memory = (limit = Infinity) => {

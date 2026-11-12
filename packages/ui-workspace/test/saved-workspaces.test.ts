@@ -46,9 +46,9 @@ test('mounting one adds a top-level nav item, and a page with a drawer beside a 
 
 test('a mounted workspace runs in its system: its wiring view over that runtime (platform calls in host), its dock on that registry', async () => {
   const { Components, Ops, Registries, Runtimes } = await import('@pritzlaff/nano-core')
-  const { platform, PlatformOps: P, runtimeOf } = await import('@composable/platform')
+  const { application, ApplicationOps: P, runtimeOf } = await import('@pritzlaff/nano-app')
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('application', Components.instantiate(platform(host, {})))
+  host.registry.add('application', Components.instantiate(application(host, {})))
   await host.call({ registry: 'host', instance: 't' }, 'application', Ops.key(P.createSystem), 'lab')
   document.body.innerHTML = `<app-shell><div slot="nav" data-workspaces></div>
     <app-route path="/workspace"><div class="ws-page"><c-wires><workspace-dock id="workspace" storage-key="k"></workspace-dock></c-wires></div></app-route></app-shell>`
@@ -63,11 +63,11 @@ test('a mounted workspace runs in its system: its wiring view over that runtime 
 
 test('+ makes a workspace in a new system, empty; a taken route is refused with the input kept', async () => {
   const { Components, Ops, Registries, Runtimes } = await import('@pritzlaff/nano-core')
-  const { platform, PlatformOps: P, runtimeOf } = await import('@composable/platform')
+  const { application, ApplicationOps: P, runtimeOf } = await import('@pritzlaff/nano-app')
   const { bootSavedWorkspaces } = await import('../src/components/saved-workspaces.ts')
   localStorage.clear()
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('application', Components.instantiate(platform(host, {})))
+  host.registry.add('application', Components.instantiate(application(host, {})))
   document.body.innerHTML = `<app-shell><div slot="nav" class="nav-row" data-workspaces><a href="#/workspace">Workspaces</a><button data-new-workspace>+</button></div>
     <a slot="nav" data-sub href="#/workspace">Main</a>
     <app-route path="/workspace"><div class="ws-page"><c-wires><workspace-dock id="workspace" storage-key="k"></workspace-dock></c-wires></div></app-route><app-route path="*"></app-route></app-shell>`
@@ -107,10 +107,10 @@ const order = () => [...document.querySelectorAll('app-shell > [slot="nav"]')].m
 const settle = () => new Promise(r => setTimeout(r, 0))
 const reorderWorld = async () => {
   const { Components, Ops, Registries, Runtimes } = await import('@pritzlaff/nano-core')
-  const { platform, PlatformOps: P } = await import('@composable/platform')
+  const { application, ApplicationOps: P } = await import('@pritzlaff/nano-app')
   const { bootSavedWorkspaces } = await import('../src/components/saved-workspaces.ts')
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('application', Components.instantiate(platform(host, {})))
+  host.registry.add('application', Components.instantiate(application(host, {})))
   const call = (op: { ns: string; name: string }, arg: unknown) => host.call({ registry: 'host', instance: 't' }, 'application', Ops.key(op), arg) as Promise<any>
   for (const [p, t] of [['/workspace', 'Main'], ['/a', 'A'], ['/b', 'B'], ['/c', 'C']] as const) await call(P.setScreen, { id: p, title: t, icon: 'box', system: 'host', layout: null })
   document.body.innerHTML = `<app-shell><div slot="nav" class="nav-row" data-workspaces><a href="#/workspace">Workspaces</a><button data-toggle-drawer></button><button data-new-workspace>+</button></div>

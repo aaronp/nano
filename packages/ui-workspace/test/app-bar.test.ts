@@ -11,8 +11,8 @@ mock.module('golden-layout/dist/css/goldenlayout-base.css', () => ({ default: ''
 
 // lit picks its DOM build when first imported, so these come after the DOM exists
 const { Components, Ops } = await import('@pritzlaff/nano-core')
-const { AppGateway } = await import('@composable/shell')
-const { PlatformOps: P, runtimeOf } = await import('@composable/platform')
+const { AppGateway } = await import('@pritzlaff/nano-app')
+const { ApplicationOps: P, runtimeOf } = await import('@pritzlaff/nano-app')
 await import('../src/boot-theme.ts')
 const page = await Bun.file(new URL('../public/index.html', import.meta.url)).text()
 document.body.innerHTML = page.slice(page.indexOf('<body>') + 6, page.indexOf('</body>'))

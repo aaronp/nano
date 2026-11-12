@@ -165,10 +165,10 @@ test('with no panel focused, adding splits the largest', async () => {
 
 test("save gives its route's screen the layout, so the application knows what each panel shows", async () => {
   const { Components, Ops, Registries, Runtimes } = await import('@pritzlaff/nano-core')
-  const { platform, PlatformOps: P } = await import('@composable/platform')
+  const { application, ApplicationOps: P } = await import('@pritzlaff/nano-app')
   const { placementsOf } = await import('../src/lib/dock-layout.ts')
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('application', Components.instantiate(platform(host, {}, { placementsOf })))
+  host.registry.add('application', Components.instantiate(application(host, {}, { placementsOf })))
   const call = (op: { ns: string; name: string }, arg: unknown) => host.call({ registry: 'host', instance: 't' }, 'application', Ops.key(op), arg) as Promise<any>
   await call(P.setScreen, { id: '/lab', title: 'Lab', system: 'host', layout: null })
   const route = document.createElement('app-route'); route.setAttribute('path', '/lab')

@@ -1,15 +1,13 @@
-// Host-page pieces any host can reuse: the profile menu.
+// The host UI kit: reusable Lit pieces any host can use — the profile and File menus.
 import type { Catalog } from '@pritzlaff/nano-elements'
 import { Profile } from './profile'
 
 export { Profile }
-export { AppGateway, type Focus, type Target } from '@pritzlaff/nano-app'
 export { initials, safeAvatar, type Entry, type User } from './profile'
 export { defineShell, ProfileEl } from './profile-el'
 export { FileMenuEl } from './file-menu-el'
-export { NanoAppSchema, checkApp, canonicalApp, RESERVED, MAX_BYTES, type NanoApp } from '@pritzlaff/nano-app'
 
-/** The shell's kinds of component, for a host to list (and the platform to make). */
+/** The shell's kinds of component, for a host to list (and the Application to make). */
 export const catalog = {
   profile: { component: Profile, title: 'Profile', tag: 'nano-profile' },
 } satisfies Catalog

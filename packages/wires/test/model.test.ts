@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { Components, Ops } from '@pritzlaff/nano-core'
 import { Debounce, Log, Map, Range } from '@composable/bundle'
-import { PlatformOps as P } from '@composable/platform'
+import { ApplicationOps as P } from '@pritzlaff/nano-app'
 import { Type } from 'typebox'
 import { buildModel, buildPuzzle, checkConnect } from '../src'
 import { panels, setup } from './setup'

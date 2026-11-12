@@ -4,8 +4,8 @@
  * nothing); a dock's `dock:focus` sets focus. Components put their own controls up through the gateway themselves.
  */
 import { Components, Ops, type Op } from '@pritzlaff/nano-core'
-import { runtimeOf } from '@composable/platform'
-import { AppGateway, type Focus } from '@composable/shell'
+import { runtimeOf } from '@pritzlaff/nano-app'
+import { AppGateway, type Focus } from '@pritzlaff/nano-app'
 import { catalog, host } from './composable.ts'
 import { defineAppBar, type AppBarEl } from './components/app-bar.ts'
 import { controlsId, WorkspaceControls } from './components/workspace-controls.ts'

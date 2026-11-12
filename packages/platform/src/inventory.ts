@@ -1,7 +1,7 @@
 // The platform as a list: one row per instance in each system, then one per kind nothing has been made of.
 import type { TSchema } from 'typebox'
 import type { Snapshot } from '@pritzlaff/nano-core'
-import type { Kind } from './platform'
+import type { Kind } from '@pritzlaff/nano-app'
 
 /** A row of the inventory. A kind never made has `—` for system, instance and owner. */
 export type Row = { system: string; component: string; instance: string; name: string; owner: string; description: string; deploy: string }

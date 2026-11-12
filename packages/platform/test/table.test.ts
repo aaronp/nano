@@ -2,7 +2,8 @@ import { expect, test } from 'bun:test'
 import { Components, Ops, Registries, Runtimes } from '@pritzlaff/nano-core'
 import { provide } from '@pritzlaff/nano-elements'
 import { catalog } from '@composable/bundle'
-import { definePlatformTable, platform, PlatformOps as P, type Row } from '../src'
+import { definePlatformTable, type Row } from '../src'
+import { application, ApplicationOps as P } from '@pritzlaff/nano-app'
 
 definePlatformTable()
 const tick = () => new Promise(r => setTimeout(r, 0))
@@ -10,7 +11,7 @@ type El = HTMLElement & { updateComplete: Promise<boolean> }
 
 const mount = async () => {
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('application', Components.instantiate(platform(host, catalog)))
+  host.registry.add('application', Components.instantiate(application(host, catalog)))
   const call = (op: any, arg: unknown = null) => host.call({ registry: 'host', instance: 't' }, 'application', Ops.key(op), arg) as Promise<any>
   await call(P.createComponent, { kind: 'range', name: 'r', system: 'host' })
   await call(P.createComponent, { kind: 'log', name: 'l', system: 'host' })

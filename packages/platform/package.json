@@ -2,7 +2,7 @@
   "name": "@composable/platform", "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Systems as a component: create them, put components in them, connect them, and watch them change.",
+  "description": "Lit views of the Application: the systems tree and the inventory table",
   "exports": {
     ".": "./src/index.ts"
   },

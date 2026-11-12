@@ -5,6 +5,7 @@
   "description": "The workspace's connection view: a faithful Lit port of the wires prototype, over the live host system.",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
+    "@pritzlaff/nano-app": "workspace:*",
     "@pritzlaff/nano-core": "workspace:*",
     "@pritzlaff/nano-elements": "workspace:*",
     "@composable/platform": "workspace:*",

@@ -134,6 +134,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@composable/platform": "workspace:*",
+        "@pritzlaff/nano-app": "workspace:*",
         "@pritzlaff/nano-core": "workspace:*",
         "@pritzlaff/nano-elements": "workspace:*",
         "lit": "^3.0.0",

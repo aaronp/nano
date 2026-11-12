@@ -2,7 +2,8 @@ import { expect, test } from 'bun:test'
 import { Components, Ops, Registries, Runtimes } from '@pritzlaff/nano-core'
 import { provide } from '@pritzlaff/nano-elements'
 import { catalog, Log, Range } from '@composable/bundle'
-import { definePlatform, platform, PlatformOps as P } from '../src'
+import { definePlatform } from '../src'
+import { application, ApplicationOps as P } from '@pritzlaff/nano-app'
 
 definePlatform()
 const tick = () => new Promise(r => setTimeout(r, 0))
@@ -10,7 +11,7 @@ type El = HTMLElement & { updateComplete: Promise<boolean> }
 
 const mount = async () => {
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('application', Components.instantiate(platform(host, catalog)))
+  host.registry.add('application', Components.instantiate(application(host, catalog)))
   const call = (op: any, arg: unknown = null) => host.call({ registry: 'host', instance: 't' }, 'application', Ops.key(op), arg) as Promise<any>
   await call(P.createComponent, { kind: 'range', name: 'r', system: 'host' })
   await call(P.createComponent, { kind: 'log', name: 'l', system: 'host' })
@@ -174,7 +175,7 @@ test('an instance owned by a view is hidden whatever its id; one named ~view but
 test('the Add form offers only the kind\'s modes and selector fields, and sends them', async () => {
   const host = Runtimes.create(Registries.create('host'))
   const sent: unknown[] = []
-  host.registry.add('application', Components.instantiate(platform(host, { range: { ...catalog.range!, modes: ['isolated-sandbox'] }, log: { ...catalog.log!, modes: ['host', 'sandbox'] }, input: catalog.input! }, {
+  host.registry.add('application', Components.instantiate(application(host, { range: { ...catalog.range!, modes: ['isolated-sandbox'] }, log: { ...catalog.log!, modes: ['host', 'sandbox'] }, input: catalog.input! }, {
     deploy: (_rt, id, kind, mode, _o, outward) => { sent.push({ id, kind, mode, outward }); return { value: undefined } },
   })))
   provide(document, host.registry)

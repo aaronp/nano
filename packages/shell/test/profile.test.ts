@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { catalog, initials, Profile, safeAvatar } from '../src'
-import { page } from './fixtures'
+import { page } from '../../app/test/fixtures'
 
 test('starts with no name and no entries', async () => {
   const { add, value } = page(); add('p', Profile)

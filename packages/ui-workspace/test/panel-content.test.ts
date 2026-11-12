@@ -7,13 +7,13 @@ import { expect, test } from 'bun:test'
 const { Components, Registries, Runtimes } = await import('@pritzlaff/nano-core')
 const { provide } = await import('@pritzlaff/nano-elements')
 const { catalog, defineBundle } = await import('@composable/bundle')
-const { definePlatform, platform } = await import('@composable/platform')
+const { definePlatform } = await import('@composable/platform'); const { application } = await import('@pritzlaff/nano-app')
 const { handRegistry } = await import('../src/lib/panel-content.ts')
 const tick = () => new Promise(r => setTimeout(r, 0))
 
 test('a placed element in a panel makes its component in the dock\'s registry; other model views keep the page\'s', async () => {
   const host = Runtimes.create(Registries.create('host')), lab = Runtimes.create(Registries.create('lab'))
-  host.registry.add('application', Components.instantiate(platform(host, catalog)))
+  host.registry.add('application', Components.instantiate(application(host, catalog)))
   provide(document, host.registry)
   // panelContent imports the template into the page (browsers upgrade the elements then; happy-dom can't), so this
   // starts from upgraded elements, not yet on the page, and hands them the registry as panelContent does

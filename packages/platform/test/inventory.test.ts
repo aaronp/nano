@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { Snapshot } from '@pritzlaff/nano-core'
-import { examplesOf, inventory, matches, UNREGISTERED, type Filters, type Kind, type Row } from '../src'
+import { examplesOf, inventory, matches, UNREGISTERED, type Filters, type Row } from '../src'
+import { type Kind } from '@pritzlaff/nano-app'
 
 const inst = (id: string, component: string, owner?: { kind: string; name: string }) => ({ id, component, ...(owner && { owner }), ops: [] })
 const SYSTEMS: Snapshot[] = [

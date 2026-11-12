@@ -3,7 +3,7 @@
 import { css, html, nothing } from 'lit'
 import type { Snapshot } from '@pritzlaff/nano-core'
 import { base, kit, ModelElement, providedRegistry, t, type Column } from '@pritzlaff/nano-elements'
-import { PlatformOps as P, type Kind } from './platform'
+import { ApplicationOps as P, type Kind } from '@pritzlaff/nano-app'
 import { inventory, matches, sandboxed, UNREGISTERED, type Filters, type Row } from './inventory'
 
 const NONE = '—'

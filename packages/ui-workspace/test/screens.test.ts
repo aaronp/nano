@@ -1,6 +1,6 @@
 // The Application's screens, kept in this browser in the saved-workspaces format from before the Application held them.
 import { expect, test } from 'bun:test'
-import { PlatformOps as P } from '@composable/platform'
+import { ApplicationOps as P } from '@pritzlaff/nano-app'
 import { persistScreens } from '../src/lib/screens.ts'
 import { KEY } from '../src/lib/saved-workspaces.ts'
 import { appHost, tick } from './fixtures/app-host'

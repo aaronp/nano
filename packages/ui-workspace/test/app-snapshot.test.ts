@@ -2,8 +2,8 @@ import { snapshotApp } from '@pritzlaff/nano-app'
 import { expect, test } from 'bun:test'
 import { Components, Ops } from '@pritzlaff/nano-core'
 import { Range, Map as MapC, Log } from '@composable/bundle'
-import { PlatformOps as P, runtimeOf } from '@composable/platform'
-import { checkApp } from '@composable/shell'
+import { ApplicationOps as P, runtimeOf } from '@pritzlaff/nano-app'
+import { checkApp } from '@pritzlaff/nano-app'
 import { appHost, memoryStores, Profile, tick } from './fixtures/app-host'
 
 async function world() {

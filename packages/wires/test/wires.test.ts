@@ -2,7 +2,8 @@ import { afterEach, expect, test } from 'bun:test'
 import { Ops } from '@pritzlaff/nano-core'
 import { catalog, Map, Range } from '@composable/bundle'
 import { defineWires, type Wires } from '../src'
-import { definePlatform, PlatformOps as P } from '@composable/platform'
+import { definePlatform } from '@composable/platform'
+import { ApplicationOps as P } from '@pritzlaff/nano-app'
 import { onDown, onMove, onUp, removeSel, toggleEdit } from '../src/pointer'
 import { setup, tick } from './setup'
 
@@ -338,7 +339,7 @@ test('over another system: cords connect in that system, through the platform in
   const t = await setup()
   await t.call(P.createSystem, 'lab')
   for (const [kind, name] of [['range', 'lr'], ['debounce', 'ld']]) await t.call(P.createComponent, { kind, name, system: 'lab' })
-  const { runtimeOf } = await import('@composable/platform')
+  const { runtimeOf } = await import('@pritzlaff/nano-app')
   const lab = runtimeOf(t.host.registry, 'lab')!
   const el = document.createElement('c-wires') as Wires
   Object.assign(el, { runtime: lab, host: t.host, catalog })

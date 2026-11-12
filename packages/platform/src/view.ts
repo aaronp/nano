@@ -4,7 +4,7 @@ import { css, html } from 'lit'
 import type { TSchema } from 'typebox'
 import { Ops, type Op, type Snapshot, type Subscription } from '@pritzlaff/nano-core'
 import { base, ModelElement, providedRegistry, type NanoTree, type TreeNode } from '@pritzlaff/nano-elements'
-import { PlatformOps as P, type Kind, type Selection } from './platform'
+import { ApplicationOps as P, type Kind, type Selection } from '@pritzlaff/nano-app'
 import { deployOf, examplesOf, sandboxed } from './inventory'
 
 type Inst = Snapshot['instances'][number]

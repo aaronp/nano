@@ -3,7 +3,7 @@
 import { nothing } from 'lit'
 import type { Registry } from '@pritzlaff/nano-core'
 import { PlacedElement } from '@pritzlaff/nano-elements'
-import { AppGateway, type Target } from '@composable/shell'
+import { AppGateway, type Target } from '@pritzlaff/nano-app'
 import { showStatus } from '../lib/status.ts'
 
 /** The element tag and registry for an instance, or undefined if it has no element. */

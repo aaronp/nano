@@ -1,7 +1,7 @@
 import './dom'
 import { expect, test } from 'bun:test'
 import { defineShell } from '../src'
-import { tick } from './fixtures'
+import { tick } from '../../app/test/fixtures'
 
 defineShell()
 type El = HTMLElement & { updateComplete: Promise<boolean>; dirty: boolean }
