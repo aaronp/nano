@@ -1,12 +1,14 @@
 // An instance's view of the registries it is in: one handle per registry, and its own ops.
 import type { Action } from './component'
-import { Ops, type Coord, type Op, type Result } from './data'
+import { err, Ops, type Coord, type Op, type Result } from './data'
 
 /** One registry as seen by an instance in it: its coordinate there, and how to publish and call. */
 export type Handle = {
   coord: Coord
   notify(op: Op, data: unknown, correlation?: string): Promise<Result<Result[]>>
   call(target: string, op: Op, arg: unknown): Promise<Result>
+  /** Calls `op` on whatever this instance's `need` is bound to, read at call time. */
+  use(need: string, op: Op, arg: unknown): Promise<Result>
 }
 
 /** Tells a registry that the instance's ops changed. */
@@ -18,6 +20,8 @@ export type Environment = {
   added(h: Handle, announce: Announce): void
   removed(coord: Coord): void
   notify(op: Op, data: unknown, correlation?: string): Promise<Result<Result[]>[]>
+  /** Calls a need through the first handle. */
+  use(need: string, op: Op, arg: unknown): Promise<Result>
   register(op: Op, run?: Action<any>['run'], opts?: { emits?: Op[] }): 'added' | 'replaced'
   unregister(op: Op): boolean
 }
@@ -34,6 +38,7 @@ export const Environments = {
       added: (h, announce) => { if (!members.some(m => same(m.h.coord, h.coord))) members.push({ h, announce }) },
       removed: coord => { members = members.filter(m => !same(m.h.coord, coord)) },
       notify: (op, data, correlation) => Promise.all(members.map(m => m.h.notify(op, data, correlation))),
+      use: async (need, op, arg) => members[0] ? members[0].h.use(need, op, arg) : err('not in a registry'),
       register(op, run, opts) {
         const had = actions.has(Ops.key(op))
         actions.set(Ops.key(op), { op, run, emits: opts?.emits })

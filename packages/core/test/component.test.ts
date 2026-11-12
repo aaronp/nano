@@ -16,7 +16,7 @@ const counter = () => {
 /** A handle that records what it is asked to publish. */
 const recorder = (instance = 'c') => {
   const sent: [Op, unknown][] = [], announced: [string, Op][] = []
-  const h: Handle = { coord: { registry: 'r', instance }, notify: async (op, data) => { sent.push([op, data]); return { value: [] } }, call: async () => err('no') }
+  const h: Handle = { coord: { registry: 'r', instance }, notify: async (op, data) => { sent.push([op, data]); return { value: [] } }, call: async () => err('no'), use: async () => err('no') }
   return { h, sent, announced, announce: (t: 'op-added' | 'op-removed', op: Op) => { announced.push([t, op]) } }
 }
 

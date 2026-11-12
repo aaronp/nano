@@ -63,8 +63,9 @@ function registryComponent(registry: Registry) {
   return c
 }
 
-/** Makes the runtime for a registry, adds the registry to itself as 'registry', and publishes its changes. */
-function create(registry: Registry, policy?: Policy): Runtime {
+/** Makes the runtime for a registry, adds the registry to itself as 'registry', and publishes its changes.
+ *  `peers` finds the runtime of another registry, for a need bound there. */
+function create(registry: Registry, policy?: Policy, opts: { peers?: (registry: string) => Runtime | undefined } = {}): Runtime {
   if (registry.get('registry')) throw new Error(`registry ${registry.id} already has a runtime`)
   const at = (instance: string): Coord => ({ registry: registry.id, instance })
   const listeners = new Set<(t: Trace) => void>()
@@ -113,8 +114,14 @@ function create(registry: Registry, policy?: Policy): Runtime {
   const attach = (id: string) => {
     const env = registry.get(id)!.env, coord = at(id)
     envs.set(id, env)
+    const use = async (need: string, op: Op, arg: unknown): Promise<Result> => {
+      const to = registry.binding(id, need)
+      if (!to) return err(`${id} needs ${need}: not bound`)
+      const rt = to.registry === registry.id ? outer : opts.peers?.(to.registry)
+      return rt ? rt.call(coord, to.instance, Ops.key(op), arg) : err(`no runtime ${to.registry}`)
+    }
     env.added(
-      { coord, notify: (op, data, correlation) => outer.notify({ from: coord, op: Ops.key(op), data, correlation }), call: (t, op, arg) => outer.call(coord, t, Ops.key(op), arg) },
+      { coord, notify: (op, data, correlation) => outer.notify({ from: coord, op: Ops.key(op), data, correlation }), call: (t, op, arg) => outer.call(coord, t, Ops.key(op), arg), use },
       (type, op) => { registry.announce(id, type, op) },
     )
   }
