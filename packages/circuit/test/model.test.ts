@@ -64,3 +64,13 @@ test('an infrastructure end drops the cable', () => {
 test('a null-layout screen is an empty layer', () => {
   expect(build().layers[2]).toMatchObject({ screen: '/c', footprints: [] })
 })
+
+test('placed infrastructure is never a footprint', () => {
+  const c = build([pl('/a', 'application'), pl('/a', 'r1'), pl('/a', 'hidden')])
+  expect(c.layers[0]!.footprints.map(f => f.instance)).toEqual(['r1'])
+})
+
+test('a placement missing from the snapshot still yields a bare footprint', () => {
+  const f = build([pl('/a', 'ghost')]).layers[0]!.footprints[0]!
+  expect([f.instance, f.title, f.pads]).toEqual(['ghost', 'ghost', []])
+})

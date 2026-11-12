@@ -24,6 +24,9 @@ export function buildCircuit({ systems, screens, placements, kinds }: { systems:
   const describe = (system: string, instance: string) => { const c = lookup(system, instance)?.component; return { ...(c !== undefined && kindOf.has(c) && { kind: kindOf.get(c)! }), title: (c !== undefined && titleOf.get(c)) || instance, pads: padsOf(system, instance) } }
 
   const screenOf = new Map(screens.map(s => [s.id, s]))
+  const views = new Map(systems.map(s => [s.id, viewIds(s)]))
+  // infrastructure is never drawn as a user's component, even when a panel shows it
+  placements = placements.filter(p => { const sc = screenOf.get(p.screen); return !sc || !isInfrastructure(p.instance, views.get(sc.system) ?? new Set()) })
   const pages = new Map<string, Set<string>>()
   for (const p of placements) { const sc = screenOf.get(p.screen); if (sc) { const k = `${sc.system}/${p.instance}`; pages.set(k, (pages.get(k) ?? new Set()).add(p.screen)) } }
 
