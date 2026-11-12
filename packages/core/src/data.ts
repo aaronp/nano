@@ -44,6 +44,9 @@ export const Ops = {
 /** Where an instance lives: a registry and an instance id within it. */
 export type Coord = { registry: string; instance: string }
 
+/** A named set of ops a component can need or implement: `ops` maps a role name to the op. */
+export type Interface = { id: string; ops: Record<string, Op> }
+
 /** The outcome of anything that can fail: a value, or an error message. */
 export type Result<A = unknown> = { value: A; detail?: unknown } | { error: string; detail?: unknown }
 
@@ -72,6 +75,13 @@ export const OwnerSchema = Type.Object({ kind: str('What kind of thing owns it',
   { title: 'Owner', description: 'Who added an instance to a registry' })
 export type Owner = Static<typeof OwnerSchema>
 
+export const CoordSchema = Type.Object({ registry: str('The registry id', ['host']), instance: str('The instance id', ['ex-db']) }, { title: 'Coord', description: 'Where an instance lives' })
+
+/** A need of an instance, bound to the instance that serves it. */
+export const BindingSchema = Type.Object({ instance: str('The instance with the need', ['ex-app']), need: str('The need, by name', ['db']), to: CoordSchema },
+  { title: 'Binding', description: 'A need bound to an instance coordinate' })
+export type Binding = Static<typeof BindingSchema>
+
 /** Free-form key/value tags on an instance, per registry; indexed so views and deploy can find by key or value. */
 export const LabelsSchema = Type.Record(Type.String(), Type.String(), { description: 'Labels on an instance: key to value', examples: [{ mode: 'worker' }] })
 
@@ -88,6 +98,8 @@ export const DeltaSchemas = {
   'op-removed': Type.Object({ type: Type.Literal('op-removed'), instance, op: str('The op, by key') }, { description: 'An instance lost an op' }),
   'subscription-opened': Type.Object({ type: Type.Literal('subscription-opened'), subscription: SubscriptionSchema }, { description: 'A subscription was opened' }),
   'subscription-closed': Type.Object({ type: Type.Literal('subscription-closed'), subscription: SubscriptionSchema }, { description: 'A subscription was closed' }),
+  'binding-set': Type.Object({ type: Type.Literal('binding-set'), binding: BindingSchema }, { description: 'A need was bound (or rebound) to a coord' }),
+  'binding-cleared': Type.Object({ type: Type.Literal('binding-cleared'), binding: BindingSchema }, { description: 'A need lost its binding; binding is what it was' }),
 }
 /** A change to a registry, published from the registry itself. */
 export const DeltaSchema = Type.Union(Object.values(DeltaSchemas), { title: 'Delta', description: 'A change to a registry' })

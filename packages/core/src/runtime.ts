@@ -2,7 +2,7 @@
 import { Type, type TSchema } from 'typebox'
 import { Value } from 'typebox/value'
 import { Components, type Instance } from './component'
-import { DeltaSchemas, err, isOk, Ops, SubscriptionSchema, type Coord, type Delta, type Op, type Event, type Result, type Subscription } from './data'
+import { CoordSchema, DeltaSchemas, err, isOk, Ops, SubscriptionSchema, type Coord, type Delta, type Op, type Event, type Result, type Subscription } from './data'
 import type { Environment } from './env'
 import { SnapshotSchema, type Registry } from './registry'
 
@@ -37,6 +37,10 @@ export const RegistryOps = {
     Type.Void(), { description: "Merges labels into an instance's labels" }),
   subscribe: Ops.action('composable', 'subscribe', Type.Omit(SubscriptionSchema, ['id']), SubscriptionSchema, { description: 'Connects a published op to an action' }),
   unsubscribe: Ops.action('composable', 'unsubscribe', Type.String({ description: 'The subscription id' }), Type.Void(), { description: 'Closes a subscription' }),
+  bind: Ops.action('composable', 'bind', Type.Object({ instance: Type.String({ description: 'The instance with the need', examples: ['ex-app'] }), need: Type.String({ description: 'The need, by name', examples: ['db'] }), to: CoordSchema }),
+    Type.Void(), { description: "Binds an instance's need to a coord" }),
+  unbind: Ops.action('composable', 'unbind', Type.Object({ instance: Type.String({ description: 'The instance with the need' }), need: Type.String({ description: 'The need, by name' }) }),
+    Type.Void(), { description: "Clears an instance's need binding" }),
   snapshot: Ops.action('composable', 'snapshot', Type.Null({ description: 'Nothing' }), SnapshotSchema, { description: 'What the registry holds now' }),
   deltas: Object.fromEntries(Object.entries(DeltaSchemas).map(([d, s]) => [d, Ops.source('composable', d, s, { description: (s as { description?: string }).description })])) as unknown as Record<Delta['type'], Op<undefined, TSchema>>,
 }
@@ -52,6 +56,8 @@ function registryComponent(registry: Registry) {
   c.action(RegistryOps.label, (r, a) => must(r.label(a.id, a.labels)))
   c.action(RegistryOps.subscribe, (r, s) => must(r.subscribe(s)) as Subscription)
   c.action(RegistryOps.unsubscribe, (r, id) => must(r.unsubscribe(id)))
+  c.action(RegistryOps.bind, (r, a) => must(r.bind(a.instance, a.need, a.to)))
+  c.action(RegistryOps.unbind, (r, a) => must(r.unbind(a.instance, a.need)))
   c.action(RegistryOps.snapshot, r => r.snapshot())
   for (const op of Object.values(RegistryOps.deltas)) c.action(op)
   return c

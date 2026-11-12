@@ -1,6 +1,6 @@
-import { expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { Components, isOk, Ops, Registries, type Delta } from '../src'
+import { Components, isOk, Ops, Registries, type Delta, type Interface } from '../src'
 
 const Ping = Ops.sink('t', 'ping', Type.Unknown())
 const thing = () => { const c = Components.create({ ns: 't', name: 'thing' }, () => ({})); c.action(Ping, () => {}); return Components.instantiate(c) }
@@ -43,7 +43,7 @@ test('a snapshot lists each instance with its ops; unsubscribe and unlisten work
   const { r, seen } = watched()
   r.add('l', thing())
   const s = r.subscribe({ source: '*', op: 't/ping', listener: 'l', target: 't/ping' })
-  expect(r.snapshot()).toEqual({ id: 'r', instances: [{ id: 'l', component: 't/thing', ops: [Ping] }], subscriptions: [(s as { value: any }).value] })
+  expect(r.snapshot()).toEqual({ id: 'r', instances: [{ id: 'l', component: 't/thing', ops: [Ping] }], subscriptions: [(s as { value: any }).value], bindings: [] })
   expect(isOk(r.unsubscribe((s as { value: { id: string } }).value.id))).toBe(true)
   const n = seen.length, stop = r.listen(() => {}); stop()
   expect(seen.at(-1)!.type).toBe('subscription-closed')
@@ -185,4 +185,66 @@ test('the snapshot carries labels, omitted when empty', () => {
   const [a, b] = r.snapshot().instances
   expect(a!.labels).toEqual({ mode: 'worker' })
   expect('labels' in b!).toBe(false)
+})
+
+describe('bindings', () => {
+  const Db: Interface = { id: 'example/db', ops: {} }
+  const needy = (opts: { needs?: Record<string, Interface>; implements?: Interface[] } = { needs: { db: Db } }) =>
+    Components.instantiate(Components.create({ ns: 't', name: 'needy' }, () => ({}), opts))
+  const to = { registry: 's', instance: 'd' }
+  const setup = () => { const w = watched(); w.r.add('a', needy()); w.r.add('d', thing()); w.seen.length = 0; return w }
+
+  test('bind needs a known instance and a declared need', () => {
+    const { r } = setup()
+    expect(r.bind('x', 'db', to)).toEqual({ error: 'no instance x in r' })
+    expect(r.bind('a', 'cache', to)).toEqual({ error: 'a has no need cache' })
+  })
+
+  test('a bind emits binding-set and shows in the snapshot; binding again replaces', () => {
+    const { r, seen } = setup()
+    expect(isOk(r.bind('a', 'db', to))).toBe(true)
+    expect(seen).toEqual([{ type: 'binding-set', binding: { instance: 'a', need: 'db', to } }])
+    expect(r.snapshot().bindings).toEqual([{ instance: 'a', need: 'db', to }])
+    expect(r.binding('a', 'db')).toEqual(to)
+    const to2 = { registry: 's', instance: 'e' }
+    seen.length = 0
+    r.bind('a', 'db', to2)
+    expect(r.snapshot().bindings).toEqual([{ instance: 'a', need: 'db', to: to2 }])
+    expect(seen).toEqual([{ type: 'binding-set', binding: { instance: 'a', need: 'db', to: to2 } }])
+  })
+
+  test('unbind emits binding-cleared; with no binding it is an error', () => {
+    const { r, seen } = setup()
+    expect(r.unbind('a', 'db')).toEqual({ error: 'a has no binding db' })
+    r.bind('a', 'db', to); seen.length = 0
+    expect(isOk(r.unbind('a', 'db'))).toBe(true)
+    expect(seen).toEqual([{ type: 'binding-cleared', binding: { instance: 'a', need: 'db', to } }])
+    expect(r.binding('a', 'db')).toBeUndefined()
+  })
+
+  test('removing an instance clears its bindings, but not those pointing at it', () => {
+    const { r, seen } = setup()
+    r.bind('a', 'db', to); seen.length = 0
+    r.remove('d')
+    expect(r.snapshot().bindings).toHaveLength(1)
+    r.remove('a')
+    expect(seen.map(d => d.type)).toEqual(['instance-removed', 'binding-cleared', 'instance-removed'])
+    expect(r.snapshot().bindings).toEqual([])
+  })
+
+  test('replace keeps bindings', () => {
+    const { r } = setup()
+    r.bind('a', 'db', to)
+    r.replace('a', needy())
+    expect(r.binding('a', 'db')).toEqual(to)
+  })
+
+  test('a snapshot instance shows needs and implements only when declared', () => {
+    const { r } = watched()
+    r.add('a', needy({ needs: { db: Db }, implements: [Db] })); r.add('b', thing())
+    const [a, b] = r.snapshot().instances
+    expect(a).toMatchObject({ needs: { db: 'example/db' }, implements: ['example/db'] })
+    expect('needs' in b!).toBe(false)
+    expect('implements' in b!).toBe(false)
+  })
 })

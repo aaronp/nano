@@ -1,6 +1,6 @@
 // Wraps plain code: how to make a value, and the actions over it, each named by an op.
 import type { Static, TSchema } from 'typebox'
-import { err, isOk, ok, Ops, type Op, type Result } from './data'
+import { err, isOk, ok, Ops, type Interface, type Op, type Result } from './data'
 import { Environments, type Environment } from './env'
 
 type StaticOf<T> = T extends TSchema ? Static<T> : void
@@ -16,6 +16,10 @@ export type Component<A = any> = {
   id: { ns: string; name: string }
   /** What the component is for, in a sentence. */
   description?: string
+  /** What it needs, by name: each need is bound to an instance (see Registry.bind). */
+  needs?: Record<string, Interface>
+  /** The interfaces it serves. */
+  implements?: Interface[]
   make(env: Environment): A
   actions: Map<string, Action<A>>
   action<I extends TSchema | undefined, O extends TSchema | undefined>(op: Op<I, O>, run?: Run<A, StaticOf<I>, StaticOf<O>>, opts?: { emits?: Op[] }): 'added' | 'replaced'
@@ -35,10 +39,11 @@ async function run<A>(inst: Instance<A>, key: string, arg: unknown): Promise<Res
 
 /** Makes components, instances of them, and invokes their actions. */
 export const Components = {
-  create<A>(id: { ns: string; name: string }, make: (env: Environment) => A, opts: { description?: string } = {}): Component<A> {
+  create<A>(id: { ns: string; name: string }, make: (env: Environment) => A, opts: { description?: string; needs?: Record<string, Interface>; implements?: Interface[] } = {}): Component<A> {
     const actions = new Map<string, Action<A>>()
     return {
       id, make, actions, ...(opts.description !== undefined && { description: opts.description }),
+      ...(opts.needs && { needs: opts.needs }), ...(opts.implements && { implements: opts.implements }),
       action(op, run, opts) {
         const had = actions.has(Ops.key(op))
         actions.set(Ops.key(op), { op, run: run as Run<A>, emits: opts?.emits })

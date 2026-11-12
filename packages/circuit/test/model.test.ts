@@ -15,6 +15,7 @@ const host: Snapshot = {
     { id: 's3', source: 'r1', op: 't/value', listener: 'hidden', target: 't/info' },
     { id: 's4', source: 'app', op: 't/value', listener: 'r2', target: 't/set' },
   ],
+  bindings: [],
 }
 const kinds: Kind[] = [{ kind: 'thing', component: 't/thing', title: 'Thing' }]
 const screens: Screen[] = [{ id: '/a', title: 'A', system: 'host', layout: {} }, { id: '/b', title: 'B', system: 'host', layout: {} }, { id: '/c', title: 'C', system: 'host', layout: null }]

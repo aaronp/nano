@@ -5,12 +5,12 @@ import { type Kind } from '@pritzlaff/nano-app'
 
 const inst = (id: string, component: string, owner?: { kind: string; name: string }) => ({ id, component, ...(owner && { owner }), ops: [] })
 const SYSTEMS: Snapshot[] = [
-  { id: 'host', subscriptions: [], instances: [
+  { id: 'host', subscriptions: [], bindings: [], instances: [
     inst('r', 'composable/range', { kind: 'widget', name: 'c-range' }),
     inst('p', 'composable/platform', { kind: 'app', name: 'ui-workspace' }),
     inst('p~view-0', 'composable.editor/view', { kind: 'view', name: 'c-platform' }),
   ] },
-  { id: 'lab', subscriptions: [], instances: [inst('r', 'composable/range', { kind: 'platform', name: 'platform' })] },
+  { id: 'lab', subscriptions: [], bindings: [], instances: [inst('r', 'composable/range', { kind: 'platform', name: 'platform' })] },
 ]
 const KINDS: Kind[] = [{ kind: 'range', component: 'composable/range', title: 'Range' }, { kind: 'log', component: 'composable/log', title: 'Log' }]
 const rows = inventory(SYSTEMS, KINDS)
@@ -27,7 +27,7 @@ test('an instance whose component is no kind shows —', () => {
 })
 
 test('an instance with no owner shows unknown', () => {
-  expect(inventory([{ id: 's', subscriptions: [], instances: [inst('x', 'composable/range')] }], KINDS)[0]!.owner).toBe('unknown')
+  expect(inventory([{ id: 's', subscriptions: [], bindings: [], instances: [inst('x', 'composable/range')] }], KINDS)[0]!.owner).toBe('unknown')
 })
 
 test('a kind with no instance gets one — row', () => {
@@ -58,7 +58,7 @@ test('free text matches any column, case-insensitively', () => {
 })
 
 test("rows carry the component's description; a never-made kind its kind's", () => {
-  const described: Snapshot[] = [{ id: 's', subscriptions: [], instances: [{ ...inst('x', 'composable/range'), description: 'A range' }] }]
+  const described: Snapshot[] = [{ id: 's', subscriptions: [], bindings: [], instances: [{ ...inst('x', 'composable/range'), description: 'A range' }] }]
   const rows = inventory(described, [...KINDS.slice(0, 1), { kind: 'log', component: 'composable/log', title: 'Log', description: 'A log' }])
   expect(rows.map(r => r.description)).toEqual(['A range', 'A log'])
   expect(inventory(SYSTEMS, KINDS).find(r => r.instance === 'p')!.description).toBe('')
@@ -71,13 +71,13 @@ test('examplesOf takes two examples, as JSON, each cut to 40 characters', () => 
 })
 
 test('rows read nano/deploy, host when unlabelled; a never-made kind shows —', () => {
-  const labelled: Snapshot[] = [{ id: 's', subscriptions: [], instances: [
+  const labelled: Snapshot[] = [{ id: 's', subscriptions: [], bindings: [], instances: [
     { ...inst('a', 'composable/range'), labels: { 'nano/deploy': 'sandbox' } }, inst('b', 'composable/range'), { ...inst('c', 'composable/range'), labels: { x: 'y' } }] }]
   expect(inventory(labelled, KINDS).map(r => r.deploy)).toEqual(['sandbox', 'host', 'host', '—'])
 })
 
 test('filters by deploy like system and component', () => {
-  const labelled: Snapshot[] = [{ id: 's', subscriptions: [], instances: [
+  const labelled: Snapshot[] = [{ id: 's', subscriptions: [], bindings: [], instances: [
     { ...inst('a', 'composable/range'), labels: { 'nano/deploy': 'sandbox' } }, inst('b', 'composable/range'), { ...inst('c', 'composable/range'), labels: { 'nano/deploy': 'isolated-sandbox' } }] }]
   const rs = inventory(labelled, KINDS), keep = (deploys: string[]) => rs.filter(r => matches(r, '', { systems: [], components: [], deploys })).map(r => r.instance)
   expect(keep(['sandbox'])).toEqual(['a'])

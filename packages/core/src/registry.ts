@@ -1,7 +1,7 @@
 // One place holding instances by id, and the subscriptions between them. Data only: it never runs an action.
 import type { Instance } from './component'
 import { Type, type Static } from 'typebox'
-import { err, LabelsSchema, ok, Ops, OwnerSchema, SubscriptionSchema, type Delta, type Op, type Owner, type Result, type Subscription } from './data'
+import { BindingSchema, err, LabelsSchema, ok, Ops, OwnerSchema, SubscriptionSchema, type Binding, type Coord, type Delta, type Op, type Owner, type Result, type Subscription } from './data'
 
 // ops are data with schemas inside: described, not checked; typed as Op
 const OpSchema = Type.Unsafe<Op>(Type.Unknown({ description: 'An op: its ns, name, input and output schemas, and description' }))
@@ -15,9 +15,12 @@ export const SnapshotSchema = Type.Object({
     description: Type.Optional(Type.String({ description: "Its component's description" })),
     owner: Type.Optional(OwnerSchema),
     labels: Type.Optional(LabelsSchema),
+    needs: Type.Optional(Type.Record(Type.String(), Type.String(), { description: 'Its needs: name to interface id' })),
+    implements: Type.Optional(Type.Array(Type.String(), { description: 'The interface ids it implements' })),
     ops: Type.Array(OpSchema, { description: 'What it offers' }),
   }), { description: 'Every instance, in the order added' }),
   subscriptions: Type.Array(SubscriptionSchema, { description: 'Every subscription' }),
+  bindings: Type.Array(BindingSchema, { description: 'Every binding of a need to a coord' }),
 }, { title: 'Snapshot', description: 'What a registry holds' })
 export type Snapshot = Static<typeof SnapshotSchema>
 
@@ -40,6 +43,11 @@ export type Registry = {
   unsubscribe(id: string): Result<void>
   /** The subscriptions a publish of `op` by `source` reaches. */
   matching(source: string, op: string): Subscription[]
+  /** Binds `instance`'s declared `need` to `to`, replacing any binding; the target is not checked (it may live elsewhere or arrive later). */
+  bind(instance: string, need: string, to: Coord): Result<void>
+  unbind(instance: string, need: string): Result<void>
+  /** Where the need is bound, if it is. */
+  binding(instance: string, need: string): Coord | undefined
   snapshot(): Snapshot
   /** Records that an instance's ops changed; refused for an unknown instance. */
   announce(instance: string, type: 'op-added' | 'op-removed', op: Op): Result<void>
@@ -50,6 +58,7 @@ export type Registry = {
 export const Registries = {
   create(id: string): Registry {
     const instances = new Map<string, Instance>(), owners = new Map<string, Owner>(), tags = new Map<string, Record<string, string>>(), subs = new Map<string, Subscription>()
+    const bindings = new Map<string, Binding>()   // keyed `instance need`
     const listeners = new Set<(d: Delta) => void>()
     // subscriptions by `source op`, so a publish looks at its matches only; seq keeps them in subscription order
     const index = new Map<string, Set<Subscription>>(), seq = new Map<Subscription, number>()
@@ -70,6 +79,8 @@ export const Registries = {
     const keys = (inst: Instance) => [...inst.actions.keys()]
     const componentOf = (inst: Instance) => `${inst.component.id.ns}/${inst.component.id.name}`
     const about = (inst: Instance) => (inst.component.description === undefined ? {} : { description: inst.component.description })
+    const needsOf = (inst: Instance) => (inst.component.needs ? { needs: Object.fromEntries(Object.entries(inst.component.needs).map(([n, x]) => [n, x.id])) } : {})
+    const implsOf = (inst: Instance) => (inst.component.implements ? { implements: inst.component.implements.map(x => x.id) } : {})
     const close = (s: Subscription) => { subs.delete(s.id); bucket(s.source, s.op).delete(s); seq.delete(s); emit({ type: 'subscription-closed', subscription: s }) }
     return {
       id,
@@ -93,6 +104,7 @@ export const Registries = {
         const inst = instances.get(i)
         if (!inst) return err(`no instance ${i} in ${id}`)
         for (const s of [...subs.values()]) if (s.listener === i) close(s)
+        for (const [k, b] of [...bindings]) if (b.instance === i) { bindings.delete(k); emit({ type: 'binding-cleared', binding: b }) }
         instances.delete(i); owners.delete(i)
         for (const [k, v] of Object.entries(labelsOf(i) ?? {})) unindex(i, k, v)
         tags.delete(i)
@@ -125,6 +137,23 @@ export const Registries = {
         close(s)
         return ok(undefined)
       },
+      bind(i, need, to) {
+        const inst = instances.get(i)
+        if (!inst) return err(`no instance ${i} in ${id}`)
+        if (!inst.component.needs?.[need]) return err(`${i} has no need ${need}`)
+        const binding = { instance: i, need, to }
+        bindings.set(`${i} ${need}`, binding)
+        emit({ type: 'binding-set', binding })
+        return ok(undefined)
+      },
+      unbind(i, need) {
+        const b = bindings.get(`${i} ${need}`)
+        if (!b) return err(`${i} has no binding ${need}`)
+        bindings.delete(`${i} ${need}`)
+        emit({ type: 'binding-cleared', binding: b })
+        return ok(undefined)
+      },
+      binding: (i, need) => bindings.get(`${i} ${need}`)?.to,
       announce(i, type, op) {
         if (!instances.has(i)) return err(`no instance ${i} in ${id}`)
         emit({ type, instance: i, op: Ops.key(op) })
@@ -133,8 +162,9 @@ export const Registries = {
       matching: (source, op) => [...(index.get(`* ${op}`) ?? []), ...(source === '*' ? [] : index.get(`${source} ${op}`) ?? [])].sort((a, b) => seq.get(a)! - seq.get(b)!),
       snapshot: () => ({
         id,
-        instances: [...instances].map(([i, inst]) => ({ id: i, component: componentOf(inst), ...about(inst), ...(owners.has(i) && { owner: owners.get(i) }), ...(tags.has(i) && { labels: { ...tags.get(i) } }), ops: [...inst.actions.values()].map(a => a.op) })),
+        instances: [...instances].map(([i, inst]) => ({ id: i, component: componentOf(inst), ...about(inst), ...(owners.has(i) && { owner: owners.get(i) }), ...(tags.has(i) && { labels: { ...tags.get(i) } }), ...needsOf(inst), ...implsOf(inst), ops: [...inst.actions.values()].map(a => a.op) })),
         subscriptions: [...subs.values()],
+        bindings: [...bindings.values()],
       }),
       listen(fn) { listeners.add(fn); return () => { listeners.delete(fn) } },
     }
