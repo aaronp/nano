@@ -24,7 +24,8 @@
  */
 import { GoldenLayout, LayoutConfig, ResolvedComponentItemConfig, type ComponentContainer, type ContentItem, type Stack, type ComponentItem, type JsonValue, type ResolvedLayoutConfig } from 'golden-layout';
 import baseCss from 'golden-layout/dist/css/goldenlayout-base.css';
-import type { Registry } from '@pritzlaff/nano-core';
+import type { Registry, Runtime } from '@pritzlaff/nano-core';
+import { setLayout } from '../lib/screens.ts';
 import { providedRegistry } from '@pritzlaff/nano-elements';
 import { provideBus, requestBus, type Bus } from '../lib/bus.ts';
 import { panelContent, withMode } from '../lib/panel-content.ts';
@@ -323,6 +324,10 @@ export class WorkspaceDock extends HTMLElement {
       return;
     }
     this.say('Layout saved.');
+    // its route's screen gets the layout too, so the application knows what each panel shows
+    const path = this.closest('app-route[path]')?.getAttribute('path'), wires = this.closest('c-wires') as (Element & { host?: Runtime; runtime?: Runtime }) | null;
+    const host = wires?.host ?? wires?.runtime;   // a saved workspace's view runs over its system, with the host beside it
+    if (path && host) void setLayout(host, path, resolved);
     this.ownerDocument.dispatchEvent(new CustomEvent('nano:changed'));   // the working copy follows
     this.send('dock:saved', { panels: this.openIds().length });
   }

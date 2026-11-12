@@ -1,5 +1,5 @@
 // A host for the snapshot/apply tests: a runtime with the platform over a catalog (bundle, shell's profile, and a
-// sandboxed-only kind), a built-in profile and example, and in-memory stores.
+// sandboxed-only kind), a built-in profile and example, and in-memory stores (workspaces are the application's screens).
 import { Components, Ops, Registries, Runtimes } from '@pritzlaff/nano-core'
 import { Type } from 'typebox'
 import { component } from '@pritzlaff/nano-runes'
@@ -7,6 +7,7 @@ import { catalog as bundle } from '@composable/bundle'
 import { AppGateway, catalog as shell, Profile } from '@composable/shell'
 import { platform } from '@composable/platform'
 import { deploy, type AppCatalog, type Mode } from '../../src/sandbox/deploy'
+import { placementsOf } from '../../src/lib/dock-layout'
 import type { Stores } from '../../src/app/snapshot'
 
 export const tick = (ms = 0) => new Promise(r => setTimeout(r, ms))
@@ -19,7 +20,7 @@ export function appHost() {
   const open = (() => ({ port: new MessageChannel().port1, ready: new Promise<void>(() => {}), dispose() {} })) as never
   host.registry.add('app', Components.instantiate(AppGateway), { kind: 'app', name: 'test' })
   host.registry.add('application', Components.instantiate(platform(host, catalog, {
-    gateways: ['app'], locked: id => id.startsWith('ws-controls-'),
+    gateways: ['app'], locked: id => id.startsWith('ws-controls-'), placementsOf,
     deploy: (system, id, kind, mode, owner, outward) => { deployed.push({ id, mode: mode ?? 'host' }); return deploy(system, id, kind, (mode ?? 'host') as Mode, { catalog, owner, open, ...(outward && { outward }) }) },
   })), { kind: 'app', name: 'test' })
   const me = { registry: 'host', instance: 'test' }
@@ -27,12 +28,10 @@ export function appHost() {
   return { host, catalog, deployed, call }
 }
 
-export function memoryStores(init: Partial<{ title: string; theme: { theme: string; mode: string }; layouts: Record<string, unknown> }> = {}) {
-  const st = { imports: [] as any[], workspaces: [] as any[], layouts: new Map(Object.entries(init.layouts ?? {})), theme: (init.theme ?? { theme: 'enterprise', mode: 'system' }) as any, title: init.title ?? 'Nano' }
+export function memoryStores(init: Partial<{ title: string; theme: { theme: string; mode: string } }> = {}) {
+  const st = { imports: [] as any[], theme: (init.theme ?? { theme: 'enterprise', mode: 'system' }) as any, title: init.title ?? 'Nano' }
   const stores: Stores = {
     imports: { list: () => st.imports, set: xs => { st.imports = xs } },
-    workspaces: { list: () => st.workspaces, set: xs => { st.workspaces = xs } },
-    layouts: { get: p => st.layouts.get(p), set: (p, l) => { st.layouts.set(p, l) } },
     theme: { get: () => st.theme, set: c => { st.theme = c } },
     title: { get: () => st.title, set: t => { st.title = t } },
   }

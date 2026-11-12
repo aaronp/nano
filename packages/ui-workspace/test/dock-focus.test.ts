@@ -162,3 +162,23 @@ test('with no panel focused, adding splits the largest', async () => {
   expect(big.closest('.lm_column')).not.toBeNull()
   expect(big.closest('.lm_column')!.querySelectorAll('.lm_stack').length).toBe(2)
 })
+
+test("save gives its route's screen the layout, so the application knows what each panel shows", async () => {
+  const { Components, Ops, Registries, Runtimes } = await import('@pritzlaff/nano-core')
+  const { platform, PlatformOps: P } = await import('@composable/platform')
+  const { placementsOf } = await import('../src/lib/dock-layout.ts')
+  const host = Runtimes.create(Registries.create('host'))
+  host.registry.add('application', Components.instantiate(platform(host, {}, { placementsOf })))
+  const call = (op: { ns: string; name: string }, arg: unknown) => host.call({ registry: 'host', instance: 't' }, 'application', Ops.key(op), arg) as Promise<any>
+  await call(P.setScreen, { id: '/lab', title: 'Lab', system: 'host', layout: null })
+  const route = document.createElement('app-route'); route.setAttribute('path', '/lab')
+  const wires = Object.assign(document.createElement('c-wires'), { runtime: host })
+  route.append(wires); document.body.append(route)
+  const { dock } = await mount()
+  wires.append(dock.parentElement!)
+  dock.addWidget('shown'); await tick()
+  dock.save(); await tick()
+  const [lab] = (await call(P.screens, null)).value
+  expect(lab.layout).toEqual(JSON.parse(localStorage.getItem('t.ws')!))
+  expect((await call(P.placements, { screen: '/lab' })).value.map((p: { instance: string }) => p.instance)).toEqual(['inst-1'])
+})

@@ -8,12 +8,15 @@
 import { Ops, type Op, type Runtime } from '@pritzlaff/nano-core';
 import { PlatformOps as P, runtimeOf } from '@composable/platform';
 import { ICONS, SYSTEM, savedWorkspaces, type SavedWorkspace } from '../lib/saved-workspaces.ts';
+import { layoutKey, moveScreen, savedScreens, setScreen } from '../lib/screens.ts';
 import { askWorkspace, type WorkspaceChoice } from './workspace-dialog.ts';
 
 const icon = (name: string) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name] ?? ''}"/></svg>`;
 const mainDock = (doc: Document) => doc.querySelector<HTMLElement>('workspace-dock#workspace') ?? doc.querySelector<HTMLElement>('workspace-dock');
+/** The main dock's storage-key: its own layout's, and the start of every saved workspace's. */
+export const mainKey = (doc: Document) => mainDock(doc)?.getAttribute('storage-key') ?? 'workspace';
 /** Where a saved workspace's dock keeps its layout. */
-export const keyFor = (doc: Document, path: string) => `${mainDock(doc)?.getAttribute('storage-key') ?? 'workspace'}.saved.${path}`;
+export const keyFor = (doc: Document, path: string) => layoutKey(mainKey(doc), path);
 
 /** Adds a saved workspace's nav item (top-level, after the others) and its page (after the other workspaces'):
  * a components drawer beside a dock of the same widgets, in the workspace's system. */
@@ -51,40 +54,52 @@ export function mountWorkspace(doc: Document, ws: SavedWorkspace) {
   if (fallback) fallback.before(route); else shell.append(route);
 }
 
-/** Mounts the saved workspaces, and saves new ones when a dock asks. */
 const hostOf = (doc: Document) => (mainDock(doc)?.closest('c-wires') as (HTMLElement & { runtime?: Runtime }) | null)?.runtime;
 
-/** Mounts the saved workspaces, saves a dock's layout as a new workspace when it asks, and makes new ones with +. */
-export function bootSavedWorkspaces(doc: Document) {
-  const saved = savedWorkspaces(localStorage);
-  for (const ws of saved.list()) mountWorkspace(doc, ws);
+/** Mounts the saved workspaces (the Application's screens, but Main), saves a dock's layout as a new workspace when it
+ * asks, and makes new ones with +. */
+export async function bootSavedWorkspaces(doc: Document) {
+  const saved = savedWorkspaces(localStorage);   // only to check a new one: the screens are in the Application
+  const none = { call: async () => ({ error: 'no host' }) } as unknown as Runtime;
+  const app = () => hostOf(doc) ?? none;
+  for (const ws of await savedScreens(app())) mountWorkspace(doc, ws);
   const taken = () => [...doc.querySelectorAll('app-route')].map((r) => r.getAttribute('path') ?? '');
   const open = (ws: SavedWorkspace) => { mountWorkspace(doc, ws); location.hash = `#${ws.path}`; doc.dispatchEvent(new CustomEvent('nano:changed')); };
+  const screen = (ws: SavedWorkspace, layout: unknown) => setScreen(app(), { id: ws.path, title: ws.title.trim(), icon: ws.icon, system: ws.system ?? 'host', layout });
 
-  // Reorder: Alt+↑/↓ on a focused item, or drag one onto another. The stored order is the truth; the nav follows it.
+  // Reorder: Alt+↑/↓ on a focused item, or drag one onto another. The Application's order is the truth; the nav follows it.
   const item = (t: EventTarget | null) => (t as Element | null)?.closest?.('a[data-saved]') as HTMLAnchorElement | null;
   const live = doc.createElement('div');
   live.setAttribute('aria-live', 'polite'); live.setAttribute('role', 'status');
   live.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)';
   const shell = doc.querySelector('app-shell') ?? doc.body;   // listeners live on the shell, not the document
   shell.append(live);
-  const arrange = () => {
+  const arrange = async () => {
     let prev: Element | null = null;
-    for (const w of saved.list()) {
+    for (const w of await savedScreens(app())) {
       const a = doc.querySelector(`a[data-saved="${w.path}"]`);
       if (!a) continue;
       if (prev && prev.nextElementSibling !== a) prev.after(a);
       prev = a;
     }
   };
-  const changed = (moved: boolean) => { if (moved) { arrange(); doc.dispatchEvent(new CustomEvent('nano:changed')); } return moved; };
-  shell.addEventListener('keydown', (e) => {
+  const changed = async (moved: boolean) => { if (moved) { await arrange(); doc.dispatchEvent(new CustomEvent('nano:changed')); } return moved; };
+  /** Moves a saved one to a place among the saved ones (Main stays first): false if unchanged or unknown. */
+  const moveTo = async (path: string, index: number) => {
+    const paths = (await savedScreens(app())).map((w) => w.path);
+    let i = paths.indexOf(path);
+    if (i < 0 || index < 0 || index >= paths.length || index === i) return false;
+    // ponytail: one move-screen per place, so a long drag writes the list once per place; a move-to op would make it one
+    for (const by = index > i ? 1 : -1; i !== index; i += by) if (!(await moveScreen(app(), path, by))) break;
+    return true;
+  };
+  shell.addEventListener('keydown', async (e) => {
     const a = item(e.target), k = (e as KeyboardEvent).key;
     const ke = e as KeyboardEvent;
     if (!a || !ke.altKey || ke.ctrlKey || ke.shiftKey || ke.metaKey || (k !== 'ArrowUp' && k !== 'ArrowDown')) return;
     e.preventDefault();
-    const up = k === 'ArrowUp';
-    if (changed(saved.move(a.dataset.saved!, up ? -1 : 1))) {
+    const up = k === 'ArrowUp', paths = (await savedScreens(app())).map((w) => w.path);
+    if (await changed(await moveTo(a.dataset.saved!, paths.indexOf(a.dataset.saved!) + (up ? -1 : 1)))) {
       a.focus();
       live.textContent = '';   // cleared first so a repeat is announced again
       setTimeout(() => { live.textContent = `Moved ${a.textContent} ${up ? 'up' : 'down'}`; }, 50);
@@ -97,11 +112,13 @@ export function bootSavedWorkspaces(doc: Document) {
     (e as DragEvent).dataTransfer?.setData('text/plain', dragged);
   });
   const clear = () => { for (const x of doc.querySelectorAll('[data-drop]')) x.removeAttribute('data-drop'); };
+  // the nav's order: it follows the Application's, and is there at once (dragover can't wait)
+  const navPaths = () => [...doc.querySelectorAll<HTMLElement>('a[data-saved]')].map((a) => a.dataset.saved!);
   shell.addEventListener('dragover', (e) => {
     const a = item(e.target);
     if (!dragged || !a) return;
     e.preventDefault();
-    const paths = saved.list().map((w) => w.path);
+    const paths = navPaths();
     clear();
     // it lands where the target is: above it when coming from below, below it when coming from above
     if (a.dataset.saved !== dragged) a.dataset.drop = paths.indexOf(dragged) > paths.indexOf(a.dataset.saved!) ? 'before' : 'after';
@@ -110,8 +127,9 @@ export function bootSavedWorkspaces(doc: Document) {
   shell.addEventListener('drop', (e) => {
     const a = item(e.target); if (!dragged || !a) return;
     e.preventDefault();   // dropping a link must not navigate
-    changed(saved.moveTo(dragged, saved.list().findIndex((w) => w.path === a.dataset.saved)));
+    const from = dragged, to = navPaths().indexOf(a.dataset.saved!);
     dragged = ''; clear();
+    void moveTo(from, to).then(changed);
   });
   shell.addEventListener('dragend', () => { dragged = ''; clear(); });
 
@@ -122,9 +140,9 @@ export function bootSavedWorkspaces(doc: Document) {
       const c = await askWorkspace(doc, { heading: 'Save workspace', error, prev });
       if (!c) return;
       const ws = { path: c.path, title: c.title, icon: c.icon, system: system ?? 'host' };
-      const refused = saved.add(ws, taken());
+      const refused = saved.refusal(ws, taken()) ?? await screen(ws, layout);
       if (refused) { error = refused; prev = c; continue; }
-      localStorage.setItem(keyFor(doc, ws.path), JSON.stringify(layout));
+      localStorage.setItem(keyFor(doc, ws.path), JSON.stringify(layout));   // now, not when the screens are written back: its dock reads it as it mounts
       return open(ws);
     }
   });
@@ -147,7 +165,8 @@ export function bootSavedWorkspaces(doc: Document) {
       // the system first: a workspace is only saved once the system it runs in exists
       const made = fresh ? await call(P.createSystem, system) : null;
       if (made && 'error' in made) { error = made.error; prev = c; continue; }
-      saved.add(ws, taken());
+      const notSaved = await screen(ws, null);
+      if (notSaved) { error = notSaved; prev = c; continue; }
       return open(ws);
     }
   });

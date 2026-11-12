@@ -1,11 +1,11 @@
 // The live app as a nano.json document (see apply.ts for the reverse). Reads the platform's systems, the instances'
-// labels and `config`s, and the host's stores; writes nothing.
+// labels and `config`s, its screens, and the host's stores; writes nothing.
 import { Ops, type Runtime } from '@pritzlaff/nano-core'
-import { PlatformOps as P, runtimeOf } from '@composable/platform'
+import { PlatformOps as P, runtimeOf, type Screen } from '@composable/platform'
 import { Profile, RESERVED, type NanoApp } from '@composable/shell'
 import type { ThemeChoice } from '../lib/theme-state.ts'
 import type { ImportRecord } from '../lib/imports.ts'
-import type { SavedWorkspace } from '../lib/saved-workspaces.ts'
+import { MAIN } from '../lib/screens.ts'
 
 /** The profile menu's links to the host's own pages: always in the menu after a document's own entries, never written to one. */
 /** Listeners whose ops create and wire things, or drive the host's UI: a document never wires into them. */
@@ -15,14 +15,11 @@ export const HOST_ENTRIES = [{ label: 'Components', href: '#/components' }, { la
 /** The host's stores, as far as a document needs them; tests pass fakes. `set` replaces the whole list. */
 export interface Stores {
   imports: { list(): ImportRecord[]; set(xs: ImportRecord[]): void }
-  workspaces: { list(): SavedWorkspace[]; set(xs: SavedWorkspace[]): void }
-  /** A saved workspace's dock layout (null when it has none yet), by its path. */
-  layouts: { get(path: string): unknown; set(path: string, layout: unknown): void }
   theme: { get(): ThemeChoice; set(c: ThemeChoice): void }
   title: { get(): string; set(t: string): void }
 }
 
-export const MAIN = '/workspace'
+export { MAIN }
 const me = (host: Runtime) => ({ registry: host.registry.id, instance: 'app' })
 const CONFIG_WAIT = 2000   // a hung sandbox frame must not hang a snapshot
 
@@ -70,8 +67,9 @@ export async function snapshotApp({ host, stores }: { host: Runtime; stores: Sto
     systems.push({ id: snap.id, instances, subscriptions })
   }
 
-  const ws = stores.workspaces.list().filter(w => w.path !== MAIN)
-  const workspaces = ws.map(w => ({ id: w.path, title: w.title, system: w.system ?? 'host', icon: w.icon, layout: stores.layouts.get(w.path) ?? null }))
+  // the screens but Main (the host's own)
+  const screens = ((await value(host, from, 'application', Ops.key(P.screens))) ?? []) as Screen[]
+  const workspaces = screens.filter(s => s.id !== MAIN).map(s => ({ id: s.id, title: s.title, system: s.system, icon: s.icon, layout: s.layout ?? null }))
   const user = await value(host, from, 'profile', Ops.key(Profile.ops.user)) as { name: string; avatar?: string } | undefined
   const entries = await value(host, from, 'profile', Ops.key(Profile.ops.entries)) as { label: string; href: string }[] | undefined
   const t = stores.theme.get()

@@ -1,9 +1,9 @@
 // A nano.json document onto the live app, in the spec's order: title, theme, profile; imports (awaited); systems;
-// instances (deployed with mode and guard selectors, then `configure`); subscriptions; workspaces and their layouts.
-// 'replace' is for a freshly started host (Open reloads first): it replaces the stores. 'merge' (Import) adds only
-// what is new and leaves title, theme and profile alone. Both skip what clashes, with a note; nothing throws.
+// instances (deployed with mode and guard selectors, then `configure`); subscriptions; workspaces and their layouts
+// (the application's screens). 'replace' is for a freshly started host (Open reloads first): it replaces the stores
+// and the screens but Main. 'merge' (Import) adds only what is new and leaves title, theme and profile alone. Both skip what clashes, with a note; nothing throws.
 import { Ops, type Runtime } from '@pritzlaff/nano-core'
-import { PlatformOps as P, runtimeOf } from '@composable/platform'
+import { PlatformOps as P, runtimeOf, type Screen } from '@composable/platform'
 import { Profile, RESERVED, type NanoApp } from '@composable/shell'
 import { isThemeId } from '../lib/themes.ts'
 import { ICONS } from '../lib/saved-workspaces.ts'
@@ -139,16 +139,20 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
     }
   }
 
-  const saved = replace ? [] : [...stores.workspaces.list()]
-  const layouts: [string, unknown][] = []
+  // workspaces are the application's screens (Main is the host's own): 'replace' takes out the others first
+  const screens = ((await value(host, from, 'application', Ops.key(P.screens))) ?? []) as Screen[]
+  if (replace) for (const s of screens) if (s.id !== MAIN) { const r = await call('application', P.removeScreen, s.id); if ('error' in r) fail(`workspace ${s.id}`, r) }
+  const taken = new Set(replace ? [] : screens.map(s => s.id))
   for (const w of app.workspaces) {
     if (w.id === MAIN) { notes.push(`workspace ${w.id} is the host's own, skipped`); continue }
-    if (saved.some(x => x.path === w.id)) { notes.push(`workspace ${w.id} already exists, skipped`); continue }
-    // a workspace whose system doesn't exist is still saved (its page then falls back to the host's system when mounted, by Task 5)
-    if (!existing.has(w.system)) notes.push(`workspace ${w.id}: system ${w.system} does not exist`)
-    saved.push({ path: w.id, title: w.title, icon: w.icon && Object.hasOwn(ICONS, w.icon) ? w.icon : 'folder', system: w.system })
-    if (w.layout !== null && w.layout !== undefined) layouts.push([w.id, w.layout])
+    if (taken.has(w.id)) { notes.push(`workspace ${w.id} already exists, skipped`); continue }
+    // a screen needs its system: one the document doesn't define is made empty (as a page start-up would)
+    if (!existing.has(w.system)) {
+      const r = await call('application', P.createSystem, w.system)
+      if ('error' in r) { fail(`workspace ${w.id}: system ${w.system}`, r); continue }
+      existing.add(w.system)
+    }
+    const r = await call('application', P.setScreen, { id: w.id, title: w.title, icon: w.icon && Object.hasOwn(ICONS, w.icon) ? w.icon : 'folder', system: w.system, layout: w.layout ?? null })
+    if ('error' in r) fail(`workspace ${w.id}`, r); else taken.add(w.id)
   }
-  attempt('workspaces', () => stores.workspaces.set(saved))
-  for (const [path, layout] of layouts) attempt(`layout of ${path}`, () => stores.layouts.set(path, layout))
 }

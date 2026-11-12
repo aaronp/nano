@@ -21,9 +21,10 @@ async function world() {
   await call('application', P.createComponent, { kind: 'log', name: 'l1', system: 'lab' })
   await call('application', P.connect, { system: 'lab', source: 'r1', op: Ops.key(Range.ops.value), listener: 'm1', target: Ops.key(MapC.ops.map) })
   await call('application', P.createComponent, { kind: 'boxed', name: 'b1', system: 'lab', mode: 'isolated-sandbox' })
-  const { stores, st } = memoryStores({ title: 'My app', theme: { theme: 'terminal', mode: 'dark' }, layouts: { '/lab': { root: 1 } } })
+  const { stores, st } = memoryStores({ title: 'My app', theme: { theme: 'terminal', mode: 'dark' } })
   st.imports = [{ url: 'https://x.test/m.json', name: 'p', version: '1', trust: 'sandboxed' }]
-  st.workspaces = [{ path: '/lab', title: 'Lab', icon: 'rocket', system: 'lab' }]
+  await call('application', P.setScreen, { id: '/workspace', title: 'Main', system: 'host', layout: { root: 2 } })   // Main: a screen, never written
+  await call('application', P.setScreen, { id: '/lab', title: 'Lab', icon: 'rocket', system: 'lab', layout: { root: 1 } })
   await tick()
   return { ...h, stores }
 }
@@ -51,7 +52,7 @@ test('reserved ids, view-owned listeners and the Main workspace are never writte
   const lab = (await call('application', P.systems)).value.find((s: any) => s.id === 'lab')
   expect(lab).toBeDefined()
   await call('application', P.createComponent, { kind: 'log', name: 'ex-mine', system: 'lab' })
-  ;(stores.workspaces as any).set([{ path: '/workspace', title: 'Main', icon: 'box' }])
+  await call('application', P.removeScreen, '/lab')   // only Main is left
   const app = await snapshotApp({ host, stores })
   expect(app.systems.flatMap(s => s.instances).map(i => i.id)).not.toContain('ex-mine')
   expect(app.systems.flatMap(s => s.instances).map(i => i.id)).not.toContain('~view-1')

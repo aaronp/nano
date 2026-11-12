@@ -1,5 +1,5 @@
-/** Saved workspaces: a copy of the workspace on its own route, with a title and icon in the nav. Pure; the list is
- * kept in storage. Each one's layout is kept by its own dock, under its own storage key. */
+/** Saved workspaces: a copy of the workspace on its own route, with a title and icon in the nav. Pure; they are the
+ * Application's screens, kept in storage by screens.ts. Each one's layout is also kept by its own dock, under its own storage key. */
 
 /** The nav icons to choose from: 24×24 stroke paths, drawn like the nav's other icons. */
 export const ICONS: Record<string, string> = {
@@ -85,7 +85,7 @@ export const SYSTEM = /^[a-z0-9][a-z0-9-]*$/;
 export const KEY = 'workspace-starter.saved-workspaces';
 export const PATH = /^\/[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)*$/;
 
-/** The saved workspaces in storage: list them, check one, or add one (a refusal is returned as a sentence). */
+/** The saved workspaces in storage (written by screens.ts): list them, or check a new one (a refusal is a sentence). */
 export const savedWorkspaces = (storage: Pick<Storage, 'getItem' | 'setItem'>) => {
   const list = (): SavedWorkspace[] => {
     try { const v = JSON.parse(storage.getItem(KEY) ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
@@ -99,27 +99,5 @@ export const savedWorkspaces = (storage: Pick<Storage, 'getItem' | 'setItem'>) =
     if (!SYSTEM.test(system)) return 'A system name is lower-case letters, digits and dashes.';
     return null;
   };
-  const add = (ws: SavedWorkspace, taken: readonly string[]): string | null => {
-    const refused = refusal(ws, taken);
-    if (refused) return refused;
-    storage.setItem(KEY, JSON.stringify([...list(), { path: ws.path, title: ws.title.trim(), icon: ws.icon, system: ws.system ?? 'host' }]));
-    return null;
-  };
-  /** Moves one up (-1) or down (+1) in the stored order; false at an end or if unknown. */
-  const move = (path: string, by: -1 | 1): boolean => {
-    const xs = list(), i = xs.findIndex((w) => w.path === path), j = i + by;
-    if (i < 0 || j < 0 || j >= xs.length) return false;
-    [xs[i], xs[j]] = [xs[j]!, xs[i]!];
-    storage.setItem(KEY, JSON.stringify(xs));
-    return true;
-  };
-  /** Moves one to a place in the order: one splice, one write; false if unchanged or unknown. */
-  const moveTo = (path: string, index: number): boolean => {
-    const xs = list(), i = xs.findIndex((w) => w.path === path);
-    if (i < 0 || index < 0 || index >= xs.length || index === i) return false;
-    xs.splice(index, 0, ...xs.splice(i, 1));
-    storage.setItem(KEY, JSON.stringify(xs));
-    return true;
-  };
-  return { list, refusal, add, move, moveTo };
+  return { list, refusal };
 };

@@ -167,28 +167,29 @@ test('a "*" source subscription round-trips', async () => {
 test('applyApp always resolves: a throwing consent, throwing stores and a throwing host become notes', async () => {
   const a = await fresh()
   const boom = () => { throw new Error('quota') }
-  const stores = { ...a.stores, title: { get: () => '', set: boom }, theme: { get: () => ({ theme: 'enterprise', mode: 'system' }) as never, set: boom }, imports: { list: () => [], set: boom }, workspaces: { list: () => [], set: boom }, layouts: { get: () => null, set: boom } }
+  const stores = { ...a.stores, title: { get: () => '', set: boom }, theme: { get: () => ({ theme: 'enterprise', mode: 'system' }) as never, set: boom }, imports: { list: () => [], set: boom } }
   const notes = await applyApp(doc, 'replace', { ...a.deps, stores, consentCode: boom })
-  for (const w of ['title', 'theme', 'imports', 'workspaces', 'layout of /lab']) expect(notes.some(n => n.startsWith(w + ': quota'))).toBe(true)
+  for (const w of ['title', 'theme', 'imports']) expect(notes.some(n => n.startsWith(w + ': quota'))).toBe(true)
   expect(notes.some(n => n.includes('m1') && n.includes('not agreed'))).toBe(true)   // consent that throws is no consent
   const dead = await applyApp(doc, 'replace', { ...a.deps, host: { ...a.host, call: () => { throw new Error('gone') } } as never })
   expect(Array.isArray(dead)).toBe(true)
 })
 
 test('the saved workspaces order round-trips through snapshot and apply', async () => {
-  const ws = (id: string) => ({ id, title: id, system: 'host', icon: 'box', layout: null })
-  const d = { ...doc, workspaces: [ws('/c'), ws('/a'), ws('/b')] }
+  const ws = (id: string, system = 'host') => ({ id, title: id, system, icon: 'box', layout: null })
+  const d = { ...doc, workspaces: [ws('/c'), ws('/a', 'elsewhere'), ws('/b')] }
   const a = await fresh()
+  const paths = async (h: { call: typeof a.call }) => (await h.call('application', P.screens)).value.map((s: { id: string }) => s.id)
+  await a.call('application', P.setScreen, ws('/workspace'))   // Main stays: it is the host's own
+  await a.call('application', P.setScreen, ws('/old'))         // replaced away
   expect(await applyApp(d, 'replace', a.deps)).toEqual([])
-  expect(a.st.workspaces.map((w: any) => w.path)).toEqual(['/c', '/a', '/b'])
-  const { savedWorkspaces } = await import('../src/lib/saved-workspaces.ts')
-  const mem = { v: JSON.stringify(a.st.workspaces), getItem() { return this.v }, setItem(_: string, v: string) { this.v = v } }
-  savedWorkspaces(mem).move('/c', 1)
-  a.st.workspaces = savedWorkspaces(mem).list()
+  expect(await paths(a)).toEqual(['/workspace', '/c', '/a', '/b'])
+  expect(runtimeOf(a.host.registry, 'elsewhere')).toBeDefined()   // a screen's system the document doesn't define is made
+  await a.call('application', P.moveScreen, { id: '/c', by: 1 })
   expect((await snapshotApp({ host: a.host, stores: a.stores })).workspaces.map(w => w.id)).toEqual(['/a', '/c', '/b'])
   const b = await fresh()
   await applyApp(await snapshotApp({ host: a.host, stores: a.stores }), 'replace', b.deps)
-  expect(b.st.workspaces.map((w: any) => w.path)).toEqual(['/a', '/c', '/b'])
+  expect(await paths(b)).toEqual(['/a', '/c', '/b'])
 }, 10_000)
 
 test("the platform and a built-in's code op are never wired, even with consent; a built-in's other ops are", async () => {

@@ -27,7 +27,8 @@ export interface FileDeps {
   imports(): { url: string; trust?: string }[]
   /** Import: applies a document to the running app, giving its notes. */
   merge(app: NanoApp, consentCode: (system: string, instance: string) => boolean): Promise<string[]>
-  workspaces(): SavedWorkspace[]
+  /** The saved workspaces now (the application's screens but Main). */
+  workspaces(): SavedWorkspace[] | Promise<SavedWorkspace[]>
   mount(ws: SavedWorkspace): void
   /** Stops autosave: it must not write over the working copy Open/New are about to leave for the reload. */
   stopAutosave(): void
@@ -152,9 +153,9 @@ export function fileCommands(d: FileDeps) {
       if (o.kept) app.discard(o.kept)
       return 'applied'
     }
-    const before = new Set(d.workspaces().map(w => w.path))
+    const before = new Set((await d.workspaces()).map(w => w.path))
     const merged = await d.merge(doc, (s, i) => consent.has(`${s}/${i}`))
-    for (const ws of d.workspaces()) if (!before.has(ws.path)) d.mount(ws)
+    for (const ws of await d.workspaces()) if (!before.has(ws.path)) d.mount(ws)
     d.doc.dispatchEvent(new CustomEvent('nano:changed'))
     const all = [...notes.filter(n => !n.includes('not agreed to')), ...merged]
     d.say(all.length ? `Imported, with ${all.length} note${all.length === 1 ? '' : 's'}: ${all.join(' · ')}` : 'Imported.')

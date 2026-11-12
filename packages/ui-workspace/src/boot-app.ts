@@ -1,6 +1,6 @@
 /**
- * Start-up of the app (after the theme and composable, before the saved workspaces mount): the title; the working
- * copy applied if there is one (it is then the source of truth, and bootImports is skipped); autosave begins from
+ * Start-up of the app (after the theme and composable, before the saved workspaces mount): the title; the screens
+ * loaded into the Application from storage; the working copy applied if there is one (it is then the source of truth, and bootImports is skipped); autosave begins from
  * `startAutosave()`, which boot-saved-workspaces calls when it is done, so a half-started page never overwrites the copy.
  */
 import { host, catalog } from './composable.ts'
@@ -10,10 +10,14 @@ import { showStatus } from './lib/status.ts'
 import { realStores } from './app/stores.ts'
 import { appStore, editableTitle, titleStore } from './app/store.ts'
 import { autosave, restoreApp } from './app/boot.ts'
+import { MAIN, persistScreens } from './lib/screens.ts'
+import { mainKey } from './components/saved-workspaces.ts'
 
 export const title = titleStore(localStorage, document)
 export const app = appStore(localStorage)
 const stores = realStores(document, localStorage, title)
+// the screens (Main, then the saved workspaces) into the Application, kept in storage from then on: before the working copy replaces them
+await persistScreens(host, localStorage, MAIN, mainKey(document))
 title.show()
 editableTitle(document, title)
 

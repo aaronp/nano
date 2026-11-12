@@ -7,6 +7,7 @@ import { rebase } from './app/boot.ts'
 import { fileCommands, showNotes } from './app/file.ts'
 import { app, stores, protect, importPackage, stopAutosave } from './boot-app.ts'
 import { mountWorkspace } from './components/saved-workspaces.ts'
+import { savedScreens } from './lib/screens.ts'
 import { openDialog } from './components/open-dialog.ts'
 import { confirmImports } from './components/imports-confirm.ts'
 import { askConfirm, askName } from './components/name-dialog.ts'
@@ -16,7 +17,7 @@ const cmds = fileCommands({
   doc: document, app, catalog, snapshot: () => snapshotApp({ host, stores }),
   imports: () => stores.imports.list(),
   merge: (a, consentCode) => applyApp(a, 'merge', { host, stores, catalog, importPackage, consentCode }),
-  workspaces: () => stores.workspaces.list(), mount: ws => mountWorkspace(document, ws),
+  workspaces: () => savedScreens(host), mount: ws => mountWorkspace(document, ws),
   stopAutosave, reload: () => location.reload(), say: t => showStatus(document, t),
   download: (name, text) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000) },
   changed: s => { menu().dirty = app.dirty(s) },

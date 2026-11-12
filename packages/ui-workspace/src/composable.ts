@@ -21,6 +21,7 @@ import { defineWires } from '@composable/wires'
 import { defineSandboxed, provideDeploy } from './sandbox/sandboxed-el.ts'
 import { deploy, deployIn, type AppCatalog, type Mode } from './sandbox/deploy.ts'
 import { HOST_ENTRIES } from './app/snapshot.ts'
+import { placementsOf } from './lib/dock-layout.ts'
 
 /** Every kind of component this host offers: its packages' catalogs, merged. Add a package, add its catalog. */
 export const catalog: AppCatalog = Object.fromEntries(Object.entries({ ...bundle, ...editor, ...shell } as Catalog).map(([k, e]) => [k, { ...e, modes: ['host'] as Mode[], trust: 'trusted' as const, ...(k === 'map' || k === 'filter' ? { code: ['setCode', 'configure'] } : {}) }]))
@@ -30,7 +31,7 @@ export const host = Runtimes.create(Registries.create('host'))
 provide(document, host.registry)
 host.registry.add('app', Components.instantiate(AppGateway), { kind: 'app', name: 'ui-workspace' })   // focus and the app bar: in every system (a gateway), never written
 host.registry.add('application', Components.instantiate(platform(host, catalog, {
-  gateways: ['app'], locked: id => id.startsWith('ws-controls-'),
+  gateways: ['app'], locked: id => id.startsWith('ws-controls-'), placementsOf,
   deploy: (system, id, kind, mode, owner, outward) => deploy(system, id, kind, (mode ?? 'host') as Mode, { catalog, owner, ...(outward && { outward }) }),
 })), { kind: 'app', name: 'ui-workspace' })
 // <c-sandboxed> creates its instance in the registry it shows (a dock's system, or the page's) through the same deploy

@@ -2,24 +2,23 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
-import { ICONS, savedWorkspaces } from '../src/lib/saved-workspaces.ts'
+import { ICONS, KEY, savedWorkspaces } from '../src/lib/saved-workspaces.ts'
 import { mountWorkspace } from '../src/components/saved-workspaces.ts'
 
 const memory = () => { const m = new Map<string, string>(); return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, v) } } }
 
-test('a saved workspace needs a free /path, a title and a known icon, and is remembered', () => {
+test('a saved workspace needs a free /path, a title, a known icon and a system name', () => {
   const store = memory(), saved = savedWorkspaces(store), taken = ['/', '/workspace']
+  store.setItem(KEY, JSON.stringify([{ path: '/kept', title: 'Kept', icon: 'box', system: 'host' }]))
   expect(Object.keys(ICONS)).toContain('rocket')
-  expect(saved.add({ path: 'foo', title: 'My Workspace', icon: 'rocket' }, taken)).toContain('/')
-  expect(saved.add({ path: '/workspace', title: 'Mine', icon: 'rocket' }, taken)).toContain('already')
-  expect(saved.add({ path: '/foo', title: ' ', icon: 'rocket' }, taken)).toContain('title')
-  expect(saved.add({ path: '/foo', title: 'Mine', icon: 'nope' }, taken)).toContain('icon')
-  expect(saved.add({ path: '/foo', title: 'My Workspace', icon: 'rocket' }, taken)).toBeNull()
-  expect(savedWorkspaces(store).list()).toEqual([{ path: '/foo', title: 'My Workspace', icon: 'rocket', system: 'host' }])
-  expect(saved.add({ path: '/bar', title: 'Lab', icon: 'star', system: 'Bad Name' }, taken)).toContain('system')
-  expect(saved.add({ path: '/bar', title: 'Lab', icon: 'star', system: 'lab' }, taken)).toBeNull()
-  expect(savedWorkspaces(store).list()[1]!.system).toBe('lab')
-  expect(saved.add({ path: '/foo', title: 'Again', icon: 'star' }, taken)).toContain('already')
+  expect(saved.refusal({ path: 'foo', title: 'My Workspace', icon: 'rocket' }, taken)).toContain('/')
+  expect(saved.refusal({ path: '/workspace', title: 'Mine', icon: 'rocket' }, taken)).toContain('already')
+  expect(saved.refusal({ path: '/kept', title: 'Mine', icon: 'rocket' }, taken)).toContain('already')
+  expect(saved.refusal({ path: '/foo', title: ' ', icon: 'rocket' }, taken)).toContain('title')
+  expect(saved.refusal({ path: '/foo', title: 'Mine', icon: 'nope' }, taken)).toContain('icon')
+  expect(saved.refusal({ path: '/bar', title: 'Lab', icon: 'star', system: 'Bad Name' }, taken)).toContain('system')
+  expect(saved.refusal({ path: '/bar', title: 'Lab', icon: 'star', system: 'lab' }, taken)).toBeNull()
+  expect(saved.list()).toEqual([{ path: '/kept', title: 'Kept', icon: 'box', system: 'host' }])
 })
 
 test('mounting one adds a top-level nav item, and a page with a drawer beside a dock in its system', () => {
@@ -73,7 +72,7 @@ test('+ makes a workspace in a new system, empty; a taken route is refused with 
     <a slot="nav" data-sub href="#/workspace">Main</a>
     <app-route path="/workspace"><div class="ws-page"><c-wires><workspace-dock id="workspace" storage-key="k"></workspace-dock></c-wires></div></app-route><app-route path="*"></app-route></app-shell>`
   Object.assign(document.querySelector('c-wires')!, { runtime: host })
-  bootSavedWorkspaces(document)
+  await bootSavedWorkspaces(document)
   const tick = () => new Promise(r => setTimeout(r, 0))
   const dialog = () => document.querySelector('dialog[aria-label="New workspace"]') as HTMLDialogElement
   const field = (name: string) => dialog().querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLSelectElement
@@ -90,6 +89,8 @@ test('+ makes a workspace in a new system, empty; a taken route is refused with 
   const dock = document.querySelector('app-route[path="/lab-bench"] workspace-dock')!
   expect(dock.getAttribute('system')).toBe('lab')
   expect(dock.getAttribute('open')).toBe('')   // starts empty
+  expect((await host.call({ registry: 'host', instance: 't' }, 'application', Ops.key(P.screens), null) as any).value)
+    .toEqual([{ id: '/lab-bench', title: 'Lab Bench', icon: expect.any(String), system: 'lab', layout: null }])   // a screen in the application
 
   ;(document.querySelector('[data-new-workspace]') as HTMLButtonElement).click(); await tick()
   type('title', 'Again'); type('path', '/lab-bench'); type('system', 'lab')
@@ -103,45 +104,54 @@ test('+ makes a workspace in a new system, empty; a taken route is refused with 
 
 
 const order = () => [...document.querySelectorAll('app-shell > [slot="nav"]')].map(a => a.textContent!.trim())
+const settle = () => new Promise(r => setTimeout(r, 0))
 const reorderWorld = async () => {
+  const { Components, Ops, Registries, Runtimes } = await import('@pritzlaff/nano-core')
+  const { platform, PlatformOps: P } = await import('@composable/platform')
   const { bootSavedWorkspaces } = await import('../src/components/saved-workspaces.ts')
-  localStorage.clear()
-  const store = savedWorkspaces(localStorage)
-  for (const [p, t] of [['/a', 'A'], ['/b', 'B'], ['/c', 'C']] as const) store.add({ path: p, title: t, icon: 'box' }, ['/workspace'])
+  const host = Runtimes.create(Registries.create('host'))
+  host.registry.add('application', Components.instantiate(platform(host, {})))
+  const call = (op: { ns: string; name: string }, arg: unknown) => host.call({ registry: 'host', instance: 't' }, 'application', Ops.key(op), arg) as Promise<any>
+  for (const [p, t] of [['/workspace', 'Main'], ['/a', 'A'], ['/b', 'B'], ['/c', 'C']] as const) await call(P.setScreen, { id: p, title: t, icon: 'box', system: 'host', layout: null })
   document.body.innerHTML = `<app-shell><div slot="nav" class="nav-row" data-workspaces><a href="#/workspace">Workspaces</a><button data-toggle-drawer></button><button data-new-workspace>+</button></div>
     <a slot="nav" href="#/workspace">Main</a><a slot="nav" href="#/inbox">Inbox</a>
     <app-route path="/workspace"><div class="ws-page"><c-wires><workspace-dock id="workspace" storage-key="k"></workspace-dock></c-wires></div></app-route><app-route path="*"></app-route></app-shell>`
-  bootSavedWorkspaces(document)
+  Object.assign(document.querySelector('c-wires')!, { runtime: host })
+  await bootSavedWorkspaces(document)
   let changed = 0
   document.addEventListener('nano:changed', () => changed++)
-  return { store, changed: () => changed }
+  const screens = async () => ((await call(P.screens, null)).value as { id: string }[]).map(s => s.id)
+  return { screens, changed: () => changed }
 }
 
-test('saved workspaces are top-level nav items in stored order', async () => {
+test('saved workspaces are top-level nav items in the order of the screens', async () => {
   await reorderWorld()
   expect(order()).toEqual(['Workspaces+', 'Main', 'A', 'B', 'C', 'Inbox'])
   expect(document.querySelectorAll('a[data-saved][data-sub]').length).toBe(0)
 })
 
-test('Alt+ArrowDown moves an item down and the order is stored; focus stays; announced politely', async () => {
+test('Alt+ArrowDown moves an item down in the screens; focus stays; announced politely', async () => {
   const w = await reorderWorld()
   const a = document.querySelector('a[href="#/a"]') as HTMLAnchorElement
   a.focus()
-  a.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true }))
-  expect(w.store.list().map(x => x.path)).toEqual(['/b', '/a', '/c'])
+  const down = new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true })
+  a.dispatchEvent(down)
+  expect(down.defaultPrevented).toBe(true)
+  await settle()
+  expect(await w.screens()).toEqual(['/workspace', '/b', '/a', '/c'])
   expect(order()).toEqual(['Workspaces+', 'Main', 'B', 'A', 'C', 'Inbox'])
   expect(document.activeElement).toBe(a)
   expect(w.changed()).toBe(1)
   expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('')   // cleared first, set after a beat
   await new Promise(r => setTimeout(r, 80))
   expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('Moved A down')
-  a.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true }))
-  a.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true }))   // at the end: nothing
-  expect(w.store.list().map(x => x.path)).toEqual(['/b', '/c', '/a'])
+  a.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true })); await settle()
+  a.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true })); await settle()   // at the end: nothing
+  expect(await w.screens()).toEqual(['/workspace', '/b', '/c', '/a'])
   expect(w.changed()).toBe(2)
 })
 
-test('a drag-and-drop reorder is stored, and the drop does not navigate', async () => {
+test('a drag-and-drop reorder moves the screen, and the drop does not navigate', async () => {
   const w = await reorderWorld()
   document.querySelector('a[href="#/c"]')!.dispatchEvent(new Event('dragstart', { bubbles: true }))
   const over = new Event('dragover', { bubbles: true, cancelable: true })
@@ -151,10 +161,11 @@ test('a drag-and-drop reorder is stored, and the drop does not navigate', async 
   const drop = new Event('drop', { bubbles: true, cancelable: true })
   document.querySelector('a[href="#/a"]')!.dispatchEvent(drop)
   expect(drop.defaultPrevented).toBe(true)
-  expect(w.store.list().map(x => x.path)).toEqual(['/c', '/a', '/b'])
+  expect(document.querySelector('[data-drop]')).toBeNull()   // indicator cleared
+  await settle()
+  expect(await w.screens()).toEqual(['/workspace', '/c', '/a', '/b'])
   expect(order()).toEqual(['Workspaces+', 'Main', 'C', 'A', 'B', 'Inbox'])
   expect(w.changed()).toBe(1)   // one drop, one change
-  expect(document.querySelector('[data-drop]')).toBeNull()   // indicator cleared
 })
 
 test('dragstart puts the path on the DataTransfer; dragend clears the indicator', async () => {
@@ -169,21 +180,13 @@ test('dragstart puts the path on the DataTransfer; dragend clears the indicator'
   expect(document.querySelector('[data-drop]')).toBeNull()
 })
 
-test('moveTo is one splice and one write; Alt with Ctrl/Shift/Meta does nothing', async () => {
+test('Alt with Ctrl/Shift/Meta does nothing', async () => {
   const w = await reorderWorld()
-  let writes = 0
-  const counting = { getItem: (k: string) => localStorage.getItem(k), setItem: (k: string, v: string) => { writes++; localStorage.setItem(k, v) } }
-  const s = savedWorkspaces(counting)
-  expect(s.moveTo('/a', 2)).toBe(true)
-  expect(writes).toBe(1)
-  expect(s.list().map(x => x.path)).toEqual(['/b', '/c', '/a'])
-  expect(s.moveTo('/a', 2)).toBe(false)
-  expect(s.moveTo('/zzz', 0)).toBe(false)
-  expect(writes).toBe(1)
   const b = document.querySelector('a[href="#/b"]') as HTMLAnchorElement
   for (const mod of ['ctrlKey', 'shiftKey', 'metaKey'])
     b.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, [mod]: true, bubbles: true, cancelable: true }))
-  expect(w.store.list().map(x => x.path)).toEqual(['/b', '/c', '/a'])
+  await settle()
+  expect(await w.screens()).toEqual(['/workspace', '/a', '/b', '/c'])
 })
 
 test('Main stays first and is not reorderable', async () => {
@@ -193,6 +196,7 @@ test('Main stays first and is not reorderable', async () => {
   main.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true }))
   const a = document.querySelector('a[href="#/a"]')!
   a.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true }))   // already first of the saved ones
+  await settle()
   expect(order().slice(0, 3)).toEqual(['Workspaces+', 'Main', 'A'])
-  expect(w.store.move('/workspace', 1)).toBe(false)
+  expect(await w.screens()).toEqual(['/workspace', '/a', '/b', '/c'])
 })
