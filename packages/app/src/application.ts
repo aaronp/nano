@@ -2,8 +2,8 @@
 // systems, connects their actions, and publishes every change in any system.
 import { Type, type Static } from 'typebox'
 import type { AppCatalog } from './catalog'
-import { ref } from './refs'
-import { Components, DeltaSchema, Ops, SnapshotSchema, SubscriptionSchema, Registries, Runtimes, type Component, type Environment, type Owner, type Registry, type Result, type Runtime, type Selectors, type Snapshot } from '@pritzlaff/nano-core'
+import { parseRef, ref, type Ref } from './refs'
+import { Components, DeltaSchema, Tags, Ops, SnapshotSchema, SubscriptionSchema, Registries, Runtimes, type Component, type Environment, type Owner, type Registry, type Result, type Runtime, type Selectors, type Snapshot } from '@pritzlaff/nano-core'
 
 const NS = 'nano.app/application', none = Type.Void()
 const str = (description: string, examples: string[]) => Type.String({ description, examples })
@@ -38,6 +38,9 @@ export type Screen = Static<typeof ScreenSchema>
 export const PlacementSchema = Type.Object({ screen: str('A screen id', ['/lab']), panel: str('A panel of that screen', ['gauge']), instance }, { title: 'Placement', description: 'An instance shown in a panel of a screen' })
 export type Placement = Static<typeof PlacementSchema>
 
+const refArg = str('A ref: system:<id>, instance:<system>/<id> or screen:<path>', ['instance:host/r1'])
+const TagArg = Type.Object({ ref: refArg, tag: str('A tag', ['billing']) }, { description: 'Which ref, and which tag' })
+
 /** The application's ops. */
 export const ApplicationOps = {
   systems: Ops.source(NS, 'systems', Type.Array(SnapshotSchema, { description: 'A snapshot of each system, host first' }), { description: 'Every system, as it is now' }),
@@ -68,11 +71,20 @@ export const ApplicationOps = {
   moveScreen: Ops.action(NS, 'move-screen', Type.Object({ id: str('A screen id', ['/lab']), by: Type.Union([Type.Literal(-1), Type.Literal(1)], { description: '-1 earlier, 1 later' }) }), none, { description: 'Moves a screen one place in navigation order' }),
   placements: Ops.action(NS, 'placements', Type.Object({ screen: Type.Optional(str('Only this screen', ['/lab'])) }), Type.Array(PlacementSchema), { description: 'Which instances are shown where, on one screen or all' }),
   changed: Ops.source(NS, 'changed', Type.Object({ what: Type.Union([Type.Literal('systems'), Type.Literal('screens'), Type.Literal('tags')]), ref: Type.Optional(Type.String({ description: 'The ref that changed' })) }), { description: 'Something the application keeps changed' }),
+  tag: Ops.action(NS, 'tag', TagArg, none, { description: 'Tags a system, instance or screen' }),
+  untag: Ops.action(NS, 'untag', TagArg, none, { description: 'Removes a tag from a system, instance or screen' }),
+  tagsOf: Ops.action(NS, 'tags-of', refArg, Type.Array(Type.String()), { description: 'The tags of a ref, sorted' }),
+  tagged: Ops.action(NS, 'tagged', str('A tag', ['billing']), Type.Array(Type.String()), { description: 'The refs with a tag, sorted' }),
+  allTags: Ops.action(NS, 'all-tags', ignored, Type.Record(Type.String(), Type.Array(Type.String())), { description: 'Every ref with its tags, for saving' }),
+  query: Ops.action(NS, 'query', Type.Object({ screen: Type.Optional(str('Placed on this screen', ['/lab'])), system: Type.Optional(systemId),
+    kind: Type.Optional(str('A catalog kind', ['range'])), tag: Type.Optional(str('Tagged with this', ['billing'])) }, { description: 'Filters that all must hold' }),
+    Type.Array(Type.String()), { description: 'The instances (as refs, sorted) that match every filter given' }),
+  screensOf: Ops.action(NS, 'screens-of', refArg, Type.Array(Type.String()), { description: 'The screens that place an instance' }),
   select: Ops.action(NS, 'select', SelectionSchema, none, { description: 'Selects an instance (and maybe an op), or nothing with null' }),
 }
 const P = ApplicationOps
 
-type State = { screens: Map<string, { screen: Screen; placements: Placement[] }>; host: string; systems: Map<string, Runtime>; selected: Selection; env: Environment; watch(rt: Runtime): void; changed(id: string, delta: unknown): void }
+type State = { tags: Tags<Ref>; screens: Map<string, { screen: Screen; placements: Placement[] }>; host: string; systems: Map<string, Runtime>; selected: Selection; env: Environment; watch(rt: Runtime): void; changed(id: string, delta: unknown): void }
 
 // what the application adds, it owns: named by its own id in the host
 const owner = (s: State): Owner => ({ kind: 'platform', name: s.env.handles().find(h => h.coord.registry === s.host)?.coord.instance ?? 'application' })
@@ -105,8 +117,11 @@ export function application(host: Runtime, catalog: AppCatalog,
   }
   const c = Components.create<State>({ ns: 'nano.app', name: 'application' }, env => {
     const s: State = {
-      screens: new Map(), host: host.registry.id, systems: new Map([[host.registry.id, host]]), selected: null, env, changed: () => {},
-      watch: rt => { rt.registry.listen(delta => changed(rt.registry.id, delta)) },
+      tags: Tags.create<Ref>(), screens: new Map(), host: host.registry.id, systems: new Map([[host.registry.id, host]]), selected: null, env, changed: () => {},
+      watch: rt => { rt.registry.listen(delta => {
+        if (delta.type === 'instance-removed') s.tags.remove(`instance:${rt.registry.id}/${delta.instance}`)
+        changed(rt.registry.id, delta)
+      }) },
     }
     // every change is told at once; the snapshots go out once per burst (adding an element makes several deltas)
     let pending = false
@@ -115,6 +130,7 @@ export function application(host: Runtime, catalog: AppCatalog,
       if (!pending) { pending = true; queueMicrotask(() => { pending = false; void env.notify(P.systems, snapshots(s)); void env.notify(P.changed, { what: 'systems' }) }) }
     }
     s.changed = changed
+    s.tags.listen(c => { void env.notify(P.changed, { what: 'tags', ref: c.item }) })
     s.watch(host)
     return s
   }, { description: "The application: its systems, makes components from the catalog, adds them to systems, connects their actions, and publishes every change" })
@@ -171,6 +187,7 @@ export function application(host: Runtime, catalog: AppCatalog,
   })
   c.action(P.removeScreen, (s, id) => {
     if (!s.screens.delete(id)) throw new Error(`no screen ${id}`)
+    s.tags.remove(ref.screen(id))
     screensChanged(s, id)
   })
   c.action(P.moveScreen, (s, { id, by }) => {
@@ -182,6 +199,40 @@ export function application(host: Runtime, catalog: AppCatalog,
     screensChanged(s, id)
   })
   c.action(P.placements, (s, { screen }) => [...s.screens.values()].filter(e => !screen || e.screen.id === screen).flatMap(e => e.placements))
+  // a ref must be well formed and name something that exists
+  const known = (s: State, r: string): Ref => {
+    const p = parseRef(r)
+    if (!p) throw new Error(`bad ref: ${JSON.stringify(r)}`)
+    if (p.kind === 'system' ? !s.systems.has(p.id) : p.kind === 'screen' ? !s.screens.has(p.path) : !s.systems.get(p.system)?.registry.get(p.id)) throw new Error(`no such thing: ${r}`)
+    return r as Ref
+  }
+  c.action(P.tag, (s, a) => { s.tags.tag(known(s, a.ref), a.tag) })
+  c.action(P.untag, (s, a) => { s.tags.untag(known(s, a.ref), a.tag) })
+  c.action(P.tagsOf, (s, r) => [...s.tags.tagsOf(r as Ref)].sort())
+  c.action(P.tagged, (s, t) => [...s.tags.tagged(t)].sort())
+  c.action(P.allTags, s => Object.fromEntries([...s.tags.all()].map(([k, v]) => [k, [...v].sort()])))
+  // the screens placing an instance that exists
+  const screensOf = (s: State, r: string) => {
+    const p = parseRef(r)
+    if (p?.kind !== 'instance' || !s.systems.get(p.system)?.registry.get(p.id)) return []
+    return [...s.screens.values()].filter(e => e.screen.system === p.system && e.placements.some(x => x.instance === p.id)).map(e => e.screen.id)
+  }
+  c.action(P.screensOf, (s, r) => screensOf(s, r))
+  c.action(P.query, (s, f) => {
+    const kinds_ = f.kind ? new Set(kinds().filter(k => k.kind === f.kind).map(k => k.component)) : null
+    const out: string[] = []
+    for (const snap of snapshots(s)) {
+      if (f.system && snap.id !== f.system) continue
+      for (const i of snap.instances) {
+        const r = `instance:${snap.id}/${i.id}` as Ref
+        if (kinds_ && !kinds_.has(i.component)) continue
+        if (f.tag && !s.tags.tagged(f.tag).has(r)) continue
+        if (f.screen && !screensOf(s, r).includes(f.screen)) continue
+        out.push(r)
+      }
+    }
+    return out.sort()
+  })
   c.action(P.select, (s, sel) => {
     s.selected = (sel ?? null) as Selection
     void s.env.notify(P.selectionChanged, s.selected)
