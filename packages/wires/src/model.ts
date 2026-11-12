@@ -1,7 +1,7 @@
 // The view model, as pure functions: from a registry snapshot, the dock's panel geometry and the catalog, the
 // prototype's chassis, jacks (ports), rack modules and blocks, wires and routes.
 import { Ops, type Op, type Snapshot } from '@pritzlaff/nano-core'
-import { viewIds } from '@composable/platform'
+import { isInfrastructure, viewIds } from '@pritzlaff/nano-app'
 import { BLOCK_DY, BLOCK_H, BLOCK_JACK_DY, JACK_W, MOD_H, PALETTE, ROW_STEP, ROW_Y } from './constants'
 
 /** A rectangle in the dock's (front) coordinates. */
@@ -23,7 +23,7 @@ export type Model = { W: number; H: number; chassis: Chassis[]; rack: RackItem[]
 
 /** What the model is made from. `kinds` maps an instance to its catalog kind; `titles` maps a kind to its title. */
 export type ModelInput = {
-  snapshot: Snapshot; panels: Panel[]; W: number; H: number; platform: string
+  snapshot: Snapshot; panels: Panel[]; W: number; H: number; application: string
   kinds?: Record<string, string>; titles?: Record<string, string>
 }
 
@@ -32,11 +32,11 @@ export const portKey = (instance: string, op: string) => instance + ' ' + op
 /** An op with an input is an in jack; one with an output and no input is an out jack; the rest get none. */
 export const dirOf = (op: Op): 'in' | 'out' | null => (op.input ? 'in' : op.output ? 'out' : null)
 const jacksOf = (ops: Op[]) => [...ops.filter(o => dirOf(o) === 'in'), ...ops.filter(o => dirOf(o) === 'out')]
-/** Instances that are never shown: the registry itself, element views, and the platform. */
-export const hidden = (id: string, platform: string, views: Set<string>) => id === 'registry' || views.has(id) || id === platform
+/** Instances that are never shown: infrastructure (the registry, the host's listeners, element views) and the application. */
+export const hidden = (id: string, application: string, views: Set<string>) => isInfrastructure(id, views) || id === application
 
 /** Builds the model. Panels are given in front coordinates; the back face mirrors x. */
-export function buildModel({ snapshot, panels, W, H, platform, kinds = {}, titles = {} }: ModelInput): Model {
+export function buildModel({ snapshot, panels, W, H, application, kinds = {}, titles = {} }: ModelInput): Model {
   const opsOf = new Map(snapshot.instances.map(i => [i.id, i.ops])), deployOf = new Map(snapshot.instances.map(i => [i.id, i.labels?.['nano/deploy'] ?? 'host'])), views = viewIds(snapshot)
   const P: Record<string, Port> = {}
   const chassis: Chassis[] = []
@@ -60,7 +60,7 @@ export function buildModel({ snapshot, panels, W, H, platform, kinds = {}, title
   const rack: RackItem[] = []
   let x = 20, row = 0
   for (const inst of snapshot.instances) {
-    if (placed.has(inst.id) || hidden(inst.id, platform, views)) continue
+    if (placed.has(inst.id) || hidden(inst.id, application, views)) continue
     const jacks = jacksOf(inst.ops)
     const block = !jacks.some(o => dirOf(o) === 'out')
     const kind = kinds[inst.id]

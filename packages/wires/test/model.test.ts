@@ -8,7 +8,7 @@ import { panels, setup } from './setup'
 
 const k = (instance: string, op: { ns: string; name: string }) => instance + ' ' + Ops.key(op)
 const model = (host: Awaited<ReturnType<typeof setup>>['host']) =>
-  buildModel({ snapshot: host.registry.snapshot(), panels, W: 1200, H: 600, platform: 'application', kinds: { d: 'debounce', m: 'map' }, titles: { debounce: 'Debounce', map: 'Map' } })
+  buildModel({ snapshot: host.registry.snapshot(), panels, W: 1200, H: 600, application: 'application', kinds: { d: 'debounce', m: 'map' }, titles: { debounce: 'Debounce', map: 'Map' } })
 
 test('panels become mirrored chassis with jacks: outs along the top, ins along the bottom', async () => {
   const { host } = await setup()
@@ -72,4 +72,14 @@ test('an instance named ~view but owned by a widget is in the rack', async () =>
   const { host } = await setup()
   host.registry.add('x~view-9', Components.instantiate(Components.create({ ns: 't', name: 'thing' }, () => null)), { kind: 'widget', name: 'w' })
   expect(model(host).rack.map(r => r.id)).toContain('x~view-9')
+})
+
+test('infrastructure never shows in the rack, and a subscription into app draws no wire', async () => {
+  const { host } = await setup()
+  const sink = () => { const c = Components.create({ ns: 't', name: 'sink' }, () => null); c.action(Ops.sink('t', 'in', Type.Unknown()), () => {}); return Components.instantiate(c) }
+  for (const id of ['app', 'alerts', 'ws-controls-workspace', 'r1']) host.registry.add(id, sink())
+  const m = buildModel({ snapshot: host.registry.snapshot(), panels: [], W: 1200, H: 600, application: 'application' })
+  expect(m.rack.map(r => r.id).filter(id => ['app', 'alerts', 'ws-controls-workspace', 'r1'].includes(id))).toEqual(['r1'])
+  host.registry.subscribe({ source: 'r', op: Ops.key(Range.ops.value), listener: 'app', target: 't/in' })
+  expect(buildModel({ snapshot: host.registry.snapshot(), panels, W: 1200, H: 600, application: 'application' }).wires.length).toBe(2)
 })

@@ -1,6 +1,6 @@
 // <c-wires>: the prototype's Component class as a Lit element over the live system. It holds the view state, keeps
 // the model in step with the registry and the dock's layout, turns trace deliveries into packets, and edits the
-// system through the platform. The render-* files draw it, as the prototype's template does from renderVals.
+// system through the Application. The render-* files draw it, as the prototype's template does from renderVals.
 import { LitElement, css } from 'lit'
 import { Ops, type Op, type Result, type Runtime, type Trace } from '@pritzlaff/nano-core'
 import { ApplicationOps, ApplicationOps as P, type Selection } from '@pritzlaff/nano-app'
@@ -19,7 +19,7 @@ export interface State {
   ry: number; rx: number; dragging: boolean; mode: 'relay' | 'puzzle'; sel: string | null; depth: number; editing: boolean; entering: boolean; leaving: boolean; hl: boolean
   /** Zoom (1 = fitted) and pan (screen px) on top of the camera; `zooming` makes them follow the wheel without easing. */
   zoom: number; panX: number; panY: number; zooming: boolean
-  /** The drawer's tab, and what is selected (the platform's selection, kept in step through the trace). */
+  /** The drawer's tab, and what is selected (the Application's selection, kept in step through the trace). */
   tab: 'view' | 'detail'; picked: Selection
   cord: Cord | null; armed: string | null; selMod: string | null; lift: string | null; toast: { kind: 'ok' | 'err'; text: string } | null
   packets: Packet[]; hits: Record<string, number>; flashes: Record<string, number>; stats: Record<string, { in: number; out: number }>
@@ -46,7 +46,7 @@ let packetId = 0
 
 /** The wiring view: slot the live `<workspace-dock>`; its `dock:connections` event flips it to show the back. */
 export class Wires extends LitElement {
-  static properties = { runtime: { attribute: false }, host: { attribute: false }, catalog: { attribute: false }, platform: {}, system: {}, flipped: { type: Boolean, reflect: true } }
+  static properties = { runtime: { attribute: false }, host: { attribute: false }, catalog: { attribute: false }, application: {}, screen: {}, system: {}, flipped: { type: Boolean, reflect: true } }
   static styles = css`
     :host { display: block; height: 100% }
     .stage-bg{background-color:#0B0E12;background-image:radial-gradient(#1C222B 1px, transparent 1px);background-size:22px 22px}
@@ -61,10 +61,13 @@ export class Wires extends LitElement {
     .joint:hover{background:#FFFFFF}
     .pkt-label{paint-order:stroke;stroke:#0A0D11;stroke-width:3px;stroke-linejoin:round}`
   declare runtime?: Runtime
-  /** The runtime the platform lives in (platform calls, selection); defaults to `runtime`. */
+  /** The runtime the Application lives in (its calls, selection); defaults to `runtime`. */
   declare host?: Runtime
   declare catalog: Catalog
-  declare platform: string
+  /** The instance the Application lives in (its ops are called as the view). */
+  declare application: string
+  /** The screen the dock shows (its route path); with none, the dock's enclosing `app-route[path]`. */
+  declare screen?: string
   declare system: string
   declare flipped: boolean
   s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, entering: false, leaving: false, hl: false, zoom: 1, panX: 0, panY: 0, zooming: false, tab: 'view', picked: null, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
@@ -76,10 +79,12 @@ export class Wires extends LitElement {
   #timer?: ReturnType<typeof setInterval>
   #layout = ''
   #pending = false
+  #placed: Set<string> | null = null
+  #placedKey = ''
 
   constructor() {
     super()
-    this.catalog = {}; this.platform = 'application'; this.system = ''; this.flipped = false
+    this.catalog = {}; this.application = 'application'; this.system = ''; this.flipped = false
     this.addEventListener('dock:connections', () => { if (this.flipped) this.close(); else this.flipped = true })
   }
   connectedCallback() { super.connectedCallback(); loadFonts(this.ownerDocument); if (this.hasUpdated) this.#attach() }
@@ -109,7 +114,7 @@ export class Wires extends LitElement {
     if (e.ctrlKey || e.metaKey) this.zoomBy(Math.exp(-e.deltaY * 0.01), e)
     else this.setState({ panX: this.s.panX - e.deltaX, panY: this.s.panY - e.deltaY, zooming: true })
   }
-  /** Selects a component, or one of its actions, through the platform, and shows it in Detail. */
+  /** Selects a component, or one of its actions, through the Application, and shows it in Detail. */
   pick(sel: Exclude<Selection, null>) { this.setState({ picked: sel, tab: 'detail' }); void this.call(P.select, sel) }
   /** Back to the fitted view. */
   fit() { this.setState({ zoom: 1, panX: 0, panY: 0, zooming: false }) }
@@ -122,7 +127,7 @@ export class Wires extends LitElement {
     const rt = this.runtime
     if (!rt || !this.isConnected || this.#off.length) return
     this.#off = [rt.registry.listen(() => this.schedule()), rt.listen(t => this.trace(t))]
-    // the platform's selection is published where the platform lives
+    // the Application's selection is published where it lives
     if (this.host && this.host !== rt) this.#off.push(this.host.listen(t => { if (t.kind === 'publish') this.trace(t) }))
     this.rebuild()
   }
@@ -135,8 +140,9 @@ export class Wires extends LitElement {
     if (!dock) return []
     // only panels that are showing: an inactive tab has no size or place, and its component waits in the rack
     return [...dock.querySelectorAll<HTMLElement>('.dock-panel')].filter(p => p.offsetWidth > 0 && p.offsetHeight > 0).map(p => {
-      const el = modelIn(p)
-      return { instance: el?.model ?? null, rect: rectIn(p, dock), tag: (el ?? p.firstElementChild ?? p).localName }
+      const el = modelIn(p), id = el?.model ?? null
+      // on screen only if the Application places it there; ponytail: with no placements known (screen not registered yet) the DOM decides
+      return { instance: id !== null && this.#placed && !this.#placed.has(id) ? null : id, rect: rectIn(p, dock), tag: (el ?? p.firstElementChild ?? p).localName }
     })
   }
   rebuild() {
@@ -146,9 +152,21 @@ export class Wires extends LitElement {
     for (const i of snapshot.instances) { const k = this.kindOf(i.id); if (k) kinds[i.id] = k }
     const titles = Object.fromEntries(Object.entries(this.catalog).map(([k, e]) => [k, e.title]))
     this.#layout = JSON.stringify(panels)
-    this.model = buildModel({ snapshot, panels, W: this.model.W, H: this.model.H, platform: this.platform, kinds, titles })
+    void this.#refreshPlacements()
+    this.model = buildModel({ snapshot, panels, W: this.model.W, H: this.model.H, application: this.application, kinds, titles })
     this.puzzle = buildPuzzle(this.model)
     this.requestUpdate()
+  }
+  /** Asks the Application which instances its screen places; rebuilds when that changed. */
+  async #refreshPlacements() {
+    const at = this.host ?? this.runtime, screen = this.screen ?? this.closest('app-route[path]')?.getAttribute('path') ?? undefined
+    if (!at) return
+    const r = await at.call({ registry: at.registry.id, instance: 'wires' }, this.application, Ops.key(P.placements), screen ? { screen } : {})
+    const list = 'error' in r ? [] : (r.value as { instance: string }[])
+    const ids = list.map(p => p.instance).sort(), key = ids.join('\n')
+    if (key === this.#placedKey) return
+    this.#placedKey = key; this.#placed = ids.length ? new Set(ids) : null
+    this.rebuild()
   }
   /** The catalog kind an instance was made from: the entry whose component is the instance's. */
   kindOf(id: string) {
@@ -158,7 +176,7 @@ export class Wires extends LitElement {
 
   /** A delivery on a drawn wire sends a packet along it, flashes its source and counts it. */
   trace(t: Trace) {
-    if (this.flipped && t.kind === 'publish' && t.from.instance === this.platform && t.op === Ops.key(P.selectionChanged)) this.setState({ picked: (t.data ?? null) as Selection })
+    if (this.flipped && t.kind === 'publish' && t.from.instance === this.application && t.op === Ops.key(P.selectionChanged)) this.setState({ picked: (t.data ?? null) as Selection })
     if (!this.flipped || t.kind !== 'delivery' || !this.model.wires.some(w => w.id === t.subscription)) return   // flat: nothing to draw
     const now = this.now(), { stats, flashes } = this.s
     const stat = (id: string) => stats[id] ?? { in: 0, out: 0 }
@@ -215,13 +233,13 @@ export class Wires extends LitElement {
   ok(text: string) { this.setState({ cord: null, toast: { kind: 'ok', text } }) }
   fail(text: string) { this.setState({ cord: null, toast: { kind: 'err', text } }) }
 
-  /** Calls a platform op as the view; a refusal is shown, and returned. */
+  /** Calls an Application op as the view; a refusal is shown, and returned. */
   /** The system shown: `system`, or the runtime's registry. */
   get sys() { return this.system || this.runtime?.registry.id || 'host' }
   async call(op: Op, arg: unknown): Promise<Result> {
     const at = this.host ?? this.runtime
     if (!at) return { error: 'no runtime' }
-    const r = await at.call({ registry: at.registry.id, instance: 'wires' }, this.platform, Ops.key(op), arg)
+    const r = await at.call({ registry: at.registry.id, instance: 'wires' }, this.application, Ops.key(op), arg)
     if ('error' in r) this.fail(r.error)
     return r
   }

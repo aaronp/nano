@@ -16,8 +16,8 @@ const box = (el: HTMLElement, x: number, y: number, w: number, h: number) => {
 }
 
 // the host system, and a stand-in dock (1200×600) with panels for r and l, and a Notes panel
-async function mount() {
-  const t = await setup()
+async function mount(placementsOf?: (layout: any) => any[]) {
+  const t = await setup(placementsOf)
   const el = document.createElement('c-wires') as Wires
   el.runtime = t.host
   el.catalog = catalog
@@ -392,4 +392,15 @@ test('a docked panel\'s chassis carries data-deploy and is marked by the toggle'
   expect(root.querySelectorAll('[data-chassis][data-mark]').length).toBe(0)
   ;(root.querySelector('button.highlight') as HTMLElement).click(); await settle()
   expect([...root.querySelectorAll('[data-chassis][data-mark]')].map(e => e.getAttribute('data-chassis'))).toEqual(['panel-0'])
+})
+
+test('on-screen membership comes from the Application placements', async () => {
+  const { el, dock, call, flip, settle } = await mount(l => l.p)
+  await call(P.setScreen, { id: '/x', title: 'X', system: 'host', layout: { p: [{ panel: 'a', instance: 'r' }] } })
+  el.screen = '/x'
+  await flip()
+  await settle()
+  expect(el.model.chassis.map(c => c.instance)).toEqual(['r', null, null])
+  expect(el.model.rack.map(r => r.id)).toContain('l')
+  expect(dock.querySelectorAll('.dock-panel').length).toBe(3)
 })

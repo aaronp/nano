@@ -2,7 +2,8 @@
 // a component (its coordinates, kind, jacks and connections) or one of its actions (its op, schemas and connections).
 import { html } from 'lit'
 import { Ops, type Op, type Subscription } from '@pritzlaff/nano-core'
-import { examplesOf, viewIds } from '@composable/platform'
+import { examplesOf } from '@composable/platform'
+import { viewIds } from '@pritzlaff/nano-app'
 import { runtimeOf } from '@pritzlaff/nano-app'
 import type { Vals } from './render-root'
 import type { Wires } from './wires'
@@ -21,7 +22,7 @@ const cord = (c: Subscription) => html`<div class="mono">${c.source}.${name(c.op
 export function renderDetail(el: Wires, d: Vals) {
   // the selection may be in any system: look it up through the platform, where the tree lives too
   const sel = d.s.picked, home = (el.host ?? el.runtime)?.registry
-  const reg = sel && home ? runtimeOf(home, sel.system, el.platform)?.registry : el.runtime?.registry
+  const reg = sel && home ? runtimeOf(home, sel.system, el.application)?.registry : el.runtime?.registry
   const snap = reg?.snapshot(), views = snap ? viewIds(snap) : new Set<string>()
   const subs = (snap?.subscriptions ?? []).filter(c => !views.has(c.listener))
   const inst = sel && reg?.get(sel.instance)
@@ -30,7 +31,7 @@ export function renderDetail(el: Wires, d: Vals) {
     : sel.op ? action(sel.system, sel.instance, inst.actions.get(sel.op)?.op, sel.op, subs)
     : component(el, sel.system, sel.instance, `${inst.component.id.ns}/${inst.component.id.name}`, [...inst.actions.values()].map(a => a.op), subs)
   return html`<section style="display:flex; flex-direction:column; gap:14px">
-    <c-platform .registry=${home} model=${el.platform}></c-platform>
+    <c-platform .registry=${home} model=${el.application}></c-platform>
     <div class="detail" style="display:flex; flex-direction:column; gap:6px; font-size:12px; color:#C9D1D9">${card}</div>
   </section>`
 }

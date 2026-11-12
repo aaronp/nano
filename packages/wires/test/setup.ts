@@ -5,9 +5,9 @@ import { application, ApplicationOps as P } from '@pritzlaff/nano-app'
 
 export const tick = () => new Promise(r => setTimeout(r, 0))
 
-export async function setup() {
+export async function setup(placementsOf?: (layout: any) => any[]) {
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('application', Components.instantiate(application(host, catalog)))
+  host.registry.add('application', Components.instantiate(application(host, catalog, placementsOf ? { placementsOf } : {})))
   const call = (op: Op, arg: unknown) => host.call({ registry: 'host', instance: 'test' }, 'application', Ops.key(op), arg) as Promise<any>
   for (const [kind, name] of [['range', 'r'], ['debounce', 'd'], ['log', 'l'], ['map', 'm']]) await call(P.createComponent, { kind, name, system: 'host' })
   const s1 = (await call(P.connect, { system: 'host', source: 'r', op: Ops.key(Range.ops.value), listener: 'd', target: Ops.key(Debounce.ops.enqueue) })).value
