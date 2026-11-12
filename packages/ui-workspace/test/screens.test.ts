@@ -27,7 +27,7 @@ test('screens from before this change still load', async () => {
     { id: '/b', title: 'B', icon: 'box', system: 'host', layout: null },
     { id: '/a', title: 'A', icon: 'star', system: 'lab', layout: layout('r1') },   // its system is made first
   ])
-  expect((await h.call('application', P.placements, { screen: '/a' })).value).toEqual([{ screen: '/a', panel: 'p1', instance: 'r1' }])
+  expect((await h.call('application', P.placements, { screen: '/a' })).value).toEqual([{ screen: '/a', panel: 'p1', instance: 'r1', box: { x: 0, y: 0, w: 1, h: 1 }, tab: { group: '0', active: true } }])
 })
 
 test('a change to a screen is written back in the old format', async () => {
