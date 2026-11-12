@@ -149,6 +149,10 @@ are first-class registry data, they are saved in `nano.json` as pins, and they c
     - "an unbound need fails with `form needs bff: not bound`".
     - "a binding to an unknown registry fails with `no runtime nowhere`".
     - "a call to a removed target fails with `no instance db in storage`" **(Review Focus 4)**.
+    - "binary passes through a client": an iface op with input `T.Object({ bytes: T.Uint8Array() })` and output
+      `T.Uint8Array()` returns the provider's bytes unchanged (the signer case: `sign(publicKey, purpose, bytes)`).
+    - "a provider's error reaches the caller as a thrown error": a provider whose op throws `new Error('locked')` makes
+      `await deps.x.op(...)` reject with message `locked` (the `Signature | Error` case; no `Error` in schemas).
 - [ ] **Step 2: Run** `bun test --isolate test/needs.test.ts`. Expect FAIL (module missing).
 - [ ] **Step 3: Implement** `needs.ts`, `Handle.use` and `Environment.use`. `define` builds on `Components.create`
   with `opts.needs`/`implements`; `make` receives `clients(env, needs)`.
@@ -300,7 +304,12 @@ are first-class registry data, they are saved in `nano.json` as pins, and they c
     **(Review Focus 5)**.
   - A document without `needs` still validates.
 - [ ] **Step 2: Run.** Expect FAIL.
-- [ ] **Step 3: Implement.** Document the new `needs` field in the README.
+- [ ] **Step 3: Implement.** Document the new `needs` field in the README. Add a README section "Using nano from
+  another project": the package serves `nano-package.json` (`{ manifest: 1, name, version, module, components }`;
+  the module exports `catalog` and `define()`) and a `nano.json` whose `imports` lists that manifest; it bundles with
+  `--external '@pritzlaff/*' --external typebox --external 'typebox/*'` (the host's import map supplies them), serves
+  with CORS, and opens `<host>/?src=<url of nano.json>`. Include a `nano-dev` Makefile target like:
+  `bun build … && bunx serve --cors -l $(PORT) dist/nano`, echoing the `?src=` URL.
 - [ ] **Step 4: Run** all of app, plus root tsc. Expect PASS.
 - [ ] **Step 5: Commit** `feat(app): needs in nano.json — saved as pins, resolved after everything loads`
 
