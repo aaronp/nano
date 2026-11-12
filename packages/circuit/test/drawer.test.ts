@@ -35,3 +35,15 @@ test("Follow cable focuses the other end's page", async () => {
   ;[...root.querySelectorAll<HTMLElement>('aside button')].find(b => b.textContent === 'Follow cable')!.click(); await settle()
   expect(el.page).toBe('/b')
 })
+
+test('a cable is labelled by its ends and Follow cable centres the other end', async () => {
+  const { el, root, settle } = await mount()
+  const g = root.querySelector<HTMLElement>('g[data-cable-hit]')!
+  expect(g.getAttribute('aria-label')).toMatch(/^Cable \w+\.\w+ to \w+\.\w+$/)
+  g.dispatchEvent(new MouseEvent('click', { bubbles: true })); await settle()
+  expect(g.getAttribute('aria-pressed')).toBe('true')
+  ;[...root.querySelectorAll<HTMLElement>('aside button')].find(b => b.textContent === 'Follow cable')!.click(); await settle()
+  const key = el.s.sel!.slice(4), end = [...el.geo.pos].find(([k]) => k.endsWith(`|${key}`))![1]
+  expect(el.s.panX).toBeCloseTo(-end.x * el.s.zoom)
+  expect(el.s.panY).toBeCloseTo(-end.y * el.s.zoom)
+})

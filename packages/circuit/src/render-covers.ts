@@ -20,7 +20,7 @@ export function renderCovers(el: Circuit, f: LayerFrame) {
 export function renderLiftTools(el: Circuit) {
   const { lift } = el.s
   return html`<div class="tools">
-    <button class="lift" @click=${() => el.toggleLift()}>${lift > 0.5 ? 'Put covers back' : 'Lift covers'}</button>
+    <button class="lift" @click=${() => el.toggleLift()}>${lift > 0.5 || el.anyHidden() ? 'Put covers back' : 'Lift covers'}</button>
     <label>Covers <input type="range" min="0" max="100" .value=${String(Math.round(lift * 100))} @input=${(e: Event) => el.setLift(Number((e.target as HTMLInputElement).value) / 100)}></label>
   </div>`
 }

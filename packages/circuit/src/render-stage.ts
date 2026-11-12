@@ -29,6 +29,8 @@ function box(el: Circuit, b: PlacedBox, shared: boolean) {
       style=${styleMap(px(t.rect))} @click=${() => el.select(fp(t.fp))}>${t.fp.title}</button>`)}`
 }
 
+const padName = (el: Circuit, key: string) => { const p = [...el.model.layers.flatMap(l => l.footprints), ...el.model.side.flatMap(b => b.items)].flatMap(i => i.pads).find(x => x.key === key); return p ? `${p.instance}.${p.label}` : key }
+
 /** A cable is a bezier between two pad centres, drawn in its source's frame. Full strength only on the focus layer. */
 function cables(el: Circuit, f: Frame) {
   const { pos } = el.geo, focusFrame = `l:${el.s.focus}`
@@ -38,7 +40,7 @@ function cables(el: Circuit, f: Frame) {
     const x1 = a.x - f.origin.x, y1 = a.y - f.origin.y, x2 = b.x - f.origin.x, y2 = b.y - f.origin.y, dx = Math.max(40, Math.abs(x2 - x1) / 2)
     const full = frameId(c.from.at) === focusFrame || frameId(c.to.at) === focusFrame || (f.id.startsWith('s:') && frameId(c.to.at).startsWith('s:'))
     const d = `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`, sel = el.s.sel === `cable:${c.id}`
-    return svg`<g data-cable-hit=${c.id} role="button" tabindex="0" aria-label=${`Cable ${c.id}`} @click=${() => el.select(`cable:${c.id}`)}
+    return svg`<g data-cable-hit=${c.id} role="button" tabindex="0" aria-label=${`Cable ${padName(el, c.from.pad)} to ${padName(el, c.to.pad)}`} aria-pressed=${sel} @click=${() => el.select(`cable:${c.id}`)}
       @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.select(`cable:${c.id}`) } }}>
       <path data-cable=${c.id} data-x1=${x1} data-y1=${y1} data-x2=${x2} data-y2=${y2} d=${d}
       fill="none" stroke=${TYPE_COLOR[c.type]} stroke-width=${sel ? 4 : 2} opacity=${full ? 1 : DIM_CABLE}/><path class="hit" d=${d}/></g>`

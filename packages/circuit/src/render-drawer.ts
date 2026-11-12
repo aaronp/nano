@@ -41,7 +41,7 @@ export function renderDrawer(el: Circuit) {
   const d = describe(el)
   return html`<aside class="drawer" aria-label="Details" ?hidden=${!d} @wheel=${(e: Event) => e.stopPropagation()}>${!d ? nothing : html`
     <div class="d-head"><div><div class="kicker">${d.kicker}</div><div class="d-title">${d.title}</div><div class="d-sub">${d.sub}</div></div>
-      <button aria-label="Close details" @click=${() => el.select(null)}>✕</button></div>
+      <button aria-label="Close details" @click=${() => { el.select(null); el.refocus() }}>✕</button></div>
     <div class="chips">${d.types.map(t => html`<span class="chip"><span class="glyph" aria-hidden="true" style="background:${TYPE_COLOR[t]}">${TYPE_GLYPH[t]}</span>${TYPE_NAME[t]}</span>`)}</div>
     <dl>${d.rows.map(([k, v]) => html`<dt>${k}</dt><dd>${v}</dd>`)}</dl>
     ${d.schemaLabel ? html`<div class="kicker">${d.schemaLabel}</div><pre>${d.schema === undefined ? 'none (signal)' : JSON.stringify(d.schema, null, 2)}</pre>` : nothing}

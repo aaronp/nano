@@ -34,7 +34,7 @@ export class Circuit extends LitElement {
     .ltitle { position: absolute; left: 0; top: -22px; margin: 0; font-size: 12px; color: #94a3b8; white-space: nowrap }
     .layer .ltitle { left: 8px; top: 6px }
     .fp { position: absolute; box-sizing: border-box; border: 1px solid #2A323D; border-radius: 6px; background: #181E26 }
-    .ftitle { position: absolute; left: 14px; top: 8px; font-weight: 600 }
+    .ftitle { position: absolute; left: 14px; top: 8px; padding: 0; border: 0; background: none; color: inherit; font: 600 12px system-ui; cursor: pointer }
     .pad { position: absolute; width: 24px; height: 24px; padding: 0; border: 2px solid; font: 600 10px ui-monospace, monospace; cursor: pointer }
     .plabel { position: absolute; font-size: 10px; color: #94a3b8; white-space: nowrap }
     .tab { position: absolute; box-sizing: border-box; padding: 0 6px; border: 1px solid #2A323D; border-bottom: 0; border-radius: 6px 6px 0 0; background: #12161C; color: inherit; font: 10px system-ui; overflow: hidden; text-overflow: ellipsis; cursor: pointer }
@@ -45,7 +45,6 @@ export class Circuit extends LitElement {
     .cover { position: absolute; box-sizing: border-box; display: grid; place-items: center; padding: 0; border: 1px solid #3B475A; border-radius: 6px; background: #1E252Fee; color: #E6EDF3; font: 600 13px system-ui; cursor: grab; touch-action: none }
     .cover.anim { transition: transform .3s ease }
     .cover[aria-pressed="true"], .pad[aria-pressed="true"], .fp[data-sel="true"] { border-color: #4CC2FF }
-    .ftitle { background: none; border: 0; padding: 0; color: inherit; font: 600 12px system-ui; cursor: pointer }
     .hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer }
     g[data-cable-hit]:focus-visible { outline: 2px solid #4CC2FF }
     .drawer { position: absolute; top: 0; right: 0; bottom: 0; z-index: 3; width: 340px; max-width: 100%; box-sizing: border-box; padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; background: #0E131A; border-left: 1px solid #263041; box-shadow: -20px 0 40px #0006; cursor: auto; user-select: text }
@@ -135,14 +134,17 @@ export class Circuit extends LitElement {
     if (ls[j]) this.go(ls[j]!.screen)
   }
   key(e: KeyboardEvent) {
+    if ((e.composedPath()[0] as Element | undefined)?.matches?.('input, select, textarea')) return   // the slider keeps its own keys
     if (e.key === 'ArrowRight' || e.key === 'PageDown') this.move(1)
     else if (e.key === 'ArrowLeft' || e.key === 'PageUp') this.move(-1)
-    else if (e.key === 'Escape') this.select(null)
-    else if ((e.key === 'Delete' || e.key === 'Backspace') && this.s.sel?.startsWith('cover:')) { const [screen, inst] = this.s.sel.slice(6).split('|'); this.hide(screen!, inst!) }
+    else if (e.key === 'Escape' && this.s.sel) { this.select(null); this.refocus() }
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && this.s.sel?.startsWith('cover:')) { const [screen, inst] = this.s.sel.slice(6).split('|'); this.hide(screen!, inst!); this.refocus() }
     else return
     e.preventDefault()
   }
 
+  /** Hands focus back to the stage, so keyboard users are not dropped on the body. */
+  refocus() { this.renderRoot.querySelector<HTMLElement>('.stage')?.focus() }
   select(sel: string | null) { this.s = { ...this.s, sel }; this.requestUpdate() }
   setLift(lift: number) { this.s = { ...this.s, lift: Math.min(1, Math.max(0, lift)) }; this.requestUpdate() }
   /** Hides one page's cover; the selection goes with it. */
@@ -150,8 +152,9 @@ export class Circuit extends LitElement {
     const hidden = { ...this.s.hidden, [screen]: new Set(this.s.hidden[screen]).add(inst) }
     this.s = { ...this.s, hidden, sel: this.s.sel === `cover:${screen}|${inst}` ? null : this.s.sel }; this.requestUpdate()
   }
-  /** Lifts the covers; when they are already lifted, puts them back (down, and every hidden one restored). */
-  toggleLift() { this.s = this.s.lift > 0.5 ? { ...this.s, lift: 0, hidden: {} } : { ...this.s, lift: LIFT_ON }; this.requestUpdate() }
+  anyHidden() { return Object.values(this.s.hidden).some(h => h.size) }
+  /** Lifts the covers; when they are lifted or any is hidden, puts them back (down, and every hidden one restored). */
+  toggleLift() { this.s = this.s.lift > 0.5 || this.anyHidden() ? { ...this.s, lift: 0, hidden: {} } : { ...this.s, lift: LIFT_ON }; this.requestUpdate() }
   /** Drags a cover along with the pointer; past HIDE_DIST from where it rests, it is hidden. */
   coverDown(e: PointerEvent, key: string, screen: string, inst: string) {
     e.stopPropagation()
@@ -159,11 +162,11 @@ export class Circuit extends LitElement {
     const move = (m: PointerEvent) => { this.coverDrag = { key, dx: m.clientX - x0, dy: m.clientY - y0 }; this.requestUpdate() }
     const up = () => {
       const d = this.coverDrag; this.coverDrag = null
-      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up)
       if (d && Math.hypot(d.dx, d.dy) > HIDE_DIST) this.hide(screen, inst)
       this.requestUpdate()
     }
-    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up)
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up)
   }
   /** Pans to the other end of the selected pad's (or cable's) cable, focusing its layer if it has one. */
   follow() {

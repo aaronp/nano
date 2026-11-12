@@ -29,8 +29,8 @@ test('Delete hides the selected cover; Put covers back restores it', async () =>
   el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }))
   await settle()
   expect(cover(root)).toBeNull()
-  root.querySelector<HTMLElement>('button.lift')!.click(); await settle()   // lift
-  root.querySelector<HTMLElement>('button.lift')!.click(); await settle()   // put back
+  expect(root.querySelector('button.lift')!.textContent).toContain('Put covers back')
+  root.querySelector<HTMLElement>('button.lift')!.click(); await settle()
   expect(cover(root)).not.toBeNull()
 })
 
@@ -45,4 +45,12 @@ test('dragging a cover far enough hides it', async () => {
   expect(cover(root)).not.toBeNull()
   drag(200); await settle()
   expect(cover(root)).toBeNull()
+})
+
+test('arrow keys on the slider change lift, not the page', async () => {
+  const { el, root, settle } = await mount()
+  const s = root.querySelector<HTMLInputElement>('input[type=range]')!
+  s.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, composed: true }))
+  await settle()
+  expect(el.page).toBe('/a')
 })
