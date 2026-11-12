@@ -20,8 +20,8 @@ export interface ApplyDeps {
   consentCode?(system: string, instance: string): boolean
   /** Longest waits in ms for one configure and one import (a sandbox frame may never answer). */
   waits?: { configure?: number; import?: number }
-  /** Whether the host knows a theme id / an icon name; without them any is accepted (an unknown icon becomes 'folder'). */
-  known?: { theme?(id: string): boolean; icon?(name: string): boolean }
+  /** Whether the host knows a theme id / an icon name (an unknown icon becomes 'folder'). Required: a host must say. */
+  known: { theme(id: string): boolean; icon(name: string): boolean }
 }
 
 const within = <T>(p: Promise<T>, ms: number, what: string): Promise<T> => {
@@ -56,7 +56,7 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
   if (replace) {
     attempt('title', () => stores.title.set(app.title))
     if (app.theme) {
-      if (deps.known?.theme?.(app.theme.id) ?? true) { const t = app.theme; attempt('theme', () => stores.theme.set({ theme: t.id, mode: t.mode ?? stores.theme.get().mode })) }
+      if (deps.known.theme(app.theme.id)) { const t = app.theme; attempt('theme', () => stores.theme.set({ theme: t.id, mode: t.mode ?? stores.theme.get().mode })) }
       else notes.push(`unknown theme ${app.theme.id}: kept the host's`)
     }
     if (app.profile) {
@@ -154,7 +154,7 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
       if ('error' in r) { fail(`workspace ${w.id}: system ${w.system}`, r); continue }
       existing.add(w.system)
     }
-    const r = await call('application', P.setScreen, { id: w.id, title: w.title, icon: w.icon && (deps.known?.icon?.(w.icon) ?? true) ? w.icon : 'folder', system: w.system, layout: w.layout ?? null })
+    const r = await call('application', P.setScreen, { id: w.id, title: w.title, icon: w.icon && deps.known.icon(w.icon) ? w.icon : 'folder', system: w.system, layout: w.layout ?? null })
     if ('error' in r) fail(`workspace ${w.id}`, r); else taken.add(w.id)
   }
 

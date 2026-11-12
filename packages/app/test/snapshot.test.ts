@@ -9,7 +9,7 @@ const setup = () => {
   const call = (op: any, arg: unknown = null) => host.call({ registry: 'host', instance: 'test' }, 'application', Ops.key(op), arg) as Promise<any>
   const st = { imports: [] as any[], theme: { theme: 'enterprise', mode: 'system' as 'system' | 'light' | 'dark' }, title: 'Nano' }
   const stores: HostStores = { imports: { list: () => st.imports, set: xs => { st.imports = xs } }, theme: { get: () => st.theme, set: c => { st.theme = c } }, title: { get: () => st.title, set: t => { st.title = t } } }
-  const deps = { host, stores, catalog, importPackage: async () => ({}) }
+  const deps = { host, stores, catalog, known: { theme: () => true, icon: () => true }, importPackage: async () => ({}) }
   return { host, call, stores, deps }
 }
 const empty: NanoApp = { nano: 1, title: 'Doc', imports: [], systems: [], workspaces: [] }

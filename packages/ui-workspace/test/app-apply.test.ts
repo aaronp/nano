@@ -104,7 +104,7 @@ test('a code config (map, filter) is applied only with consent; the instance is 
   expect((await a.call('m1', MapC.ops.code)).value).toBe('return x')
   expect((await a.call('m2', MapC.ops.code)).value).toBe('return 2')
   const b = await fresh()   // by default a document's code is not run
-  await applyApp(d, 'replace', { host: b.host, stores: b.stores, catalog: b.catalog, importPackage: async () => ({}) })
+  await applyApp(d, 'replace', { host: b.host, stores: b.stores, catalog: b.catalog, known, importPackage: async () => ({}) })
   expect((await b.call('m2', MapC.ops.code)).value).toBe('return x')
 })
 
