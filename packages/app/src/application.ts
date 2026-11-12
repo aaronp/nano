@@ -35,7 +35,17 @@ export const ScreenSchema = Type.Object({
 export type Screen = Static<typeof ScreenSchema>
 
 /** One instance shown in one panel of one screen. */
-export const PlacementSchema = Type.Object({ screen: str('A screen id', ['/lab']), panel: str('A panel of that screen', ['gauge']), instance }, { title: 'Placement', description: 'An instance shown in a panel of a screen' })
+/** A rectangle as fractions of the page, each in [0, 1]. */
+export const BoxSchema = Type.Object({
+  x: Type.Number({ minimum: 0, maximum: 1 }), y: Type.Number({ minimum: 0, maximum: 1 }), w: Type.Number({ minimum: 0, maximum: 1 }), h: Type.Number({ minimum: 0, maximum: 1 }),
+}, { title: 'Box', description: 'A rectangle, as fractions of the page' })
+export type Box = Static<typeof BoxSchema>
+
+/** One instance shown in one panel of one screen; its box on the page and its tab in a group, when known. */
+export const PlacementSchema = Type.Object({
+  screen: str('A screen id', ['/lab']), panel: str('A panel of that screen', ['gauge']), instance,
+  box: Type.Optional(BoxSchema), tab: Type.Optional(Type.Object({ group: str('The tab group', ['main']), active: Type.Boolean({ description: 'Whether it is the group\'s open tab' }) })),
+}, { title: 'Placement', description: 'An instance shown in a panel of a screen' })
 export type Placement = Static<typeof PlacementSchema>
 
 const refArg = str('A ref: system:<id>, instance:<system>/<id> or screen:<path>', ['instance:host/r1'])
@@ -103,7 +113,7 @@ const opOf = (reg: Registry, instance: string, key: string) => {
 
 /** The application over `host`, able to create the kinds of component in `catalog` (a host's merged catalogs). */
 export function application(host: Runtime, catalog: AppCatalog,
-  opts: { placementsOf?: (layout: unknown) => { panel: string; instance: string }[]; gateways?: readonly string[]; locked?: (id: string) => boolean; deploy?: (system: Runtime, id: string, kind: string, mode: string | undefined, owner: Owner, outward?: Selectors) => Result<void> } = {}): Component<State> {
+  opts: { placementsOf?: (layout: unknown) => Omit<Placement, 'screen'>[]; gateways?: readonly string[]; locked?: (id: string) => boolean; deploy?: (system: Runtime, id: string, kind: string, mode: string | undefined, owner: Owner, outward?: Selectors) => Result<void> } = {}): Component<State> {
   // read at call time: the host adds imported packages' kinds to this same object, then calls catalog-changed
   const kinds = (): Kind[] => Object.entries(catalog).map(([kind, e]) =>
     ({ kind, component: `${e.component.id.ns}/${e.component.id.name}`, title: e.title ?? kind, ...(e.tag && { tag: e.tag }), ...(e.modes && { modes: [...e.modes] }),

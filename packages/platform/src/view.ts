@@ -4,12 +4,11 @@ import { css, html } from 'lit'
 import type { TSchema } from 'typebox'
 import { Ops, type Op, type Snapshot, type Subscription } from '@pritzlaff/nano-core'
 import { base, ModelElement, providedRegistry, type NanoTree, type TreeNode } from '@pritzlaff/nano-elements'
-import { ApplicationOps as P, type Kind, type Selection } from '@pritzlaff/nano-app'
+import { ApplicationOps as P, viewIds, type Kind, type Selection } from '@pritzlaff/nano-app'
 import { deployOf, examplesOf, sandboxed } from './inventory'
 
 type Inst = Snapshot['instances'][number]
-/** The ids of a registry's entries owned by a view (an element's hidden subscriber): never shown. */
-export const viewIds = (s: Snapshot): Set<string> => new Set(s.instances.filter(i => i.owner?.kind === 'view').map(i => i.id))
+export { viewIds } from '@pritzlaff/nano-app'   // the ids of a snapshot's view-owned instances: never shown
 const shown = (i: Inst) => i.id !== 'registry' && i.owner?.kind !== 'view'
 const typeLabel = (s?: TSchema): string => {
   const t = s as { title?: string; type?: string; items?: TSchema } | undefined

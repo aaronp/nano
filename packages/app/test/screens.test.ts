@@ -3,9 +3,9 @@ import { Components, Ops, Registries, Runtimes, type Op } from '@pritzlaff/nano-
 import { catalog } from '@composable/bundle'
 import { application, ApplicationOps as P } from '../src/application'
 
-const setup = () => {
+const setup = (placementsOf: (l: any) => any[] = l => l.p ?? []) => {
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('application', Components.instantiate(application(host, catalog, { placementsOf: l => (l as any).p ?? [] })))
+  host.registry.add('application', Components.instantiate(application(host, catalog, { placementsOf })))
   const call = (op: Op, arg: unknown = null) => host.call({ registry: 'host', instance: 'test' }, 'application', Ops.key(op), arg) as Promise<any>
   const events: any[] = []
   const spy = Components.create({ ns: 't', name: 'spy' }, () => events)
@@ -21,6 +21,13 @@ test('setScreen stores a screen and works out its placements', async () => {
   await call(P.setScreen, lab([{ panel: 'a', instance: 'r1' }]))
   expect((await call(P.screens)).value.map((s: any) => s.id)).toEqual(['/lab'])
   expect((await call(P.placements, { screen: '/lab' })).value).toEqual([{ screen: '/lab', panel: 'a', instance: 'r1' }])
+})
+
+test('placements carry box and tab from placementsOf', async () => {
+  const box = { x: 0.1, y: 0.2, w: 0.3, h: 0.4 }, tab = { group: 'g', active: true }
+  const { call } = setup(() => [{ panel: 'a', instance: 'r1', box, tab }])
+  await call(P.setScreen, lab())
+  expect((await call(P.placements, { screen: '/lab' })).value).toEqual([{ screen: '/lab', panel: 'a', instance: 'r1', box, tab }])
 })
 
 test('a new layout replaces the placements', async () => {
