@@ -39,6 +39,22 @@ export const readWidgetName = (state: unknown): string | undefined => {
   return typeof n === 'string' && n ? n : undefined;
 };
 
+/** Which instance each panel of a saved layout shows (panels with no instance are skipped). A panel is named by its id,
+ * else its title and index path; anything that isn't a layout gives []. */
+export const placementsOf = (layout: unknown): { panel: string; instance: string }[] => {
+  const walk = (item: unknown, path: number[]): { panel: string; instance: string }[] => {
+    if (typeof item !== 'object' || item === null) return [];
+    const it = item as { type?: unknown; content?: unknown; id?: unknown; title?: unknown; componentState?: unknown };
+    if (it.type === 'component') {
+      const instance = readWidgetName(it.componentState);
+      if (!instance) return [];
+      return [{ panel: (typeof it.id === 'string' && it.id) || `${typeof it.title === 'string' ? it.title : ''}@${path.join('.')}`, instance }];
+    }
+    return Array.isArray(it.content) ? it.content.flatMap((c, i) => walk(c, [...path, i])) : [];
+  };
+  return walk((layout as { root?: unknown } | null)?.root, [0]);
+};
+
 /** The deploy mode a panel was saved with, if it has one (missing: the panel shows the host's element as before). */
 export const readWidgetMode = (state: unknown): string | undefined => {
   const m = typeof state === 'object' && state !== null ? (state as Record<string, unknown>)['mode'] : undefined;
