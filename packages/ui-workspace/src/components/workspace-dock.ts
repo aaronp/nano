@@ -22,7 +22,7 @@
  * instance or nothing is focused (empty space clicked, the panel closed, the page changed: `route:changed` on the bus).
  * Light DOM, because golden-layout positions its drag proxy in document.body.
  */
-import { GoldenLayout, LayoutConfig, type ComponentContainer, type ComponentItem, type JsonValue, type ResolvedLayoutConfig } from 'golden-layout';
+import { GoldenLayout, LayoutConfig, ResolvedComponentItemConfig, type ComponentContainer, type ContentItem, type Stack, type ComponentItem, type JsonValue, type ResolvedLayoutConfig } from 'golden-layout';
 import baseCss from 'golden-layout/dist/css/goldenlayout-base.css';
 import type { Registry } from '@pritzlaff/nano-core';
 import { providedRegistry } from '@pritzlaff/nano-elements';
@@ -45,7 +45,8 @@ workspace-dock .dock-area { position: relative; min-height: 0; overflow: hidden;
 .lm_header { height: ${HEADER_H}px; }
 /* plain text tabs: the active one is underlined; a tab's close shows on hover */
 .lm_header .lm_tabs { gap: 4px; padding-left: 4px; }
-.lm_header .lm_tab { height: 28px; line-height: 28px; padding: 0 22px 0 8px; font: 12px var(--font); color: var(--muted); background: none; border: 0; border-radius: 0; box-shadow: none; }
+/* the title is an inline-block with overflow hidden, whose baseline is its bottom edge: centre it as a flex item instead */
+.lm_header .lm_tab { display: flex; align-items: center; height: 28px; line-height: 28px; padding: 0 22px 0 8px; font: 12px var(--font); color: var(--muted); background: none; border: 0; border-radius: 0; box-shadow: none; }
 .lm_header .lm_tab:hover { color: var(--fg); }
 .lm_header .lm_tab.lm_active { color: var(--fg); background: none; font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
 .lm_header.lm_focused .lm_tab.lm_active { color: var(--accent); }
@@ -85,6 +86,17 @@ const ensureStyles = (doc: Document) => {
 };
 
 interface Def extends PaletteEntry { readonly template: HTMLTemplateElement }
+
+/** The stack with the largest area on screen, if any. */
+const largestStack = (root: ContentItem | undefined): Stack | undefined => {
+  let best: Stack | undefined, area = -1;
+  const visit = (item: ContentItem) => {
+    if (item.isStack) { const r = item.element.getBoundingClientRect(); if (r.width * r.height > area) { area = r.width * r.height; best = item as Stack; } }
+    else item.contentItems.forEach(visit);
+  };
+  if (root) visit(root);
+  return best;
+};
 
 export class WorkspaceDock extends HTMLElement {
   /** The system (registry) the panels' components live in; unset, they use the page's provided registry. Declared,
@@ -136,11 +148,20 @@ export class WorkspaceDock extends HTMLElement {
     });
   }
 
-  /** Open a palette widget as a new panel; with `name`, its element shows that existing instance. */
+  /** Open a palette widget as a new panel; with `name`, its element shows that existing instance. It splits the focused
+   * panel (else the largest): beside it as a new column when that panel is wider than tall, else below it as a new row. */
   addWidget(id: string, name?: string) {
     const def = this.defs.get(id);
     if (!def) throw new Error(`<workspace-dock> has no palette widget "${id}"`);
-    this.requireLayout().addComponent('widget', name ? { widget: def.id, name } : { widget: def.id }, name ?? def.title);
+    const layout = this.requireLayout(), state = name ? { widget: def.id, name } : { widget: def.id }, title = name ?? def.title;
+    const target = layout.focusedComponentItem?.parentItem ?? largestStack(layout.rootItem);
+    if (!target?.isStack) { layout.addComponent('widget', state, title); return; }   // an empty dock
+    const { width, height } = target.element.getBoundingClientRect();
+    // golden-layout's own drop onto a panel's right or bottom edge (internal API: nothing public splits a panel)
+    const item = layout.createAndInitContentItem(ResolvedComponentItemConfig.createDefault('widget', state, title), target);
+    const drop = target as unknown as { _dropSegment: string; onDrop(item: ContentItem, area: null): void };
+    drop._dropSegment = width > height ? 'right' : 'bottom';
+    drop.onDrop(item, null);
   }
 
   /** Adds a palette widget while running (an imported package's kind): its template, now addable. */
