@@ -10,6 +10,15 @@
         "typescript": "^7.0.2",
       },
     },
+    "packages/app": {
+      "name": "@pritzlaff/nano-app",
+      "version": "0.1.0",
+      "dependencies": {
+        "@pritzlaff/nano-core": "workspace:*",
+        "@pritzlaff/nano-runes": "workspace:*",
+        "typebox": "^1.4.0",
+      },
+    },
     "packages/bundle": {
       "name": "@composable/bundle",
       "version": "0.1.0",
@@ -150,6 +159,8 @@
     "@lit/reactive-element": ["@lit/reactive-element@2.1.2", "", { "dependencies": { "@lit-labs/ssr-dom-shim": "^1.5.0" } }, "sha512-pbCDiVMnne1lYUIaYNN5wrwQXDtHaYtg7YEFPeW+hws6U47WeFvISGUWekPGKWOP1ygrs0ef0o1VJMk1exos5A=="],
 
     "@playwright/test": ["@playwright/test@1.65.0", "", { "dependencies": { "playwright": "1.65.0" }, "bin": { "playwright": "cli.js" } }, "sha512-iGURLGuKDLakSEl7Pgfv8h7f+XLT+V861Wfhz0zlEl5nyFuKUopdkFBPKqTllTUp06aOwPuH8iuUEb3yp3MpbQ=="],
+
+    "@pritzlaff/nano-app": ["@pritzlaff/nano-app@workspace:packages/app"],
 
     "@pritzlaff/nano-core": ["@pritzlaff/nano-core@workspace:packages/core"],
 
