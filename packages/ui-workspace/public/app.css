@@ -17,6 +17,8 @@ a[slot='nav'][data-sub] svg { width: 16px; height: 16px; }
 .nav-row [data-toggle-drawer] { display: grid; place-items: center; padding: 0; }
 .nav-row [data-toggle-drawer] svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .nav-row [data-toggle-drawer][aria-pressed='true'] { background: var(--accent-soft); }
+/* The drawer as an icon rail: only the row's link icon shows. */
+app-shell[collapsed]:not([narrow]) .nav-row button { display: none; }
 html[data-drawers-hidden] component-drawer { display: none; }
 
 /* A workspace page: the components drawer beside the dock. */
