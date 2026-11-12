@@ -54,6 +54,13 @@ test('a document without tags or a main workspace still opens, and leaves Main a
   expect((await a.call(P.screens)).value.map((s: any) => [s.id, s.layout])).toEqual([['/workspace', { root: 9 }]])
 })
 
+test("Main's system stays the host, whatever the document says", async () => {
+  const a = setup()
+  expect(await applyApp({ ...empty, workspaces: [{ id: '/workspace', title: 'Main', system: 'ghost', layout: { root: 4 } }] }, 'replace', a.deps)).toEqual([])
+  expect((await a.call(P.screens)).value.map((s: any) => [s.id, s.system, s.layout])).toEqual([['/workspace', 'host', { root: 4 }]])
+  expect((await a.call(P.systems)).value.map((s: any) => s.id)).not.toContain('ghost')
+})
+
 test('checkApp refuses 21 tags on one ref', () => {
   const tags = (n: number) => ({ ...empty, tags: { 'instance:host/r1': Array.from({ length: n }, (_, i) => `t${i}`) } })
   expect(typeof checkApp(tags(20))).toBe('object')

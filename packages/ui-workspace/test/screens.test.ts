@@ -1,9 +1,10 @@
 // The Application's screens, kept in this browser in the saved-workspaces format from before the Application held them.
 import { expect, test } from 'bun:test'
-import { ApplicationOps as P } from '@pritzlaff/nano-app'
+import { ApplicationOps as P, applyApp } from '@pritzlaff/nano-app'
 import { persistScreens } from '../src/lib/screens.ts'
 import { KEY } from '../src/lib/saved-workspaces.ts'
-import { appHost, tick } from './fixtures/app-host'
+import { known } from '../src/app/known'
+import { appHost, memoryStores, tick } from './fixtures/app-host'
 
 const memory = () => { const m = new Map<string, string>(); return Object.assign(m, { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, v) } }) as unknown as Storage & Map<string, string> }
 const layout = (instance: string) => ({ root: { type: 'stack', content: [{ type: 'component', id: 'p1', componentState: { widget: 'w', name: instance } }] } })
@@ -46,9 +47,36 @@ test('the main workspace is a screen but never in the saved list', async () => {
   await h.call('application', P.setScreen, { id: '/workspace', title: 'Main', system: 'host', layout: layout('other') })
   await tick()
   expect(JSON.parse(s.getItem(KEY)!).map((w: { path: string }) => w.path)).toEqual(['/b', '/a'])
-  expect(JSON.parse(s.getItem('k')!)).toEqual(layout('ex-log'))   // its dock writes its own key
+  expect(JSON.parse(s.getItem('k')!)).toEqual(layout('other'))   // under its dock's own key, read when the dock mounts
   expect(s.has('k.saved./workspace')).toBe(false)
   stop()
   await h.call('application', P.removeScreen, '/b'); await tick()
   expect(JSON.parse(s.getItem(KEY)!).map((w: { path: string }) => w.path)).toEqual(['/b', '/a'])   // stopped: no more writes
+})
+
+test('a change is in storage as soon as the call returns, before any dock mounts', async () => {
+  const h = appHost(), s = seeded()
+  await persistScreens(h.host, s, '/workspace', 'k')
+  await h.call('application', P.setScreen, { id: '/c', title: 'C', icon: 'flag', system: 'host', layout: layout('m1') })
+  expect(JSON.parse(s.getItem('k.saved./c')!)).toEqual(layout('m1'))
+  expect(JSON.parse(s.getItem(KEY)!).map((w: { path: string }) => w.path)).toEqual(['/b', '/a', '/c'])
+})
+
+test("a document's main-workspace layout reaches the main dock's key", async () => {
+  const h = appHost(), s = seeded()
+  await persistScreens(h.host, s, '/workspace', 'k')
+  const deps = { host: h.host, stores: memoryStores().stores, catalog: h.catalog, known, importPackage: async () => ({}) }
+  expect(await applyApp({ nano: 1, title: 'Doc', imports: [], systems: [], workspaces: [{ id: '/workspace', title: 'Main', system: 'host', layout: layout('doc') }] }, 'replace', deps)).toEqual([])
+  await tick()
+  expect(JSON.parse(s.getItem('k')!)).toEqual(layout('doc'))
+  expect(JSON.parse(s.getItem(KEY)!)).toEqual([])
+})
+
+test('a stored workspace with a blank title still loads, titled by its path', async () => {
+  const h = appHost(), s = seeded()
+  s.setItem(KEY, JSON.stringify([{ path: '/b', title: '  ', icon: 'box', system: 'host' }, { path: '/a', title: 'A', icon: 'star', system: 'lab' }]))
+  await persistScreens(h.host, s, '/workspace', 'k')
+  expect((await h.call('application', P.screens)).value.map((x: { id: string; title: string }) => [x.id, x.title])).toEqual([['/workspace', 'Main'], ['/b', '/b'], ['/a', 'A']])
+  await h.call('application', P.moveScreen, { id: '/a', by: -1 })
+  expect(JSON.parse(s.getItem(KEY)!).map((w: { path: string }) => w.path)).toEqual(['/a', '/b'])   // not dropped on the next write
 })

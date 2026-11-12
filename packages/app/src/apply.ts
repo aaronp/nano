@@ -148,13 +148,15 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
   for (const w of app.workspaces) {
     if (w.id === MAIN && !replace) continue   // Main is always there: Import leaves it as it is
     if (taken.has(w.id)) { notes.push(`workspace ${w.id} already exists, skipped`); continue }
+    // Main's dock always runs on the host, whatever the document says
+    const system = w.id === MAIN ? host.registry.id : w.system
     // a screen needs its system: one the document doesn't define is made empty (as a page start-up would)
-    if (!existing.has(w.system)) {
-      const r = await call('application', P.createSystem, w.system)
-      if ('error' in r) { fail(`workspace ${w.id}: system ${w.system}`, r); continue }
-      existing.add(w.system)
+    if (!existing.has(system)) {
+      const r = await call('application', P.createSystem, system)
+      if ('error' in r) { fail(`workspace ${w.id}: system ${system}`, r); continue }
+      existing.add(system)
     }
-    const r = await call('application', P.setScreen, { id: w.id, title: w.title, icon: w.icon && deps.known.icon(w.icon) ? w.icon : 'folder', system: w.system, layout: w.layout ?? null })
+    const r = await call('application', P.setScreen, { id: w.id, title: w.title, icon: w.icon && deps.known.icon(w.icon) ? w.icon : 'folder', system, layout: w.layout ?? null })
     if ('error' in r) fail(`workspace ${w.id}`, r); else taken.add(w.id)
   }
 

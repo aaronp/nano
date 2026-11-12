@@ -1,6 +1,6 @@
 /** The Application's screens, kept in this browser in the format saved workspaces have always had: the saved list under
  * KEY (never the main workspace), each saved one's dock layout under `<main dock's storage-key>.saved.<path>`. The main
- * workspace's layout stays under its dock's own storage-key: read here at start, written only by that dock. */
+ * workspace's layout stays under its dock's own storage-key: read here at start, written by that dock and here when Main's screen changes. */
 import { Ops, type Runtime } from '@pritzlaff/nano-core'
 import { ApplicationOps as P, type Screen } from '@pritzlaff/nano-app'
 import { KEY, savedWorkspaces, type SavedWorkspace } from './saved-workspaces.ts'
@@ -51,18 +51,22 @@ export async function persistScreens(app: Pick<Runtime, 'call' | 'listen'>, stor
   for (const system of new Set(saved.map(w => w.system ?? 'host'))) if (!have.has(system)) await call(app, P.createSystem, system)
   const load = async (s: Screen) => { const e = await setScreen(app, s); if (e) console.warn(`screen ${s.id} not loaded: ${e}`) }
   await load({ id: mainPath, title: 'Main', system: 'host', layout: parse(storage.getItem(mainKey)) })
-  for (const w of saved) await load({ id: w.path, title: w.title, ...(w.icon && { icon: w.icon }), system: w.system ?? 'host', layout: parse(storage.getItem(layoutKey(mainKey, w.path))) })
+  // a blank title (an older apply could write one) would be refused, and the screen dropped on the next write: its path stands in
+  for (const w of saved) await load({ id: w.path, title: (typeof w.title === 'string' && w.title.trim()) || w.path, ...(w.icon && { icon: w.icon }), system: w.system ?? 'host', layout: parse(storage.getItem(layoutKey(mainKey, w.path))) })
 
-  const write = async (ref: string | undefined) => {
-    const all = (await screensOf(app)).filter(s => s.id !== mainPath)
+  // the list comes with the Application's `screens` publish, just before `changed`: written at once, so keys are there before docks mount
+  let all = await screensOf(app)
+  const write = (ref: string | undefined) => {
     try {
-      storage.setItem(KEY, JSON.stringify(all.map(s => ({ path: s.id, title: s.title, icon: s.icon, system: s.system }))))
-      // only the screen that changed has a new layout; a screen without one leaves its key alone
-      for (const s of all) if (ref === `screen:${s.id}` && s.layout !== null && s.layout !== undefined) storage.setItem(layoutKey(mainKey, s.id), JSON.stringify(s.layout))
+      storage.setItem(KEY, JSON.stringify(all.filter(s => s.id !== mainPath).map(s => ({ path: s.id, title: s.title, icon: s.icon, system: s.system }))))
+      // only the screen that changed has a new layout; a screen without one leaves its key alone. Main's is its dock's own key.
+      for (const s of all) if (ref === `screen:${s.id}` && s.layout !== null && s.layout !== undefined) storage.setItem(s.id === mainPath ? mainKey : layoutKey(mainKey, s.id), JSON.stringify(s.layout))
     } catch (e) { console.error('screens could not be saved:', e) }
   }
   return app.listen(t => {
+    if (t.kind !== 'publish' || t.from.instance !== 'application') return
+    if (t.op === Ops.key(P.screens)) all = t.data as Screen[]
     const d = t.data as { what?: string; ref?: string } | null
-    if (t.kind === 'publish' && t.from.instance === 'application' && t.op === Ops.key(P.changed) && d?.what === 'screens') void write(d.ref)
+    if (t.op === Ops.key(P.changed) && d?.what === 'screens') write(d.ref)
   })
 }
