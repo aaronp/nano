@@ -36,6 +36,20 @@
         "@happy-dom/global-registrator": "^21.0.4",
       },
     },
+    "packages/circuit": {
+      "name": "@composable/circuit",
+      "version": "0.1.0",
+      "dependencies": {
+        "@pritzlaff/nano-app": "workspace:*",
+        "@pritzlaff/nano-core": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+      "devDependencies": {
+        "@composable/bundle": "workspace:*",
+        "@happy-dom/global-registrator": "^21.0.4",
+      },
+    },
     "packages/core": {
       "name": "@pritzlaff/nano-core",
       "version": "0.3.0",
@@ -148,6 +162,8 @@
   },
   "packages": {
     "@composable/bundle": ["@composable/bundle@workspace:packages/bundle"],
+
+    "@composable/circuit": ["@composable/circuit@workspace:packages/circuit"],
 
     "@composable/editor": ["@composable/editor@workspace:packages/editor"],
 

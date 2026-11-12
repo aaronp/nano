@@ -1,0 +1,17 @@
+{
+  "name": "@composable/circuit", "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "The workspace's circuit view: every page of the app as a layer of wired boards.",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@pritzlaff/nano-app": "workspace:*",
+    "@pritzlaff/nano-core": "workspace:*",
+    "lit": "^3.0.0",
+    "typebox": "^1.4.0"
+  },
+  "devDependencies": {
+    "@composable/bundle": "workspace:*",
+    "@happy-dom/global-registrator": "^21.0.4"
+  }
+}
