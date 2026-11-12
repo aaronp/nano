@@ -1,9 +1,9 @@
+import { snapshotApp } from '@pritzlaff/nano-app'
 // Start-up and autosave of the working copy over the real stores and one storage: boot, change, "reload", boot again.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
 import { PlatformOps as P } from '@composable/platform'
-import { snapshotApp } from '../src/app/snapshot'
 import { realStores } from '../src/app/stores'
 import { appStore, editableTitle, titleStore } from '../src/app/store'
 import { autosave, rebase, restoreApp } from '../src/app/boot'
@@ -41,7 +41,7 @@ test('with a working copy holding a user instance, start-up recreates it (a relo
 
   const two = await boot(storage)   // the reload
   expect(two.r).toMatchObject({ restored: true, notes: [] })
-  const app = await snapshotApp({ host: two.host, stores: two.stores })
+  const app = await snapshotApp(two.host, two.stores)
   expect(app.systems.find(s => s.id === 'lab')!.instances.map(i => i.id).sort()).toEqual(['l1', 'r1'])
   two.auto.stop()
 }, 10_000)

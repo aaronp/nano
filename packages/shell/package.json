@@ -5,6 +5,7 @@
   "description": "Host-page pieces any host can reuse: the profile menu.",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
+    "@pritzlaff/nano-app": "workspace:*",
     "@pritzlaff/nano-core": "workspace:*",
     "@pritzlaff/nano-elements": "workspace:*",
     "@pritzlaff/nano-runes": "workspace:*",

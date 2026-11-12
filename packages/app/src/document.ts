@@ -1,7 +1,6 @@
 // The nano.json document: a whole app (title, theme, profile, imports, systems, workspaces) as data any host can read and write.
 import { Type, type Static } from 'typebox'
 import { Value } from 'typebox/value'
-import { safeAvatar, safeHref } from './profile'
 
 // ids are free text from the platform: non-empty, no '/', whitespace or control characters
 const ID = '^[^/\\s\\x00-\\x1f\\x7f]+$', KIND = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$', PATH = '^/[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*$'
@@ -9,6 +8,15 @@ const s = (max: number, description: string, extra: object = {}) => Type.String(
 const list = <T extends import('typebox').TSchema>(t: T, maxItems: number, description: string) => Type.Array(t, { maxItems, description })
 
 export const MAX_BYTES = 1_000_000, MAX_DEPTH = 32
+
+/** The main workspace's route: a screen, first. */
+export const MAIN = '/workspace'
+
+/** The avatar URL if it is an http(s) or data:image/ one, else undefined: anything else (javascript:) never reaches `src`. */
+export const safeAvatar = (url?: string): string | undefined => (url && /^(https?:\/\/|data:image\/)/i.test(url) ? url : undefined)
+
+/** Whether a link target is safe to follow: #…, /…, http(s): or mailto: (anything else, javascript: above all, is not). */
+export const safeHref = (href: string) => /^(#|\/|https?:|mailto:)/i.test(href.trim())
 
 export const NanoAppSchema = Type.Object({
   nano: Type.Literal(1, { description: 'The document version' }),
@@ -36,11 +44,15 @@ export const NanoAppSchema = Type.Object({
     id: s(120, 'The workspace path', { pattern: PATH }), title: s(120, 'The workspace title'), system: s(64, 'Its system', { pattern: ID }),
     icon: Type.Optional(s(64, 'Its icon')), layout: Type.Unknown({ description: "The dock's saved layout JSON" }),
   }), 50, 'Workspaces, in nav order'),
+  tags: Type.Optional(Type.Record(s(300, 'A ref: system:<id>, instance:<system>/<id> or screen:<path>'), list(s(64, 'A tag', { minLength: 1 }), 20, 'Its tags'), { maxProperties: 500, description: 'Tags by ref' })),
 }, { description: 'A nano.json document, version 1' })
 export type NanoApp = Static<typeof NanoAppSchema>
 
 /** Ids the host owns: never written, skipped on load. */
 export const RESERVED = (id: string): boolean => id === 'application' || id === 'app' || id === 'alerts' || id.startsWith('ws-controls-') || id === 'registry' || id === 'profile' || id.startsWith('ex-')
+
+/** Listeners whose ops create and wire things, or drive the host's UI: a document never wires into them. */
+export const HOST_DRIVEN = (id: string): boolean => id === 'application' || id === 'alerts' || id === 'registry' || id === 'app' || id.startsWith('ws-controls-')
 
 const depth = (v: unknown, n = 0): number => {
   if (n > MAX_DEPTH || !v || typeof v !== 'object') return n
@@ -67,6 +79,10 @@ export function checkApp(x: unknown): NanoApp | string {
     if (av !== undefined && !safeAvatar(av)) return 'profile avatar must be an http(s): or data:image/ URL'
     for (const sys of a.systems) for (const i of sys.instances) if (depth(i.config) > MAX_DEPTH) return `config of ${i.id} nests deeper than ${MAX_DEPTH}`
     for (const w of a.workspaces) if (depth(w.layout) > MAX_DEPTH) return `layout of ${w.id} nests deeper than ${MAX_DEPTH}`
+    for (const [r, ts] of Object.entries(a.tags ?? {})) {
+      if (r.length > 300) return `a tag ref is longer than 300 characters`
+      if (ts.some(t => t !== t.trim() || !t)) return `tags of ${r} must be trimmed and not empty`
+    }
     const out: NanoApp = {
       nano: 1, title: a.title,
       ...(a.theme && { theme: pick(a.theme, ['id', 'mode']) }),
@@ -78,6 +94,7 @@ export function checkApp(x: unknown): NanoApp | string {
         subscriptions: sys.subscriptions.map(u => ({ source: u.source, op: u.op, listener: u.listener, target: u.target })),
       })),
       workspaces: a.workspaces.map(w => ({ ...pick(w, ['id', 'title', 'system', 'icon']), layout: w.layout })),
+      ...(a.tags && { tags: Object.fromEntries(Object.entries(a.tags).map(([r, ts]) => [r, [...ts]])) }),
     }
     return out
   } catch (e) { return `could not be read: ${e instanceof Error ? e.message : 'unknown error'}` }
@@ -85,4 +102,4 @@ export function checkApp(x: unknown): NanoApp | string {
 
 const sorted = (v: unknown): unknown => Array.isArray(v) ? v.map(sorted) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, sorted((v as Record<string, unknown>)[k])])) : v
 /** The document as JSON with keys sorted, so equal documents give equal strings. */
-export const canonicalApp = (a: NanoApp): string => JSON.stringify(sorted(a))
+export const canonicalApp = (a: NanoApp): string => JSON.stringify(sorted(a.tags ? { ...a, tags: Object.fromEntries(Object.entries(a.tags).map(([r, ts]) => [r, [...ts].sort()])) } : a))

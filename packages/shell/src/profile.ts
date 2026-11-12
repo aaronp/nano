@@ -1,6 +1,7 @@
 // A Profile: who the user is and the menu entries under their avatar. The host fills both; the element shows them.
 import { Type } from 'typebox'
 import { component, state } from '@pritzlaff/nano-runes'
+import { safeAvatar, safeHref } from '@pritzlaff/nano-app'
 
 export type User = { name: string; avatar?: string }
 export type Entry = { label: string; href: string }
@@ -9,11 +10,7 @@ export type Entry = { label: string; href: string }
 export const initials = (name: string): string =>
   name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => [...w][0]!.toUpperCase()).join('') || '?'
 
-/** The avatar URL if it is an http(s) or data:image/ one, else undefined: anything else (javascript:) never reaches `src`. */
-export const safeAvatar = (url?: string): string | undefined => (url && /^(https?:\/\/|data:image\/)/i.test(url) ? url : undefined)
-
-/** Whether a link target is safe to follow: #…, /…, http(s): or mailto: (anything else, javascript: above all, is not). */
-export const safeHref = (href: string) => /^(#|\/|https?:|mailto:)/i.test(href.trim())
+export { safeAvatar, safeHref }
 
 const User_ = Type.Object({
   name: Type.String({ maxLength: 80, description: 'The name shown (and whose initials stand in for a missing avatar)', examples: ['Ada Lovelace'] }),

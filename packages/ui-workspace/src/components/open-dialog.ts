@@ -4,7 +4,7 @@
  * untrusted: it is read up to 1 MB and checked; a problem is shown here and the dialog stays. Resolves with the
  * document (and the saved app's name, if one was picked), or null.
  */
-import { MAX_BYTES, checkApp, type NanoApp } from '@composable/shell';
+import { MAX_BYTES, checkApp, type NanoApp } from '@pritzlaff/nano-app';
 import { fetchApp, parseApp, type Opened } from '../app/file.ts';
 import { ask, esc } from './name-dialog.ts';
 

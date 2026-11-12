@@ -8,7 +8,7 @@ import { AppGateway, catalog as shell, Profile } from '@composable/shell'
 import { platform } from '@composable/platform'
 import { deploy, type AppCatalog, type Mode } from '../../src/sandbox/deploy'
 import { placementsOf } from '../../src/lib/dock-layout'
-import type { Stores } from '../../src/app/snapshot'
+import { HOST_ENTRIES, type Stores } from '../../src/app/stores'
 
 export const tick = (ms = 0) => new Promise(r => setTimeout(r, ms))
 
@@ -34,6 +34,7 @@ export function memoryStores(init: Partial<{ title: string; theme: { theme: stri
     imports: { list: () => st.imports, set: xs => { st.imports = xs } },
     theme: { get: () => st.theme, set: c => { st.theme = c } },
     title: { get: () => st.title, set: t => { st.title = t } },
+    hostEntries: HOST_ENTRIES,
   }
   return { st, stores }
 }

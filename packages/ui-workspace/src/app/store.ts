@@ -1,6 +1,6 @@
 // The app kept in this browser: the working copy (`nano.working`), named saved apps (`nano.apps`), the current name
 // (`nano.app`) and the title (`nano.title`). A storage error (quota) is returned as a sentence and changes nothing.
-import { canonicalApp, checkApp, type NanoApp } from '@composable/shell'
+import { canonicalApp, checkApp, type NanoApp } from '@pritzlaff/nano-app'
 
 type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 export const WORKING = 'nano.working', APPS = 'nano.apps', CURRENT = 'nano.app', TITLE = 'nano.title'

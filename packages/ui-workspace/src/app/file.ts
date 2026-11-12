@@ -1,8 +1,7 @@
 // What the File menu's commands do, over injected deps (boot-file.ts passes the page's real ones, tests pass fakes).
 // Open and New replace the app by writing the working copy and reloading (imports can't be unloaded); Import
 // merges into the running app. A document is untrusted data: it is checked, its imports and code are confirmed.
-import { checkApp, MAX_BYTES, RESERVED, type NanoApp } from '@composable/shell'
-import { codeTarget } from './apply.ts'
+import { checkApp, codeTarget, MAX_BYTES, RESERVED, type NanoApp } from '@pritzlaff/nano-app'
 import type { AppCatalog } from '../sandbox/deploy.ts'
 import type { SavedWorkspace } from '../lib/saved-workspaces.ts'
 import type { appStore } from './store.ts'

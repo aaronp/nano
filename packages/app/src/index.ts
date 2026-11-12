@@ -1,3 +1,6 @@
 export * from './refs'
 export * from './catalog'
 export * from './application'
+export * from './document'
+export * from './snapshot'
+export * from './apply'

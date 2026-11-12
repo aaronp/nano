@@ -1,10 +1,9 @@
 // Start-up and autosave of the working copy, over injected deps (boot-app.ts passes the page's real ones).
 import { Ops, type Runtime, type Trace } from '@pritzlaff/nano-core'
-import { PlatformOps as P, runtimeOf } from '@composable/platform'
-import { checkApp, RESERVED, type NanoApp } from '@composable/shell'
+import { ApplicationOps as P, runtimeOf, applyApp, snapshotApp, value, checkApp, RESERVED, type ApplyDeps, type NanoApp } from '@pritzlaff/nano-app'
+import { known } from './known.ts'
 import type { AppCatalog } from '../sandbox/deploy.ts'
-import { applyApp, type ApplyDeps } from './apply.ts'
-import { snapshotApp, value, type Stores } from './snapshot.ts'
+import type { Stores } from './stores.ts'
 import type { appStore } from './store.ts'
 
 export type Deps = { host: Runtime; stores: Stores; app: ReturnType<typeof appStore>; catalog: AppCatalog; importPackage: ApplyDeps['importPackage']; waits?: ApplyDeps['waits'] }
@@ -43,7 +42,7 @@ export async function restoreApp({ host, stores, app, catalog, importPackage, wa
   const before = (() => { try { return stores.imports.list() } catch { return [] } })()
   try {
     stores.imports.set([])
-    notes = await applyApp(w, 'replace', { host, stores, catalog, consentCode: () => true, waits,
+    notes = await applyApp(w, 'replace', { host, stores, catalog, known, consentCode: () => true, waits,
       importPackage: async (url, trust) => { const r = await importPackage(url, trust); if (r.error) failed.push({ url, error: r.error }); return r } })
     const kept = stores.imports.list()
     stores.imports.set(w.imports.map(i => kept.find(k => k.url === i.url) ?? before.find(b => b.url === i.url) ?? { url: i.url, name: i.url, version: '', trust: i.trust }))
@@ -95,7 +94,7 @@ export function autosave({ host, stores, app, doc, delay = 500, initial = true, 
     busy = true
     try {
       await watch()
-      last = await snapshotApp({ host, stores })
+      last = await snapshotApp(host, stores)
       if (stopped) return   // Open/New wrote the next working copy: a snapshot of the old app must not land over it
       const e = app.setWorking(last); if (e) onError?.(e); else onWrite?.()
     } catch { /* the next change tries again */ } finally { busy = false; if (again) { again = false; schedule() } }

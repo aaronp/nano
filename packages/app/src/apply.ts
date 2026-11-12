@@ -3,16 +3,15 @@
 // (the application's screens). 'replace' is for a freshly started host (Open reloads first): it replaces the stores
 // and the screens but Main. 'merge' (Import) adds only what is new and leaves title, theme and profile alone. Both skip what clashes, with a note; nothing throws.
 import { Ops, type Runtime } from '@pritzlaff/nano-core'
-import { PlatformOps as P, runtimeOf, type Screen } from '@composable/platform'
-import { Profile, RESERVED, type NanoApp } from '@composable/shell'
-import { isThemeId } from '../lib/themes.ts'
-import { ICONS } from '../lib/saved-workspaces.ts'
-import type { AppCatalog } from '../sandbox/deploy.ts'
-import { HOST_DRIVEN, HOST_ENTRIES, MAIN, value, type Stores } from './snapshot.ts'
+import { ApplicationOps as P, runtimeOf, type Screen } from './application'
+import type { AppCatalog } from './catalog'
+import { HOST_DRIVEN, MAIN, RESERVED, type NanoApp } from './document'
+import { parseRef } from './refs'
+import { PROFILE, value, type HostStores } from './snapshot'
 
 export interface ApplyDeps {
   host: Runtime
-  stores: Stores
+  stores: HostStores
   /** Loads a package; a name and version, when known, are kept with the import. */
   importPackage(url: string, trust: 'trusted' | 'sandboxed'): Promise<{ error?: string; name?: string; version?: string }>
   /** The host's catalog, for which kinds take code (read at call time: imports add to it). */
@@ -21,6 +20,8 @@ export interface ApplyDeps {
   consentCode?(system: string, instance: string): boolean
   /** Longest waits in ms for one configure and one import (a sandbox frame may never answer). */
   waits?: { configure?: number; import?: number }
+  /** Whether the host knows a theme id / an icon name; without them any is accepted (an unknown icon becomes 'folder'). */
+  known?: { theme?(id: string): boolean; icon?(name: string): boolean }
 }
 
 const within = <T>(p: Promise<T>, ms: number, what: string): Promise<T> => {
@@ -43,9 +44,10 @@ export async function applyApp(app: NanoApp, how: 'replace' | 'merge', deps: App
 
 async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, notes: string[]): Promise<void> {
   const { host, stores } = deps, from = { registry: host.registry.id, instance: 'app' }
-  const call = async (target: string, op: { ns: string; name: string }, arg: unknown) => {
-    try { return await host.call(from, target, Ops.key(op), arg) } catch (e) { return { error: msg(e) } }
+  const callKey = async (target: string, key: string, arg: unknown) => {
+    try { return await host.call(from, target, key, arg) } catch (e) { return { error: msg(e) } }
   }
+  const call = (target: string, op: { ns: string; name: string }, arg: unknown) => callKey(target, Ops.key(op), arg)
   const attempt = (what: string, f: () => void) => { try { f() } catch (e) { notes.push(`${what}: ${msg(e)}`) } }
   const consent = (system: string, instance: string) => { try { return !!deps.consentCode?.(system, instance) } catch { return false } }
   const fail = (what: string, r: { error: string }) => notes.push(`${what}: ${r.error}`)
@@ -54,12 +56,12 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
   if (replace) {
     attempt('title', () => stores.title.set(app.title))
     if (app.theme) {
-      if (isThemeId(app.theme.id)) { const t = app.theme; attempt('theme', () => stores.theme.set({ theme: t.id as never, mode: t.mode ?? stores.theme.get().mode })) }
+      if (deps.known?.theme?.(app.theme.id) ?? true) { const t = app.theme; attempt('theme', () => stores.theme.set({ theme: t.id, mode: t.mode ?? stores.theme.get().mode })) }
       else notes.push(`unknown theme ${app.theme.id}: kept the host's`)
     }
     if (app.profile) {
-      const u = await call('profile', Profile.ops.setUser, app.profile.user); if ('error' in u) fail('profile', u)
-      else { const e = await call('profile', Profile.ops.setEntries, [...app.profile.entries, ...HOST_ENTRIES.filter(h => !app.profile!.entries.some(e => e.href === h.href))]); if ('error' in e) fail('profile entries', e) }
+      const u = await callKey('profile', PROFILE.setUser, app.profile.user); if ('error' in u) fail('profile', u)
+      else { const e = await callKey('profile', PROFILE.setEntries, [...app.profile.entries, ...(stores.hostEntries ?? []).filter(h => !app.profile!.entries.some(e => e.href === h.href))]); if ('error' in e) fail('profile entries', e) }
     }
   }
 
@@ -139,12 +141,12 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
     }
   }
 
-  // workspaces are the application's screens (Main is the host's own): 'replace' takes out the others first
+  // workspaces are the application's screens: 'replace' takes out the others first (Main stays, its layout is replaced below)
   const screens = ((await value(host, from, 'application', Ops.key(P.screens))) ?? []) as Screen[]
   if (replace) for (const s of screens) if (s.id !== MAIN) { const r = await call('application', P.removeScreen, s.id); if ('error' in r) fail(`workspace ${s.id}`, r) }
   const taken = new Set(replace ? [] : screens.map(s => s.id))
   for (const w of app.workspaces) {
-    if (w.id === MAIN) { notes.push(`workspace ${w.id} is the host's own, skipped`); continue }
+    if (w.id === MAIN && !replace) continue   // Main is always there: Import leaves it as it is
     if (taken.has(w.id)) { notes.push(`workspace ${w.id} already exists, skipped`); continue }
     // a screen needs its system: one the document doesn't define is made empty (as a page start-up would)
     if (!existing.has(w.system)) {
@@ -152,7 +154,13 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
       if ('error' in r) { fail(`workspace ${w.id}: system ${w.system}`, r); continue }
       existing.add(w.system)
     }
-    const r = await call('application', P.setScreen, { id: w.id, title: w.title, icon: w.icon && Object.hasOwn(ICONS, w.icon) ? w.icon : 'folder', system: w.system, layout: w.layout ?? null })
+    const r = await call('application', P.setScreen, { id: w.id, title: w.title, icon: w.icon && (deps.known?.icon?.(w.icon) ?? true) ? w.icon : 'folder', system: w.system, layout: w.layout ?? null })
     if ('error' in r) fail(`workspace ${w.id}`, r); else taken.add(w.id)
+  }
+
+  // tags last: what they name now exists. A malformed or missing ref is a note.
+  for (const [r, ts] of Object.entries(app.tags ?? {})) {
+    if (!parseRef(r)) { notes.push(`tags of ${JSON.stringify(r)}: not a ref, dropped`); continue }
+    for (const tag of ts) { const t = await call('application', P.tag, { ref: r, tag }); if ('error' in t) { fail(`tags of ${r}`, t); break } }
   }
 }

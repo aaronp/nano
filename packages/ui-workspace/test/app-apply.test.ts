@@ -1,10 +1,10 @@
+import { snapshotApp, applyApp } from '@pritzlaff/nano-app'
 import { expect, test } from 'bun:test'
 import { Components, Ops } from '@pritzlaff/nano-core'
 import { Log, Range, Map as MapC } from '@composable/bundle'
 import { PlatformOps as P, runtimeOf } from '@composable/platform'
 import type { NanoApp } from '@composable/shell'
-import { applyApp } from '../src/app/apply'
-import { snapshotApp } from '../src/app/snapshot'
+import { known } from '../src/app/known'
 import { appHost, memoryStores, Profile, tick } from './fixtures/app-host'
 
 const doc: NanoApp = {
@@ -26,7 +26,7 @@ const fresh = async (init = {}) => {
   const h = appHost(), s = memoryStores(init)
   await h.call('application', P.createComponent, { kind: 'profile', name: 'profile', system: 'host' })
   const imported: string[] = []
-  const deps = { host: h.host, stores: s.stores, catalog: h.catalog, consentCode: () => true, importPackage: async (url: string) => { imported.push(url); return {} } }
+  const deps = { host: h.host, stores: s.stores, catalog: h.catalog, consentCode: () => true, known, importPackage: async (url: string) => { imported.push(url); return {} } }
   return { ...h, ...s, imported, deps }
 }
 
@@ -35,12 +35,12 @@ test('apply(replace) of a snapshot onto a fresh host reproduces it', async () =>
   expect(await applyApp(doc, 'replace', a.deps)).toEqual([])
   await tick()
   expect(a.imported).toEqual(['https://x.test/m.json'])
-  const first = await snapshotApp({ host: a.host, stores: a.stores })
+  const first = await snapshotApp(a.host, a.stores)
   expect(first).toEqual(doc)
   const b = await fresh()
   expect(await applyApp(first, 'replace', b.deps)).toEqual([])
   await tick()
-  expect(await snapshotApp({ host: b.host, stores: b.stores })).toEqual(first)
+  expect(await snapshotApp(b.host, b.stores)).toEqual(first)
   expect(b.st.title).toBe('Doc')
 }, 10_000)
 
@@ -58,7 +58,7 @@ test('apply(merge) adds only new ids and returns clash notes; leaves title/theme
   const notes = await applyApp(doc, 'merge', a.deps)
   expect(notes.some(n => n.includes('lab/r1') && n.includes('already exists'))).toBe(true)
   expect(notes.some(n => n.includes('workspace /lab already exists'))).toBe(true)
-  const app = await snapshotApp({ host: a.host, stores: a.stores })
+  const app = await snapshotApp(a.host, a.stores)
   expect(app.title).toBe('Mine'); expect(app.theme).toEqual({ id: 'enterprise', mode: 'light' }); expect(app.profile?.user.name).toBe('Me')
   expect(app.systems[0]!.instances.map(i => i.id).sort()).toEqual(['b1', 'm1', 'r1'])
   expect(app.systems[0]!.instances.find(i => i.id === 'r1')!.config).toMatchObject({ max: 100 })   // the existing r1 is untouched
@@ -157,11 +157,11 @@ test('a "*" source subscription round-trips', async () => {
   const a = await fresh()
   await applyApp(sys([{ id: 'l1', kind: 'log' }]), 'replace', a.deps)
   a.host.registry.subscribe({ source: '*', op: Ops.key(Range.ops.value), listener: 'l1', target: 'composable.bundle/log/info' })
-  const snap = await snapshotApp({ host: a.host, stores: a.stores })
+  const snap = await snapshotApp(a.host, a.stores)
   expect(snap.systems[0]!.subscriptions).toHaveLength(1)
   const b = await fresh()
   expect(await applyApp(snap, 'replace', b.deps)).toEqual([])
-  expect(await snapshotApp({ host: b.host, stores: b.stores })).toEqual(snap)
+  expect(await snapshotApp(b.host, b.stores)).toEqual(snap)
 })
 
 test('applyApp always resolves: a throwing consent, throwing stores and a throwing host become notes', async () => {
@@ -186,10 +186,10 @@ test('the saved workspaces order round-trips through snapshot and apply', async 
   expect(await paths(a)).toEqual(['/workspace', '/c', '/a', '/b'])
   expect(runtimeOf(a.host.registry, 'elsewhere')).toBeDefined()   // a screen's system the document doesn't define is made
   await a.call('application', P.moveScreen, { id: '/c', by: 1 })
-  expect((await snapshotApp({ host: a.host, stores: a.stores })).workspaces.map(w => w.id)).toEqual(['/a', '/c', '/b'])
+  expect((await snapshotApp(a.host, a.stores)).workspaces.map(w => w.id)).toEqual(['/workspace', '/a', '/c', '/b'])
   const b = await fresh()
-  await applyApp(await snapshotApp({ host: a.host, stores: a.stores }), 'replace', b.deps)
-  expect(await paths(b)).toEqual(['/a', '/c', '/b'])
+  await applyApp(await snapshotApp(a.host, a.stores), 'replace', b.deps)
+  expect(await paths(b)).toEqual(['/workspace', '/a', '/c', '/b'])
 }, 10_000)
 
 test("the platform and a built-in's code op are never wired, even with consent; a built-in's other ops are", async () => {
@@ -239,7 +239,7 @@ test('a throwing "*"-source subscribe is that step\'s note', async () => {
 })
 
 test('a restored profile keeps the host\'s own menu links after its own (an older working copy cannot hide Settings)', async () => {
-  const { HOST_ENTRIES } = await import('../src/app/snapshot.ts')
+  const { HOST_ENTRIES } = await import('../src/app/stores.ts')
   const a = await fresh()
   await applyApp(doc, 'replace', a.deps)
   const entries = (await a.call('profile', Profile.ops.entries)).value as { href: string }[]

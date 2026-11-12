@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { canonicalApp, checkApp, RESERVED, type NanoApp } from '../src'
+import { canonicalApp, checkApp, RESERVED, type NanoApp } from '../src/document'
 
 const full = (): NanoApp => ({
   nano: 1, title: 'Demo', theme: { id: 'ocean', mode: 'dark' },
@@ -71,4 +71,9 @@ test('deep config, long label and too many entries are refused', () => {
 
 test('a very wide config does not throw', () => {
   expect(typeof bad(a => { a.systems[0].instances[0].config = Array(300_000).fill(1) })).toBe('object')
+})
+
+test('canonicalApp sorts tags, keys and values', () => {
+  const a = { ...full(), tags: { 'screen:/b': ['y', 'x'], 'screen:/a': ['z'] } }, b = { ...full(), tags: { 'screen:/a': ['z'], 'screen:/b': ['x', 'y'] } }
+  expect(canonicalApp(a)).toBe(canonicalApp(b))
 })

@@ -20,7 +20,7 @@ import { defineElements as defineEditor } from '@composable/editor/elements'
 import { defineWires } from '@composable/wires'
 import { defineSandboxed, provideDeploy } from './sandbox/sandboxed-el.ts'
 import { deploy, deployIn, type AppCatalog, type Mode } from './sandbox/deploy.ts'
-import { HOST_ENTRIES } from './app/snapshot.ts'
+import { HOST_ENTRIES } from './app/stores.ts'
 import { placementsOf } from './lib/dock-layout.ts'
 
 /** Every kind of component this host offers: its packages' catalogs, merged. Add a package, add its catalog. */

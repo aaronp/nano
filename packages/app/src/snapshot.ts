@@ -1,25 +1,25 @@
-// The live app as a nano.json document (see apply.ts for the reverse). Reads the platform's systems, the instances'
-// labels and `config`s, its screens, and the host's stores; writes nothing.
+// The live app as a nano.json document (see apply.ts for the reverse). Reads the Application's systems, the instances'
+// labels and `config`s, its screens and tags, and the host's stores; writes nothing. Pure: it talks to the host through a runtime.
 import { Ops, type Runtime } from '@pritzlaff/nano-core'
-import { PlatformOps as P, runtimeOf, type Screen } from '@composable/platform'
-import { Profile, RESERVED, type NanoApp } from '@composable/shell'
-import type { ThemeChoice } from '../lib/theme-state.ts'
-import type { ImportRecord } from '../lib/imports.ts'
-import { MAIN } from '../lib/screens.ts'
+import { ApplicationOps as P, runtimeOf, type Screen } from './application'
+import { HOST_DRIVEN, RESERVED, type NanoApp } from './document'
 
-/** The profile menu's links to the host's own pages: always in the menu after a document's own entries, never written to one. */
-/** Listeners whose ops create and wire things, or drive the host's UI: a document never wires into them. */
-export const HOST_DRIVEN = (id: string): boolean => id === 'application' || id === 'alerts' || id === 'registry' || id === 'app' || id.startsWith('ws-controls-')
-export const HOST_ENTRIES = [{ label: 'Components', href: '#/components' }, { label: 'Settings', href: '#/settings' }, { label: 'Systems', href: '#/systems' }, { label: 'Themes', href: '#/themes' }]
+/** The runtime the Application lives in: a handle to call it through. */
+export type AppHandle = Runtime
+
+type Entry = { label: string; href: string }
+// the host's profile component (nano.shell/profile): its ops by key, as nano-app cannot import it
+export const PROFILE = { user: 'nano.shell/profile/user', entries: 'nano.shell/profile/entries', setUser: 'nano.shell/profile/setUser', setEntries: 'nano.shell/profile/setEntries' }
 
 /** The host's stores, as far as a document needs them; tests pass fakes. `set` replaces the whole list. */
-export interface Stores {
-  imports: { list(): ImportRecord[]; set(xs: ImportRecord[]): void }
-  theme: { get(): ThemeChoice; set(c: ThemeChoice): void }
+export interface HostStores {
+  imports: { list(): { url: string; name: string; version: string; trust?: 'trusted' | 'sandboxed' }[]; set(xs: { url: string; name: string; version: string; trust?: 'trusted' | 'sandboxed' }[]): void }
+  theme: { get(): { theme: string; mode: 'system' | 'light' | 'dark' }; set(c: { theme: string; mode: 'system' | 'light' | 'dark' }): void }
   title: { get(): string; set(t: string): void }
+  /** Profile menu links to the host's own pages: always in the menu after a document's own entries, never written to one. */
+  hostEntries?: readonly Entry[]
 }
 
-export { MAIN }
 const me = (host: Runtime) => ({ registry: host.registry.id, instance: 'app' })
 const CONFIG_WAIT = 2000   // a hung sandbox frame must not hang a snapshot
 
@@ -35,7 +35,7 @@ const list = (s: string | undefined): string[] | undefined => {
   try { const v = s === undefined ? undefined : JSON.parse(s); return Array.isArray(v) && v.every(x => typeof x === 'string') ? v : undefined } catch { return undefined }
 }
 
-export async function snapshotApp({ host, stores }: { host: Runtime; stores: Stores }): Promise<NanoApp> {
+export async function snapshotApp(host: AppHandle, stores: HostStores): Promise<NanoApp> {
   const from = me(host)
   const kinds = ((await value(host, from, 'application', Ops.key(P.kinds))) ?? []) as { kind: string; component: string }[]
   const kindOf = new Map<string, string>()
@@ -67,16 +67,19 @@ export async function snapshotApp({ host, stores }: { host: Runtime; stores: Sto
     systems.push({ id: snap.id, instances, subscriptions })
   }
 
-  // the screens but Main (the host's own)
   const screens = ((await value(host, from, 'application', Ops.key(P.screens))) ?? []) as Screen[]
-  const workspaces = screens.filter(s => s.id !== MAIN).map(s => ({ id: s.id, title: s.title, system: s.system, icon: s.icon, layout: s.layout ?? null }))
-  const user = await value(host, from, 'profile', Ops.key(Profile.ops.user)) as { name: string; avatar?: string } | undefined
-  const entries = await value(host, from, 'profile', Ops.key(Profile.ops.entries)) as { label: string; href: string }[] | undefined
-  const t = stores.theme.get()
+  const workspaces = screens.map(s => ({ id: s.id, title: s.title, system: s.system, ...(s.icon && { icon: s.icon }), layout: s.layout ?? null }))
+  // tags, for what the document keeps: not an instance it leaves out
+  const allTags = ((await value(host, from, 'application', Ops.key(P.allTags))) ?? {}) as Record<string, string[]>
+  const keptRefs = new Set([...systems.flatMap(sy => sy.instances.map(i => `instance:${sy.id}/${i.id}`)), ...workspaces.map(w => `screen:${w.id}`), ...snaps.map(sn => `system:${sn.id}`)])
+  const tags = Object.fromEntries(Object.entries(allTags).filter(([r, ts]) => keptRefs.has(r) && ts.length))
+  const user = await value(host, from, 'profile', PROFILE.user) as { name: string; avatar?: string } | undefined
+  const entries = await value(host, from, 'profile', PROFILE.entries) as { label: string; href: string }[] | undefined
+  const t = stores.theme.get(), hostEntries = stores.hostEntries ?? []
   return {
     nano: 1, title: stores.title.get(), theme: { id: t.theme, mode: t.mode },
-    ...(user && entries && { profile: { user: { name: user.name, ...(user.avatar !== undefined && { avatar: user.avatar }) }, entries: entries.filter(e => !HOST_ENTRIES.some(h => h.href === e.href)).map(e => ({ label: e.label, href: e.href })) } }),
+    ...(user && entries && { profile: { user: { name: user.name, ...(user.avatar !== undefined && { avatar: user.avatar }) }, entries: entries.filter(e => !hostEntries.some(h => h.href === e.href)).map(e => ({ label: e.label, href: e.href })) } }),
     imports: stores.imports.list().map(r => ({ url: r.url, trust: r.trust ?? 'trusted' })),
-    systems, workspaces,
+    systems, workspaces, ...(Object.keys(tags).length && { tags }),
   }
 }
