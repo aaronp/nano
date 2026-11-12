@@ -1,19 +1,19 @@
 import { expect, test } from 'bun:test'
 import { Components, Ops, Registries, Runtimes, type Op, type Snapshot } from '@pritzlaff/nano-core'
 import { catalog, Log, Range } from '@composable/bundle'
-import type { Catalog } from '@pritzlaff/nano-elements'
-import { platform, PlatformOps as P, runtimeOf } from '../src'
+import type { AppCatalog } from '../src/catalog'
+import { application, ApplicationOps as P, runtimeOf } from '../src/application'
 
 const tick = () => new Promise(r => setTimeout(r, 0))
 const setup = () => {
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('platform', Components.instantiate(platform(host, catalog)))
-  const call = (op: Op, arg: unknown = null) => host.call({ registry: 'host', instance: 'test' }, 'platform', Ops.key(op), arg) as Promise<any>
+  host.registry.add('application', Components.instantiate(application(host, catalog)))
+  const call = (op: Op, arg: unknown = null) => host.call({ registry: 'host', instance: 'test' }, 'application', Ops.key(op), arg) as Promise<any>
   const events: unknown[] = []
   const spy = Components.create({ ns: 't', name: 'spy' }, () => events)
   spy.action(Ops.sink('t', 'take', P.stateChanged.output!), (e, x) => { e.push(x) })
   host.registry.add('spy', Components.instantiate(spy))
-  host.registry.subscribe({ source: 'platform', op: Ops.key(P.stateChanged), listener: 'spy', target: 't/take' })
+  host.registry.subscribe({ source: 'application', op: Ops.key(P.stateChanged), listener: 'spy', target: 't/take' })
   return { host, call, events }
 }
 const ids = (s: Snapshot) => s.instances.map(i => i.id).filter(i => i !== 'registry')
@@ -39,7 +39,7 @@ test('add-to-system puts the same instance in both systems', async () => {
   expect(ids(systems[1]!)).toEqual(['r'])
   await call(P.removeFromSystem, { instance: 'r', system: 'host' })
   expect(ids((await call(P.systems)).value[0])).not.toContain('r')
-  expect('error' in await call(P.removeFromSystem, { instance: 'platform', system: 'host' })).toBe(true)
+  expect('error' in await call(P.removeFromSystem, { instance: 'application', system: 'host' })).toBe(true)
 })
 
 test('connect wires fitting actions in one system, and refuses the rest', async () => {
@@ -63,7 +63,7 @@ test('state-changed fires for every system; select publishes the selection', asy
   await call(P.createSystem, 'lab')
   await call(P.createComponent, { kind: 'log', name: 'l', system: 'lab' }); await tick()
   expect(events.some((e: any) => e.system === 'lab' && e.delta.type === 'instance-added')).toBe(true)
-  const sel = { system: 'host', instance: 'platform', op: Ops.key(P.select) }
+  const sel = { system: 'host', instance: 'application', op: Ops.key(P.select) }
   await call(P.select, sel)
   expect((await call(P.selected)).value).toEqual(sel)
 })
@@ -74,7 +74,7 @@ test('a burst of changes publishes the systems once', async () => {
   const counter = Components.create({ ns: 't', name: 'count' }, () => seen)
   counter.action(Ops.sink('t', 'see', P.systems.output!), (s, x) => { s.push(x) })
   host.registry.add('counter', Components.instantiate(counter))
-  host.registry.subscribe({ source: 'platform', op: Ops.key(P.systems), listener: 'counter', target: 't/see' })
+  host.registry.subscribe({ source: 'application', op: Ops.key(P.systems), listener: 'counter', target: 't/see' })
   await tick(); seen.length = 0
   host.registry.add('a', Components.instantiate(Log))   // three deltas in a row, as attaching an element makes:
   host.registry.subscribe({ source: 'a', op: 'x', listener: 'a', target: 'y' })
@@ -92,7 +92,7 @@ test('removing a component from a system removes its connections both ways', asy
   expect(host.registry.snapshot().subscriptions.filter(s => s.source === 'r')).toEqual([])
 })
 
-test('runtimeOf finds a system\'s runtime through the platform', async () => {
+test('runtimeOf finds a system\'s runtime through the application', async () => {
   const { host, call } = setup()
   await call(P.createSystem, 'lab')
   expect(runtimeOf(host.registry, 'lab')!.registry.id).toBe('lab')
@@ -100,12 +100,12 @@ test('runtimeOf finds a system\'s runtime through the platform', async () => {
   expect(runtimeOf(host.registry, 'nope')).toBeUndefined()
 })
 
-test('components the platform creates or adds are owned by the platform', async () => {
+test('components the application creates or adds are owned by the application', async () => {
   const { host, call } = setup()
   await call(P.createSystem, 'lab')
   await call(P.createComponent, { kind: 'range', name: 'r', system: 'host' })
   await call(P.addToSystem, { instance: 'r', from: 'host', to: 'lab' })
-  const owner = { kind: 'platform', name: 'platform' }
+  const owner = { kind: 'platform', name: 'application' }
   expect(host.registry.snapshot().instances.find(i => i.id === 'r')!.owner).toEqual(owner)
   expect(runtimeOf(host.registry, 'lab')!.registry.snapshot().instances.find(i => i.id === 'r')!.owner).toEqual(owner)
 })
@@ -121,25 +121,25 @@ test('kinds lists each catalog kind with its component id, title and tag', async
 })
 
 test('after catalog-changed, a kind added to the catalog object is published in kinds', async () => {
-  const host = Runtimes.create(Registries.create('host')), mine: Catalog = { ...catalog }
-  host.registry.add('platform', Components.instantiate(platform(host, mine)))
+  const host = Runtimes.create(Registries.create('host')), mine: AppCatalog = { ...catalog }
+  host.registry.add('application', Components.instantiate(application(host, mine)))
   const heard: any[][] = []
   const spy = Components.create({ ns: 't', name: 'spy' }, () => heard)
   spy.action(Ops.sink('t', 'take', P.kinds.output!), (h, x) => { h.push(x as any[]) })
   host.registry.add('spy', Components.instantiate(spy))
-  host.registry.subscribe({ source: 'platform', op: Ops.key(P.kinds), listener: 'spy', target: 't/take' })
+  host.registry.subscribe({ source: 'application', op: Ops.key(P.kinds), listener: 'spy', target: 't/take' })
   mine.extra = { component: Components.create({ ns: 't', name: 'extra' }, () => ({})), title: 'Extra' }
-  await host.call({ registry: 'host', instance: 'test' }, 'platform', Ops.key(P.catalogChanged), null); await tick()
+  await host.call({ registry: 'host', instance: 'test' }, 'application', Ops.key(P.catalogChanged), null); await tick()
   expect(heard.at(-1)!.find(k => k.kind === 'extra')).toEqual({ kind: 'extra', component: 't/extra', title: 'Extra' })
 })
 
 test('createComponent with a mode goes through deploy; without deploy, unchanged', async () => {
   const seen: unknown[][] = []
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('platform', Components.instantiate(platform(host, catalog, {
+  host.registry.add('application', Components.instantiate(application(host, catalog, {
     deploy: (rt, id, kind, mode, owner, outward) => { seen.push([rt.registry.id, id, kind, mode, owner.kind, outward]); return { value: undefined } },
   })))
-  const call = (op: Op, arg: unknown) => host.call({ registry: 'host', instance: 't' }, 'platform', Ops.key(op), arg) as Promise<any>
+  const call = (op: Op, arg: unknown) => host.call({ registry: 'host', instance: 't' }, 'application', Ops.key(op), arg) as Promise<any>
   await call(P.createComponent, { kind: 'range', name: 'r', system: 'host', mode: 'sandbox', allow: ['a/*'], deny: ['b/*'] })
   await call(P.createComponent, { kind: 'range', name: 'q', system: 'host' })
   expect(seen).toEqual([['host', 'r', 'range', 'sandbox', 'platform', { allow: ['a/*'], deny: ['b/*'] }], ['host', 'q', 'range', undefined, 'platform', undefined]])
@@ -151,8 +151,8 @@ test('createComponent with a mode goes through deploy; without deploy, unchanged
 
 test('kinds carry modes', async () => {
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('platform', Components.instantiate(platform(host, { range: { ...catalog.range!, modes: ['host', 'sandbox'] }, log: catalog.log! })))
-  const kinds = (await host.call({ registry: 'host', instance: 't' }, 'platform', Ops.key(P.kinds), null) as any).value
+  host.registry.add('application', Components.instantiate(application(host, { range: { ...catalog.range!, modes: ['host', 'sandbox'] }, log: catalog.log! })))
+  const kinds = (await host.call({ registry: 'host', instance: 't' }, 'application', Ops.key(P.kinds), null) as any).value
   expect(kinds.find((k: any) => k.kind === 'range').modes).toEqual(['host', 'sandbox'])
   expect(kinds.find((k: any) => k.kind === 'log').modes).toBeUndefined()
 })
@@ -160,10 +160,10 @@ test('kinds carry modes', async () => {
 test('createComponent without a mode uses the kind\'s first allowed mode', async () => {
   const seen: unknown[] = []
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('platform', Components.instantiate(platform(host, { range: { ...catalog.range!, modes: ['isolated-sandbox', 'host'] }, log: catalog.log! }, {
+  host.registry.add('application', Components.instantiate(application(host, { range: { ...catalog.range!, modes: ['isolated-sandbox', 'host'] }, log: catalog.log! }, {
     deploy: (_rt, id, _k, mode) => { seen.push([id, mode]); return { value: undefined } },
   })))
-  const call = (arg: unknown) => host.call({ registry: 'host', instance: 't' }, 'platform', Ops.key(P.createComponent), arg)
+  const call = (arg: unknown) => host.call({ registry: 'host', instance: 't' }, 'application', Ops.key(P.createComponent), arg)
   await call({ kind: 'range', name: 'a', system: 'host' }); await call({ kind: 'range', name: 'b', system: 'host', mode: 'host' }); await call({ kind: 'log', name: 'c', system: 'host' })
   expect(seen).toEqual([['a', 'isolated-sandbox'], ['b', 'host'], ['c', undefined]])
 })
@@ -177,11 +177,11 @@ test('add-to-system carries the instance\'s labels', async () => {
   expect(runtimeOf(host.registry, 'lab')!.registry.labels('r')).toEqual({ 'nano/deploy': 'sandbox', 'nano/guarded': 'true' })
 })
 
-const withGateway = (o: Parameters<typeof platform>[2] = {}) => {
+const withGateway = (o: Parameters<typeof application>[2] = {}) => {
   const host = Runtimes.create(Registries.create('host'))
   host.registry.add('app', Components.instantiate(Components.create({ ns: 't', name: 'app' }, () => ({}))))
-  host.registry.add('platform', Components.instantiate(platform(host, catalog, o)))
-  const call = (op: Op, arg: unknown = null) => host.call({ registry: 'host', instance: 'test' }, 'platform', Ops.key(op), arg) as Promise<any>
+  host.registry.add('application', Components.instantiate(application(host, catalog, o)))
+  const call = (op: Op, arg: unknown = null) => host.call({ registry: 'host', instance: 'test' }, 'application', Ops.key(op), arg) as Promise<any>
   return { host, call }
 }
 
@@ -206,4 +206,11 @@ test('a locked instance cannot be removed', async () => {
 test('a gateway missing from the host is skipped, not an error', async () => {
   const { call } = withGateway({ gateways: ['nope'] })
   expect('error' in await call(P.createSystem, 'lab')).toBe(false)
+})
+
+test('the application is registered as application, with no platform alias', () => {
+  const { host } = setup()
+  expect(host.registry.get('platform')).toBeUndefined()
+  expect(host.registry.get('application')).toBeDefined()
+  for (const op of Object.values(P)) expect(Ops.key(op).startsWith('nano.app/application/')).toBe(true)
 })

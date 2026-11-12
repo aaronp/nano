@@ -79,7 +79,7 @@ export class Wires extends LitElement {
 
   constructor() {
     super()
-    this.catalog = {}; this.platform = 'platform'; this.system = ''; this.flipped = false
+    this.catalog = {}; this.platform = 'application'; this.system = ''; this.flipped = false
     this.addEventListener('dock:connections', () => { if (this.flipped) this.close(); else this.flipped = true })
   }
   connectedCallback() { super.connectedCallback(); loadFonts(this.ownerDocument); if (this.hasUpdated) this.#attach() }

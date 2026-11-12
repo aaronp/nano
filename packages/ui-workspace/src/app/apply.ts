@@ -77,18 +77,18 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
   }
   attempt('imports', () => stores.imports.set(imports))
 
-  const kinds = ((await value(host, from, 'platform', Ops.key(P.kinds))) ?? []) as { kind: string; component: string; modes?: string[] }[]
+  const kinds = ((await value(host, from, 'application', Ops.key(P.kinds))) ?? []) as { kind: string; component: string; modes?: string[] }[]
   const kindBy = new Map(kinds.map(k => [k.kind, k]))
   const codeOps = (kind: string | undefined) => (kind !== undefined && Object.hasOwn(deps.catalog, kind) ? deps.catalog[kind]!.code : undefined)
   const kindOfComponent = new Map(kinds.map(k => [k.component, k.kind]))
   // the systems there are, fetched once and kept current
-  const existing = new Set((((await value(host, from, 'platform', Ops.key(P.systems))) ?? []) as { id: string }[]).map(s => s.id))
+  const existing = new Set((((await value(host, from, 'application', Ops.key(P.systems))) ?? []) as { id: string }[]).map(s => s.id))
 
   const configuring: Promise<void>[] = []   // started together: a frame that never answers costs one wait, not one each
   const ok = new Set<string>()   // systems that exist
   for (const sys of app.systems) {
     if (!existing.has(sys.id)) {
-      const r = await call('platform', P.createSystem, sys.id)
+      const r = await call('application', P.createSystem, sys.id)
       if ('error' in r) { fail(`system ${sys.id}`, r); continue }
       existing.add(sys.id)
     }
@@ -105,7 +105,7 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
       if (mode && k.modes && !k.modes.includes(mode) && k.modes.includes('isolated-sandbox')) {
         notes.push(`${what}: ${i.kind} is sandboxed, deployed isolated-sandbox instead of ${mode}`); mode = 'isolated-sandbox'
       }
-      const made = await call('platform', P.createComponent, { kind: i.kind, name: i.id, system: sys.id, ...(mode && { mode }), ...(i.allow && { allow: i.allow }), ...(i.deny && { deny: i.deny }) })
+      const made = await call('application', P.createComponent, { kind: i.kind, name: i.id, system: sys.id, ...(mode && { mode }), ...(i.allow && { allow: i.allow }), ...(i.deny && { deny: i.deny }) })
       if ('error' in made) { fail(what, made); continue }
       if (i.config === undefined) continue
       if (codeOps(i.kind) && !consent(sys.id, i.id)) { notes.push(`${what}: its ${i.kind} code was not applied (not agreed to)`); continue }
@@ -133,7 +133,7 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
       if (rt.registry.snapshot().subscriptions.some(x => x.source === s.source && x.op === s.op && x.listener === s.listener && x.target === s.target)) { notes.push(`${what}: already wired, skipped`); continue }
       // the platform's connect needs a named source; a '*' one goes straight to the registry
       try {
-        const r = s.source === '*' ? rt.registry.subscribe(s) : await call('platform', P.connect, { system: sys.id, ...s })
+        const r = s.source === '*' ? rt.registry.subscribe(s) : await call('application', P.connect, { system: sys.id, ...s })
         if ('error' in r) fail(what, r)
       } catch (e) { notes.push(`${what}: ${msg(e)}`) }
     }

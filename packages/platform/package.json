@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@pritzlaff/nano-core": "workspace:*",
+    "@pritzlaff/nano-app": "workspace:*",
     "@pritzlaff/nano-elements": "workspace:*",
     "lit": "^3.0.0",
     "typebox": "^1.4.0"

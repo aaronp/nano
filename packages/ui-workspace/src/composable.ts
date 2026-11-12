@@ -29,7 +29,7 @@ export const catalog: AppCatalog = Object.fromEntries(Object.entries({ ...bundle
 export const host = Runtimes.create(Registries.create('host'))
 provide(document, host.registry)
 host.registry.add('app', Components.instantiate(AppGateway), { kind: 'app', name: 'ui-workspace' })   // focus and the app bar: in every system (a gateway), never written
-host.registry.add('platform', Components.instantiate(platform(host, catalog, {
+host.registry.add('application', Components.instantiate(platform(host, catalog, {
   gateways: ['app'], locked: id => id.startsWith('ws-controls-'),
   deploy: (system, id, kind, mode, owner, outward) => deploy(system, id, kind, (mode ?? 'host') as Mode, { catalog, owner, ...(outward && { outward }) }),
 })), { kind: 'app', name: 'ui-workspace' })
@@ -38,7 +38,7 @@ provideDeploy(document, (registry, id, kind, mode, owner) =>
   deployIn(host, catalog, registry, id, kind, mode as Mode, owner))
 
 const ask = async (op: Op, arg: unknown) => {
-  const r = await host.call({ registry: 'host', instance: 'workspace' }, 'platform', Ops.key(op), arg)
+  const r = await host.call({ registry: 'host', instance: 'workspace' }, 'application', Ops.key(op), arg)
   if ('error' in r) console.error('composable:', r.error)
 }
 for (const [kind, name] of [['range', 'ex-range'], ['debounce', 'ex-debounce'], ['log', 'ex-log'], ['input', 'ex-input'], ['map', 'ex-map']])

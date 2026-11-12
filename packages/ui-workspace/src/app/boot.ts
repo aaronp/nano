@@ -86,7 +86,7 @@ export function autosave({ host, stores, app, doc, delay = 500, initial = true, 
     else if (t.kind === 'call' && !RESERVED(t.target) && SETTING.test(t.op) && 'value' in t.result) schedule()
   }
   async function watch() {
-    const snaps = ((await value(host, { registry: host.registry.id, instance: 'app' }, 'platform', Ops.key(P.systems))) ?? []) as { id: string }[]
+    const snaps = ((await value(host, { registry: host.registry.id, instance: 'app' }, 'application', Ops.key(P.systems))) ?? []) as { id: string }[]
     for (const s of snaps) { const rt = s.id === host.registry.id ? host : runtimeOf(host.registry, s.id); if (rt && !seen.has(rt)) { seen.add(rt); offs.add(rt.listen(onTrace)) } }
   }
   async function run() {

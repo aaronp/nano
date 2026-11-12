@@ -10,8 +10,8 @@ type El = HTMLElement & { updateComplete: Promise<boolean> }
 
 const mount = async () => {
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('platform', Components.instantiate(platform(host, catalog)))
-  const call = (op: any, arg: unknown = null) => host.call({ registry: 'host', instance: 't' }, 'platform', Ops.key(op), arg) as Promise<any>
+  host.registry.add('application', Components.instantiate(platform(host, catalog)))
+  const call = (op: any, arg: unknown = null) => host.call({ registry: 'host', instance: 't' }, 'application', Ops.key(op), arg) as Promise<any>
   await call(P.createComponent, { kind: 'range', name: 'r', system: 'host' })
   await call(P.createComponent, { kind: 'log', name: 'l', system: 'host' })
   await call(P.createSystem, 'lab')
@@ -174,7 +174,7 @@ test('an instance owned by a view is hidden whatever its id; one named ~view but
 test('the Add form offers only the kind\'s modes and selector fields, and sends them', async () => {
   const host = Runtimes.create(Registries.create('host'))
   const sent: unknown[] = []
-  host.registry.add('platform', Components.instantiate(platform(host, { range: { ...catalog.range!, modes: ['isolated-sandbox'] }, log: { ...catalog.log!, modes: ['host', 'sandbox'] }, input: catalog.input! }, {
+  host.registry.add('application', Components.instantiate(platform(host, { range: { ...catalog.range!, modes: ['isolated-sandbox'] }, log: { ...catalog.log!, modes: ['host', 'sandbox'] }, input: catalog.input! }, {
     deploy: (_rt, id, kind, mode, _o, outward) => { sent.push({ id, kind, mode, outward }); return { value: undefined } },
   })))
   provide(document, host.registry)
@@ -193,9 +193,9 @@ test('the Add form offers only the kind\'s modes and selector fields, and sends 
   expect($('input[name="allow"]')).toBeNull()   // host by default: no selectors
   await pick('range')
   expect([...$('select[name="mode"]')!.querySelectorAll('option')].map(o => o.textContent)).toEqual(['isolated-sandbox'])
-  await type('input[name="name"]', 'r1'); await type('input[name="allow"]', 'host/log/*, host/x/y'); await type('input[name="deny"]', 'host/platform/*')
+  await type('input[name="name"]', 'r1'); await type('input[name="allow"]', 'host/log/*, host/x/y'); await type('input[name="deny"]', 'host/application/*')
   ;[...el.shadowRoot!.querySelectorAll('button')].find(b => b.textContent!.trim() === 'Create')!.click(); await settle()
-  expect(sent).toEqual([{ id: 'r1', kind: 'range', mode: 'isolated-sandbox', outward: { allow: ['host/log/*', 'host/x/y'], deny: ['host/platform/*'] } }])
+  expect(sent).toEqual([{ id: 'r1', kind: 'range', mode: 'isolated-sandbox', outward: { allow: ['host/log/*', 'host/x/y'], deny: ['host/application/*'] } }])
 })
 
 test('tree rows carry data-deploy; the toggle marks exactly the non-host entries, and is off by default', async () => {

@@ -53,7 +53,7 @@ test('on the workspace page the app bar shows its controls', async () => {
 })
 
 test('a saved workspace page shows its own dock\'s controls', async () => {
-  await host.call(me, 'platform', Ops.key(P.createSystem), 'lab')
+  await host.call(me, 'application', Ops.key(P.createSystem), 'lab')
   mountWorkspace(document, { path: '/lab', title: 'Lab', icon: 'box', system: 'lab' })
   await go('#/lab')
   expect(await until(() => shown().join() === controls('ws-lab'))).toBe(true)

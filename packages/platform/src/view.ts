@@ -26,7 +26,7 @@ const membership = (systems: Snapshot[]) => {
   return where
 }
 
-/** The platform's view. Uses the provided registry and the instance `platform` unless told otherwise. */
+/** The platform's view. Uses the provided registry and the instance `application` unless told otherwise. */
 export class PlatformEl extends ModelElement {
   static styles = [base, css`.filter { flex: 1; min-width: 160px } nano-tree { margin-top: 4px }`]   // .desc/.eg sit in the tree's rows: styled there
   static properties = { ...ModelElement.properties, mode: { state: true }, filter: { state: true }, sharedOnly: { state: true }, highlight: { state: true }, form: { state: true }, target: { state: true } }
@@ -39,7 +39,7 @@ export class PlatformEl extends ModelElement {
   #picks = new Map<string, Selection>()   // what each selectable row selects, from the last render
   constructor() { super(); this.mode = 'system'; this.filter = ''; this.sharedOnly = false; this.highlight = false; this.target = {} }
 
-  connectedCallback() { this.registry ??= providedRegistry(this.ownerDocument); this.model ??= 'platform'; super.connectedCallback() }
+  connectedCallback() { this.registry ??= providedRegistry(this.ownerDocument); this.model ??= 'application'; super.connectedCallback() }
 
   // a new selection, from here or elsewhere, opens the tree down to it and brings it into view (focus stays put)
   #shownSel = 'null'

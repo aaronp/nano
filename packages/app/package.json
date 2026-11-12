@@ -9,5 +9,8 @@
     "@pritzlaff/nano-core": "workspace:*",
     "@pritzlaff/nano-runes": "workspace:*",
     "typebox": "^1.4.0"
+  },
+  "devDependencies": {
+    "@composable/bundle": "workspace:*"
   }
 }

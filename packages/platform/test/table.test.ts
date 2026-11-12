@@ -10,8 +10,8 @@ type El = HTMLElement & { updateComplete: Promise<boolean> }
 
 const mount = async () => {
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('platform', Components.instantiate(platform(host, catalog)))
-  const call = (op: any, arg: unknown = null) => host.call({ registry: 'host', instance: 't' }, 'platform', Ops.key(op), arg) as Promise<any>
+  host.registry.add('application', Components.instantiate(platform(host, catalog)))
+  const call = (op: any, arg: unknown = null) => host.call({ registry: 'host', instance: 't' }, 'application', Ops.key(op), arg) as Promise<any>
   await call(P.createComponent, { kind: 'range', name: 'r', system: 'host' })
   await call(P.createComponent, { kind: 'log', name: 'l', system: 'host' })
   await call(P.createSystem, 'lab')
@@ -30,7 +30,7 @@ const mount = async () => {
 
 test('lists every instance, including views, with owners', async () => {
   const { rows } = await mount()
-  expect(rows().find(r => r.system === 'host' && r.instance === 'r')).toEqual({ system: 'host', component: 'range', instance: 'r', name: 'composable.bundle/range', owner: 'platform · platform', description: catalog.range!.component.description!, deploy: 'host' })
+  expect(rows().find(r => r.system === 'host' && r.instance === 'r')).toEqual({ system: 'host', component: 'range', instance: 'r', name: 'composable.bundle/range', owner: 'platform · application', description: catalog.range!.component.description!, deploy: 'host' })
   expect(rows().some(r => r.instance.includes('~view') && r.owner === 'view · c-platform-table')).toBe(true)
   expect(rows().some(r => r.system === '—' && r.component === 'debounce')).toBe(true)
 })

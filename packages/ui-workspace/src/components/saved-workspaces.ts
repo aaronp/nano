@@ -134,7 +134,7 @@ export function bootSavedWorkspaces(doc: Document) {
     if (!(e.target as Element | null)?.closest?.('[data-new-workspace]')) return;
     const host = hostOf(doc);
     if (!host) return;
-    const call = (op: Op, arg: unknown) => host.call({ registry: host.registry.id, instance: 'workspace' }, 'platform', Ops.key(op), arg);
+    const call = (op: Op, arg: unknown) => host.call({ registry: host.registry.id, instance: 'workspace' }, 'application', Ops.key(op), arg);
     const systems = (((await call(P.systems, null)) as { value?: { id: string }[] }).value ?? []).map((s) => s.id);
     for (let error = '', prev: WorkspaceChoice | undefined; ;) {
       const c = await askWorkspace(doc, { heading: 'New workspace', systems, error, prev });

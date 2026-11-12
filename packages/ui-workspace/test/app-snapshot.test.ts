@@ -8,19 +8,19 @@ import { appHost, memoryStores, Profile, tick } from './fixtures/app-host'
 
 async function world() {
   const h = appHost(), { call } = h
-  await call('platform', P.createComponent, { kind: 'profile', name: 'profile', system: 'host' })
+  await call('application', P.createComponent, { kind: 'profile', name: 'profile', system: 'host' })
   await call('profile', Profile.ops.setUser, { name: 'Ada' })
   await call('profile', Profile.ops.setEntries, [{ label: 'Home', href: '#/' }])
-  await call('platform', P.createComponent, { kind: 'log', name: 'ex-log', system: 'host' })   // a built-in: not written
-  await call('platform', P.createSystem, 'lab')
-  await call('platform', P.createComponent, { kind: 'range', name: 'r1', system: 'lab', mode: 'host', allow: ['host/log/*'], deny: ['host/platform/*'] })
+  await call('application', P.createComponent, { kind: 'log', name: 'ex-log', system: 'host' })   // a built-in: not written
+  await call('application', P.createSystem, 'lab')
+  await call('application', P.createComponent, { kind: 'range', name: 'r1', system: 'lab', mode: 'host', allow: ['host/log/*'], deny: ['host/application/*'] })
   const lab = runtimeOf(h.host.registry, 'lab')!
   await lab.call({ registry: 'lab', instance: 'x' }, 'r1', Ops.key(Range.ops.configure), { min: 0, max: 10, step: 0.5, value: 4 })
-  await call('platform', P.createComponent, { kind: 'map', name: 'm1', system: 'lab' })
+  await call('application', P.createComponent, { kind: 'map', name: 'm1', system: 'lab' })
   await lab.call({ registry: 'lab', instance: 'x' }, 'm1', Ops.key(MapC.ops.setCode), 'return x * 2')
-  await call('platform', P.createComponent, { kind: 'log', name: 'l1', system: 'lab' })
-  await call('platform', P.connect, { system: 'lab', source: 'r1', op: Ops.key(Range.ops.value), listener: 'm1', target: Ops.key(MapC.ops.map) })
-  await call('platform', P.createComponent, { kind: 'boxed', name: 'b1', system: 'lab', mode: 'isolated-sandbox' })
+  await call('application', P.createComponent, { kind: 'log', name: 'l1', system: 'lab' })
+  await call('application', P.connect, { system: 'lab', source: 'r1', op: Ops.key(Range.ops.value), listener: 'm1', target: Ops.key(MapC.ops.map) })
+  await call('application', P.createComponent, { kind: 'boxed', name: 'b1', system: 'lab', mode: 'isolated-sandbox' })
   const { stores, st } = memoryStores({ title: 'My app', theme: { theme: 'terminal', mode: 'dark' }, layouts: { '/lab': { root: 1 } } })
   st.imports = [{ url: 'https://x.test/m.json', name: 'p', version: '1', trust: 'sandboxed' }]
   st.workspaces = [{ path: '/lab', title: 'Lab', icon: 'rocket', system: 'lab' }]
@@ -38,7 +38,7 @@ test('snapshot of a host with a user system, a guarded sandboxed instance with c
   expect(app.imports).toEqual([{ url: 'https://x.test/m.json', trust: 'sandboxed' }])
   expect(app.systems.map(s => s.id)).toEqual(['lab'])   // the host's built-ins only: not written
   const [lab] = app.systems
-  expect(lab!.instances.find(i => i.id === 'r1')).toEqual({ id: 'r1', kind: 'range', mode: 'host', allow: ['host/log/*'], deny: ['host/platform/*'], config: { min: 0, max: 10, step: 0.5, value: 4 } })
+  expect(lab!.instances.find(i => i.id === 'r1')).toEqual({ id: 'r1', kind: 'range', mode: 'host', allow: ['host/log/*'], deny: ['host/application/*'], config: { min: 0, max: 10, step: 0.5, value: 4 } })
   expect(lab!.instances.find(i => i.id === 'm1')).toMatchObject({ kind: 'map', config: { code: 'return x * 2' } })
   expect(lab!.instances.find(i => i.id === 'b1')).toMatchObject({ kind: 'boxed', mode: 'isolated-sandbox' })   // its frame never answers: no config
   expect(lab!.subscriptions).toEqual([{ source: 'r1', op: Ops.key(Range.ops.value), listener: 'm1', target: Ops.key(MapC.ops.map) }])
@@ -48,9 +48,9 @@ test('snapshot of a host with a user system, a guarded sandboxed instance with c
 test('reserved ids, view-owned listeners and the Main workspace are never written', async () => {
   const { host, stores, call } = await world()
   host.registry.add('~view-1', (await import('@pritzlaff/nano-core')).Components.instantiate(Log), { kind: 'view', name: 'v' })
-  const lab = (await call('platform', P.systems)).value.find((s: any) => s.id === 'lab')
+  const lab = (await call('application', P.systems)).value.find((s: any) => s.id === 'lab')
   expect(lab).toBeDefined()
-  await call('platform', P.createComponent, { kind: 'log', name: 'ex-mine', system: 'lab' })
+  await call('application', P.createComponent, { kind: 'log', name: 'ex-mine', system: 'lab' })
   ;(stores.workspaces as any).set([{ path: '/workspace', title: 'Main', icon: 'box' }])
   const app = await snapshotApp({ host, stores })
   expect(app.systems.flatMap(s => s.instances).map(i => i.id)).not.toContain('ex-mine')

@@ -18,6 +18,9 @@
         "@pritzlaff/nano-runes": "workspace:*",
         "typebox": "^1.4.0",
       },
+      "devDependencies": {
+        "@composable/bundle": "workspace:*",
+      },
     },
     "packages/bundle": {
       "name": "@composable/bundle",
@@ -71,6 +74,7 @@
       "name": "@composable/platform",
       "version": "0.1.0",
       "dependencies": {
+        "@pritzlaff/nano-app": "workspace:*",
         "@pritzlaff/nano-core": "workspace:*",
         "@pritzlaff/nano-elements": "workspace:*",
         "lit": "^3.0.0",

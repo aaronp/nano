@@ -18,7 +18,7 @@ export function appHost() {
   const deployed: { id: string; mode: string }[] = []
   const open = (() => ({ port: new MessageChannel().port1, ready: new Promise<void>(() => {}), dispose() {} })) as never
   host.registry.add('app', Components.instantiate(AppGateway), { kind: 'app', name: 'test' })
-  host.registry.add('platform', Components.instantiate(platform(host, catalog, {
+  host.registry.add('application', Components.instantiate(platform(host, catalog, {
     gateways: ['app'], locked: id => id.startsWith('ws-controls-'),
     deploy: (system, id, kind, mode, owner, outward) => { deployed.push({ id, mode: mode ?? 'host' }); return deploy(system, id, kind, (mode ?? 'host') as Mode, { catalog, owner, open, ...(outward && { outward }) }) },
   })), { kind: 'app', name: 'test' })

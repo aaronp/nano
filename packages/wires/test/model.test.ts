@@ -8,7 +8,7 @@ import { panels, setup } from './setup'
 
 const k = (instance: string, op: { ns: string; name: string }) => instance + ' ' + Ops.key(op)
 const model = (host: Awaited<ReturnType<typeof setup>>['host']) =>
-  buildModel({ snapshot: host.registry.snapshot(), panels, W: 1200, H: 600, platform: 'platform', kinds: { d: 'debounce', m: 'map' }, titles: { debounce: 'Debounce', map: 'Map' } })
+  buildModel({ snapshot: host.registry.snapshot(), panels, W: 1200, H: 600, platform: 'application', kinds: { d: 'debounce', m: 'map' }, titles: { debounce: 'Debounce', map: 'Map' } })
 
 test('panels become mirrored chassis with jacks: outs along the top, ins along the bottom', async () => {
   const { host } = await setup()

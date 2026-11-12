@@ -9,7 +9,7 @@ import { inventory, matches, sandboxed, UNREGISTERED, type Filters, type Row } f
 const NONE = '—'
 const DEPLOYS = ['host', 'sandbox', 'isolated-sandbox']
 
-/** The platform's inventory. Uses the provided registry and the instance `platform` unless told otherwise. */
+/** The platform's inventory. Uses the provided registry and the instance `application` unless told otherwise. */
 export class PlatformTableEl extends ModelElement {
   static styles = [base, kit, css`
     .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px } .q { flex: 1; min-width: 160px }
@@ -27,7 +27,7 @@ export class PlatformTableEl extends ModelElement {
   declare highlight: boolean   // view state: mark the sandboxed rows
   constructor() { super(); this.q = ''; this.filters = { systems: [], components: [], deploys: [] }; this.open = false; this.highlight = false }
 
-  connectedCallback() { this.registry ??= providedRegistry(this.ownerDocument); this.model ??= 'platform'; super.connectedCallback() }
+  connectedCallback() { this.registry ??= providedRegistry(this.ownerDocument); this.model ??= 'application'; super.connectedCallback() }
 
   #columns: Column[] = [
     { key: 'system', label: 'System', sortable: true },

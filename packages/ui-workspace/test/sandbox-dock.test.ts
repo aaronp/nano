@@ -72,9 +72,9 @@ test('deployIn deploys into the host, into a platform system, and errors for a r
   const { Components, Ops } = await import('@pritzlaff/nano-core')
   const { platform, PlatformOps: P } = await import('@composable/platform')
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('platform', Components.instantiate(platform(host, bundle as never)))
-  await host.call({ registry: 'host', instance: 'workspace' }, 'platform', Ops.key(P.createSystem), 'lab')
-  const lab = (host.registry.get('platform')!.value as { systems: Map<string, { registry: typeof host.registry }> }).systems.get('lab')!
+  host.registry.add('application', Components.instantiate(platform(host, bundle as never)))
+  await host.call({ registry: 'host', instance: 'workspace' }, 'application', Ops.key(P.createSystem), 'lab')
+  const lab = (host.registry.get('application')!.value as { systems: Map<string, { registry: typeof host.registry }> }).systems.get('lab')!
   expect(deployIn(host, cat, host.registry, 'a', 'range', 'host')).toEqual({ value: undefined })
   expect(host.registry.get('a')).toBeDefined()
   expect(deployIn(host, cat, lab.registry, 'b', 'range', 'host')).toEqual({ value: undefined })

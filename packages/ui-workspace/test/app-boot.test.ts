@@ -18,7 +18,7 @@ const memory = () => {
 async function boot(storage: ReturnType<typeof memory>) {
   document.body.innerHTML = '<span slot="title">Nano</span>'
   const h = appHost()
-  await h.call('platform', P.createComponent, { kind: 'profile', name: 'profile', system: 'host' })
+  await h.call('application', P.createComponent, { kind: 'profile', name: 'profile', system: 'host' })
   const title = titleStore(storage, document), app = appStore(storage)
   const stores = realStores(document, storage as never, title)
   title.show()
@@ -32,9 +32,9 @@ test('with a working copy holding a user instance, start-up recreates it (a relo
   const storage = memory()
   const one = await boot(storage)
   expect(one.r.restored).toBe(false)
-  await one.call('platform', P.createSystem, 'lab')
-  await one.call('platform', P.createComponent, { kind: 'range', name: 'r1', system: 'lab' })
-  await one.call('platform', P.createComponent, { kind: 'log', name: 'l1', system: 'lab' })
+  await one.call('application', P.createSystem, 'lab')
+  await one.call('application', P.createComponent, { kind: 'range', name: 'r1', system: 'lab' })
+  await one.call('application', P.createComponent, { kind: 'log', name: 'l1', system: 'lab' })
   await tick(700)   // the debounce
   one.auto.stop()
   expect(one.app.working()!.systems.find(s => s.id === 'lab')!.instances.map(i => i.id).sort()).toEqual(['l1', 'r1'])
@@ -68,14 +68,14 @@ test('a partial restore is not written back: the copy is kept as unrestored, not
   const raw = storage.getItem('nano.working')
   document.body.innerHTML = ''
   const h = appHost(), title = titleStore(storage, document), stores = realStores(document, storage as never, title)
-  await h.call('platform', P.createComponent, { kind: 'profile', name: 'profile', system: 'host' })
+  await h.call('application', P.createComponent, { kind: 'profile', name: 'profile', system: 'host' })
   const r = await restoreApp({ host: h.host, stores, app, catalog: h.catalog, importPackage: async () => ({ error: 'down' }) })
   expect(r.say).toContain('nano.working.unrestored'); expect(storage.getItem('nano.working.unrestored')).toBe(raw)
   const w0 = storage.writes
   const auto = autosave({ host: h.host, stores, app, doc: document, initial: !r.protect })
   await tick(700)
   expect(storage.writes).toBe(w0); expect(storage.getItem('nano.working')).toBe(raw)
-  await h.call('platform', P.createComponent, { kind: 'range', name: 'n1', system: 'host' })
+  await h.call('application', P.createComponent, { kind: 'range', name: 'n1', system: 'host' })
   await tick(700)
   expect(storage.writes).toBe(w0 + 1)
   auto.stop()
@@ -152,7 +152,7 @@ test('a failed write (quota) is reported', async () => {
 test('on pagehide a pending change is written at once, not after the delay', async () => {
   const storage = memory(), b = await boot(storage)
   await tick(700)
-  await b.call('platform', P.createComponent, { kind: 'range', name: 'p1', system: 'host' })
+  await b.call('application', P.createComponent, { kind: 'range', name: 'p1', system: 'host' })
   const w0 = storage.writes
   window.dispatchEvent(new Event('pagehide'))
   await tick(100)   // far under 500 ms
@@ -176,9 +176,9 @@ test('changes autosave after 500 ms, coalesced', async () => {
   const b = await boot(storage)
   await tick(700); const base = storage.writes   // the first snapshot becomes the working copy
   expect(base).toBe(1)
-  await b.call('platform', P.createComponent, { kind: 'range', name: 'a1', system: 'host' })
+  await b.call('application', P.createComponent, { kind: 'range', name: 'a1', system: 'host' })
   await tick(200)
-  await b.call('platform', P.createComponent, { kind: 'range', name: 'a2', system: 'host' })
+  await b.call('application', P.createComponent, { kind: 'range', name: 'a2', system: 'host' })
   await tick(300)
   expect(storage.writes).toBe(base)   // 500 ms after the last change has not come
   await tick(400)

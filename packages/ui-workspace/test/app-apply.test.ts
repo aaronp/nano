@@ -14,7 +14,7 @@ const doc: NanoApp = {
   systems: [{
     id: 'lab',
     instances: [
-      { id: 'r1', kind: 'range', mode: 'host', allow: ['host/log/*'], deny: ['host/platform/*'], config: { min: 0, max: 10, step: 0.5, value: 4 } },
+      { id: 'r1', kind: 'range', mode: 'host', allow: ['host/log/*'], deny: ['host/application/*'], config: { min: 0, max: 10, step: 0.5, value: 4 } },
       { id: 'm1', kind: 'map', mode: 'host', config: { code: 'return x * 2' } },
       { id: 'b1', kind: 'boxed', mode: 'isolated-sandbox' },
     ],
@@ -24,7 +24,7 @@ const doc: NanoApp = {
 }
 const fresh = async (init = {}) => {
   const h = appHost(), s = memoryStores(init)
-  await h.call('platform', P.createComponent, { kind: 'profile', name: 'profile', system: 'host' })
+  await h.call('application', P.createComponent, { kind: 'profile', name: 'profile', system: 'host' })
   const imported: string[] = []
   const deps = { host: h.host, stores: s.stores, catalog: h.catalog, consentCode: () => true, importPackage: async (url: string) => { imported.push(url); return {} } }
   return { ...h, ...s, imported, deps }
@@ -76,7 +76,7 @@ test('unknown kinds and subscriptions with missing ends are skipped with notes',
 
 test('reserved ids are skipped', async () => {
   const a = await fresh()
-  const notes = await applyApp({ ...doc, workspaces: [], systems: [{ id: 'host', instances: [{ id: 'platform', kind: 'log' }, { id: 'ex-new', kind: 'log' }, { id: 'ok', kind: 'log' }], subscriptions: [] }] }, 'replace', a.deps)
+  const notes = await applyApp({ ...doc, workspaces: [], systems: [{ id: 'host', instances: [{ id: 'application', kind: 'log' }, { id: 'ex-new', kind: 'log' }, { id: 'ok', kind: 'log' }], subscriptions: [] }] }, 'replace', a.deps)
   expect(notes.filter(n => n.includes('reserved'))).toHaveLength(2)
   expect(a.host.registry.get('ex-new')).toBeUndefined()
   expect(a.host.registry.get('ok')).toBeDefined()
@@ -193,11 +193,11 @@ test('the saved workspaces order round-trips through snapshot and apply', async 
 
 test("the platform and a built-in's code op are never wired, even with consent; a built-in's other ops are", async () => {
   const a = await fresh()
-  for (const [kind, name] of [['map', 'ex-map'], ['log', 'ex-log']]) await a.call('platform', P.createComponent, { kind, name, system: 'host' })
+  for (const [kind, name] of [['map', 'ex-map'], ['log', 'ex-log']]) await a.call('application', P.createComponent, { kind, name, system: 'host' })
   const notes = await applyApp(sys([{ id: 'm0', kind: 'map' }], [
     { source: 'm0', op: Ops.key(MapC.ops.mapped), listener: 'ex-map', target: Ops.key(MapC.ops.setCode) },
     { source: 'm0', op: Ops.key(MapC.ops.mapped), listener: 'ex-log', target: Ops.key(Log.ops.info) },
-    { source: 'm0', op: Ops.key(MapC.ops.mapped), listener: 'platform', target: Ops.key(P.connect) },
+    { source: 'm0', op: Ops.key(MapC.ops.mapped), listener: 'application', target: Ops.key(P.connect) },
   ]), 'replace', a.deps)
   expect(notes).toHaveLength(2)
   expect(notes.every(n => n.includes('reserved'))).toBe(true)

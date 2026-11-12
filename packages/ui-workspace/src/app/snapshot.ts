@@ -9,7 +9,7 @@ import type { SavedWorkspace } from '../lib/saved-workspaces.ts'
 
 /** The profile menu's links to the host's own pages: always in the menu after a document's own entries, never written to one. */
 /** Listeners whose ops create and wire things, or drive the host's UI: a document never wires into them. */
-export const HOST_DRIVEN = (id: string): boolean => id === 'platform' || id === 'registry' || id === 'app' || id.startsWith('ws-controls-')
+export const HOST_DRIVEN = (id: string): boolean => id === 'application' || id === 'alerts' || id === 'registry' || id === 'app' || id.startsWith('ws-controls-')
 export const HOST_ENTRIES = [{ label: 'Components', href: '#/components' }, { label: 'Settings', href: '#/settings' }, { label: 'Systems', href: '#/systems' }, { label: 'Themes', href: '#/themes' }]
 
 /** The host's stores, as far as a document needs them; tests pass fakes. `set` replaces the whole list. */
@@ -40,10 +40,10 @@ const list = (s: string | undefined): string[] | undefined => {
 
 export async function snapshotApp({ host, stores }: { host: Runtime; stores: Stores }): Promise<NanoApp> {
   const from = me(host)
-  const kinds = ((await value(host, from, 'platform', Ops.key(P.kinds))) ?? []) as { kind: string; component: string }[]
+  const kinds = ((await value(host, from, 'application', Ops.key(P.kinds))) ?? []) as { kind: string; component: string }[]
   const kindOf = new Map<string, string>()
   for (const k of kinds) if (!kindOf.has(k.component)) kindOf.set(k.component, k.kind)
-  const snaps = ((await value(host, from, 'platform', Ops.key(P.systems))) ?? []) as ReturnType<Runtime['registry']['snapshot']>[]
+  const snaps = ((await value(host, from, 'application', Ops.key(P.systems))) ?? []) as ReturnType<Runtime['registry']['snapshot']>[]
 
   const systems: NanoApp['systems'] = []
   for (const snap of snaps) {

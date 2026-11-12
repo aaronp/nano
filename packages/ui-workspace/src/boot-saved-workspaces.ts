@@ -13,7 +13,7 @@ import { bootImports } from './imports.ts'
 import { restored, startAutosave } from './boot-app.ts'
 
 for (const system of new Set(savedWorkspaces(localStorage).list().map(ws => ws.system ?? 'host')))
-  if (!runtimeOf(host.registry, system)) await host.call({ registry: 'host', instance: 'workspace' }, 'platform', Ops.key(P.createSystem), system)
+  if (!runtimeOf(host.registry, system)) await host.call({ registry: 'host', instance: 'workspace' }, 'application', Ops.key(P.createSystem), system)
 // remembered imports first: their kinds are in Main's palette before saved docks copy it (a restored working copy already imported its own)
 if (!restored) await bootImports()
 bootSavedWorkspaces(document)

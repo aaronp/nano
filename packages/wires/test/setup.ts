@@ -7,8 +7,8 @@ export const tick = () => new Promise(r => setTimeout(r, 0))
 
 export async function setup() {
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('platform', Components.instantiate(platform(host, catalog)))
-  const call = (op: Op, arg: unknown) => host.call({ registry: 'host', instance: 'test' }, 'platform', Ops.key(op), arg) as Promise<any>
+  host.registry.add('application', Components.instantiate(platform(host, catalog)))
+  const call = (op: Op, arg: unknown) => host.call({ registry: 'host', instance: 'test' }, 'application', Ops.key(op), arg) as Promise<any>
   for (const [kind, name] of [['range', 'r'], ['debounce', 'd'], ['log', 'l'], ['map', 'm']]) await call(P.createComponent, { kind, name, system: 'host' })
   const s1 = (await call(P.connect, { system: 'host', source: 'r', op: Ops.key(Range.ops.value), listener: 'd', target: Ops.key(Debounce.ops.enqueue) })).value
   const s2 = (await call(P.connect, { system: 'host', source: 'd', op: Ops.key(Debounce.ops.flushed), listener: 'l', target: Ops.key(Log.ops.info) })).value

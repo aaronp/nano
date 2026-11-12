@@ -18,16 +18,16 @@ const call = (id: string, op: any, arg: unknown = null) => host.call(me, id, Ops
 
 test('the platform lists the host system with the worked example, wired', async () => {
   await tick()
-  const [hostSystem] = (await call('platform', P.systems)).value
+  const [hostSystem] = (await call('application', P.systems)).value
   expect(hostSystem.id).toBe('host')
   const ids = hostSystem.instances.map((i: any) => i.id)
-  expect(ids).toEqual(expect.arrayContaining(['platform', 'ex-range', 'ex-debounce', 'ex-log', 'ex-input', 'ex-map']))
+  expect(ids).toEqual(expect.arrayContaining(['application', 'ex-range', 'ex-debounce', 'ex-log', 'ex-input', 'ex-map']))
   expect(hostSystem.subscriptions.filter((s: any) => !s.listener.includes('~view'))).toHaveLength(4)   // views subscribe too
 })
 
 test('the app gateway is in host and in every system the platform makes', async () => {
   expect(host.registry.get('app')).toBeDefined()
-  await call('platform', P.createSystem, 'g1')
+  await call('application', P.createSystem, 'g1')
   expect(runtimeOf(host.registry, 'g1')!.registry.get('app')).toBeDefined()
 })
 
@@ -63,7 +63,7 @@ test('the dock can add every catalog type that has an element (marked for the dr
     expect(t.innerHTML).toBe(`<${e.tag} keep=""></${e.tag}>`)   // closing sends it to the rack
     expect(t.hasAttribute('data-catalog')).toBe(true)
   }
-  const kinds = (await call('platform', P.catalog)).value
+  const kinds = (await call('application', P.catalog)).value
   expect(kinds).toEqual(expect.arrayContaining(['range', 'log', 'component-list', 'connection-board']))
 })
 
@@ -106,7 +106,7 @@ test('a package\'s catalog joins the running host: the platform can make it, Mai
   document.addEventListener('catalog:changed', () => { changed++ })
   addCatalog({ timer: { component: Timer, title: 'Timer', tag: 'nano-timer' } }, { name: 'nano-template', url: 'https://x/manifest.json' })
   expect(changed).toBe(1)
-  expect(await call('platform', P.createComponent, { kind: 'timer', name: 't1', system: 'host' })).not.toHaveProperty('error')
+  expect(await call('application', P.createComponent, { kind: 'timer', name: 't1', system: 'host' })).not.toHaveProperty('error')
   expect(host.registry.get('t1')!.component).toBe(Timer)
   const t = document.querySelector('workspace-dock#workspace > template[data-widget="timer"]') as HTMLTemplateElement
   expect([t.dataset.title, t.dataset.package, t.dataset.packageUrl, t.hasAttribute('data-catalog')]).toEqual(['Timer', 'nano-template', 'https://x/manifest.json', true])
@@ -127,7 +127,7 @@ test('importing a package republishes the platform\'s kinds', async () => {
   const spy = C.create({ ns: 't', name: 'kinds-spy' }, () => heard)
   spy.action(O.sink('t', 'take', P.kinds.output!), (h, x) => { h.push(x as { kind: string }[]) })
   host.registry.add('kinds-spy', C.instantiate(spy))
-  host.registry.subscribe({ source: 'platform', op: O.key(P.kinds), listener: 'kinds-spy', target: 't/take' })
+  host.registry.subscribe({ source: 'application', op: O.key(P.kinds), listener: 'kinds-spy', target: 't/take' })
   addCatalog({ clock: { component: C.create({ ns: 't', name: 'clock' }, () => ({})), title: 'Clock' } }, { name: 'clocks', url: 'https://x/clocks.json' })
   await new Promise(r => setTimeout(r, 0))
   expect(heard.at(-1)?.map(k => k.kind)).toContain('clock')
@@ -166,9 +166,9 @@ test('#/themes has the theme cards; Settings keeps Layout and no theme picker', 
 })
 
 test('the profile instance is in the host system, owned by the platform, labelled nano/deploy host', async () => {
-  const [hostSystem] = (await call('platform', P.systems)).value
+  const [hostSystem] = (await call('application', P.systems)).value
   const p = hostSystem.instances.find((i: any) => i.id === 'profile')
-  expect(p.owner).toEqual({ kind: 'platform', name: 'platform' })   // as the ex-* examples: made through the app's platform
+  expect(p.owner).toEqual({ kind: 'platform', name: 'application' })   // as the ex-* examples: made through the app's platform
   expect(p.labels['nano/deploy']).toBe('host')
   expect(host.registry.snapshot().instances.filter(i => i.id === 'profile')).toHaveLength(1)
   expect((await call('profile', Profile.ops.user)).value).toEqual({ name: 'You' })

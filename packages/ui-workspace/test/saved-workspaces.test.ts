@@ -49,8 +49,8 @@ test('a mounted workspace runs in its system: its wiring view over that runtime 
   const { Components, Ops, Registries, Runtimes } = await import('@pritzlaff/nano-core')
   const { platform, PlatformOps: P, runtimeOf } = await import('@composable/platform')
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('platform', Components.instantiate(platform(host, {})))
-  await host.call({ registry: 'host', instance: 't' }, 'platform', Ops.key(P.createSystem), 'lab')
+  host.registry.add('application', Components.instantiate(platform(host, {})))
+  await host.call({ registry: 'host', instance: 't' }, 'application', Ops.key(P.createSystem), 'lab')
   document.body.innerHTML = `<app-shell><div slot="nav" data-workspaces></div>
     <app-route path="/workspace"><div class="ws-page"><c-wires><workspace-dock id="workspace" storage-key="k"></workspace-dock></c-wires></div></app-route></app-shell>`
   Object.assign(document.querySelector('c-wires')!, { runtime: host })
@@ -68,7 +68,7 @@ test('+ makes a workspace in a new system, empty; a taken route is refused with 
   const { bootSavedWorkspaces } = await import('../src/components/saved-workspaces.ts')
   localStorage.clear()
   const host = Runtimes.create(Registries.create('host'))
-  host.registry.add('platform', Components.instantiate(platform(host, {})))
+  host.registry.add('application', Components.instantiate(platform(host, {})))
   document.body.innerHTML = `<app-shell><div slot="nav" class="nav-row" data-workspaces><a href="#/workspace">Workspaces</a><button data-new-workspace>+</button></div>
     <a slot="nav" data-sub href="#/workspace">Main</a>
     <app-route path="/workspace"><div class="ws-page"><c-wires><workspace-dock id="workspace" storage-key="k"></workspace-dock></c-wires></div></app-route><app-route path="*"></app-route></app-shell>`
