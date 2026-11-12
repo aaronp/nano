@@ -8,14 +8,16 @@
  *     input → map → log. The Systems page's elements name these instances and attach to them.
  * Imported before the elements are defined, so the registry is provided when markup upgrades.
  */
-import { Components, Ops, Registries, Runtimes, type Op } from '@pritzlaff/nano-core'
+import { Components, Ops, type Op } from '@pritzlaff/nano-core'
 import { provide } from '@pritzlaff/nano-elements'
 import { catalog as bundle, Debounce, defineBundle, Input, Log, Map, Range } from '@composable/bundle'
 import { catalog as editor } from '@composable/editor'
-import { AppGateway, catalog as shell, defineShell, Profile } from '@composable/shell'
+import { catalog as shell, defineShell, Profile } from '@composable/shell'
 import type { Catalog } from '@pritzlaff/nano-elements'
+import { alerts, createApplication } from '@pritzlaff/nano-app'
+import { requestBus } from './lib/bus.ts'
 import { defineWorkspaceControls } from './components/workspace-controls.ts'
-import { definePlatform, definePlatformTable, platform, PlatformOps as P } from '@composable/platform'
+import { definePlatform, definePlatformTable, PlatformOps as P } from '@composable/platform'
 import { defineElements as defineEditor } from '@composable/editor/elements'
 import { defineWires } from '@composable/wires'
 import { defineSandboxed, provideDeploy } from './sandbox/sandboxed-el.ts'
@@ -23,16 +25,21 @@ import { deploy, deployIn, type AppCatalog, type Mode } from './sandbox/deploy.t
 import { HOST_ENTRIES } from './app/stores.ts'
 import { placementsOf } from './lib/dock-layout.ts'
 
-/** Every kind of component this host offers: its packages' catalogs, merged. Add a package, add its catalog. */
-export const catalog: AppCatalog = Object.fromEntries(Object.entries({ ...bundle, ...editor, ...shell } as Catalog).map(([k, e]) => [k, { ...e, modes: ['host'] as Mode[], trust: 'trusted' as const, ...(k === 'map' || k === 'filter' ? { code: ['setCode', 'configure'] } : {}) }]))
+/** Every kind of component this host offers: its packages' catalogs. Add a package, add its catalog. */
+const kinds: AppCatalog = Object.fromEntries(Object.entries({ ...bundle, ...editor, ...shell } as Catalog).map(([k, e]) => [k, { ...e, modes: ['host'] as Mode[], trust: 'trusted' as const, ...(k === 'map' || k === 'filter' ? { code: ['setCode', 'configure'] } : {}) }]))
 
-/** The page's runtime and its registry, `host`. */
-export const host = Runtimes.create(Registries.create('host'))
-provide(document, host.registry)
-host.registry.add('app', Components.instantiate(AppGateway), { kind: 'app', name: 'ui-workspace' })   // focus and the app bar: in every system (a gateway), never written
-host.registry.add('application', Components.instantiate(platform(host, catalog, {
-  gateways: ['app'], locked: id => id.startsWith('ws-controls-'), placementsOf,
+/** The page's runtime and its registry, `host`, with the app-bar gateway and the Application (made through the same sandbox-aware deploy). */
+const made = createApplication({
+  catalogs: [kinds], locked: id => id.startsWith('ws-controls-'), placementsOf,
   deploy: (system, id, kind, mode, owner, outward) => deploy(system, id, kind, (mode ?? 'host') as Mode, { catalog, owner, ...(outward && { outward }) }),
+})
+export const host = made.host
+/** The merged catalog the Application reads: imports add kinds to it. */
+export const catalog = made.catalog as AppCatalog
+provide(document, host.registry)
+// alerts: the message goes to the status line, over the page bus (the dock's `dock:status`)
+host.registry.add('alerts', Components.instantiate(alerts(({ message }) => {
+  try { requestBus(document.querySelector<HTMLElement>('workspace-dock') ?? document.body).publish('dock:status', { message }, 'alerts') } catch { /* no shell yet: nowhere to show it */ }
 })), { kind: 'app', name: 'ui-workspace' })
 // <c-sandboxed> creates its instance in the registry it shows (a dock's system, or the page's) through the same deploy
 provideDeploy(document, (registry, id, kind, mode, owner) =>

@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import { Ops } from '@pritzlaff/nano-core'
 import { component } from '@pritzlaff/nano-runes'
-import { AppGateway } from '../src'
+import { AppGateway } from '../src/gateway'
 import { page, tick } from './fixtures'
 
 const dflt = { system: 'host', instance: 'ws-controls-workspace' }
