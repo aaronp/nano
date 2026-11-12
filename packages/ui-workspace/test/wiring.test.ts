@@ -33,13 +33,28 @@ test('opening Wiring after a workspace focuses that page', async () => {
   expect(t.link.getAttribute('href')).toBe('#/lab')
 })
 
-test('Connections goes to that workspace and flips its dock', async () => {
+const frame = () => new Promise(r => requestAnimationFrame(() => r(null)))
+
+test('Connections flips the dock once, when the target route is shown', async () => {
   const t = setup()
   await t.go('/workspace'); await t.go('/wiring')
-  location.hash = '#/wiring'
-  t.link.click()
-  location.hash = '#/workspace'; window.dispatchEvent(new HashChangeEvent('hashchange')); await tick()
+  t.link.click(); t.link.click()   // a double click does not stack
+  expect(t.flips()).toBe(0)
+  await t.go('/workspace'); await frame(); await tick()
   expect(t.flips()).toBe(1)
+  await t.go('/wiring'); await t.go('/workspace'); await frame()
+  expect(t.flips()).toBe(1)
+})
+
+test('a modified click does not arm, and an unrelated navigation spends the arm', async () => {
+  const t = setup()
+  await t.go('/workspace'); await t.go('/wiring')
+  t.link.dispatchEvent(new MouseEvent('click', { ctrlKey: true, button: 0 }))
+  await t.go('/workspace'); await frame()
+  expect(t.flips()).toBe(0)
+  await t.go('/wiring'); t.link.click()
+  await t.go('/settings'); await t.go('/workspace'); await frame()
+  expect(t.flips()).toBe(0)
 })
 
 test('opening Wiring first focuses the first page and hides Connections', async () => {
