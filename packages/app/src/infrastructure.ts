@@ -8,3 +8,7 @@ export const viewIds = (s: Snapshot): Set<string> => new Set(s.instances.filter(
 
 /** Whether an id is infrastructure: the registry or a host-driven listener (HOST_DRIVEN), or a view's (`views`, from viewIds). */
 export const isInfrastructure = (id: string, views: ReadonlySet<string>): boolean => HOST_DRIVEN(id) || views.has(id)
+
+/** The needs declared in a snapshot with no binding there: an instance with any of them is disabled. */
+export const unboundOf = (s: Snapshot): Array<{ instance: string; need: string }> =>
+  s.instances.flatMap(i => Object.keys(i.needs ?? {}).filter(n => !s.bindings.some(b => b.instance === i.id && b.need === n)).map(need => ({ instance: i.id, need })))

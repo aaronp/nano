@@ -3,7 +3,8 @@
 import { Type, type Static } from 'typebox'
 import type { AppCatalog } from './catalog'
 import { parseRef, ref, type Ref } from './refs'
-import { Components, DeltaSchema, Tags, Ops, SnapshotSchema, SubscriptionSchema, Registries, Runtimes, type Component, type Environment, type Owner, type Registry, type Result, type Runtime, type Selectors, type Snapshot } from '@pritzlaff/nano-core'
+import { resolve, type Resolution, type Selector } from './resolve'
+import { Components, CoordSchema, DeltaSchema, Tags, Ops, SnapshotSchema, SubscriptionSchema, Registries, Runtimes, type Component, type Environment, type Interface, type Owner, type Registry, type Result, type Runtime, type Selectors, type Snapshot } from '@pritzlaff/nano-core'
 
 const NS = 'nano.app/application', none = Type.Void()
 const str = (description: string, examples: string[]) => Type.String({ description, examples })
@@ -24,6 +25,8 @@ export const KindSchema = Type.Object({
   title: str('What to call it', ['Range']), tag: Type.Optional(str("Its element's tag, if it has one", ['c-range'])),
   description: Type.Optional(str('What it is for', ['A number between bounds'])),
   modes: Type.Optional(Type.Array(Type.String({ description: 'A deploy mode', examples: ['host'] }), { description: 'The modes it can be deployed in, the first is the default: host, sandbox, isolated-sandbox' })),
+  implements: Type.Optional(Type.Array(Type.String({ description: 'An interface id', examples: ['example/db'] }), { description: 'The interfaces it implements' })),
+  needs: Type.Optional(Type.Record(Type.String(), Type.String(), { description: 'Its needs: name to interface id' })),
 }, { title: 'Kind', description: 'A kind of component the application can make' })
 export type Kind = Static<typeof KindSchema>
 
@@ -49,6 +52,16 @@ export const PlacementSchema = Type.Object({
 export type Placement = Static<typeof PlacementSchema>
 
 const refArg = str('A ref: system:<id>, instance:<system>/<id> or screen:<path>', ['instance:host/r1'])
+/** Which instance a need should bind to: one implementing the interface, with every tag, in `layer`, maybe pinned `at` one. */
+export const SelectorSchema = Type.Object({
+  implements: str('The interface id', ['example/db']), tags: Type.Optional(Type.Array(Type.String({ description: 'A tag' }), { description: 'Tags it must have' })),
+  layer: Type.Optional(str("The system to look in (default: the requester's)", ['storage'])), at: Type.Optional(str('Pins an instance id', ['db'])),
+}, { title: 'Selector', description: 'Which instance a need binds to' })
+export const ResolutionSchema = Type.Union([
+  Type.Object({ bound: CoordSchema }), Type.Object({ make: str('A catalog kind to make', ['db']) }),
+  Type.Object({ choose: Type.Object({ candidates: Type.Array(CoordSchema), kinds: Type.Array(Type.String()) }), reason: str('Why it needs a choice', ['2 match']) }),
+], { title: 'Resolution', description: 'Bound to an instance, a kind to make, or a choice' })
+const need = str('A need, by name', ['db'])
 const TagArg = Type.Object({ ref: refArg, tag: str('A tag', ['billing']) }, { description: 'Which ref, and which tag' })
 
 /** The application's ops. */
@@ -90,11 +103,18 @@ export const ApplicationOps = {
     kind: Type.Optional(str('A catalog kind', ['range'])), tag: Type.Optional(str('Tagged with this', ['billing'])) }, { description: 'Filters that all must hold' }),
     Type.Array(Type.String()), { description: 'The instances (as refs, sorted) that match every filter given' }),
   screensOf: Ops.action(NS, 'screens-of', refArg, Type.Array(Type.String()), { description: 'The screens that place an instance' }),
+  needsOf: Ops.action(NS, 'needs-of', refArg, Type.Array(Type.Object({ need, implements: str('Its interface id', ['example/db']), selector: SelectorSchema,
+    binding: Type.Optional(str('The instance it is bound to, as a ref', ['instance:storage/db'])) })), { description: "An instance's needs: each one's selector and binding (none: it is disabled)" }),
+  setSelector: Ops.action(NS, 'set-selector', Type.Object({ ref: refArg, need, selector: SelectorSchema }), ResolutionSchema,
+    { description: "Sets a need's selector and resolves it, binding when exactly one instance fits; never makes one" }),
+  bindNeed: Ops.action(NS, 'bind-need', Type.Object({ ref: refArg, need, to: refArg }), none, { description: 'Binds a need to an instance, pinning its selector there' }),
+  unbindNeed: Ops.action(NS, 'unbind-need', Type.Object({ ref: refArg, need }), none, { description: 'Clears a need\'s binding, leaving its instance disabled' }),
   select: Ops.action(NS, 'select', SelectionSchema, none, { description: 'Selects an instance (and maybe an op), or nothing with null' }),
 }
 const P = ApplicationOps
 
-type State = { tags: Tags<Ref>; screens: Map<string, { screen: Screen; placements: Placement[] }>; host: string; systems: Map<string, Runtime>; selected: Selection; env: Environment; watch(rt: Runtime): void; changed(id: string, delta: unknown): void }
+type State = { tags: Tags<Ref>; selectors: Map<string, Selector>;   // by `ref need`
+  screens: Map<string, { screen: Screen; placements: Placement[] }>; host: string; systems: Map<string, Runtime>; selected: Selection; env: Environment; watch(rt: Runtime): void; changed(id: string, delta: unknown): void }
 
 // what the application adds, it owns: named by its own id in the host
 const owner = (s: State): Owner => ({ kind: 'platform', name: s.env.handles().find(h => h.coord.registry === s.host)?.coord.instance ?? 'application' })
@@ -117,7 +137,38 @@ export function application(host: Runtime, catalog: AppCatalog,
   // read at call time: the host adds imported packages' kinds to this same object, then calls catalog-changed
   const kinds = (): Kind[] => Object.entries(catalog).map(([kind, e]) =>
     ({ kind, component: `${e.component.id.ns}/${e.component.id.name}`, title: e.title ?? kind, ...(e.tag && { tag: e.tag }), ...(e.modes && { modes: [...e.modes] }),
-      ...(e.component.description && { description: e.component.description }) }))
+      ...(e.component.description && { description: e.component.description }),
+      ...(e.component.implements && { implements: e.component.implements.map(i => i.id) }),
+      ...(e.component.needs && { needs: Object.fromEntries(Object.entries(e.component.needs).map(([n, i]) => [n, i.id])) }) }))
+  // needs: the instance at a ref, its declared need, and resolving a selector for it over every system
+  const instanceAt = (s: State, r: string) => {
+    const p = parseRef(r)
+    if (p?.kind !== 'instance') throw new Error(`not an instance ref: ${JSON.stringify(r)}`)
+    const reg = system(s, p.system), inst = reg.get(p.id)
+    if (!inst) throw new Error(`no such thing: ${r}`)
+    return { reg, id: p.id, inst, system: p.system }
+  }
+  const needAt = (s: State, r: string, need: string) => {
+    const { reg, id, inst } = instanceAt(s, r), i = inst.component.needs?.[need]
+    if (!i) throw new Error(`${id} has no need ${need}`)
+    return { reg, id, iface: i, key: `${r} ${need}` }
+  }
+  const selectorOf = (s: State, key: string, i: Interface): Selector => s.selectors.get(key) ?? { implements: i.id }
+  const resolveNeed = (s: State, reg: Registry, id: string, need: string, i: Interface, selector: Selector): Resolution => {
+    const snaps = snapshots(s)
+    const r = resolve(selector, {
+      requester: { registry: reg.id, instance: id }, interfaceOps: Object.values(i.ops).map(op => Ops.key(op)), systems: snaps.map(x => x.id),
+      candidates: snaps.flatMap(x => x.instances.map(c => ({ coord: { registry: x.id, instance: c.id }, ops: c.ops.map(op => Ops.key(op)), tags: [...s.tags.tagsOf(`instance:${x.id}/${c.id}`)] }))),
+      providers: kinds().flatMap(k => k.implements ? [{ kind: k.kind, implements: k.implements }] : []),
+    })
+    if ('bound' in r) must(reg.bind(id, need, r.bound))
+    return r
+  }
+  // after an instance is added (never inside it), each unbound need binds when exactly one instance fits
+  const autoBind = (s: State, reg: Registry, id: string) => {
+    for (const [need, i] of Object.entries(reg.get(id)?.component.needs ?? {}))
+      if (!reg.binding(id, need)) resolveNeed(s, reg, id, need, i, selectorOf(s, `instance:${reg.id}/${id} ${need}`, i))
+  }
   // the same instance, owned by the application, keeping its labels (a sandboxed instance stays one)
   const share = (s: State, instance: string, from: string, to: string) => {
     const inst = system(s, from).get(instance)
@@ -127,9 +178,13 @@ export function application(host: Runtime, catalog: AppCatalog,
   }
   const c = Components.create<State>({ ns: 'nano.app', name: 'application' }, env => {
     const s: State = {
-      tags: Tags.create<Ref>(), screens: new Map(), host: host.registry.id, systems: new Map([[host.registry.id, host]]), selected: null, env, changed: () => {},
+      tags: Tags.create<Ref>(), selectors: new Map(), screens: new Map(), host: host.registry.id, systems: new Map([[host.registry.id, host]]), selected: null, env, changed: () => {},
       watch: rt => { rt.registry.listen(delta => {
-        if (delta.type === 'instance-removed') s.tags.remove(`instance:${rt.registry.id}/${delta.instance}`)
+        if (delta.type === 'instance-removed') {
+          const r = `instance:${rt.registry.id}/${delta.instance}` as Ref
+          s.tags.remove(r); for (const k of s.selectors.keys()) if (k.startsWith(`${r} `)) s.selectors.delete(k)
+        }
+        if (delta.type === 'instance-added') queueMicrotask(() => autoBind(s, rt.registry, delta.instance))
         changed(rt.registry.id, delta)
       }) },
     }
@@ -152,7 +207,7 @@ export function application(host: Runtime, catalog: AppCatalog,
   c.action(P.selectionChanged); c.action(P.stateChanged); c.action(P.changed)
   c.action(P.createSystem, (s, name) => {
     if (s.systems.has(name)) throw new Error(`${name} already exists`)
-    const rt = Runtimes.create(Registries.create(name))
+    const rt = Runtimes.create(Registries.create(name), undefined, { peers: id => s.systems.get(id) })
     s.systems.set(name, rt); s.watch(rt)
     for (const g of opts.gateways ?? []) if (host.registry.get(g)) share(s, g, s.host, name)   // the same instance in every system
     s.changed(name, { type: 'system-created' })
@@ -243,6 +298,24 @@ export function application(host: Runtime, catalog: AppCatalog,
     }
     return out.sort()
   })
+  c.action(P.needsOf, (s, r) => {
+    const { reg, id, inst } = instanceAt(s, r)
+    return Object.entries(inst.component.needs ?? {}).map(([need, i]) => {
+      const b = reg.binding(id, need)
+      return { need, implements: i.id, selector: selectorOf(s, `${r} ${need}`, i), ...(b && { binding: `instance:${b.registry}/${b.instance}` }) }
+    })
+  })
+  c.action(P.setSelector, (s, { ref: r, need, selector }) => {
+    const n = needAt(s, r, need)
+    s.selectors.set(n.key, selector)
+    return resolveNeed(s, n.reg, n.id, need, n.iface, selector)
+  })
+  c.action(P.bindNeed, (s, { ref: r, need, to }) => {
+    const n = needAt(s, r, need), t = instanceAt(s, to)
+    must(n.reg.bind(n.id, need, { registry: t.system, instance: t.id }))
+    s.selectors.set(n.key, { implements: n.iface.id, layer: t.system, at: t.id, tags: [...s.tags.tagsOf(to as Ref)].sort() })
+  })
+  c.action(P.unbindNeed, (s, { ref: r, need }) => { const n = needAt(s, r, need); must(n.reg.unbind(n.id, need)) })
   c.action(P.select, (s, sel) => {
     s.selected = (sel ?? null) as Selection
     void s.env.notify(P.selectionChanged, s.selected)

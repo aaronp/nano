@@ -16,12 +16,12 @@ export const resolve = (selector: Selector, ctx: ResolveContext): Resolution => 
     !(c.coord.registry === ctx.requester.registry && c.coord.instance === ctx.requester.instance) &&
     ctx.interfaceOps.every(o => c.ops.includes(o)) &&
     (selector.tags ?? []).every(t => c.tags.includes(t)))
+  const kinds = ctx.providers.filter(p => p.implements.includes(selector.implements)).map(p => p.kind)
   if (selector.at !== undefined) {
     const pinned = fits.find(c => c.coord.instance === selector.at)
-    return pinned ? { bound: pinned.coord } : choose([], [], `${layer}/${selector.at} doesn't fit`)
+    return pinned ? { bound: pinned.coord } : choose(fits.map(c => c.coord), kinds, `${layer}/${selector.at} doesn't fit`)
   }
   if (fits.length === 1) return { bound: fits[0]!.coord }
-  const kinds = ctx.providers.filter(p => p.implements.includes(selector.implements)).map(p => p.kind)
   if (fits.length === 0 && kinds.length === 1) return { make: kinds[0]! }
   return choose(fits.map(c => c.coord), kinds, fits.length ? `${fits.length} match` : 'nothing matches')
 }

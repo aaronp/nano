@@ -14,8 +14,8 @@ test('the pin wins', () => {
 })
 
 test('a pin that does not fit gives choose', () => {
-  const c = ctx({ candidates: [cand('storage', 'db', [])] })
-  expect(resolve({ ...sel, layer: 'storage', at: 'db' }, c)).toEqual({ choose: { candidates: [], kinds: [] }, reason: "storage/db doesn't fit" })
+  const c = ctx({ candidates: [cand('storage', 'db', []), cand('storage', 'other')], providers: [{ kind: 'k', implements: ['a/store'] }] })
+  expect(resolve({ ...sel, layer: 'storage', at: 'db' }, c)).toEqual({ choose: { candidates: [{ registry: 'storage', instance: 'other' }], kinds: ['k'] }, reason: "storage/db doesn't fit" })
 })
 
 test('tags filter', () => {
