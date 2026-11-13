@@ -18,6 +18,8 @@ export const deployStrategy = (catalog: AppCatalog, open: typeof openFrame = ope
   if (!e) throw new Error(`no component kind ${kind}`)
   if (!e.modes.includes(mode)) throw new Error(`${kind} can't be deployed as ${mode}`)
   if (mode === 'host') return e.component
+  // ponytail: a stand-in has no way to call a need back across the frame yet
+  if (Object.keys(e.component.needs ?? {}).length) throw new Error(`${kind} has needs: host mode only for now`)
   const url = e.source?.url
   if (!url) throw new Error(`${kind} has no package to load in a ${mode}`)
   return standIn(serialEntry(e), () => open({ url, kind, mode, render: !!e.tag }))

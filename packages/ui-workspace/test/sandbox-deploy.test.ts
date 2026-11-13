@@ -102,3 +102,10 @@ test('removing a deployed isolated instance disposes its frame', async () => {
   rt.registry.remove('b'); await tick()
   expect(disposed).toBe(1)
 })
+
+test('a kind with needs deploys in host mode only, for now', () => {
+  const needy = { ...cat.pkg!, component: Components.create({ ns: 'x', name: 'needy' }, () => ({}), { needs: { db: { id: 'x/db', ops: {} } } }) }
+  const s = deployStrategy({ needy }, fake().open)
+  expect(s('needy', 'host')).toBe(needy.component)
+  expect(() => s('needy', 'sandbox')).toThrow('needy has needs: host mode only for now')
+})

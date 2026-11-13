@@ -40,10 +40,13 @@ export function bootNeeds(doc: Document, host: Runtime, opts: { busy(): boolean;
     return r.value as T
   }
   const registryOf = (system: string) => runtimeOf(host.registry, system)?.registry
-  /** The declared needs of an instance with no binding. */
+  /** Whether an instance ref names one that exists: core keeps a binding to a removed instance, the views treat it as unbound. */
+  const exists = (ref: string) => { const { system, id } = parse(ref); return !!registryOf(system)?.get(id) }
+  /** The declared needs of an instance with no binding (or one to an instance gone). */
   const unbound = (ref: string) => {
     const { system, id } = parse(ref), reg = registryOf(system)
-    return Object.entries(reg?.get(id)?.component.needs ?? {}).filter(([n]) => !reg!.binding(id, n)).map(([need, i]) => ({ ref, need, implements: i.id }))
+    return Object.entries(reg?.get(id)?.component.needs ?? {}).filter(([n]) => { const to = reg!.binding(id, n); return !to || !exists(`instance:${to.registry}/${to.instance}`) })
+      .map(([need, i]) => ({ ref, need, implements: i.id }))
   }
   const timers = new Set<ReturnType<typeof setTimeout>>()
   const later = (f: () => void) => { const t = setTimeout(() => { timers.delete(t); f() }); timers.add(t) }
@@ -98,7 +101,8 @@ export function bootNeeds(doc: Document, host: Runtime, opts: { busy(): boolean;
   const overlays = new Map<Element, HTMLButtonElement>()
   const clear = (el: Element) => { el.removeAttribute('data-unbound'); el.removeAttribute('inert'); overlays.get(el)?.remove(); overlays.delete(el) }
   const mark = (snaps: Snapshot[]) => {
-    const unboundBy = new Map<string, string[]>(snaps.flatMap(s => [...Map.groupBy(unboundOf(s), u => u.instance)].map(([i, us]) => [`${s.id}/${i}`, us.map(u => u.need)] as const)))
+    const live = new Set(snaps.flatMap(s => s.instances.map(i => `${s.id}/${i.id}`)))
+    const unboundBy = new Map<string, string[]>(snaps.flatMap(s => [...Map.groupBy(unboundOf({ ...s, bindings: s.bindings.filter(b => live.has(`${b.to.registry}/${b.to.instance}`)) }), u => u.instance)].map(([i, us]) => [`${s.id}/${i}`, us.map(u => u.need)] as const)))
     const declares = new Set(snaps.flatMap(s => s.instances.filter(i => i.needs && Object.keys(i.needs).length).map(i => `${s.id}/${i.id}`)))
     for (const el of overlays.keys()) if (!el.isConnected) clear(el)
     for (const el of doc.querySelectorAll('*')) {
@@ -132,7 +136,7 @@ export function bootNeeds(doc: Document, host: Runtime, opts: { busy(): boolean;
   })
   /** The Dependencies dialog for `ref`: Replace… waits in the queue; a bound row's Dependencies… opens its target's. */
   const dependencies = async (ref: string): Promise<void> => {
-    const needs = await call<NeedOf[]>(P.needsOf, ref)
+    const needs = (await call<NeedOf[]>(P.needsOf, ref)).map(n => (n.binding && !exists(n.binding) ? { ...n, missing: true } : n))
     await showDependencies(doc, ref, needs, need => replace({ ref, need, implements: needs.find(x => x.need === need)!.implements }), dependencies)
   }
   const onDeps = (e: Event) => {

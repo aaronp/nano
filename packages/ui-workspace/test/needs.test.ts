@@ -107,3 +107,33 @@ test('Dependencies drills into a bound target, where Replace… makes a provider
   expect(a.host.registry.binding('person-service-1', 'db')).toEqual({ registry: 'host', instance: 'people-db-1' })
   a.stop()
 }, 10_000)
+
+test('a binding to a removed provider marks the consumer unbound, and its Dependencies row says missing', async () => {
+  const a = setup()
+  definePeople()
+  provide(document, a.host.registry)
+  await whileApplying(async () => {
+    await a.call('application', P.createComponent, { kind: 'people-bff', name: 'b', system: 'host' })
+    await a.call('application', P.createComponent, { kind: 'person-rules', name: 'r', system: 'host' })
+    await a.call('application', P.createComponent, { kind: 'person-form', name: 'f', system: 'host' })
+    await a.call('application', P.bindNeed, { ref: 'instance:host/f', need: 'bff', to: 'instance:host/b' })
+    await a.call('application', P.bindNeed, { ref: 'instance:host/f', need: 'rules', to: 'instance:host/r' })
+  })
+  document.body.insertAdjacentHTML('beforeend', '<div class="lm_content"><c-person-form name="f"></c-person-form></div>')
+  const panel = document.body.lastElementChild!, el = panel.firstElementChild!
+  await settle()
+  expect(el.hasAttribute('data-unbound')).toBe(false)
+  await a.call('application', P.removeFromSystem, { instance: 'b', system: 'host' }); await settle()
+  expect(a.host.registry.binding('f', 'bff')).toEqual({ registry: 'host', instance: 'b' })   // core keeps it
+  expect(el.getAttribute('data-unbound')).toBe('bff')
+  expect(el.hasAttribute('inert')).toBe(true)
+  // its Choose… asks for it
+  ;(el.nextElementSibling as HTMLButtonElement).click(); await settle()
+  expect(await answer('[data-cancel]')).toBe('Choose bff')
+  document.dispatchEvent(new CustomEvent('dock:dependencies', { detail: { system: 'host', instance: 'f' } })); await settle()
+  const row = [...dlg()!.querySelectorAll('tbody tr')].find(tr => tr.firstElementChild?.textContent === 'bff')!
+  expect(row.textContent).toContain('missing')
+  expect(row.querySelector('[data-open]')).toBeNull()
+  await answer('[data-cancel]')
+  a.stop(); panel.remove()
+}, 10_000)

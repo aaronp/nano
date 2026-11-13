@@ -20,9 +20,9 @@ export function chooseBinding(doc: Document, need: { ref: string; need: string; 
 
 /** An instance's needs and what each is bound to. Replace… closes the list and runs `replace` for that need; a bound
  * row's Dependencies… closes it and runs `open` for its target (so a headless provider's needs can be reached). */
-export async function showDependencies(doc: Document, ref: string, needs: { need: string; implements: string; binding?: string }[], replace: (need: string) => Promise<void>, open?: (ref: string) => Promise<void>): Promise<void> {
+export async function showDependencies(doc: Document, ref: string, needs: { need: string; implements: string; binding?: string; missing?: boolean }[], replace: (need: string) => Promise<void>, open?: (ref: string) => Promise<void>): Promise<void> {
   const rows = needs.map((n) => `<tr><td>${esc(n.need)}</td><td><code>${esc(n.implements)}</code></td>
-    <td>${n.binding ? `<code>${esc(n.binding)}</code>${open ? ` <button type="button" data-open="${esc(n.binding)}">Dependencies…</button>` : ''}` : '<em>not bound</em>'}</td>
+    <td>${n.binding ? `<code>${esc(n.binding)}</code>${n.missing ? ' <em>missing</em>' : open ? ` <button type="button" data-open="${esc(n.binding)}">Dependencies…</button>` : ''}` : '<em>not bound</em>'}</td>
     <td><button type="button" data-replace="${esc(n.need)}">Replace…</button></td></tr>`).join('');
   const hidden = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap';
   const picked = await ask<{ replace: string } | { open: string } | null>(doc, 'Dependencies', `<h2>Dependencies</h2><p><code>${esc(ref)}</code></p>
