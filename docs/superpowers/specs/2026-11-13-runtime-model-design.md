@@ -149,6 +149,14 @@ time, and the role filter in code (`ctx.one({ implements: DB, tags: ['cache'] },
 
 "Open" is renamed **start**: the application starts a runtime from its saved definition, making its pods (each with a
 state) and adding its subscriptions.
+### Observability
+
+Each runtime has **one stream** (`rt.listen`) that a person, a test or the host watches: lifecycle (pods created,
+swapped, removed; each instance's state changes, with the reason when it fails), wiring (subscriptions set or removed,
+and why; status changes), messages (every call and delivery as *sent* then exactly one of *delivered*, with its result
+and duration, or *denied*, with the reason), and problems (*failure*: a handler threw or timed out, a policy threw, a
+bad publish; *warning*: what the application notes as it happens). Tests assert behaviour through this stream.
+
 
 ### Behaviours (written as tests first)
 
