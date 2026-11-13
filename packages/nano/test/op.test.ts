@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { defineSchema } from '../src/schema.ts'
+import { canonicalSchema, defineSchema } from '../src/schema.ts'
 import { op, fits } from '../src/op.ts'
 import { iface, type Client } from '../src/iface.ts'
 import { success, type NanoResult } from '../src/result.ts'
@@ -32,8 +32,7 @@ describe('fits', () => {
   test('a target that takes anything accepts any source', () => {
     expect(fits(op.source('a', Num), op.sink('b', Any))).toBe(true)
   })
-  test('Unknown and Any both canonicalise to {}', async () => {
-    const { canonicalSchema } = await import('../src/schema.ts')
+  test('Unknown and Any both canonicalise to {}', () => {
     expect(canonicalSchema(Type.Unknown())).toBe('{}')
     expect(canonicalSchema(Type.Any())).toBe('{}')
   })
@@ -48,6 +47,8 @@ describe('iface', () => {
   })
   test('a bad coordinate throws', () => {
     expect(() => iface('db', { get })).toThrow('bad interface coordinate db')
+  })
+  test('dotted and slashed coordinates are accepted', () => {
     expect(iface('com.example.DB', { get }).coord).toBe('com.example.DB')
   })
   test('a key that differs from the op name throws', () => {
@@ -60,5 +61,12 @@ describe('iface', () => {
       log: async (_s: string): Promise<NanoResult<void>> => success(undefined),
     }
     expect(Object.keys(c)).toEqual(['get', 'log'])
+  })
+  test('Client has no key for a source', () => {
+    const i = iface('acme/db', { get, tick: op.source('tick', Num) })
+    const c: Client<typeof i> = { get: async (s: string) => success(s.length) }
+    // @ts-expect-error sources are not callable
+    void c.tick
+    expect(Object.keys(c)).toEqual(['get'])
   })
 })
