@@ -1,32 +1,29 @@
 /**
- * Provisioning: give a new instance's unconnected dependencies the one matching member, or make the one matching implementation.
+ * Provisioning: settle a joined instance's unconnected dependencies — subscribe to the one matching member, or make the one matching implementation.
  *
- *   const r = await provision(p, 'acme/app/foo#f', foo, ['acme/app/foo'])
- *   r.unsatisfied   // [] once bar-1 (and its own baz-1) are made and subscribed; or [{ role: 'bar', reason: '2 match' }]
- *   r.cycles        // [['acme/cyc/a', 'acme/cyc/b', 'acme/cyc/a']] when a dependency closes a cycle (reason `cycle: a → b → a`)
+ *   await rt.create('a', 'acme/cyc/a', { provision: true })   // a joins, b-1 is made and joins, then a → b-1 and b-1 → a
+ *   await provision(p, 'acme/app/foo#f', foo)                  // [] or [{ role: 'bar', reason: '2 match' }]
  */
 import type { Implementation } from '../implementation.ts'
 import type { Registry } from '../registry.ts'
 import type { NanoResult } from '../result.ts'
-
-/** A create's result; a create that fails because it lies on a cycle carries the cycle's path. */
-export type Made = NanoResult<{ coord: string }> & { cycle?: readonly string[] }
-export const cycleReason = (path: readonly string[]): string => `cycle: ${path.join(' → ')}`
 import { matches, type SelectorData, type Target } from '../selector.ts'
 import type { NewSubscription, SubscriptionData } from './subscriptions.ts'
 
 export type Unsatisfied = { role: string; reason: string }
 
-/** What provisioning needs of a runtime. `make` creates (and provisions) one instance with the given creation stack. */
+/** What provisioning needs of a runtime. `make` creates, joins and provisions one instance in the same pass. */
 export type Provisioner = {
   registry: Registry
   members(): readonly string[]
   target(coord: string): Target | undefined
-  /** A live call subscription from the new instance already reaches a member matching `d`. */
+  /** A live call subscription from the instance already reaches a member matching `d`. */
   connected(d: SelectorData): boolean
   idFree(id: string): boolean
-  make(id: string, implementation: string, stack: readonly string[]): Promise<Made>
+  make(id: string, implementation: string): Promise<NanoResult<{ coord: string }>>
   subscribe(s: NewSubscription): NanoResult<SubscriptionData>
+  /** A safety net that should never trip: making more would pass the pass's depth limit. */
+  tooDeep: boolean
 }
 
 /** Implementations a selector names by interface, coord or provider. Tags can't be known before creation, so they never block; a selector naming none of the three matches none. */
@@ -41,41 +38,28 @@ export function implementationsFor(registry: Registry, d: SelectorData): Impleme
     !!i && matches(named, { instance: '', implementation: i.coord, provider: i.provider, provides: new Set(i.provides.map(x => x.coord)), tags: new Set() }))
 }
 
-/** `stack` is the implementation coords being created, outermost first, ending with the new instance's own. */
-export async function provision(p: Provisioner, coord: string, impl: Implementation, stack: readonly string[]): Promise<{ unsatisfied: Unsatisfied[]; cycles: (readonly string[])[]; subscribed: string[] }> {
+/** `coord` is already a member: a dependency that leads back to it finds it, so mutual dependencies connect both ways. */
+export async function provision(p: Provisioner, coord: string, impl: Implementation): Promise<Unsatisfied[]> {
   const unsatisfied: Unsatisfied[] = []
-  const subscribed: string[] = []
-  const cycles: (readonly string[])[] = []
   for (const [role, d] of Object.entries(impl.dependencies)) {
     if (p.connected(d)) continue
     const leave = (reason: string) => { unsatisfied.push({ role, reason }) }
-    const members = p.members().filter(c => { const t = p.target(c); return !!t && matches(d, t) })
-    let to = members.length === 1 ? members[0]! : undefined
+    const members = p.members().filter(c => { const t = c !== coord && p.target(c); return !!t && matches(d, t) })
     // Several members: a choice for the user, not a reason to make yet another.
     if (members.length > 1) { leave(`${members.length} match`); continue }
+    let to = members[0]
     if (!to) {
       const impls = implementationsFor(p.registry, d)
       if (impls.length !== 1) { leave(impls.length === 0 ? 'nothing matches' : `${impls.length} match`); continue }
-      const x = impls[0]!
-      if (stack.includes(x.coord)) {
-        const path = [...stack.slice(stack.indexOf(x.coord)), x.coord]
-        cycles.push(path)
-        leave(cycleReason(path))
-        continue
-      }
-      const made = await p.make(freeId(p, x.coord), x.coord, stack)
-      if (!made.ok) {
-        if (made.cycle) cycles.push(made.cycle)
-        leave(made.fail.reason)
-        continue
-      }
+      if (p.tooDeep) { leave('provisioning too deep'); continue }
+      const made = await p.make(freeId(p, impls[0]!.coord), impls[0]!.coord)
+      if (!made.ok) { leave(made.fail.reason); continue }
       to = made.value.coord
     }
     const s = p.subscribe({ kind: 'call', from: coord, to })
-    if (s.ok) subscribed.push(s.value.id)
-    else leave(s.fail.reason)
+    if (!s.ok) leave(s.fail.reason)
   }
-  return { unsatisfied, subscribed, cycles }
+  return unsatisfied
 }
 
 /** `<last segment of the coord>-<first free n from 1>`. */

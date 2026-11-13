@@ -6,7 +6,7 @@
  */
 export type FailType =
   | 'threw' | 'timeout' | 'denied' | 'invalid-input' | 'invalid-output' | 'unknown-op'
-  | 'missing-component' | 'ambiguous' | 'all-failed' | 'not-found' | 'exists' | 'cycle'
+  | 'missing-component' | 'ambiguous' | 'all-failed' | 'not-found' | 'exists'
 
 export type Fail = { type: FailType; reason: string; coord?: string }
 export type NanoResult<T> = { ok: true; value: T } | { ok: false; fail: Fail }

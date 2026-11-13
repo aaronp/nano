@@ -1,5 +1,6 @@
 /**
  * Calls: a context's verbs routed over its home runtime's live call subscriptions, policy per message, books, and publish delivered in every runtime the instance is a member of.
+ * Calls into or out of an instance in an unfinished provisioning pass wait for the pass.
  *
  *   const { ctx, bind } = contextFor(wiring, 'acme/app/main#m', impl, config)   // bind(pod) once the pod is made
  *   await ctx.one(DB, db => db.save(r))     // policed, invoked on the target's pod, counted on the subscription's books
@@ -27,6 +28,13 @@ export type Wiring = {
   member(coord: string): Member | undefined
   target(coord: string): Target | undefined
   observe?(o: Observation): void
+  /** While `coord` is in an unfinished provisioning pass, the pass's end; calls into or out of it wait for it. */
+  settled?(coord: string): Promise<void> | undefined
+}
+
+/** Wait for any unfinished provisioning pass these instances are in; no await at all when there is none. */
+async function ready(w: Wiring, ...coords: string[]): Promise<void> {
+  for (const c of coords) { const p = w.settled?.(c); if (p) await p }
 }
 
 /** One runtime's delivery of a publish by `from` on source port `port`. */
@@ -41,6 +49,7 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 /** One message over subscription `sid`: policed, invoked, booked. A denied message is not delivered and not counted. */
 async function send(w: Wiring, sid: string, from: string, to: string, port: string, input: unknown): Promise<NanoResult<unknown>> {
+  if (w.settled?.(from) || w.settled?.(to)) await ready(w, from, to)
   const sub = w.subscriptions().find(s => s.id === sid)
   let v
   try { v = w.policy.isAllowed(from, to, input) } catch (e) {
@@ -77,6 +86,8 @@ export function connectionsOf(w: Wiring, instance: string, d: SelectorData): Con
 export function contextFor(w: Wiring, instance: string, impl: Implementation, config: unknown): { ctx: NanoContext; bind(pod: Pod): void } {
   let own: Pod | undefined
   const connections = <I extends Interface>(s: CallSelector<I>) => connectionsOf(w, instance, selectorData(s))
+  /** A verb made during this instance's provisioning pass waits for the pass to wire it; otherwise it reads connections at once. */
+  const busy = () => w.settled?.(instance)
   /** A client over one connection: the given interface's ops, or for plain data the target's matching interfaces. */
   const client = <I extends Interface>(s: CallSelector<I>, c: Conn): Client<I> => {
     const d = selectorData(s)
@@ -108,14 +119,17 @@ export function contextFor(w: Wiring, instance: string, impl: Implementation, co
     runtime: w.id,
     config,
     async one<I extends Interface, T>(s: CallSelector<I>, fn: Call<I, T>) {
+      if (busy()) await ready(w, instance)
       const cs = connections(s)
       return cs.length === 0 ? missing(s) : cs.length > 1 ? ambiguous(s, cs) : run(s, fn, cs[0]!)
     },
     async optional<I extends Interface, T>(s: CallSelector<I>, fn: Call<I, T>) {
+      if (busy()) await ready(w, instance)
       const cs = connections(s)
       return cs.length === 0 ? success({ none: true }) : cs.length > 1 ? ambiguous(s, cs) : found(await run(s, fn, cs[0]!), cs[0]!.to)
     },
     async any<I extends Interface, T>(s: CallSelector<I>, fn: Call<I, T>) {
+      if (busy()) await ready(w, instance)
       const cs = connections(s)
       if (cs.length === 0) return missing(s)
       const tries = cs.map(async c => {
@@ -126,13 +140,16 @@ export function contextFor(w: Wiring, instance: string, impl: Implementation, co
       return Promise.any(tries).catch((e: AggregateError) => allFailed(e.errors))
     },
     async all<I extends Interface, T>(s: CallSelector<I>, fn: Call<I, T>) {
+      if (busy()) await ready(w, instance)
       return Promise.all(connections(s).map(async c => ({ from: c.to, result: await run(s, fn, c) })))
     },
     async first<I extends Interface, T>(s: CallSelector<I>, fn: Call<I, T>) {
+      if (busy()) await ready(w, instance)
       const c = connections(s)[0]
       return c ? run(s, fn, c) : missing(s)
     },
     async fallback<I extends Interface, T>(s: CallSelector<I>, fn: Call<I, T>) {
+      if (busy()) await ready(w, instance)
       const cs = connections(s)
       if (cs.length === 0) return missing(s)
       const failures: { from: string; fail: Fail }[] = []
@@ -145,6 +162,7 @@ export function contextFor(w: Wiring, instance: string, impl: Implementation, co
     },
     async each<I extends Interface, T>(s: CallSelector<I>, fn: Call<I, T>) {
       const out: Each<T> = []
+      if (busy()) await ready(w, instance)
       for (const c of connections(s)) out.push({ from: c.to, result: await run(s, fn, c) })
       return out
     },
@@ -153,6 +171,7 @@ export function contextFor(w: Wiring, instance: string, impl: Implementation, co
       const ports = impl.provides.flatMap(i => Object.values(i.ops).filter(o => o.kind === 'source' && o.coord === op.coord).map(o => portKey(i.coord, o.coord)))
       if (ports.length === 0) return drop(`${op.name} is not a source of this instance`)
       if (op.output && !op.output.check(data)) return drop(`${op.name} data does not fit its schema`)
+      if (busy()) await ready(w, instance)
       // Only the pod this context was made for, while it is still the home member: a removed or replaced instance publishes nowhere.
       const runtimes = own && w.member(instance)?.pod === own ? [...(runtimesOf.get(own) ?? [])] : []
       await Promise.all(ports.flatMap(p => runtimes.map(d => d(instance, p, data))))
