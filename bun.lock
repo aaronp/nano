@@ -84,6 +84,21 @@
         "@pritzlaff/nano-runes": "workspace:*",
       },
     },
+    "packages/people": {
+      "name": "@composable/people",
+      "version": "0.1.0",
+      "dependencies": {
+        "@pritzlaff/nano-core": "workspace:*",
+        "@pritzlaff/nano-elements": "workspace:*",
+        "@pritzlaff/nano-runes": "workspace:*",
+        "lit": "^3.0.0",
+        "typebox": "^1.4.0",
+      },
+      "devDependencies": {
+        "@happy-dom/global-registrator": "^21.0.4",
+        "@pritzlaff/nano-app": "workspace:*",
+      },
+    },
     "packages/platform": {
       "name": "@composable/platform",
       "version": "0.1.0",
@@ -167,6 +182,8 @@
     "@composable/circuit": ["@composable/circuit@workspace:packages/circuit"],
 
     "@composable/editor": ["@composable/editor@workspace:packages/editor"],
+
+    "@composable/people": ["@composable/people@workspace:packages/people"],
 
     "@composable/platform": ["@composable/platform@workspace:packages/platform"],
 

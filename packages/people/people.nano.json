@@ -1,0 +1,32 @@
+{
+  "nano": 1,
+  "title": "Save a person",
+  "imports": [],
+  "systems": [
+    { "id": "app", "instances": [
+      { "id": "rules", "kind": "person-rules" },
+      { "id": "form", "kind": "person-form", "needs": {
+        "bff": { "implements": "example/bff", "layer": "bff", "at": "bff" },
+        "rules": { "implements": "example/person-validation", "layer": "app", "at": "rules" } } }
+    ], "subscriptions": [] },
+    { "id": "bff", "instances": [
+      { "id": "bff", "kind": "people-bff", "needs": {
+        "persons": { "implements": "example/person-api", "layer": "api", "at": "persons" } } }
+    ], "subscriptions": [] },
+    { "id": "api", "instances": [
+      { "id": "rules", "kind": "person-rules" },
+      { "id": "persons", "kind": "person-service", "needs": {
+        "db": { "implements": "example/db", "layer": "storage", "at": "db" },
+        "rules": { "implements": "example/person-validation", "layer": "api", "at": "rules" } } }
+    ], "subscriptions": [] },
+    { "id": "storage", "instances": [
+      { "id": "db", "kind": "people-db" }
+    ], "subscriptions": [] }
+  ],
+  "workspaces": [
+    { "id": "/people", "title": "People", "icon": "user", "system": "app", "layout": { "root": {
+      "type": "component", "componentType": "widget", "id": "form", "title": "Person form", "componentState": { "widget": "person-form", "name": "form" } } } },
+    { "id": "/people-data", "title": "People data", "icon": "database", "system": "storage", "layout": { "root": {
+      "type": "component", "componentType": "widget", "id": "db", "title": "People DB", "componentState": { "widget": "people-db", "name": "db" } } } }
+  ]
+}
