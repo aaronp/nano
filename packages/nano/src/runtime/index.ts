@@ -133,7 +133,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
   /**
    * Create; with `provision`, one pass: every instance it makes joins at once, then its dependencies are settled
    * (made instances settle theirs in the same pass). Calls into or out of the pass's instances wait until it is done.
-   * ponytail: a `make` that awaits a call waits on its own pass forever; a make may start calls, not await them.
+   * Calls a `make` makes through its own ctx fail at once (construction is not use), so a make cannot wait on its own pass.
    */
   async function make(iid: string, implementation: string, o: { config?: unknown; provision?: boolean }, pass?: Pass, depth = 0): Promise<NanoResult<{ coord: string; unsatisfied: Unsatisfied[] }>> {
     const impl = registry.implementation(implementation)

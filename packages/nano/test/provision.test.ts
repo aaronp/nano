@@ -3,7 +3,7 @@ import { Type } from 'typebox'
 import { defineSchema } from '../src/schema.ts'
 import { op } from '../src/op.ts'
 import { iface, type Interface } from '../src/iface.ts'
-import { success } from '../src/result.ts'
+import { failure, success } from '../src/result.ts'
 import { implementation, provide, type Implementation } from '../src/implementation.ts'
 import { provider } from '../src/provider.ts'
 import { createRegistry } from '../src/registry.ts'
@@ -36,9 +36,23 @@ const loopA = impl('acme/loop/a', [LA], { d: LD, b: LB })
 const loopB = impl('acme/loop/b', [LB], { c: LC })
 const loopC = impl('acme/loop/c', [LC], { b: LB, d: LD })
 const loopD = impl('acme/loop/d', [LD])
-// An instance whose make calls its dependency before the pass has wired it.
+// A make that awaits its dependency: construction is not use, so it fails at once instead of waiting.
+const during = new Map<string, unknown[]>()
+const blocking = implementation('acme/loop/blocking', { provides: [], dependencies: { d: LD }, make: async ctx => {
+  during.set(ctx.instance, [await ctx.one(LD, d => d.ping('hi')), await ctx.optional(LD, d => d.ping('hi')), await ctx.all(LD, d => d.ping('hi'))])
+  return []
+} })
+// A pass held open by a slow make, and an outside instance that calls into it meanwhile.
+const Slow = face('acme/l-slow')
+const slow = implementation('acme/loop/slow', { provides: [Slow], make: async () => { await new Promise(r => setTimeout(r, 10)); return [provide(Slow, { ping: async (_c, s) => success(s) })] } })
+const waits = impl('acme/loop/waits', [], { d: LD, s: Slow })
+const outsider = impl('acme/loop/outsider', [], { d: LD })
+// An instance that, once made, calls its dependency while a slow make still holds the pass open.
 const early = new Map<string, Promise<unknown>>()
-const eager = implementation('acme/loop/eager', { provides: [], dependencies: { d: LD }, make: ctx => { early.set(ctx.instance, ctx.one(LD, d => d.ping('hi'))); return [] } })
+const eager = implementation('acme/loop/eager', { provides: [], dependencies: { s: Slow, d: LD }, make: ctx => {
+  setTimeout(() => early.set(ctx.instance, ctx.one(LD, d => d.ping('hi'))), 0)
+  return []
+} })
 const boom = implementation('acme/bad/boom', { provides: [], make: () => { throw new Error('nope') } })
 
 function setup(policy?: Policy, idTaken?: (id: string) => boolean) {
@@ -48,7 +62,7 @@ function setup(policy?: Policy, idTaken?: (id: string) => boolean) {
     provider('acme/db', [impl('acme/db/mem', [DB]), impl('acme/db/file', [DB])]),
     provider('acme/cyc', [cycA, cycB]),
     provider('acme/bad', [boom]),
-    provider('acme/loop', [loopR, loopA, loopB, loopC, loopD, eager]),
+    provider('acme/loop', [loopR, loopA, loopB, loopC, loopD, eager, blocking, slow, waits, outsider]),
   ]) registry.add(p)
   return createRuntime('r1', { registry, ...(policy && { policy }), ...(idTaken && { idTaken }) })
 }
@@ -129,7 +143,27 @@ describe('provisioning', () => {
       'acme/loop/r#r -> acme/loop/a#a-1 live',
     ])
   })
-  test('calls during the pass wait for it, then get the real result', async () => {
+  test('a make that awaits a dependency call fails at once: dependencies are not available while it is being made', async () => {
+    const rt = setup()
+    await rt.create('k', 'acme/loop/blocking', { provision: true })
+    const fail = failure('missing-component', 'acme/loop/blocking#k: dependencies are not available while it is being made')
+    expect(during.get('acme/loop/blocking#k')).toEqual([fail, fail, []])
+    expect(edges(rt)).toEqual(['acme/loop/blocking#k -> acme/loop/d#d-1 live'])
+  })
+  test('a call from outside into an instance of an unfinished pass waits for the pass, then succeeds', async () => {
+    const rt = setup()
+    await rt.create('o', 'acme/loop/outsider')
+    rt.subscribe({ kind: 'call', from: 'acme/loop/outsider#o', to: 'acme/loop/d#d-1' })
+    const order: string[] = []
+    const created = rt.create('w', 'acme/loop/waits', { provision: true }).then(() => order.push('pass'))
+    await new Promise(r => setTimeout(r, 2))
+    expect(rt.members()).toContain('acme/loop/d#d-1')
+    const call = contexts.get('acme/loop/outsider#o')!.one(LD, d => d.ping('x')).then(r => { order.push('call'); return r })
+    await created
+    expect(await call).toEqual(success('x'))
+    expect(order).toEqual(['pass', 'call'])
+  })
+  test('a call made after make, during the pass, waits for it, then gets the real result', async () => {
     const rt = setup()
     await rt.create('e', 'acme/loop/eager', { provision: true })
     expect(await early.get('acme/loop/eager#e')).toEqual(success('hi'))
