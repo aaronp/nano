@@ -20,10 +20,15 @@ export type InstanceState = 'starting' | 'running' | 'failed' | 'stopped'
 export type PodState = InstanceState
 
 /** One made implementation in a pod. `host` is its invoker (a host pod from `pod.ts`) while it is running. */
-export type Instance = { readonly coord: string; state: InstanceState; host?: Pod }
+export type Instance = { readonly coord: string; state: InstanceState; host?: Pod; /** Why its make failed, while it is `failed`. */ reason?: string }
 
 /** A runtime that holds a pod: it delivers the pod's publishes and refreshes its statuses when the pod changes. */
-export type Holder = { deliver(from: string, port: string, data: unknown): Promise<void>; refresh(): void }
+export type Holder = {
+  deliver(from: string, port: string, data: unknown): Promise<void>
+  refresh(): void
+  /** These coords of `pod` are gone (the whole pod if `whole`): drop the subscriptions naming them. */
+  forget(pod: PodRecord, coords: string[], whole: boolean): void
+}
 
 /** `next` is the next instance index (indices are never reused); `holders` are the runtimes it is a member of. */
 export type PodRecord = {
@@ -43,7 +48,7 @@ export type PodInfo = {
   count: number
   state: PodState
   home: string
-  instances: { coord: string; state: InstanceState }[]
+  instances: { coord: string; state: InstanceState; reason?: string }[]
 }
 
 export const instanceCoord = (pod: string, n: number): string => `${pod}#${n}`
@@ -60,7 +65,7 @@ export function podState(states: InstanceState[]): PodState {
 }
 
 export function podInfo(r: PodRecord): PodInfo {
-  const instances = [...r.instances.values()].map(i => ({ coord: i.coord, state: i.state }))
+  const instances = [...r.instances.values()].map(i => ({ coord: i.coord, state: i.state, ...(i.reason !== undefined && { reason: i.reason }) }))
   return {
     id: r.id, implementation: r.implementation.coord, ...(r.config !== undefined && { config: r.config }),
     count: instances.length, state: podState(instances.map(i => i.state)), home: r.home, instances,

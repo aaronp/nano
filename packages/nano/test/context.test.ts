@@ -368,6 +368,7 @@ describe('publish', () => {
     const { rt, contexts, ctx, received } = await wired()
     rt.remove('t')
     await rt.create('t', 'acme/clock/ticker')
+    rt.subscribe({ kind: 'event', from: T, source: TICK, to: 'l1#0', target: WRITE })
     await ctx.publish(Ticks.ops.tick, 1)
     expect(received.size).toBe(0)
     await contexts.get(T)!.publish(Ticks.ops.tick, 2)

@@ -55,7 +55,13 @@ export type Runtime = {
   addInstance(pod: string): Promise<NanoResult<string>>
   /** Place a pod from its home: the record is shared, not copied, so its instances and their states are the home's. */
   add(pod: PodRecord): NanoResult<void>
-  /** At home, the pod's instances are disposed (stopped); placed here from elsewhere, only the membership goes. */
+  /** Scale to `count` (1 to 500): up adds at the next indices, down removes the highest. Returns the instance coords after. Only at home. */
+  scale(pod: string, count: number): Promise<NanoResult<string[]>>
+  /** Remove one instance (only at home): it is disposed and every subscription naming it is deleted (decision 49). */
+  removeInstance(coord: string): NanoResult<void>
+  /** Remake an instance in place; a failing make returns `threw` and leaves it `failed`. Only at home. */
+  restart(coord: string): Promise<NanoResult<void>>
+  /** At home, the pod's instances are disposed and every subscription naming them is deleted, in every runtime holding it; placed here from elsewhere, only this runtime's membership (and its subscriptions to it) go. */
   remove(pod: string): NanoResult<void>
   /** Remake every instance of a pod with another implementation (or config), in place: coords and subscriptions are kept. Only at home. */
   replace(pod: string, implementation: string, opts?: { config?: unknown }): Promise<NanoResult<void>>
@@ -127,7 +133,15 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       if (statuses.get(s.id) !== now) { statuses.set(s.id, now); emit({ type: 'status', id: s.id, status: now }) }
     }
   }
-  const holder: Holder = { deliver: deliverer(wiring), refresh: recompute }
+  /** This runtime stops holding `coords`: subscriptions naming them are deleted (they are gone, not unavailable). */
+  const forget = (p: PodRecord, coords: string[], whole: boolean) => {
+    if (whole) { pods.delete(p.id); p.holders.delete(holder) }
+    const gone = new Set(coords)
+    for (const c of coords) emit({ type: 'instance-removed', instance: c })
+    for (const s of subs.filter(s => gone.has(s.from) || gone.has(s.to))) rt.unsubscribe(s.id)
+    recompute()
+  }
+  const holder: Holder = { deliver: deliverer(wiring), refresh: recompute, forget }
   /** A pod's instances changed: every runtime holding it recomputes its statuses. */
   const changed = (p: PodRecord) => { for (const h of p.holders) h.refresh() }
   const hold = (p: PodRecord) => {
@@ -158,13 +172,19 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     if (impl.config && !impl.config.check(config)) return failure('invalid-input', `${pod}: config does not fit ${impl.config.type}`)
   }
 
-  /** Make one instance's host; failing, the instance is `failed`. Stopped meanwhile (its pod removed), the host is dropped. */
-  async function start(p: PodRecord, inst: Instance): Promise<void> {
+  const badCount = (pod: string, n: number): NanoResult<never> | undefined =>
+    !Number.isInteger(n) || n < 1 || n > 500 ? failure('invalid-input', `${pod}: count must be a whole number from 1 to 500`) : undefined
+  /** Make one instance's host; failing, the instance is `failed` with the reason. Stopped meanwhile (removed), the host is dropped. */
+  async function start(p: PodRecord, inst: Instance): Promise<NanoResult<void>> {
     const { ctx, bind } = contextFor(wiring, inst.coord, p.implementation, p.config)
     const host = await createHostPod(inst.coord, p.implementation, ctx, opts.pod)
-    if (inst.state !== 'starting') { if (host.ok) host.value.dispose(); return }
-    if (host.ok) { bind(host.value); inst.host = host.value; inst.state = 'running' } else inst.state = 'failed'
+    if (inst.state !== 'starting') { if (host.ok) host.value.dispose(); return failure('not-found', `${inst.coord} was removed while it started`) }
+    if (host.ok) { bind(host.value); inst.host = host.value; inst.state = 'running'; delete inst.reason } else {
+      inst.state = 'failed'; inst.reason = host.fail.reason
+      try { opts.pod?.observe?.({ kind: 'exception', instance: inst.coord, op: 'make', error: host.fail.reason }) } catch { /* an observer must never break the runtime */ }
+    }
     changed(p)
+    return host.ok ? success(undefined) : host
   }
 
   /** coord → the provisioning pass it was made in, while that pass is unfinished; calls into or out of it wait for it. */
@@ -182,7 +202,8 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
   async function make(pid: string, implementation: string, o: { config?: unknown; count?: number; provision?: boolean }, pass?: Pass, depth = 0): Promise<NanoResult<Created>> {
     if (!ID.test(pid)) return failure('invalid-input', `bad pod id ${JSON.stringify(pid)}`)
     const count = o.count ?? 1
-    if (!Number.isInteger(count) || count < 1) return failure('invalid-input', `${pid}: count must be a whole number from 1`)
+    const bc = badCount(pid, count)
+    if (bc) return bc
     const impl = registry.implementation(implementation)
     if (!impl) return failure('not-found', `no implementation ${implementation}`)
     if (pods.has(pid) || opts.idTaken?.(pid)) return failure('exists', `pod id ${pid} is taken`)
@@ -249,6 +270,35 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       await start(p, inst)
       return success(inst.coord)
     },
+    async scale(pid, count) {
+      const p = pods.get(pid)
+      if (!p) return failure('not-found', `${pid} is not a pod of ${id}`)
+      if (p.home !== id) return failure('denied', `${pid}: scale it at its home runtime ${p.home}`)
+      const no = badCount(pid, count)
+      if (no) return no
+      const byIndex = () => [...p.instances.keys()].sort((x, y) => parseInstance(x)!.index - parseInstance(y)!.index)
+      for (const c of byIndex().slice(count)) rt.removeInstance(c)
+      await Promise.all(Array.from({ length: count - p.instances.size }, () => rt.addInstance(pid)))
+      return success(byIndex())
+    },
+    removeInstance(coord) {
+      const f = find(coord)
+      if (!f) return failure('not-found', `${coord} is not an instance of ${id}`)
+      if (f.pod.home !== id) return failure('denied', `${coord}: remove it at its home runtime ${f.pod.home}`)
+      f.instance.host?.dispose(); delete f.instance.host; f.instance.state = 'stopped'
+      f.pod.instances.delete(coord)
+      for (const h of [...f.pod.holders]) h.forget(f.pod, [coord], false)
+      return success(undefined)
+    },
+    async restart(coord) {
+      const f = find(coord)
+      if (!f) return failure('not-found', `${coord} is not an instance of ${id}`)
+      if (f.pod.home !== id) return failure('denied', `${coord}: restart it at its home runtime ${f.pod.home}`)
+      f.instance.host?.dispose(); delete f.instance.host; delete f.instance.reason
+      f.instance.state = 'starting'
+      changed(f.pod)
+      return start(f.pod, f.instance)
+    },
     add(p) {
       if (pods.has(p.id)) return failure('exists', `pod id ${p.id} is taken`)
       hold(p)
@@ -257,14 +307,11 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     remove(pid) {
       const p = pods.get(pid)
       if (!p) return failure('not-found', `${pid} is not a pod of ${id}`)
-      pods.delete(pid)
-      p.holders.delete(holder)
-      if (p.home === id) {
-        for (const i of p.instances.values()) { i.host?.dispose(); delete i.host; i.state = 'stopped' }
-        changed(p)
-      }
-      for (const c of p.instances.keys()) emit({ type: 'instance-removed', instance: c })
-      recompute()
+      const coords = [...p.instances.keys()]
+      if (p.home !== id) { forget(p, coords, true); return success(undefined) }
+      for (const i of p.instances.values()) { i.host?.dispose(); delete i.host; i.state = 'stopped' }
+      p.instances.clear()
+      for (const h of [...p.holders]) h.forget(p, coords, true)
       return success(undefined)
     },
     async replace(pid, implementation, o = {}) {

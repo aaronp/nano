@@ -107,7 +107,7 @@ describe('placing', () => {
     expect(app.place(S, 'signer', 'client')).toEqual({ ok: false, fail: { type: 'denied', reason: 'no signer -> client' } })
     expect(client.instances()).toEqual([])
   })
-  test('removing it at home removes it everywhere; subscriptions to it wait', async () => {
+  test('removing it at home removes it everywhere; subscriptions to it are deleted', async () => {
     const { app, signerRt, client } = await setup()
     app.place(S, 'signer', 'client')
     await client.create('t', 'acme/ui/tester', { provision: true })
@@ -115,7 +115,7 @@ describe('placing', () => {
     expect(client.status(sid)).toBe('live')
     expect(signerRt.remove('s')).toEqual(success(undefined))
     expect(client.instances()).toEqual([T])
-    expect(client.status(sid)).toBe('waiting')
+    expect(client.subscriptions()).toEqual([])
     expect(await contexts.get(T)!.one(Signer, s => s.ping('x'))).toMatchObject({ ok: false, fail: { type: 'missing-component' } })
   })
   test('removing it from a runtime it was placed into leaves its home alone', async () => {

@@ -138,17 +138,11 @@ describe('saving and loading', () => {
     expect(saveDoc(app).runtimes).toEqual([{ id: 'strict', instances: [], members: [], subscriptions: [] }])
   })
 
-  test('a subscription to a removed target is still saved, and waits after loading', async () => {
+  test('a subscription to a removed target is deleted, so it is not saved', async () => {
     const app = await setup()
     app.runtime('client')!.remove('s')
-    expect(app.runtime('client')!.status('s1')).toBe('waiting')
-    const doc = saveDoc(app)
-    expect(doc.runtimes.find(r => r.id === 'client')!.subscriptions[0]).toEqual({ id: 's1', kind: 'call', from: T, to: S })
-    const { app: back } = await load(doc)
-    const client = back.runtime('client')!
-    expect(client.status('s1')).toBe('waiting')
-    expect(back.place(S, 'signer', 'client')).toEqual(success(undefined))
-    expect(client.status('s1')).toBe('live')
+    expect(app.runtime('client')!.subscriptions().some(s => s.to.startsWith('s#'))).toBe(false)
+    expect(saveDoc(app).runtimes.find(r => r.id === 'client')!.subscriptions.some(s => s.to.startsWith('s#'))).toBe(false)
   })
 
   test('an event subscription survives a round trip, live', async () => {

@@ -177,6 +177,7 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Decision:** Removing an instance at its home removes it from every runtime of the application it was placed into (each emits `instance-removed`, unregisters its publish delivery, and its subscriptions to it go `waiting`). Removing it from a runtime it was placed into touches only that runtime.
 **Why:** The home disposes the pod; a guest holding a disposed pod would show a live connection that can only fail.
 **Cost if wrong:** Guests keep a dead member; calls into it fail `not-found … is disposed`.
+**Superseded in part by 49:** its subscriptions are deleted, not left waiting.
 
 ## 30. Does a call in another runtime wait for the home's provisioning pass?
 
@@ -323,7 +324,7 @@ Pinned by the matching tests in `application.test.ts`, `document.test.ts` and `p
 - An end whose instance is not `running` makes a subscription `waiting`. Every runtime holding a pod is one of its `holders` (its publish delivery and a status refresh); an instance's state change refreshes them all.
 - Placing shares the record, not a copy. The publish registry is the record's `holders` (was a `WeakMap<Pod, Set<Deliver>>`, decision 17); a context publishes only while its own host is still the instance's. The pass wait stays keyed on instance coords, now `<pod>#<n>`.
 - `replace(pod, implementation, opts)` remakes every instance of the pod off to the side, then swaps them all at once; any make failing changes nothing. Coords are kept, so no subscription is rewritten or re-policed, tags stay, and guests see the new implementation through the shared record. `rehome` is gone (decision 34 superseded) and `instance-replaced` is now `pod-replaced { pod, implementation }`. The application tests on rewrites a guest's policy denies, and on `rehome` itself, are deleted; the rest are kept on the new coords.
-- `remove(pod)` takes a pod id: at home the instances are disposed and `stopped`; placed, only the membership goes. Subscriptions to it still wait (the cascade comes with removal in a later task).
+- `remove(pod)` takes a pod id: at home the instances are disposed and `stopped`; placed, only the membership goes. Its subscriptions are deleted (decision 49).
 - `members()`/`member()` are replaced by `pods()`, `pod(id)` (a `PodInfo`), `instances()` and `record(id)` (the live record, for placing, and for the examples' test-only `press`, decision 45). `PodInfo` carries `home`, so the pods test "reports its implementation, config, count, state and instances" now expects `home: 'app'`.
 - Provisioning names a made pod `<last segment>-<first free n from 1>` and subscribes to its `#0`. It matches instances whatever their state, so a failed match still gets a subscription; when that subscription is not live the role is unsatisfied with `subscription <id> to <coord> is <status>` (Review Focus 5). With `count` above 1 every instance is provisioned. The old test "a nested create that fails leaves the role unsatisfied with its reason" became that case.
 - For the tests this task turns green: `addInstance(pod)` (the next index, home only) and a minimal `connect` (a `{ pod }` target, by `first` — the lowest running index — or `index`). The connecting task brings the other targets, tags and the `2 match` rule.
@@ -332,3 +333,14 @@ Pinned by the matching tests in `application.test.ts`, `document.test.ts` and `p
 
 **Why:** The spec: a pod owns its instances, their states and their lifecycle; a failing make never fails its runtime; coords are deterministic and survive a swap. Sharing the record makes "placed without copying" literal and removes the follow-the-home machinery.
 **Cost if wrong:** Guests can no longer refuse a new implementation by policy; a guest that must would need a per-runtime veto on `pod-replaced`.
+
+## 49. Removal cascades; unavailable waits (pods revision, task 2)
+
+**Decision:**
+- Removing an instance or pod **deletes** every subscription naming the removed coords, in every runtime holding the pod (each emits `instance-removed`, then `subscription-removed` per subscription). Removing at home also evicts the pod from guests; removing from a guest only drops that runtime's membership and its subscriptions to it. Supersedes decision 29's "its subscriptions to it go `waiting`".
+- An **unavailable** end (instance `failed`, `stopped` or `starting`) still makes the subscription `waiting`; it goes `live` when the instance runs again. Only removal (the end is gone) deletes.
+- `scale(pod, count)` (1 to 500; the same cap on `create`, `invalid-input` above) removes the highest indices going down and adds at `next` going up; indices are never reused. `removeInstance` and `restart` act at home only (`denied` elsewhere; unknown `not-found`). `restart` remakes in place; a failing make returns `threw` and the instance stays `failed`.
+- A failed make keeps its reason on the instance (`PodInfo.instances[].reason`) and reports an `exception` observation (`op: 'make'`) through the existing `observe` option; Task 6 moves it to the event stream.
+
+**Why:** The spec: unavailable is temporary and a connection should wait for it; deleted is final, and a subscription to a coord that will never be reused only misleads.
+**Cost if wrong:** A caller wanting "reconnect on re-add" must resubscribe; scaling down silently deletes the subscriptions of the highest instances.

@@ -8,6 +8,7 @@ import { implementation, provide } from '../src/implementation.ts'
 import { provider } from '../src/provider.ts'
 import { createRegistry } from '../src/registry.ts'
 import type { Policy } from '../src/policy.ts'
+import type { Observation } from '../src/pod.ts'
 import { createRuntime, instanceCoord, parseInstance, type RuntimeEvent } from '../src/runtime/index.ts'
 
 const Num = defineSchema('Num', Type.Number())
@@ -30,7 +31,7 @@ const boom = implementation('acme/bad/boom', { provides: [], make: () => { throw
 const configured = implementation('acme/app/conf', { provides: [], config: Num, make: () => [] })
 const DB_GET = portKey(DB.coord, DB.ops.get.coord)
 
-function setup(opts: { policy?: Policy; idTaken?: (id: string) => boolean } = {}) {
+function setup(opts: { policy?: Policy; idTaken?: (id: string) => boolean; pod?: { observe?(o: Observation): void } } = {}) {
   const registry = createRegistry()
   for (const p of [
     provider('acme/clock', [ticker]), provider('acme/log', [memLog, noteLog]), provider('acme/db', [memDb, fileDb]),
@@ -79,10 +80,30 @@ describe('runtime pods', () => {
     expect(await rt.create('b', 'acme/log/mem', { count: 1.5 })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
     expect(rt.pods()).toEqual([])
   })
-  test('a pod whose make throws is created, with its instance failed', async () => {
+  test('a count above 500 fails invalid-input, at create and scale', async () => {
     const { rt } = setup()
+    expect(await rt.create('b', 'acme/log/mem', { count: 501 })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    await rt.create('b', 'acme/log/mem')
+    expect(await rt.scale('b', 501)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(rt.pod('b')!.count).toBe(1)
+  })
+  test('a removal at home cascades in a runtime the pod was placed into', async () => {
+    const { rt, registry } = setup()
+    const r2 = createRuntime('r2', { registry })
+    await r2.create('z', 'acme/log/mem')
+    await rt.create('a', 'acme/clock/ticker')
+    rt.add(r2.record('z')!)
+    rt.subscribe({ kind: 'event', from: 'a#0', source: tickToLog.source, to: 'z#0', target: tickToLog.target })
+    r2.remove('z')
+    expect(rt.pods()).toEqual(['a'])
+    expect(rt.subscriptions()).toEqual([])
+  })
+  test('a pod whose make throws is created, with its instance failed', async () => {
+    const seen: unknown[] = []
+    const { rt } = setup({ pod: { observe: o => seen.push(o) } })
     expect(await rt.create('x', 'acme/bad/boom')).toEqual(success({ pod: 'x', instances: ['x#0'], unsatisfied: [] }))
-    expect(rt.pod('x')).toMatchObject({ state: 'failed', instances: [{ coord: 'x#0', state: 'failed' }] })
+    expect(rt.pod('x')).toMatchObject({ state: 'failed', instances: [{ coord: 'x#0', state: 'failed', reason: expect.any(String) }] })
+    expect(seen).toMatchObject([{ kind: 'exception', instance: 'x#0', op: 'make' }])
   })
   test('config that does not fit the implementation fails invalid-input', async () => {
     const { rt } = setup()
@@ -236,16 +257,14 @@ describe('runtime subscriptions', () => {
     expect(rt.subscriptions()[0]).toMatchObject({ to: 'c#0' })
     expect(rt.status('s1')).toBe('live')
   })
-  test('removing a target leaves its subscriptions waiting', async () => {
+  test('removing a target deletes its subscriptions (decision 49)', async () => {
     const { rt } = setup()
     await rt.create('a', 'acme/clock/ticker')
     await rt.create('b', 'acme/log/mem')
     rt.subscribe(tickToLog)
     expect(rt.remove('b')).toEqual(success(undefined))
-    expect(rt.subscriptions()).toEqual([{ id: 's1', ...tickToLog }])
-    expect(rt.status('s1')).toBe('waiting')
-    await rt.create('b', 'acme/log/mem')
-    expect(rt.status('s1')).toBe('live')
+    expect(rt.subscriptions()).toEqual([])
+    expect(rt.status('s1')).toBeUndefined()
   })
   test('removing a pod at home disposes its instances', async () => {
     const { rt } = setup()

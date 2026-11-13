@@ -222,7 +222,7 @@ describe('connecting', () => {
 
 describe('scaling', () => {
   // Behaviour 2.
-  test.todo('given log#0 connected, when log is scaled to two, then log#1 is added and the connection to log#0 is unchanged', async () => {
+  test('given log#0 connected, when log is scaled to two, then log#1 is added and the connection to log#0 is unchanged', async () => {
     const rt = setup()
     await rt.create('ticks', 'acme/clock/ticker')
     await rt.create('log', 'acme/log/mem')
@@ -233,7 +233,7 @@ describe('scaling', () => {
     expect(rt.subscriptions()).toEqual(before)
     expect(rt.status('s1')).toBe('live')
   })
-  test.todo('given log#0 and log#1 each connected, when log is scaled to one, then log#1 and only its subscription go', async () => {
+  test('given log#0 and log#1 each connected, when log is scaled to one, then log#1 and only its subscription go', async () => {
     const rt = setup()
     await rt.create('ticks', 'acme/clock/ticker')
     await rt.create('log', 'acme/log/mem', { count: 2 })
@@ -243,14 +243,14 @@ describe('scaling', () => {
     expect(edges(rt)).toEqual(['ticks#0 -> log#0 live'])
   })
   // Behaviour 6.
-  test.todo('given log#0 removed, when an instance is added, then it is log#1, never a reused log#0', async () => {
+  test('given log#0 removed, when an instance is added, then it is log#1, never a reused log#0', async () => {
     const rt = setup()
     await rt.create('log', 'acme/log/mem')
     expect(rt.removeInstance('log#0')).toEqual(success(undefined))
     expect(await rt.addInstance('log')).toEqual(success('log#1'))
     expect(rt.pod('log')).toMatchObject({ count: 1, instances: [{ coord: 'log#1' }] })
   })
-  test.todo('given log scaled down from two, when scaled back up, then the new instance is log#2', async () => {
+  test('given log scaled down from two, when scaled back up, then the new instance is log#2', async () => {
     const rt = setup()
     await rt.create('log', 'acme/log/mem', { count: 2 })
     await rt.scale('log', 1)
@@ -268,25 +268,25 @@ describe('cascade and wait', () => {
     return rt
   }
   // Behaviour 3.
-  test.todo('given subscriptions to vault#0 and vault#1, when pod vault is removed, then every subscription naming vault#… is deleted', async () => {
+  test('given subscriptions to vault#0 and vault#1, when pod vault is removed, then every subscription naming vault#… is deleted', async () => {
     const rt = await vaults()
     expect(rt.remove('vault')).toEqual(success(undefined))
     expect(rt.subscriptions()).toEqual([])
     expect(rt.pod('vault')).toBeUndefined()
   })
-  test.todo('given subscriptions to vault#0 and vault#1, when instance vault#1 is removed, then only its subscription is deleted', async () => {
+  test('given subscriptions to vault#0 and vault#1, when instance vault#1 is removed, then only its subscription is deleted', async () => {
     const rt = await vaults()
     expect(rt.removeInstance('vault#1')).toEqual(success(undefined))
     expect(edges(rt)).toEqual(['user#0 -> vault#0 live'])
     expect(rt.pod('vault')).toMatchObject({ count: 1, instances: [{ coord: 'vault#0' }] })
   })
-  test.todo('given an unknown pod or instance, when it is removed, then it fails not-found', () => {
+  test('given an unknown pod or instance, when it is removed, then it fails not-found', () => {
     const rt = setup()
     expect(rt.remove('nope')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
     expect(rt.removeInstance('nope#0')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
   })
   // Behaviour 4.
-  test.todo('given a failed vault#0, when subscribed to, then the subscription waits; when vault#0 is restarted, then it is live', async () => {
+  test('given a failed vault#0, when subscribed to, then the subscription waits; when vault#0 is restarted, then it is live', async () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     failing = true
@@ -300,7 +300,7 @@ describe('cascade and wait', () => {
     expect(rt.status('s1')).toBe('live')
     expect(await ping('user#0', 'x')).toEqual(success('flaky x'))
   })
-  test.todo('given a failed vault#0, when its restart fails again, then it stays failed and the subscription keeps waiting', async () => {
+  test('given a failed vault#0, when its restart fails again, then it stays failed and the subscription keeps waiting', async () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     failing = true
