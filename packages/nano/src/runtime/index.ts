@@ -3,7 +3,7 @@
  *
  *   const rt = createRuntime('r1', { registry })
  *   await rt.create('b', 'acme/log/mem')                                  // NanoResult<{ coord: 'acme/log/mem#b', ... }>
- *   rt.subscribe({ kind: 'call', from: 'acme/app/main#a', to: 'acme/log/mem#b' }); rt.status('s1')   // 'live'
+ *   rt.subscribe({ kind: 'call', from: 'acme/app/main#a', to: 'acme/log/mem#b' }); rt.status('s1')   // 'waiting': no acme/app/main#a yet
  */
 import type { NanoContext } from '../context.ts'
 import type { Implementation } from '../implementation.ts'
@@ -13,7 +13,7 @@ import type { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
 import type { Target } from '../selector.ts'
 import { instanceCoord, parseInstance, targetOf, type Member } from './members.ts'
-import { nextId, reordered, statusOf, type NewSubscription, type Status, type SubscriptionData } from './subscriptions.ts'
+import { invalid, nextId, reordered, statusOf, type NewSubscription, type Status, type SubscriptionData } from './subscriptions.ts'
 
 export * from './members.ts'
 export * from './subscriptions.ts'
@@ -57,7 +57,7 @@ export type RuntimeOpts = {
 export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
   const { registry } = opts
   const policy = opts.policy ?? Policies.allowAll()
-  const members = new Map<string, Member>()
+  let members = new Map<string, Member>() // insertion order is create order; saving relies on it
   let subs: SubscriptionData[] = []
   const statuses = new Map<string, Status>()
   const listeners = new Set<(e: RuntimeEvent) => void>()
@@ -70,6 +70,10 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const now = statusOf(s, c => members.get(c))
       if (statuses.get(s.id) !== now) { statuses.set(s.id, now); emit({ type: 'status', id: s.id, status: now }) }
     }
+  }
+  const bad = (s: SubscriptionData): NanoResult<never> | undefined => {
+    const why = invalid(s)
+    if (why) return failure('invalid-input', why)
   }
   /** The first denial among these subscriptions, as a fail. */
   const denied = (list: readonly SubscriptionData[]): NanoResult<never> | undefined => {
@@ -102,9 +106,9 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const coord = instanceCoord(implementation, iid)
       const pod = await makePod(coord, impl, o.config)
       if (!pod.ok) return pod
-      // ponytail: re-check after the await; two concurrent creates of one id would otherwise both land.
-      if (idHeld(iid)) { pod.value.dispose(); return failure('exists', `instance id ${iid} is taken`) }
-      members.set(coord, { coord, pod: pod.value, home: id })
+      // Re-check after the await: a concurrent create, here or elsewhere, may have taken the id.
+      if (idHeld(iid) || opts.idTaken?.(iid)) { pod.value.dispose(); return failure('exists', `instance id ${iid} is taken`) }
+      members.set(coord, { coord, pod: pod.value, home: id, ...(o.config !== undefined && { config: o.config }) })
       emit({ type: 'instance-added', instance: coord, home: id })
       recompute()
       // Task 7 provisions; until then every declared dependency is unsatisfied.
@@ -114,6 +118,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     add(m) {
       const parsed = parseInstance(m.coord)
       if (!parsed) return failure('invalid-input', `bad instance coord ${m.coord}`)
+      if (m.pod.instance !== m.coord) return failure('invalid-input', `${m.coord}: its pod is ${m.pod.instance}`)
       if (members.has(m.coord) || idHeld(parsed.id)) return failure('exists', `instance id ${parsed.id} is taken`)
       members.set(m.coord, m)
       emit({ type: 'instance-added', instance: m.coord, home: m.home })
@@ -131,18 +136,24 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     async replace(coord, implementation, o = {}) {
       const old = members.get(coord)
       if (!old) return failure('not-found', `${coord} is not a member`)
+      if (old.home !== id) return failure('denied', `${coord}: replace it at its home runtime ${old.home}`)
       const impl = registry.implementation(implementation)
       if (!impl) return failure('not-found', `no implementation ${implementation}`)
       const to = instanceCoord(implementation, parseInstance(coord)!.id)
       const swap = (c: string) => (c === coord ? to : c)
-      const touched = subs.filter(s => s.from === coord || s.to === coord).map(s => ({ ...s, from: swap(s.from), to: swap(s.to) }))
-      const no = denied(touched)
-      if (no) return no
-      const pod = await makePod(to, impl, o.config)
+      const rewrite = () => subs.filter(s => s.from === coord || s.to === coord).map(s => ({ ...s, from: swap(s.from), to: swap(s.to) }))
+      const early = denied(rewrite())
+      if (early) return early
+      const config = 'config' in o ? o.config : old.config
+      const pod = await makePod(to, impl, config)
       if (!pod.ok) return pod
-      if (members.get(coord) !== old) { pod.value.dispose(); return failure('not-found', `${coord} changed while it was replaced`) }
-      drop(old)
-      members.set(to, { coord: to, pod: pod.value, home: id })
+      // Subscriptions may have changed during the await: rewrite and police what is there now.
+      const touched = rewrite()
+      const no = members.get(coord) !== old ? failure('not-found', `${coord} changed while it was replaced`) : denied(touched)
+      if (no) { pod.value.dispose(); return no }
+      old.pod.dispose()
+      const next: Member = { coord: to, pod: pod.value, home: id, ...(config !== undefined && { config }) }
+      members = new Map([...members].map(([c, m]) => (c === coord ? [to, next] : [c, m]))) // keeps the slot in create order
       subs = subs.map(s => touched.find(t => t.id === s.id) ?? s)
       emit({ type: 'instance-replaced', from: coord, to })
       for (const s of touched) emit({ type: 'subscription-set', subscription: s })
@@ -150,7 +161,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       return success(to)
     },
     member: c => members.get(c),
-    members: () => [...members.keys()].sort(),
+    members: () => [...members.keys()],
     target(coord) {
       const m = members.get(coord)
       return m && targetOf(m, opts.tagsOf?.(coord) ?? new Set())
@@ -159,7 +170,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const sid = input.id ?? nextId(subs)
       if (subs.some(s => s.id === sid)) return failure('exists', `subscription ${sid} exists`)
       const s = { ...input, id: sid } as SubscriptionData
-      const no = denied([s])
+      const no = bad(s) ?? denied([s])
       if (no) return no
       subs.push(s)
       emit({ type: 'subscription-set', subscription: s })
@@ -177,7 +188,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const i = subs.findIndex(s => s.id === sid)
       if (i < 0) return failure('not-found', `no subscription ${sid}`)
       const s = { ...subs[i]!, to }
-      const no = denied([s])
+      const no = bad(s) ?? denied([s])
       if (no) return no
       subs[i] = s
       emit({ type: 'subscription-set', subscription: s })

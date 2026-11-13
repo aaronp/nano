@@ -101,6 +101,31 @@ describe('runtime members', () => {
     expect(rt.members()).toEqual([])
     expect(disposed).toBe(false)
   })
+  test('members are listed in create order', async () => {
+    const { rt } = setup()
+    await rt.create('z', 'acme/log/mem')
+    await rt.create('a', 'acme/db/mem')
+    expect(rt.members()).toEqual(['acme/log/mem#z', 'acme/db/mem#a'])
+  })
+  test('an id taken elsewhere while the pod was being made fails exists', async () => {
+    let taken = false
+    const { rt } = setup({ idTaken: () => taken })
+    const pending = rt.create('b', 'acme/log/mem')
+    taken = true
+    expect(await pending).toMatchObject({ ok: false, fail: { type: 'exists' } })
+    expect(rt.members()).toEqual([])
+  })
+  test('a member records the config it was created with', async () => {
+    const { rt } = setup()
+    await rt.create('c', 'acme/app/conf', { config: 3 })
+    expect(rt.member('acme/app/conf#c')?.config).toBe(3)
+  })
+  test('add fails invalid-input when the pod belongs to another coord', () => {
+    const { rt } = setup()
+    const pod = { instance: 'acme/log/mem#y', implementation: memLog, invoke: ok, dispose: () => {} }
+    expect(rt.add({ coord: 'acme/log/mem#z', home: 'r2', pod })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(rt.members()).toEqual([])
+  })
   test('a throwing listener does not break the runtime', async () => {
     const { rt } = setup()
     rt.listen(() => { throw new Error('listener') })
@@ -160,6 +185,27 @@ describe('runtime subscriptions', () => {
     expect(rt.subscriptions()).toEqual(before)
     expect(events.length).toBe(seen)
   })
+  test('a denied retarget leaves the status as it was', async () => {
+    let deny = false
+    const { rt } = setup({ policy: { isAllowed: () => (deny ? { approved: false, reason: 'no' } : { approved: true }) } })
+    await rt.create('a', 'acme/clock/ticker')
+    await rt.create('b', 'acme/log/mem')
+    rt.subscribe(tickToLog)
+    deny = true
+    expect(rt.retarget('s1', 'acme/log/mem#c')).toMatchObject({ ok: false, fail: { type: 'denied' } })
+    expect(rt.status('s1')).toBe('live')
+  })
+  test('subscribe and retarget reject ends that are not instance coords', () => {
+    const { rt } = setup()
+    const bad = { ok: false, fail: { type: 'invalid-input' } }
+    expect(rt.subscribe({ ...tickToLog, to: 'nohash' })).toMatchObject(bad)
+    expect(rt.subscribe({ ...tickToLog, from: 'a#b#c' })).toMatchObject(bad)
+    expect(rt.subscribe({ ...tickToLog, source: '' })).toMatchObject(bad)
+    expect(rt.subscribe({ ...tickToLog, kind: 'stream' } as any)).toMatchObject(bad)
+    rt.subscribe(tickToLog)
+    expect(rt.retarget('s1', 'nohash')).toMatchObject(bad)
+    expect(rt.subscriptions()).toEqual([{ id: 's1', ...tickToLog }])
+  })
   test('retarget moves a subscription to a new target', async () => {
     const { rt } = setup()
     await rt.create('a', 'acme/clock/ticker')
@@ -197,7 +243,7 @@ describe('runtime subscriptions', () => {
     rt.subscribe({ ...tickToLog, from: 'acme/clock/ticker#t' })
     expect(await rt.replace('acme/db/mem#d', 'acme/db/file')).toEqual(success('acme/db/file#d'))
     expect(await rt.replace('acme/log/mem#b', 'acme/log/notes')).toEqual(success('acme/log/notes#b'))
-    expect(rt.members()).toEqual(['acme/app/main#a', 'acme/clock/ticker#t', 'acme/db/file#d', 'acme/log/notes#b'])
+    expect(rt.members()).toEqual(['acme/app/main#a', 'acme/db/file#d', 'acme/clock/ticker#t', 'acme/log/notes#b'])
     expect(rt.subscriptions().map(s => s.to)).toEqual(['acme/db/file#d', 'acme/log/notes#b'])
     expect([rt.status('s1'), rt.status('s2')]).toEqual(['live', 'broken'])
     expect(events).toContainEqual({ type: 'instance-replaced', from: 'acme/db/mem#d', to: 'acme/db/file#d' })
@@ -213,6 +259,39 @@ describe('runtime subscriptions', () => {
       { type: 'instance-replaced', from: 'acme/db/mem#d', to: 'acme/db/file#d' },
       { type: 'subscription-set', subscription: { id: 's1', kind: 'call', from: 'acme/app/main#a', to: 'acme/db/file#d' } },
     ])
+  })
+  test('replace carries the config over unless a new one is given', async () => {
+    const { rt } = setup()
+    await rt.create('c', 'acme/app/conf', { config: 3 })
+    await rt.replace('acme/app/conf#c', 'acme/app/conf')
+    expect(rt.member('acme/app/conf#c')?.config).toBe(3)
+    await rt.replace('acme/app/conf#c', 'acme/app/conf', { config: 4 })
+    expect(rt.member('acme/app/conf#c')?.config).toBe(4)
+  })
+  test('replacing a member placed from another runtime is denied and changes nothing', () => {
+    const { rt } = setup()
+    rt.add({ coord: 'acme/log/mem#z', home: 'r2', pod: { instance: 'acme/log/mem#z', implementation: memLog, invoke: ok, dispose: () => {} } })
+    return rt.replace('acme/log/mem#z', 'acme/log/notes').then(r => {
+      expect(r).toEqual({ ok: false, fail: { type: 'denied', reason: 'acme/log/mem#z: replace it at its home runtime r2' } })
+      expect(rt.members()).toEqual(['acme/log/mem#z'])
+    })
+  })
+  test('a subscription added while a replace is pending is rewritten too', async () => {
+    const { rt } = setup()
+    await rt.create('d', 'acme/db/mem')
+    const pending = rt.replace('acme/db/mem#d', 'acme/db/file')
+    rt.subscribe({ kind: 'call', from: 'acme/app/main#a', to: 'acme/db/mem#d' })
+    await pending
+    expect(rt.subscriptions()[0]).toMatchObject({ to: 'acme/db/file#d' })
+  })
+  test('a subscription retargeted away while a replace is pending keeps its new target', async () => {
+    const { rt } = setup()
+    await rt.create('d', 'acme/db/mem')
+    rt.subscribe({ kind: 'call', from: 'acme/app/main#a', to: 'acme/db/mem#d' })
+    const pending = rt.replace('acme/db/mem#d', 'acme/db/file')
+    rt.retarget('s1', 'acme/db/mem#e')
+    await pending
+    expect(rt.subscriptions()[0]).toMatchObject({ to: 'acme/db/mem#e' })
   })
   test('a replace the policy denies for a rewritten subscription changes nothing', async () => {
     const policy: Policy = { isAllowed: (_s, dest) => (dest === 'acme/db/file#d' ? { approved: false, reason: 'no file' } : { approved: true }) }
@@ -234,6 +313,22 @@ describe('runtime subscriptions', () => {
     expect(rt.subscriptions().map(s => s.id)).toEqual(['s3', 's2', 's1'])
     expect(rt.reorder(A, ['s3'])).toMatchObject({ ok: false, fail: { type: 'not-found' } })
     expect(rt.subscriptions().map(s => s.id)).toEqual(['s3', 's2', 's1'])
+  })
+  test('a reorder the policy denies changes nothing', () => {
+    let deny = false
+    const { rt } = setup({ policy: { isAllowed: () => (deny ? { approved: false, reason: 'no' } : { approved: true }) } })
+    const A = 'acme/app/main#a'
+    rt.subscribe({ kind: 'call', from: A, to: 'acme/db/mem#d' })
+    rt.subscribe({ kind: 'call', from: A, to: 'acme/db/file#e' })
+    deny = true
+    expect(rt.reorder(A, ['s2', 's1'])).toEqual({ ok: false, fail: { type: 'denied', reason: 'no' } })
+    expect(rt.subscriptions().map(s => s.id)).toEqual(['s1', 's2'])
+  })
+  test('reordering a consumer with no call subscriptions to an empty list is a no-op', () => {
+    const { rt } = setup()
+    rt.subscribe(tickToLog)
+    expect(rt.reorder('acme/app/main#a', [])).toEqual(success(undefined))
+    expect(rt.subscriptions().map(s => s.id)).toEqual(['s1'])
   })
   test('unsubscribe removes the subscription and announces it', async () => {
     const { rt, events } = setup()

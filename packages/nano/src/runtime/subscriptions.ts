@@ -5,7 +5,7 @@
  *   statusOf(s, coord => runtime.member(coord))   // 'live' | 'waiting' | 'broken'
  */
 import { fits } from '../op.ts'
-import { portOp, type Member } from './members.ts'
+import { parseInstance, portOp, type Member } from './members.ts'
 
 /** `from`/`to` are instance coords; an event's `source`/`target` are port keys (`portKey(ifaceCoord, opCoord)`). */
 export type SubscriptionData =
@@ -28,6 +28,14 @@ export function statusOf(s: SubscriptionData, member: (coord: string) => Member 
   }
   const wanted = Object.values(from.dependencies).flatMap(d => (d.implements === undefined ? [] : [d.implements]))
   return wanted.length === 0 || to.provides.some(i => wanted.includes(i.coord)) ? 'live' : 'broken'
+}
+
+/** Why this subscription's shape is unusable, or undefined when it is fine. */
+export function invalid(s: SubscriptionData): string | undefined {
+  if (s.kind !== 'call' && s.kind !== 'event') return `unknown subscription kind ${String((s as { kind: unknown }).kind)}`
+  for (const end of [s.from, s.to]) if (typeof end !== 'string' || !parseInstance(end)) return `${String(end)} is not an instance coord`
+  if (s.kind === 'event' && !(typeof s.source === 'string' && s.source && typeof s.target === 'string' && s.target))
+    return 'an event subscription needs a source and a target port'
 }
 
 export function nextId(subs: readonly SubscriptionData[]): string {

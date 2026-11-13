@@ -11,7 +11,8 @@ import type { Op } from '../op.ts'
 import type { Pod } from '../pod.ts'
 import type { Target } from '../selector.ts'
 
-export type Member = { coord: string; pod: Pod; home: string }
+/** `config` is what the instance was created with; saving writes it. */
+export type Member = { coord: string; pod: Pod; home: string; config?: unknown }
 
 export const instanceCoord = (implementation: string, id: string): string => `${implementation}#${id}`
 

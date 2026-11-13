@@ -79,3 +79,21 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Decision:** `replace` emits `instance-replaced { from, to }`, then `subscription-set` for each rewritten subscription, then any `status` changes — not `instance-added` / `instance-removed`. `reorder` emits `subscription-set` for each subscription in the given list (in the new order); a listener reads the order from `subscriptions()`.
 **Why:** One event per user-visible change; a listener keeping a member list can apply `instance-replaced` directly.
 **Cost if wrong:** A listener that only handles added/removed misses replacements; emit both, or add an order event.
+
+## 14. In what order does a runtime list its members?
+
+**Decision:** Create order (`add` order for placed members). `replace` keeps the replaced member's slot: `acme/db/mem#d` → `acme/db/file#d` stays where it was.
+**Why:** Saving relies on it: a saved document lists instances in the order they were made, and a replacement doesn't reshuffle the file.
+**Cost if wrong:** One sort in `members()`, and saved documents reorder.
+
+## 15. Can a runtime replace a member whose home is another runtime?
+
+**Decision:** No. `replace` fails `denied` with `<coord>: replace it at its home runtime <home>` and changes nothing.
+**Why:** The home runtime owns the pod and its outgoing calls (decision 11). A replacement made in a guest runtime would leave the home holding the old pod.
+**Cost if wrong:** A cross-runtime replace that goes through the application to the home runtime.
+
+## 16. Does a member remember its config?
+
+**Decision:** Yes, `Member.config` is the config the instance was created with. `replace` carries it over unless `opts.config` is given.
+**Why:** Saving writes it (Task 9), and a replacement of the same kind (a newer version) usually wants the same settings.
+**Cost if wrong:** Replacements that need a fresh config must pass one explicitly.
