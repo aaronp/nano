@@ -69,7 +69,7 @@ async function setup(policies: { signer?: Policy; client?: Policy } = {}) {
 }
 
 describe('placing', () => {
-  test('a placed instance is a member of both, and announced only where it arrives, with its home', async () => {
+  test('a placed pod is a member of both, and announced (created, with each instance state) only where it arrives', async () => {
     const { app, signerRt, client } = await setup()
     const inSigner: RuntimeEvent[] = [], inClient: RuntimeEvent[] = []
     signerRt.listen(e => inSigner.push(e)); client.listen(e => inClient.push(e))
@@ -78,7 +78,7 @@ describe('placing', () => {
     expect(client.pod('s')).toMatchObject({ home: 'signer', instances: [{ coord: S, state: 'running' }] })
     expect(client.record('s')).toBe(signerRt.record('s')!)
     expect(inSigner).toEqual([])
-    expect(inClient).toEqual([{ type: 'instance-added', instance: S, home: 'signer' }])
+    expect(inClient).toEqual([{ type: 'pod-created', pod: 's', implementation: 'acme/keys/signer' }, { type: 'instance', coord: S, state: 'running' }])
   })
   test('calls into it are policed by the runtime they happen in', async () => {
     const signerLog: string[] = [], clientLog: string[] = []
@@ -140,7 +140,7 @@ describe('placing', () => {
     signerRt.listen(e => inSigner.push(e)); client.listen(e => inClient.push(e))
     client.remove('s')
     expect(inSigner).toEqual([])
-    expect(inClient).toEqual([{ type: 'instance-removed', instance: S }])
+    expect(inClient).toEqual([{ type: 'pod-removed', pod: 's' }])
     expect(signerRt.instances()).toEqual([V, S])
     expect(await signerRt.record('s')!.instances.get(S)!.host!.invoke(portKey(Signer.coord, Signer.ops.ping.coord), 'y')).toEqual(success('signed y'))
   })
@@ -208,7 +208,7 @@ describe('swapping at home', () => {
     expect(client.instances()).toEqual([S, T])
     expect(client.pod('s')).toMatchObject({ home: 'signer', implementation: 'acme/keys/signer2' })
     expect(client.subscriptions().map(s => `${s.from} -> ${s.to} ${client.status(s.id)}`)).toEqual([`${T} -> ${S} live`])
-    expect(events).toEqual([])
+    expect(events).toEqual([{ type: 'pod-swapped', pod: 's', from: 'acme/keys/signer', to: 'acme/keys/signer2' }])
     expect(await contexts.get(T)!.one(Signer, s => s.ping('x'))).toEqual(success('signed x'))
   })
   test('swapping to the same implementation leaves guests the new instance: calls succeed, subscriptions stay live', async () => {
@@ -385,6 +385,28 @@ describe('runtimes on demand', () => {
     app.define(signerDef)
     expect(await app.start('signer')).toMatchObject({ ok: false, fail: { type: 'threw' } })
     expect(app.runtime('signer')).toBeUndefined()
+  })
+  test('placed members are rolled back when a start throws', async () => {
+    const reg = registry()
+    let app: ReturnType<typeof createApplication>
+    // The tester's dependencies throw once the client holds the signer: subscribing (after the members are placed) throws.
+    const armed = () => app.runtime('client')?.pod('s') !== undefined
+    const tester = reg.implementation('acme/ui/tester')!
+    const trap = { ...tester, get dependencies() { if (armed()) throw new Error('registry down'); return tester.dependencies } }
+    app = createApplication('app', { registry: { ...reg, implementation: (c: string) => (c === tester.coord ? trap : reg.implementation(c)) } })
+    app.define(signerDef); app.define(clientDef)
+    expect(await app.start('client')).toMatchObject({ ok: false, fail: { type: 'threw', reason: 'starting client: registry down' } })
+    expect(app.runtime('client')).toBeUndefined()
+    const signerRt = app.runtime('signer')!
+    expect(signerRt.instances()).toEqual([V, S])
+    expect(signerRt.record('s')!.holders.size).toBe(1)
+  })
+  test('define refuses a runtime of more than 500 instances', () => {
+    const app = createApplication('app', { registry: registry() })
+    const many = (id: string, n: number) => ({ id, implementation: 'acme/keys/vault', instances: Array.from({ length: n }, (_, i) => i), next: n })
+    expect(app.define({ id: 'big', pods: [many('a', 300), many('b', 201)], members: [], subscriptions: [] }))
+      .toEqual({ ok: false, fail: { type: 'invalid-input', reason: 'big: 501 instances (at most 500)' } })
+    expect(app.define({ id: 'big', pods: [many('a', 300), many('b', 200)], members: [], subscriptions: [] })).toEqual(success(undefined))
   })
   test('a subscription that cannot be added is skipped with a note; the runtime starts with the rest', async () => {
     const app = createApplication('app', { registry: registry() })

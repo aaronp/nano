@@ -85,6 +85,8 @@ Superseded by 51: a swap keeps every coord, so nothing is rewritten and there is
 
 Superseded in part by 51: `swap` emits `pod-swapped { pod, implementation }` (coords are kept, so no subscription is rewritten). The `reorder` part stands.
 
+Superseded in part by 53: the event is `pod-swapped { pod, from, to }`, on the stream of every runtime holding the pod.
+
 ## 14. In what order does a runtime list its members?
 
 **Decision:** Create order (`add` order for placed members). `replace` keeps the replaced member's slot: `acme/db/mem#d` → `acme/db/file#d` stays where it was.
@@ -121,6 +123,8 @@ Superseded by 51: config lives on the pod record; `swap` keeps it unless `opts.c
 **Why:** Keeps the `publish(op)` signature while handlers and event ends are keyed by port; two interfaces offering the identical source both emit it.
 **Cost if wrong:** A `publish(iface, name)` form that names the port.
 
+Superseded in part by 53: a dropped publish is a `failure { coord, reason }` on the stream, not an `exception` observation.
+
 ## 19. What do a subscription's books count?
 
 **Decision:** Messages actually delivered over it — client calls and event deliveries — with the last result. A message the policy denies is neither delivered nor counted. `books(id)` is `{ calls: 0 }` for a subscription with no traffic, `undefined` for an unknown id, and unsubscribing drops the books.
@@ -144,6 +148,8 @@ Superseded by 51: config lives on the pod record; `swap` keeps it unless `opts.c
 **Decision:** The message is denied (`denied`, reason `policy threw: <message>`) and observed as an `exception` from the sender, with `op` the port the message was going to. A verb gets that fail; `publish` still resolves.
 **Why:** Platform failures are fails, never thrown; one runtime's broken policy must not reject another runtime's publish.
 **Cost if wrong:** Treat a throwing policy as approving; one test changes.
+
+Superseded in part by 53: the message is `sent` then `denied`, and the throw is a `failure { coord: <sender>, reason }` on the stream.
 
 ## 23. Which subscription does a call in flight get booked on?
 
@@ -175,6 +181,8 @@ Superseded by 51: config lives on the pod record; `swap` keeps it unless `opts.c
 **Decision:** As decision 22 for messages: the rewire (`subscribe`, `retarget`, `reorder`, `replace`, or a subscription provisioning makes) is denied with reason `policy threw: <message>` and nothing changes; it is observed (if the runtime has an observer) as an `exception` from the subscription's `from`, with `op` the subscription id.
 **Why:** No runtime call rejects because of user code.
 **Cost if wrong:** Let it throw; callers must guard.
+
+Superseded in part by 53: the throw is a `failure { coord: <from>, reason }` on the stream.
 
 ## 28. What does placing an instance check, and what does the receiving runtime hold?
 
@@ -374,6 +382,8 @@ Superseded in part by 51: `replace` is now `swap` and `pod-replaced` is `pod-swa
 **Why:** The spec: unavailable is temporary and a connection should wait for it; deleted is final, and a subscription to a coord that will never be reused only misleads.
 **Cost if wrong:** A caller wanting "reconnect on re-add" must resubscribe; scaling down silently deletes the subscriptions of the highest instances.
 
+Superseded in part by 53: removal and adds are `instance` state events (`stopped`; `starting`), a cascade is `subscription-removed { reason: 'cascade' }`, and a failed make is the `instance` event `failed` with its reason (no separate failure).
+
 ## 50. Connect: end selectors resolved once (pods revision, task 3)
 
 **Decision:**
@@ -397,6 +407,8 @@ Superseded in part by 51: `replace` is now `swap` and `pod-replaced` is `pod-swa
 **Why:** The spec: a swap keeps coords and never makes a subscription wait; placed pods are swapped once, at home, and every runtime sees it through the shared record.
 **Cost if wrong:** A swap that should only reach some instances (a canary) needs a per-instance swap; a host with real teardown needs dispose to wait for in-flight calls.
 
+Superseded in part by 53: `pod-swapped { pod, from, to }`, told to every runtime holding the pod.
+
 ## 52. Start, definitions of pods, and saving indices (pods revision, task 5)
 
 **Decision:**
@@ -409,3 +421,18 @@ Superseded in part by 51: `replace` is now `swap` and `pod-replaced` is `pod-swa
 
 **Why:** The spec's failure boundaries: starting a runtime from its saved definition always gives a runtime; problems are notes and pod states. Indices are never reused within a pod, which must hold across a save too.
 **Cost if wrong:** A caller wanting all-or-nothing starts needs a strict flag; a document can carry gaps in indices forever (harmless, but visible).
+
+## 53. One observable stream per runtime (pods revision, task 6)
+
+**Decision:**
+- `rt.listen` is the only stream (`runtime/trace.ts`); the runtime's `pod.observe` option and the host pod's `Observation` are gone (`createHostPod` takes `onFailure(reason)`, called when a handler throws or times out). A throwing listener is swallowed; listeners see events in emit order.
+- Lifecycle. `pod-created { pod, implementation }` when a pod is created here **or placed here** (a guest learns of it the same way), followed by one `instance` event per instance with its current state (`starting` on create; whatever it is, with any reason, on place). Every later state change of an instance (`starting`, `running`, `failed` with `reason`, `stopped`) is told to **every runtime holding the pod**, since the record is shared. Removing an instance: `instance … stopped` (it is already gone from `instances()`), then each holder's `subscription-removed { reason: 'cascade' }`, then `status` changes. Removing a pod at home: `stopped` for each instance, then in each holder the cascade, then `pod-removed`. Removing a placed pod in a guest: the guest's cascade, then `pod-removed` (no `stopped`: the instances still run at home). `pod-swapped { pod, from, to }` goes to every holder (before, only the home emitted it), followed by `instance … running` for each instance the swap revived. A failed make is the `instance` event `failed` with its reason; it is not also a `failure`.
+- Wiring. `subscription-removed` carries `reason: 'unsubscribed' | 'cascade'`. `subscription-set` and `status` unchanged.
+- Messages. Ids are a per-runtime counter (`m1`, `m2`, …). `sent { id, subscription, from, to, port, kind }` is emitted once the subscription is found (after any provisioning wait; a message whose subscription went away while waiting is not sent at all), then exactly one of `denied { id, reason }` (policy refused or threw; not booked) or `delivered { id, result, ms }` (the invoke's result, whatever it is: a target not running is `delivered` with its `not-found` fail, 0-ish ms, and not booked). Each publish delivery is its own message, `kind: 'event'`, on the stream of the runtime delivering it. `subscription` is always set today (optional in the type for messages without one).
+- Problems. `failure { coord, reason }`: a handler threw or timed out (`coord` the instance, told to every holder of its pod; the reason is the `threw`/`timeout` fail's reason), a policy threw on a message or a rewire (`coord` the sender / the subscription's `from`), a publish dropped (`coord` the publisher). `warning { reason }`: every application note, **on the application's root stream** (`app.listen`), as it is noted; `app.notes()` stays the log. Every note today is made while a runtime is being started, before anyone can reach that runtime to listen, so the root is the one stream that can see them; the reason already names the runtime. `Runtime.warn(reason)` is how the application emits it.
+- The application no longer removes a pod from guests on its home's removal event (the shared record's holders already do it); it drops an instance's tags on `instance … stopped` once no runtime holds it.
+- Test changes: event assertions in `runtime.test.ts` and `application.test.ts` moved to the new shapes; the guest-swap test now expects `pod-swapped` (it expected no event). `pod.test.ts` lost "every invoke is observed once", "an unknown port still ends with one message observation" (message tracing is the runtime's now, pinned in `trace.test.ts`), and its failure tests assert reasons via `onFailure`.
+- *(Task 5 hardening.)* A runtime holds at most `MAX_INSTANCES` = 500 instances of its own pods (placed pods count at home): `create` (count or restored indices), `addInstance` and `scale` refuse beyond with `invalid-input` (`<pod>: <runtime> would hold more than 500 instances`); `define` refuses a definition whose pods sum to more (`<runtime>: <n> instances (at most 500)`); `checkDoc` refuses a document of more than 5000 instances across its runtimes (`<n> instances (at most 5000 in a document)`). `addInstance` (and `scale` up) refuse with `invalid-input` once the next index would pass 999 999 999, the last a coord can carry. Restored instances are **sorted** into index order on `create` (and so on start/load), rather than requiring ascending indices: a hand-edited file still loads. The rollback of placed members when a start throws is pinned again (a registry whose implementation throws once the member is placed).
+
+**Why:** The spec's Observability section: one stream a person, a test or the host watches; tests assert behaviour through it. Telling a shared pod's news to every holder keeps "placed pods share one record" true on the stream too. The caps bound what loading one file can make.
+**Cost if wrong:** A host wanting a note on the runtime it concerns filters root warnings by the runtime id prefix (or the note gets a `runtime` field); a guest wanting no echo of its home's state changes filters by `pod-created`'s home (`rt.pod(id).home`).

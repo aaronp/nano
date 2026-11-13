@@ -1,5 +1,6 @@
 /**
  * Calls: a context's verbs routed over its home runtime's live call subscriptions, policy per message, books, and publish delivered in every runtime the instance's pod is a member of.
+ * Every message is on the runtime's stream: `sent`, then `delivered` (result, ms) or `denied` (reason).
  * Calls into or out of an instance in an unfinished provisioning pass wait for the pass; calls during its own `make` fail at once.
  *
  *   const { ctx, bind } = contextFor(wiring, 'main#0', impl, config)   // bind(host) once the instance is made
@@ -9,12 +10,13 @@
 import type { Call, CallSelector, Each, Found, NanoContext } from '../context.ts'
 import { portKey, type Client, type Interface } from '../iface.ts'
 import type { Implementation } from '../implementation.ts'
-import type { Observation, Pod } from '../pod.ts'
+import type { Pod } from '../pod.ts'
 import type { Policy } from '../policy.ts'
 import { failure, success, type Fail, type NanoResult } from '../result.ts'
 import { matches, selectorData, type SelectorData, type Target } from '../selector.ts'
 import type { Instance, PodRecord } from './pods.ts'
 import type { Status, SubscriptionData } from './subscriptions.ts'
+import type { Tracer } from './trace.ts'
 
 export type Book = { calls: number; last?: NanoResult<unknown> }
 
@@ -27,7 +29,7 @@ export type Wiring = {
   status(id: string): Status | undefined
   locate(coord: string): { pod: PodRecord; instance: Instance } | undefined
   target(coord: string): Target | undefined
-  observe?(o: Observation): void
+  readonly trace: Tracer
   /** While `coord` is in an unfinished provisioning pass, the pass's end; calls into or out of it wait for it. */
   settled?(coord: string): Promise<void> | undefined
 }
@@ -42,22 +44,29 @@ export type Deliver = (from: string, port: string, data: unknown) => Promise<voi
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-/** One message over subscription `sid`: policed, invoked, booked. A denied message is not delivered and not counted. */
+/**
+ * One message over subscription `sid`: traced (`sent` once its subscription is found, then `denied` or `delivered`),
+ * policed, invoked, booked. A denied message is not delivered and not counted.
+ */
 async function send(w: Wiring, sid: string, from: string, to: string, port: string, input: unknown): Promise<NanoResult<unknown>> {
   if (w.settled?.(from) || w.settled?.(to)) await ready(w, from, to)
   const sub = w.subscriptions().find(s => s.id === sid)
   if (!sub) return failure('not-found', `no subscription ${sid} in ${w.id}`) // gone while it waited for a pass
+  const id = w.trace.message()
+  w.trace.emit({ type: 'sent', id, subscription: sid, from, to, port, kind: sub.kind })
+  const deny = (reason: string) => { w.trace.emit({ type: 'denied', id, reason }); return failure('denied', reason) }
   let v
   try { v = w.policy.isAllowed(from, to, input) } catch (e) {
-    w.observe?.({ kind: 'exception', instance: from, op: port, error: `policy threw: ${msg(e)}` })
-    return failure('denied', `policy threw: ${msg(e)}`)
+    w.trace.emit({ type: 'failure', coord: from, reason: `policy threw: ${msg(e)}` })
+    return deny(`policy threw: ${msg(e)}`)
   }
-  if (!v.approved) return failure('denied', v.reason)
+  if (!v.approved) return deny(v.reason)
   const host = w.locate(to)?.instance.host
-  if (!host) return failure('not-found', `${to} is not a running instance in ${w.id}`)
-  const r = await host.invoke(port, input)
+  const t0 = performance.now()
+  const r = host ? await host.invoke(port, input) : failure('not-found', `${to} is not a running instance in ${w.id}`)
+  w.trace.emit({ type: 'delivered', id, result: r, ms: performance.now() - t0 })
   // Book only on the very subscription the call went over: unsubscribed, retargeted or replaced meanwhile, it is off the books.
-  if (sub && w.subscriptions().includes(sub)) w.books.set(sid, { calls: (w.books.get(sid)?.calls ?? 0) + 1, last: r })
+  if (host && w.subscriptions().includes(sub)) w.books.set(sid, { calls: (w.books.get(sid)?.calls ?? 0) + 1, last: r })
   return r
 }
 
@@ -177,7 +186,7 @@ export function contextFor(w: Wiring, instance: string, impl: Implementation, co
       return out
     },
     async publish(op, data) {
-      const drop = (why: string) => w.observe?.({ kind: 'exception', instance, op: op.coord, error: `${instance}: ${why}` })
+      const drop = (why: string) => w.trace.emit({ type: 'failure', coord: instance, reason: `${instance}: ${why}` })
       const ports = impl.provides.flatMap(i => Object.values(i.ops).filter(o => o.kind === 'source' && o.coord === op.coord).map(o => portKey(i.coord, o.coord)))
       if (ports.length === 0) return drop(`${op.name} is not a source of this instance`)
       if (op.output && !op.output.check(data)) return drop(`${op.name} data does not fit its schema`)

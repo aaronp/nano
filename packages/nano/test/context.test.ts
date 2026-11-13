@@ -9,8 +9,7 @@ import { provider } from '../src/provider.ts'
 import { createRegistry } from '../src/registry.ts'
 import { sel, selectorData } from '../src/selector.ts'
 import type { NanoContext } from '../src/context.ts'
-import type { Observation } from '../src/pod.ts'
-import { createRuntime } from '../src/runtime/index.ts'
+import { createRuntime, type RuntimeEvent } from '../src/runtime/index.ts'
 
 const Str = defineSchema('Str', Type.String())
 const Num = defineSchema('Num', Type.Number())
@@ -29,7 +28,7 @@ function setup(opts: { deny?: (from: string, to: string, data: unknown) => boole
   const contexts = new Map<string, NanoContext>()
   const trace: string[] = []
   const received = new Map<string, number[]>()
-  const observed: Observation[] = []
+  const observed: RuntimeEvent[] = []
   const tags = new Map<string, Set<string>>()
   const db = (name: string, down = false, ms = 1) =>
     implementation(`acme/db/${name}`, {
@@ -61,7 +60,8 @@ function setup(opts: { deny?: (from: string, to: string, data: unknown) => boole
     registry.add(p)
   let denying = false
   const policy = { isAllowed: (from: string, to: string, data: unknown) => (denying && opts.deny?.(from, to, data) ? { approved: false as const, reason: `${to} refused` } : { approved: true as const }) }
-  const rt = createRuntime('r1', { registry, policy, tagsOf: c => tags.get(c) ?? new Set(), pod: { observe: o => observed.push(o) } })
+  const rt = createRuntime('r1', { registry, policy, tagsOf: c => tags.get(c) ?? new Set() })
+  rt.listen(e => observed.push(e))
   /** A consumer `m#0` with call subscriptions to the given DBs, in that order. */
   async function wire(...dbs: ('a' | 'b' | 'c' | 's')[]) {
     await rt.create('m', 'acme/app/main')
@@ -353,16 +353,18 @@ describe('publish', () => {
   })
   test('a policy that throws is a denial, observed; publish still resolves', async () => {
     const { rt, registry, ctx, received } = await wired()
-    const seen: Observation[] = []
+    const seen: RuntimeEvent[] = []
     const policy = { isAllowed: (_f: string, _t: string, d: unknown) => { if (typeof d === 'number') throw new Error('bad policy'); return { approved: true as const } } }
-    const r2 = createRuntime('r2', { registry, policy, pod: { observe: o => seen.push(o) } })
+    const r2 = createRuntime('r2', { registry, policy })
+    r2.listen(e => seen.push(e))
     await r2.create('l2', 'acme/log/mem')
     r2.add(rt.record('t')!)
     r2.subscribe({ kind: 'event', from: T, source: TICK, to: 'l2#0', target: WRITE })
     await ctx.publish(Ticks.ops.tick, 1)
     expect(received.get('l1#0')).toEqual([1])
     expect(received.get('l2#0')).toBeUndefined()
-    expect(seen).toContainEqual({ kind: 'exception', instance: T, op: WRITE, error: 'policy threw: bad policy' })
+    expect(seen).toContainEqual({ type: 'failure', coord: T, reason: 'policy threw: bad policy' })
+    expect(seen.filter(e => e.type === 'denied')).toMatchObject([{ reason: 'policy threw: bad policy' }])
   })
   test('a context publishes only through the pod it was made for', async () => {
     const { rt, contexts, ctx, received } = await wired()
@@ -380,16 +382,16 @@ describe('publish', () => {
     await ctx.publish(Ticks.ops.tick, 1)
     expect(received.size).toBe(0)
   })
-  test('data that does not fit the op is dropped and observed as an exception', async () => {
+  test('data that does not fit the op is dropped and observed as a failure', async () => {
     const { ctx, received, observed } = await wired()
     await ctx.publish(Ticks.ops.tick, 'x')
     expect(received.size).toBe(0)
-    expect(observed).toContainEqual({ kind: 'exception', instance: T, op: Ticks.ops.tick.coord, error: `${T}: tick data does not fit its schema` })
+    expect(observed).toContainEqual({ type: 'failure', coord: T, reason: `${T}: tick data does not fit its schema` })
   })
   test('an op that is not one of the instance’s sources is dropped and observed', async () => {
     const { ctx, observed } = await wired()
     await ctx.publish(Log.ops.write, 1)
-    expect(observed).toContainEqual({ kind: 'exception', instance: T, op: Log.ops.write.coord, error: `${T}: write is not a source of this instance` })
+    expect(observed).toContainEqual({ type: 'failure', coord: T, reason: `${T}: write is not a source of this instance` })
   })
 })
 

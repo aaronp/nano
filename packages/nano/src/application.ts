@@ -6,6 +6,7 @@
  *   await app.start('client')                                       // starts the runtimes its members come from, then builds it; always a runtime
  *   app.place('s', 'signer', 'client')                               // pod s is a member of both; it still calls out through `signer`
  *   app.notes()                                                     // what it skipped, e.g. a pod that could not be made or a member whose home failed to start
+ *   app.listen(e => …)                                              // the root's stream, where each note is also a `warning` as it happens
  */
 import { Type } from 'typebox'
 import { Value } from 'typebox/value'
@@ -13,7 +14,7 @@ import { COORD } from './iface.ts'
 import type { Policy } from './policy.ts'
 import type { Registry } from './registry.ts'
 import { failure, success, type NanoResult } from './result.ts'
-import { badIndices, createRuntime, ID, parseInstance, type Runtime, type SubscriptionData } from './runtime/index.ts'
+import { badIndices, createRuntime, ID, MAX_INSTANCES, type Runtime, type SubscriptionData } from './runtime/index.ts'
 import { isJson } from './schema.ts'
 
 const inner = (r: RegExp) => r.source.slice(1, -1) // COORD and ID are anchored `^…$` and flagless, so their bodies compose
@@ -69,7 +70,7 @@ export type Application = Runtime & {
   place(pod: string, from: string, to: string): NanoResult<void>
   /** Child runtimes, started and defined (not the root). */
   runtimes(): readonly string[]
-  /** What the application skipped or could not follow, oldest first: pods, members and subscriptions a start skipped. */
+  /** What the application skipped or could not follow, oldest first: pods, members and subscriptions a start skipped. Each is also a `warning` on the application's (root) stream as it happens. */
   notes(): readonly string[]
   /** Whether this child was adopted (adopted runtimes are not saved). */
   adopted(id: string): boolean
@@ -101,15 +102,14 @@ export function createApplication(id: string, opts: { registry: Registry; policy
   const shared = { registry: opts.registry, tagsOf, idTaken, settling }
 
   /**
-   * A pod removed at its home is removed wherever it was placed. (A swap needs nothing here: the placed pod is
-   * the home's record, so every runtime holding it sees the new implementation.)
+   * A stopped instance held nowhere is gone: its tags go too. (Removal and swaps need nothing here: a placed pod is the
+   * home's record, so removing it at home takes it out of every runtime holding it, and each sees a swap.)
    */
   const watch = (r: Runtime) => r.listen(e => {
-    if (e.type !== 'instance-removed') return
-    const pid = parseInstance(e.instance)!.pod
-    if (!r.pod(pid)) for (const o of all()) if (o !== r && o.pod(pid)?.home === r.id) o.remove(pid)
-    if (!all().some(o => o.instances().includes(e.instance))) tags.delete(e.instance)
+    if (e.type === 'instance' && e.state === 'stopped' && !all().some(o => o.instances().includes(e.coord))) tags.delete(e.coord)
   })
+  /** A note on the log and, as it happens, a warning on the root's stream (a runtime being started has no listener yet). */
+  const note = (reason: string) => { notes.push(reason); root.warn(reason) }
   const child = (rid: string, policy?: Policy) => {
     const r = createRuntime(rid, { ...shared, ...(policy && { policy }) })
     kids.set(rid, r)
@@ -141,7 +141,7 @@ export function createApplication(id: string, opts: { registry: Registry; policy
    */
   async function build(def: RuntimeDef, chain: ReadonlySet<string>, made: () => void): Promise<NanoResult<Runtime>> {
     const rt = child(def.id) // 'allow-all' is the only saved policy, and the default
-    const skip = (what: string, r: NanoResult<unknown>) => { if (!r.ok) notes.push(`${what}: ${r.fail.reason}`) }
+    const skip = (what: string, r: NanoResult<unknown>) => { if (!r.ok) note(`${what}: ${r.fail.reason}`) }
     try {
       for (const p of def.pods)
         skip(`${def.id}/${p.id}`, await rt.create(p.id, p.implementation, { ...(p.config !== undefined && { config: p.config }), instances: p.instances, next: p.next, provision: false }))
@@ -156,7 +156,7 @@ export function createApplication(id: string, opts: { registry: Registry; policy
       }
       for (const m of def.members) {
         const why = failed.get(m.home) ?? (r => (r.ok ? undefined : r.fail.reason))(place(m.pod, m.home, def.id))
-        if (why) notes.push(`${def.id}: member ${m.pod} skipped: ${why}`)
+        if (why) note(`${def.id}: member ${m.pod} skipped: ${why}`)
       }
       for (const s of def.subscriptions) skip(`${def.id}/${s.id}`, rt.subscribe(s))
       return success(rt)
@@ -207,6 +207,8 @@ export function createApplication(id: string, opts: { registry: Registry; policy
         const why = badIndices(p.instances, p.next)
         if (why) return failure('invalid-input', `${p.id}: ${why}`)
       }
+      const total = def.pods.reduce((n, p) => n + p.instances.length, 0)
+      if (total > MAX_INSTANCES) return failure('invalid-input', `${def.id}: ${total} instances (at most ${MAX_INSTANCES})`)
       if (taken(def.id)) return failure('exists', `runtime ${def.id} exists`)
       const twice = def.pods.find((p, n) => def.pods.findIndex(q => q.id === p.id) !== n)
       if (twice) return failure('exists', `pod id ${twice.id} is repeated`)

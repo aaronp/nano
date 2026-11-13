@@ -204,9 +204,10 @@ describe('provisioning', () => {
   })
   test('a throwing policy on a plain subscribe is a denial, observed', () => {
     const seen: unknown[] = []
-    const rt = createRuntime('r1', { registry: createRegistry(), policy: { isAllowed: () => { throw new Error('bad policy') } }, pod: { observe: o => seen.push(o) } })
+    const rt = createRuntime('r1', { registry: createRegistry(), policy: { isAllowed: () => { throw new Error('bad policy') } } })
+    rt.listen(e => seen.push(e))
     expect(rt.subscribe({ kind: 'call', from: 'b#0', to: 'z#0' })).toEqual({ ok: false, fail: { type: 'denied', reason: 'policy threw: bad policy' } })
-    expect(seen).toEqual([{ kind: 'exception', instance: 'b#0', op: 's1', error: 'policy threw: bad policy' }])
+    expect(seen).toEqual([{ type: 'failure', coord: 'b#0', reason: 'policy threw: bad policy' }])
     expect(rt.subscriptions()).toEqual([])
   })
   test('`provision: false` makes nothing', async () => {

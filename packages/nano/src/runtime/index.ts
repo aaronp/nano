@@ -7,9 +7,10 @@
  *   rt.pod('b')                                                  // { id: 'b', implementation: 'acme/log/mem', count: 2, state: 'running', home: 'r1', instances: [...] }
  *   rt.subscribe({ kind: 'call', from: 'a#0', to: 'b#0' }); rt.status('s1')   // 'waiting': no a#0 yet
  *   rt.books('s1')                                               // { calls: 0 }
+ *   rt.listen(e => console.log(e))                               // { type: 'pod-created', … }, { type: 'instance', coord: 'b#0', state: 'running' }, …
  */
 import type { Implementation } from '../implementation.ts'
-import { createHostPod, type Observation, type Pod } from '../pod.ts'
+import { createHostPod, type Pod } from '../pod.ts'
 import { Policies, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
@@ -20,19 +21,18 @@ import { provision, type Unsatisfied } from './provision.ts'
 import { badIndices, ID, instanceCoord, locate, parseInstance, podInfo, targetOf, type Holder, type Instance, type PodInfo, type PodRecord } from './pods.ts'
 import { isJson } from '../schema.ts'
 import { invalid, nextId, reordered, statusOf, type NewSubscription, type Status, type SubscriptionData } from './subscriptions.ts'
+import { tracer, type RuntimeEvent } from './trace.ts'
 
 export * from './pods.ts'
 export * from './subscriptions.ts'
 export type { Book } from './calls.ts'
 export type { Unsatisfied } from './provision.ts'
+export type { RuntimeEvent } from './trace.ts'
 
-export type RuntimeEvent =
-  | { type: 'instance-added'; instance: string; home: string }
-  | { type: 'instance-removed'; instance: string }
-  | { type: 'pod-swapped'; pod: string; implementation: string }
-  | { type: 'subscription-set'; subscription: SubscriptionData }
-  | { type: 'subscription-removed'; id: string }
-  | { type: 'status'; id: string; status: Status }
+/** Instances of a runtime's own pods, at most (placed pods count at their home). */
+export const MAX_INSTANCES = 500
+/** The highest instance index a coord can carry. */
+const MAX_INDEX = 999_999_999
 
 export type NewConnection =
   | { id?: string; kind: 'call'; from: EndSelector; to: EndSelector }
@@ -57,7 +57,7 @@ export type Runtime = {
   addInstance(pod: string): Promise<NanoResult<string>>
   /** Place a pod from its home: the record is shared, not copied, so its instances and their states are the home's. */
   add(pod: PodRecord): NanoResult<void>
-  /** Scale to `count` (1 to 500): up adds at the next indices, down removes the highest. Returns the instance coords after. Only at home. */
+  /** Scale to `count` (0 to 500): up adds at the next indices, down removes the highest. Returns the instance coords after. Only at home. */
   scale(pod: string, count: number): Promise<NanoResult<string[]>>
   /** Remove one instance (only at home): it is disposed and every subscription naming it is deleted (decision 49). */
   removeInstance(coord: string): NanoResult<void>
@@ -91,7 +91,15 @@ export type Runtime = {
   status(id: string): Status | undefined
   /** Messages delivered over a subscription (calls and event deliveries) and the last result; undefined for an unknown id. */
   books(id: string): Book | undefined
+  /**
+   * The runtime's one stream, in order: lifecycle (`pod-created` when a pod is created or placed here, then each instance's
+   * state; every `instance` state change, with the reason when it fails; `pod-swapped`; removal is `instance` `stopped`,
+   * the cascade, then `pod-removed`), wiring, messages (`sent`, then `delivered` or `denied`) and problems (`failure`,
+   * `warning`). A throwing listener is swallowed.
+   */
   listen(fn: (e: RuntimeEvent) => void): () => void
+  /** Put a warning on this runtime's stream (the application's notes, as they happen). */
+  warn(reason: string): void
   /** While `coord` is in this runtime's own unfinished provisioning pass, the pass's end. */
   settling(coord: string): Promise<void> | undefined
 }
@@ -104,7 +112,7 @@ export type RuntimeOpts = {
   idTaken?: (id: string) => boolean
   /** Unfinished passes elsewhere (the pod's home runtime): calls here into or out of `coord` wait for them too. */
   settling?: (coord: string) => Promise<void> | undefined
-  pod?: { timeoutMs?: number; observe?(o: Observation): void }
+  pod?: { timeoutMs?: number }
 }
 
 /** Throws on an id outside the id rule (a construction error, like a bad coord). */
@@ -115,7 +123,8 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
   const pods = new Map<string, PodRecord>() // insertion order is create order; saving relies on it
   let subs: SubscriptionData[] = []
   const statuses = new Map<string, Status>()
-  const listeners = new Set<(e: RuntimeEvent) => void>()
+  const trace = tracer()
+  const emit = trace.emit
   const books = new Map<string, Book>()
   const find = (coord: string) => locate(pods, coord)
   const target = (coord: string): Target | undefined => {
@@ -128,36 +137,47 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     subscriptions: () => subs,
     status: sid => statuses.get(sid),
     locate: find,
-    observe: o => opts.pod?.observe?.(o),
+    trace,
     settled: c => passOf.get(c) ?? opts.settling?.(c),
   }
 
-  const emit = (e: RuntimeEvent) => {
-    for (const fn of listeners) try { fn(e) } catch { /* a listener must never break the runtime */ }
-  }
   const recompute = () => {
     for (const s of subs) {
       const now = statusOf(s, find, id)
       if (statuses.get(s.id) !== now) { statuses.set(s.id, now); emit({ type: 'status', id: s.id, status: now }) }
     }
   }
+  const drop = (sid: string, reason: 'unsubscribed' | 'cascade') => {
+    subs = subs.filter(s => s.id !== sid)
+    statuses.delete(sid)
+    books.delete(sid)
+    emit({ type: 'subscription-removed', id: sid, reason })
+  }
   /** This runtime stops holding `coords`: subscriptions naming them are deleted (they are gone, not unavailable). */
   const forget = (p: PodRecord, coords: string[], whole: boolean) => {
     if (whole) { pods.delete(p.id); p.holders.delete(holder) }
     const gone = new Set(coords)
-    for (const c of coords) emit({ type: 'instance-removed', instance: c })
-    for (const s of subs.filter(s => gone.has(s.from) || gone.has(s.to))) rt.unsubscribe(s.id)
+    for (const s of subs.filter(s => gone.has(s.from) || gone.has(s.to))) drop(s.id, 'cascade')
     recompute()
+    if (whole) emit({ type: 'pod-removed', pod: p.id })
   }
-  const holder: Holder = { deliver: deliverer(wiring), refresh: recompute, forget, added: (p, c) => emit({ type: 'instance-added', instance: c, home: p.home }) }
+  const holder: Holder = { deliver: deliverer(wiring), refresh: recompute, forget, emit }
   /** A pod's instances changed: every runtime holding it recomputes its statuses. */
   const changed = (p: PodRecord) => { for (const h of p.holders) h.refresh() }
+  /** News of a pod, on the stream of every runtime holding it. */
+  const tell = (p: PodRecord, e: RuntimeEvent) => { for (const h of [...p.holders]) h.emit(e) }
+  const stateOf = (i: Instance): RuntimeEvent => ({ type: 'instance', coord: i.coord, state: i.state, ...(i.reason !== undefined && { reason: i.reason }) })
   const hold = (p: PodRecord) => {
     pods.set(p.id, p)
     p.holders.add(holder)
-    for (const c of p.instances.keys()) emit({ type: 'instance-added', instance: c, home: p.home })
+    emit({ type: 'pod-created', pod: p.id, implementation: p.implementation.coord })
+    for (const i of p.instances.values()) emit(stateOf(i))
     recompute()
   }
+  /** Instances of this runtime's own pods. */
+  const own = () => [...pods.values()].reduce((n, p) => n + (p.home === id ? p.instances.size : 0), 0)
+  const tooMany = (pod: string, more: number): NanoResult<never> | undefined =>
+    own() + more > MAX_INSTANCES ? failure('invalid-input', `${pod}: ${id} would hold more than ${MAX_INSTANCES} instances`) : undefined
 
   const bad = (s: SubscriptionData): NanoResult<never> | undefined => {
     const why = invalid(s)
@@ -174,7 +194,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       let v
       try { v = policy.isAllowed(s.from, s.to, s) } catch (e) {
         const why = `policy threw: ${e instanceof Error ? e.message : String(e)}`
-        try { opts.pod?.observe?.({ kind: 'exception', instance: s.from, op: s.id, error: why }) } catch { /* an observer must never break a rewire */ }
+        emit({ type: 'failure', coord: s.from, reason: why })
         return failure('denied', why)
       }
       if (!v.approved) return failure('denied', v.reason)
@@ -187,20 +207,23 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
 
   const badCount = (pod: string, n: number, min = 1): NanoResult<never> | undefined =>
     !Number.isInteger(n) || n < min || n > 500 ? failure('invalid-input', `${pod}: count must be a whole number from ${min} to 500`) : undefined
+  /** A host for `coord`: a handler that throws or times out is a `failure` on the stream of every runtime holding the pod. */
+  const host = (p: PodRecord, coord: string, impl: Implementation, ctx: Parameters<typeof createHostPod>[2]) =>
+    createHostPod(coord, impl, ctx, { ...opts.pod, onFailure: reason => tell(p, { type: 'failure', coord, reason }) })
   /** Make one instance's host; failing, the instance is `failed` with the reason. Stopped meanwhile (removed), the host is dropped. */
   async function start(p: PodRecord, inst: Instance): Promise<NanoResult<void>> {
     const { ctx, bind } = contextFor(wiring, inst.coord, p.implementation, p.config)
-    const host = await createHostPod(inst.coord, p.implementation, ctx, opts.pod)
+    const made = await host(p, inst.coord, p.implementation, ctx)
     if (inst.state !== 'starting') {
-      if (host.ok) host.value.dispose()
+      if (made.ok) made.value.dispose()
       return failure('not-found', p.instances.get(inst.coord) === inst ? `${inst.coord} was replaced (swapped) while it started` : `${inst.coord} was removed while it started`)
     }
-    if (host.ok) { bind(host.value); inst.host = host.value; inst.state = 'running'; delete inst.reason } else {
-      inst.state = 'failed'; inst.reason = host.fail.reason
-      try { opts.pod?.observe?.({ kind: 'exception', instance: inst.coord, op: 'make', error: host.fail.reason }) } catch { /* an observer must never break the runtime */ }
+    if (made.ok) { bind(made.value); inst.host = made.value; inst.state = 'running'; delete inst.reason } else {
+      inst.state = 'failed'; inst.reason = made.fail.reason
     }
+    tell(p, stateOf(inst))
     changed(p)
-    return host.ok ? success(undefined) : host
+    return made.ok ? success(undefined) : made
   }
 
   /** coord → the provisioning pass it was made in, while that pass is unfinished; calls into or out of it wait for it. */
@@ -220,10 +243,13 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     const restore = o.instances !== undefined || o.next !== undefined
     const bc = restore ? undefined : badCount(pid, o.count ?? 1)
     if (bc) return bc
-    const indices = o.instances ?? Array.from({ length: o.count ?? 1 }, (_, n) => n)
+    // Restored in index order, however they were saved.
+    const indices = o.instances ? [...o.instances].sort((a, b) => a - b) : Array.from({ length: o.count ?? 1 }, (_, n) => n)
     const next = o.next ?? indices.reduce((m, n) => Math.max(m, n + 1), 0)
     const why = restore && badIndices(indices, next)
     if (why) return failure('invalid-input', `${pid}: ${why}`)
+    const full = tooMany(pid, indices.length)
+    if (full) return full
     const impl = registry.implementation(implementation)
     if (!impl) return failure('not-found', `no implementation ${implementation}`)
     if (pods.has(pid) || opts.idTaken?.(pid)) return failure('exists', `pod id ${pid} is taken`)
@@ -276,9 +302,12 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const p = pods.get(pid)
       if (!p) return failure('not-found', `${pid} is not a pod of ${id}`)
       if (p.home !== id) return failure('denied', `${pid}: add instances at its home runtime ${p.home}`)
+      const full = tooMany(pid, 1)
+      if (full) return full
+      if (p.next > MAX_INDEX) return failure('invalid-input', `${pid}: no instance index is left (the last is ${MAX_INDEX})`)
       const inst: Instance = { coord: instanceCoord(pid, p.next++), state: 'starting' }
       p.instances.set(inst.coord, inst)
-      for (const h of [...p.holders]) h.added(p, inst.coord)
+      tell(p, stateOf(inst))
       changed(p)
       await start(p, inst)
       return success(inst.coord)
@@ -287,8 +316,10 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const p = pods.get(pid)
       if (!p) return failure('not-found', `${pid} is not a pod of ${id}`)
       if (p.home !== id) return failure('denied', `${pid}: scale it at its home runtime ${p.home}`)
-      const no = badCount(pid, count, 0)
+      const more = count - p.instances.size
+      const no = badCount(pid, count, 0) ?? tooMany(pid, more)
       if (no) return no
+      if (p.next + more - 1 > MAX_INDEX) return failure('invalid-input', `${pid}: no instance index is left (the last is ${MAX_INDEX})`)
       const byIndex = () => [...p.instances.keys()].sort((x, y) => parseInstance(x)!.index - parseInstance(y)!.index)
       for (const c of byIndex().slice(count)) rt.removeInstance(c)
       await Promise.all(Array.from({ length: count - p.instances.size }, () => rt.addInstance(pid)))
@@ -300,6 +331,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       if (f.pod.home !== id) return failure('denied', `${coord}: remove it at its home runtime ${f.pod.home}`)
       f.instance.host?.dispose(); delete f.instance.host; f.instance.state = 'stopped'
       f.pod.instances.delete(coord)
+      tell(f.pod, stateOf(f.instance))
       for (const h of [...f.pod.holders]) h.forget(f.pod, [coord], false)
       return success(undefined)
     },
@@ -310,6 +342,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       if (f.instance.state !== 'failed' && f.instance.state !== 'stopped') return failure('invalid-input', `${coord} is ${f.instance.state}`)
       delete f.instance.reason
       f.instance.state = 'starting'
+      tell(f.pod, stateOf(f.instance))
       changed(f.pod)
       return start(f.pod, f.instance)
     },
@@ -323,8 +356,10 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       if (!p) return failure('not-found', `${pid} is not a pod of ${id}`)
       const coords = [...p.instances.keys()]
       if (p.home !== id) { forget(p, coords, true); return success(undefined) }
-      for (const i of p.instances.values()) { i.host?.dispose(); delete i.host; i.state = 'stopped' }
+      const stopped = [...p.instances.values()]
+      for (const i of stopped) { i.host?.dispose(); delete i.host; i.state = 'stopped' }
       p.instances.clear()
+      for (const i of stopped) tell(p, stateOf(i))
       for (const h of [...p.holders]) h.forget(p, coords, true)
       return success(undefined)
     },
@@ -344,14 +379,16 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       for (let todo = [...p.instances.keys()]; todo.length > 0; todo = [...p.instances.keys()].filter(c => !made.has(c)))
         await Promise.all(todo.map(async coord => {
           const { ctx, bind } = contextFor(wiring, coord, impl, config)
-          made.set(coord, { bind, host: await createHostPod(coord, impl, ctx, opts.pod) })
+          made.set(coord, { bind, host: await host(p, coord, impl, ctx) })
         }))
       const fail = swaps.get(p) !== gen ? failure('invalid-input', `${pid}: superseded by a later swap`)
         : [...made.values()].flatMap(m => (m.host.ok ? [] : [m.host]))[0] ?? (pods.get(pid) !== p ? failure('not-found', `${pid} was removed while it was swapped`) : undefined)
       if (fail) { for (const m of made.values()) if (m.host.ok) m.host.value.dispose(); return fail }
+      const from = p.implementation.coord
       p.implementation = impl
       if (config === undefined) delete p.config
       else p.config = config
+      const revived: Instance[] = []
       for (const [coord, m] of made) {
         if (!m.host.ok) continue // never: any failure returned above
         const inst = p.instances.get(coord)
@@ -360,10 +397,12 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
         inst.host?.dispose()
         m.bind(m.host.value)
         inst.host = m.host.value
+        if (inst.state !== 'running') revived.push(inst)
         inst.state = 'running'
         delete inst.reason
       }
-      emit({ type: 'pod-swapped', pod: pid, implementation })
+      tell(p, { type: 'pod-swapped', pod: pid, from, to: implementation })
+      for (const i of revived) tell(p, stateOf(i))
       changed(p)
       return success(undefined)
     },
@@ -393,10 +432,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     },
     unsubscribe(sid) {
       if (!subs.some(s => s.id === sid)) return failure('not-found', `no subscription ${sid}`)
-      subs = subs.filter(s => s.id !== sid)
-      statuses.delete(sid)
-      books.delete(sid)
-      emit({ type: 'subscription-removed', id: sid })
+      drop(sid, 'unsubscribed')
       return success(undefined)
     },
     retarget(sid, to) {
@@ -422,10 +458,8 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     subscriptions: () => [...subs],
     status: sid => statuses.get(sid),
     books: sid => (subs.some(s => s.id === sid) ? { ...(books.get(sid) ?? { calls: 0 }) } : undefined),
-    listen(fn) {
-      listeners.add(fn)
-      return () => { listeners.delete(fn) }
-    },
+    listen: trace.listen,
+    warn: reason => emit({ type: 'warning', reason }),
     settling: c => passOf.get(c),
   }
   return rt

@@ -1,7 +1,8 @@
 /**
- * Host pods: run one instance's handlers in-process and turn every misbehaviour into a NanoResult fail plus an observation.
+ * Host pods: run one instance's handlers in-process and turn every misbehaviour into a NanoResult fail; a handler that
+ * throws or times out is also reported to `onFailure` (the runtime puts it on its stream).
  *
- *   const pod = await createHostPod('acme/mem/db#1', memDb, ctx, { observe: o => log.push(o) })
+ *   const pod = await createHostPod('db#1', memDb, ctx, { onFailure: reason => log.push(reason) })
  *   if (pod.ok) await pod.value.invoke(portKey(db.coord, db.ops.get.coord), 'k')   // NanoResult
  */
 import { portKey } from './iface.ts'
@@ -9,10 +10,6 @@ import type { Op } from './op.ts'
 import type { NanoContext } from './context.ts'
 import type { Handler, Implementation } from './implementation.ts'
 import { failure, isNanoResult, type NanoResult } from './result.ts'
-
-export type Observation =
-  | { kind: 'message'; instance: string; op: string; input: unknown; result: NanoResult<unknown>; ms: number }
-  | { kind: 'exception'; instance: string; op: string; error: string }
 
 export type Pod = {
   readonly instance: string
@@ -28,7 +25,7 @@ export async function createHostPod(
   instance: string,
   impl: Implementation,
   ctx: NanoContext,
-  opts: { timeoutMs?: number; observe?(o: Observation): void } = {},
+  opts: { timeoutMs?: number; onFailure?(reason: string): void } = {},
 ): Promise<NanoResult<Pod>> {
   const timeoutMs = opts.timeoutMs ?? 30_000
   let handlers: ReadonlyMap<string, Handler>
@@ -48,8 +45,8 @@ export async function createHostPod(
   for (const i of impl.provides) for (const o of Object.values(i.ops)) ops.set(portKey(i.coord, o.coord), o)
   let disposed = false
 
-  const safeObserve = (o: Observation) => {
-    try { opts.observe?.(o) } catch { /* an observer must never break a call */ }
+  const failed = (reason: string) => {
+    try { opts.onFailure?.(reason) } catch { /* an observer must never break a call */ }
   }
 
   async function run(port: string, input: unknown): Promise<NanoResult<unknown>> {
@@ -59,14 +56,11 @@ export async function createHostPod(
     if (o.input && !o.input.check(input)) return failure('invalid-input', `${instance}: input does not fit ${o.name}`)
     let timer: ReturnType<typeof setTimeout> | undefined
     const outcome = await new Promise<unknown>(resolve => {
-      let done = false // a late settle after the timeout is ignored: no second observation, no unhandled rejection
+      let done = false // a late settle after the timeout is ignored: no second failure, no unhandled rejection
       const finish = (r: unknown) => { if (!done) { done = true; resolve(r) } }
-      timer = setTimeout(() => finish(failure('timeout', `${instance}: ${o.name} did not settle in ${timeoutMs}ms`)), timeoutMs)
-      const threw = (e: unknown) => {
-        if (done) return
-        safeObserve({ kind: 'exception', instance, op: port, error: msg(e) })
-        finish(failure('threw', `${instance}: ${msg(e)}`))
-      }
+      const fail = (type: 'threw' | 'timeout', reason: string) => { if (!done) { failed(reason); finish(failure(type, reason)) } }
+      timer = setTimeout(() => fail('timeout', `${instance}: ${o.name} did not settle in ${timeoutMs}ms`), timeoutMs)
+      const threw = (e: unknown) => fail('threw', `${instance}: ${msg(e)}`)
       Promise.resolve().then(() => h(ctx, input)).then(finish, threw)
     }).finally(() => clearTimeout(timer))
     if (!isNanoResult(outcome)) return failure('invalid-output', `${instance}: ${o.name} returned something other than a NanoResult`)
@@ -77,12 +71,7 @@ export async function createHostPod(
   const pod: Pod = {
     instance,
     implementation: impl,
-    async invoke(port, input) {
-      const t0 = performance.now()
-      const result = disposed ? failure('not-found', `${instance} is disposed`) : await run(port, input)
-      safeObserve({ kind: 'message', instance, op: port, input, result, ms: performance.now() - t0 })
-      return result
-    },
+    invoke: (port, input) => (disposed ? Promise.resolve(failure('not-found', `${instance} is disposed`)) : run(port, input)),
     dispose() { disposed = true },
   }
   return { ok: true, value: pod }

@@ -8,7 +8,6 @@ import { implementation, provide } from '../src/implementation.ts'
 import { provider } from '../src/provider.ts'
 import { createRegistry } from '../src/registry.ts'
 import type { Policy } from '../src/policy.ts'
-import type { Observation } from '../src/pod.ts'
 import { createRuntime, instanceCoord, parseInstance, type RuntimeEvent } from '../src/runtime/index.ts'
 
 const Num = defineSchema('Num', Type.Number())
@@ -31,7 +30,7 @@ const boom = implementation('acme/bad/boom', { provides: [], make: () => { throw
 const configured = implementation('acme/app/conf', { provides: [], config: Num, make: () => [] })
 const DB_GET = portKey(DB.coord, DB.ops.get.coord)
 
-function setup(opts: { policy?: Policy; idTaken?: (id: string) => boolean; pod?: { observe?(o: Observation): void } } = {}) {
+function setup(opts: { policy?: Policy; idTaken?: (id: string) => boolean } = {}) {
   const registry = createRegistry()
   for (const p of [
     provider('acme/clock', [ticker]), provider('acme/log', [memLog, noteLog]), provider('acme/db', [memDb, fileDb]),
@@ -61,7 +60,10 @@ describe('runtime pods', () => {
     expect(rt.pods()).toEqual(['b'])
     expect(rt.instances()).toEqual(['b#0'])
     expect(rt.pod('b')?.home).toBe('r1')
-    expect(events).toEqual([{ type: 'instance-added', instance: 'b#0', home: 'r1' }])
+    expect(events).toEqual([
+      { type: 'pod-created', pod: 'b', implementation: 'acme/log/mem' },
+      { type: 'instance', coord: 'b#0', state: 'starting' }, { type: 'instance', coord: 'b#0', state: 'running' },
+    ])
   })
   test('an unknown implementation fails not-found', async () => {
     const { rt } = setup()
@@ -106,7 +108,7 @@ describe('runtime pods', () => {
     expect(await rt.scale('b', 1)).toEqual(success(['b#2']))
     expect(await rt.create('c', 'acme/log/mem', { count: 0 })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   })
-  test('a cascade emits instance-removed, then subscription-removed in subscription order', async () => {
+  test('a cascade emits each instance stopped, then subscription-removed in subscription order, then pod-removed', async () => {
     const { rt, events } = setup()
     await rt.create('a', 'acme/clock/ticker', { count: 2 })
     await rt.create('b', 'acme/log/mem', { count: 2 })
@@ -114,8 +116,9 @@ describe('runtime pods', () => {
     events.length = 0
     rt.remove('b')
     expect(events.filter(e => e.type !== 'status')).toEqual([
-      { type: 'instance-removed', instance: 'b#0' }, { type: 'instance-removed', instance: 'b#1' },
-      { type: 'subscription-removed', id: 's1' }, { type: 'subscription-removed', id: 's2' },
+      { type: 'instance', coord: 'b#0', state: 'stopped' }, { type: 'instance', coord: 'b#1', state: 'stopped' },
+      { type: 'subscription-removed', id: 's1', reason: 'cascade' }, { type: 'subscription-removed', id: 's2', reason: 'cascade' },
+      { type: 'pod-removed', pod: 'b' },
     ])
   })
   test('a guest cannot scale, remove an instance or restart; a home add and removal show in the guest', async () => {
@@ -131,11 +134,12 @@ describe('runtime pods', () => {
     const seen: RuntimeEvent[] = []
     rt.listen(e => seen.push(e))
     await r2.addInstance('z')
-    expect(seen).toContainEqual({ type: 'instance-added', instance: 'z#1', home: 'r2' })
+    expect(seen).toContainEqual({ type: 'instance', coord: 'z#1', state: 'running' })
     rt.subscribe({ ...tickToLog, to: 'z#0' })
     r2.removeInstance('z#0')
     expect(rt.subscriptions()).toEqual([])
-    expect(seen).toContainEqual({ type: 'instance-removed', instance: 'z#0' })
+    expect(seen).toContainEqual({ type: 'instance', coord: 'z#0', state: 'stopped' })
+    expect(seen).toContainEqual({ type: 'subscription-removed', id: 's1', reason: 'cascade' })
   })
   test('restarting an instance that is starting or running fails invalid-input and makes nothing twice', async () => {
     const { rt } = setup()
@@ -143,11 +147,10 @@ describe('runtime pods', () => {
     expect(await rt.restart('b#0')).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'b#0 is running' } })
   })
   test('a pod whose make throws is created, with its instance failed', async () => {
-    const seen: unknown[] = []
-    const { rt } = setup({ pod: { observe: o => seen.push(o) } })
+    const { rt, events } = setup()
     expect(await rt.create('x', 'acme/bad/boom')).toEqual(success({ pod: 'x', instances: ['x#0'], unsatisfied: [] }))
     expect(rt.pod('x')).toMatchObject({ state: 'failed', instances: [{ coord: 'x#0', state: 'failed', reason: expect.any(String) }] })
-    expect(seen).toMatchObject([{ kind: 'exception', instance: 'x#0', op: 'make' }])
+    expect(events.at(-1)).toEqual({ type: 'instance', coord: 'x#0', state: 'failed', reason: 'x#0: nope' })
   })
   test('config that does not fit the implementation fails invalid-input', async () => {
     const { rt } = setup()
@@ -203,6 +206,30 @@ describe('runtime pods', () => {
     await rt.create('z', 'acme/db/mem')
     expect(rt.add(r2.record('z')!)).toMatchObject({ ok: false, fail: { type: 'exists' } })
     expect(rt.pod('z')!.implementation).toBe('acme/db/mem')
+  })
+  test('a runtime holds at most 500 instances of its own pods: create, addInstance and scale refuse beyond', async () => {
+    const { rt } = setup()
+    await rt.create('a', 'acme/log/mem', { count: 400 })
+    const full = { ok: false, fail: { type: 'invalid-input', reason: expect.stringContaining('more than 500 instances') } }
+    expect(await rt.create('b', 'acme/log/mem', { count: 101 })).toMatchObject(full)
+    expect(await rt.create('b', 'acme/log/mem', { instances: Array.from({ length: 101 }, (_, i) => i), next: 101 })).toMatchObject(full)
+    await rt.create('b', 'acme/log/mem', { count: 100 })
+    expect(await rt.addInstance('b')).toMatchObject(full)
+    expect(await rt.scale('b', 101)).toMatchObject(full)
+    expect(await rt.scale('b', 50)).toMatchObject({ ok: true })
+    expect((await rt.scale('a', 450)).ok).toBe(true)
+  })
+  test('addInstance and scale refuse once no instance index is left', async () => {
+    const { rt } = setup()
+    await rt.create('b', 'acme/log/mem', { instances: [], next: 999_999_999 })
+    expect(await rt.scale('b', 2)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(await rt.addInstance('b')).toEqual(success('b#999999999'))
+    expect(await rt.addInstance('b')).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'b: no instance index is left (the last is 999999999)' } })
+  })
+  test('saved instances are restored in index order', async () => {
+    const { rt } = setup()
+    await rt.create('b', 'acme/log/mem', { instances: [2, 0, 1], next: 3 })
+    expect(rt.instances()).toEqual(['b#0', 'b#1', 'b#2'])
   })
   test('a throwing listener does not break the runtime', async () => {
     const { rt } = setup()
@@ -331,7 +358,7 @@ describe('runtime subscriptions', () => {
     expect(rt.pod('d')).toMatchObject({ implementation: 'acme/db/file', instances: [{ coord: 'd#0', state: 'running' }] })
     expect(rt.subscriptions().map(s => s.to)).toEqual(['d#0', 'b#0'])
     expect([rt.status('s1'), rt.status('s2')]).toEqual(['live', 'broken'])
-    expect(events).toContainEqual({ type: 'pod-swapped', pod: 'd', implementation: 'acme/db/file' })
+    expect(events).toContainEqual({ type: 'pod-swapped', pod: 'd', from: 'acme/db/mem', to: 'acme/db/file' })
   })
   test('swap announces itself, not an add and a remove', async () => {
     const { rt, events } = setup()
@@ -340,7 +367,7 @@ describe('runtime subscriptions', () => {
     rt.subscribe({ kind: 'call', from: 'a#0', to: 'd#0' })
     const seen = events.length
     await rt.swap('d', 'acme/db/file')
-    expect(events.slice(seen)).toEqual([{ type: 'pod-swapped', pod: 'd', implementation: 'acme/db/file' }])
+    expect(events.slice(seen)).toEqual([{ type: 'pod-swapped', pod: 'd', from: 'acme/db/mem', to: 'acme/db/file' }])
   })
   test('swap carries the config over unless a new one is given', async () => {
     const { rt } = setup()
@@ -398,7 +425,7 @@ describe('runtime subscriptions', () => {
     expect(rt.unsubscribe('s1')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
     expect(rt.subscriptions()).toEqual([])
     expect(rt.status('s1')).toBeUndefined()
-    expect(events.at(-1)).toEqual({ type: 'subscription-removed', id: 's1' })
+    expect(events.at(-1)).toEqual({ type: 'subscription-removed', id: 's1', reason: 'unsubscribed' })
   })
   test('status events fire only on change', async () => {
     const { rt, events } = setup()

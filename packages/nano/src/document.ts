@@ -29,12 +29,18 @@ export const NanoDocSchema = Type.Object({
 
 export type NanoDoc = Static<typeof NanoDocSchema>
 
+/** Instances across a document's runtimes, at most: a bound on what loading one file can make. */
+export const MAX_DOC_INSTANCES = 5000
+
 /** The document, or why it is not a v2 document (`<path>: <message>` for the first error). Never throws. */
 export function checkDoc(json: unknown): NanoDoc | string {
   if (json === null || typeof json !== 'object' || (json as { nano?: unknown }).nano !== 2) return 'not a nano v2 document'
   try {
     const e = Value.Errors(NanoDocSchema, json)[0]
-    return e ? `${e.instancePath || '/'}: ${e.message}` : (json as NanoDoc)
+    if (e) return `${e.instancePath || '/'}: ${e.message}`
+    const doc = json as NanoDoc
+    const total = doc.runtimes.reduce((n, r) => n + r.pods.reduce((m, p) => m + p.instances.length, 0), 0)
+    return total > MAX_DOC_INSTANCES ? `${total} instances (at most ${MAX_DOC_INSTANCES} in a document)` : doc
   } catch (e) {
     return `unreadable document: ${e instanceof Error ? e.message : String(e)}`
   }

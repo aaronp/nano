@@ -300,6 +300,12 @@ describe('loading what does not fit', () => {
 describe('checkDoc', () => {
   const ok = { nano: 2 as const, title: 't', providers: [], runtimes: [], tags: {} }
 
+  test('checkDoc refuses a document of more than 5000 instances', () => {
+    const rt = (n: number): RuntimeDef => ({ id: `r${n}`, policy: 'allow-all', pods: [{ id: `p${n}`, implementation: 'acme/keys/vault', instances: Array.from({ length: 500 }, (_, i) => i), next: 500 }], members: [], subscriptions: [] })
+    const doc = (k: number) => ({ nano: 2, title: 'Big', providers: [], runtimes: Array.from({ length: k }, (_, n) => rt(n)), tags: {} })
+    expect(checkDoc(doc(11))).toBe('5500 instances (at most 5000 in a document)')
+    expect(typeof checkDoc(doc(10))).toBe('object')
+  })
   test('checkDoc refuses a v1 document with a reason', () => {
     expect(checkDoc({ nano: 1, title: 'Demo', imports: [], systems: [] })).toBe('not a nano v2 document')
   })
