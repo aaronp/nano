@@ -3,6 +3,7 @@
 import { Ops, type Runtime } from '@pritzlaff/nano-core'
 import { ApplicationOps as P, runtimeOf, type Screen } from './application'
 import { HOST_DRIVEN, RESERVED, type NanoApp } from './document'
+import type { Selector } from './resolve'
 
 /** The runtime the Application lives in: a handle to call it through. */
 export type AppHandle = Runtime
@@ -54,8 +55,14 @@ export async function snapshotApp(host: AppHandle, stores: HostStores): Promise<
       const l = i.labels ?? {}, mode = l['nano/deploy'], allow = list(l['nano/allow']), deny = list(l['nano/deny'])
       const hasConfig = i.ops.some(o => Ops.key(o) === `${i.component}/config`)
       const config = hasConfig && rt ? await value(rt, from, i.id, `${i.component}/config`) : undefined
+      // each need as a pin to what it is bound to, or (unbound) as its stored selector
+      const declared = Object.keys(i.needs ?? {}).length ? ((await value(host, from, 'application', Ops.key(P.needsOf), `instance:${snap.id}/${i.id}`)) ?? []) as { need: string; selector: Selector }[] : []
+      const needs = Object.fromEntries(declared.map(({ need, selector }) => {
+        const to = snap.bindings.find(b => b.instance === i.id && b.need === need)?.to
+        return [need, to ? { implements: selector.implements, ...(selector.tags?.length && { tags: selector.tags }), layer: to.registry, at: to.instance } : selector]
+      }))
       return { id: i.id, kind, ...(mode === 'host' || mode === 'sandbox' || mode === 'isolated-sandbox' ? { mode } : {}),
-        ...(allow && { allow }), ...(deny && { deny }), ...(config !== undefined && { config }) } as NanoApp['systems'][number]['instances'][number]
+        ...(allow && { allow }), ...(deny && { deny }), ...(config !== undefined && { config }), ...(declared.length && { needs }) } as NanoApp['systems'][number]['instances'][number]
     }))
     const instances = found.filter(x => x !== undefined)
     const written = new Set(instances.map(i => i.id))

@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import { Components, Ops, Registries, Runtimes } from '@pritzlaff/nano-core'
 import { catalog } from '@composable/bundle'
 import { application, ApplicationOps as P, applyApp, snapshotApp, checkApp, type HostStores, type NanoApp } from '../src'
+import { needsApp, tick } from './fixtures'
 
 const setup = () => {
   const host = Runtimes.create(Registries.create('host'))
@@ -67,4 +68,31 @@ test('checkApp refuses 21 tags on one ref', () => {
   expect(typeof checkApp(tags(21))).toBe('string')
   expect(typeof checkApp({ ...empty, tags: { 'screen:/a': [' x '] } })).toBe('string')
   expect(typeof checkApp({ ...empty, tags: { ['screen:/' + 'a'.repeat(300)]: ['x'] } })).toBe('string')
+})
+
+test('needs: a snapshot writes each need as a pin, and loading it gives the same bindings', async () => {
+  const a = needsApp()
+  await a.call(P.createSystem, 'storage')
+  await a.make('db', 'db1', 'storage'); await a.make('service', 'svc'); await a.make('form', 'form'); await tick()
+  await a.call(P.tag, { ref: 'instance:storage/db1', tag: 'fast' })
+  await a.call(P.bindNeed, { ref: 'instance:host/svc', need: 'db', to: 'instance:storage/db1' })
+  const doc = await snapshotApp(a.host, a.stores)
+  const host = doc.systems.find(s => s.id === 'host')!
+  expect(host.instances.find(i => i.id === 'svc')!.needs).toEqual({ db: { implements: 't/db', tags: ['fast'], layer: 'storage', at: 'db1' } })
+  expect(host.instances.find(i => i.id === 'form')!.needs).toEqual({ bff: { implements: 't/bff' } })   // unbound: its stored selector
+  expect(doc.systems.find(s => s.id === 'storage')!.instances[0]!.needs).toBeUndefined()
+  expect(typeof checkApp(doc)).toBe('object')
+  const b = needsApp()
+  expect(await applyApp(doc, 'replace', b.deps)).toEqual(['host/form needs bff: nothing matches'])
+  expect(await b.bindings()).toEqual(await a.bindings())
+})
+
+test('needs: a pin survives a wrap, a second db in the document keeps the original binding', async () => {
+  const a = needsApp()
+  await a.make('db', 'db1'); await a.make('service', 'svc'); await tick()
+  const doc = await snapshotApp(a.host, a.stores)
+  doc.systems[0]!.instances.unshift({ id: 'db2', kind: 'db' })   // first: without the pin, two fit and svc stays unbound
+  const b = needsApp()
+  expect(await applyApp(doc, 'replace', b.deps)).toEqual([])
+  expect(b.host.registry.binding('svc', 'db')).toEqual({ registry: 'host', instance: 'db1' })
 })

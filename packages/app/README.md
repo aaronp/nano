@@ -46,3 +46,46 @@ Tags are plain strings (trimmed, at most 64 characters), keyed by reference.
 | `query({ screen?, system?, kind?, tag? })` | instance refs matching every filter, sorted |
 | `screens-of(ref)` | the screens that place an instance |
 | `systems`, `kinds`, `select`, `changed` | snapshots, the catalog, selection, and a change feed |
+| `needs-of`, `set-selector`, `bind-need`, `unbind-need` | an instance's needs: list, select, bind (never to itself) and unbind |
+
+## Needs in `nano.json`
+
+An instance may carry `needs`: at most 20, by name (`^[a-z][a-zA-Z0-9-]*$`), each a selector
+`{ implements, tags?, layer?, at? }` (`implements` up to 200 characters; up to 20 tags of up to 64; `layer` and `at`
+are ids). A document without `needs` loads exactly as before.
+
+```json
+{ "id": "svc", "kind": "service", "needs": { "db": { "implements": "example/db", "layer": "storage", "at": "db" } } }
+```
+
+- **Saved as pins.** `snapshotApp` writes a bound need as `{ implements, tags?, layer, at }` naming the instance it
+  is bound to, so adding a second fitting instance later never changes it; an unbound need is written as its
+  stored selector.
+- **Resolved after everything loads.** `applyApp` creates every system's instances and subscriptions (and tags)
+  first, then calls `set-selector` for each need in document order, so a pin may name an instance later in the
+  document or in another system, and a pin that resolves overrides whatever auto-bind picked meanwhile.
+- **Never makes instances.** A need that doesn't resolve to one instance is a note,
+  `<system>/<id> needs <need>: <reason>` (say `app/form needs bff: nothing matches`), and its instance stays
+  disabled. An unknown need, instance or system is a note too; the rest loads.
+
+## Using nano from another project
+
+A project serves its components as a package and opens them in any nano host:
+
+- **`nano-package.json`**: `{ "manifest": 1, "name", "version", "module", "components" }`; the module exports
+  `catalog` and `define()`.
+- **`nano.json`**: a document whose `imports` lists that manifest's URL.
+- **Bundle** with `--external '@pritzlaff/*' --external typebox --external 'typebox/*'`: the host's import map
+  supplies them.
+- **Serve with CORS** and open `<host>/?src=<url of nano.json>`.
+
+A Makefile target in that project, for example:
+
+```make
+PORT ?= 4321
+nano-dev:
+	bun build src/index.ts --outdir dist/nano --target browser --external '@pritzlaff/*' --external typebox --external 'typebox/*'
+	cp nano-package.json nano.json dist/nano/
+	@echo "open <host>/?src=http://localhost:$(PORT)/nano.json"
+	bunx serve --cors -l $(PORT) dist/nano
+```

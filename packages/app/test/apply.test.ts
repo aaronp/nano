@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test'
-import { Components, Ops, Registries, Runtimes } from '@pritzlaff/nano-core'
+import { Components, Ops, Registries, Runtimes, type Snapshot } from '@pritzlaff/nano-core'
 import { catalog as bundle, Log, Map as MapC } from '@composable/bundle'
-import { application, ApplicationOps as P, applyApp, type AppCatalog, type NanoApp } from '../src'
+import { application, ApplicationOps as P, applyApp, checkApp, RESERVED, unboundOf, type AppCatalog, type NanoApp } from '../src'
+import { needsApp } from './fixtures'
 
 const catalog: AppCatalog = { ...bundle, map: { ...bundle.map, code: ['setCode', 'configure'] } }
 const setup = () => {
@@ -78,4 +79,55 @@ test('merge keeps an existing instance and notes the clash; it applies the docum
   expect((await a.call('m1', MapC.ops.code)).value).toBe('return 7')
   expect(a.host.registry.get('m2')).toBeDefined()
   expect((await a.call('application', P.allTags)).value).toEqual({ 'instance:host/m1': ['mine'], 'instance:host/m2': ['new'] })
+})
+
+const needsDoc = (systems: NanoApp['systems']): NanoApp => ({ nano: 1, title: 'D', imports: [], workspaces: [], systems })
+
+test('needs: a pin to an instance later in the document, in another system, binds, and wins over auto-bind', async () => {
+  const a = needsApp()
+  // db1 comes first in host, so auto-bind takes it for svc before the pin to storage/db2 is applied
+  const doc = needsDoc([
+    { id: 'host', instances: [{ id: 'db1', kind: 'db' }, { id: 'svc', kind: 'service', needs: { db: { implements: 't/db', layer: 'storage', at: 'db2' } } }], subscriptions: [] },
+    { id: 'storage', instances: [{ id: 'db2', kind: 'db' }], subscriptions: [] },
+  ])
+  expect(checkApp(doc)).toEqual(doc)
+  expect(await applyApp(doc, 'replace', a.deps)).toEqual([])
+  expect(a.host.registry.binding('svc', 'db')).toEqual({ registry: 'storage', instance: 'db2' })
+})
+
+test('needs: an unresolvable need is a note and the instance stays disabled; loading makes nothing', async () => {
+  const a = needsApp()
+  const doc = needsDoc([{ id: 'app', instances: [{ id: 'form', kind: 'form', needs: { bff: { implements: 't/bff' } } }], subscriptions: [] }])
+  expect(await applyApp(doc, 'replace', a.deps)).toEqual(['app/form needs bff: nothing matches'])
+  const app = ((await a.call(P.systems)) as Snapshot[]).find(s => s.id === 'app')!
+  expect(unboundOf(app)).toEqual([{ instance: 'form', need: 'bff' }])
+  expect(app.instances.map(i => i.id).filter(id => !RESERVED(id))).toEqual(['form'])
+})
+
+test('needs: an unknown need or instance is a note, never a throw, and the rest loads', async () => {
+  const a = needsApp()
+  const doc = needsDoc([{ id: 'host', instances: [
+    { id: 'db1', kind: 'db' },
+    { id: 'svc', kind: 'service', needs: { nope: { implements: 't/db' }, db: { implements: 't/db', at: 'ghost' } } },
+    { id: 'svc2', kind: 'service', needs: { db: { implements: 't/db', layer: 'nowhere' } } },
+    { id: 'gone', kind: 'unknown-kind', needs: { db: { implements: 't/db' } } },
+  ], subscriptions: [] }])
+  expect(await applyApp(doc, 'replace', a.deps)).toEqual([
+    'host/gone: no component kind unknown-kind, skipped',
+    'host/svc needs nope: svc has no need nope',
+    "host/svc needs db: host/ghost doesn't fit",
+    'host/svc2 needs db: no system nowhere',
+  ])
+  expect(a.host.registry.snapshot().instances.map(i => i.id)).toEqual(expect.arrayContaining(['db1', 'svc', 'svc2']))
+})
+
+test('needs: checkApp validates needs, and a document without them still validates', () => {
+  const doc = (needs?: unknown) => needsDoc([{ id: 'host', instances: [{ id: 'svc', kind: 'service', ...(needs !== undefined && { needs }) } as any], subscriptions: [] }])
+  expect(checkApp(doc())).toEqual(doc())
+  expect(typeof checkApp(doc({ db: { implements: 't/db', tags: ['a'], layer: 'storage', at: 'db1' } }))).toBe('object')
+  expect(typeof checkApp(doc({ Db: { implements: 't/db' } }))).toBe('string')
+  expect(typeof checkApp(doc({ db: { implements: 'x'.repeat(201) } }))).toBe('string')
+  expect(typeof checkApp(doc({ db: { implements: 't/db', at: 'a/b' } }))).toBe('string')
+  expect(typeof checkApp(doc({ db: { implements: 't/db', tags: Array.from({ length: 21 }, (_, i) => `t${i}`) } }))).toBe('string')
+  expect(typeof checkApp(doc(Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`n${i}`, { implements: 't/db' }]))))).toBe('string')
 })

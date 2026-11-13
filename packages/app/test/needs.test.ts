@@ -121,3 +121,10 @@ test('the systems source republishes on a binding delta', async () => {
   await call(P.bindNeed, { ref: 'instance:host/svc', need: 'db', to: 'instance:host/db2' }); await tick()
   expect(got.at(-1)![0]!.bindings).toEqual([{ instance: 'svc', need: 'db', to: { registry: 'host', instance: 'db2' } }])
 })
+
+test("bindNeed refuses to bind an instance to itself", async () => {
+  const { ask, make, host } = setup()
+  await make('service', 'svc')
+  expect((await ask(P.bindNeed, { ref: 'instance:host/svc', need: 'db', to: 'instance:host/svc' })).error).toBe("svc can't depend on itself")
+  expect(host.registry.binding('svc', 'db')).toBeUndefined()
+})

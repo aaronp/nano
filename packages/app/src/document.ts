@@ -3,7 +3,7 @@ import { Type, type Static } from 'typebox'
 import { Value } from 'typebox/value'
 
 // ids are free text from the platform: non-empty, no '/', whitespace or control characters
-const ID = '^[^/\\s\\x00-\\x1f\\x7f]+$', KIND = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$', PATH = '^/[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*$'
+const ID = '^[^/\\s\\x00-\\x1f\\x7f]+$', KIND = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$', PATH = '^/[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*$', NEED = '^[a-z][a-zA-Z0-9-]*$'
 const s = (max: number, description: string, extra: object = {}) => Type.String({ maxLength: max, description, ...extra })
 const list = <T extends import('typebox').TSchema>(t: T, maxItems: number, description: string) => Type.Array(t, { maxItems, description })
 
@@ -37,6 +37,10 @@ export const NanoAppSchema = Type.Object({
       mode: Type.Optional(Type.Union([Type.Literal('host'), Type.Literal('sandbox'), Type.Literal('isolated-sandbox')], { description: 'Where it runs' })),
       allow: Type.Optional(list(s(200, 'A guard selector'), 50, 'Allowed ops')), deny: Type.Optional(list(s(200, 'A guard selector'), 50, 'Denied ops')),
       config: Type.Optional(Type.Unknown({ description: 'What the component needs to be recreated' })),
+      needs: Type.Optional(Type.Record(s(64, 'A need', { pattern: NEED }), Type.Object({
+        implements: s(200, 'The interface id'), tags: Type.Optional(list(s(64, 'A tag'), 20, 'Tags it must have')),
+        layer: Type.Optional(s(64, "The system to look in (default: the instance's)", { pattern: ID })), at: Type.Optional(s(64, 'Pins an instance id', { pattern: ID })),
+      }), { maxProperties: 20, additionalProperties: false, description: 'Its needs: each one\'s selector, saved pinned when bound' })),
     }), 200, 'The system\'s instances'),
     subscriptions: list(Type.Object({ source: s(64, 'Publisher, or *', { pattern: ID }), op: s(200, 'Published op key'), listener: s(64, 'Listener instance', { pattern: ID }), target: s(200, 'Listener action key') }), 500, 'Connections'),
   }), 50, 'The systems'),
@@ -90,7 +94,9 @@ export function checkApp(x: unknown): NanoApp | string {
       imports: a.imports.map(i => ({ url: i.url, trust: i.trust })),
       systems: a.systems.map(sys => ({
         id: sys.id,
-        instances: sys.instances.map(i => { const o = pick(i, ['id', 'kind', 'mode', 'allow', 'deny']); if (i.config !== undefined) o.config = i.config; return o }),
+        instances: sys.instances.map(i => { const o = pick(i, ['id', 'kind', 'mode', 'allow', 'deny']); if (i.config !== undefined) o.config = i.config
+          if (i.needs) o.needs = Object.fromEntries(Object.entries(i.needs).map(([n, x]) => [n, pick({ ...x, ...(x.tags && { tags: [...x.tags] }) }, ['implements', 'tags', 'layer', 'at'])]))
+          return o }),
         subscriptions: sys.subscriptions.map(u => ({ source: u.source, op: u.op, listener: u.listener, target: u.target })),
       })),
       workspaces: a.workspaces.map(w => ({ ...pick(w, ['id', 'title', 'system', 'icon']), layout: w.layout })),

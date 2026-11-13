@@ -7,6 +7,7 @@ import { ApplicationOps as P, runtimeOf, type Screen } from './application'
 import type { AppCatalog } from './catalog'
 import { HOST_DRIVEN, MAIN, RESERVED, type NanoApp } from './document'
 import { parseRef } from './refs'
+import type { Resolution } from './resolve'
 import { PROFILE, value, type HostStores } from './snapshot'
 
 export interface ApplyDeps {
@@ -88,6 +89,7 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
 
   const configuring: Promise<void>[] = []   // started together: a frame that never answers costs one wait, not one each
   const ok = new Set<string>()   // systems that exist
+  const needs: { system: string; id: string; needs: NonNullable<NanoApp['systems'][number]['instances'][number]['needs']> }[] = []   // of the instances made, resolved once everything is
   for (const sys of app.systems) {
     if (!existing.has(sys.id)) {
       const r = await call('application', P.createSystem, sys.id)
@@ -109,6 +111,7 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
       }
       const made = await call('application', P.createComponent, { kind: i.kind, name: i.id, system: sys.id, ...(mode && { mode }), ...(i.allow && { allow: i.allow }), ...(i.deny && { deny: i.deny }) })
       if ('error' in made) { fail(what, made); continue }
+      if (i.needs) needs.push({ system: sys.id, id: i.id, needs: i.needs })
       if (i.config === undefined) continue
       if (codeOps(i.kind) && !consent(sys.id, i.id)) { notes.push(`${what}: its ${i.kind} code was not applied (not agreed to)`); continue }
       configuring.push(within(rt.call(from, i.id, `${k.component}/configure`, i.config), deps.waits?.configure ?? 5000, 'configure').catch((e: unknown) => ({ error: msg(e) }))
@@ -164,5 +167,12 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
   for (const [r, ts] of Object.entries(app.tags ?? {})) {
     if (!parseRef(r)) { notes.push(`tags of ${JSON.stringify(r)}: not a ref, dropped`); continue }
     for (const tag of ts) { const t = await call('application', P.tag, { ref: r, tag }); if ('error' in t) { fail(`tags of ${r}`, t); break } }
+  }
+
+  // needs last: every instance a pin may name now exists, with its tags. A pin that resolves overrides auto-bind; loading never makes one.
+  for (const n of needs) for (const [need, selector] of Object.entries(n.needs)) {
+    const what = `${n.system}/${n.id} needs ${need}`, r = await call('application', P.setSelector, { ref: `instance:${n.system}/${n.id}`, need, selector })
+    if ('error' in r) fail(what, r)
+    else { const v = r.value as Resolution; if (!('bound' in v)) notes.push(`${what}: ${'make' in v ? 'nothing matches' : v.reason}`) }
   }
 }
