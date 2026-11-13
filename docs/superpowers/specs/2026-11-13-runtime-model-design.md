@@ -111,13 +111,15 @@ const sendMessage = async (ctx, message) =>
   unplugs. Each joins exactly two instances by concrete coordinate, so adding instances, components or interfaces
   later never changes an existing connection. Fan-out ("write to both DBs") is two subscriptions.
 - **Unavailable vs deleted.** An end that is *unavailable* (its pod failed or is stopped, its runtime hasn't started,
-  provisioning is still running, or a swap is in progress) leaves the subscription **waiting**; it goes live when the
+  provisioning is still running) leaves the subscription **waiting**; it goes live when the
   end is back. An end that is *deleted* (someone removed the instance or its pod) **deletes the subscription too**
   (cascade). When the ends no longer fit (a swapped implementation lost a port), the subscription is **broken**.
 - The runtime is the bookkeeper. Because every message passes through it, the connections it reports are exactly the
   ones carrying traffic, with counts and last results. Flipping a widget over shows them.
 - Swapping a pod's implementation keeps its instances' coordinates, so its subscriptions are untouched: those whose
   ports still fit stay live, the rest are broken.
+- During a swap the old instances keep serving until the new ones are made, then the swap is atomic; a swap never
+  makes a subscription wait. *(Ruled while building: no gap in service.)*
 
 ### Connecting: selectors choose the two ends, once
 
