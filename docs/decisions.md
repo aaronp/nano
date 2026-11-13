@@ -67,3 +67,15 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Decision:** Through its home runtime's subscriptions, wherever the instance is called from. A pod always hands its handlers the instance's own context (home runtime), never the caller's.
 **Why:** Matches the signer calling the vault at home and a client-side log listening where it was placed; policy for each hop stays in the runtime the hop happens in.
 **Cost if wrong:** A per-runtime context per member.
+
+## 12. Does replacing an instance ask the policy?
+
+**Decision:** Yes. `replace` rewrites every subscription naming the old coord to the new one and asks `policy.isAllowed(from, to, subscription)` for each rewritten subscription before creating anything; the first denial returns `denied` and nothing changes (the old member and its subscriptions stay).
+**Why:** The new coord is a different `dest` (or `src`) as far as a policy is concerned, and the spec says a rewire the policy denies changes nothing; replacing is a rewire of every subscription naming the instance.
+**Cost if wrong:** Drop the check in `replace`; one test changes.
+
+## 13. Which events do `replace` and `reorder` emit?
+
+**Decision:** `replace` emits `instance-replaced { from, to }`, then `subscription-set` for each rewritten subscription, then any `status` changes — not `instance-added` / `instance-removed`. `reorder` emits `subscription-set` for each subscription in the given list (in the new order); a listener reads the order from `subscriptions()`.
+**Why:** One event per user-visible change; a listener keeping a member list can apply `instance-replaced` directly.
+**Cost if wrong:** A listener that only handles added/removed misses replacements; emit both, or add an order event.

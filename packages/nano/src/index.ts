@@ -1,5 +1,5 @@
 /**
- * The nano model, headless: schemas, ops, interfaces, results, implementations, providers, the registry and selectors.
+ * The nano model, headless: schemas, ops, interfaces, results, implementations, providers, the registry, selectors, pods and runtimes.
  *
  *   const Key = defineSchema('Key', Type.String())
  *   const db = iface('acme/db', { get: op.action('get', Key, Key) })
@@ -16,3 +16,4 @@ export * from './provider.ts'
 export * from './registry.ts'
 export * from './policy.ts'
 export * from './pod.ts'
+export * from './runtime/index.ts'
