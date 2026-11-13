@@ -1,6 +1,6 @@
 // Rune-style sugar over @pritzlaff/nano-core: write plain state and functions; get an ordinary core Component.
 import { Type, type Static, type TSchema, type TUnknown } from 'typebox'
-import { clients, Components, Ops, type Clients, type Component, type Environment, type Interface, type Op } from '@pritzlaff/nano-core'
+import { clients, Components, Ops, type Clients, type Component, type Environment, type Iface, type Interface, type Op } from '@pritzlaff/nano-core'
 
 /** The instance whose `make` is running: what state writes mark dirty, and where events publish. */
 type Making = { dirty(): void; env?: Environment }
@@ -85,13 +85,15 @@ const about = (s?: TSchema) => { const d = (s as { description?: string } | unde
 /**
  * A component from a function returning its surface: functions become actions, getters become sources published
  * when their value changes, and `event()` members become sources. `make` runs once here to read the shape.
+ * When `make` uses needs, annotate `deps` as `Clients<{...}>`, or A is not inferred.
+ * Keys that are ops of `implements` are actions that take the interface's op as-is: they need no schema entry, and any given is ignored.
  */
-export function component<A extends object, S extends Schemas<A> = Schemas<A>, N extends Record<string, Interface> = {}>(id: string, make: (deps: Clients<N>) => A, schemas: S & Checked<A, S>,
-  opts: { description?: string; needs?: N; implements?: Interface } = {}): Component<A> & { ops: { [K in keyof A]: Op } } {
+export function component<A extends object, N extends Record<string, Interface> = {}, I extends Iface = never, IK extends PropertyKey = [I] extends [never] ? never : keyof I['spec'], S extends Schemas<Omit<A, IK>> = Schemas<Omit<A, IK>>>(
+  id: string, make: (deps: Clients<N>) => A, schemas: S & Checked<A, S>,
+  opts: { description?: string; needs?: N; implements?: I } = {}): Component<A> & { ops: { [K in keyof A]: Op } } {
   const kinds = new Map<string, Kind>(), ops: Record<string, Op> = {}
   const needs = opts.needs ?? {} as N
-  const unavailable = Object.fromEntries(Object.entries(needs).map(([n, i]) => [n, Object.fromEntries(Object.keys(i.ops).map(k =>
-    [k, async () => { throw new Error('needs are not available while reading the shape') }]))])) as unknown as Clients<N>
+  const unavailable = clients({ use: async () => ({ error: 'needs are not available while reading the shape' }) } as unknown as Environment, needs)
   for (const [k, d] of Object.entries(Object.getOwnPropertyDescriptors(run(() => make(unavailable), { dirty() {} })))) {
     const given = (schemas as Record<string, TSchema | ActionSpec | undefined>)[k], mark = d.value?.[EVENT] as EventMark | undefined
     const schema = isSchema(given) ? given : undefined
@@ -102,9 +104,13 @@ export function component<A extends object, S extends Schemas<A> = Schemas<A>, N
       const spec: Partial<ActionSpec> = (given as ActionSpec | undefined) ?? {}
       ops[k] = Ops.action(id, k, spec.in ?? IGNORED, spec.out ?? Type.Void(), spec.description === undefined ? {} : { description: spec.description })
     }
-    const given_ = opts.implements?.ops[k]
-    if (given_ && kinds.has(k)) ops[k] = given_   // an interface op is used as-is
+    const iop = opts.implements?.ops[k]
+    if (iop) {
+      if (kinds.get(k) !== 'action') throw new Error(`${id}: ${k} must be an action to implement ${opts.implements!.id}`)
+      ops[k] = iop   // an interface op is used as-is
+    }
   }
+  for (const k of Object.keys(opts.implements?.ops ?? {})) if (kinds.get(k) !== 'action') throw new Error(`${id} implements ${opts.implements!.id} but has no ${k}`)
   const getters = [...kinds].filter(([, kind]) => kind === 'getter').map(([k]) => k)
   const at = id.lastIndexOf('/')
   if (at < 1) throw new Error(`component id ${id} needs a namespace, like acme/${id}`)
@@ -125,7 +131,7 @@ export function component<A extends object, S extends Schemas<A> = Schemas<A>, N
     for (const k of getters) { try { last.set(k, read(k)) } catch {} }
     for (const [k, kind] of kinds) if (kind === 'event') ((api as any)[k][EVENT] as EventMark).bind(ops[k]!)
     return api
-  }, { ...(opts.description !== undefined && { description: opts.description }), ...(opts.needs && { needs: opts.needs }), ...(opts.implements && { implements: [opts.implements] }) })
+  }, { description: opts.description, needs: opts.needs, implements: opts.implements && [opts.implements] })
   for (const [k, kind] of kinds) {
     if (kind === 'getter') c.action(ops[k]!, a => copy(JSON.stringify((a as any)[k])))
     else if (kind === 'event') c.action(ops[k]!)

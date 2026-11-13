@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { Components, Ops, Registries, Runtimes, Strategies, WrapperOps, wrap, type Component, type Op } from '@pritzlaff/nano-core'
+import { Components, iface, type Clients, Ops, Registries, Runtimes, Strategies, WrapperOps, wrap, type Component, type Op } from '@pritzlaff/nano-core'
 import { component, event, state } from '../src'
 
 const tick = () => new Promise(r => setTimeout(r, 0))
@@ -261,7 +261,6 @@ test('a runes component publishing to a paused wrapper keeps updating its own st
 })
 
 // needs and implements
-import { iface, type Clients } from '@pritzlaff/nano-core'
 const Db = iface('example/db', { save: { in: Type.String(), out: Type.String() }, load: { in: Type.String(), out: Type.String() } })
 
 test('a runes component with needs calls its dependency through the binding', async () => {
@@ -287,9 +286,16 @@ test('the shape-reading run gets clients that throw', () => {
 
 test("implements puts the interface's ops under its id", () => {
   const C = component('example/impl', () => ({ get entries() { return [] as string[] }, save: (k: string) => k, load: (k: string) => k }),
-    { entries: Type.Array(Type.String()) } as never, { implements: Db })
+    { entries: Type.Array(Type.String()) }, { implements: Db })
   const keys = [...C.actions.keys()]
   expect(keys).toContain('example/db/save')
   expect(keys).toContain('example/impl/entries')
   expect(C.implements).toEqual([Db])
+})
+
+test('implements fails when an op is missing or is not an action', () => {
+  expect(() => component('example/bad', () => ({ save: (k: string) => k }), {} as never, { implements: Db }))
+    .toThrow('example/bad implements example/db but has no load')
+  expect(() => component('example/bad2', () => ({ save: (k: string) => k, get load() { return '' } }), {} as never, { implements: Db }))
+    .toThrow('example/bad2: load must be an action to implement example/db')
 })
