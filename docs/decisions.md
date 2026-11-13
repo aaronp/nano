@@ -206,6 +206,7 @@ Superseded in part by 51 and 53: `place(pod, from, to)` takes a pod id and adds 
 **Decision:** Yes. A runtime made by the application consults every runtime's own unfinished passes (`Runtime.settling(coord)`; instance ids are unique, so only the home can have one) through `RuntimeOpts.settling`, so a call routed in a guest into or out of a placed member mid-pass waits for that pass, as at home (decision 26).
 **Why:** The half-wired state of a pass must be invisible to callers wherever they call from.
 **Cost if wrong:** Guests see the half-wired instance; their calls may fail `missing-component` during a pass.
+**Updated by 48:** pod ids are unique across the application (instances are `<pod>#<n>`), so only the pod's home can have a pass for a coord.
 
 ## 31. In what order is a defined runtime opened?
 
@@ -454,6 +455,7 @@ Superseded in part by 53: `pod-swapped { pod, from, to }`, told to every runtime
 
 **Why:** The spec's Observability section: one stream a person, a test or the host watches; tests assert behaviour through it. Telling a shared pod's news to every holder keeps "placed pods share one record" true on the stream too. The caps bound what loading one file can make.
 **Cost if wrong:** A host wanting a note on the runtime it concerns filters root warnings by the runtime id prefix (or the note gets a `runtime` field); a guest wanting no echo of its home's state changes filters by `pod-created`'s home (`rt.pod(id).home`).
+**Updated by 54:** the application's 5000-instance cap is enforced live too; a failed swap make is a `failure` on the stream.
 
 ## 54. The application's instance cap, swap failures on the stream, and what `listen` leaves out (pods revision, task 7)
 
@@ -465,6 +467,7 @@ Superseded in part by 53: `pod-swapped { pod, from, to }`, told to every runtime
 Pinned by "the application holds at most 5000 instances …" (`application.test.ts`) and "a swap whose make throws changes nothing, and the failure is on the stream" (`runtime.test.ts`).
 **Why:** Anything the application can save must load: `checkDoc` refuses more than 5000 instances (decision 53). A swap that failed silently left only the caller knowing.
 **Cost if wrong:** A long-lived application counts adopted runtimes it never saves, so it may refuse a little early; an exact count skips `adopted(id)`.
+**Updated by 56:** the instance cap alone did not make "what it saves loads" true; the other document limits are enforced live too.
 
 ## 55. Examples on pods (pods revision, task 7)
 
@@ -476,3 +479,17 @@ Pinned by "the application holds at most 5000 instances …" (`application.test.
 
 **Why:** The spec: every connection end has a selector, resolved once; the examples are the recipes.
 **Cost if wrong:** None to the model; the examples change.
+
+## 56. Every document limit is enforced where things are made (whole-branch review of the pods revision)
+
+**Decision:**
+- The document's limits are enforced live with `invalid-input`, so an application never builds what its saved `nano.json` could not load. The constants live in `runtime/pods.ts` beside `MAX_INSTANCES` and are shared by the runtime, `RuntimeDefSchema` and `NanoDocSchema`: `MAX_PODS` = 500 (a runtime's pods, own and placed: `create` and `add`/`place` refuse a 501st, `<pod>: <runtime> would hold more than 500 pods`; `define` refuses `pods` + `members` over 500), `MAX_SUBSCRIPTIONS` = 2000 (`subscribe` refuses a 2001st, `<runtime> would hold more than 2000 subscriptions`), `MAX_RUNTIMES` = 50 (`createRuntime` and `define` refuse once 49 children not adopted exist, `<id>: the application would hold more than 49 runtimes besides its root`; the root takes the 50th slot when saved, and adopted runtimes are never saved so are not counted).
+- What is guaranteed: a document saved from an application built through the public API passes `checkDoc` and loads without a note, with the exceptions that were already there (a member whose home is adopted, a custom policy).
+- A create racing a swap provisions, and reports `unsatisfied`, against the implementation the pod runs once its instances have started (re-read after the makes), not the one it was created with.
+- `addInstance` fails `not-found` (`<coord> was removed while it started`) when the instance was removed before its make finished; a failed make is still a success with the instance `failed`, as on create.
+- `restart` takes only a `failed` instance (a removed instance is gone, never `stopped` in place); `create` refuses `count` together with `instances`/`next`; an unknown instance selector names a non-string `by` by its type (no `JSON.stringify`, which throws on a bigint or a cycle).
+- `subscribe` computes only the new subscription's status (adding one changes no other's), so 2000 subscribes are linear, not quadratic.
+
+Pinned by "the document limits hold for what is built live" (`document.test.ts`), "races and guards (whole-branch review)" (`pods.test.ts`), "the application cap holds for addInstance and scale …" (`application.test.ts`) and "removing an instance frees a runtime's capacity …" (`runtime.test.ts`).
+**Why:** Decision 54's promise, "anything the application can save must load", was only true of instances: 51 runtimes, 2001 subscriptions or 501 pods each saved fine and loaded as an empty application.
+**Cost if wrong:** An application loaded under a different id than it was saved with turns the saved root into a child; a document of 50 runtimes then loses one to the 49-child limit, with a note.

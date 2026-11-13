@@ -40,7 +40,8 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 2. **Make.** `rt.create('vault', 'example.signer/vault', { count })` makes a pod of instances `vault#0`, `vault#1`, …
    A `make` that throws or times out leaves that instance `failed`; the create still succeeds (D48). With
    `{ provision: true }` the runtime connects or makes what each instance's dependencies need (create first, then
-   wire: D24–D26). `addInstance`, `scale`, `restart`, `removeInstance` and `remove` act at the pod's home (D49).
+   wire: D24–D26). `addInstance`, `scale`, `restart`, `removeInstance` and `remove` act at the pod's home (D49); a guest's `remove`
+   drops only its own membership.
 3. **Connect, once.** `rt.connect({ kind, from, to, … })` takes an `EndSelector` for each end (which pod: by id,
    interface or implementation; which instance: `first`, `index` or `tags`). Each must resolve to exactly one instance
    now, else `not-found` or `ambiguous` and nothing is added; what is saved is the two coords, so later changes never
@@ -50,8 +51,9 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
    selector filters the instance's live call subscriptions in its home runtime (D3, D11). `ctx.publish(op, data)`
    delivers to live event subscriptions in every runtime holding the pod (D17, D48). Every message is policed and
    booked by the runtime it travels in (D19).
-5. **Cascade or wait.** Deleting an instance or pod deletes every subscription naming it, in every runtime holding the
-   pod (a coord is never reused, so it would only mislead). An instance that is failed, stopped or starting is only
+5. **Cascade or wait.** Deleting an instance or pod at home deletes every subscription naming it, in every runtime
+   holding the pod (a coord is never reused, so it would only mislead); a guest removing a placed pod drops only its
+   membership and its own subscriptions to it. An instance that is failed, stopped or starting is only
    unavailable: its subscriptions wait and go live when it runs again (D49).
 6. **Swap.** `rt.swap(pod, implementation, { config? })`, at home only: every instance is made off to the side while
    the old ones serve, then all switch at once. Coords, tags and subscriptions are kept; ports that no longer fit are
@@ -66,7 +68,9 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
    `status`), messages (`sent`, then `delivered` or `denied`), problems (`failure`, `warning`) (D53, D54).
 9. **Save.** `saveDoc(app)` writes every runtime as data: pods with their live indices and `next`, members by pod id,
    subscriptions in order, tags, and the runtimes to `start`. `loadDoc` defines them and starts those, never
-   provisioning (D37–D42, D52). An application holds at most 5000 instances, so what it saves can load (D54).
+   provisioning (D37–D42, D52). What is built live stays within what a document can hold, so what it saves loads
+   (D54, D56): at most 5000 instances across the application, 49 runtimes besides the root (adopted ones are not
+   saved or counted), and per runtime 500 own instances, 500 pods (own and placed) and 2000 subscriptions.
 
 ## FAQ
 
