@@ -1,22 +1,24 @@
 /**
- * The runtime: members and their lifecycle, subscriptions as data with live/waiting/broken status, policy on every rewire.
+ * The runtime: members and their lifecycle, subscriptions as data with live/waiting/broken status, policy on every rewire, books per subscription.
  *
  *   const rt = createRuntime('r1', { registry })
  *   await rt.create('b', 'acme/log/mem')                                  // NanoResult<{ coord: 'acme/log/mem#b', ... }>
  *   rt.subscribe({ kind: 'call', from: 'acme/app/main#a', to: 'acme/log/mem#b' }); rt.status('s1')   // 'waiting': no acme/app/main#a yet
+ *   rt.books('s1')                                                        // { calls: 0 }
  */
-import type { NanoContext } from '../context.ts'
 import type { Implementation } from '../implementation.ts'
 import { createHostPod, type Observation, type Pod } from '../pod.ts'
 import { Policies, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
 import type { Target } from '../selector.ts'
+import { contextFor, deliverer, join, leave, type Book, type Wiring } from './calls.ts'
 import { instanceCoord, parseInstance, targetOf, type Member } from './members.ts'
 import { invalid, nextId, reordered, statusOf, type NewSubscription, type Status, type SubscriptionData } from './subscriptions.ts'
 
 export * from './members.ts'
 export * from './subscriptions.ts'
+export type { Book } from './calls.ts'
 
 export type RuntimeEvent =
   | { type: 'instance-added'; instance: string; home: string }
@@ -43,6 +45,8 @@ export type Runtime = {
   reorder(consumer: string, ids: string[]): NanoResult<void>
   subscriptions(): readonly SubscriptionData[]
   status(id: string): Status | undefined
+  /** Messages delivered over a subscription (calls and event deliveries) and the last result; undefined for an unknown id. */
+  books(id: string): Book | undefined
   listen(fn: (e: RuntimeEvent) => void): () => void
 }
 
@@ -61,6 +65,19 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
   let subs: SubscriptionData[] = []
   const statuses = new Map<string, Status>()
   const listeners = new Set<(e: RuntimeEvent) => void>()
+  const books = new Map<string, Book>()
+  const target = (coord: string): Target | undefined => {
+    const m = members.get(coord)
+    return m && targetOf(m, opts.tagsOf?.(coord) ?? new Set())
+  }
+  const wiring: Wiring = {
+    id, policy, books, target,
+    subscriptions: () => subs,
+    status: sid => statuses.get(sid),
+    member: c => members.get(c),
+    observe: o => opts.pod?.observe?.(o),
+  }
+  const deliver = deliverer(wiring)
 
   const emit = (e: RuntimeEvent) => {
     for (const fn of listeners) try { fn(e) } catch { /* a listener must never break the runtime */ }
@@ -87,11 +104,11 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
 
   async function makePod(coord: string, impl: Implementation, config: unknown): Promise<NanoResult<Pod>> {
     if (impl.config && !impl.config.check(config)) return failure('invalid-input', `${coord}: config does not fit ${impl.config.type}`)
-    const ctx: NanoContext = { instance: coord, runtime: id, config }
-    return createHostPod(coord, impl, ctx, opts.pod)
+    return createHostPod(coord, impl, contextFor(wiring, coord, impl, config), opts.pod)
   }
   const drop = (m: Member) => {
     if (m.home === id) m.pod.dispose()
+    leave(m.pod, deliver)
     members.delete(m.coord)
   }
 
@@ -109,6 +126,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       // Re-check after the await: a concurrent create, here or elsewhere, may have taken the id.
       if (idHeld(iid) || opts.idTaken?.(iid)) { pod.value.dispose(); return failure('exists', `instance id ${iid} is taken`) }
       members.set(coord, { coord, pod: pod.value, home: id, ...(o.config !== undefined && { config: o.config }) })
+      join(pod.value, deliver)
       emit({ type: 'instance-added', instance: coord, home: id })
       recompute()
       // Task 7 provisions; until then every declared dependency is unsatisfied.
@@ -121,6 +139,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       if (m.pod.instance !== m.coord) return failure('invalid-input', `${m.coord}: its pod is ${m.pod.instance}`)
       if (members.has(m.coord) || idHeld(parsed.id)) return failure('exists', `instance id ${parsed.id} is taken`)
       members.set(m.coord, m)
+      join(m.pod, deliver)
       emit({ type: 'instance-added', instance: m.coord, home: m.home })
       recompute()
       return success(undefined)
@@ -152,6 +171,8 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const no = members.get(coord) !== old ? failure('not-found', `${coord} changed while it was replaced`) : denied(touched)
       if (no) { pod.value.dispose(); return no }
       old.pod.dispose()
+      leave(old.pod, deliver)
+      join(pod.value, deliver)
       const next: Member = { coord: to, pod: pod.value, home: id, ...(config !== undefined && { config }) }
       members = new Map([...members].map(([c, m]) => (c === coord ? [to, next] : [c, m]))) // keeps the slot in create order
       subs = subs.map(s => touched.find(t => t.id === s.id) ?? s)
@@ -162,10 +183,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     },
     member: c => members.get(c),
     members: () => [...members.keys()],
-    target(coord) {
-      const m = members.get(coord)
-      return m && targetOf(m, opts.tagsOf?.(coord) ?? new Set())
-    },
+    target,
     subscribe(input) {
       const sid = input.id ?? nextId(subs)
       if (subs.some(s => s.id === sid)) return failure('exists', `subscription ${sid} exists`)
@@ -181,6 +199,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       if (!subs.some(s => s.id === sid)) return failure('not-found', `no subscription ${sid}`)
       subs = subs.filter(s => s.id !== sid)
       statuses.delete(sid)
+      books.delete(sid)
       emit({ type: 'subscription-removed', id: sid })
       return success(undefined)
     },
@@ -206,6 +225,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     },
     subscriptions: () => [...subs],
     status: sid => statuses.get(sid),
+    books: sid => (subs.some(s => s.id === sid) ? { ...(books.get(sid) ?? { calls: 0 }) } : undefined),
     listen(fn) {
       listeners.add(fn)
       return () => { listeners.delete(fn) }

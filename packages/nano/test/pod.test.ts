@@ -11,7 +11,7 @@ import { createHostPod, type Observation } from '../src/pod.ts'
 const Str = defineSchema('Str', Type.String())
 const Num = defineSchema('Num', Type.Number())
 const api = iface('acme/api', { len: op.action('len', Str, Num), poke: op.sink('poke', Str) })
-const ctx: NanoContext = { instance: 'acme/x/api#1', runtime: 'r1', config: undefined }
+const ctx = { instance: 'acme/x/api#1', runtime: 'r1', config: undefined } as NanoContext // handlers here never call out
 const LEN = portKey('acme/api', api.ops.len.coord)
 const POKE = portKey('acme/api', api.ops.poke.coord)
 

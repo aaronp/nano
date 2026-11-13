@@ -3,6 +3,7 @@
  *
  *   selectorData(DB)                                    // { implements: 'acme/db' }
  *   matches({ implements: 'acme/db', tags: ['primary'] }, target)
+ *   sel(DB, { tags: ['cache'] })                        // still DB (typed clients survive), plus implements and tags
  */
 import type { Interface } from './iface.ts'
 
@@ -19,7 +20,15 @@ export type Target = {
 
 const isInterface = (s: Selector): s is Interface => 'byCoord' in s
 
-export const selectorData = (s: Selector): SelectorData => (isInterface(s) ? { implements: s.coord } : s)
+/** An interface (possibly narrowed by `sel`) or plain selector data, as plain data. */
+export function selectorData(s: Selector): SelectorData {
+  if (!isInterface(s)) return s
+  const { tags, implementation, provider } = s as SelectorData
+  return { implements: s.coord, ...(tags && { tags }), ...(implementation !== undefined && { implementation }), ...(provider !== undefined && { provider }) }
+}
+
+/** An interface narrowed by tags, implementation or provider; still the interface, so a call's client stays typed. */
+export const sel = <I extends Interface>(i: I, s: Omit<SelectorData, 'implements'> = {}): I & SelectorData => ({ ...i, ...s, implements: i.coord })
 
 /** Every given field holds; all tags must be present on the target. */
 export const matches = (s: SelectorData, t: Target): boolean =>

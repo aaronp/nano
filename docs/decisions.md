@@ -97,3 +97,33 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Decision:** Yes, `Member.config` is the config the instance was created with. `replace` carries it over unless `opts.config` is given.
 **Why:** Saving writes it (Task 9), and a replacement of the same kind (a newer version) usually wants the same settings.
 **Cost if wrong:** Replacements that need a fresh config must pass one explicitly.
+
+## 17. Where does `ctx.publish` deliver?
+
+**Decision:** In every runtime the instance is a member of (home and every runtime it was `add`ed to), each runtime delivering to its own live event subscriptions under its own policy and books. Runtimes register with the pod on `create`/`add`/`replace` and leave on `remove`/`replace` (a runtime-layer `WeakMap<Pod, Set<Deliver>>`, so no application is needed). Once the instance is gone from its home runtime, its publishes go nowhere.
+**Why:** The ruling: an instance calls out at home but publishes into every runtime it belongs to — a client-side log listens where it was placed.
+**Cost if wrong:** Restrict delivery to the home runtime; one test changes.
+
+## 18. Which ports does `ctx.publish(op, data)` publish on?
+
+**Decision:** Every source port of the instance whose op coord equals `op.coord` (normally one). Data that fails the op's output schema, or an op that is none of the instance's sources, is dropped and observed as an `exception` (`op` = the op coord); `publish` never throws.
+**Why:** Keeps the `publish(op)` signature while handlers and event ends are keyed by port; two interfaces offering the identical source both emit it.
+**Cost if wrong:** A `publish(iface, name)` form that names the port.
+
+## 19. What do a subscription's books count?
+
+**Decision:** Messages actually delivered over it — client calls and event deliveries — with the last result. A message the policy denies is neither delivered nor counted. `books(id)` is `{ calls: 0 }` for a subscription with no traffic, `undefined` for an unknown id, and unsubscribing drops the books.
+**Why:** The runtime reports exactly the connections carrying traffic; a denial is not traffic.
+**Cost if wrong:** A `denied` counter beside `calls`.
+
+## 20. What if the `fn` given to a verb throws?
+
+**Decision:** That connection's result is `threw` with reason `<target coord>: <message>`; the verb applies its cardinality as for any fail (`all` lists it, `fallback` moves on). Verbs never reject.
+**Why:** Platform failures are NanoResult fails, never thrown; one bad call in a fan-out must not lose the others' results.
+**Cost if wrong:** Let it propagate; the handler's pod still turns it into `threw`.
+
+## 21. What client does a plain-data selector get?
+
+**Decision:** Built per target from the target's own interfaces whose coord is `implements` (every interface it provides when `implements` is absent; on a name clash the first wins). An interface or `sel(I, …)` selector always uses the caller's interface, so the client is typed and a missing op is `unknown-op`.
+**Why:** Plain data carries no ops; the target's interface is the only shape at hand.
+**Cost if wrong:** Look the interface up in the registry by `implements` instead.

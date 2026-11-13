@@ -13,7 +13,7 @@ const Str = defineSchema('Str', Type.String())
 const Num = defineSchema('Num', Type.Number())
 const db = iface('acme/db', { get: op.action('get', Str, Num), put: op.sink('put', Str), changed: op.source('changed', Str) })
 const log = iface('acme/log', { write: op.sink('write', Str) })
-const ctx: NanoContext = { instance: 'acme/mem/db#1', runtime: 'r1', config: undefined }
+const ctx = { instance: 'acme/mem/db#1', runtime: 'r1', config: undefined } as NanoContext // handlers here never call out
 
 const memDb = implementation('acme/mem/db', {
   provides: [db],
