@@ -1,8 +1,8 @@
 /**
- * The runtime: members and their lifecycle, subscriptions as data with live/waiting/broken status, policy on every rewire, books per subscription.
+ * The runtime: members and their lifecycle (provisioned on create when asked), subscriptions as data with live/waiting/broken status, policy on every rewire, books per subscription.
  *
  *   const rt = createRuntime('r1', { registry })
- *   await rt.create('b', 'acme/log/mem')                                  // NanoResult<{ coord: 'acme/log/mem#b', ... }>
+ *   await rt.create('b', 'acme/log/mem', { provision: true })             // NanoResult<{ coord: 'acme/log/mem#b', unsatisfied: [] }>
  *   rt.subscribe({ kind: 'call', from: 'acme/app/main#a', to: 'acme/log/mem#b' }); rt.status('s1')   // 'waiting': no acme/app/main#a yet
  *   rt.books('s1')                                                        // { calls: 0 }
  */
@@ -11,14 +11,16 @@ import { createHostPod, type Observation, type Pod } from '../pod.ts'
 import { Policies, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
-import type { Target } from '../selector.ts'
-import { contextFor, deliverer, join, leave, type Book, type Wiring } from './calls.ts'
+import type { SelectorData, Target } from '../selector.ts'
+import { connectionsOf, contextFor, deliverer, join, leave, type Book, type Wiring } from './calls.ts'
+import { provision, type Unsatisfied } from './provision.ts'
 import { instanceCoord, parseInstance, targetOf, type Member } from './members.ts'
 import { invalid, nextId, reordered, statusOf, type NewSubscription, type Status, type SubscriptionData } from './subscriptions.ts'
 
 export * from './members.ts'
 export * from './subscriptions.ts'
 export type { Book } from './calls.ts'
+export type { Unsatisfied } from './provision.ts'
 
 export type RuntimeEvent =
   | { type: 'instance-added'; instance: string; home: string }
@@ -32,7 +34,8 @@ export type Runtime = {
   readonly id: string
   readonly registry: Registry
   readonly policy: Policy
-  create(id: string, implementation: string, opts?: { config?: unknown; provision?: boolean }): Promise<NanoResult<{ coord: string; unsatisfied: { role: string; reason: string }[] }>>
+  /** With `provision: true`, connects or makes what its dependencies need; `unsatisfied` lists the rest (`not provisioned` without it). */
+  create(id: string, implementation: string, opts?: { config?: unknown; provision?: boolean }): Promise<NanoResult<{ coord: string; unsatisfied: Unsatisfied[] }>>
   add(m: Member): NanoResult<void>
   remove(coord: string): NanoResult<void>
   replace(coord: string, implementation: string, opts?: { config?: unknown }): Promise<NanoResult<string>>
@@ -99,8 +102,8 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       if (!v.approved) return failure('denied', v.reason)
     }
   }
-  const idHeld = (iid: string, except?: string) =>
-    [...members.keys()].some(c => c !== except && parseInstance(c)?.id === iid)
+  const reserved = new Set<string>() // ids of instances still being made (and provisioned)
+  const idHeld = (iid: string) => reserved.has(iid) || [...members.keys()].some(c => parseInstance(c)?.id === iid)
 
   async function makePod(coord: string, impl: Implementation, config: unknown): Promise<NanoResult<Pod>> {
     if (impl.config && !impl.config.check(config)) return failure('invalid-input', `${coord}: config does not fit ${impl.config.type}`)
@@ -115,27 +118,58 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     members.delete(m.coord)
   }
 
-  return {
-    id,
-    registry,
-    policy,
-    async create(iid, implementation, o = {}) {
-      const impl = registry.implementation(implementation)
-      if (!impl) return failure('not-found', `no implementation ${implementation}`)
-      if (idHeld(iid) || opts.idTaken?.(iid)) return failure('exists', `instance id ${iid} is taken`)
-      const coord = instanceCoord(implementation, iid)
+  /** Live call connections of `pending`, read as if it were already a member: what provisioning must not redo. */
+  const connected = (pending: Member) => (d: SelectorData) => {
+    const member = (c: string) => (c === pending.coord ? pending : members.get(c))
+    const status = (sid: string) => { const s = subs.find(x => x.id === sid); return s && statusOf(s, member) }
+    return connectionsOf({ ...wiring, member, status }, pending.coord, d).length > 0
+  }
+
+  /** Create, provisioning first when asked; `stack` is the implementations being made above this one. */
+  async function make(iid: string, implementation: string, o: { config?: unknown; provision?: boolean }, stack: readonly string[]): Promise<NanoResult<{ coord: string; unsatisfied: Unsatisfied[] }>> {
+    const impl = registry.implementation(implementation)
+    if (!impl) return failure('not-found', `no implementation ${implementation}`)
+    if (idHeld(iid) || opts.idTaken?.(iid)) return failure('exists', `instance id ${iid} is taken`)
+    const coord = instanceCoord(implementation, iid)
+    reserved.add(iid)
+    try {
       const pod = await makePod(coord, impl, o.config)
       if (!pod.ok) return pod
-      // Re-check after the await: a concurrent create, here or elsewhere, may have taken the id.
-      if (idHeld(iid) || opts.idTaken?.(iid)) { pod.value.dispose(); return failure('exists', `instance id ${iid} is taken`) }
-      members.set(coord, { coord, pod: pod.value, home: id, ...(o.config !== undefined && { config: o.config }) })
+      const pending: Member = { coord, pod: pod.value, home: id, ...(o.config !== undefined && { config: o.config }) }
+      const isConnected = connected(pending)
+      // Dependencies are made before the instance joins, so a dependency that leads back to it is a cycle, not a connection.
+      const p = o.provision
+        ? await provision({
+          registry, target, connected: isConnected,
+          members: () => [...members.keys()],
+          idFree: n => !idHeld(n) && !opts.idTaken?.(n),
+          make: (n, c, st) => make(n, c, { provision: true }, st),
+          subscribe: s => rt.subscribe(s),
+        }, coord, impl, [...stack, implementation])
+        : { unsatisfied: Object.entries(impl.dependencies).filter(([, d]) => !isConnected(d)).map(([role]) => ({ role, reason: 'not provisioned' })), subscribed: [] }
+      // A nested instance in a cycle is not made: the cycle reaches the instance whose create started it. Another runtime may have taken the id meanwhile.
+      const no = stack.length > 0 && p.cycle !== undefined ? failure('cycle', p.cycle)
+        : opts.idTaken?.(iid) ? failure('exists', `instance id ${iid} is taken`) : undefined
+      if (no) {
+        pod.value.dispose()
+        for (const sid of p.subscribed) rt.unsubscribe(sid)
+        return no // ponytail: instances made for its other roles stay as ordinary members; undo them if that bites
+      }
+      members.set(coord, pending)
       join(pod.value, deliver)
       emit({ type: 'instance-added', instance: coord, home: id })
       recompute()
-      // Task 7 provisions; until then every declared dependency is unsatisfied.
-      const unsatisfied = Object.keys(impl.dependencies).map(role => ({ role, reason: 'not provisioned' }))
-      return success({ coord, unsatisfied })
-    },
+      return success({ coord, unsatisfied: p.unsatisfied })
+    } finally {
+      reserved.delete(iid)
+    }
+  }
+
+  const rt: Runtime = {
+    id,
+    registry,
+    policy,
+    create: (iid, implementation, o = {}) => make(iid, implementation, o, []),
     add(m) {
       const parsed = parseInstance(m.coord)
       if (!parsed) return failure('invalid-input', `bad instance coord ${m.coord}`)
@@ -234,4 +268,5 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       return () => { listeners.delete(fn) }
     },
   }
+  return rt
 }

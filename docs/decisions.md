@@ -139,3 +139,21 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Decision:** Only the exact subscription it went over, if that subscription is still there unchanged when the call settles. Unsubscribed, retargeted or rewritten by `replace` meanwhile, the call is not booked (a new subscription that reuses the id starts at `{ calls: 0 }`).
 **Why:** Books describe what each current connection carried; a call to the old target is not traffic on the new edge.
 **Cost if wrong:** Book on the id regardless; a retarget shows calls its new target never saw.
+
+## 24. Does `create` provision by default?
+
+**Decision:** No: only with `{ provision: true }`. Without it, `unsatisfied` lists every dependency with no live connection, each with reason `not provisioned`, and nothing is made or subscribed.
+**Why:** Loading a document never provisions, and a host that creates what a user picked should opt in to the runtime making more.
+**Cost if wrong:** Flip the default; hosts that want plain creates pass `provision: false`.
+
+## 25. Provisioning when several existing members match
+
+**Decision:** The dependency is left unsatisfied with `<n> match` (n members); no implementation is made even if exactly one matches.
+**Why:** Two candidates already present is a choice for the user (the host may offer it); making a third hides that choice.
+**Cost if wrong:** Fall through to the implementation rule; one test changes.
+
+## 26. When are dependencies made, and what does a cycle do?
+
+**Decision:** A provisioned create makes its pod first (bad config fails before anything else is made), then provisions its dependencies, then joins the runtime; its own subscriptions wait until it joins. So a dependency leading back to an implementation still being made finds no member and is a cycle, reason `cycle: <a> → <b> → <a>` (implementation coords from where the cycle starts). A nested create in a cycle is not made (it fails `cycle`, its subscriptions removed), so the cycle reaches the instance whose create began it, which is made with that role unsatisfied. Instances already made for a failed nested create's other roles stay as ordinary members. Generated ids are `<last coord segment>-<first free n>`, counting ids reserved by creates still in progress.
+**Why:** The spec says the dependency is made first; reporting the cycle to the caller is the only way it is seen, and nothing half-wired remains of the cycle itself.
+**Cost if wrong:** Join first and let the inner instance connect back to the outer one (mutual dependencies then resolve silently).

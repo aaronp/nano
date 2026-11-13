@@ -80,7 +80,7 @@ describe('runtime members', () => {
     expect(await rt.create('c', 'acme/app/conf', { config: 'x' })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
     expect((await rt.create('c', 'acme/app/conf', { config: 3 })).ok).toBe(true)
   })
-  test('until provisioning exists, every dependency is unsatisfied', async () => {
+  test('without provision, every dependency is unsatisfied as not provisioned', async () => {
     const { rt } = setup()
     expect(await rt.create('a', 'acme/app/main')).toEqual(success({ coord: 'acme/app/main#a', unsatisfied: [{ role: 'store', reason: 'not provisioned' }] }))
   })
