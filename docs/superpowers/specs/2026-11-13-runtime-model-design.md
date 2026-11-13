@@ -116,8 +116,8 @@ const sendMessage = async (ctx, message) =>
 ### Dependencies: informational, used for provisioning and display
 
 - An implementation declares the interfaces it depends on. The declaration is information, not a binding.
-- **Provisioning.** Creating an instance of `Foo` that depends on `Bar` makes the runtime create `Bar` first, through
-  its provider (recursively, with a cycle check), and connect them, when no suitable connection exists. The
+- **Provisioning.** Creating an instance of `Foo` that depends on `Bar` also makes the runtime create `Bar`, through
+  its provider (create first, then wire), and connect them, when no suitable connection exists. The
   connection is recorded as a subscription like any other. *(Recording it: my call.)*
 - **Display.** The host shows a component disabled when a dependency has no connection and no provider can supply
   one. The component decides its own behaviour too: `ctx.hasDependencies()` / `ctx.listDependencies()` let it disable
@@ -153,12 +153,19 @@ subscription data first, so a `nano.json` saved at any moment describes exactly 
 
 ### Provisioning, precisely
 
-*(My calls; they mirror the dependencies work's resolver.)* When an instance is created, for each declared dependency
-that no connection satisfies:
+**Create first, then wire** *(decided with the user)*: calls always go through the runtime and an instance is never
+handed another instance, so mutual dependencies (A needs B, B needs A) are legitimate. A provisioning pass makes every
+instance it needs and lets each join the runtime *before* any dependency is settled, and the runtime honours no calls
+into or out of the pass's instances until the pass completes. A new instance is made only when no member matches, and
+then matches later searches, so a pass makes at most one instance per implementation and always ends; there is no
+cycle check.
 
-1. exactly one existing instance in the runtime matches the dependency's selector → subscribe to it;
-2. otherwise, exactly one implementation in the registry matches → create it (recursively, with a cycle check) and
-   subscribe to it;
+*(My calls; they mirror the dependencies work's resolver.)* For each declared dependency that no connection satisfies:
+
+1. exactly one existing instance in the runtime matches the dependency's selector → subscribe to it; several match →
+   leave it unsatisfied (the person chooses; nothing new is made);
+2. otherwise (no instance matches), exactly one implementation in the registry matches → create it (recursively,
+   in the same pass) and subscribe to it;
 3. otherwise (none, or several) → leave it unsatisfied: the component shows disabled or falls back, and the host may
    offer a choice.
 
@@ -311,7 +318,7 @@ builder states the behaviour in the log and pins it with a test before relying o
 - Actions are `(ctx, input) => Promise<NanoResult>`; `NanoResult` is the platform's Success | Fail; domain failures
   belong to the op's own union.
 - One `Policy` per runtime, `isAllowed(src, dest, data) → reason`; `Policies.allowAll()` now, richer later.
-- Dependencies are informational: the runtime provisions them recursively with a cycle check; the host shows
+- Dependencies are informational: the runtime provisions them (create first, then wire; mutual dependencies allowed); the host shows
   disabled components; components can query `ctx.hasDependencies()` / `ctx.listDependencies()` and adapt.
 - Calls state their cardinality in code; the verb set above, including ordered verbs and the caveats.
 - No separate composite concept: a higher-level component is an implementation with its own sub-runtime.

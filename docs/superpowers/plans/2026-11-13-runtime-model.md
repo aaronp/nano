@@ -47,7 +47,7 @@ suite with UIs (and the WebAuthn signer variants). Other packages are deferred.
 3. **A subscription whose target is removed** → status `waiting`, verbs see no connection (`one` fails
    `missing-component`), saving still writes the subscription, and re-adding the target makes it `live`. *(Task 5 and
    Task 9 tests.)*
-4. **Cyclic dependencies** (A depends on B depends on A) → provisioning stops with an unsatisfied `cycle` reason; no
+4. **Mutual dependencies** (A depends on B depends on A) → both are made once and connected both ways (create first, then wire); no
    loop, no stack overflow. *(Task 7 test.)*
 5. **A non-JSON schema** (a `Type.Refine`, a function inside) → `defineSchema` throws a clear error when defined, never
    a wrong hash. *(Task 1 test.)*
