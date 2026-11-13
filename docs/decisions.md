@@ -61,3 +61,9 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Decision:** A port: `portKey(ifaceCoord, opCoord)` = `<iface coord>/<op coord>`. `make` returns handlers keyed by port; it throws when an interface is given twice, or given but not declared in `provides`, and checks for missing handlers per interface. `registry.op(coord)` stays keyed by op coord.
 **Why:** An op coord is content-only, so two interfaces with an identical op (`log.write`, `audit.write`) share it; keyed by op coord they would collide, and one interface's handler would satisfy the other's.
 **Cost if wrong:** Routing re-keyed by op coord, and a rule for which interface's handler wins.
+
+## 11. Where does an instance's outgoing call travel?
+
+**Decision:** Through its home runtime's subscriptions, wherever the instance is called from. A pod always hands its handlers the instance's own context (home runtime), never the caller's.
+**Why:** Matches the signer calling the vault at home and a client-side log listening where it was placed; policy for each hop stays in the runtime the hop happens in.
+**Cost if wrong:** A per-runtime context per member.
