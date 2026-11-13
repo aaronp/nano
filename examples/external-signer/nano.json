@@ -8,22 +8,38 @@
     {
       "id": "signer",
       "policy": "allow-all",
-      "instances": [
+      "pods": [
         {
           "id": "vault",
-          "implementation": "example.signer/vault"
+          "implementation": "example.signer/vault",
+          "instances": [
+            0
+          ],
+          "next": 1
         },
         {
           "id": "generator",
-          "implementation": "example.signer/generator"
+          "implementation": "example.signer/generator",
+          "instances": [
+            0
+          ],
+          "next": 1
         },
         {
           "id": "signer",
-          "implementation": "example.signer/signer"
+          "implementation": "example.signer/signer",
+          "instances": [
+            0
+          ],
+          "next": 1
         },
         {
           "id": "map",
-          "implementation": "example.signer/map"
+          "implementation": "example.signer/map",
+          "instances": [
+            0
+          ],
+          "next": 1
         }
       ],
       "members": [],
@@ -53,27 +69,35 @@
     {
       "id": "signer-client",
       "policy": "allow-all",
-      "instances": [
+      "pods": [
         {
           "id": "tester",
-          "implementation": "example.signer/tester"
+          "implementation": "example.signer/tester",
+          "instances": [
+            0
+          ],
+          "next": 1
         },
         {
           "id": "log",
-          "implementation": "example.signer/log"
+          "implementation": "example.signer/log",
+          "instances": [
+            0
+          ],
+          "next": 1
         }
       ],
       "members": [
         {
-          "instance": "generator#0",
+          "pod": "generator",
           "home": "signer"
         },
         {
-          "instance": "signer#0",
+          "pod": "signer",
           "home": "signer"
         },
         {
-          "instance": "map#0",
+          "pod": "map",
           "home": "signer"
         }
       ],
@@ -102,7 +126,7 @@
     }
   ],
   "tags": {},
-  "open": [
+  "start": [
     "signer",
     "signer-client"
   ]

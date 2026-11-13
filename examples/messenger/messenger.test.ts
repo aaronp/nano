@@ -46,8 +46,8 @@ async function stitch(app: Application, messenger: Runtime) {
   if (!persistence.ok || !messaging.ok) throw new Error('runtimes')
   await persistence.value.create('store', 'example.messenger/memory-store')
   await messaging.value.create('messaging', 'example.messenger/messaging')
-  app.place(STORE, 'persistence', 'messenger')
-  app.place(MESSAGING, 'messaging', 'messenger')
+  app.place('store', 'persistence', 'messenger')
+  app.place('messaging', 'messaging', 'messenger')
   messenger.subscribe({ id: 'inbox-store', kind: 'call', from: INBOX, to: STORE })
   messenger.subscribe({ id: 'composer-messaging', kind: 'call', from: COMPOSER, to: MESSAGING })
   messenger.subscribe({

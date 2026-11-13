@@ -34,7 +34,9 @@ const registry = () => {
   return r
 }
 const S = 's#0', V = 'v#0', T = 't#0', W = 'w#0', X = 'x#0'
-const spare: RuntimeDef = { id: 'spare', policy: 'allow-all', instances: [{ id: 'x', implementation: 'acme/keys/vault' }], members: [], subscriptions: [] }
+/** A saved pod with one instance, `<id>#0`. */
+const one = (id: string, implementation: string, config?: unknown): RuntimeDef['pods'][number] => ({ id, implementation, ...(config !== undefined && { config }), instances: [0], next: 1 })
+const spare: RuntimeDef = { id: 'spare', policy: 'allow-all', pods: [one('x', 'acme/keys/vault')], members: [], subscriptions: [] }
 
 /** Root holds `w`; `signer` holds the vault (with config) and the signer; `client` holds the tester, the signer placed in, and `w`; `spare` is only defined. */
 async function setup() {
@@ -44,8 +46,8 @@ async function setup() {
   await app.create('w', 'acme/keys/vault', { config: { root: true } })
   await sr.value.create('v', 'acme/keys/vault', { config: { slot: 1 } })
   await sr.value.create('s', 'acme/keys/signer', { provision: true })
-  app.place(S, 'signer', 'client')
-  app.place(W, 'app', 'client')
+  app.place('s', 'signer', 'client')
+  app.place('w', 'app', 'client')
   await cr.value.create('t', 'acme/ui/tester')
   cr.value.subscribe({ kind: 'call', from: T, to: S })
   cr.value.subscribe({ id: 'late', kind: 'call', from: T, to: W })
@@ -88,30 +90,27 @@ describe('saving and loading', () => {
     expect(back.runtime('client')!.status('s1')).toBe('live') // and 'late' (tester → a vault) stays broken, as it was
   })
 
-  test('an opened runtime is saved from live: its own instances with config, placed members with their home, subscriptions in order', async () => {
+  test('a started runtime is saved from live: its own pods with config and indices, placed members with their home, subscriptions in order', async () => {
     const doc = saveDoc(await setup())
     expect(doc.runtimes.find(r => r.id === 'client')).toEqual({
       id: 'client', policy: 'allow-all',
-      instances: [{ id: 't', implementation: 'acme/ui/tester' }],
-      members: [{ instance: S, home: 'signer' }, { instance: W, home: 'app' }],
+      pods: [one('t', 'acme/ui/tester')],
+      members: [{ pod: 's', home: 'signer' }, { pod: 'w', home: 'app' }],
       subscriptions: [{ id: 's1', kind: 'call', from: T, to: S }, { id: 'late', kind: 'call', from: T, to: W }],
     })
-    expect(doc.runtimes.find(r => r.id === 'signer')!.instances).toEqual([
-      { id: 'v', implementation: 'acme/keys/vault', config: { slot: 1 } },
-      { id: 's', implementation: 'acme/keys/signer' },
-    ])
+    expect(doc.runtimes.find(r => r.id === 'signer')!.pods).toEqual([one('v', 'acme/keys/vault', { slot: 1 }), one('s', 'acme/keys/signer')])
   })
 
-  test('the document lists the providers in use, the runtimes to open, and only coords with a tag', async () => {
+  test('the document lists the providers in use, the runtimes to start, and only coords with a tag', async () => {
     const doc = saveDoc(await setup(), { title: 'Signer', workspaces: [{ any: 'thing' }] })
-    expect(doc).toMatchObject({ nano: 2, title: 'Signer', providers: ['acme/keys', 'acme/ui'], open: ['app', 'signer', 'client'], workspaces: [{ any: 'thing' }] })
+    expect(doc).toMatchObject({ nano: 2, title: 'Signer', providers: ['acme/keys', 'acme/ui'], start: ['app', 'signer', 'client'], workspaces: [{ any: 'thing' }] })
     expect(doc.tags).toEqual({ [T]: ['ui'], [V]: ['keys', 'hot'], [X]: ['spare'] })
   })
 
-  test('an unopened runtime is saved from its definition, unchanged', async () => {
+  test('an unstarted runtime is saved from its definition, unchanged', async () => {
     const doc = saveDoc(await setup())
     expect(doc.runtimes.find(r => r.id === 'spare')).toEqual(spare)
-    expect(doc.open).not.toContain('spare')
+    expect(doc.start).not.toContain('spare')
   })
 
   test('the root is saved under the application id only when it has members or subscriptions', async () => {
@@ -120,7 +119,7 @@ describe('saving and loading', () => {
     expect(saveDoc(app).runtimes.map(r => r.id)).toEqual(['r'])
   })
 
-  test('a root saved under another id loads as a child runtime, opened', async () => {
+  test('a root saved under another id loads as a child runtime, started', async () => {
     const { app, notes } = await loadDoc(saveDoc(await setup()), { registry: registry(), id: 'other' })
     expect(notes).toEqual([])
     expect(app.runtime('app')!.instances()).toEqual([W])
@@ -135,7 +134,7 @@ describe('saving and loading', () => {
   test('a custom policy is not saved', async () => {
     const app = createApplication('app', { registry: registry() })
     app.createRuntime('strict', { policy: { isAllowed: () => ({ approved: true }) } })
-    expect(saveDoc(app).runtimes).toEqual([{ id: 'strict', instances: [], members: [], subscriptions: [] }])
+    expect(saveDoc(app).runtimes).toEqual([{ id: 'strict', pods: [], members: [], subscriptions: [] }])
   })
 
   test('a subscription to a removed target is deleted, so it is not saved', async () => {
@@ -144,6 +143,35 @@ describe('saving and loading', () => {
     const rest = [{ id: 'late', kind: 'call' as const, from: T, to: W }]
     expect(app.runtime('client')!.subscriptions()).toEqual(rest)
     expect(saveDoc(app).runtimes.find(r => r.id === 'client')!.subscriptions).toEqual(rest)
+  })
+
+  // Plan Review Focus 4: indices are never reused across a save.
+  test('given log#0 removed, when saved, loaded and an instance added, then it is log#1, never log#0', async () => {
+    const app = createApplication('app', { registry: registry() })
+    const r = app.createRuntime('r')
+    if (!r.ok) throw new Error('setup')
+    await r.value.create('log', 'acme/keys/vault')
+    r.value.removeInstance('log#0')
+    const doc = saveDoc(app)
+    expect(doc.runtimes[0]!.pods).toEqual([{ id: 'log', implementation: 'acme/keys/vault', instances: [], next: 1 }])
+    const { app: back, notes } = await load(doc)
+    expect(notes).toEqual([])
+    expect(back.runtime('r')!.pod('log')).toMatchObject({ count: 0, state: 'stopped' })
+    expect(await back.runtime('r')!.addInstance('log')).toEqual(success('log#1'))
+  })
+  test('every instance of a pod survives a round trip with its index and its tags', async () => {
+    const app = createApplication('app', { registry: registry() })
+    const r = app.createRuntime('r')
+    if (!r.ok) throw new Error('setup')
+    await r.value.create('v', 'acme/keys/vault', { count: 3 })
+    r.value.removeInstance('v#1')
+    app.tag('v#0', 'a'); app.tag('v#2', 'b')
+    const doc = saveDoc(app)
+    expect(doc.tags).toEqual({ 'v#0': ['a'], 'v#2': ['b'] })
+    const { app: back } = await load(doc)
+    expect(back.runtime('r')!.instances()).toEqual(['v#0', 'v#2'])
+    expect([...back.tagsOf('v#2')]).toEqual(['b'])
+    expect(await back.runtime('r')!.addInstance('v')).toEqual(success('v#3'))
   })
 
   test('an event subscription survives a round trip, live', async () => {
@@ -162,50 +190,50 @@ describe('saving and loading', () => {
 
   test('changing the saved document never changes a running or defined config', async () => {
     const app = await setup()
-    app.define({ id: 'more', instances: [{ id: 'm', implementation: 'acme/keys/vault', config: { n: 1 } }], members: [], subscriptions: [] })
+    app.define({ id: 'more', pods: [one('m', 'acme/keys/vault', { n: 1 })], members: [], subscriptions: [] })
     const doc = saveDoc(app)
-    ;(doc.runtimes.find(r => r.id === 'signer')!.instances[0]!.config as { slot: number }).slot = 9
-    ;(doc.runtimes.find(r => r.id === 'more')!.instances[0]!.config as { n: number }).n = 9
+    ;(doc.runtimes.find(r => r.id === 'signer')!.pods[0]!.config as { slot: number }).slot = 9
+    ;(doc.runtimes.find(r => r.id === 'more')!.pods[0]!.config as { n: number }).n = 9
     expect(app.runtime('signer')!.pod('v')!.config).toEqual({ slot: 1 })
-    expect(app.definition('more')!.instances[0]!.config).toEqual({ n: 1 })
+    expect(app.definition('more')!.pods[0]!.config).toEqual({ n: 1 })
   })
 
-  test('only the runtimes in `open` are opened on load; the rest stay defined', async () => {
+  test('only the runtimes in `start` are started on load; the rest stay defined', async () => {
     const { app } = await load(saveDoc(await setup()))
     expect(app.runtime('spare')).toBeUndefined()
     expect(app.definition('spare')).toEqual(spare)
-    expect((await app.open('spare')).ok).toBe(true)
+    expect((await app.start('spare')).ok).toBe(true)
   })
 })
 
 describe('loading what does not fit', () => {
   const doc = (runtimes: RuntimeDef[], extra: Partial<NanoDoc> = {}): NanoDoc =>
-    ({ nano: 2, title: 't', providers: [], runtimes: runtimes.map(r => ({ policy: 'allow-all', ...r })), tags: {}, open: runtimes.map(r => r.id), ...extra })
+    ({ nano: 2, title: 't', providers: [], runtimes: runtimes.map(r => ({ policy: 'allow-all', ...r })), tags: {}, start: runtimes.map(r => r.id), ...extra })
 
   test('a runtime saved without a policy (a custom one) gives a note and loads with allow-all; a definition saves as allow-all', async () => {
     const app = createApplication('app', { registry: registry() })
     app.createRuntime('locked', { policy: { isAllowed: () => ({ approved: false, reason: 'no' }) } })
-    app.define({ id: 'plain', instances: [], members: [], subscriptions: [] }) // a definition opens allow-all, so it saves as allow-all
+    app.define({ id: 'plain', pods: [], members: [], subscriptions: [] }) // a definition starts allow-all, so it saves as allow-all
     const { app: back, notes } = await load(saveDoc(app))
     expect(notes).toEqual(['locked: saved with a custom policy; loaded with allow-all'])
     expect(back.runtime('locked')!.policy.isAllowed(V, V, undefined)).toEqual({ approved: true })
   })
 
   test('a member whose home fails to open gives a note; the runtime opens without it', async () => {
-    const v = { id: 'v', implementation: 'acme/keys/vault' }
+    const v = one('v', 'acme/keys/vault')
     const { app, notes } = await load(doc([
-      { id: 'a', instances: [v], members: [], subscriptions: [] },
-      { id: 'h', instances: [v], members: [], subscriptions: [] }, // not defined: v is taken, so it cannot open
-      { id: 'r', instances: [], members: [{ instance: V, home: 'h' }], subscriptions: [] },
+      { id: 'a', pods: [v], members: [], subscriptions: [] },
+      { id: 'h', pods: [v], members: [], subscriptions: [] }, // not defined: v is taken, so it cannot open
+      { id: 'r', pods: [], members: [{ pod: 'v', home: 'h' }], subscriptions: [] },
     ]))
     expect(app.runtime('r')!.instances()).toEqual([])
-    expect(notes).toEqual(['h: pod id v is taken', `r: member ${V} skipped: no runtime h`])
+    expect(notes).toEqual(['h: pod id v is taken', 'r: member v skipped: no runtime h'])
   })
 
   test('an unknown implementation gives a note and the rest loads', async () => {
     const { app, notes } = await load(doc([{
       id: 'r', members: [], subscriptions: [{ id: 's1', kind: 'call', from: 'a#0', to: V }],
-      instances: [{ id: 'a', implementation: 'acme/nope/x' }, { id: 'v', implementation: 'acme/keys/vault' }],
+      pods: [one('a', 'acme/nope/x'), one('v', 'acme/keys/vault')],
     }], { providers: ['acme/keys', 'acme/nope'] }))
     expect(notes).toEqual(['provider acme/nope is not registered', 'r/a: no implementation acme/nope/x'])
     expect(app.runtime('r')!.instances()).toEqual([V])
@@ -213,49 +241,49 @@ describe('loading what does not fit', () => {
   })
 
   test('a member whose home is not in the document gives a note and is skipped', async () => {
-    const { app, notes } = await load(doc([{ id: 'r', instances: [], members: [{ instance: S, home: 'gone' }], subscriptions: [] }]))
-    expect(notes).toEqual(['r: member s#0 has no home gone'])
+    const { app, notes } = await load(doc([{ id: 'r', pods: [], members: [{ pod: 's', home: 'gone' }], subscriptions: [] }]))
+    expect(notes).toEqual(['r: member s has no home gone'])
     expect(app.runtime('r')!.instances()).toEqual([])
   })
 
   test('a member whose instance was skipped at its home gives the same note', async () => {
     const { notes } = await load(doc([
-      { id: 'h', instances: [{ id: 'a', implementation: 'acme/nope/x' }], members: [], subscriptions: [] },
-      { id: 'r', instances: [], members: [{ instance: 'a#0', home: 'h' }], subscriptions: [] },
+      { id: 'h', pods: [one('a', 'acme/nope/x')], members: [], subscriptions: [] },
+      { id: 'r', pods: [], members: [{ pod: 'a', home: 'h' }], subscriptions: [] },
     ]))
-    expect(notes).toEqual(['h/a: no implementation acme/nope/x', 'r: member a#0 has no home h'])
+    expect(notes).toEqual(['h/a: no implementation acme/nope/x', 'r: member a has no home h'])
   })
 
   test('a subscription that cannot be added gives a note and the rest loads', async () => {
     const sub = { id: 's1', kind: 'call' as const, from: T, to: V }
-    const { app, notes } = await load(doc([{ id: 'r', instances: [], members: [], subscriptions: [sub, sub] }]))
+    const { app, notes } = await load(doc([{ id: 'r', pods: [], members: [], subscriptions: [sub, sub] }]))
     expect(notes).toEqual(['r/s1: subscription s1 exists'])
     expect(app.runtime('r')!.subscriptions()).toEqual([sub])
   })
 
   test('a runtime that cannot be defined gives a note and the rest loads', async () => {
-    const v = { id: 'v', implementation: 'acme/keys/vault' }
+    const v = one('v', 'acme/keys/vault')
     const { app, notes } = await load(doc([
-      { id: 'a', instances: [v], members: [], subscriptions: [] },
-      { id: 'b', instances: [v], members: [], subscriptions: [] },
+      { id: 'a', pods: [v], members: [], subscriptions: [] },
+      { id: 'b', pods: [v], members: [], subscriptions: [] },
     ]))
     expect(notes).toEqual(['b: pod id v is taken'])
     expect(app.runtime('a')!.instances()).toEqual([V])
   })
 
   test('a member repeated in one runtime gives a note, and the runtime opens with it once', async () => {
-    const v = { id: 'v', implementation: 'acme/keys/vault' }
+    const v = one('v', 'acme/keys/vault')
     const { app, notes } = await load(doc([
-      { id: 'h', instances: [v], members: [], subscriptions: [] },
-      { id: 'r', instances: [], members: [{ instance: V, home: 'h' }, { instance: V, home: 'h' }], subscriptions: [] },
+      { id: 'h', pods: [v], members: [], subscriptions: [] },
+      { id: 'r', pods: [], members: [{ pod: 'v', home: 'h' }, { pod: 'v', home: 'h' }], subscriptions: [] },
     ]))
-    expect(notes).toEqual([`r: member ${V} is repeated`])
+    expect(notes).toEqual(['r: member v is repeated'])
     expect(app.runtime('r')!.instances()).toEqual([V])
   })
 
   test('tags are applied only to what is held after loading', async () => {
     const { app } = await load(doc(
-      [{ id: 'r', instances: [{ id: 'a', implementation: 'acme/nope/x' }, { id: 'v', implementation: 'acme/keys/vault' }], members: [], subscriptions: [] }],
+      [{ id: 'r', pods: [one('a', 'acme/nope/x'), one('v', 'acme/keys/vault')], members: [], subscriptions: [] }],
       { tags: { 'a#0': ['lost'], [V]: ['kept'] } },
     ))
     expect([...app.tagsOf('a#0')]).toEqual([])
@@ -281,7 +309,7 @@ describe('checkDoc', () => {
   })
 
   test('checkDoc names where a document is wrong', () => {
-    const bad = { ...ok, runtimes: [{ id: 'a/b', instances: [], members: [], subscriptions: [] }] }
+    const bad = { ...ok, runtimes: [{ id: 'a/b', pods: [], members: [], subscriptions: [] }] }
     expect(checkDoc(bad)).toMatch(/^\/runtimes\/0\/id: /)
   })
 
@@ -291,13 +319,20 @@ describe('checkDoc', () => {
   })
 
   test('checkDoc refuses more than 50 runtimes', () => {
-    expect(checkDoc({ ...ok, runtimes: Array.from({ length: 51 }, (_, i) => ({ id: `r${i}`, instances: [], members: [], subscriptions: [] })) }))
+    expect(checkDoc({ ...ok, runtimes: Array.from({ length: 51 }, (_, i) => ({ id: `r${i}`, pods: [], members: [], subscriptions: [] })) }))
       .toMatch(/^\/runtimes: /)
   })
 
-  test('member and subscription ends are instance coords', () => {
-    const r = { id: 'r', instances: [], members: [{ instance: 'nope', home: 'h' }], subscriptions: [] }
-    expect(checkDoc({ ...ok, runtimes: [r] })).toMatch(/^\/runtimes\/0\/members\/0\/instance: /)
+  test('members name a pod id; subscription ends are instance coords', () => {
+    const r = (members: unknown[], subscriptions: unknown[]) => ({ id: 'r', pods: [], members, subscriptions })
+    expect(checkDoc({ ...ok, runtimes: [r([{ pod: 'a/b', home: 'h' }], [])] })).toMatch(/^\/runtimes\/0\/members\/0\/pod: /)
+    expect(checkDoc({ ...ok, runtimes: [r([], [{ id: 's', kind: 'call', from: 'a', to: 'b#0' }])] })).toMatch(/^\/runtimes\/0\/subscriptions\/0/)
+  })
+  test('a pod saves its instance indices and next', () => {
+    const pod = (p: object) => ({ ...ok, runtimes: [{ id: 'r', pods: [{ id: 'v', implementation: 'acme/keys/vault', instances: [0], next: 1, ...p }], members: [], subscriptions: [] }] })
+    expect(typeof checkDoc(pod({}))).toBe('object')
+    expect(checkDoc(pod({ instances: [1.5] }))).toMatch(/^\/runtimes\/0\/pods\/0\/instances\/0: /)
+    expect(checkDoc(pod({ next: undefined }))).toMatch(/^\/runtimes\/0\/pods\/0/)
   })
 })
 
@@ -336,9 +371,9 @@ describe('only what the document can hold is made', () => {
 
   test('define refuses a definition the document could not hold', () => {
     const app = createApplication('app', { registry: registry() })
-    const def = (instances: RuntimeDef['instances']): RuntimeDef => ({ id: 'd', instances, members: [], subscriptions: [] })
-    expect(app.define(def([{ id: 'a b', implementation: 'acme/keys/vault' }]))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
-    expect(app.define(def([{ id: 'a', implementation: 'acme/keys/vault', config: () => 1 }]))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    const def = (pods: RuntimeDef['pods']): RuntimeDef => ({ id: 'd', pods, members: [], subscriptions: [] })
+    expect(app.define(def([one('a b', 'acme/keys/vault')]))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(app.define(def([one('a', 'acme/keys/vault', () => 1)]))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
     expect(app.definition('d')).toBeUndefined()
   })
 

@@ -17,7 +17,7 @@ import type { EndSelector, Target } from '../selector.ts'
 import { connectionsOf, contextFor, deliverer, type Book, type Wiring } from './calls.ts'
 import { resolveEnd } from './connect.ts'
 import { provision, type Unsatisfied } from './provision.ts'
-import { ID, instanceCoord, locate, parseInstance, podInfo, targetOf, type Holder, type Instance, type PodInfo, type PodRecord } from './pods.ts'
+import { badIndices, ID, instanceCoord, locate, parseInstance, podInfo, targetOf, type Holder, type Instance, type PodInfo, type PodRecord } from './pods.ts'
 import { isJson } from '../schema.ts'
 import { invalid, nextId, reordered, statusOf, type NewSubscription, type Status, type SubscriptionData } from './subscriptions.ts'
 
@@ -38,6 +38,8 @@ export type NewConnection =
   | { id?: string; kind: 'call'; from: EndSelector; to: EndSelector }
   | { id?: string; kind: 'event'; from: EndSelector; source: string; to: EndSelector; target: string }
 
+export type CreateOpts = { config?: unknown; count?: number; provision?: boolean; instances?: readonly number[]; next?: number }
+
 export type Created = { pod: string; instances: string[]; unsatisfied: Unsatisfied[] }
 
 export type Runtime = {
@@ -47,9 +49,10 @@ export type Runtime = {
   /**
    * A pod of `count` instances (default 1), `<pod>#0` up. A `make` that throws or times out leaves that instance `failed`;
    * the create still succeeds. With `provision: true`, connects or makes what each instance's dependencies need;
-   * `unsatisfied` lists the rest (`not provisioned` without it).
+   * `unsatisfied` lists the rest (`not provisioned` without it). `instances` and `next` restore a saved pod exactly
+   * (its live indices, perhaps none, and its next index) in place of `count`.
    */
-  create(pod: string, implementation: string, opts?: { config?: unknown; count?: number; provision?: boolean }): Promise<NanoResult<Created>>
+  create(pod: string, implementation: string, opts?: CreateOpts): Promise<NanoResult<Created>>
   /** One more instance at the next index (indices are never reused); only at the pod's home. */
   addInstance(pod: string): Promise<NanoResult<string>>
   /** Place a pod from its home: the record is shared, not copied, so its instances and their states are the home's. */
@@ -66,7 +69,8 @@ export type Runtime = {
    * Swap a pod's implementation (and config, when given) in place, only at home: coords, tags and subscriptions are kept;
    * every instance is remade off to the side (one added meanwhile too), then all switch at once and every runtime holding
    * the pod recomputes its statuses (ports that no longer fit → `broken`). Until the switch the old instances serve; calls
-   * already inside an old one finish there. A failing make changes nothing.
+   * already inside an old one finish there. A failing make changes nothing; so does a swap superseded by a later one
+   * (the last asked wins; the earlier fails `invalid-input`).
    */
   swap(pod: string, implementation: string, opts?: { config?: unknown }): Promise<NanoResult<void>>
   pod(id: string): PodInfo | undefined
@@ -211,19 +215,23 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
    * same pass). Calls into or out of the pass's instances wait until it is done. Calls a `make` makes through its own ctx
    * fail at once (construction is not use), so a make cannot wait on its own pass.
    */
-  async function make(pid: string, implementation: string, o: { config?: unknown; count?: number; provision?: boolean }, pass?: Pass, depth = 0): Promise<NanoResult<Created>> {
+  async function make(pid: string, implementation: string, o: CreateOpts, pass?: Pass, depth = 0): Promise<NanoResult<Created>> {
     if (!ID.test(pid)) return failure('invalid-input', `bad pod id ${JSON.stringify(pid)}`)
-    const count = o.count ?? 1
-    const bc = badCount(pid, count)
+    const restore = o.instances !== undefined || o.next !== undefined
+    const bc = restore ? undefined : badCount(pid, o.count ?? 1)
     if (bc) return bc
+    const indices = o.instances ?? Array.from({ length: o.count ?? 1 }, (_, n) => n)
+    const next = o.next ?? indices.reduce((m, n) => Math.max(m, n + 1), 0)
+    const why = restore && badIndices(indices, next)
+    if (why) return failure('invalid-input', `${pid}: ${why}`)
     const impl = registry.implementation(implementation)
     if (!impl) return failure('not-found', `no implementation ${implementation}`)
     if (pods.has(pid) || opts.idTaken?.(pid)) return failure('exists', `pod id ${pid} is taken`)
     const no = badConfig(pid, impl, o.config)
     if (no) return no
-    const coords = Array.from({ length: count }, (_, n) => instanceCoord(pid, n))
+    const coords = indices.map(n => instanceCoord(pid, n))
     const p: PodRecord = {
-      id: pid, implementation: impl, ...(o.config !== undefined && { config: o.config }), home: id, next: count,
+      id: pid, implementation: impl, ...(o.config !== undefined && { config: o.config }), home: id, next,
       instances: new Map(coords.map(c => [c, { coord: c, state: 'starting' }])), holders: new Set(),
     }
     let release: (() => void) | undefined
@@ -257,6 +265,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     }
   }
 
+  const swaps = new WeakMap<PodRecord, number>() // per pod, the latest swap asked for
   const ends = { pods, tagsOf: (c: string) => opts.tagsOf?.(c) ?? new Set<string>() }
   const rt: Runtime = {
     id,
@@ -328,6 +337,8 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const config = 'config' in o ? o.config : p.config
       const no = badConfig(pid, impl, config)
       if (no) return no
+      const gen = (swaps.get(p) ?? 0) + 1 // the last swap asked for wins
+      swaps.set(p, gen)
       // Every instance is remade off to the side, including any added meanwhile; the old ones serve until all are made.
       const made = new Map<string, { bind(pod: Pod): void; host: NanoResult<Pod> }>()
       for (let todo = [...p.instances.keys()]; todo.length > 0; todo = [...p.instances.keys()].filter(c => !made.has(c)))
@@ -335,7 +346,8 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
           const { ctx, bind } = contextFor(wiring, coord, impl, config)
           made.set(coord, { bind, host: await createHostPod(coord, impl, ctx, opts.pod) })
         }))
-      const fail = [...made.values()].flatMap(m => (m.host.ok ? [] : [m.host]))[0] ?? (pods.get(pid) !== p ? failure('not-found', `${pid} was removed while it was swapped`) : undefined)
+      const fail = swaps.get(p) !== gen ? failure('invalid-input', `${pid}: superseded by a later swap`)
+        : [...made.values()].flatMap(m => (m.host.ok ? [] : [m.host]))[0] ?? (pods.get(pid) !== p ? failure('not-found', `${pid} was removed while it was swapped`) : undefined)
       if (fail) { for (const m of made.values()) if (m.host.ok) m.host.value.dispose(); return fail }
       p.implementation = impl
       if (config === undefined) delete p.config

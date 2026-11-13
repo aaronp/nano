@@ -8,23 +8,31 @@
     {
       "id": "messenger",
       "policy": "allow-all",
-      "instances": [
+      "pods": [
         {
           "id": "inbox",
-          "implementation": "example.messenger/inbox"
+          "implementation": "example.messenger/inbox",
+          "instances": [
+            0
+          ],
+          "next": 1
         },
         {
           "id": "composer",
-          "implementation": "example.messenger/composer"
+          "implementation": "example.messenger/composer",
+          "instances": [
+            0
+          ],
+          "next": 1
         }
       ],
       "members": [
         {
-          "instance": "store#0",
+          "pod": "store",
           "home": "persistence"
         },
         {
-          "instance": "messaging#0",
+          "pod": "messaging",
           "home": "messaging"
         }
       ],
@@ -54,10 +62,14 @@
     {
       "id": "persistence",
       "policy": "allow-all",
-      "instances": [
+      "pods": [
         {
           "id": "store",
-          "implementation": "example.messenger/memory-store"
+          "implementation": "example.messenger/memory-store",
+          "instances": [
+            0
+          ],
+          "next": 1
         }
       ],
       "members": [],
@@ -66,10 +78,14 @@
     {
       "id": "messaging",
       "policy": "allow-all",
-      "instances": [
+      "pods": [
         {
           "id": "messaging",
-          "implementation": "example.messenger/messaging"
+          "implementation": "example.messenger/messaging",
+          "instances": [
+            0
+          ],
+          "next": 1
         }
       ],
       "members": [],
@@ -77,7 +93,7 @@
     }
   ],
   "tags": {},
-  "open": [
+  "start": [
     "messenger",
     "persistence",
     "messaging"

@@ -75,13 +75,15 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Why:** The new coord is a different `dest` (or `src`) as far as a policy is concerned, and the spec says a rewire the policy denies changes nothing; replacing is a rewire of every subscription naming the instance.
 **Cost if wrong:** Drop the check in `replace`; one test changes.
 
+Superseded by 51: a swap keeps every coord, so nothing is rewritten and there is nothing to police.
+
 ## 13. Which events do `replace` and `reorder` emit?
 
 **Decision:** `replace` emits `instance-replaced { from, to }`, then `subscription-set` for each rewritten subscription, then any `status` changes — not `instance-added` / `instance-removed`. `reorder` emits `subscription-set` for each subscription in the given list (in the new order); a listener reads the order from `subscriptions()`.
 **Why:** One event per user-visible change; a listener keeping a member list can apply `instance-replaced` directly.
 **Cost if wrong:** A listener that only handles added/removed misses replacements; emit both, or add an order event.
 
-Superseded by 51: `swap` emits `pod-swapped { pod, implementation }` (coords are kept, so no subscription is rewritten).
+Superseded in part by 51: `swap` emits `pod-swapped { pod, implementation }` (coords are kept, so no subscription is rewritten). The `reorder` part stands.
 
 ## 14. In what order does a runtime list its members?
 
@@ -199,6 +201,8 @@ Superseded by 51: config lives on the pod record; `swap` keeps it unless `opts.c
 **Why:** Creating its own instances before opening others makes mutual placement work: when A's members come from B and B's from A, B (opened while A is opening) can already place A's instances. The plan's order (homes first) would fail that case with `not-found`.
 **Cost if wrong:** Swap two loops; mutually placing runtimes then fail to open.
 
+Superseded by 52: `open` is `start`, which always gives a runtime; only a throw takes it down.
+
 ## 32. Which instance ids are taken in an application?
 
 **Decision:** Any id held by a member of the root or any child runtime, and any id a defined but unopened runtime declares among its instances. Applies to creates (and provisioning's generated ids) in runtimes the application makes.
@@ -225,6 +229,8 @@ Superseded by 48: a placed pod is the home's record, so a replacement keeps ever
 **Why:** Skipping every runtime being opened made `Promise.all([open('signer'), open('client')])` fail `not-found` for the client, whose members signer had not made yet.
 **Cost if wrong:** An open may resolve while a home another caller is opening is still adding its subscriptions; that caller's own `open` tells when it is done.
 
+Superseded by 52: the same rules under `start` (`starting <id>: <message>` for a throw).
+
 ## 36. Definitions and tags keep ids and coords tidy
 
 **Decision:** `define` fails `exists` (`instance id <id> is taken`) when one of its instances' ids is already taken in the application (decision 32). An instance's tags are dropped once it is gone from every runtime (removed at home); removing it from a runtime it was placed into keeps them.
@@ -237,11 +243,15 @@ Superseded by 48: a placed pod is the home's record, so a replacement keeps ever
 **Why:** The brief's `RuntimeDef` has separate `instances` and `members`; create order matters for creates and replacing, not for placed copies.
 **Cost if wrong:** An `order` list of coords per runtime in the document.
 
+Superseded by 52: the lists are `pods` (with indices and `next`) and `members` (pod ids); the interleaving is still not kept.
+
 ## 38. How is the application's own root runtime saved and loaded?
 
 **Decision:** Saved as a runtime under the application's id, only when it holds members or subscriptions, and listed first in `open`. `loadDoc(doc, { registry, policy?, id? })` builds the application with `id` (default `app`); a saved runtime with that id is the root: its instances are created (`provision: false`), its members' homes opened and placed, its subscriptions added, before the rest of `open`. Saved under another id, the root loads as an ordinary child runtime (opened, since it is in `open`). Pinned by "the root is saved under the application id only when …" and "a root saved under another id loads as a child runtime, opened".
 **Why:** The document has no application id; a mismatch should lose nothing.
 **Cost if wrong:** An `application` id field in the document.
+
+Updated by 52: the root's own pods are created at their saved indices, members are pod ids, and the document's `open` is `start`.
 
 ## 39. Which runtimes and policies does `saveDoc` write?
 
@@ -249,11 +259,15 @@ Superseded by 48: a placed pod is the home's record, so a replacement keeps ever
 **Why:** Adopted runtimes keep their own registry and ids (decision 33); fine-grained policies are a non-goal.
 **Cost if wrong:** Saving adopted applications as nested documents; a policy schema.
 
+Updated by 52: `open` is `start`; `providers` are those of every saved pod; `tags` cover every instance of the saved pods (`#1` and up too).
+
 ## 40. What does `loadDoc` do with a document that does not fully fit?
 
 **Decision:** It never throws or rejects. An invalid document (per `checkDoc`) gives an empty application and the reason as the only note. Otherwise each problem is skipped with a note and the rest loads: `provider <coord> is not registered` (note only); `<runtime>/<id>: no implementation <coord>` (instance dropped); `<runtime>: member <coord> has no home <runtime>` (member dropped: its home is not in the document, is the runtime itself, or does not hold that instance after the drops above); `<runtime>/<sub id>: <reason>` (subscription dropped: invalid shape or a repeated id); `<runtime>: <reason>` when a runtime cannot be defined (it is not opened either) or fails to open (it stays defined); `<runtime>: member <coord> skipped: <reason>` when a member's home fails to open while opening (from `app.notes()`, decision 31); `<runtime>: saved with a custom policy; loaded with allow-all` for every runtime saved without `policy` (the root only when no `policy` is given to `loadDoc`); `load: <message>` for anything thrown. Subscriptions whose ends were dropped stay, `waiting`. `checkDoc` answers `not a nano v2 document` unless `nano` is 2, else the first schema error as `<path>: <message>`. Pinned by the `loading what does not fit` and `checkDoc` tests.
 **Why:** A document written by another registry or an older build should open as far as it can, with each loss visible.
 **Cost if wrong:** Refuse the whole document on the first problem.
+
+Updated by 52: notes name pods, not coords: `<runtime>/<pod>: no implementation <coord>`, `<runtime>: member <pod> has no home <runtime>` (also when the home does not hold that pod), `<runtime>: member <pod> is repeated`, `<runtime>: member <pod> skipped: <reason>`. A start's own skips (`<runtime>/<pod>: <reason>`, `<runtime>/<sub id>: <reason>`) arrive through `app.notes()`.
 
 ## 41. One id rule, enforced where things are made
 
@@ -324,6 +338,8 @@ Pinned by the matching tests in `application.test.ts`, `document.test.ts` and `p
 **Why:** Each was a silent loss: a guest kept a disposed pod (same-implementation replace), one bad home failed every runtime placing from it, a hung `make` hung its creator, an edit to a definition changed what opened later.
 **Cost if wrong:** Notes are unbounded (a drain or cap later); an open that should fail on a missing member needs a strict flag.
 
+Superseded in part by 52: `open` is `start`, and it fails only for an unknown id or a throw.
+
 ## 48. Pods in the runtime (pods revision, task 1)
 
 **Decision:**
@@ -373,7 +389,23 @@ Superseded in part by 51: `replace` is now `swap` and `pod-replaced` is `pod-swa
 - `Runtime.swap(pod, implementation, opts?)` replaces `replace`, at home only (`denied` elsewhere, unknown `not-found`). Coords, tags and subscriptions are kept; config is replaced when `opts.config` is given, else kept. Every instance is made off to the side; the old instances serve until all are made, then all switch at once and every runtime holding the pod recomputes its statuses (a subscription whose port the new implementation lacks is `broken`). Any make failing changes nothing. The event is `pod-swapped { pod, implementation }` (Task 6 folds it into the one stream).
 - An instance added while a swap is pending is made with the new implementation too: the swap keeps making until every current instance has a new host, then switches. If the instance's own (old-implementation) start finishes after the switch, its host is dropped.
 - Calls already inside an old instance finish there with its result; calls after the switch reach the new one. Disposing a host only refuses new calls, so disposing it at the switch is "disposed once its in-flight calls settle"; no in-flight tracking is needed while dispose has no teardown of its own (a sandboxed host with one would have to wait).
-- `Application.place(pod, from, to)` takes a pod id and adds the same record to `to`. An instance coord still stands for its pod (saved members name one until the application starts pods). Removing at home deletes the pod's subscriptions and membership in every runtime holding it (decision 49), now pinned with two guests.
+- `Application.place(pod, from, to)` takes a pod id and adds the same record to `to`. *(Until decision 52 an instance coord also stood for its pod; now only a pod id.)* Removing at home deletes the pod's subscriptions and membership in every runtime holding it (decision 49), now pinned with two guests.
+- *(Task 5 fold-ins.)* Concurrent swaps: the **last asked wins**. Each pod keeps a swap generation; a swap overtaken by a later one disposes what it made, changes nothing and fails `invalid-input` (`<pod>: superseded by a later swap`), whether it finishes before or after the later one.
+- A swap revives failed instances: each one is made again with the new implementation and is `running` after the switch (its reason cleared).
+- An old handler still in flight after the switch may publish, but those publishes are dropped: a context publishes only while its own host is still the instance's (decision 48).
 
 **Why:** The spec: a swap keeps coords and never makes a subscription wait; placed pods are swapped once, at home, and every runtime sees it through the shared record.
 **Cost if wrong:** A swap that should only reach some instances (a canary) needs a per-instance swap; a host with real teardown needs dispose to wait for in-flight calls.
+
+## 52. Start, definitions of pods, and saving indices (pods revision, task 5)
+
+**Decision:**
+- `Application.start(id)` replaces `open` (removed). Starting always gives a runtime: its own pods are created first (`provision: false`, at their saved indices), a pod whose make fails is `failed` and subscriptions to it wait; a pod that cannot be made at all (unknown implementation, bad config, id taken) is skipped with the note `<runtime>/<pod>: <reason>`; a member whose home fails to start or cannot be placed is skipped (`<runtime>: member <pod> skipped: <reason>`); a subscription that cannot be added is skipped (`<runtime>/<sub id>: <reason>`). Notes go to `app.notes()`. `start` fails only for an id neither started nor defined (`not-found`) or a throw while building (`threw`, `starting <id>: <message>`; the runtime is taken down, runtimes started on the way stay). Ordering and overlap are decisions 31 and 35 under the new name.
+- `RuntimeDef = { id, policy?, pods: { id, implementation, config?, instances: number[], next }[], members: { pod, home }[], subscriptions }`. `RuntimeDefSchema` (and so the document) checks indices are whole numbers from 0 to 999 999 999 (at most 500) and `next` from 0 to 10⁹; `define` also refuses repeated indices or one not below `next` (`invalid-input`, via `badIndices`, shared with the runtime).
+- `Runtime.create` takes `instances` and `next` in place of `count`, to restore a saved pod exactly; an empty `instances` gives a `stopped` pod. `saveDoc` writes each pod's live indices and `next`, so a removed index is never reused across a save (Review Focus 4: remove `log#0`, save, load, add → `log#1`). Tags are saved for every instance of the saved pods.
+- The document field `open` is `start` (runtimes to start on load). Members are saved by pod id.
+- `place` takes only a pod id; the receiving runtime's policy is asked with the pod id.
+- Test changes: the two `start` todos in `pods.test.ts` defined pods with `count`; they now use `instances`/`next` (the brief's `RuntimeDef`). `pods.test.ts` placed `vault#0`; it now places `vault`. Removing `// @ts-nocheck` needed type-only edits (typed helpers, `as never` on deliberately malformed selectors). In `application.test.ts`, "a definition that cannot be built fails" and "placed members are removed when an open rolls back" became "is skipped with a note; the runtime starts" (the spec: starting never refuses a runtime).
+
+**Why:** The spec's failure boundaries: starting a runtime from its saved definition always gives a runtime; problems are notes and pod states. Indices are never reused within a pod, which must hold across a save too.
+**Cost if wrong:** A caller wanting all-or-nothing starts needs a strict flag; a document can carry gaps in indices forever (harmless, but visible).

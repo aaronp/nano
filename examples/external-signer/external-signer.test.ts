@@ -50,9 +50,9 @@ async function build(): Promise<Application> {
   await signer.value.create('map', 'example.signer/map')
   signer.value.subscribe({ kind: 'event', from: VAULT, source: portKey(Vault.coord, Vault.ops.keys.coord), to: MAP, target: portKey(KeyFormatter.coord, KeyFormatter.ops.format.coord) })
 
-  app.place(GENERATOR, 'signer', 'signer-client')
-  app.place(SIGNER, 'signer', 'signer-client')
-  app.place(MAP, 'signer', 'signer-client')
+  app.place('generator', 'signer', 'signer-client')
+  app.place('signer', 'signer', 'signer-client')
+  app.place('map', 'signer', 'signer-client')
   // Placed first, so provisioning finds the generator and signer in the client and subscribes the tester to them.
   await client.value.create('tester', 'example.signer/tester', { provision: true })
   await client.value.create('log', 'example.signer/log')

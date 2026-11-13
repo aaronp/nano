@@ -73,7 +73,7 @@ describe('placing', () => {
     const { app, signerRt, client } = await setup()
     const inSigner: RuntimeEvent[] = [], inClient: RuntimeEvent[] = []
     signerRt.listen(e => inSigner.push(e)); client.listen(e => inClient.push(e))
-    expect(app.place(S, 'signer', 'client')).toEqual(success(undefined))
+    expect(app.place('s', 'signer', 'client')).toEqual(success(undefined))
     expect(signerRt.instances()).toContain(S)
     expect(client.pod('s')).toMatchObject({ home: 'signer', instances: [{ coord: S, state: 'running' }] })
     expect(client.record('s')).toBe(signerRt.record('s')!)
@@ -83,7 +83,7 @@ describe('placing', () => {
   test('calls into it are policed by the runtime they happen in', async () => {
     const signerLog: string[] = [], clientLog: string[] = []
     const { app, client } = await setup({ signer: recording(signerLog), client: recording(clientLog) })
-    app.place(S, 'signer', 'client')
+    app.place('s', 'signer', 'client')
     await client.create('t', 'acme/ui/tester', { provision: true })
     signerLog.length = 0; clientLog.length = 0
     expect(await contexts.get(T)!.one(Signer, s => s.ping('x'))).toEqual(success('signed x'))
@@ -92,7 +92,7 @@ describe('placing', () => {
   })
   test('a placed instance calls out through its home runtime\'s subscriptions', async () => {
     const { app, signerRt, client } = await setup()
-    app.place(S, 'signer', 'client')
+    app.place('s', 'signer', 'client')
     await client.create('t', 'acme/ui/tester', { provision: true })
     await contexts.get(T)!.one(Signer, s => s.ping('x'))
     expect(client.subscriptions().map(s => `${s.from} -> ${s.to}`)).toEqual([`${T} -> ${S}`])
@@ -100,16 +100,16 @@ describe('placing', () => {
     expect(signerRt.books(home.id)).toEqual({ calls: 1, last: success('x') })
   })
   test('placing needs the instance in `from` and an approving `to`', async () => {
-    const { app, client } = await setup({ client: { isAllowed: (f, t, d) => (d === S ? { approved: false, reason: `no ${f} -> ${t}` } : { approved: true }) } })
-    expect(app.place('nope#0', 'signer', 'client')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
-    expect(app.place(S, 'client', 'signer')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
-    expect(app.place(S, 'signer', 'elsewhere')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
-    expect(app.place(S, 'signer', 'client')).toEqual({ ok: false, fail: { type: 'denied', reason: 'no signer -> client' } })
+    const { app, client } = await setup({ client: { isAllowed: (f, t, d) => (d === 's' ? { approved: false, reason: `no ${f} -> ${t}` } : { approved: true }) } })
+    expect(app.place('nope', 'signer', 'client')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+    expect(app.place('s', 'client', 'signer')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+    expect(app.place('s', 'signer', 'elsewhere')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+    expect(app.place('s', 'signer', 'client')).toEqual({ ok: false, fail: { type: 'denied', reason: 'no signer -> client' } })
     expect(client.instances()).toEqual([])
   })
   test('removing it at home removes it everywhere; subscriptions to it are deleted', async () => {
     const { app, signerRt, client } = await setup()
-    app.place(S, 'signer', 'client')
+    app.place('s', 'signer', 'client')
     await client.create('t', 'acme/ui/tester', { provision: true })
     const sid = client.subscriptions()[0]!.id
     expect(client.status(sid)).toBe('live')
@@ -135,7 +135,7 @@ describe('placing', () => {
   })
   test('removing it from a runtime it was placed into leaves its home alone', async () => {
     const { app, signerRt, client } = await setup()
-    app.place(S, 'signer', 'client')
+    app.place('s', 'signer', 'client')
     const inSigner: RuntimeEvent[] = [], inClient: RuntimeEvent[] = []
     signerRt.listen(e => inSigner.push(e)); client.listen(e => inClient.push(e))
     client.remove('s')
@@ -151,7 +151,7 @@ describe('placing', () => {
     const order: string[] = []
     const pass = home.value.create('h', 'acme/keys/holder', { provision: true }).then(() => order.push('pass'))
     await new Promise(r => setTimeout(r, 2))
-    expect(app.place('vault-1#0', 'home', 'client')).toEqual(success(undefined))
+    expect(app.place('vault-1', 'home', 'client')).toEqual(success(undefined))
     await client.create('u', 'acme/ui/user')
     client.subscribe({ kind: 'call', from: 'u#0', to: 'vault-1#0' })
     const call = contexts.get('u#0')!.one(Vault, v => v.ping('x')).then(r => { order.push('call'); return r })
@@ -165,7 +165,7 @@ describe('placing', () => {
     if (!home.ok) throw new Error('home')
     const pass = home.value.create('h', 'acme/keys/holder', { provision: true })
     await new Promise(r => setTimeout(r, 2))
-    app.place('vault-1#0', 'home', 'client')
+    app.place('vault-1', 'home', 'client')
     await client.create('u', 'acme/ui/user')
     const sub = client.subscribe({ kind: 'call', from: 'u#0', to: 'vault-1#0' })
     const call = contexts.get('u#0')!.one(Vault, v => v.ping('x'))
@@ -176,7 +176,7 @@ describe('placing', () => {
   })
   test('a call subscription from a member placed here is broken: it calls out through its home', async () => {
     const { app, client } = await setup()
-    app.place(S, 'signer', 'client'); app.place(V, 'signer', 'client')
+    app.place('s', 'signer', 'client'); app.place('v', 'signer', 'client')
     const s = client.subscribe({ kind: 'call', from: S, to: V })
     expect(s.ok && client.status(s.value.id)).toBe('broken')
   })
@@ -187,7 +187,7 @@ describe('placing', () => {
     const order: string[] = []
     const pass = home.value.create('h', 'acme/keys/holder', { provision: true }).then(() => order.push('pass'))
     await new Promise(r => setTimeout(r, 2))
-    expect(app.place('vault-1#0', 'home', 'client')).toEqual(success(undefined))
+    expect(app.place('vault-1', 'home', 'client')).toEqual(success(undefined))
     await client.create('k', 'acme/keys/ticker')
     client.subscribe({ kind: 'event', from: 'k#0', source: TICK, to: 'vault-1#0', target: PING(Vault) })
     const published = contexts.get('k#0')!.publish(Ticks.ops.tick, 'x').then(() => order.push('publish'))
@@ -200,7 +200,7 @@ describe('placing', () => {
 describe('swapping at home', () => {
   test('a runtime it was placed into sees the new implementation behind the same coord; subscriptions stay', async () => {
     const { app, signerRt, client } = await setup()
-    app.place(S, 'signer', 'client')
+    app.place('s', 'signer', 'client')
     await client.create('t', 'acme/ui/tester', { provision: true })
     const events: RuntimeEvent[] = []
     client.listen(e => events.push(e))
@@ -213,7 +213,7 @@ describe('swapping at home', () => {
   })
   test('swapping to the same implementation leaves guests the new instance: calls succeed, subscriptions stay live', async () => {
     const { app, signerRt, client } = await setup()
-    app.place(S, 'signer', 'client')
+    app.place('s', 'signer', 'client')
     await client.create('t', 'acme/ui/tester', { provision: true })
     const before = signerRt.record('s')!.instances.get(S)!.host
     expect(await signerRt.swap('s', 'acme/keys/signer')).toEqual(success(undefined))
@@ -227,7 +227,7 @@ describe('swapping at home', () => {
     const home = app.createRuntime('home')
     if (!home.ok) throw new Error('home')
     await home.value.create('k', 'acme/keys/ticker')
-    app.place('k#0', 'home', 'client')
+    app.place('k', 'home', 'client')
     await client.create('n', 'acme/ui/sink')
     client.subscribe({ kind: 'event', from: 'k#0', source: TICK, to: 'n#0', target: PING(Sink) })
     await home.value.swap('k', 'acme/keys/ticker')
@@ -240,7 +240,7 @@ describe('swapping at home', () => {
     const home = app.createRuntime('home')
     if (!home.ok) throw new Error('home')
     await home.value.create('k', 'acme/keys/ticker')
-    app.place('k#0', 'home', 'client')
+    app.place('k', 'home', 'client')
     await client.create('n', 'acme/ui/sink')
     client.subscribe({ kind: 'event', from: 'k#0', source: TICK, to: 'n#0', target: PING(Sink) })
     await home.value.swap('k', 'acme/keys/ticker2')
@@ -256,7 +256,7 @@ describe('swapping at home', () => {
   })
   test('a runtime it was placed into cannot swap it', async () => {
     const { app, client } = await setup()
-    app.place(S, 'signer', 'client')
+    app.place('s', 'signer', 'client')
     expect(await client.swap('s', 'acme/keys/signer2')).toMatchObject({ ok: false, fail: { type: 'denied' } })
   })
 })
@@ -274,17 +274,17 @@ describe('the application', () => {
     expect(await client.create('v', 'acme/ui/user')).toMatchObject({ ok: false, fail: { type: 'exists' } })
     expect(await app.create('s', 'acme/ui/user')).toMatchObject({ ok: false, fail: { type: 'exists' } })
   })
-  test('a pod id a definition declares is taken before that runtime is opened', async () => {
+  test('a pod id a definition declares is taken before that runtime is started', async () => {
     const app = createApplication('app', { registry: registry() })
     app.define(signerDef); app.define(clientDef)
     expect(await app.create('t', 'acme/ui/user')).toMatchObject({ ok: false, fail: { type: 'exists' } })
-    expect((await app.open('client')).ok).toBe(true)
+    expect((await app.start('client')).ok).toBe(true)
   })
   test('tags are shared, so a tag selector works in every runtime', async () => {
     const { app, client } = await setup()
     app.tag(V, 'cache')
     expect(app.tagsOf(V)).toEqual(new Set(['cache']))
-    app.place(V, 'signer', 'client')
+    app.place('v', 'signer', 'client')
     expect(client.target(V)!.tags).toEqual(new Set(['cache']))
     expect(await client.create('c', 'acme/ui/cached', { provision: true })).toEqual(success({ pod: 'c', instances: ['c#0'], unsatisfied: [] }))
     app.untag(V, 'cache')
@@ -293,7 +293,7 @@ describe('the application', () => {
   test('tags go when the instance is gone everywhere, not when it leaves a runtime it was placed into', async () => {
     const { app, signerRt, client } = await setup()
     app.tag(V, 'cache')
-    app.place(V, 'signer', 'client')
+    app.place('v', 'signer', 'client')
     client.remove('v')
     expect(app.tagsOf(V)).toEqual(new Set(['cache']))
     signerRt.remove('v')
@@ -312,20 +312,20 @@ describe('the application', () => {
 
 const signerDef: RuntimeDef = {
   id: 'signer',
-  instances: [{ id: 'v', implementation: 'acme/keys/vault' }, { id: 's', implementation: 'acme/keys/signer' }],
+  pods: [{ id: 'v', implementation: 'acme/keys/vault', instances: [0], next: 1 }, { id: 's', implementation: 'acme/keys/signer', instances: [0], next: 1 }],
   members: [],
   subscriptions: [{ id: 's1', kind: 'call', from: S, to: V }],
 }
 const clientDef: RuntimeDef = {
   id: 'client',
   policy: 'allow-all',
-  instances: [{ id: 't', implementation: 'acme/ui/tester' }],
-  members: [{ instance: S, home: 'signer' }],
+  pods: [{ id: 't', implementation: 'acme/ui/tester', instances: [0], next: 1 }],
+  members: [{ pod: 's', home: 'signer' }],
   subscriptions: [{ id: 's1', kind: 'call', from: T, to: S }],
 }
 
 describe('runtimes on demand', () => {
-  test('runtimes() lists opened and defined runtimes; definition() gives the data back', () => {
+  test('runtimes() lists started and defined runtimes; definition() gives the data back', () => {
     const app = createApplication('app', { registry: registry() })
     app.createRuntime('made')
     expect(app.define(signerDef)).toEqual(success(undefined))
@@ -333,7 +333,7 @@ describe('runtimes on demand', () => {
     expect(app.definition('signer')).toEqual(signerDef)
     expect(app.runtime('signer')).toBeUndefined()
   })
-  test('define rejects a duplicate id or one already opened', () => {
+  test('define rejects a duplicate id or one already started', () => {
     const app = createApplication('app', { registry: registry() })
     app.createRuntime('made')
     app.define(signerDef)
@@ -345,13 +345,13 @@ describe('runtimes on demand', () => {
     const app = createApplication('app', { registry: registry() })
     const def = structuredClone(signerDef)
     app.define(def)
-    def.instances.pop()
+    def.pods.pop()
     app.definition('signer')!.subscriptions.pop()
     expect(app.definition('signer')).toEqual(signerDef)
   })
   test('define rejects a pod id repeated within the definition', () => {
     const app = createApplication('app', { registry: registry() })
-    const def = { ...signerDef, instances: [...signerDef.instances, { id: 'v', implementation: 'acme/keys/slow' }] }
+    const def = { ...signerDef, pods: [...signerDef.pods, { id: 'v', implementation: 'acme/keys/slow', instances: [0], next: 1 }] }
     expect(app.define(def)).toEqual({ ok: false, fail: { type: 'exists', reason: 'pod id v is repeated' } })
     expect(app.runtimes()).toEqual([])
   })
@@ -361,47 +361,44 @@ describe('runtimes on demand', () => {
     expect(app.define(signerDef)).toEqual({ ok: false, fail: { type: 'exists', reason: 'pod id v is taken' } })
     expect(app.runtimes()).toEqual([])
   })
-  test('overlapping opens both succeed', async () => {
+  test('overlapping starts both succeed', async () => {
     const app = createApplication('app', { registry: registry() })
     app.define(signerDef); app.define(clientDef)
-    const [a, b] = await Promise.all([app.open('signer'), app.open('client')])
+    const [a, b] = await Promise.all([app.start('signer'), app.start('client')])
     expect(a.ok && b.ok).toBe(true)
     expect(app.runtime('client')!.instances()).toEqual([T, S])
     expect(await contexts.get(T)!.one(Signer, s => s.ping('x'))).toEqual(success('signed x'))
   })
-  test('overlapping opens of runtimes whose members come from each other both succeed', async () => {
+  test('overlapping starts of runtimes whose members come from each other both succeed', async () => {
     const app = createApplication('app', { registry: registry() })
-    app.define({ ...signerDef, members: [{ instance: T, home: 'client' }] })
+    app.define({ ...signerDef, members: [{ pod: 't', home: 'client' }] })
     app.define(clientDef)
-    const [a, b] = await Promise.all([app.open('client'), app.open('signer')])
+    const [a, b] = await Promise.all([app.start('client'), app.start('signer')])
     expect(a.ok && b.ok).toBe(true)
     expect(app.runtime('signer')!.instances()).toEqual([V, S, T])
     expect(app.runtime('client')!.instances()).toEqual([T, S])
   })
-  test('open never rejects: a definition that throws while built fails threw', async () => {
+  test('start never rejects: a definition that throws while built fails threw', async () => {
     const reg = registry()
     const throwing = { ...reg, implementation: (c: string) => { if (c === 'acme/keys/signer') throw new Error('registry down'); return reg.implementation(c) } }
     const app = createApplication('app', { registry: throwing })
     app.define(signerDef)
-    expect(await app.open('signer')).toMatchObject({ ok: false, fail: { type: 'threw' } })
+    expect(await app.start('signer')).toMatchObject({ ok: false, fail: { type: 'threw' } })
     expect(app.runtime('signer')).toBeUndefined()
   })
-  test('placed members are removed when an open rolls back', async () => {
+  test('a subscription that cannot be added is skipped with a note; the runtime starts with the rest', async () => {
     const app = createApplication('app', { registry: registry() })
     app.define(signerDef)
     app.define({ ...clientDef, subscriptions: [clientDef.subscriptions[0]!, clientDef.subscriptions[0]!] }) // a repeated id fails on subscribe
-    const p = app.open('client')
-    await Promise.resolve()
-    const half = app.runtime('client')!
-    expect(await p).toMatchObject({ ok: false, fail: { type: 'exists' } })
-    expect(half.instances()).toEqual([])
-    expect(app.runtime('client')).toBeUndefined()
-    expect(app.runtime('signer')!.instances()).toEqual([V, S])
+    const r = await app.start('client')
+    expect(r.ok).toBe(true)
+    expect(app.runtime('client')!.subscriptions()).toEqual([clientDef.subscriptions[0]!])
+    expect(app.notes()).toEqual(['client/s1: subscription s1 exists'])
   })
-  test('opening a defined runtime opens the runtimes its members come from first', async () => {
+  test('starting a defined runtime starts the runtimes its members come from first', async () => {
     const app = createApplication('app', { registry: registry() })
     app.define(signerDef); app.define(clientDef)
-    const r = await app.open('client')
+    const r = await app.start('client')
     expect(r.ok).toBe(true)
     const client = app.runtime('client')!, signerRt = app.runtime('signer')!
     expect(r.ok && r.value).toBe(client)
@@ -411,58 +408,81 @@ describe('runtimes on demand', () => {
     expect(client.status('s1')).toBe('live')
     expect(await contexts.get(T)!.one(Signer, s => s.ping('x'))).toEqual(success('signed x'))
   })
-  test('an opened runtime is returned as it is', async () => {
+  test('a started runtime is returned as it is', async () => {
     const app = createApplication('app', { registry: registry() })
     app.define(signerDef)
-    const [a, b] = await Promise.all([app.open('signer'), app.open('signer')])
+    const [a, b] = await Promise.all([app.start('signer'), app.start('signer')])
     expect(a.ok && b.ok && a.value === b.value).toBe(true)
-    const c = await app.open('signer')
+    const c = await app.start('signer')
     expect(c.ok && a.ok && c.value === a.value).toBe(true)
   })
-  test('runtimes whose members come from each other open without looping', async () => {
+  test('runtimes whose members come from each other start without looping', async () => {
     const app = createApplication('app', { registry: registry() })
-    app.define({ ...signerDef, members: [{ instance: T, home: 'client' }] })
+    app.define({ ...signerDef, members: [{ pod: 't', home: 'client' }] })
     app.define(clientDef)
-    expect((await app.open('signer')).ok).toBe(true)
+    expect((await app.start('signer')).ok).toBe(true)
     expect(app.runtime('signer')!.instances()).toEqual([V, S, T])
     expect(app.runtime('client')!.instances()).toEqual([T, S])
   })
   test('a subscription whose end is not there yet waits', async () => {
     const app = createApplication('app', { registry: registry() })
     app.define({ ...clientDef, members: [], subscriptions: [{ id: 's1', kind: 'call', from: T, to: S }] })
-    expect((await app.open('client')).ok).toBe(true)
+    expect((await app.start('client')).ok).toBe(true)
     expect(app.runtime('client')!.status('s1')).toBe('waiting')
   })
-  test('an undefined, unopened id fails not-found', async () => {
+  test('an undefined, unstarted id fails not-found', async () => {
     const app = createApplication('app', { registry: registry() })
-    expect(await app.open('nope')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+    expect(await app.start('nope')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
   })
-  test('a definition that cannot be built fails, and the runtime is not left half open', async () => {
+  test('a pod that cannot be made is skipped with a note; the runtime starts and subscriptions from it wait', async () => {
     const app = createApplication('app', { registry: registry() })
-    app.define({ ...clientDef, instances: [{ id: 't', implementation: 'acme/ui/nope' }] })
-    expect(await app.open('client')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
-    expect(app.runtime('client')).toBeUndefined()
-    expect(app.runtimes()).toEqual(['client'])
-    expect(app.runtime('signer')).toBeUndefined()
+    app.define(signerDef)
+    app.define({ ...clientDef, pods: [{ id: 't', implementation: 'acme/ui/nope', instances: [0], next: 1 }] })
+    const r = await app.start('client')
+    expect(r.ok && r.value).toBe(app.runtime('client')!)
+    expect(app.runtime('client')!.instances()).toEqual([S])
+    expect(app.runtime('client')!.status('s1')).toBe('waiting')
+    expect(app.notes()).toEqual(['client/t: no implementation acme/ui/nope'])
   })
-  test("a member whose home cannot be opened is skipped with a note; a home whose pod failed opens, and subscriptions to that pod wait", async () => {
+  test('a saved pod restores its live indices and next: a removed index is never reused', async () => {
+    const app = createApplication('app', { registry: registry() })
+    app.define({ id: 'r', pods: [{ id: 'v', implementation: 'acme/keys/vault', instances: [1, 3], next: 4 }], members: [], subscriptions: [] })
+    await app.start('r')
+    const r = app.runtime('r')!
+    expect(r.instances()).toEqual(['v#1', 'v#3'])
+    expect(await r.addInstance('v')).toEqual(success('v#4'))
+  })
+  test('a saved pod with no instances starts stopped', async () => {
+    const app = createApplication('app', { registry: registry() })
+    app.define({ id: 'r', pods: [{ id: 'v', implementation: 'acme/keys/vault', instances: [], next: 2 }], members: [], subscriptions: [] })
+    await app.start('r')
+    expect(app.runtime('r')!.pod('v')).toMatchObject({ state: 'stopped', count: 0 })
+  })
+  test('define refuses indices that repeat or are not below next', () => {
+    const app = createApplication('app', { registry: registry() })
+    const def = (instances: number[], next: number): RuntimeDef => ({ id: 'r', pods: [{ id: 'v', implementation: 'acme/keys/vault', instances, next }], members: [], subscriptions: [] })
+    expect(app.define(def([0, 0], 1))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(app.define(def([2], 2))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(app.define(def([-1], 2))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+  })
+  test("a member whose home cannot be started is skipped with a note; a home whose pod failed starts, and subscriptions to that pod wait", async () => {
     const app = createApplication('app', { registry: registry() })
     const B = 'b#0'
     app.define(signerDef)
-    app.define({ id: 'bad', instances: [{ id: 'b', implementation: 'acme/keys/boom' }], members: [], subscriptions: [] })
+    app.define({ id: 'bad', pods: [{ id: 'b', implementation: 'acme/keys/boom', instances: [0], next: 1 }], members: [], subscriptions: [] })
     app.define({
       ...clientDef,
-      members: [{ instance: B, home: 'bad' }, { instance: S, home: 'signer' }, { instance: V, home: 'nowhere' }],
+      members: [{ pod: 'b', home: 'bad' }, { pod: 's', home: 'signer' }, { pod: 'v', home: 'nowhere' }],
       subscriptions: [{ id: 's1', kind: 'call', from: T, to: B }, { id: 's2', kind: 'call', from: T, to: S }],
     })
-    const r = await app.open('client')
+    const r = await app.start('client')
     expect(r.ok).toBe(true)
     const client = app.runtime('client')!
     expect(client.instances()).toEqual([T, B, S])
     expect(client.pod('b')).toMatchObject({ home: 'bad', state: 'failed' })
     expect([client.status('s1'), client.status('s2')]).toEqual(['waiting', 'live'])
     expect(await contexts.get(T)!.fallback(Signer, s => s.ping('x'))).toEqual(success({ value: 'signed x', from: S, failures: [] }))
-    expect(app.notes()).toEqual([`client: member ${V} skipped: no runtime nowhere`])
+    expect(app.notes()).toEqual(['client: member v skipped: no runtime nowhere'])
   })
 
 })

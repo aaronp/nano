@@ -55,6 +55,13 @@ export type PodInfo = {
 
 export const instanceCoord = (pod: string, n: number): string => `${pod}#${n}`
 
+/** Why these saved instance indices and `next` cannot be a pod's (up to 500 distinct whole numbers, each below `next`), or undefined. */
+export function badIndices(instances: readonly number[], next: number): string | undefined {
+  const whole = (n: number, max: number) => Number.isInteger(n) && n >= 0 && n <= max
+  if (!whole(next, 1e9) || instances.length > 500 || new Set(instances).size !== instances.length || !instances.every(n => whole(n, next - 1)))
+    return 'instances must be up to 500 distinct whole numbers, each below next (at most 1000000000)'
+}
+
 export function parseInstance(coord: string): { pod: string; index: number } | undefined {
   const m = /^(.*)#(0|[1-9][0-9]{0,8})$/.exec(coord)
   return m && ID.test(m[1]!) ? { pod: m[1]!, index: Number(m[2]) } : undefined

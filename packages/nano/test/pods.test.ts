@@ -1,8 +1,6 @@
-// @ts-nocheck — the pods revision isn't built yet; remove when it lands (plan: pods revision)
 /**
  * The pods revision, written first: pods own their instances (`<pod>#<n>`), `connect` resolves two selectors to two
  * concrete coords once, unavailable ends wait and deleted ends cascade, and the application starts runtimes.
- * Every test is `test.todo` until the plan lands: `bun test --todo test/pods.test.ts` runs them (red today).
  */
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
@@ -15,7 +13,8 @@ import { provider } from '../src/provider.ts'
 import { createRegistry } from '../src/registry.ts'
 import type { Policy } from '../src/policy.ts'
 import type { NanoContext } from '../src/context.ts'
-import type { Selector } from '../src/selector.ts'
+import type { EndSelector, Selector } from '../src/selector.ts'
+import type { NewConnection, Runtime } from '../src/runtime/index.ts'
 import { createApplication } from '../src/application.ts'
 
 const Str = defineSchema('Str', Type.String())
@@ -26,9 +25,10 @@ const Log = iface('acme/log', { write: op.sink('write', Str) })
 const TICK = portKey(Ticks.coord, Ticks.ops.tick.coord), WRITE = portKey(Log.coord, Log.ops.write.coord)
 
 const contexts = new Map<string, NanoContext>()
-const echo = (prefix: string): Handler => async (_c, s) => success(`${prefix} ${s}`)
+type Ping = (ctx: NanoContext, s: string) => Promise<NanoResult<string>>
+const echo = (prefix: string): Ping => async (_c, s) => success(`${prefix} ${s}`)
 const impl = (coord: string, provides: Interface[], dependencies: Record<string, Selector> = {}, ping = echo(coord)): Implementation =>
-  implementation(coord, { provides, dependencies, make: ctx => { contexts.set(ctx.instance, ctx); return provides.map(i => provide(i, { ping })) } })
+  implementation(coord, { provides, dependencies, make: ctx => { contexts.set(ctx.instance, ctx); return provides.map(i => provide(i, { ping: ping as Handler })) } })
 
 // While `failing` is set, every flaky make throws: the instance it was making is `failed`.
 let failing = false
@@ -70,11 +70,11 @@ const registry = () => {
 /** The application is its own root runtime, and holds the tags. */
 const setup = (policy?: Policy) => createApplication('app', { registry: registry(), ...(policy && { policy }) })
 
-const first = (pod: string) => ({ target: { pod }, instance: { by: 'first' } })
-const at = (pod: string, index: number) => ({ target: { pod }, instance: { by: 'index', index } })
-const call = (from: string, to: string) => ({ kind: 'call', from: first(from), to: first(to) })
-const tickToLog = { kind: 'event', from: first('ticks'), source: TICK, to: first('log'), target: WRITE }
-const edges = (rt: ReturnType<typeof setup>) => rt.subscriptions().map(s => `${s.from} -> ${s.to} ${rt.status(s.id)}`)
+const first = (pod: string): EndSelector => ({ target: { pod }, instance: { by: 'first' } })
+const at = (pod: string, index: number): EndSelector => ({ target: { pod }, instance: { by: 'index', index } })
+const call = (from: string, to: string): NewConnection => ({ kind: 'call', from: first(from), to: first(to) })
+const tickToLog = { kind: 'event', from: first('ticks'), source: TICK, to: first('log'), target: WRITE } as const
+const edges = (rt: Runtime) => rt.subscriptions().map(s => `${s.from} -> ${s.to} ${rt.status(s.id)}`)
 const ping = (coord: string, s: string): Promise<NanoResult<string>> => contexts.get(coord)!.one(Vault, v => v.ping(s))
 
 beforeEach(() => { failing = false; made2 = 0 })
@@ -152,8 +152,8 @@ describe('connecting', () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     await rt.create('vault', 'acme/keys/vault')
-    expect(rt.connect({ kind: 'call', from: first('user'), to: { target: { pod: 'vault' } } })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
-    expect(rt.connect({ kind: 'call', from: { instance: { by: 'first' } }, to: first('vault') })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(rt.connect({ kind: 'call', from: first('user'), to: { target: { pod: 'vault' } } as never })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(rt.connect({ kind: 'call', from: { instance: { by: 'first' } } as never, to: first('vault') })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
     expect(rt.subscriptions()).toEqual([])
   })
   test('given no instance matching an end, when connecting, then it fails nothing matches and adds nothing', async () => {
@@ -185,7 +185,7 @@ describe('connecting', () => {
     await rt.create('user', 'acme/ui/user')
     await rt.create('vault', 'acme/keys/vault')
     await rt.create('spare', 'acme/keys/vault2')
-    const to = (index: number) => ({ target: { implements: 'acme/vault' }, instance: { by: 'index', index } })
+    const to = (index: number): EndSelector => ({ target: { implements: 'acme/vault' }, instance: { by: 'index', index } })
     expect(rt.connect({ kind: 'call', from: first('user'), to: to(0) })).toMatchObject({ ok: false, fail: { type: 'ambiguous', reason: expect.stringContaining('2 match') } })
     expect(rt.subscriptions()).toEqual([])
   })
@@ -232,8 +232,8 @@ describe('connecting', () => {
     const home = app.runtime('home')!, guest = app.runtime('guest')!
     await home.create('vault', 'acme/keys/vault')
     await guest.create('user', 'acme/ui/user')
-    app.place('vault#0', 'home', 'guest')
-    const to = (t: object) => ({ kind: 'call', from: first('user'), to: { target: t, instance: { by: 'first' } } })
+    app.place('vault', 'home', 'guest')
+    const to = (t: object) => ({ kind: 'call', from: first('user'), to: { target: t, instance: { by: 'first' } } }) as NewConnection
     expect(guest.connect(to({ implements: 'acme/vault' }))).toMatchObject({ ok: true, value: { to: 'vault#0' } })
     guest.unsubscribe('s1')
     await guest.create('spare', 'acme/keys/vault2')
@@ -253,7 +253,7 @@ describe('connecting', () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     for (const to of [{ target: { pod: 5 }, instance: { by: 'first' } }, { target: { implements: {} }, instance: { by: 'first' } }, { target: { pod: 'user' }, instance: { by: 'index', index: '0' } }, { target: { pod: 'user' }, instance: { by: 'index', index: 1.5 } }])
-      expect(rt.connect({ kind: 'call', from: first('user'), to })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+      expect(rt.connect({ kind: 'call', from: first('user'), to: to as never })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   })
   test('given no running instance, when connecting by first, then it fails not-found; tags matching across two pods fail ambiguous', async () => {
     const rt = setup()
@@ -261,7 +261,7 @@ describe('connecting', () => {
     await rt.create('vault', 'acme/keys/vault')
     await rt.create('spare', 'acme/keys/vault2')
     rt.tag('vault#0', 'x'); rt.tag('spare#0', 'x')
-    const to = (t: object, by: object) => ({ kind: 'call', from: first('user'), to: { target: t, instance: by } })
+    const to = (t: object, by: object) => ({ kind: 'call', from: first('user'), to: { target: t, instance: by } }) as NewConnection
     expect(rt.connect(to({ implements: 'acme/vault' }, { by: 'tags', tags: ['x'] }))).toMatchObject({ ok: false, fail: { type: 'ambiguous' } })
     await rt.removeInstance('vault#0')
     expect(rt.connect(to({ pod: 'vault' }, { by: 'first' }))).toMatchObject({ ok: false, fail: { type: 'not-found' } })
@@ -270,7 +270,7 @@ describe('connecting', () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     for (const bad of [{ target: 5, instance: { by: 'first' } }, { target: { pod: 'user' }, instance: 'x' }, { target: { pod: 'user' }, instance: { by: 'nope' } }, { target: {}, instance: { by: 'first' } }])
-      expect(rt.connect({ kind: 'call', from: first('user'), to: bad })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+      expect(rt.connect({ kind: 'call', from: first('user'), to: bad as never })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   })
 })
 
@@ -427,7 +427,7 @@ describe('swap', () => {
     await rt.create('user', 'acme/ui/user')
     await rt.create('vault', 'acme/keys/gated')
     rt.connect(call('user', 'vault'))
-    const old = rt.record('vault').instances.get('vault#0').host
+    const old = rt.record('vault')!.instances.get('vault#0')!.host!
     const inFlight = ping('user#0', 'a')
     await new Promise(r => setTimeout(r, 1))
     expect(await rt.swap('vault', 'acme/keys/vault2')).toEqual(success(undefined))
@@ -443,18 +443,34 @@ describe('swap', () => {
     const added = rt.addInstance('vault')
     expect(await swapped).toEqual(success(undefined))
     expect(await added).toEqual(success('vault#1'))
-    const p = rt.record('vault')
-    expect([...p.instances.values()].map(i => `${i.coord} ${i.state} ${i.host.implementation.coord}`)).toEqual(['vault#0 running acme/keys/vault2', 'vault#1 running acme/keys/vault2'])
+    const p = rt.record('vault')!
+    expect([...p.instances.values()].map(i => `${i.coord} ${i.state} ${i.host!.implementation.coord}`)).toEqual(['vault#0 running acme/keys/vault2', 'vault#1 running acme/keys/vault2'])
+  })
+  test('given a slow swap pending, when a second swap is asked for, then the last asked wins and the first fails superseded, changing nothing', async () => {
+    const rt = setup()
+    await rt.create('vault', 'acme/keys/vault')
+    const first = rt.swap('vault', 'acme/keys/slow')
+    expect(await rt.swap('vault', 'acme/keys/vault2')).toEqual(success(undefined))
+    release()
+    expect(await first).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: expect.stringContaining('superseded by a later swap') } })
+    expect(rt.pod('vault')).toMatchObject({ implementation: 'acme/keys/vault2', state: 'running' })
+  })
+  test('given a failed vault#0, when vault is swapped, then vault#0 is made again and runs', async () => {
+    const rt = setup()
+    failing = true
+    await rt.create('vault', 'acme/keys/flaky')
+    expect(await rt.swap('vault', 'acme/keys/vault2')).toEqual(success(undefined))
+    expect(rt.pod('vault')).toMatchObject({ state: 'running', instances: [{ coord: 'vault#0', state: 'running' }] })
   })
 })
 
 describe('start', () => {
   // Behaviour 8.
-  test.todo("given a saved runtime whose pod's make fails, when it is started, then the runtime runs with that pod failed and its subscriptions waiting", async () => {
+  test("given a saved runtime whose pod's make fails, when it is started, then the runtime runs with that pod failed and its subscriptions waiting", async () => {
     const app = setup()
     app.define({
       id: 'r',
-      pods: [{ id: 'user', implementation: 'acme/ui/user', count: 1 }, { id: 'vault', implementation: 'acme/keys/flaky', count: 1 }],
+      pods: [{ id: 'user', implementation: 'acme/ui/user', instances: [0], next: 1 }, { id: 'vault', implementation: 'acme/keys/flaky', instances: [0], next: 1 }],
       members: [],
       subscriptions: [{ id: 's1', kind: 'call', from: 'user#0', to: 'vault#0' }],
     })
@@ -467,13 +483,13 @@ describe('start', () => {
     expect(rt.pod('vault')).toMatchObject({ state: 'failed', instances: [{ coord: 'vault#0', state: 'failed' }] })
     expect(rt.status('s1')).toBe('waiting')
   })
-  test.todo('given a saved pod with count 2, when its runtime is started, then it has both instances', async () => {
+  test('given a saved pod with count 2, when its runtime is started, then it has both instances', async () => {
     const app = setup()
-    app.define({ id: 'r', pods: [{ id: 'vault', implementation: 'acme/keys/vault', count: 2 }], members: [], subscriptions: [] })
+    app.define({ id: 'r', pods: [{ id: 'vault', implementation: 'acme/keys/vault', instances: [0, 1], next: 2 }], members: [], subscriptions: [] })
     await app.start('r')
     expect(app.runtime('r')!.pod('vault')).toMatchObject({ count: 2, state: 'running', instances: [{ coord: 'vault#0' }, { coord: 'vault#1' }] })
   })
-  test.todo('given an application, when it is asked to open a runtime, then there is no open: start replaces it', () => {
+  test('given an application, when it is asked to open a runtime, then there is no open: start replaces it', () => {
     expect('open' in setup()).toBe(false)
   })
 })
