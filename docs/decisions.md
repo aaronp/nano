@@ -117,6 +117,8 @@ Superseded by 51: config lives on the pod record; `swap` keeps it unless `opts.c
 **Why:** The ruling: an instance calls out at home but publishes into every runtime it belongs to — a client-side log listens where it was placed.
 **Cost if wrong:** Restrict delivery to the home runtime; one test changes.
 
+Superseded in part by 48: the publish registry is the pod record's `holders`, not a `WeakMap`; a runtime joins on `create`/`add` and leaves on `remove` (a swap keeps it).
+
 ## 18. Which ports does `ctx.publish(op, data)` publish on?
 
 **Decision:** Every source port of the instance whose op coord equals `op.coord` (normally one). Data that fails the op's output schema, or an op that is none of the instance's sources, is dropped and observed as an `exception` (`op` = the op coord); `publish` never throws. It resolves once every delivery on every port has settled (decision 17).
@@ -190,6 +192,8 @@ Superseded in part by 53: the throw is a `failure { coord: <from>, reason }` on 
 **Why:** The runtime receiving something polices what enters it; one pod keeps one instance, and its calls out still go through its home (decision 11).
 **Cost if wrong:** A policy check on the sending side too; one more `isAllowed` call.
 
+Superseded in part by 51 and 53: `place(pod, from, to)` takes a pod id and adds the home's record itself, not a copy; the policy is asked with the pod id; the receiving runtime emits `pod-created` and each instance's state.
+
 ## 29. What happens to placed copies when an instance leaves its home?
 
 **Decision:** Removing an instance at its home removes it from every runtime of the application it was placed into (each emits `instance-removed`, unregisters its publish delivery, and its subscriptions to it go `waiting`). Removing it from a runtime it was placed into touches only that runtime.
@@ -217,11 +221,15 @@ Superseded by 52: `open` is `start`, which always gives a runtime; only a throw 
 **Why:** Instance ids are unique across the application (ruling), including runtimes opened later on demand; otherwise opening a saved runtime could fail on an id created meanwhile.
 **Cost if wrong:** Opening a runtime can fail `exists`.
 
+Superseded in part by 48: pod ids, not instance ids, are unique across the application (an instance coord `<pod>#<n>` follows from its pod's).
+
 ## 33. What does the application share with adopted children, and what does `runtimes()` list?
 
 **Decision:** `createRuntime` and `open` make children that share the application's registry, tags and id check; an adopted runtime (another application included) keeps its own registry, tags and ids, and only its id must be free. `place` works between the root and direct children (adopted ones included, as they are runtimes); runtimes inside an adopted application are out of reach (placing across nested applications is out of scope). `runtime(<application id>)` gives the root; `runtimes()` lists child ids, opened and defined, not the root. Defined runtimes always use the allow-all policy (the only saved policy). The id check and the pass wait (decision 30) cover the root and direct children only: the children of an adopted application are not consulted (out of scope with placing across nested applications).
 **Why:** Nesting is adoption only (ruling); the root is the application itself.
 **Cost if wrong:** A cross-application place that walks nested applications.
+
+Updated by 52: `open` is `start`.
 
 ## 34. What happens to placed copies when an instance is replaced at its home?
 
@@ -244,6 +252,8 @@ Superseded by 52: the same rules under `start` (`starting <id>: <message>` for a
 **Decision:** `define` fails `exists` (`instance id <id> is taken`) when one of its instances' ids is already taken in the application (decision 32). An instance's tags are dropped once it is gone from every runtime (removed at home); removing it from a runtime it was placed into keeps them.
 **Why:** Ids are unique across the application, definitions included; tags keyed by a coord no runtime holds would reattach to an unrelated instance created later with that coord.
 **Cost if wrong:** A clash surfaces only at `open`; stale tags on reuse.
+
+Updated by 52 and 53: `define` fails `exists` with `pod id <id> is taken`; tags are dropped on an instance's `stopped` event once no runtime holds it.
 
 ## 37. Does a round trip keep how a runtime's own instances and placed members interleave?
 
@@ -296,6 +306,8 @@ Pinned by the "only what the document can hold is made" tests in `document.test.
 **Why:** The application should only be able to hold what its document can hold, so `checkDoc(saveDoc(app))` cannot fail on ids or configs.
 **Cost if wrong:** Saving produces documents that refuse to load.
 
+Updated by 48 and 51: `ID` lives in `runtime/pods.ts` and covers pod ids; `swap` (not `replace`) refuses a config that is not JSON.
+
 ## 42. Loading: repeated members, held tags, copied configs
 
 **Decision:**
@@ -323,11 +335,15 @@ Superseded in part by 53 and 54: live creation is capped at 500 instances per ru
 **Why:** One example of each: provisioning is what a host does when a person adds a widget; explicit subscriptions are what the person does when plugging in, and named ids read better in `nano.json` and in `unsubscribe`.
 **Cost if wrong:** None to the model; the examples change.
 
+Updated by 55: ends a person chooses are connected with selectors (`connect`); provisioning stays where it was.
+
 ## 45. Examples: how does a test call into an instance from outside the graph?
 
 **Decision:** A known gap, test-only: the example tests call `rt.member(coord)!.pod.invoke(portKey(iface.coord, op.coord), input)` (their `press` helper). It skips the runtime's policy, its books and the provisioning-pass wait, so it is not how a host should call in. The planned fix (plan 2) is a host-side invoke through the runtime, policed and booked like any other message. To see what a source publishes, a test subscribes a probe sink whose input is `Type.Unknown()` (it fits any source, `fits`).
 **Why:** There is no caller instance outside the graph and no host-side invoke yet; calls between instances only travel through subscriptions.
 **Cost if wrong:** A host built on `pod.invoke` would let button presses past policy and leave them out of the books.
+
+Updated by 48: the helper is `rt.record(pod)!.instances.get(coord)!.host!.invoke(…)`; the gap stands.
 
 ## 46. External signer: who makes the keys?
 
@@ -449,3 +465,14 @@ Superseded in part by 53: `pod-swapped { pod, from, to }`, told to every runtime
 Pinned by "the application holds at most 5000 instances …" (`application.test.ts`) and "a swap whose make throws changes nothing, and the failure is on the stream" (`runtime.test.ts`).
 **Why:** Anything the application can save must load: `checkDoc` refuses more than 5000 instances (decision 53). A swap that failed silently left only the caller knowing.
 **Cost if wrong:** A long-lived application counts adopted runtimes it never saves, so it may refuse a little early; an exact count skips `adopted(id)`.
+
+## 55. Examples on pods (pods revision, task 7)
+
+**Decision:**
+- Ends a person would choose are connected with `connect` and end selectors, keeping the subscription ids: the signer's `vault.keys → map.format` and `map.line → log.append` and the test probe pick pods by id, first running instance; the messenger picks its widgets by pod and the store and messaging by the interface they implement (`{ implements }`), showing both kinds. Provisioning stays for the signer's calls (decision 44).
+- The vault stays private to `signer` (decision 43). "Replace the vault" is `swap('vault', …)` at its home; the client sees it through the placed `signer` pod: the same coords (`signer#0`), the same subscriptions, all live, and a fresh vault (an old key is `unknown-key`). The test also shows the client cannot swap a pod it only holds (`denied`).
+- The tests assert through `rt.listen` where it reads better: one `pod-swapped` on the signer's stream; the messenger's `sent` subscriptions for one message (`composer-messaging`, `messages-inbox`, `inbox-store` ×2); `subscription-removed { reason: 'unsubscribed' }` when the store is unplugged. A probe still reads published data (the stream carries results, not inputs).
+- Both `nano.json` are unchanged by the regeneration: `connect` saves the same concrete coords and ids the hand-written subscriptions had.
+
+**Why:** The spec: every connection end has a selector, resolved once; the examples are the recipes.
+**Cost if wrong:** None to the model; the examples change.

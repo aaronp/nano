@@ -1,18 +1,27 @@
 /**
- * The messenger, end to end: opened alone its widgets show disabled or fall back; with `persistence` and `messaging`
- * placed into it and subscribed, messages flow and are stored; unplugged, the inbox falls back again.
+ * The messenger, end to end: alone, its widgets show disabled or fall back; with the `store` and `messaging` pods
+ * placed into it and plugged in (connected, each end chosen by a selector), messages flow and are stored; unplugged,
+ * the inbox falls back again. The runtime's stream shows each message as it travels.
  *
  *   messenger:  inbox → store, composer → messaging, messaging.messages → inbox.receive
  *               (store placed from `persistence`, messaging from `messaging`)
  */
 import { describe, expect, test } from 'bun:test'
-import { createApplication, createRegistry, loadDoc, parseInstance, portKey, saveDoc, success, type Application, type Interface, type NanoResult, type Op, type Runtime } from '@pritzlaff/nano'
+import {
+  createApplication, createRegistry, loadDoc, parseInstance, portKey, saveDoc, success,
+  type Application, type EndSelector, type Interface, type NanoResult, type Op, type Runtime, type RuntimeEvent,
+} from '@pritzlaff/nano'
 import { Composer, Inbox, KeyValueStore, Messaging } from './interfaces.ts'
 import { messengerProvider } from './providers.ts'
 
-const INBOX = 'inbox#0', COMPOSER = 'composer#0'
-const STORE = 'store#0', MESSAGING = 'messaging#0'
+const INBOX = 'inbox#0', COMPOSER = 'composer#0', STORE = 'store#0'
 const DOC = new URL('./nano.json', import.meta.url)
+
+/** The value, or a thrown error: setup steps that must work. */
+const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
+/** Connection ends as a person picks them: a widget by its pod, a provider by what it implements. */
+const pod = (id: string): EndSelector => ({ target: { pod: id }, instance: { by: 'first' } })
+const anyOf = (i: Interface): EndSelector => ({ target: { implements: i.coord }, instance: { by: 'first' } })
 
 /** What a host does when a person presses a button: call one of an instance's ops from outside. */
 const press = (rt: Runtime, coord: string, i: Interface, o: Op, input: unknown) => rt.record(parseInstance(coord)!.pod)!.instances.get(coord)!.host!.invoke(portKey(i.coord, o.coord), input)
@@ -33,29 +42,27 @@ function registry() {
 /** The messenger alone: `create` never provisions unless asked (decision 24), so nothing is made for the widgets. */
 async function openAlone() {
   const app = createApplication('app', { registry: registry() })
-  const rt = app.createRuntime('messenger')
-  if (!rt.ok) throw new Error(rt.fail.reason)
-  await rt.value.create('inbox', 'example.messenger/inbox')
-  await rt.value.create('composer', 'example.messenger/composer')
-  return { app, messenger: rt.value }
+  const messenger = must(app.createRuntime('messenger'))
+  must(await messenger.create('inbox', 'example.messenger/inbox'))
+  must(await messenger.create('composer', 'example.messenger/composer'))
+  return { app, messenger }
 }
 
-/** Opens `persistence` and `messaging`, places their instances into the messenger, and plugs them in. */
+/** Starts `persistence` and `messaging`, places their pods into the messenger, and plugs them in. */
 async function stitch(app: Application, messenger: Runtime) {
-  const persistence = app.createRuntime('persistence'), messaging = app.createRuntime('messaging')
-  if (!persistence.ok || !messaging.ok) throw new Error('runtimes')
-  await persistence.value.create('store', 'example.messenger/memory-store')
-  await messaging.value.create('messaging', 'example.messenger/messaging')
-  app.place('store', 'persistence', 'messenger')
-  app.place('messaging', 'messaging', 'messenger')
-  messenger.subscribe({ id: 'inbox-store', kind: 'call', from: INBOX, to: STORE })
-  messenger.subscribe({ id: 'composer-messaging', kind: 'call', from: COMPOSER, to: MESSAGING })
-  messenger.subscribe({
+  const persistence = must(app.createRuntime('persistence')), messaging = must(app.createRuntime('messaging'))
+  must(await persistence.create('store', 'example.messenger/memory-store'))
+  must(await messaging.create('messaging', 'example.messenger/messaging'))
+  must(app.place('store', 'persistence', 'messenger'))
+  must(app.place('messaging', 'messaging', 'messenger'))
+  must(messenger.connect({ id: 'inbox-store', kind: 'call', from: pod('inbox'), to: anyOf(KeyValueStore) }))
+  must(messenger.connect({ id: 'composer-messaging', kind: 'call', from: pod('composer'), to: anyOf(Messaging) }))
+  must(messenger.connect({
     id: 'messages-inbox', kind: 'event',
-    from: MESSAGING, source: portKey(Messaging.coord, Messaging.ops.messages.coord),
-    to: INBOX, target: portKey(Inbox.coord, Inbox.ops.receive.coord),
-  })
-  return { persistence: persistence.value }
+    from: anyOf(Messaging), source: portKey(Messaging.coord, Messaging.ops.messages.coord),
+    to: pod('inbox'), target: portKey(Inbox.coord, Inbox.ops.receive.coord),
+  }))
+  return { persistence }
 }
 
 async function stitched() {
@@ -79,8 +86,13 @@ describe('the messenger, alone', () => {
 describe('the messenger, stitched', () => {
   test('messages flow to the inbox and are stored in persistence', async () => {
     const { messenger, persistence } = await stitched()
+    const events: RuntimeEvent[] = []
+    messenger.listen(e => events.push(e))
     const sent = await send(messenger, 'hi')
     if (!sent.ok || sent.value.status !== 'sent') throw new Error('not sent')
+    // The stream shows the path: the post, its delivery to the inbox, and the inbox reading and writing the store.
+    expect(events.flatMap(e => (e.type === 'sent' ? [e.subscription] : []))).toEqual(['composer-messaging', 'messages-inbox', 'inbox-store', 'inbox-store'])
+    expect(events.filter(e => e.type === 'delivered').every(e => e.result.ok)).toBe(true)
     const message = { id: sent.value.id, text: 'hi' }
     expect(await inbox(messenger)).toEqual(success([message]))
     expect(await stored(persistence)).toEqual([message])
@@ -89,7 +101,10 @@ describe('the messenger, stitched', () => {
   test('unplugging the store sends the inbox back to its fallback', async () => {
     const { messenger, persistence } = await stitched()
     await send(messenger, 'first')
+    const events: RuntimeEvent[] = []
+    messenger.listen(e => events.push(e))
     expect(messenger.unsubscribe('inbox-store')).toEqual(success(undefined))
+    expect(events).toEqual([{ type: 'subscription-removed', id: 'inbox-store', reason: 'unsubscribed' }])
     const sent = await send(messenger, 'second')
     if (!sent.ok || sent.value.status !== 'sent') throw new Error('not sent')
     expect(await inbox(messenger)).toEqual(success([{ id: sent.value.id, text: 'second' }]))
