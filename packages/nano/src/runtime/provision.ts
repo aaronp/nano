@@ -62,9 +62,9 @@ export async function provision(p: Provisioner, coord: string, impl: Implementat
   return unsatisfied
 }
 
-/** `<last segment of the coord>-<first free n from 1>`. */
+/** `<last segment of the coord, at most 50 characters>-<first free n from 1>`. */
 function freeId(p: Provisioner, implementation: string): string {
-  const base = implementation.slice(implementation.lastIndexOf('/') + 1)
+  const base = implementation.slice(implementation.lastIndexOf('/') + 1).slice(0, 50) // the id rule allows 64
   let n = 1
   while (!p.idFree(`${base}-${n}`)) n++
   return `${base}-${n}`

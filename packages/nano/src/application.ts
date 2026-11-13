@@ -6,10 +6,31 @@
  *   await app.open('client')                                        // opens the runtimes its members come from, then builds it
  *   app.place('acme/keys/signer#s', 'signer', 'client')             // a member of both; it still calls out through `signer`
  */
+import { Type } from 'typebox'
+import { Value } from 'typebox/value'
+import { COORD } from './iface.ts'
 import type { Policy } from './policy.ts'
 import type { Registry } from './registry.ts'
 import { failure, success, type NanoResult } from './result.ts'
-import { createRuntime, parseInstance, type Runtime, type SubscriptionData } from './runtime/index.ts'
+import { createRuntime, ID, parseInstance, type Runtime, type SubscriptionData } from './runtime/index.ts'
+import { isJson } from './schema.ts'
+
+const inner = (r: RegExp) => r.source.slice(1, -1) // COORD and ID are anchored `^…$` and flagless, so their bodies compose
+const Id = Type.String({ pattern: ID.source })
+const Instance = Type.String({ pattern: `^${inner(COORD)}#${inner(ID)}$` })
+const Port = Type.String({ minLength: 1 })
+
+/** What a `RuntimeDef` must be: `define` checks it, and the document holds runtimes of this shape. */
+export const RuntimeDefSchema = Type.Object({
+  id: Id,
+  policy: Type.Optional(Type.Literal('allow-all')),
+  instances: Type.Array(Type.Object({ id: Id, implementation: Type.String({ pattern: COORD.source }), config: Type.Optional(Type.Unknown()) }), { maxItems: 500 }),
+  members: Type.Array(Type.Object({ instance: Instance, home: Id }), { maxItems: 500 }),
+  subscriptions: Type.Array(Type.Union([
+    Type.Object({ id: Id, kind: Type.Literal('call'), from: Instance, to: Instance }),
+    Type.Object({ id: Id, kind: Type.Literal('event'), from: Instance, source: Port, to: Instance, target: Port }),
+  ]), { maxItems: 2000 }),
+})
 
 /** A runtime as saved: its own instances (create order), the members placed into it, and its subscriptions (in order). */
 export type RuntimeDef = {
@@ -151,6 +172,7 @@ export function createApplication(id: string, opts: { registry: Registry; policy
     ...root,
     runtime: lookup,
     createRuntime(rid, o = {}) {
+      if (!ID.test(rid)) return failure('invalid-input', `bad runtime id ${JSON.stringify(rid)}`)
       if (taken(rid)) return failure('exists', `runtime ${rid} exists`)
       return success(child(rid, o.policy))
     },
@@ -162,6 +184,10 @@ export function createApplication(id: string, opts: { registry: Registry; policy
       return success(undefined)
     },
     define(def) {
+      const e = Value.Errors(RuntimeDefSchema, def)[0]
+      if (e) return failure('invalid-input', `bad runtime definition: ${e.instancePath || '/'}: ${e.message}`)
+      const notJson = def.instances.find(i => i.config !== undefined && !isJson(i.config))
+      if (notJson) return failure('invalid-input', `${notJson.id}: config is not JSON`)
       if (taken(def.id)) return failure('exists', `runtime ${def.id} exists`)
       const clash = def.instances.find(i => idTaken(i.id))
       if (clash) return failure('exists', `instance id ${clash.id} is taken`)

@@ -315,14 +315,18 @@ describe('runtimes on demand', () => {
   })
   test('open never rejects: a definition that throws while built fails threw', async () => {
     const app = createApplication('app', { registry: registry() })
-    app.define({ ...signerDef, subscriptions: null as unknown as SubscriptionData[] })
+    const def = { ...signerDef }
+    app.define(def)
+    def.subscriptions = null as unknown as SubscriptionData[] // broken after define, which would refuse it
     expect(await app.open('signer')).toMatchObject({ ok: false, fail: { type: 'threw' } })
     expect(app.runtime('signer')).toBeUndefined()
   })
   test('placed members are removed when an open rolls back', async () => {
     const app = createApplication('app', { registry: registry() })
     app.define(signerDef)
-    app.define({ ...clientDef, subscriptions: [{ id: 's1', kind: 'call', from: T, to: 'not a coord' }] })
+    const def = { ...clientDef }
+    app.define(def)
+    def.subscriptions = [{ id: 's1', kind: 'call', from: T, to: 'not a coord' }] // broken after define, which would refuse it
     const p = app.open('client')
     await Promise.resolve()
     const half = app.runtime('client')!

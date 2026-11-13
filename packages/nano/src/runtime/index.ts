@@ -14,7 +14,8 @@ import { failure, success, type NanoResult } from '../result.ts'
 import type { Target } from '../selector.ts'
 import { connectionsOf, contextFor, deliverer, join, leave, type Book, type Wiring } from './calls.ts'
 import { provision, type Unsatisfied } from './provision.ts'
-import { instanceCoord, parseInstance, targetOf, type Member } from './members.ts'
+import { ID, instanceCoord, parseInstance, targetOf, type Member } from './members.ts'
+import { isJson } from '../schema.ts'
 import { invalid, nextId, reordered, statusOf, type NewSubscription, type Status, type SubscriptionData } from './subscriptions.ts'
 
 export * from './members.ts'
@@ -70,7 +71,9 @@ export type RuntimeOpts = {
   pod?: { timeoutMs?: number; observe?(o: Observation): void }
 }
 
+/** Throws on an id outside the id rule (a construction error, like a bad coord). */
 export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
+  if (!ID.test(id)) throw new Error(`bad runtime id ${JSON.stringify(id)}`)
   const { registry } = opts
   const policy = opts.policy ?? Policies.allowAll()
   let members = new Map<string, Member>() // insertion order is create order; saving relies on it
@@ -121,6 +124,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
   const idHeld = (iid: string) => reserved.has(iid) || [...members.keys()].some(c => parseInstance(c)?.id === iid)
 
   async function makePod(coord: string, impl: Implementation, config: unknown): Promise<NanoResult<Pod>> {
+    if (config !== undefined && !isJson(config)) return failure('invalid-input', `${coord}: config is not JSON`)
     if (impl.config && !impl.config.check(config)) return failure('invalid-input', `${coord}: config does not fit ${impl.config.type}`)
     const { ctx, bind } = contextFor(wiring, coord, impl, config)
     const pod = await createHostPod(coord, impl, ctx, opts.pod)
@@ -161,6 +165,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
    * Calls a `make` makes through its own ctx fail at once (construction is not use), so a make cannot wait on its own pass.
    */
   async function make(iid: string, implementation: string, o: { config?: unknown; provision?: boolean }, pass?: Pass, depth = 0): Promise<NanoResult<{ coord: string; unsatisfied: Unsatisfied[] }>> {
+    if (!ID.test(iid)) return failure('invalid-input', `bad instance id ${JSON.stringify(iid)}`)
     const impl = registry.implementation(implementation)
     if (!impl) return failure('not-found', `no implementation ${implementation}`)
     if (idHeld(iid) || opts.idTaken?.(iid)) return failure('exists', `instance id ${iid} is taken`)
@@ -262,6 +267,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     target,
     subscribe(input) {
       const sid = input.id ?? nextId(subs)
+      if (!ID.test(sid)) return failure('invalid-input', `bad subscription id ${JSON.stringify(sid)}`)
       if (subs.some(s => s.id === sid)) return failure('exists', `subscription ${sid} exists`)
       const s = { ...input, id: sid } as SubscriptionData
       const no = bad(s) ?? denied([s])

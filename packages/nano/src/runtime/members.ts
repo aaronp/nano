@@ -1,5 +1,5 @@
 /**
- * Members: instance coords, the member record a runtime keeps per instance, and what a member offers.
+ * Members: the id rule, instance coords, the member record a runtime keeps per instance, and what a member offers.
  *
  *   instanceCoord('acme/log/mem', 'b')        // 'acme/log/mem#b'
  *   parseInstance('acme/log/mem#b')           // { implementation: 'acme/log/mem', id: 'b' }
@@ -14,11 +14,14 @@ import type { Target } from '../selector.ts'
 /** `config` is what the instance was created with; saving writes it. */
 export type Member = { coord: string; pod: Pod; home: string; config?: unknown }
 
+/** Runtime, instance and subscription ids: the one rule the runtime, the application and the document share. */
+export const ID = /^[^/\s#\x00-\x1f\x7f]{1,64}$/
+
 export const instanceCoord = (implementation: string, id: string): string => `${implementation}#${id}`
 
 export function parseInstance(coord: string): { implementation: string; id: string } | undefined {
   const [implementation, id, ...rest] = coord.split('#')
-  return id && !rest.length && COORD.test(implementation!) ? { implementation: implementation!, id } : undefined
+  return id && !rest.length && ID.test(id) && COORD.test(implementation!) ? { implementation: implementation!, id } : undefined
 }
 
 export function portOp(impl: Implementation, port: string): Op | undefined {

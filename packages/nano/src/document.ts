@@ -7,31 +7,13 @@
  */
 import { Type, type Static } from 'typebox'
 import { Value } from 'typebox/value'
-import { createApplication, type Application, type RuntimeDef } from './application.ts'
-import { COORD } from './iface.ts'
+import { createApplication, RuntimeDefSchema, type Application, type RuntimeDef } from './application.ts'
 import { Policies, type Policy } from './policy.ts'
 import type { Registry } from './registry.ts'
 import type { NanoResult } from './result.ts'
-import { instanceCoord, invalid, parseInstance, type Runtime } from './runtime/index.ts'
+import { ID, instanceCoord, invalid, parseInstance, type Runtime } from './runtime/index.ts'
 
 export type { RuntimeDef } from './application.ts'
-
-const ID = '[^/\\s#\\x00-\\x1f\\x7f]{1,64}'
-const Id = Type.String({ pattern: `^${ID}$` })
-const Impl = Type.String({ pattern: COORD.source })
-const Instance = Type.String({ pattern: `^${COORD.source.slice(1, -1)}#${ID}$` })
-const Port = Type.String({ minLength: 1 })
-
-const RuntimeDefSchema = Type.Object({
-  id: Id,
-  policy: Type.Optional(Type.Literal('allow-all')),
-  instances: Type.Array(Type.Object({ id: Id, implementation: Impl, config: Type.Optional(Type.Unknown()) }), { maxItems: 500 }),
-  members: Type.Array(Type.Object({ instance: Instance, home: Id }), { maxItems: 500 }),
-  subscriptions: Type.Array(Type.Union([
-    Type.Object({ id: Id, kind: Type.Literal('call'), from: Instance, to: Instance }),
-    Type.Object({ id: Id, kind: Type.Literal('event'), from: Instance, source: Port, to: Instance, target: Port }),
-  ]), { maxItems: 2000 }),
-})
 
 export const NanoDocSchema = Type.Object({
   nano: Type.Literal(2),
@@ -40,7 +22,7 @@ export const NanoDocSchema = Type.Object({
   runtimes: Type.Array(RuntimeDefSchema, { maxItems: 50 }),
   tags: Type.Record(Type.String(), Type.Array(Type.String())),
   /** Runtimes to open on load. */
-  open: Type.Optional(Type.Array(Id)),
+  open: Type.Optional(Type.Array(Type.String({ pattern: ID.source }))),
   /** Opaque until the host defines it. */
   workspaces: Type.Optional(Type.Array(Type.Unknown())),
 })
@@ -68,7 +50,7 @@ function live(rt: Runtime): RuntimeDef {
   for (const c of rt.members()) {
     const m = rt.member(c)!
     if (m.home !== rt.id) def.members.push({ instance: c, home: m.home })
-    else def.instances.push({ id: parseInstance(c)!.id, implementation: m.pod.implementation.coord, ...(m.config !== undefined && { config: m.config }) })
+    else def.instances.push({ id: parseInstance(c)!.id, implementation: m.pod.implementation.coord, ...(m.config !== undefined && { config: structuredClone(m.config) }) })
   }
   return def
 }
@@ -77,7 +59,8 @@ function live(rt: Runtime): RuntimeDef {
  * Every runtime but adopted ones: opened ones from live, the rest as defined. The root is saved under the
  * application's id when it holds members or subscriptions. A custom policy is not saved (allow-all is the only one).
  */
-export function saveDoc(app: Application, opts: { title?: string; workspaces?: unknown[] } = {}): NanoDoc {
+/** The runtimes saveDoc writes (configs copied, so the document never shares them with what runs), and whether the root is among them. */
+function saved(app: Application) {
   const root = live(app.runtime(app.id)!)
   const withRoot = root.instances.length + root.members.length + root.subscriptions.length > 0
   const ids = app.runtimes().filter(id => !app.adopted(id))
@@ -85,9 +68,15 @@ export function saveDoc(app: Application, opts: { title?: string; workspaces?: u
     ...(withRoot ? [root] : []),
     ...ids.map(id => { const rt = app.runtime(id); return rt ? live(rt) : structuredClone(app.definition(id)!) }),
   ]
-  const coords = runtimes.flatMap(r => [...r.instances.map(i => instanceCoord(i.implementation, i.id)), ...r.members.map(m => m.instance)])
+  return { runtimes, withRoot, ids }
+}
+const coordsOf = (runtimes: RuntimeDef[]) =>
+  runtimes.flatMap(r => [...r.instances.map(i => instanceCoord(i.implementation, i.id)), ...r.members.map(m => m.instance)])
+
+export function saveDoc(app: Application, opts: { title?: string; workspaces?: unknown[] } = {}): NanoDoc {
+  const { runtimes, withRoot, ids } = saved(app)
   const tags: Record<string, string[]> = {}
-  for (const c of coords) { const t = app.tagsOf(c); if (t.size) tags[c] = [...t] }
+  for (const c of coordsOf(runtimes)) { const t = app.tagsOf(c); if (t.size) tags[c] = [...t] }
   const providers = new Set(runtimes.flatMap(r => r.instances.flatMap(i => app.registry.implementation(i.implementation)?.provider ?? [])))
   return {
     nano: 2,
@@ -119,10 +108,12 @@ export async function loadDoc(doc: NanoDoc, opts: { registry: Registry; policy?:
       instances: d.instances.filter(i => registry.implementation(i.implementation) || !notes.push(`${d.id}/${i.id}: no implementation ${i.implementation}`)),
     }))
     const defs: RuntimeDef[] = withImpl.map(d => {
-      const seen = new Set<string>()
+      const seen = new Set<string>(), placed = new Set<string>()
       return {
         ...d,
         members: d.members.filter(m => {
+          if (placed.has(m.instance)) return !notes.push(`${d.id}: member ${m.instance} is repeated`)
+          placed.add(m.instance)
           const home = m.home !== d.id && withImpl.find(h => h.id === m.home)
           return (home && home.instances.some(i => instanceCoord(i.implementation, i.id) === m.instance)) ||
             !notes.push(`${d.id}: member ${m.instance} has no home ${m.home}`)
@@ -136,7 +127,6 @@ export async function loadDoc(doc: NanoDoc, opts: { registry: Registry; policy?:
     })
     const root = defs.find(d => d.id === app.id)
     const defined = new Set(defs.filter(d => d !== root && note(d.id, app.define(d))).map(d => d.id))
-    for (const [c, ts] of Object.entries(checked.tags)) for (const t of ts) app.tag(c, t)
     if (root) {
       for (const i of root.instances)
         note(`${app.id}/${i.id}`, await app.create(i.id, i.implementation, { ...(i.config !== undefined && { config: i.config }), provision: false }))
@@ -147,6 +137,9 @@ export async function loadDoc(doc: NanoDoc, opts: { registry: Registry; policy?:
       for (const s of root.subscriptions) note(`${app.id}/${s.id}`, app.subscribe(s))
     }
     for (const id of checked.open ?? []) if (id !== app.id && (defined.has(id) || !defs.some(d => d.id === id))) note(id, await app.open(id))
+    // Tags only for what is held now: a dropped instance's tags would attach to whatever later takes its coord.
+    const held = new Set(coordsOf(saved(app).runtimes))
+    for (const [c, ts] of Object.entries(checked.tags)) if (held.has(c)) for (const t of ts) app.tag(c, t)
   } catch (e) {
     notes.push(`load: ${e instanceof Error ? e.message : String(e)}`)
   }

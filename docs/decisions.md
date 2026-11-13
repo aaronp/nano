@@ -242,3 +242,35 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Decision:** It never throws or rejects. An invalid document (per `checkDoc`) gives an empty application and the reason as the only note. Otherwise each problem is skipped with a note and the rest loads: `provider <coord> is not registered` (note only); `<runtime>/<id>: no implementation <coord>` (instance dropped); `<runtime>: member <coord> has no home <runtime>` (member dropped: its home is not in the document, is the runtime itself, or does not hold that instance after the drops above); `<runtime>/<sub id>: <reason>` (subscription dropped: invalid shape or a repeated id); `<runtime>: <reason>` when a runtime cannot be defined (it is not opened either) or fails to open (it stays defined); `load: <message>` for anything thrown. Subscriptions whose ends were dropped stay, `waiting`. `checkDoc` answers `not a nano v2 document` unless `nano` is 2, else the first schema error as `<path>: <message>`. Pinned by the `loading what does not fit` and `checkDoc` tests.
 **Why:** A document written by another registry or an older build should open as far as it can, with each loss visible.
 **Cost if wrong:** Refuse the whole document on the first problem.
+
+## 41. One id rule, enforced where things are made
+
+**Decision:**
+- One rule, `ID = /^[^/\s#\x00-\x1f\x7f]{1,64}$/`, exported from `runtime/members.ts`. It applies to runtime, instance and subscription ids.
+- Where it is enforced:
+  - `createRuntime` throws `bad runtime id` (it is a factory, like `iface`). This covers `createApplication`.
+  - `Application.createRuntime` fails `invalid-input`.
+  - `Runtime.create` fails `invalid-input`.
+  - `subscribe` fails `invalid-input` for a caller-chosen id.
+  - `parseInstance` accepts only coords whose id fits the rule, so subscription ends and placed members follow it.
+- Provisioning cuts a generated id's base to 50 characters.
+- `define` checks the definition against `RuntimeDefSchema`, the document's own runtime schema, which now lives in `application.ts`, and refuses a config that is not JSON.
+- `Runtime.create` and `replace` refuse a config that is not plain JSON (`isJson` in `schema.ts`).
+- The document schema reuses these constants.
+
+Pinned by the "only what the document can hold is made" tests in `document.test.ts`.
+**Why:** The application should only be able to hold what its document can hold, so `checkDoc(saveDoc(app))` cannot fail on ids or configs.
+**Cost if wrong:** Saving produces documents that refuse to load.
+
+## 42. Loading: repeated members, held tags, copied configs
+
+**Decision:**
+- A member repeated in one runtime is loaded once, with the note `<runtime>: member <coord> is repeated`.
+- `loadDoc` applies tags only to coords held after loading (by an opened runtime or declared by a defined one), so a dropped instance's tags are not kept.
+- `saveDoc` deep-copies configs from opened runtimes and from definitions, so changing the document never changes what runs.
+
+Pinned by the matching tests in `document.test.ts`.
+**Why:** A repeated member otherwise failed the whole runtime's open. Stale tags would attach to a later instance with that coord (decision 36). A shared config would let an edit to a saved document reach a running instance.
+**Cost if wrong:** Runtimes fail to open; tags appear on the wrong instance; configs change unseen.
+
+Limits (50 runtimes, 500 instances or members, 2000 subscriptions) are still enforced only by the document. An application past them saves a document that `checkDoc` refuses.

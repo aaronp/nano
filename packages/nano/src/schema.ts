@@ -44,6 +44,19 @@ function strip(node: unknown, isMap = false): unknown {
   return out
 }
 
+/** Plain JSON data: null, booleans, finite numbers, strings, arrays and plain objects of them, without cycles. */
+export function isJson(v: unknown, seen = new Set<unknown>()): boolean {
+  if (v === null || typeof v === 'string' || typeof v === 'boolean') return true
+  if (typeof v === 'number') return Number.isFinite(v)
+  if (typeof v !== 'object' || seen.has(v)) return false
+  const proto = Object.getPrototypeOf(v)
+  if (!Array.isArray(v) && proto !== Object.prototype && proto !== null) return false
+  seen.add(v)
+  const ok = Object.values(v).every(x => isJson(x, seen))
+  seen.delete(v)
+  return ok
+}
+
 export const canonicalSchema = (schema: TSchema): string => canonical(strip(schema))
 
 // A function anywhere (own keys, enumerable or not) means the schema can't be JSON: a Refine keeps its check in a hidden `~refine`.

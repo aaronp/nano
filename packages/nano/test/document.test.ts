@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import { defineSchema } from '../src/schema.ts'
 import { op } from '../src/op.ts'
-import { iface, type Interface } from '../src/iface.ts'
+import { iface, portKey, type Interface } from '../src/iface.ts'
 import { success, type NanoResult } from '../src/result.ts'
 import { implementation, provide, type Handler, type Implementation } from '../src/implementation.ts'
 import { provider } from '../src/provider.ts'
@@ -22,12 +22,14 @@ const sign: Handler = async (ctx, s) => {
   const r: NanoResult<string> = await ctx.one(Vault, v => v.ping(s as string))
   return r.ok ? success(`signed ${r.value}`) : r
 }
+const Ticks = iface('acme/ticks', { tick: op.source('tick', Str) })
 const vault = impl('acme/keys/vault', [Vault])
+const ticker = impl('acme/keys/ticker', [Ticks])
 const signer = impl('acme/keys/signer', [Signer], { vault: Vault }, sign)
 const tester = impl('acme/ui/tester', [], { signer: Signer })
 const registry = () => {
   const r = createRegistry()
-  r.add(provider('acme/keys', [vault, signer]))
+  r.add(provider('acme/keys', [vault, signer, ticker]))
   r.add(provider('acme/ui', [tester]))
   return r
 }
@@ -149,6 +151,30 @@ describe('saving and loading', () => {
     expect(client.status('s1')).toBe('live')
   })
 
+  test('an event subscription survives a round trip, live', async () => {
+    const app = createApplication('app', { registry: registry() })
+    const r = app.createRuntime('r')
+    if (!r.ok) throw new Error('setup')
+    await r.value.create('k', 'acme/keys/ticker'); await r.value.create('v', 'acme/keys/vault')
+    const ev = { id: 'e', kind: 'event' as const, from: 'acme/keys/ticker#k', source: portKey(Ticks.coord, Ticks.ops.tick.coord), to: V, target: portKey(Vault.coord, Vault.ops.ping.coord) }
+    expect(r.value.subscribe(ev).ok).toBe(true)
+    expect(r.value.status('e')).toBe('live')
+    const { app: back, notes } = await load(saveDoc(app))
+    expect(notes).toEqual([])
+    expect(snapshot(back)).toEqual(snapshot(app))
+    expect(back.runtime('r')!.status('e')).toBe('live')
+  })
+
+  test('changing the saved document never changes a running or defined config', async () => {
+    const app = await setup()
+    app.define({ id: 'more', instances: [{ id: 'm', implementation: 'acme/keys/vault', config: { n: 1 } }], members: [], subscriptions: [] })
+    const doc = saveDoc(app)
+    ;(doc.runtimes.find(r => r.id === 'signer')!.instances[0]!.config as { slot: number }).slot = 9
+    ;(doc.runtimes.find(r => r.id === 'more')!.instances[0]!.config as { n: number }).n = 9
+    expect(app.runtime('signer')!.member(V)!.config).toEqual({ slot: 1 })
+    expect(app.definition('more')!.instances[0]!.config).toEqual({ n: 1 })
+  })
+
   test('only the runtimes in `open` are opened on load; the rest stay defined', async () => {
     const { app } = await load(saveDoc(await setup()))
     expect(app.runtime('spare')).toBeUndefined()
@@ -202,6 +228,25 @@ describe('loading what does not fit', () => {
     expect(app.runtime('a')!.members()).toEqual([V])
   })
 
+  test('a member repeated in one runtime gives a note, and the runtime opens with it once', async () => {
+    const v = { id: 'v', implementation: 'acme/keys/vault' }
+    const { app, notes } = await load(doc([
+      { id: 'h', instances: [v], members: [], subscriptions: [] },
+      { id: 'r', instances: [], members: [{ instance: V, home: 'h' }, { instance: V, home: 'h' }], subscriptions: [] },
+    ]))
+    expect(notes).toEqual([`r: member ${V} is repeated`])
+    expect(app.runtime('r')!.members()).toEqual([V])
+  })
+
+  test('tags are applied only to what is held after loading', async () => {
+    const { app } = await load(doc(
+      [{ id: 'r', instances: [{ id: 'a', implementation: 'acme/nope/x' }, { id: 'v', implementation: 'acme/keys/vault' }], members: [], subscriptions: [] }],
+      { tags: { 'acme/nope/x#a': ['lost'], [V]: ['kept'] } },
+    ))
+    expect([...app.tagsOf('acme/nope/x#a')]).toEqual([])
+    expect([...app.tagsOf(V)]).toEqual(['kept'])
+  })
+
   test('an invalid document gives its reason as a note and an empty application', async () => {
     const { app, notes } = await load({ nano: 1 } as unknown as NanoDoc)
     expect(notes).toEqual(['not a nano v2 document'])
@@ -220,10 +265,17 @@ describe('checkDoc', () => {
     expect(checkDoc(ok)).toEqual(ok)
   })
 
-  test('checkDoc names where a document is wrong, and never throws', () => {
+  test('checkDoc names where a document is wrong', () => {
     const bad = { ...ok, runtimes: [{ id: 'a/b', instances: [], members: [], subscriptions: [] }] }
     expect(checkDoc(bad)).toMatch(/^\/runtimes\/0\/id: /)
+  })
+
+  test('checkDoc answers anything that is not an object with a reason, without throwing', () => {
     expect(checkDoc(null)).toBe('not a nano v2 document')
+    expect(checkDoc('nano')).toBe('not a nano v2 document')
+  })
+
+  test('checkDoc refuses more than 50 runtimes', () => {
     expect(checkDoc({ ...ok, runtimes: Array.from({ length: 51 }, (_, i) => ({ id: `r${i}`, instances: [], members: [], subscriptions: [] })) }))
       .toMatch(/^\/runtimes: /)
   })
@@ -231,5 +283,62 @@ describe('checkDoc', () => {
   test('member and subscription ends are instance coords', () => {
     const r = { id: 'r', instances: [], members: [{ instance: 'nope', home: 'h' }], subscriptions: [] }
     expect(checkDoc({ ...ok, runtimes: [r] })).toMatch(/^\/runtimes\/0\/members\/0\/instance: /)
+  })
+})
+
+describe('only what the document can hold is made', () => {
+  const long = 'x'.repeat(65)
+
+  test('a runtime id outside the id rule is refused', () => {
+    const app = createApplication('app', { registry: registry() })
+    expect(app.createRuntime('my runtime')).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(app.createRuntime(long)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(() => createRuntime('my runtime', { registry: registry() })).toThrow('bad runtime id')
+  })
+
+  test('an instance id outside the id rule is refused', async () => {
+    const rt = createRuntime('r', { registry: registry() })
+    expect(await rt.create('a/b', 'acme/keys/vault')).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(await rt.create(long, 'acme/keys/vault')).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(rt.members()).toEqual([])
+  })
+
+  test('a subscription id outside the id rule is refused', () => {
+    const rt = createRuntime('r', { registry: registry() })
+    expect(rt.subscribe({ id: 'my sub', kind: 'call', from: T, to: V })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+  })
+
+  test('a coord whose id is outside the id rule is not an instance coord', () => {
+    const rt = createRuntime('r', { registry: registry() })
+    expect(rt.subscribe({ kind: 'call', from: 'acme/ui/tester#a b', to: V })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+  })
+
+  test('a config that is not JSON is refused', async () => {
+    const rt = createRuntime('r', { registry: registry() })
+    expect(await rt.create('v', 'acme/keys/vault', { config: { f: () => 1 } })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(await rt.create('v', 'acme/keys/vault', { config: new Date() })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+  })
+
+  test('define refuses a definition the document could not hold', () => {
+    const app = createApplication('app', { registry: registry() })
+    const def = (instances: RuntimeDef['instances']): RuntimeDef => ({ id: 'd', instances, members: [], subscriptions: [] })
+    expect(app.define(def([{ id: 'a b', implementation: 'acme/keys/vault' }]))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(app.define(def([{ id: 'a', implementation: 'acme/keys/vault', config: () => 1 }]))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(app.definition('d')).toBeUndefined()
+  })
+
+  test('an application built through the public API saves a document checkDoc accepts, and it loads without notes', async () => {
+    const app = await setup()
+    const edge = 'é'.repeat(64)
+    const r = app.createRuntime(edge)
+    if (!r.ok) throw new Error('setup')
+    await r.value.create('ü-1', 'acme/keys/vault', { config: { nested: [1, 'two', null, { three: true }] } })
+    await r.value.create('s2', 'acme/keys/signer', { provision: true })
+    r.value.subscribe({ id: 'x'.repeat(64), kind: 'call', from: 'acme/keys/signer#s2', to: 'acme/keys/vault#ü-1' })
+    const doc = saveDoc(app)
+    expect(typeof checkDoc(JSON.parse(JSON.stringify(doc)))).toBe('object')
+    const { app: back, notes } = await load(doc)
+    expect(notes).toEqual([])
+    expect(snapshot(back).runtimes).toEqual(snapshot(app).runtimes)
   })
 })
