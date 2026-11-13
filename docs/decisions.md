@@ -55,3 +55,9 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Decision:** No. Every op belongs to an interface; an implementation provides whole interfaces, and `make` throws `<coord>: missing <iface>/<op>` for any action or sink left without a handler.
 **Why:** Keeps the manifest and selectors one shape: everything on offer is an interface coordinate.
 **Cost if wrong:** A "local interface" helper later.
+
+## 10. What keys an implementation's handlers?
+
+**Decision:** A port: `portKey(ifaceCoord, opCoord)` = `<iface coord>/<op coord>`. `make` returns handlers keyed by port; it throws when an interface is given twice, or given but not declared in `provides`, and checks for missing handlers per interface. `registry.op(coord)` stays keyed by op coord.
+**Why:** An op coord is content-only, so two interfaces with an identical op (`log.write`, `audit.write`) share it; keyed by op coord they would collide, and one interface's handler would satisfy the other's.
+**Cost if wrong:** Routing re-keyed by op coord, and a rule for which interface's handler wins.

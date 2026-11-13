@@ -14,7 +14,10 @@ export type Interface<Ops extends Record<string, Op> = Record<string, Op>> = {
   readonly byCoord: ReadonlyMap<string, Op>
 }
 
-const COORD = /^[a-zA-Z][a-zA-Z0-9-]*([./][a-zA-Z0-9-]+)+$/
+export const COORD = /^[a-zA-Z][a-zA-Z0-9-]*([./][a-zA-Z0-9-]+)+$/
+
+/** A port: one op as offered by one interface. Handlers are keyed by it, since an op coord alone is content-only and two interfaces may share it. */
+export const portKey = (ifaceCoord: string, opCoord: string): string => `${ifaceCoord}/${opCoord}`
 
 export function iface<Ops extends Record<string, Op>>(coord: string, ops: Ops): Interface<Ops> {
   if (!COORD.test(coord)) throw new Error(`bad interface coordinate ${coord}`)

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import { defineSchema } from '../src/schema.ts'
 import { op } from '../src/op.ts'
-import { iface } from '../src/iface.ts'
+import { iface, portKey } from '../src/iface.ts'
 import { success } from '../src/result.ts'
 import type { NanoContext } from '../src/context.ts'
 import { implementation, provide } from '../src/implementation.ts'
@@ -26,8 +26,8 @@ const mem = provider('acme/mem', [memDb, memLog], { author: 'acme' })
 describe('implementations', () => {
   test('make maps handlers by op coord', async () => {
     const handlers = await memDb.make(ctx)
-    expect([...handlers.keys()].sort()).toEqual([db.ops.get.coord, db.ops.put.coord].sort())
-    expect(await handlers.get(db.ops.get.coord)!(ctx, 'abc')).toEqual(success(3))
+    expect([...handlers.keys()].sort()).toEqual([portKey('acme/db', db.ops.get.coord), portKey('acme/db', db.ops.put.coord)].sort())
+    expect(await handlers.get(portKey('acme/db', db.ops.get.coord))!(ctx, 'abc')).toEqual(success(3))
   })
   test('a missing handler throws `<coord>: missing <iface>/<op>`', async () => {
     const half = implementation('acme/mem/half', {
@@ -37,9 +37,38 @@ describe('implementations', () => {
     })
     await expect(half.make(ctx)).rejects.toThrow('acme/mem/half: missing acme/db/put')
   })
-  test('an op provided twice throws', async () => {
+  test('two interfaces sharing an identical op get distinct handlers, one per port', async () => {
+    const audit = iface('acme/audit', { write: op.sink('write', Str) })
+    expect(audit.ops.write.coord).toBe(log.ops.write.coord)
+    const seen: string[] = []
+    const both = implementation('acme/mem/both', {
+      provides: [log, audit],
+      make: () => [
+        provide(log, { write: async (_c, s) => (seen.push(`log ${s}`), success(undefined)) }),
+        provide(audit, { write: async (_c, s) => (seen.push(`audit ${s}`), success(undefined)) }),
+      ],
+    })
+    const handlers = await both.make(ctx)
+    await handlers.get(portKey('acme/log', log.ops.write.coord))!(ctx, 'a')
+    await handlers.get(portKey('acme/audit', audit.ops.write.coord))!(ctx, 'b')
+    expect(seen).toEqual(['log a', 'audit b'])
+  })
+  test("one interface's handler does not satisfy another's", async () => {
+    const audit = iface('acme/audit', { write: op.sink('write', Str) })
+    const one = implementation('acme/mem/one', { provides: [log, audit], make: () => [provide(log, { write: async () => success(undefined) })] })
+    await expect(one.make(ctx)).rejects.toThrow('acme/mem/one: missing acme/audit/write')
+  })
+  test('a part for an interface not in provides throws', async () => {
+    const stray = implementation('acme/mem/stray', { provides: [], make: () => [provide(log, { write: async () => success(undefined) })] })
+    await expect(stray.make(ctx)).rejects.toThrow('acme/mem/stray: acme/log is not provided')
+  })
+  test('a bad implementation coordinate throws', () => {
+    for (const c of ['acme', 'acme/', 'acme/mem/', '/db', 'acme//db'])
+      expect(() => implementation(c, { provides: [], make: () => [] })).toThrow(`bad implementation coordinate ${c}`)
+  })
+  test('an interface provided twice throws', async () => {
     const twice = implementation('acme/mem/twice', { provides: [log], make: () => [provide(log, { write: async () => success(undefined) }), provide(log, { write: async () => success(undefined) })] })
-    await expect(twice.make(ctx)).rejects.toThrow('acme/mem/twice: op write is provided twice')
+    await expect(twice.make(ctx)).rejects.toThrow('acme/mem/twice: acme/log is provided twice')
   })
   test('handlers are typed from the op schemas', () => {
     // @ts-expect-error get returns a number, not a string
@@ -94,5 +123,8 @@ describe('registry', () => {
   })
   test('an implementation outside its provider\'s namespace throws', () => {
     expect(() => provider('acme/sql', [memDb])).toThrow('acme/mem/db is not under acme/sql')
+  })
+  test('an implementation listed twice throws', () => {
+    expect(() => provider('acme/mem', [memDb, memDb])).toThrow('acme/mem/db is listed twice')
   })
 })

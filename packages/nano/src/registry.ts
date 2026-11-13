@@ -40,11 +40,11 @@ export function createRegistry(): Registry {
 
   return {
     add(p) {
+      // An implementation's coord fixes its provider and a provider lists each once, so a new provider brings no clashing implementation.
       if (providers.has(p.coord)) return failure('exists', `provider ${p.coord} is already registered`)
       // Check everything before writing anything, so a clash adds nothing.
       const seen = new Map<string, Interface>()
       for (const impl of p.implementations.values()) {
-        if (impls.has(impl.coord)) return failure('exists', `implementation ${impl.coord} is already registered`)
         for (const i of impl.provides) {
           const known = ifaces.get(i.coord) ?? seen.get(i.coord)
           if (known && opSet(known) !== opSet(i)) return failure('exists', `interface ${i.coord} differs`)
