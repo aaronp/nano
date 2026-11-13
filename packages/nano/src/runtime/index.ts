@@ -100,7 +100,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
   }
   const recompute = () => {
     for (const s of subs) {
-      const now = statusOf(s, c => members.get(c))
+      const now = statusOf(s, c => members.get(c), id)
       if (statuses.get(s.id) !== now) { statuses.set(s.id, now); emit({ type: 'status', id: s.id, status: now }) }
     }
   }
@@ -256,7 +256,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       if (!old) return failure('not-found', `${from} is not a member`)
       if (old.home === id) return failure('denied', `${from}: its home is this runtime; replace it`)
       if (next.pod.instance !== next.coord || !parseInstance(next.coord)) return failure('invalid-input', `bad member ${next.coord}`)
-      if (members.has(next.coord)) return failure('exists', `${next.coord} is already a member`)
+      if (next.coord !== from && members.has(next.coord)) return failure('exists', `${next.coord} is already a member`)
       const touched = rewritten(from, next.coord)
       const no = denied(touched)
       swap(old, next, no ? [] : touched)

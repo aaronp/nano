@@ -34,7 +34,7 @@ const registry = () => {
   return r
 }
 const S = 'acme/keys/signer#s', V = 'acme/keys/vault#v', T = 'acme/ui/tester#t', W = 'acme/keys/vault#w', X = 'acme/keys/vault#x'
-const spare: RuntimeDef = { id: 'spare', instances: [{ id: 'x', implementation: 'acme/keys/vault' }], members: [], subscriptions: [] }
+const spare: RuntimeDef = { id: 'spare', policy: 'allow-all', instances: [{ id: 'x', implementation: 'acme/keys/vault' }], members: [], subscriptions: [] }
 
 /** Root holds `w`; `signer` holds the vault (with config) and the signer; `client` holds the tester, the signer placed in, and `w`; `spare` is only defined. */
 async function setup() {
@@ -185,7 +185,27 @@ describe('saving and loading', () => {
 
 describe('loading what does not fit', () => {
   const doc = (runtimes: RuntimeDef[], extra: Partial<NanoDoc> = {}): NanoDoc =>
-    ({ nano: 2, title: 't', providers: [], runtimes, tags: {}, open: runtimes.map(r => r.id), ...extra })
+    ({ nano: 2, title: 't', providers: [], runtimes: runtimes.map(r => ({ policy: 'allow-all', ...r })), tags: {}, open: runtimes.map(r => r.id), ...extra })
+
+  test('a runtime saved without a policy (a custom one) gives a note and loads with allow-all; a definition saves as allow-all', async () => {
+    const app = createApplication('app', { registry: registry() })
+    app.createRuntime('locked', { policy: { isAllowed: () => ({ approved: false, reason: 'no' }) } })
+    app.define({ id: 'plain', instances: [], members: [], subscriptions: [] }) // a definition opens allow-all, so it saves as allow-all
+    const { app: back, notes } = await load(saveDoc(app))
+    expect(notes).toEqual(['locked: saved with a custom policy; loaded with allow-all'])
+    expect(back.runtime('locked')!.policy.isAllowed(V, V, undefined)).toEqual({ approved: true })
+  })
+
+  test('a member whose home fails to open gives a note; the runtime opens without it', async () => {
+    const v = { id: 'v', implementation: 'acme/keys/vault' }
+    const { app, notes } = await load(doc([
+      { id: 'a', instances: [v], members: [], subscriptions: [] },
+      { id: 'h', instances: [v], members: [], subscriptions: [] }, // not defined: v is taken, so it cannot open
+      { id: 'r', instances: [], members: [{ instance: V, home: 'h' }], subscriptions: [] },
+    ]))
+    expect(app.runtime('r')!.members()).toEqual([])
+    expect(notes).toEqual(['h: instance id v is taken', `r: member ${V} skipped: no runtime h`])
+  })
 
   test('an unknown implementation gives a note and the rest loads', async () => {
     const { app, notes } = await load(doc([{

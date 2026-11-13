@@ -61,6 +61,10 @@ describe('host pod', () => {
     const { pod: p } = await pod(() => new Promise(() => {}), 20)
     expect(await p.invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'timeout' } })
   })
+  test('a make that never settles times out', async () => {
+    const stuck = implementation('acme/x/api', { provides: [api], make: () => new Promise(() => {}) })
+    expect(await createHostPod('acme/x/api#1', stuck, ctx, { timeoutMs: 20 })).toMatchObject({ ok: false, fail: { type: 'timeout' } })
+  })
   test('a handler settling after the timeout adds no observation and no rejection', async () => {
     const { pod: p, seen } = await pod(() => new Promise((_, rej) => setTimeout(() => rej(new Error('late')), 40)), 20)
     await p.invoke(LEN, 'a')

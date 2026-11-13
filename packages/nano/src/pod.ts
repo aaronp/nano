@@ -30,15 +30,22 @@ export async function createHostPod(
   ctx: NanoContext,
   opts: { timeoutMs?: number; observe?(o: Observation): void } = {},
 ): Promise<NanoResult<Pod>> {
+  const timeoutMs = opts.timeoutMs ?? 30_000
   let handlers: ReadonlyMap<string, Handler>
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    handlers = await impl.make(ctx)
+    // Same timeout as a handler; a make settling late is ignored (Promise.race drops it), so its handlers are never used.
+    const late = new Promise<'timeout'>(res => { timer = setTimeout(() => res('timeout'), timeoutMs) })
+    const made = await Promise.race([Promise.resolve().then(() => impl.make(ctx)), late])
+    if (made === 'timeout') return failure('timeout', `${instance}: make did not settle in ${timeoutMs}ms`)
+    handlers = made
   } catch (e) {
     return failure('threw', `${instance}: ${msg(e)}`)
+  } finally {
+    clearTimeout(timer)
   }
   const ops = new Map<string, Op>()
   for (const i of impl.provides) for (const o of Object.values(i.ops)) ops.set(portKey(i.coord, o.coord), o)
-  const timeoutMs = opts.timeoutMs ?? 30_000
   let disposed = false
 
   const safeObserve = (o: Observation) => {

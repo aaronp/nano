@@ -56,7 +56,7 @@ function live(rt: Runtime): RuntimeDef {
 }
 
 /**
- * Every runtime but adopted ones: opened ones from live, the rest as defined. The root is saved under the
+ * Every runtime but adopted ones: opened ones from live, the rest as defined (as allow-all, how they open). The root is saved under the
  * application's id when it holds members or subscriptions. A custom policy is not saved (allow-all is the only one).
  */
 /** The runtimes saveDoc writes (configs copied, so the document never shares them with what runs), and whether the root is among them. */
@@ -66,7 +66,8 @@ function saved(app: Application) {
   const ids = app.runtimes().filter(id => !app.adopted(id))
   const runtimes = [
     ...(withRoot ? [root] : []),
-    ...ids.map(id => { const rt = app.runtime(id); return rt ? live(rt) : structuredClone(app.definition(id)!) }),
+    // An unopened definition opens with allow-all whatever it says, so it is saved as allow-all.
+    ...ids.map(id => { const rt = app.runtime(id); return rt ? live(rt) : { ...app.definition(id)!, policy: 'allow-all' as const } }),
   ]
   return { runtimes, withRoot, ids }
 }
@@ -102,6 +103,9 @@ export async function loadDoc(doc: NanoDoc, opts: { registry: Registry; policy?:
   const note = (where: string, r: NanoResult<unknown>) => { if (!r.ok) notes.push(`${where}: ${r.fail.reason}`); return r.ok }
   try {
     for (const p of checked.providers) if (!registry.provider(p)) notes.push(`provider ${p} is not registered`)
+    // No policy saved means a custom one; only allow-all can be loaded (the root takes `opts.policy` when given).
+    for (const d of checked.runtimes)
+      if (!d.policy && !(d.id === app.id && opts.policy)) notes.push(`${d.id}: saved with a custom policy; loaded with allow-all`)
     // Instances first, everywhere, so a member can be checked against what its home will really hold.
     const withImpl = checked.runtimes.map(d => ({
       ...d,
@@ -143,5 +147,6 @@ export async function loadDoc(doc: NanoDoc, opts: { registry: Registry; policy?:
   } catch (e) {
     notes.push(`load: ${e instanceof Error ? e.message : String(e)}`)
   }
+  notes.push(...app.notes()) // members the opens skipped
   return { app, notes }
 }

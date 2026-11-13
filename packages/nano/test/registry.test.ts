@@ -24,7 +24,7 @@ const memLog = implementation('acme/mem/log', { provides: [log], make: () => [pr
 const mem = provider('acme/mem', [memDb, memLog], { author: 'acme' })
 
 describe('implementations', () => {
-  test('make maps handlers by op coord', async () => {
+  test('make keys handlers by port: interface coord and op coord', async () => {
     const handlers = await memDb.make(ctx)
     expect([...handlers.keys()].sort()).toEqual([portKey('acme/db', db.ops.get.coord), portKey('acme/db', db.ops.put.coord)].sort())
     expect(await handlers.get(portKey('acme/db', db.ops.get.coord))!(ctx, 'abc')).toEqual(success(3))

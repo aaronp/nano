@@ -65,7 +65,7 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 
 ## 11. Where does an instance's outgoing call travel?
 
-**Decision:** Through its home runtime's subscriptions, wherever the instance is called from. A pod always hands its handlers the instance's own context (home runtime), never the caller's.
+**Decision:** Through its home runtime's subscriptions, wherever the instance is called from. A pod always hands its handlers the instance's own context (home runtime), never the caller's. So a call subscription whose `from` is a member placed into a runtime (its home is elsewhere) is `broken` there: it can never carry a call (`statusOf` takes the runtime id).
 **Why:** Matches the signer calling the vault at home and a client-side log listening where it was placed; policy for each hop stays in the runtime the hop happens in.
 **Cost if wrong:** A per-runtime context per member.
 
@@ -101,13 +101,13 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 
 ## 17. Where does `ctx.publish` deliver?
 
-**Decision:** In every runtime the instance is a member of (home and every runtime it was `add`ed to), each runtime delivering to its own live event subscriptions under its own policy and books. Runtimes register with the pod on `create`/`add`/`replace` and leave on `remove`/`replace` (a runtime-layer `WeakMap<Pod, Set<Deliver>>`, so no application is needed). Once the instance is gone from its home runtime, its publishes go nowhere.
+**Decision:** In every runtime the instance is a member of (home and every runtime it was `add`ed to), each runtime delivering to its own live event subscriptions under its own policy and books. Runtimes register with the pod on `create`/`add`/`replace` and leave on `remove`/`replace` (a runtime-layer `WeakMap<Pod, Set<Deliver>>`, so no application is needed). Once the instance is gone from its home runtime, its publishes go nowhere. `ctx.publish` awaits every delivery, so a slow listener holds the publisher up and can push the publishing handler toward its own timeout.
 **Why:** The ruling: an instance calls out at home but publishes into every runtime it belongs to — a client-side log listens where it was placed.
 **Cost if wrong:** Restrict delivery to the home runtime; one test changes.
 
 ## 18. Which ports does `ctx.publish(op, data)` publish on?
 
-**Decision:** Every source port of the instance whose op coord equals `op.coord` (normally one). Data that fails the op's output schema, or an op that is none of the instance's sources, is dropped and observed as an `exception` (`op` = the op coord); `publish` never throws.
+**Decision:** Every source port of the instance whose op coord equals `op.coord` (normally one). Data that fails the op's output schema, or an op that is none of the instance's sources, is dropped and observed as an `exception` (`op` = the op coord); `publish` never throws. It resolves once every delivery on every port has settled (decision 17).
 **Why:** Keeps the `publish(op)` signature while handlers and event ends are keyed by port; two interfaces offering the identical source both emit it.
 **Cost if wrong:** A `publish(iface, name)` form that names the port.
 
@@ -186,7 +186,7 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 
 ## 31. In what order is a defined runtime opened?
 
-**Decision:** `open(id)` returns an opened runtime as it is (a concurrent open gets the same promise). A defined one is built: its own instances first (`provision: false`, create order), then the runtimes its members come from are opened (one currently being opened is skipped), then its members are placed, then its subscriptions added (they may wait). Any failure is returned as the `NanoResult` fail; the runtime is taken down again (its members removed, it is no longer opened, its definition stays), while runtimes opened on the way stay open. An undefined, unopened id fails `not-found`.
+**Decision:** `open(id)` returns an opened runtime as it is (a concurrent open gets the same promise). A defined one is built: its own instances first (`provision: false`, create order), then the runtimes its members come from are opened (one currently being opened is skipped), then its members are placed, then its subscriptions added (they may wait). A member whose home fails to open, or that cannot be placed (denied, or not held there), is skipped with the note `<runtime>: member <coord> skipped: <reason>` on `app.notes()` and the open goes on; subscriptions to it wait (decision 47). Any other failure is returned as the `NanoResult` fail; the runtime is taken down again (its members removed, it is no longer opened, its definition stays), while runtimes opened on the way stay open. An undefined, unopened id fails `not-found`.
 **Why:** Creating its own instances before opening others makes mutual placement work: when A's members come from B and B's from A, B (opened while A is opening) can already place A's instances. The plan's order (homes first) would fail that case with `not-found`.
 **Cost if wrong:** Swap two loops; mutually placing runtimes then fail to open.
 
@@ -204,7 +204,7 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 
 ## 34. What happens to placed copies when an instance is replaced at its home?
 
-**Decision:** Every runtime it was placed into follows: on the home's `instance-replaced`, the application calls `rehome(from, newMember)` on each runtime whose member `from` has that home. The new coord and pod take the old member's slot (create order holds), publish delivery moves to the new pod, the runtime emits `instance-replaced`, and its subscriptions are rewritten from → to under its own policy. If that policy denies the rewrite, the member is still swapped but its subscriptions stay on the old coord (now `waiting`) and `rehome` returns the denial. `rehome` refuses a member whose home is this runtime (`denied`: replace it there). The instance's tags move to the new coord.
+**Decision:** Every runtime it was placed into follows: on the home's `instance-replaced`, the application calls `rehome(from, newMember)` on each runtime whose member `from` has that home. The new coord and pod take the old member's slot (create order holds), publish delivery moves to the new pod, the runtime emits `instance-replaced`, and its subscriptions are rewritten from → to under its own policy. If that policy denies the rewrite, the member is still swapped but its subscriptions stay on the old coord (now `waiting`) and `rehome` returns the denial, which the application records on `app.notes()` as `<runtime>: following <from> -> <to>: <reason>`. Replacing with the same implementation keeps the coord: guests swap to the new pod (the `exists` check skips `next.coord === from`). `rehome` refuses a member whose home is this runtime (`denied`: replace it there). The instance's tags move to the new coord.
 **Why:** The home disposes the old pod; a guest must not keep it. Each runtime polices its own rewires (decision 27), so a guest can refuse the new implementation without the home being blocked.
 **Cost if wrong:** Guests drop the member instead and the person reconnects by hand.
 
@@ -240,7 +240,7 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 
 ## 40. What does `loadDoc` do with a document that does not fully fit?
 
-**Decision:** It never throws or rejects. An invalid document (per `checkDoc`) gives an empty application and the reason as the only note. Otherwise each problem is skipped with a note and the rest loads: `provider <coord> is not registered` (note only); `<runtime>/<id>: no implementation <coord>` (instance dropped); `<runtime>: member <coord> has no home <runtime>` (member dropped: its home is not in the document, is the runtime itself, or does not hold that instance after the drops above); `<runtime>/<sub id>: <reason>` (subscription dropped: invalid shape or a repeated id); `<runtime>: <reason>` when a runtime cannot be defined (it is not opened either) or fails to open (it stays defined); `load: <message>` for anything thrown. Subscriptions whose ends were dropped stay, `waiting`. `checkDoc` answers `not a nano v2 document` unless `nano` is 2, else the first schema error as `<path>: <message>`. Pinned by the `loading what does not fit` and `checkDoc` tests.
+**Decision:** It never throws or rejects. An invalid document (per `checkDoc`) gives an empty application and the reason as the only note. Otherwise each problem is skipped with a note and the rest loads: `provider <coord> is not registered` (note only); `<runtime>/<id>: no implementation <coord>` (instance dropped); `<runtime>: member <coord> has no home <runtime>` (member dropped: its home is not in the document, is the runtime itself, or does not hold that instance after the drops above); `<runtime>/<sub id>: <reason>` (subscription dropped: invalid shape or a repeated id); `<runtime>: <reason>` when a runtime cannot be defined (it is not opened either) or fails to open (it stays defined); `<runtime>: member <coord> skipped: <reason>` when a member's home fails to open while opening (from `app.notes()`, decision 31); `<runtime>: saved with a custom policy; loaded with allow-all` for every runtime saved without `policy` (the root only when no `policy` is given to `loadDoc`); `load: <message>` for anything thrown. Subscriptions whose ends were dropped stay, `waiting`. `checkDoc` answers `not a nano v2 document` unless `nano` is 2, else the first schema error as `<path>: <message>`. Pinned by the `loading what does not fit` and `checkDoc` tests.
 **Why:** A document written by another registry or an older build should open as far as it can, with each loss visible.
 **Cost if wrong:** Refuse the whole document on the first problem.
 
@@ -274,7 +274,7 @@ Pinned by the matching tests in `document.test.ts`.
 **Why:** A repeated member otherwise failed the whole runtime's open. Stale tags would attach to a later instance with that coord (decision 36). A shared config would let an edit to a saved document reach a running instance.
 **Cost if wrong:** Runtimes fail to open; tags appear on the wrong instance; configs change unseen.
 
-Limits (50 runtimes, 500 instances or members, 2000 subscriptions) are still enforced only by the document. An application past them saves a document that `checkDoc` refuses.
+Limits: `define` enforces the per-runtime ones (500 instances or members, 2000 subscriptions) through `RuntimeDefSchema`; only live creation (`create`, `place`, `subscribe`, `createRuntime`) and the 50-runtime document limit are unenforced. An application past them saves a document that `checkDoc` refuses.
 
 ## 43. External signer: where do the map and the log live?
 
@@ -299,3 +299,16 @@ Limits (50 runtimes, 500 instances or members, 2000 subscriptions) are still enf
 **Decision:** The vault. `Vault.create({ count, purpose })` makes Ed25519 key pairs inside the vault (private keys non-extractable) and returns only the public keys; `KeyGenerator.create-keys` asks the vault to do it. The vault has no `store`.
 **Why:** Private keys must never travel in messages: messages are observed and visible to policy, and a `store` would let any caller inject keys. This is also the shape the passkey and other-origin variants need, where the keys never leave their holder.
 **Cost if wrong:** An import action on the vault, guarded by policy, for keys made elsewhere.
+
+## 47. Whole-branch review: what the application notes, and smaller rulings
+
+**Decision:**
+- The application keeps `notes()`: what it skipped or could not follow, oldest first: a member an open skipped (decision 31), and a guest whose `rehome` failed (decision 34). `open` keeps its `NanoResult<Runtime>` contract; `loadDoc` appends `app.notes()` to its own notes.
+- `createHostPod` gives `make` the handler timeout: a `make` that does not settle fails `timeout`; a late settle is ignored and its handlers never used.
+- `define` stores its own copy, and `definition()` returns a copy. It rejects an instance id repeated within the definition (`exists`, `instance id <id> is repeated`).
+- `saveDoc` writes an unopened definition with `policy: 'allow-all'`: it opens with allow-all whatever it says, so the custom-policy note on load (decision 40) is only for runtimes that really had one.
+- A message waiting for a provisioning pass whose subscription is gone when the pass ends fails `not-found` and is not delivered.
+
+Pinned by the matching tests in `application.test.ts`, `document.test.ts` and `pod.test.ts`.
+**Why:** Each was a silent loss: a guest kept a disposed pod (same-implementation replace), one bad home failed every runtime placing from it, a hung `make` hung its creator, an edit to a definition changed what opened later.
+**Cost if wrong:** Notes are unbounded (a drain or cap later); an open that should fail on a missing member needs a strict flag.

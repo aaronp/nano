@@ -5,6 +5,7 @@
  *   app.define(clientDef)                                           // data only, until something needs it
  *   await app.open('client')                                        // opens the runtimes its members come from, then builds it
  *   app.place('acme/keys/signer#s', 'signer', 'client')             // a member of both; it still calls out through `signer`
+ *   app.notes()                                                     // what it skipped or could not follow, e.g. a member whose home failed to open
  */
 import { Type } from 'typebox'
 import { Value } from 'typebox/value'
@@ -52,6 +53,8 @@ export type Application = Runtime & {
   place(instance: string, from: string, to: string): NanoResult<void>
   /** Child runtimes, opened and defined (not the root). */
   runtimes(): readonly string[]
+  /** What the application skipped or could not follow, oldest first: members an open skipped, guests that refused a replacement. */
+  notes(): readonly string[]
   /** Whether this child was adopted (adopted runtimes are not saved). */
   adopted(id: string): boolean
   tag(coord: string, tag: string): void
@@ -66,6 +69,7 @@ export function createApplication(id: string, opts: { registry: Registry; policy
   const kids = new Map<string, Runtime>() // made, adopted and opened children
   const defs = new Map<string, RuntimeDef>()
   const adopted = new Set<string>()
+  const notes: string[] = [] // ponytail: unbounded; a cap or a drain when something long-lived reads it
   /** Opens in progress: `made` once its own instances exist (or it failed), `done` when it is open or failed. */
   const opening = new Map<string, { made: Promise<void>; done: Promise<NanoResult<Runtime>> }>()
   const all = (): Runtime[] => [root, ...kids.values()]
@@ -90,8 +94,11 @@ export function createApplication(id: string, opts: { registry: Registry; policy
     if (e.type === 'instance-replaced') {
       const next = r.member(e.to)
       if (next?.home !== r.id) return
-      // A guest whose policy denies the rewrite keeps its subscriptions on the old coord, waiting (decision 34).
-      for (const o of all()) if (o !== r && o.member(e.from)?.home === r.id) o.rehome(e.from, next)
+      // A guest whose policy denies the rewrite keeps its subscriptions on the old coord, waiting (decision 34); noted.
+      for (const o of all()) if (o !== r && o.member(e.from)?.home === r.id) {
+        const done = o.rehome(e.from, next)
+        if (!done.ok) notes.push(`${o.id}: following ${e.from} -> ${e.to}: ${done.fail.reason}`)
+      }
       const t = tags.get(e.from)
       if (t) { tags.delete(e.from); tags.set(e.to, t) }
     }
@@ -120,7 +127,8 @@ export function createApplication(id: string, opts: { registry: Registry; policy
    * Its own instances first (unprovisioned), then the runtimes its members come from, then its members, then its
    * subscriptions (they may wait). A home on this open's own chain is skipped (it made its instances already); a home
    * another open is building is waited for only until its instances exist (waiting for all of it could deadlock two
-   * overlapping opens); any other home is opened, in full. On a failure the runtime is taken down again; runtimes
+   * overlapping opens); any other home is opened, in full. A member whose home fails to open, or that cannot be placed,
+   * is skipped with a note (its subscriptions wait). On any other failure the runtime is taken down again; runtimes
    * opened on the way stay open.
    */
   async function build(def: RuntimeDef, chain: ReadonlySet<string>, made: () => void): Promise<NanoResult<Runtime>> {
@@ -136,14 +144,18 @@ export function createApplication(id: string, opts: { registry: Registry; policy
         if (!r.ok) return undo(r)
       }
       made()
+      const failed = new Map<string, string>() // home → why it did not open
       for (const home of new Set(def.members.map(m => m.home))) {
         if (chain.has(home)) continue
         const other = opening.get(home)
         if (other) { await other.made; continue }
         const r = await open(home, chain)
-        if (!r.ok) return undo(r)
+        if (!r.ok) failed.set(home, r.fail.reason)
       }
-      for (const m of def.members) { const r = place(m.instance, m.home, def.id); if (!r.ok) return undo(r) }
+      for (const m of def.members) {
+        const why = failed.get(m.home) ?? (r => (r.ok ? undefined : r.fail.reason))(place(m.instance, m.home, def.id))
+        if (why) notes.push(`${def.id}: member ${m.instance} skipped: ${why}`)
+      }
       for (const s of def.subscriptions) { const r = rt.subscribe(s); if (!r.ok) return undo(r) }
       return success(rt)
     } catch (e) {
@@ -189,15 +201,18 @@ export function createApplication(id: string, opts: { registry: Registry; policy
       const notJson = def.instances.find(i => i.config !== undefined && !isJson(i.config))
       if (notJson) return failure('invalid-input', `${notJson.id}: config is not JSON`)
       if (taken(def.id)) return failure('exists', `runtime ${def.id} exists`)
+      const twice = def.instances.find((i, n) => def.instances.findIndex(j => j.id === i.id) !== n)
+      if (twice) return failure('exists', `instance id ${twice.id} is repeated`)
       const clash = def.instances.find(i => idTaken(i.id))
       if (clash) return failure('exists', `instance id ${clash.id} is taken`)
-      defs.set(def.id, def)
+      defs.set(def.id, structuredClone(def)) // its own copy: a later edit to `def` never changes what opens
       return success(undefined)
     },
-    definition: rid => defs.get(rid),
+    definition: rid => { const d = defs.get(rid); return d && structuredClone(d) },
     open: rid => open(rid),
     place,
     runtimes: () => [...new Set([...kids.keys(), ...defs.keys()])],
+    notes: () => [...notes],
     adopted: rid => adopted.has(rid),
     tag(c, t) { tags.set(c, (tags.get(c) ?? new Set()).add(t)) },
     untag(c, t) { tags.get(c)?.delete(t) },

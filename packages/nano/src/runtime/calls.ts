@@ -51,6 +51,7 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 async function send(w: Wiring, sid: string, from: string, to: string, port: string, input: unknown): Promise<NanoResult<unknown>> {
   if (w.settled?.(from) || w.settled?.(to)) await ready(w, from, to)
   const sub = w.subscriptions().find(s => s.id === sid)
+  if (!sub) return failure('not-found', `no subscription ${sid} in ${w.id}`) // gone while it waited for a pass
   let v
   try { v = w.policy.isAllowed(from, to, input) } catch (e) {
     w.observe?.({ kind: 'exception', instance: from, op: port, error: `policy threw: ${msg(e)}` })
