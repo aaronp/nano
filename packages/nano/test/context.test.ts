@@ -22,7 +22,7 @@ const TICK = portKey(Ticks.coord, Ticks.ops.tick.coord)
 const WRITE = portKey(Log.coord, Log.ops.write.coord)
 const rec = { key: 'k', value: 'v' }
 
-const A = 'acme/db/a#a', B = 'acme/db/b#b', C = 'acme/db/c#c', M = 'acme/app/main#m'
+const A = 'acme/db/a#a', B = 'acme/db/b#b', C = 'acme/db/c#c', S = 'acme/db/s#s', M = 'acme/app/main#m'
 
 function setup(opts: { deny?: (from: string, to: string, data: unknown) => boolean } = {}) {
   const stores = new Map<string, Map<string, string>>()
@@ -31,7 +31,7 @@ function setup(opts: { deny?: (from: string, to: string, data: unknown) => boole
   const received = new Map<string, number[]>()
   const observed: Observation[] = []
   const tags = new Map<string, Set<string>>()
-  const db = (name: string, down = false) =>
+  const db = (name: string, down = false, ms = 1) =>
     implementation(`acme/db/${name}`, {
       provides: [DB],
       make: ctx => {
@@ -40,7 +40,7 @@ function setup(opts: { deny?: (from: string, to: string, data: unknown) => boole
         return [provide(DB, {
           save: async (_c, r) => {
             trace.push(`start ${name}`)
-            await new Promise(res => setTimeout(res, 1))
+            await new Promise(res => setTimeout(res, ms))
             trace.push(`end ${name}`)
             if (down) return failure('threw', `${name} is down`)
             store.set(r.key, r.value)
@@ -57,13 +57,13 @@ function setup(opts: { deny?: (from: string, to: string, data: unknown) => boole
     make: ctx => [provide(Log, { write: async (_c, n) => { received.set(ctx.instance, [...(received.get(ctx.instance) ?? []), n]); return success(undefined) } })],
   })
   const registry = createRegistry()
-  for (const p of [provider('acme/db', [db('a'), db('b'), db('c', true)]), provider('acme/app', [main]), provider('acme/clock', [ticker]), provider('acme/log', [memLog])])
+  for (const p of [provider('acme/db', [db('a'), db('b'), db('c', true), db('s', false, 15)]), provider('acme/app', [main]), provider('acme/clock', [ticker]), provider('acme/log', [memLog])])
     registry.add(p)
   let denying = false
   const policy = { isAllowed: (from: string, to: string, data: unknown) => (denying && opts.deny?.(from, to, data) ? { approved: false as const, reason: `${to} refused` } : { approved: true as const }) }
   const rt = createRuntime('r1', { registry, policy, tagsOf: c => tags.get(c) ?? new Set(), pod: { observe: o => observed.push(o) } })
   /** A consumer `main#m` with call subscriptions to the given DBs, in that order. */
-  async function wire(...dbs: ('a' | 'b' | 'c')[]) {
+  async function wire(...dbs: ('a' | 'b' | 'c' | 's')[]) {
     await rt.create('m', 'acme/app/main')
     for (const d of dbs) {
       await rt.create(d, `acme/db/${d}`)
@@ -134,6 +134,15 @@ describe('any', () => {
     const ctx = await wire('c', 'b')
     expect(await ctx.any(DB, db => db.save(rec))).toEqual(success({ value: 'b', from: B }))
     expect(trace.slice(0, 2)).toEqual(['start c', 'start b'])
+  })
+  test('an earlier success wins; the slower calls still complete and are booked', async () => {
+    const { rt, wire } = setup()
+    const ctx = await wire('s', 'a')
+    expect(await ctx.any(DB, db => db.save(rec))).toEqual(success({ value: 'a', from: A }))
+    expect(rt.books('s1')).toEqual({ calls: 0 })
+    await new Promise(res => setTimeout(res, 25))
+    expect(rt.books('s1')).toEqual({ calls: 1, last: success('s') })
+    expect(rt.books('s2')).toEqual({ calls: 1, last: success('a') })
   })
   test('when none succeeds it fails all-failed listing each', async () => {
     const ctx = await setup().wire('c')
@@ -263,6 +272,29 @@ describe('policy and books', () => {
     expect(rt.books('s2')).toEqual({ calls: 1, last: failure('threw', 'c is down') })
     expect(rt.books('nope')).toBeUndefined()
   })
+  test('a call in flight when its subscription goes does not bring the books back', async () => {
+    const { rt, wire } = setup()
+    const ctx = await wire('s')
+    const call = ctx.one(DB, db => db.save(rec))
+    rt.unsubscribe('s1')
+    rt.subscribe({ kind: 'call', from: M, to: S })
+    await call
+    expect(rt.books('s1')).toEqual({ calls: 0 })
+  })
+  test('a call in flight when its subscription is retargeted is not booked on it', async () => {
+    const { rt, wire } = setup()
+    const ctx = await wire('s')
+    await rt.create('a', 'acme/db/a')
+    const call = ctx.one(DB, db => db.save(rec))
+    rt.retarget('s1', A)
+    await call
+    expect(rt.books('s1')).toEqual({ calls: 0 })
+  })
+  test('a typed client has only its interface’s ops', async () => {
+    const ctx = await setup().wire('a')
+    // @ts-expect-error: DB has no op `nope`
+    expect(await ctx.one(DB, db => db.nope(rec))).toMatchObject({ ok: false, fail: { type: 'threw' } })
+  })
   test('unsubscribing drops the books', async () => {
     const { rt, wire } = setup()
     const ctx = await wire('a')
@@ -306,6 +338,40 @@ describe('publish', () => {
     rt.remove(T)
     await ctx.publish(Ticks.ops.tick, 1)
     expect(received.size).toBe(0)
+  })
+  test('a guest runtime whose policy denies blocks only its own deliveries', async () => {
+    const { rt, registry, ctx, received } = await wired()
+    const r2 = createRuntime('r2', { registry, policy: { isAllowed: (_f, _t, d) => (typeof d === 'number' ? { approved: false, reason: 'no' } : { approved: true }) } })
+    await r2.create('l2', 'acme/log/mem')
+    r2.add(rt.member(T)!)
+    r2.subscribe({ kind: 'event', from: T, source: TICK, to: 'acme/log/mem#l2', target: WRITE })
+    await ctx.publish(Ticks.ops.tick, 1)
+    expect(received.get('acme/log/mem#l1')).toEqual([1])
+    expect(received.get('acme/log/mem#l2')).toBeUndefined()
+    expect(rt.books('s1')).toEqual({ calls: 1, last: success(undefined) })
+    expect(r2.books('s1')).toEqual({ calls: 0 })
+  })
+  test('a policy that throws is a denial, observed; publish still resolves', async () => {
+    const { rt, registry, ctx, received } = await wired()
+    const seen: Observation[] = []
+    const policy = { isAllowed: (_f: string, _t: string, d: unknown) => { if (typeof d === 'number') throw new Error('bad policy'); return { approved: true as const } } }
+    const r2 = createRuntime('r2', { registry, policy, pod: { observe: o => seen.push(o) } })
+    await r2.create('l2', 'acme/log/mem')
+    r2.add(rt.member(T)!)
+    r2.subscribe({ kind: 'event', from: T, source: TICK, to: 'acme/log/mem#l2', target: WRITE })
+    await ctx.publish(Ticks.ops.tick, 1)
+    expect(received.get('acme/log/mem#l1')).toEqual([1])
+    expect(received.get('acme/log/mem#l2')).toBeUndefined()
+    expect(seen).toContainEqual({ kind: 'exception', instance: T, op: WRITE, error: 'policy threw: bad policy' })
+  })
+  test('a context publishes only through the pod it was made for', async () => {
+    const { rt, contexts, ctx, received } = await wired()
+    rt.remove(T)
+    await rt.create('t', 'acme/clock/ticker')
+    await ctx.publish(Ticks.ops.tick, 1)
+    expect(received.size).toBe(0)
+    await contexts.get(T)!.publish(Ticks.ops.tick, 2)
+    expect(received.get('acme/log/mem#l1')).toEqual([2])
   })
   test('with no event subscription nothing happens', async () => {
     const { rt, ctx, received } = await wired()

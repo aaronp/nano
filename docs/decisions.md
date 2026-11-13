@@ -127,3 +127,15 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Decision:** Built per target from the target's own interfaces whose coord is `implements` (every interface it provides when `implements` is absent; on a name clash the first wins). An interface or `sel(I, …)` selector always uses the caller's interface, so the client is typed and a missing op is `unknown-op`.
 **Why:** Plain data carries no ops; the target's interface is the only shape at hand.
 **Cost if wrong:** Look the interface up in the registry by `implements` instead.
+
+## 22. What if a policy throws while a message is checked?
+
+**Decision:** The message is denied (`denied`, reason `policy threw: <message>`) and observed as an `exception` from the sender, with `op` the port the message was going to. A verb gets that fail; `publish` still resolves.
+**Why:** Platform failures are fails, never thrown; one runtime's broken policy must not reject another runtime's publish.
+**Cost if wrong:** Treat a throwing policy as approving; one test changes.
+
+## 23. Which subscription does a call in flight get booked on?
+
+**Decision:** Only the exact subscription it went over, if that subscription is still there unchanged when the call settles. Unsubscribed, retargeted or rewritten by `replace` meanwhile, the call is not booked (a new subscription that reuses the id starts at `{ calls: 0 }`).
+**Why:** Books describe what each current connection carried; a call to the old target is not traffic on the new edge.
+**Cost if wrong:** Book on the id regardless; a retarget shows calls its new target never saw.

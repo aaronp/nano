@@ -15,7 +15,7 @@ export type Found<T> = { value: T; from: string }
 export type Each<T> = { from: string; result: NanoResult<T> }[]
 /** An interface (typed client), `sel(I, …)`, or plain selector data (client built from the target's interface). */
 export type CallSelector<I extends Interface> = I | (SelectorData & { implements?: string })
-type Call<I extends Interface, T> = (c: Client<I>) => Promise<NanoResult<T>>
+export type Call<I extends Interface, T> = (c: Client<I>) => Promise<NanoResult<T>>
 
 export type NanoContext = {
   readonly instance: string

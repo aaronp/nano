@@ -104,7 +104,10 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
 
   async function makePod(coord: string, impl: Implementation, config: unknown): Promise<NanoResult<Pod>> {
     if (impl.config && !impl.config.check(config)) return failure('invalid-input', `${coord}: config does not fit ${impl.config.type}`)
-    return createHostPod(coord, impl, contextFor(wiring, coord, impl, config), opts.pod)
+    const { ctx, bind } = contextFor(wiring, coord, impl, config)
+    const pod = await createHostPod(coord, impl, ctx, opts.pod)
+    if (pod.ok) bind(pod.value)
+    return pod
   }
   const drop = (m: Member) => {
     if (m.home === id) m.pod.dispose()
