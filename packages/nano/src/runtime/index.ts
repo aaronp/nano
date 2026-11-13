@@ -141,7 +141,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     for (const s of subs.filter(s => gone.has(s.from) || gone.has(s.to))) rt.unsubscribe(s.id)
     recompute()
   }
-  const holder: Holder = { deliver: deliverer(wiring), refresh: recompute, forget }
+  const holder: Holder = { deliver: deliverer(wiring), refresh: recompute, forget, added: (p, c) => emit({ type: 'instance-added', instance: c, home: p.home }) }
   /** A pod's instances changed: every runtime holding it recomputes its statuses. */
   const changed = (p: PodRecord) => { for (const h of p.holders) h.refresh() }
   const hold = (p: PodRecord) => {
@@ -172,13 +172,16 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     if (impl.config && !impl.config.check(config)) return failure('invalid-input', `${pod}: config does not fit ${impl.config.type}`)
   }
 
-  const badCount = (pod: string, n: number): NanoResult<never> | undefined =>
-    !Number.isInteger(n) || n < 1 || n > 500 ? failure('invalid-input', `${pod}: count must be a whole number from 1 to 500`) : undefined
+  const badCount = (pod: string, n: number, min = 1): NanoResult<never> | undefined =>
+    !Number.isInteger(n) || n < min || n > 500 ? failure('invalid-input', `${pod}: count must be a whole number from ${min} to 500`) : undefined
   /** Make one instance's host; failing, the instance is `failed` with the reason. Stopped meanwhile (removed), the host is dropped. */
   async function start(p: PodRecord, inst: Instance): Promise<NanoResult<void>> {
     const { ctx, bind } = contextFor(wiring, inst.coord, p.implementation, p.config)
     const host = await createHostPod(inst.coord, p.implementation, ctx, opts.pod)
-    if (inst.state !== 'starting') { if (host.ok) host.value.dispose(); return failure('not-found', `${inst.coord} was removed while it started`) }
+    if (inst.state !== 'starting') {
+      if (host.ok) host.value.dispose()
+      return failure('not-found', p.instances.get(inst.coord) === inst ? `${inst.coord} was replaced (swapped) while it started` : `${inst.coord} was removed while it started`)
+    }
     if (host.ok) { bind(host.value); inst.host = host.value; inst.state = 'running'; delete inst.reason } else {
       inst.state = 'failed'; inst.reason = host.fail.reason
       try { opts.pod?.observe?.({ kind: 'exception', instance: inst.coord, op: 'make', error: host.fail.reason }) } catch { /* an observer must never break the runtime */ }
@@ -224,17 +227,19 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     hold(p)
     try {
       await Promise.all([...p.instances.values()].map(i => start(p, i)))
+      const gone = () => pods.get(pid) !== p // removed (or its id remade) meanwhile: nothing more is made or wired for it
+      if (gone()) return failure('not-found', `${pid} was removed while it was made`)
       if (!o.provision) return success({ pod: pid, instances: coords, unsatisfied: coords.flatMap(c => notProvisioned(c, impl)) })
       // ponytail: the manifest per make; a registry count if provisioning gets hot. The limit should be unreachable:
       // a pod is only made when no instance matches, and once made it matches, so a pass makes each implementation once.
       const tooDeep = depth >= registry.manifest().implementations.length
       const unsatisfied: Unsatisfied[] = []
-      for (const c of coords) unsatisfied.push(...await provision({
+      for (const c of coords) if (!gone() && p.instances.has(c)) unsatisfied.push(...await provision({
         registry, target, tooDeep, instances,
         connected: d => connectionsOf(wiring, c, d).length > 0,
         idFree: n => !pods.has(n) && !opts.idTaken?.(n),
-        make: (n, ic) => make(n, ic, { provision: true }, pass, depth + 1),
-        subscribe: s => rt.subscribe(s),
+        make: (n, ic) => (gone() ? Promise.resolve(failure('not-found', `${pid} was removed`)) : make(n, ic, { provision: true }, pass, depth + 1)),
+        subscribe: s => (gone() || !p.instances.has(c) || !find(s.to) ? failure('not-found', `${c} or ${s.to} was removed`) : rt.subscribe(s)),
         status: sid => statuses.get(sid),
       }, c, impl))
       return success({ pod: pid, instances: coords, unsatisfied })
@@ -265,7 +270,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       if (p.home !== id) return failure('denied', `${pid}: add instances at its home runtime ${p.home}`)
       const inst: Instance = { coord: instanceCoord(pid, p.next++), state: 'starting' }
       p.instances.set(inst.coord, inst)
-      emit({ type: 'instance-added', instance: inst.coord, home: id })
+      for (const h of [...p.holders]) h.added(p, inst.coord)
       changed(p)
       await start(p, inst)
       return success(inst.coord)
@@ -274,7 +279,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const p = pods.get(pid)
       if (!p) return failure('not-found', `${pid} is not a pod of ${id}`)
       if (p.home !== id) return failure('denied', `${pid}: scale it at its home runtime ${p.home}`)
-      const no = badCount(pid, count)
+      const no = badCount(pid, count, 0)
       if (no) return no
       const byIndex = () => [...p.instances.keys()].sort((x, y) => parseInstance(x)!.index - parseInstance(y)!.index)
       for (const c of byIndex().slice(count)) rt.removeInstance(c)
@@ -294,7 +299,8 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const f = find(coord)
       if (!f) return failure('not-found', `${coord} is not an instance of ${id}`)
       if (f.pod.home !== id) return failure('denied', `${coord}: restart it at its home runtime ${f.pod.home}`)
-      f.instance.host?.dispose(); delete f.instance.host; delete f.instance.reason
+      if (f.instance.state !== 'failed' && f.instance.state !== 'stopped') return failure('invalid-input', `${coord} is ${f.instance.state}`)
+      delete f.instance.reason
       f.instance.state = 'starting'
       changed(f.pod)
       return start(f.pod, f.instance)

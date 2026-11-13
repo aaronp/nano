@@ -98,6 +98,50 @@ describe('runtime pods', () => {
     expect(rt.pods()).toEqual(['a'])
     expect(rt.subscriptions()).toEqual([])
   })
+  test('scale to 0 leaves a stopped pod, and scaling back up continues from next', async () => {
+    const { rt } = setup()
+    await rt.create('b', 'acme/log/mem', { count: 2 })
+    expect(await rt.scale('b', 0)).toEqual(success([]))
+    expect(rt.pod('b')).toMatchObject({ count: 0, state: 'stopped', instances: [] })
+    expect(await rt.scale('b', 1)).toEqual(success(['b#2']))
+    expect(await rt.create('c', 'acme/log/mem', { count: 0 })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+  })
+  test('a cascade emits instance-removed, then subscription-removed in subscription order', async () => {
+    const { rt, events } = setup()
+    await rt.create('a', 'acme/clock/ticker', { count: 2 })
+    await rt.create('b', 'acme/log/mem', { count: 2 })
+    rt.subscribe({ ...tickToLog, to: 'b#1' }); rt.subscribe({ ...tickToLog, from: 'a#1', to: 'b#0' })
+    events.length = 0
+    rt.remove('b')
+    expect(events.filter(e => e.type !== 'status')).toEqual([
+      { type: 'instance-removed', instance: 'b#0' }, { type: 'instance-removed', instance: 'b#1' },
+      { type: 'subscription-removed', id: 's1' }, { type: 'subscription-removed', id: 's2' },
+    ])
+  })
+  test('a guest cannot scale, remove an instance or restart; a home add and removal show in the guest', async () => {
+    const { rt, registry } = setup()
+    const r2 = createRuntime('r2', { registry })
+    await r2.create('z', 'acme/log/mem')
+    await rt.create('a', 'acme/clock/ticker')
+    rt.add(r2.record('z')!)
+    const denied = { ok: false, fail: { type: 'denied' } }
+    expect(await rt.scale('z', 2)).toMatchObject(denied)
+    expect(rt.removeInstance('z#0')).toMatchObject(denied)
+    expect(await rt.restart('z#0')).toMatchObject(denied)
+    const seen: RuntimeEvent[] = []
+    rt.listen(e => seen.push(e))
+    await r2.addInstance('z')
+    expect(seen).toContainEqual({ type: 'instance-added', instance: 'z#1', home: 'r2' })
+    rt.subscribe({ ...tickToLog, to: 'z#0' })
+    r2.removeInstance('z#0')
+    expect(rt.subscriptions()).toEqual([])
+    expect(seen).toContainEqual({ type: 'instance-removed', instance: 'z#0' })
+  })
+  test('restarting an instance that is starting or running fails invalid-input and makes nothing twice', async () => {
+    const { rt } = setup()
+    await rt.create('b', 'acme/log/mem')
+    expect(await rt.restart('b#0')).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'b#0 is running' } })
+  })
   test('a pod whose make throws is created, with its instance failed', async () => {
     const seen: unknown[] = []
     const { rt } = setup({ pod: { observe: o => seen.push(o) } })

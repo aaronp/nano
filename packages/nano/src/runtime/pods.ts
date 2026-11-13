@@ -26,6 +26,8 @@ export type Instance = { readonly coord: string; state: InstanceState; host?: Po
 export type Holder = {
   deliver(from: string, port: string, data: unknown): Promise<void>
   refresh(): void
+  /** `coord` was added to `pod`. */
+  added(pod: PodRecord, coord: string): void
   /** These coords of `pod` are gone (the whole pod if `whole`): drop the subscriptions naming them. */
   forget(pod: PodRecord, coords: string[], whole: boolean): void
 }

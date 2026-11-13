@@ -141,8 +141,9 @@ describe('saving and loading', () => {
   test('a subscription to a removed target is deleted, so it is not saved', async () => {
     const app = await setup()
     app.runtime('client')!.remove('s')
-    expect(app.runtime('client')!.subscriptions().some(s => s.to.startsWith('s#'))).toBe(false)
-    expect(saveDoc(app).runtimes.find(r => r.id === 'client')!.subscriptions.some(s => s.to.startsWith('s#'))).toBe(false)
+    const rest = [{ id: 'late', kind: 'call' as const, from: T, to: W }]
+    expect(app.runtime('client')!.subscriptions()).toEqual(rest)
+    expect(saveDoc(app).runtimes.find(r => r.id === 'client')!.subscriptions).toEqual(rest)
   })
 
   test('an event subscription survives a round trip, live', async () => {

@@ -45,6 +45,11 @@ const slow = implementation('acme/keys/slow', { provides: [Vault], make: async (
   await new Promise<void>(r => { release = r })
   return [provide(Vault, { ping: echo('slow') })]
 } })
+// A dependency that is held open, so a test can act while a provisioning pass waits on it.
+const Held = face('acme/held')
+let releaseHeld = () => {}
+const held = implementation('acme/keys/held', { provides: [Held], make: async () => { await new Promise<void>(r => { releaseHeld = r }); return [provide(Held, { ping: echo('held') })] } })
+const needsHeld = impl('acme/ui/needs-held', [], { h: Held })
 const vault = impl('acme/keys/vault', [Vault, Audit]) // vault2 keeps Vault and loses Audit
 const user = impl('acme/ui/user', [], { vault: Vault })
 const auditor = impl('acme/ui/auditor', [], { audit: Audit })
@@ -53,8 +58,8 @@ const log = implementation('acme/log/mem', { provides: [Log], make: () => [provi
 
 const registry = () => {
   const r = createRegistry()
-  r.add(provider('acme/keys', [vault, vault2, flaky, slow]))
-  r.add(provider('acme/ui', [user, auditor]))
+  r.add(provider('acme/keys', [vault, vault2, flaky, slow, held]))
+  r.add(provider('acme/ui', [user, auditor, needsHeld]))
   r.add(provider('acme/clock', [ticker]))
   r.add(provider('acme/log', [log]))
   return r
@@ -217,6 +222,18 @@ describe('connecting', () => {
     await rt.addInstance('vault')
     rt.tag('vault#1', 'cache')
     expect(rt.subscriptions()).toEqual([{ id: 's1', kind: 'call', from: 'user#0', to: 'vault#0' }])
+  })
+})
+
+describe('removal during provisioning', () => {
+  test('given a pod removed while its provisioning pass waits, then no subscription names its coords', async () => {
+    const rt = setup()
+    const made = rt.create('n', 'acme/ui/needs-held', { provision: true })
+    await new Promise(r => setTimeout(r, 0))
+    rt.remove('n')
+    releaseHeld()
+    await made
+    expect(rt.subscriptions().filter(s => s.from.startsWith('n#') || s.to.startsWith('n#'))).toEqual([])
   })
 })
 
