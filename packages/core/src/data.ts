@@ -9,6 +9,11 @@ export type Op<I extends S = S, O extends S = S> = { ns: string; name: string; i
 export type OpOptions = { description?: string }
 const described = (o: OpOptions = {}) => (o.description === undefined ? {} : { description: o.description })
 
+/** Binary data (a Uint8Array) in an op's schema, such as a signer's `sign({ publicKey, purpose, bytes })`. typebox has no
+ *  Uint8Array type, so this is a refinement: it is checked in-process (a trusted host-mode instance), but a Refine doesn't
+ *  survive structuredClone or JSON, so across a frame or the network send binary as a base64 string instead. */
+export const Bytes = Type.Refine(Type.Unsafe<Uint8Array>({ description: 'Binary data (in-process only)' }), v => v instanceof Uint8Array)
+
 const sorted = (v: unknown): unknown =>
   Array.isArray(v) ? v.map(sorted)
   : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, sorted((v as Record<string, unknown>)[k])]))

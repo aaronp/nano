@@ -35,6 +35,7 @@ export function clients<D extends Needs>(env: Environment, needs: D): Clients<D>
 /** A component that implements an interface, with code given clients for what it needs. */
 export function define<I extends Iface, D extends Needs>(id: string, implements_: I, needs: D, make: (deps: Clients<D>) => Impl<I>, opts: { description?: string } = {}): Component {
   const at = id.lastIndexOf('/')
+  if (at < 1 || at === id.length - 1) throw new Error(`define: id ${JSON.stringify(id)} must be ns/name`)
   const c = Components.create({ ns: id.slice(0, at), name: id.slice(at + 1) }, env => make(clients(env, needs)) as Record<string, (a: unknown) => unknown>,
     { ...opts, needs, implements: [implements_] })
   for (const [k, op] of Object.entries(implements_.ops) as [string, Op][]) c.action(op, (impl, arg) => impl[k]!(arg))

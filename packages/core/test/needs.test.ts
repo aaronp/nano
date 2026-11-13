@@ -2,7 +2,7 @@
 import { expect, test } from 'bun:test'
 import { Type, type Static, type TSchema } from 'typebox'
 import { Value } from 'typebox/value'
-import { Components, define, iface, isOk, Ops, Registries, Runtimes, type Component, type Result, type Runtime } from '../src'
+import { Bytes, Components, define, iface, isOk, Ops, Registries, Runtimes, type Component, type Result, type Runtime } from '../src'
 
 const Outcome = <T extends TSchema>(value: T) => Type.Union([
   Type.Object({ ok: Type.Literal(true), value }),
@@ -161,8 +161,6 @@ test('a call to a removed target fails with the runtime\'s own error', async () 
   expect(await call('submit', ada)).toEqual({ error: 'no instance db in storage' })
 })
 
-// typebox 1.x has no Type.Uint8Array: a refined Unsafe stands in for it
-const Bytes = Type.Refine(Type.Unsafe<Uint8Array>({}), v => v instanceof Uint8Array)
 const Signer = iface('example/signer', { sign: { in: Type.Object({ publicKey: Type.String(), purpose: Type.String(), bytes: Bytes }), out: Bytes } })
 const Signs = iface('example/signs', { run: { in: Type.Object({ bytes: Bytes }), out: Bytes } })
 const Signing = define('example/signing', Signs, { signer: Signer }, ({ signer }) => ({ run: ({ bytes }) => signer.sign({ publicKey: 'k', purpose: 'p', bytes }) }))
@@ -192,4 +190,10 @@ test("a provider's error reaches the caller as a thrown error", async () => {
 test('an environment with no handle is not in a registry', async () => {
   const inst = Components.instantiate(PersonForm)
   expect(await inst.env.use('bff', Bff.ops.save!, ada)).toEqual({ error: 'not in a registry' })
+})
+
+test("define refuses an id that isn't ns/name", () => {
+  const I = iface('example/i', {})
+  for (const id of ['plain', '/name', 'ns/']) expect(() => define(id, I, {}, () => ({}))).toThrow(`define: id ${JSON.stringify(id)} must be ns/name`)
+  expect(define('a/b/c', I, {}, () => ({})).id).toEqual({ ns: 'a/b', name: 'c' })
 })

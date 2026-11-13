@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { Components, guard, hasRuntime, matches, isOk, Ops, Registries, Runtimes, Strategies, unwrap, wrap, WrapperOps, type HasRuntime, type Trace } from '../src'
+import { Components, define, guard, hasRuntime, iface, matches, isOk, Ops, Registries, Runtimes, Strategies, unwrap, wrap, WrapperOps, type HasRuntime, type Trace } from '../src'
 
 const flush = () => new Promise(r => setTimeout(r, 0))
 const Updated = Ops.source('com.acme', 'counter-updated', Type.Number())
@@ -320,4 +320,48 @@ test('a schema that throws is an error result, for a call, a refused publish and
   expect(isOk(r)).toBe(false)
   const n = await rt.notify({ from: { registry: 'r', instance: 'bad' }, op: Ops.key(BadOut), data: 'x' })
   expect(isOk(n)).toBe(false)
+})
+
+test('a guarded instance keeps its needs: bound before or after the guard, its calls reach the provider', async () => {
+  const Echo = iface('com.acme/echo', { say: { in: Type.String(), out: Type.String() } })
+  const Svc = iface('com.acme/svc', { go: { in: Type.String(), out: Type.String() } })
+  const svc = define('com.acme/svc', Svc, { db: Echo }, ({ db }) => ({ go: x => db.say(x) }))
+  const run = async (bindFirst: boolean) => {
+    const rt = Runtimes.create(Registries.create('r')), reg = rt.registry
+    must(reg.add('db', Components.instantiate(define('com.acme/db', Echo, {}, () => ({ say: x => `db:${x}` })))))
+    must(reg.add('svc', Components.instantiate(svc)))
+    if (bindFirst) must(reg.bind('svc', 'db', { registry: 'r', instance: 'db' }))
+    must(guard(rt, 'svc', { allow: ['r/db/*'] }))
+    if (!bindFirst) must(reg.bind('svc', 'db', { registry: 'r', instance: 'db' }))
+    expect(reg.snapshot().instances.find(i => i.id === 'svc')?.needs).toBeDefined()
+    return rt.call(me, 'svc', Ops.key(Svc.ops.go!), 'hi')
+  }
+  expect(await run(true)).toMatchObject({ value: 'db:hi' })
+  expect(await run(false)).toMatchObject({ value: 'db:hi' })
+})
+
+test("a guard's selectors still apply to a need's calls", async () => {
+  const Echo = iface('com.acme/echo', { say: { in: Type.String(), out: Type.String() } })
+  const Svc = iface('com.acme/svc', { go: { in: Type.String(), out: Type.String() } })
+  const rt = Runtimes.create(Registries.create('r')), reg = rt.registry
+  must(reg.add('db', Components.instantiate(define('com.acme/db', Echo, {}, () => ({ say: x => `db:${x}` })))))
+  must(reg.add('svc', Components.instantiate(define('com.acme/svc', Svc, { db: Echo }, ({ db }) => ({ go: x => db.say(x) })))))
+  must(reg.bind('svc', 'db', { registry: 'r', instance: 'db' }))
+  must(guard(rt, 'svc', { allow: [] }))
+  expect(await rt.call(me, 'svc', Ops.key(Svc.ops.go!), 'hi')).toEqual({ error: 'svc may not call r/db/com.acme/echo/say' })
+})
+
+test("a guarded instance's need bound in another registry reaches it through peers, as the guard allows", async () => {
+  const Echo = iface('com.acme/echo', { say: { in: Type.String(), out: Type.String() } })
+  const Svc = iface('com.acme/svc', { go: { in: Type.String(), out: Type.String() } })
+  const store = Runtimes.create(Registries.create('store'))
+  const rt = Runtimes.create(Registries.create('r'), undefined, { peers: id => (id === 'store' ? store : undefined) }), reg = rt.registry
+  must(store.registry.add('db', Components.instantiate(define('com.acme/db', Echo, {}, () => ({ say: x => `db:${x}` })))))
+  for (const [id, allow] of [['a', ['store/db/*']], ['b', []]] as const) {
+    must(reg.add(id, Components.instantiate(define('com.acme/svc', Svc, { db: Echo }, ({ db }) => ({ go: x => db.say(x) })))))
+    must(reg.bind(id, 'db', { registry: 'store', instance: 'db' }))
+    must(guard(rt, id, { allow: [...allow] }))
+  }
+  expect(await rt.call(me, 'a', Ops.key(Svc.ops.go!), 'hi')).toMatchObject({ value: 'db:hi' })
+  expect(await rt.call(me, 'b', Ops.key(Svc.ops.go!), 'hi')).toEqual({ error: 'b may not call store/db/com.acme/echo/say' })
 })

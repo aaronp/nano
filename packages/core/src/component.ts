@@ -40,6 +40,9 @@ async function run<A>(inst: Instance<A>, key: string, arg: unknown): Promise<Res
 /** Makes components, instances of them, and invokes their actions. */
 export const Components = {
   create<A>(id: { ns: string; name: string }, make: (env: Environment) => A, opts: { description?: string; needs?: Record<string, Interface>; implements?: Interface[] } = {}): Component<A> {
+    // a need's name goes into a saved document (a map key, at most 64 characters, the same pattern as an id)
+    for (const n of Object.keys(opts.needs ?? {})) if (!/^[^/\s\x00-\x1f\x7f]{1,64}$/.test(n))
+      throw new Error(`${id.ns}/${id.name}: need name ${JSON.stringify(n)} must be 1-64 characters with no '/', whitespace or control characters`)
     const actions = new Map<string, Action<A>>()
     return {
       id, make, actions, ...(opts.description !== undefined && { description: opts.description }),

@@ -14,6 +14,8 @@ export type Runtime = {
   notify(e: Event): Promise<Result<Result[]>>
   /** Tells `fn` about every call, publish and delivery as it ends. Returns a function that stops telling it. */
   listen(fn: (t: Trace) => void): () => void
+  /** Finds the runtime of another registry, for a need bound there (as given to `Runtimes.create`). */
+  peers?: (registry: string) => Runtime | undefined
 }
 
 /** One message through a runtime, as data: what a histogram, a live wire view or a replay is built from. */
@@ -64,8 +66,8 @@ function registryComponent(registry: Registry) {
 }
 
 /** Makes the runtime for a registry, adds the registry to itself as 'registry', and publishes its changes.
- *  `peers` finds the runtime of another registry, for a need bound there. */
-function create(registry: Registry, policy?: Policy, opts: { peers?: (registry: string) => Runtime | undefined } = {}): Runtime {
+ *  `peers` finds the runtime of another registry, for a need bound there; `binding` reads a need's binding (default: the registry's). */
+function create(registry: Registry, policy?: Policy, opts: { peers?: (registry: string) => Runtime | undefined; binding?: (instance: string, need: string) => Coord | undefined } = {}): Runtime {
   if (registry.get('registry')) throw new Error(`registry ${registry.id} already has a runtime`)
   const at = (instance: string): Coord => ({ registry: registry.id, instance })
   const listeners = new Set<(t: Trace) => void>()
@@ -81,7 +83,7 @@ function create(registry: Registry, policy?: Policy, opts: { peers?: (registry: 
     return Components.invoke(inst, op, arg)
   }
   const base: Runtime = {
-    registry,
+    registry, ...(opts.peers && { peers: opts.peers }),
     async call(from, target, op, arg) {
       const result = await run(target, op, arg)
       tell({ kind: 'call', time: Date.now(), from, target, op, data: arg, result })
@@ -115,7 +117,7 @@ function create(registry: Registry, policy?: Policy, opts: { peers?: (registry: 
     const env = registry.get(id)!.env, coord = at(id)
     envs.set(id, env)
     const use = async (need: string, op: Op, arg: unknown): Promise<Result> => {
-      const to = registry.binding(id, need)
+      const to = (opts.binding ?? registry.binding)(id, need)
       if (!to) return err(`${id} needs ${need}: not bound`)
       const rt = to.registry === registry.id ? outer : opts.peers?.(to.registry)
       return rt ? rt.call(coord, to.instance, Ops.key(op), arg) : err(`no runtime ${to.registry}`)

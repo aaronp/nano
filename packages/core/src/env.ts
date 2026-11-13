@@ -20,7 +20,7 @@ export type Environment = {
   added(h: Handle, announce: Announce): void
   removed(coord: Coord): void
   notify(op: Op, data: unknown, correlation?: string): Promise<Result<Result[]>[]>
-  /** Calls a need through the first handle. */
+  /** Calls a need through the first handle: an instance in several registries uses its first registry's binding (the others' are ignored). */
   use(need: string, op: Op, arg: unknown): Promise<Result>
   register(op: Op, run?: Action<any>['run'], opts?: { emits?: Op[] }): 'added' | 'replaced'
   unregister(op: Op): boolean

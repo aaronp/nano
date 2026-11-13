@@ -90,3 +90,10 @@ test('a component keeps its description', () => {
   expect(Components.create({ ns: 't', name: 'c' }, () => ({}), { description: 'A thing' }).description).toBe('A thing')
   expect('description' in Components.create({ ns: 't', name: 'c' }, () => ({}))).toBe(false)
 })
+
+test('a need name a document can hold is accepted; one it cannot is refused at definition', () => {
+  const I = { id: 'com.acme/db', ops: {} }
+  const make = (need: string) => () => Components.create({ ns: 'com.acme', name: 'svc' }, () => ({}), { needs: { [need]: I } })
+  for (const ok of ['db', 'Vault', 'my_db', 'x'.repeat(64)]) expect(make(ok)).not.toThrow()
+  for (const bad of ['', 'a/b', 'my db', 'x'.repeat(65)]) expect(make(bad)).toThrow(`com.acme/svc: need name ${JSON.stringify(bad)} must be 1-64 characters with no '/', whitespace or control characters`)
+})

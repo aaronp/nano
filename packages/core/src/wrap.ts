@@ -79,18 +79,24 @@ export function wrap(outer: Runtime, id: string, strategy: Strategy, opts: { map
   const from = { registry: outer.registry.id, instance: id }
   // a part's call to something not inside (or to the registry) goes on to the outer runtime, as if from the wrapper
   const refusals = new Set<(t: Trace) => void>()   // refusals happen in the policy, so it traces them itself
-  const inner = Runtimes.create(Registries.create(`${outer.registry.id}/${id}`), rt => ({
+  /** `send`, if the guard permits `coord`; else a traced refusal. */
+  const outward = (f: Trace['from'], t: string, op: string, arg: unknown, coord: string, send: () => Promise<Result>) => {
+    if (permitted(opts.outward, coord)) return send()
+    const result = err(`${id} may not call ${coord}`)
+    refusals.forEach(fn => { try { fn({ kind: 'call', time: Date.now(), from: f, target: t, op, data: arg, result }) } catch { /* an observer can't change the call */ } })
+    return Promise.resolve(result)
+  }
+  const innerId = `${outer.registry.id}/${id}`
+  const inner = Runtimes.create(Registries.create(innerId), rt => ({
     ...rt,
     listen: fn => { const off = rt.listen(fn); refusals.add(fn); return () => { off(); refusals.delete(fn) } },
-    async call(f, t, op, arg) {
-      if (t !== 'registry' && rt.registry.get(t)) return rt.call(f, t, op, arg)
-      const coord = `${outer.registry.id}/${t}/${op}`
-      if (permitted(opts.outward, coord)) return outer.call(from, t, op, arg)
-      const result = err(`${id} may not call ${coord}`)
-      refusals.forEach(fn => { try { fn({ kind: 'call', time: Date.now(), from: f, target: t, op, data: arg, result }) } catch { /* an observer can't change the call */ } })
-      return result
-    },
-  }))
+    call: (f, t, op, arg) => (t !== 'registry' && rt.registry.get(t) ? rt.call(f, t, op, arg)
+      : outward(f, t, op, arg, `${outer.registry.id}/${t}/${op}`, () => outer.call(from, t, op, arg))),
+  }), {
+    // the part's needs are the wrapper's: bound in the outer registry; one there goes out through the call above
+    binding: (_, need) => { const to = outer.registry.binding(id, need); return to?.registry === outer.registry.id ? { registry: innerId, instance: to.instance } : to },
+    peers: r => { const p = outer.peers?.(r); return p && { ...p, call: (f, t, op, arg) => outward(f, t, op, arg, `${r}/${t}/${op}`, () => p.call(from, t, op, arg)) } },
+  })
   const call: Call = (part, op, arg) => (part !== 'registry' && inner.registry.get(part) ? inner.call(from, part, op, arg) : Promise.resolve(err(`no part ${part} in ${id}`)))
   // ponytail: one set for the whole wrapper, so a call may also wait for a concurrent call's publishes
   const republishing = new Set<Promise<unknown>>()
@@ -99,7 +105,7 @@ export function wrap(outer: Runtime, id: string, strategy: Strategy, opts: { map
   const before = outer.registry.snapshot().instances.find(i => i.id === id)?.owner
   let env: Environment | undefined
   const c = Components.create<Wrapper>(x.component.id, e => { env = e; return { runtime: inner, strategy, ...(before && { owner: before }) } },
-    x.component.description === undefined ? {} : { description: x.component.description })
+    { ...(x.component.description !== undefined && { description: x.component.description }), ...(x.component.needs && { needs: x.component.needs }), ...(x.component.implements && { implements: x.component.implements }) })
   for (const [key, a] of x.actions) {
     if (!a.run) { c.action(a.op); continue }   // a source only: published through the republish below
     const m = opts.map?.[key]
