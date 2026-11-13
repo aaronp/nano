@@ -36,3 +36,9 @@ export const matches = (s: SelectorData, t: Target): boolean =>
   (s.tags ?? []).every(tag => t.tags.has(tag)) &&
   (s.implementation === undefined || s.implementation === t.implementation) &&
   (s.provider === undefined || s.provider === t.provider)
+
+/** One end of a connection: which pod (by id, interface or implementation), then which of its instances. */
+export type EndSelector = {
+  target: { pod: string } | { implements: string } | { implementation: string }
+  instance: { by: 'first' } | { by: 'index'; index: number } | { by: 'tags'; tags: string[] }
+}

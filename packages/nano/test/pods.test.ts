@@ -131,7 +131,7 @@ describe('pod basics', () => {
 })
 
 describe('connecting', () => {
-  test.todo('given two pods, when connected first-to-first, then the saved subscription holds the concrete coords, not the selectors', async () => {
+  test('given two pods, when connected first-to-first, then the saved subscription holds the concrete coords, not the selectors', async () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     await rt.create('vault', 'acme/keys/vault')
@@ -139,13 +139,13 @@ describe('connecting', () => {
     expect(rt.subscriptions()).toEqual([{ id: 's1', kind: 'call', from: 'user#0', to: 'vault#0' }])
     expect(rt.status('s1')).toBe('live')
   })
-  test.todo('given a source and a sink, when an event connection is made, then it subscribes the source port to the target port', async () => {
+  test('given a source and a sink, when an event connection is made, then it subscribes the source port to the target port', async () => {
     const rt = setup()
     await rt.create('ticks', 'acme/clock/ticker')
     await rt.create('log', 'acme/log/mem')
     expect(rt.connect(tickToLog)).toEqual(success({ id: 's1', kind: 'event', from: 'ticks#0', source: TICK, to: 'log#0', target: WRITE }))
   })
-  test.todo('given an end without an instance selector, when connecting, then it fails invalid-input and adds nothing', async () => {
+  test('given an end without an instance selector, when connecting, then it fails invalid-input and adds nothing', async () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     await rt.create('vault', 'acme/keys/vault')
@@ -153,14 +153,14 @@ describe('connecting', () => {
     expect(rt.connect({ kind: 'call', from: { instance: { by: 'first' } }, to: first('vault') })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
     expect(rt.subscriptions()).toEqual([])
   })
-  test.todo('given no instance matching an end, when connecting, then it fails nothing matches and adds nothing', async () => {
+  test('given no instance matching an end, when connecting, then it fails nothing matches and adds nothing', async () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     expect(rt.connect(call('user', 'vault'))).toMatchObject({ ok: false, fail: { type: 'not-found', reason: expect.stringContaining('nothing matches') } })
     expect(rt.subscriptions()).toEqual([])
   })
   // Behaviour 1.
-  test.todo('given a source pod with two cache-tagged instances, when a sink connects to tags [cache], then it fails 2 match and adds nothing', async () => {
+  test('given a source pod with two cache-tagged instances, when a sink connects to tags [cache], then it fails 2 match and adds nothing', async () => {
     const rt = setup()
     await rt.create('ticks', 'acme/clock/ticker', { count: 2 })
     await rt.create('log', 'acme/log/mem')
@@ -169,7 +169,7 @@ describe('connecting', () => {
     expect(r).toMatchObject({ ok: false, fail: { type: 'ambiguous', reason: expect.stringContaining('2 match') } })
     expect(rt.subscriptions()).toEqual([])
   })
-  test.todo('given one of two instances tagged cache, when connecting by tags [cache], then it chooses that instance', async () => {
+  test('given one of two instances tagged cache, when connecting by tags [cache], then it chooses that instance', async () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     await rt.create('vault', 'acme/keys/vault', { count: 2 })
@@ -177,7 +177,7 @@ describe('connecting', () => {
     expect(rt.connect({ kind: 'call', from: first('user'), to: { target: { pod: 'vault' }, instance: { by: 'tags', tags: ['cache'] } } }))
       .toMatchObject({ ok: true, value: { to: 'vault#1' } })
   })
-  test.todo('given two pods implementing Vault, when connecting to implements Vault by index 0, then it fails 2 match: index is the coord index', async () => {
+  test('given two pods implementing Vault, when connecting to implements Vault by index 0, then it fails 2 match: index is the coord index', async () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     await rt.create('vault', 'acme/keys/vault')
@@ -186,7 +186,7 @@ describe('connecting', () => {
     expect(rt.connect({ kind: 'call', from: first('user'), to: to(0) })).toMatchObject({ ok: false, fail: { type: 'ambiguous', reason: expect.stringContaining('2 match') } })
     expect(rt.subscriptions()).toEqual([])
   })
-  test.todo('given two pods of different implementations, when connecting to an implementation, then it chooses that pod’s instance', async () => {
+  test('given two pods of different implementations, when connecting to an implementation, then it chooses that pod’s instance', async () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     await rt.create('vault', 'acme/keys/vault')
@@ -194,7 +194,7 @@ describe('connecting', () => {
     expect(rt.connect({ kind: 'call', from: first('user'), to: { target: { implementation: 'acme/keys/vault2' }, instance: { by: 'first' } } }))
       .toMatchObject({ ok: true, value: { to: 'spare#0' } })
   })
-  test.todo('given a failed vault#0, when connecting to it by index, then the subscription is made and waits', async () => {
+  test('given a failed vault#0, when connecting to it by index, then the subscription is made and waits', async () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     failing = true
@@ -203,7 +203,7 @@ describe('connecting', () => {
     expect(rt.status('s1')).toBe('waiting')
   })
   // Behaviour 9.
-  test.todo('given vault#0 failed and vault#1 running, when connecting by first, then it picks vault#1', async () => {
+  test('given vault#0 failed and vault#1 running, when connecting by first, then it picks vault#1', async () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     failing = true
@@ -213,7 +213,7 @@ describe('connecting', () => {
     expect(rt.connect(call('user', 'vault'))).toMatchObject({ ok: true, value: { to: 'vault#1' } })
     expect(rt.status('s1')).toBe('live')
   })
-  test.todo('given a connection, when an instance is later added that also matches, then the connection is unchanged', async () => {
+  test('given a connection, when an instance is later added that also matches, then the connection is unchanged', async () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     await rt.create('vault', 'acme/keys/vault')
@@ -222,6 +222,26 @@ describe('connecting', () => {
     await rt.addInstance('vault')
     rt.tag('vault#1', 'cache')
     expect(rt.subscriptions()).toEqual([{ id: 's1', kind: 'call', from: 'user#0', to: 'vault#0' }])
+  })
+  test('given a guest runtime with its own and a placed pod, when connecting to an interface both implement, then it fails 2 match; a placed-only match is chosen', async () => {
+    const app = setup()
+    app.createRuntime('home'); app.createRuntime('guest')
+    const home = app.runtime('home')!, guest = app.runtime('guest')!
+    await home.create('vault', 'acme/keys/vault')
+    await guest.create('user', 'acme/ui/user')
+    app.place('vault#0', 'home', 'guest')
+    const to = (t: object) => ({ kind: 'call', from: first('user'), to: { target: t, instance: { by: 'first' } } })
+    expect(guest.connect(to({ implements: 'acme/vault' }))).toMatchObject({ ok: true, value: { to: 'vault#0' } })
+    guest.unsubscribe('s1')
+    await guest.create('spare', 'acme/keys/vault2')
+    expect(guest.connect(to({ implements: 'acme/vault' }))).toMatchObject({ ok: false, fail: { type: 'ambiguous', reason: expect.stringContaining('2 match') } })
+    expect(guest.connect(to({ implementation: 'acme/keys/vault' }))).toMatchObject({ ok: true, value: { to: 'vault#0' } })
+  })
+  test('given a malformed end, when connecting, then it fails invalid-input and never throws', async () => {
+    const rt = setup()
+    await rt.create('user', 'acme/ui/user')
+    for (const bad of [{ target: 5, instance: { by: 'first' } }, { target: { pod: 'user' }, instance: 'x' }, { target: { pod: 'user' }, instance: { by: 'nope' } }, { target: {}, instance: { by: 'first' } }])
+      expect(rt.connect({ kind: 'call', from: first('user'), to: bad })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   })
 })
 

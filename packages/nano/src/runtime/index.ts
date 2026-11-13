@@ -15,6 +15,8 @@ import type { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
 import type { Target } from '../selector.ts'
 import { connectionsOf, contextFor, deliverer, type Book, type Wiring } from './calls.ts'
+import { resolveEnd } from './connect.ts'
+import type { EndSelector } from '../selector.ts'
 import { provision, type Unsatisfied } from './provision.ts'
 import { ID, instanceCoord, locate, parseInstance, podInfo, targetOf, type Holder, type Instance, type PodInfo, type PodRecord } from './pods.ts'
 import { isJson } from '../schema.ts'
@@ -33,8 +35,6 @@ export type RuntimeEvent =
   | { type: 'subscription-removed'; id: string }
   | { type: 'status'; id: string; status: Status }
 
-/** One end of a connection: a pod, and which of its instances. */
-export type EndSelector = { target: { pod: string }; instance: { by: 'first' } | { by: 'index'; index: number } }
 export type NewConnection =
   | { id?: string; kind: 'call'; from: EndSelector; to: EndSelector }
   | { id?: string; kind: 'event'; from: EndSelector; source: string; to: EndSelector; target: string }
@@ -248,17 +248,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     }
   }
 
-  /** A pod end resolved to one instance: `first` is the lowest index that is running. */
-  const resolve = (e: EndSelector | undefined): NanoResult<string> => {
-    if (!e?.target || !e.instance) return failure('invalid-input', 'an end needs a target and an instance selector')
-    // ponytail: pod targets by first or index only; the connecting task adds implements/implementation targets and tags.
-    const p = 'pod' in e.target ? pods.get(e.target.pod) : undefined
-    const sel = e.instance
-    const all = [...(p?.instances.values() ?? [])]
-    const hit = sel.by === 'index' ? all.find(i => parseInstance(i.coord)!.index === sel.index) : all.find(i => i.state === 'running')
-    return hit ? success(hit.coord) : failure('not-found', `nothing matches ${JSON.stringify(e)}`)
-  }
-
+  const ends = { pods, tagsOf: (c: string) => opts.tagsOf?.(c) ?? new Set<string>() }
   const rt: Runtime = {
     id,
     registry,
@@ -358,9 +348,9 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     record: pid => pods.get(pid),
     target,
     connect(c) {
-      const from = resolve(c.from)
+      const from = resolveEnd(ends, c.from)
       if (!from.ok) return from
-      const to = resolve(c.to)
+      const to = resolveEnd(ends, c.to)
       if (!to.ok) return to
       return rt.subscribe({ ...c, from: from.value, to: to.value })
     },

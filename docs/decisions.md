@@ -347,3 +347,12 @@ Pinned by the matching tests in `application.test.ts`, `document.test.ts` and `p
 
 **Why:** The spec: unavailable is temporary and a connection should wait for it; deleted is final, and a subscription to a coord that will never be reused only misleads.
 **Cost if wrong:** A caller wanting "reconnect on re-add" must resubscribe; scaling down silently deletes the subscriptions of the highest instances.
+
+## 50. Connect: end selectors resolved once (pods revision, task 3)
+
+**Decision:**
+- `resolveEnd` (`runtime/connect.ts`) is pure over the runtime's pods (own and placed) and `tagsOf`, and never throws: a non-object `target`/`instance`, an unknown target kind or `by`, or non-string tags are `invalid-input`. None matching is `not-found`, several `ambiguous` (`<n> match`, listing the coords). Hits are counted across all matching pods: `first` yields the lowest running instance of each pod, `index` the coord index, `tags` every tagged instance. A guest runtime's `implements`/`implementation` targets consider placed pods as well as its own.
+- `subscribe` with a concrete end naming an instance not in this runtime stays as-is (accepted, `waiting`): the end may be created later or live in another runtime, and unavailable ends must wait. Only `connect` checks existence, because it resolves.
+
+**Why:** A selector means "pick one now"; a coord is a promise about the future.
+**Cost if wrong:** A typo'd coord in `subscribe` waits forever instead of failing.
