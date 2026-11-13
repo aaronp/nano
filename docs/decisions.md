@@ -218,3 +218,27 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Decision:** `define` fails `exists` (`instance id <id> is taken`) when one of its instances' ids is already taken in the application (decision 32). An instance's tags are dropped once it is gone from every runtime (removed at home); removing it from a runtime it was placed into keeps them.
 **Why:** Ids are unique across the application, definitions included; tags keyed by a coord no runtime holds would reattach to an unrelated instance created later with that coord.
 **Cost if wrong:** A clash surfaces only at `open`; stale tags on reuse.
+
+## 37. Does a round trip keep how a runtime's own instances and placed members interleave?
+
+**Decision:** No. The v2 document keeps a runtime's own instances in create order and its placed members in placing order, as two lists; on load its own instances come first (decision 31), then its members. Everything else round-trips: own instances with config, placed members with home, subscriptions (ids, order, status) and tags. Pinned by `document.test.ts` "a round trip gives the same runtimes, …".
+**Why:** The brief's `RuntimeDef` has separate `instances` and `members`; create order matters for creates and replacing, not for placed copies.
+**Cost if wrong:** An `order` list of coords per runtime in the document.
+
+## 38. How is the application's own root runtime saved and loaded?
+
+**Decision:** Saved as a runtime under the application's id, only when it holds members or subscriptions, and listed first in `open`. `loadDoc(doc, { registry, policy?, id? })` builds the application with `id` (default `app`); a saved runtime with that id is the root: its instances are created (`provision: false`), its members' homes opened and placed, its subscriptions added, before the rest of `open`. Saved under another id, the root loads as an ordinary child runtime (opened, since it is in `open`). Pinned by "the root is saved under the application id only when …" and "a root saved under another id loads as a child runtime, opened".
+**Why:** The document has no application id; a mismatch should lose nothing.
+**Cost if wrong:** An `application` id field in the document.
+
+## 39. Which runtimes and policies does `saveDoc` write?
+
+**Decision:** Every child runtime, opened (read from live) or only defined (its definition, unchanged), in `runtimes()` order; adopted runtimes are skipped (`Application.adopted(id)`), and members placed from them then load with a `has no home` note. `open` lists the opened ones. `Policies.allowAll()` now returns one shared policy, so a runtime using it is saved with `policy: 'allow-all'`; a runtime with any other policy is saved without the field and loads with allow-all (known limitation: custom policies are not data yet). `providers` are the providers of the implementations of every saved instance, sorted; `tags` are the coords held by saved runtimes with at least one tag. Pinned by the `saving and loading` tests in `document.test.ts`.
+**Why:** Adopted runtimes keep their own registry and ids (decision 33); fine-grained policies are a non-goal.
+**Cost if wrong:** Saving adopted applications as nested documents; a policy schema.
+
+## 40. What does `loadDoc` do with a document that does not fully fit?
+
+**Decision:** It never throws or rejects. An invalid document (per `checkDoc`) gives an empty application and the reason as the only note. Otherwise each problem is skipped with a note and the rest loads: `provider <coord> is not registered` (note only); `<runtime>/<id>: no implementation <coord>` (instance dropped); `<runtime>: member <coord> has no home <runtime>` (member dropped: its home is not in the document, is the runtime itself, or does not hold that instance after the drops above); `<runtime>/<sub id>: <reason>` (subscription dropped: invalid shape or a repeated id); `<runtime>: <reason>` when a runtime cannot be defined (it is not opened either) or fails to open (it stays defined); `load: <message>` for anything thrown. Subscriptions whose ends were dropped stay, `waiting`. `checkDoc` answers `not a nano v2 document` unless `nano` is 2, else the first schema error as `<path>: <message>`. Pinned by the `loading what does not fit` and `checkDoc` tests.
+**Why:** A document written by another registry or an older build should open as far as it can, with each loss visible.
+**Cost if wrong:** Refuse the whole document on the first problem.

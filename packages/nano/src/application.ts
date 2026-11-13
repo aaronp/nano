@@ -31,6 +31,8 @@ export type Application = Runtime & {
   place(instance: string, from: string, to: string): NanoResult<void>
   /** Child runtimes, opened and defined (not the root). */
   runtimes(): readonly string[]
+  /** Whether this child was adopted (adopted runtimes are not saved). */
+  adopted(id: string): boolean
   tag(coord: string, tag: string): void
   untag(coord: string, tag: string): void
   tagsOf(coord: string): ReadonlySet<string>
@@ -42,6 +44,7 @@ export function createApplication(id: string, opts: { registry: Registry; policy
   const tags = new Map<string, Set<string>>()
   const kids = new Map<string, Runtime>() // made, adopted and opened children
   const defs = new Map<string, RuntimeDef>()
+  const adopted = new Set<string>()
   /** Opens in progress: `made` once its own instances exist (or it failed), `done` when it is open or failed. */
   const opening = new Map<string, { made: Promise<void>; done: Promise<NanoResult<Runtime>> }>()
   const all = (): Runtime[] => [root, ...kids.values()]
@@ -154,6 +157,7 @@ export function createApplication(id: string, opts: { registry: Registry; policy
     adopt(c) {
       if (taken(c.id)) return failure('exists', `runtime ${c.id} exists`)
       kids.set(c.id, c)
+      adopted.add(c.id)
       watch(c)
       return success(undefined)
     },
@@ -168,6 +172,7 @@ export function createApplication(id: string, opts: { registry: Registry; policy
     open: rid => open(rid),
     place,
     runtimes: () => [...new Set([...kids.keys(), ...defs.keys()])],
+    adopted: rid => adopted.has(rid),
     tag(c, t) { tags.set(c, (tags.get(c) ?? new Set()).add(t)) },
     untag(c, t) { tags.get(c)?.delete(t) },
     tagsOf,
