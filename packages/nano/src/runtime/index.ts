@@ -13,7 +13,7 @@ import type { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
 import type { SelectorData, Target } from '../selector.ts'
 import { connectionsOf, contextFor, deliverer, join, leave, type Book, type Wiring } from './calls.ts'
-import { provision, type Unsatisfied } from './provision.ts'
+import { cycleReason, provision, type Unsatisfied } from './provision.ts'
 import { instanceCoord, parseInstance, targetOf, type Member } from './members.ts'
 import { invalid, nextId, reordered, statusOf, type NewSubscription, type Status, type SubscriptionData } from './subscriptions.ts'
 
@@ -98,7 +98,12 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
   /** The first denial among these subscriptions, as a fail. */
   const denied = (list: readonly SubscriptionData[]): NanoResult<never> | undefined => {
     for (const s of list) {
-      const v = policy.isAllowed(s.from, s.to, s)
+      let v
+      try { v = policy.isAllowed(s.from, s.to, s) } catch (e) {
+        const why = `policy threw: ${e instanceof Error ? e.message : String(e)}`
+        try { opts.pod?.observe?.({ kind: 'exception', instance: s.from, op: s.id, error: why }) } catch { /* an observer must never break a rewire */ }
+        return failure('denied', why)
+      }
       if (!v.approved) return failure('denied', v.reason)
     }
   }
@@ -126,7 +131,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
   }
 
   /** Create, provisioning first when asked; `stack` is the implementations being made above this one. */
-  async function make(iid: string, implementation: string, o: { config?: unknown; provision?: boolean }, stack: readonly string[]): Promise<NanoResult<{ coord: string; unsatisfied: Unsatisfied[] }>> {
+  async function make(iid: string, implementation: string, o: { config?: unknown; provision?: boolean }, stack: readonly string[]): Promise<NanoResult<{ coord: string; unsatisfied: Unsatisfied[] }> & { cycle?: readonly string[] }> {
     const impl = registry.implementation(implementation)
     if (!impl) return failure('not-found', `no implementation ${implementation}`)
     if (idHeld(iid) || opts.idTaken?.(iid)) return failure('exists', `instance id ${iid} is taken`)
@@ -146,9 +151,10 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
           make: (n, c, st) => make(n, c, { provision: true }, st),
           subscribe: s => rt.subscribe(s),
         }, coord, impl, [...stack, implementation])
-        : { unsatisfied: Object.entries(impl.dependencies).filter(([, d]) => !isConnected(d)).map(([role]) => ({ role, reason: 'not provisioned' })), subscribed: [] }
-      // A nested instance in a cycle is not made: the cycle reaches the instance whose create started it. Another runtime may have taken the id meanwhile.
-      const no = stack.length > 0 && p.cycle !== undefined ? failure('cycle', p.cycle)
+        : { unsatisfied: Object.entries(impl.dependencies).filter(([, d]) => !isConnected(d)).map(([role]) => ({ role, reason: 'not provisioned' })), subscribed: [], cycles: [] }
+      // A nested instance on a cycle is not made; the first instance above the cycle is made with that role unsatisfied. Another runtime may have taken the id meanwhile.
+      const onCycle = stack.length > 0 ? p.cycles.find(c => c.includes(implementation)) : undefined
+      const no = onCycle ? { ...failure('cycle', cycleReason(onCycle)), cycle: onCycle }
         : opts.idTaken?.(iid) ? failure('exists', `instance id ${iid} is taken`) : undefined
       if (no) {
         pod.value.dispose()

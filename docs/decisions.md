@@ -154,6 +154,12 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 
 ## 26. When are dependencies made, and what does a cycle do?
 
-**Decision:** A provisioned create makes its pod first (bad config fails before anything else is made), then provisions its dependencies, then joins the runtime; its own subscriptions wait until it joins. So a dependency leading back to an implementation still being made finds no member and is a cycle, reason `cycle: <a> → <b> → <a>` (implementation coords from where the cycle starts). A nested create in a cycle is not made (it fails `cycle`, its subscriptions removed), so the cycle reaches the instance whose create began it, which is made with that role unsatisfied. Instances already made for a failed nested create's other roles stay as ordinary members. Generated ids are `<last coord segment>-<first free n>`, counting ids reserved by creates still in progress.
-**Why:** The spec says the dependency is made first; reporting the cycle to the caller is the only way it is seen, and nothing half-wired remains of the cycle itself.
+**Decision:** A provisioned create makes its pod first (bad config fails before anything else is made), then provisions its dependencies, then joins the runtime; its own subscriptions wait until it joins. So a dependency leading back to an implementation still being made finds no member and is a cycle, path = the implementation coords from where it starts back to it, reason `cycle: <a> → <b> → <a>`. A nested create whose implementation is on that path is not made (it fails `cycle`, carrying the path, its subscriptions removed); the first create above the cycle (or the create the user called) is made with that role unsatisfied with the cycle reason. So `R → A → B → C → B` makes R and A (with A's role `b` unsatisfied); B and C are not made. Instances already made for a failed create's other roles stay as ordinary members. Generated ids are `<last coord segment>-<first free n>`, skipping ids held, reserved by creates in progress, or taken elsewhere (`idTaken`).
+**Why:** The spec says the dependency is made first; reporting the cycle where it stops is the only way it is seen, nothing half-wired remains of the cycle itself, and instances above the cycle are not punished for it.
 **Cost if wrong:** Join first and let the inner instance connect back to the outer one (mutual dependencies then resolve silently).
+
+## 27. What if a policy throws while a subscription is checked?
+
+**Decision:** As decision 22 for messages: the rewire (`subscribe`, `retarget`, `reorder`, `replace`, or a subscription provisioning makes) is denied with reason `policy threw: <message>` and nothing changes; it is observed (if the runtime has an observer) as an `exception` from the subscription's `from`, with `op` the subscription id.
+**Why:** No runtime call rejects because of user code.
+**Cost if wrong:** Let it throw; callers must guard.

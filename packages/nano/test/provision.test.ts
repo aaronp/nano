@@ -28,17 +28,30 @@ const needsBoom = impl('acme/app/needs-boom', [], { boom: { provider: 'acme/bad'
 const cycA = impl('acme/cyc/a', [CycA], { b: CycB })
 const cycB = impl('acme/cyc/b', [CycB], { a: CycA })
 const cycRoot = impl('acme/cyc/root', [], { a: CycA })
+// R → A → B → C → B, and A → D: the cycle is B, C; A is above it.
+const LA = face('acme/l-a'), LB = face('acme/l-b'), LC = face('acme/l-c'), LD = face('acme/l-d')
+const loopR = impl('acme/loop/r', [], { a: LA })
+const loopA = impl('acme/loop/a', [LA], { d: LD, b: LB })
+const loopB = impl('acme/loop/b', [LB], { c: LC })
+const loopC = impl('acme/loop/c', [LC], { b: LB })
+const loopD = impl('acme/loop/d', [LD])
+// X → { D, Y }, Y → X: X's cycle fails Y after D was made for it.
+const LX = face('acme/l-x'), LY = face('acme/l-y')
+const loopX = impl('acme/loop/x', [LX], { d: LD, y: LY })
+const loopY = impl('acme/loop/y', [LY], { x: LX })
+const loopTop = impl('acme/loop/top', [], { x: LX })
 const boom = implementation('acme/bad/boom', { provides: [], make: () => { throw new Error('nope') } })
 
-function setup(policy?: Policy) {
+function setup(policy?: Policy, idTaken?: (id: string) => boolean) {
   const registry = createRegistry()
   for (const p of [
     provider('acme/app', [foo, bar, baz, user, tagged, byImpl, needsBoom]),
     provider('acme/db', [impl('acme/db/mem', [DB]), impl('acme/db/file', [DB])]),
     provider('acme/cyc', [cycA, cycB, cycRoot]),
     provider('acme/bad', [boom]),
+    provider('acme/loop', [loopR, loopA, loopB, loopC, loopD, loopX, loopY, loopTop]),
   ]) registry.add(p)
-  return createRuntime('r1', { registry, ...(policy && { policy }) })
+  return createRuntime('r1', { registry, ...(policy && { policy }), ...(idTaken && { idTaken }) })
 }
 const edges = (rt: ReturnType<typeof setup>) => rt.subscriptions().map(s => `${s.from} -> ${s.to} ${rt.status(s.id)}`)
 
@@ -59,6 +72,11 @@ describe('provisioning', () => {
   test('a made instance takes the first free id', async () => {
     const rt = setup()
     await rt.create('bar-1', 'acme/db/mem')
+    await rt.create('f', 'acme/app/foo', { provision: true })
+    expect(rt.members()).toContain('acme/app/bar#bar-2')
+  })
+  test('a made instance skips ids taken elsewhere in the application', async () => {
+    const rt = setup(undefined, id => id === 'bar-1')
     await rt.create('f', 'acme/app/foo', { provision: true })
     expect(rt.members()).toContain('acme/app/bar#bar-2')
   })
@@ -99,12 +117,34 @@ describe('provisioning', () => {
     expect(rt.members()).toEqual(['acme/cyc/a#a'])
     expect(rt.subscriptions()).toEqual([])
   })
+  test('a cycle fails only the instances on it; the one above is made with the role unsatisfied', async () => {
+    const rt = setup()
+    expect(await rt.create('r', 'acme/loop/r', { provision: true })).toEqual(success({ coord: 'acme/loop/r#r', unsatisfied: [] }))
+    expect(rt.members()).toEqual(['acme/loop/d#d-1', 'acme/loop/a#a-1', 'acme/loop/r#r'])
+    expect(edges(rt)).toEqual(['acme/loop/a#a-1 -> acme/loop/d#d-1 live', 'acme/loop/r#r -> acme/loop/a#a-1 live'])
+    const again = await rt.create('a2', 'acme/loop/a', { provision: true })
+    expect(again).toEqual(success({ coord: 'acme/loop/a#a2', unsatisfied: [{ role: 'b', reason: 'cycle: acme/loop/b → acme/loop/c → acme/loop/b' }] }))
+  })
+  test('instances made for a nested create that a cycle fails stay as members', async () => {
+    const rt = setup()
+    expect(await rt.create('t', 'acme/loop/top', { provision: true })).toEqual(success({
+      coord: 'acme/loop/top#t', unsatisfied: [{ role: 'x', reason: 'cycle: acme/loop/x → acme/loop/y → acme/loop/x' }],
+    }))
+    expect(rt.members()).toEqual(['acme/loop/d#d-1', 'acme/loop/top#t'])
+    expect(rt.subscriptions()).toEqual([])
+  })
+  test('a policy that throws while provisioning subscribes is a denial with its error', async () => {
+    const rt = setup({ isAllowed: (_f, to) => { if (to.startsWith('acme/app/baz')) throw new Error('bad policy'); return { approved: true } } })
+    await rt.create('z', 'acme/app/baz')
+    expect(await rt.create('b', 'acme/app/bar', { provision: true })).toEqual(success({ coord: 'acme/app/bar#b', unsatisfied: [{ role: 'baz', reason: 'policy threw: bad policy' }] }))
+  })
   test('a cycle below the new instance reaches it, and nothing of the cycle is made', async () => {
     const rt = setup()
     expect(await rt.create('r', 'acme/cyc/root', { provision: true })).toEqual(success({
       coord: 'acme/cyc/root#r', unsatisfied: [{ role: 'a', reason: 'cycle: acme/cyc/a → acme/cyc/b → acme/cyc/a' }],
     }))
     expect(rt.members()).toEqual(['acme/cyc/root#r'])
+    expect(rt.subscriptions()).toEqual([])
   })
   test('a nested create that fails (here one named by provider) leaves the role unsatisfied with its reason; the instance still exists', async () => {
     const rt = setup()
@@ -117,6 +157,13 @@ describe('provisioning', () => {
     const rt = setup({ isAllowed: (_f, to) => (to.startsWith('acme/app/baz') ? { approved: false, reason: 'no baz' } : { approved: true }) })
     await rt.create('z', 'acme/app/baz')
     expect(await rt.create('b', 'acme/app/bar', { provision: true })).toEqual(success({ coord: 'acme/app/bar#b', unsatisfied: [{ role: 'baz', reason: 'no baz' }] }))
+  })
+  test('a throwing policy on a plain subscribe is a denial, observed', () => {
+    const seen: unknown[] = []
+    const rt = createRuntime('r1', { registry: createRegistry(), policy: { isAllowed: () => { throw new Error('bad policy') } }, pod: { observe: o => seen.push(o) } })
+    expect(rt.subscribe({ kind: 'call', from: 'acme/app/bar#b', to: 'acme/app/baz#z' })).toEqual({ ok: false, fail: { type: 'denied', reason: 'policy threw: bad policy' } })
+    expect(seen).toEqual([{ kind: 'exception', instance: 'acme/app/bar#b', op: 's1', error: 'policy threw: bad policy' }])
+    expect(rt.subscriptions()).toEqual([])
   })
   test('`provision: false` makes nothing', async () => {
     const rt = setup()

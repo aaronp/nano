@@ -3,11 +3,15 @@
  *
  *   const r = await provision(p, 'acme/app/foo#f', foo, ['acme/app/foo'])
  *   r.unsatisfied   // [] once bar-1 (and its own baz-1) are made and subscribed; or [{ role: 'bar', reason: '2 match' }]
- *   r.cycle         // 'cycle: acme/cyc/a → acme/cyc/b → acme/cyc/a' when a dependency would close a cycle
+ *   r.cycles        // [['acme/cyc/a', 'acme/cyc/b', 'acme/cyc/a']] when a dependency closes a cycle (reason `cycle: a → b → a`)
  */
 import type { Implementation } from '../implementation.ts'
 import type { Registry } from '../registry.ts'
 import type { NanoResult } from '../result.ts'
+
+/** A create's result; a create that fails because it lies on a cycle carries the cycle's path. */
+export type Made = NanoResult<{ coord: string }> & { cycle?: readonly string[] }
+export const cycleReason = (path: readonly string[]): string => `cycle: ${path.join(' → ')}`
 import { matches, type SelectorData, type Target } from '../selector.ts'
 import type { NewSubscription, SubscriptionData } from './subscriptions.ts'
 
@@ -21,7 +25,7 @@ export type Provisioner = {
   /** A live call subscription from the new instance already reaches a member matching `d`. */
   connected(d: SelectorData): boolean
   idFree(id: string): boolean
-  make(id: string, implementation: string, stack: readonly string[]): Promise<NanoResult<{ coord: string }>>
+  make(id: string, implementation: string, stack: readonly string[]): Promise<Made>
   subscribe(s: NewSubscription): NanoResult<SubscriptionData>
 }
 
@@ -38,10 +42,10 @@ export function implementationsFor(registry: Registry, d: SelectorData): Impleme
 }
 
 /** `stack` is the implementation coords being created, outermost first, ending with the new instance's own. */
-export async function provision(p: Provisioner, coord: string, impl: Implementation, stack: readonly string[]): Promise<{ unsatisfied: Unsatisfied[]; cycle?: string; subscribed: string[] }> {
+export async function provision(p: Provisioner, coord: string, impl: Implementation, stack: readonly string[]): Promise<{ unsatisfied: Unsatisfied[]; cycles: (readonly string[])[]; subscribed: string[] }> {
   const unsatisfied: Unsatisfied[] = []
   const subscribed: string[] = []
-  let cycle: string | undefined
+  const cycles: (readonly string[])[] = []
   for (const [role, d] of Object.entries(impl.dependencies)) {
     if (p.connected(d)) continue
     const leave = (reason: string) => { unsatisfied.push({ role, reason }) }
@@ -54,13 +58,14 @@ export async function provision(p: Provisioner, coord: string, impl: Implementat
       if (impls.length !== 1) { leave(impls.length === 0 ? 'nothing matches' : `${impls.length} match`); continue }
       const x = impls[0]!
       if (stack.includes(x.coord)) {
-        cycle ??= `cycle: ${[...stack.slice(stack.indexOf(x.coord)), x.coord].join(' → ')}`
-        leave(cycle)
+        const path = [...stack.slice(stack.indexOf(x.coord)), x.coord]
+        cycles.push(path)
+        leave(cycleReason(path))
         continue
       }
       const made = await p.make(freeId(p, x.coord), x.coord, stack)
       if (!made.ok) {
-        if (made.fail.type === 'cycle') cycle ??= made.fail.reason
+        if (made.cycle) cycles.push(made.cycle)
         leave(made.fail.reason)
         continue
       }
@@ -70,7 +75,7 @@ export async function provision(p: Provisioner, coord: string, impl: Implementat
     if (s.ok) subscribed.push(s.value.id)
     else leave(s.fail.reason)
   }
-  return { unsatisfied, subscribed, ...(cycle !== undefined && { cycle }) }
+  return { unsatisfied, subscribed, cycles }
 }
 
 /** `<last segment of the coord>-<first free n from 1>`. */
