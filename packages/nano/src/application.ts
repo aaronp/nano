@@ -4,7 +4,7 @@
  *   const app = createApplication('app', { registry })              // also its own root runtime
  *   app.define(clientDef)                                           // data only, until something needs it
  *   await app.open('client')                                        // opens the runtimes its members come from, then builds it
- *   app.place('s#0', 'signer', 'client')                            // pod s is a member of both; it still calls out through `signer`
+ *   app.place('s', 'signer', 'client')                               // pod s is a member of both; it still calls out through `signer`
  *   app.notes()                                                     // what it skipped or could not follow, e.g. a member whose home failed to open
  */
 import { Type } from 'typebox'
@@ -50,7 +50,8 @@ export type Application = Runtime & {
   define(def: RuntimeDef): NanoResult<void>
   definition(id: string): RuntimeDef | undefined
   open(id: string): Promise<NanoResult<Runtime>>
-  place(instance: string, from: string, to: string): NanoResult<void>
+  /** Place pod `pod` (an instance coord stands for its pod, as saved members still name one) from its runtime into `to`: the same record, not a copy. */
+  place(pod: string, from: string, to: string): NanoResult<void>
   /** Child runtimes, opened and defined (not the root). */
   runtimes(): readonly string[]
   /** What the application skipped or could not follow, oldest first: members an open skipped. */
@@ -85,7 +86,7 @@ export function createApplication(id: string, opts: { registry: Registry; policy
   const shared = { registry: opts.registry, tagsOf, idTaken, settling }
 
   /**
-   * A pod removed at its home is removed wherever it was placed. (A replacement needs nothing here: the placed pod is
+   * A pod removed at its home is removed wherever it was placed. (A swap needs nothing here: the placed pod is
    * the home's record, so every runtime holding it sees the new implementation.)
    */
   const watch = (r: Runtime) => r.listen(e => {
@@ -103,15 +104,15 @@ export function createApplication(id: string, opts: { registry: Registry; policy
   const root = createRuntime(id, { ...shared, ...(opts.policy && { policy: opts.policy }) })
   watch(root)
 
-  /** Places the pod of `instance`, with all its instances. */
-  function place(instance: string, from: string, to: string): NanoResult<void> {
-    const p = parseInstance(instance)
-    const rec = p && lookup(from)?.record(p.pod)
-    if (!rec?.instances.has(instance)) return failure('not-found', `${instance} is not in ${from}`)
+  /** Places a pod, with all its instances; given an instance coord, that instance's pod (it must have it). */
+  function place(pod: string, from: string, to: string): NanoResult<void> {
+    const p = parseInstance(pod)
+    const rec = lookup(from)?.record(p?.pod ?? pod)
+    if (!rec || (p && !rec.instances.has(pod))) return failure('not-found', `${pod} is not in ${from}`)
     const dst = lookup(to)
     if (!dst) return failure('not-found', `no runtime ${to}`)
     let v
-    try { v = dst.policy.isAllowed(from, to, instance) } catch (e) { return failure('denied', `policy threw: ${msg(e)}`) }
+    try { v = dst.policy.isAllowed(from, to, pod) } catch (e) { return failure('denied', `policy threw: ${msg(e)}`) }
     if (!v.approved) return failure('denied', v.reason)
     return dst.add(rec)
   }

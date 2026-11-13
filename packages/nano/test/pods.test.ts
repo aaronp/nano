@@ -45,6 +45,9 @@ const slow = implementation('acme/keys/slow', { provides: [Vault], make: async (
   await new Promise<void>(r => { release = r })
   return [provide(Vault, { ping: echo('slow') })]
 } })
+// A vault whose ping is held open until the test opens the gate: a call in flight.
+let openGate = () => {}
+const gated = implementation('acme/keys/gated', { provides: [Vault], make: () => [provide(Vault, { ping: async (_c, s) => { await new Promise<void>(r => { openGate = r }); return success(`gated ${s}`) } })] })
 // A dependency that is held open, so a test can act while a provisioning pass waits on it.
 const Held = face('acme/held')
 let releaseHeld = () => {}
@@ -58,7 +61,7 @@ const log = implementation('acme/log/mem', { provides: [Log], make: () => [provi
 
 const registry = () => {
   const r = createRegistry()
-  r.add(provider('acme/keys', [vault, vault2, flaky, slow, held]))
+  r.add(provider('acme/keys', [vault, vault2, flaky, slow, held, gated]))
   r.add(provider('acme/ui', [user, auditor, needsHeld]))
   r.add(provider('acme/clock', [ticker]))
   r.add(provider('acme/log', [log]))
@@ -377,7 +380,7 @@ describe('cascade and wait', () => {
 
 describe('swap', () => {
   // Behaviour 5.
-  test.todo('given vault with Vault and Audit connections, when swapped to an implementation with only Vault, then vault#0 is kept, Vault stays live and Audit is broken', async () => {
+  test('given vault with Vault and Audit connections, when swapped to an implementation with only Vault, then vault#0 is kept, Vault stays live and Audit is broken', async () => {
     const rt = setup()
     await rt.create('user', 'acme/ui/user')
     await rt.create('auditor', 'acme/ui/auditor')
@@ -389,13 +392,13 @@ describe('swap', () => {
     expect(edges(rt)).toEqual(['user#0 -> vault#0 live', 'auditor#0 -> vault#0 broken'])
     expect(await ping('user#0', 'x')).toEqual(success('v2 x'))
   })
-  test.todo('given a pod with config, when swapped with new config, then the pod reports the new config', async () => {
+  test('given a pod with config, when swapped with new config, then the pod reports the new config', async () => {
     const rt = setup()
     await rt.create('vault', 'acme/keys/vault', { config: { region: 'eu' } })
     await rt.swap('vault', 'acme/keys/vault2', { config: { region: 'us' } })
     expect(rt.pod('vault')).toMatchObject({ implementation: 'acme/keys/vault2', config: { region: 'us' } })
   })
-  test.todo('given a tagged vault#0, when vault is swapped, then vault#0 keeps its tags', async () => {
+  test('given a tagged vault#0, when vault is swapped, then vault#0 keeps its tags', async () => {
     const rt = setup()
     await rt.create('vault', 'acme/keys/vault')
     rt.tag('vault#0', 'cache')
@@ -403,7 +406,7 @@ describe('swap', () => {
     expect(rt.tagsOf('vault#0')).toEqual(new Set(['cache']))
   })
   // Behaviour 7.
-  test.todo('given vault placed from signer into client, when swapped at signer, then it is made once and client sees the new implementation behind vault#0', async () => {
+  test('given vault placed from signer into client, when swapped at signer, then it is made once and client sees the new implementation behind vault#0', async () => {
     const app = setup()
     const home = app.createRuntime('signer'), client = app.createRuntime('client')
     if (!home.ok || !client.ok) throw new Error('setup')
@@ -417,6 +420,31 @@ describe('swap', () => {
     expect(client.value.pod('vault')).toMatchObject({ implementation: 'acme/keys/vault2', instances: [{ coord: 'vault#0' }] })
     expect(edges(client.value)).toEqual(['user#0 -> vault#0 live'])
     expect(await ping('user#0', 'x')).toEqual(success('v2 x'))
+  })
+  // Plan Review Focus 1: the old instance serves calls already inside it; calls after the switch reach the new one.
+  test('given a call in flight inside vault#0, when vault is swapped, then the call finishes on the old instance and the next call reaches the new one', async () => {
+    const rt = setup()
+    await rt.create('user', 'acme/ui/user')
+    await rt.create('vault', 'acme/keys/gated')
+    rt.connect(call('user', 'vault'))
+    const old = rt.record('vault').instances.get('vault#0').host
+    const inFlight = ping('user#0', 'a')
+    await new Promise(r => setTimeout(r, 1))
+    expect(await rt.swap('vault', 'acme/keys/vault2')).toEqual(success(undefined))
+    expect(await ping('user#0', 'b')).toEqual(success('v2 b'))
+    openGate()
+    expect(await inFlight).toEqual(success('gated a'))
+    expect(await old.invoke(portKey(Vault.coord, Vault.ops.ping.coord), 'c')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+  })
+  test('given a swap pending, when an instance is added, then it runs the new implementation too', async () => {
+    const rt = setup()
+    await rt.create('vault', 'acme/keys/vault')
+    const swapped = rt.swap('vault', 'acme/keys/vault2')
+    const added = rt.addInstance('vault')
+    expect(await swapped).toEqual(success(undefined))
+    expect(await added).toEqual(success('vault#1'))
+    const p = rt.record('vault')
+    expect([...p.instances.values()].map(i => `${i.coord} ${i.state} ${i.host.implementation.coord}`)).toEqual(['vault#0 running acme/keys/vault2', 'vault#1 running acme/keys/vault2'])
   })
 })
 

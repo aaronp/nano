@@ -118,6 +118,21 @@ describe('placing', () => {
     expect(client.subscriptions()).toEqual([])
     expect(await contexts.get(T)!.one(Signer, s => s.ping('x'))).toMatchObject({ ok: false, fail: { type: 'missing-component' } })
   })
+  test('removing it at home deletes its subscriptions in every runtime it was placed into, and its membership there', async () => {
+    const { app, signerRt, client } = await setup()
+    const other = app.createRuntime('other')
+    if (!other.ok) throw new Error('other')
+    app.place('s', 'signer', 'client'); app.place('s', 'signer', 'other')
+    await client.create('t', 'acme/ui/tester', { provision: true })
+    await other.value.create('u', 'acme/ui/tester', { provision: true })
+    expect([client, other.value].map(r => r.subscriptions().map(s => s.to))).toEqual([[S], [S]])
+    signerRt.remove('s')
+    for (const r of [client, other.value]) {
+      expect(r.subscriptions()).toEqual([])
+      expect(r.pod('s')).toBeUndefined()
+      expect(r.record('s')).toBeUndefined()
+    }
+  })
   test('removing it from a runtime it was placed into leaves its home alone', async () => {
     const { app, signerRt, client } = await setup()
     app.place(S, 'signer', 'client')
@@ -182,32 +197,32 @@ describe('placing', () => {
   })
 })
 
-describe('replacing at home', () => {
+describe('swapping at home', () => {
   test('a runtime it was placed into sees the new implementation behind the same coord; subscriptions stay', async () => {
     const { app, signerRt, client } = await setup()
     app.place(S, 'signer', 'client')
     await client.create('t', 'acme/ui/tester', { provision: true })
     const events: RuntimeEvent[] = []
     client.listen(e => events.push(e))
-    expect(await signerRt.replace('s', 'acme/keys/signer2')).toEqual(success(undefined))
+    expect(await signerRt.swap('s', 'acme/keys/signer2')).toEqual(success(undefined))
     expect(client.instances()).toEqual([S, T])
     expect(client.pod('s')).toMatchObject({ home: 'signer', implementation: 'acme/keys/signer2' })
     expect(client.subscriptions().map(s => `${s.from} -> ${s.to} ${client.status(s.id)}`)).toEqual([`${T} -> ${S} live`])
     expect(events).toEqual([])
     expect(await contexts.get(T)!.one(Signer, s => s.ping('x'))).toEqual(success('signed x'))
   })
-  test('replacing with the same implementation leaves guests the new instance: calls succeed, subscriptions stay live', async () => {
+  test('swapping to the same implementation leaves guests the new instance: calls succeed, subscriptions stay live', async () => {
     const { app, signerRt, client } = await setup()
     app.place(S, 'signer', 'client')
     await client.create('t', 'acme/ui/tester', { provision: true })
     const before = signerRt.record('s')!.instances.get(S)!.host
-    expect(await signerRt.replace('s', 'acme/keys/signer')).toEqual(success(undefined))
+    expect(await signerRt.swap('s', 'acme/keys/signer')).toEqual(success(undefined))
     expect(client.record('s')!.instances.get(S)!.host).not.toBe(before)
     expect(client.subscriptions().map(s => client.status(s.id))).toEqual(['live'])
     expect(await contexts.get(T)!.one(Signer, s => s.ping('x'))).toEqual(success('signed x'))
     expect(app.notes()).toEqual([])
   })
-  test('publishes of an instance replaced by the same implementation still reach the runtimes it was placed into', async () => {
+  test('publishes of an instance swapped to the same implementation still reach the runtimes it was placed into', async () => {
     const { app, client } = await setup()
     const home = app.createRuntime('home')
     if (!home.ok) throw new Error('home')
@@ -215,7 +230,7 @@ describe('replacing at home', () => {
     app.place('k#0', 'home', 'client')
     await client.create('n', 'acme/ui/sink')
     client.subscribe({ kind: 'event', from: 'k#0', source: TICK, to: 'n#0', target: PING(Sink) })
-    await home.value.replace('k', 'acme/keys/ticker')
+    await home.value.swap('k', 'acme/keys/ticker')
     heard.length = 0
     await contexts.get('k#0')!.publish(Ticks.ops.tick, 'after')
     expect(heard).toEqual(['after'])
@@ -228,21 +243,21 @@ describe('replacing at home', () => {
     app.place('k#0', 'home', 'client')
     await client.create('n', 'acme/ui/sink')
     client.subscribe({ kind: 'event', from: 'k#0', source: TICK, to: 'n#0', target: PING(Sink) })
-    await home.value.replace('k', 'acme/keys/ticker2')
+    await home.value.swap('k', 'acme/keys/ticker2')
     heard.length = 0
     await contexts.get('k#0')!.publish(Ticks.ops.tick, 'after')
     expect(heard).toEqual(['after'])
   })
-  test('a replaced pod keeps its tags', async () => {
+  test('a swapped pod keeps its tags', async () => {
     const { app, signerRt } = await setup()
     app.tag(S, 'primary')
-    await signerRt.replace('s', 'acme/keys/signer2')
+    await signerRt.swap('s', 'acme/keys/signer2')
     expect(app.tagsOf(S)).toEqual(new Set(['primary']))
   })
-  test('a runtime it was placed into cannot replace it', async () => {
+  test('a runtime it was placed into cannot swap it', async () => {
     const { app, client } = await setup()
     app.place(S, 'signer', 'client')
-    expect(await client.replace('s', 'acme/keys/signer2')).toMatchObject({ ok: false, fail: { type: 'denied' } })
+    expect(await client.swap('s', 'acme/keys/signer2')).toMatchObject({ ok: false, fail: { type: 'denied' } })
   })
 })
 

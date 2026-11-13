@@ -9,7 +9,7 @@
  *   rt.books('s1')                                               // { calls: 0 }
  */
 import type { Implementation } from '../implementation.ts'
-import { createHostPod, type Observation } from '../pod.ts'
+import { createHostPod, type Observation, type Pod } from '../pod.ts'
 import { Policies, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
@@ -29,7 +29,7 @@ export type { Unsatisfied } from './provision.ts'
 export type RuntimeEvent =
   | { type: 'instance-added'; instance: string; home: string }
   | { type: 'instance-removed'; instance: string }
-  | { type: 'pod-replaced'; pod: string; implementation: string }
+  | { type: 'pod-swapped'; pod: string; implementation: string }
   | { type: 'subscription-set'; subscription: SubscriptionData }
   | { type: 'subscription-removed'; id: string }
   | { type: 'status'; id: string; status: Status }
@@ -62,8 +62,13 @@ export type Runtime = {
   restart(coord: string): Promise<NanoResult<void>>
   /** At home, the pod's instances are disposed and every subscription naming them is deleted, in every runtime holding it; placed here from elsewhere, only this runtime's membership (and its subscriptions to it) go. */
   remove(pod: string): NanoResult<void>
-  /** Remake every instance of a pod with another implementation (or config), in place: coords and subscriptions are kept. Only at home. */
-  replace(pod: string, implementation: string, opts?: { config?: unknown }): Promise<NanoResult<void>>
+  /**
+   * Swap a pod's implementation (and config, when given) in place, only at home: coords, tags and subscriptions are kept;
+   * every instance is remade off to the side (one added meanwhile too), then all switch at once and every runtime holding
+   * the pod recomputes its statuses (ports that no longer fit → `broken`). Until the switch the old instances serve; calls
+   * already inside an old one finish there. A failing make changes nothing.
+   */
+  swap(pod: string, implementation: string, opts?: { config?: unknown }): Promise<NanoResult<void>>
   pod(id: string): PodInfo | undefined
   /** Pod ids, in create (or place) order. */
   pods(): readonly string[]
@@ -314,35 +319,39 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       for (const h of [...p.holders]) h.forget(p, coords, true)
       return success(undefined)
     },
-    async replace(pid, implementation, o = {}) {
+    async swap(pid, implementation, o = {}) {
       const p = pods.get(pid)
       if (!p) return failure('not-found', `${pid} is not a pod of ${id}`)
-      if (p.home !== id) return failure('denied', `${pid}: replace it at its home runtime ${p.home}`)
+      if (p.home !== id) return failure('denied', `${pid}: swap it at its home runtime ${p.home}`)
       const impl = registry.implementation(implementation)
       if (!impl) return failure('not-found', `no implementation ${implementation}`)
       const config = 'config' in o ? o.config : p.config
       const no = badConfig(pid, impl, config)
       if (no) return no
-      // Every instance is remade off to the side; the old ones serve until all are made, then all swap at once.
-      const made = await Promise.all([...p.instances.keys()].map(async coord => {
-        const { ctx, bind } = contextFor(wiring, coord, impl, config)
-        return { coord, bind, host: await createHostPod(coord, impl, ctx, opts.pod) }
-      }))
-      const fail = made.flatMap(m => (m.host.ok ? [] : [m.host]))[0] ?? (pods.get(pid) !== p ? failure('not-found', `${pid} was removed while it was replaced`) : undefined)
-      if (fail) { for (const m of made) if (m.host.ok) m.host.value.dispose(); return fail }
+      // Every instance is remade off to the side, including any added meanwhile; the old ones serve until all are made.
+      const made = new Map<string, { bind(pod: Pod): void; host: NanoResult<Pod> }>()
+      for (let todo = [...p.instances.keys()]; todo.length > 0; todo = [...p.instances.keys()].filter(c => !made.has(c)))
+        await Promise.all(todo.map(async coord => {
+          const { ctx, bind } = contextFor(wiring, coord, impl, config)
+          made.set(coord, { bind, host: await createHostPod(coord, impl, ctx, opts.pod) })
+        }))
+      const fail = [...made.values()].flatMap(m => (m.host.ok ? [] : [m.host]))[0] ?? (pods.get(pid) !== p ? failure('not-found', `${pid} was removed while it was swapped`) : undefined)
+      if (fail) { for (const m of made.values()) if (m.host.ok) m.host.value.dispose(); return fail }
       p.implementation = impl
       if (config === undefined) delete p.config
       else p.config = config
-      for (const m of made) {
+      for (const [coord, m] of made) {
         if (!m.host.ok) continue // never: any failure returned above
-        const inst = p.instances.get(m.coord)
+        const inst = p.instances.get(coord)
         if (!inst) { m.host.value.dispose(); continue } // removed meanwhile
+        // Disposing only refuses new calls: calls already inside the old host finish there.
         inst.host?.dispose()
         m.bind(m.host.value)
         inst.host = m.host.value
         inst.state = 'running'
+        delete inst.reason
       }
-      emit({ type: 'pod-replaced', pod: pid, implementation })
+      emit({ type: 'pod-swapped', pod: pid, implementation })
       changed(p)
       return success(undefined)
     },

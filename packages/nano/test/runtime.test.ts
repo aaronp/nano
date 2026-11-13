@@ -317,7 +317,7 @@ describe('runtime subscriptions', () => {
     rt.remove('d')
     expect(await host.invoke(DB_GET, 'k')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
   })
-  test('replace keeps the coords: subscriptions that still fit stay live, an event subscription whose op is gone is broken', async () => {
+  test('swap keeps the coords: subscriptions that still fit stay live, an event subscription whose op is gone is broken', async () => {
     const { rt, events } = setup()
     await rt.create('a', 'acme/app/main')
     await rt.create('d', 'acme/db/mem')
@@ -325,43 +325,43 @@ describe('runtime subscriptions', () => {
     await rt.create('b', 'acme/log/mem')
     rt.subscribe({ kind: 'call', from: 'a#0', to: 'd#0' })
     rt.subscribe({ ...tickToLog, from: 't#0' })
-    expect(await rt.replace('d', 'acme/db/file')).toEqual(success(undefined))
-    expect(await rt.replace('b', 'acme/log/notes')).toEqual(success(undefined))
+    expect(await rt.swap('d', 'acme/db/file')).toEqual(success(undefined))
+    expect(await rt.swap('b', 'acme/log/notes')).toEqual(success(undefined))
     expect(rt.pods()).toEqual(['a', 'd', 't', 'b'])
     expect(rt.pod('d')).toMatchObject({ implementation: 'acme/db/file', instances: [{ coord: 'd#0', state: 'running' }] })
     expect(rt.subscriptions().map(s => s.to)).toEqual(['d#0', 'b#0'])
     expect([rt.status('s1'), rt.status('s2')]).toEqual(['live', 'broken'])
-    expect(events).toContainEqual({ type: 'pod-replaced', pod: 'd', implementation: 'acme/db/file' })
+    expect(events).toContainEqual({ type: 'pod-swapped', pod: 'd', implementation: 'acme/db/file' })
   })
-  test('replace announces itself, not an add and a remove', async () => {
+  test('swap announces itself, not an add and a remove', async () => {
     const { rt, events } = setup()
     await rt.create('a', 'acme/app/main')
     await rt.create('d', 'acme/db/mem')
     rt.subscribe({ kind: 'call', from: 'a#0', to: 'd#0' })
     const seen = events.length
-    await rt.replace('d', 'acme/db/file')
-    expect(events.slice(seen)).toEqual([{ type: 'pod-replaced', pod: 'd', implementation: 'acme/db/file' }])
+    await rt.swap('d', 'acme/db/file')
+    expect(events.slice(seen)).toEqual([{ type: 'pod-swapped', pod: 'd', implementation: 'acme/db/file' }])
   })
-  test('replace carries the config over unless a new one is given', async () => {
+  test('swap carries the config over unless a new one is given', async () => {
     const { rt } = setup()
     await rt.create('c', 'acme/app/conf', { config: 3 })
-    await rt.replace('c', 'acme/app/conf')
+    await rt.swap('c', 'acme/app/conf')
     expect(rt.pod('c')?.config).toBe(3)
-    await rt.replace('c', 'acme/app/conf', { config: 4 })
+    await rt.swap('c', 'acme/app/conf', { config: 4 })
     expect(rt.pod('c')?.config).toBe(4)
   })
-  test('replacing a pod placed from another runtime is denied and changes nothing', async () => {
+  test('swapping a pod placed from another runtime is denied and changes nothing', async () => {
     const { rt, registry } = setup()
     const r2 = createRuntime('r2', { registry })
     await r2.create('z', 'acme/log/mem')
     rt.add(r2.record('z')!)
-    expect(await rt.replace('z', 'acme/log/notes')).toEqual({ ok: false, fail: { type: 'denied', reason: 'z: replace it at its home runtime r2' } })
+    expect(await rt.swap('z', 'acme/log/notes')).toEqual({ ok: false, fail: { type: 'denied', reason: 'z: swap it at its home runtime r2' } })
     expect(rt.pod('z')!.implementation).toBe('acme/log/mem')
   })
-  test('a replace whose make throws changes nothing', async () => {
+  test('a swap whose make throws changes nothing', async () => {
     const { rt } = setup()
     await rt.create('d', 'acme/db/mem')
-    expect(await rt.replace('d', 'acme/bad/boom')).toMatchObject({ ok: false, fail: { type: 'threw' } })
+    expect(await rt.swap('d', 'acme/bad/boom')).toMatchObject({ ok: false, fail: { type: 'threw' } })
     expect(rt.pod('d')).toMatchObject({ implementation: 'acme/db/mem', state: 'running' })
   })
   test("reorder changes a consumer's call order; a partial list fails not-found", async () => {

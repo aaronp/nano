@@ -81,11 +81,15 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Why:** One event per user-visible change; a listener keeping a member list can apply `instance-replaced` directly.
 **Cost if wrong:** A listener that only handles added/removed misses replacements; emit both, or add an order event.
 
+Superseded by 51: `swap` emits `pod-swapped { pod, implementation }` (coords are kept, so no subscription is rewritten).
+
 ## 14. In what order does a runtime list its members?
 
 **Decision:** Create order (`add` order for placed members). `replace` keeps the replaced member's slot: `acme/db/mem#d` → `acme/db/file#d` stays where it was.
 **Why:** Saving relies on it: a saved document lists instances in the order they were made, and a replacement doesn't reshuffle the file.
 **Cost if wrong:** One sort in `members()`, and saved documents reorder.
+
+Superseded by 51: there are no member slots; pods keep create (or place) order and a swap keeps the pod and its coords.
 
 ## 15. Can a runtime replace a member whose home is another runtime?
 
@@ -93,11 +97,15 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Why:** The home runtime owns the pod and its outgoing calls (decision 11). A replacement made in a guest runtime would leave the home holding the old pod.
 **Cost if wrong:** A cross-runtime replace that goes through the application to the home runtime.
 
+Superseded by 51: `swap` acts only at the pod's home; elsewhere it is `denied` (`<pod>: swap it at its home runtime <home>`).
+
 ## 16. Does a member remember its config?
 
 **Decision:** Yes, `Member.config` is the config the instance was created with. `replace` carries it over unless `opts.config` is given.
 **Why:** Saving writes it (Task 9), and a replacement of the same kind (a newer version) usually wants the same settings.
 **Cost if wrong:** Replacements that need a fresh config must pass one explicitly.
+
+Superseded by 51: config lives on the pod record; `swap` keeps it unless `opts.config` is given.
 
 ## 17. Where does `ctx.publish` deliver?
 
@@ -334,6 +342,8 @@ Pinned by the matching tests in `application.test.ts`, `document.test.ts` and `p
 **Why:** The spec: a pod owns its instances, their states and their lifecycle; a failing make never fails its runtime; coords are deterministic and survive a swap. Sharing the record makes "placed without copying" literal and removes the follow-the-home machinery.
 **Cost if wrong:** Guests can no longer refuse a new implementation by policy; a guest that must would need a per-runtime veto on `pod-replaced`.
 
+Superseded in part by 51: `replace` is now `swap` and `pod-replaced` is `pod-swapped`.
+
 ## 49. Removal cascades; unavailable waits (pods revision, task 2)
 
 **Decision:**
@@ -356,3 +366,14 @@ Pinned by the matching tests in `application.test.ts`, `document.test.ts` and `p
 
 **Why:** A selector means "pick one now"; a coord is a promise about the future.
 **Cost if wrong:** A pod removed and its id reused can pick up a hand-made subscription made while the pod was absent; closing that needs pod tombstones. A typo'd coord for an absent pod waits forever.
+
+## 51. Swap in place (pods revision, task 4)
+
+**Decision:**
+- `Runtime.swap(pod, implementation, opts?)` replaces `replace`, at home only (`denied` elsewhere, unknown `not-found`). Coords, tags and subscriptions are kept; config is replaced when `opts.config` is given, else kept. Every instance is made off to the side; the old instances serve until all are made, then all switch at once and every runtime holding the pod recomputes its statuses (a subscription whose port the new implementation lacks is `broken`). Any make failing changes nothing. The event is `pod-swapped { pod, implementation }` (Task 6 folds it into the one stream).
+- An instance added while a swap is pending is made with the new implementation too: the swap keeps making until every current instance has a new host, then switches. If the instance's own (old-implementation) start finishes after the switch, its host is dropped.
+- Calls already inside an old instance finish there with its result; calls after the switch reach the new one. Disposing a host only refuses new calls, so disposing it at the switch is "disposed once its in-flight calls settle"; no in-flight tracking is needed while dispose has no teardown of its own (a sandboxed host with one would have to wait).
+- `Application.place(pod, from, to)` takes a pod id and adds the same record to `to`. An instance coord still stands for its pod (saved members name one until the application starts pods). Removing at home deletes the pod's subscriptions and membership in every runtime holding it (decision 49), now pinned with two guests.
+
+**Why:** The spec: a swap keeps coords and never makes a subscription wait; placed pods are swapped once, at home, and every runtime sees it through the shared record.
+**Cost if wrong:** A swap that should only reach some instances (a canary) needs a per-instance swap; a host with real teardown needs dispose to wait for in-flight calls.

@@ -114,7 +114,7 @@ describe('the external signer', () => {
     if (!before.ok) throw new Error(before.fail.reason)
     const oldKey = before.value.publicKey
 
-    expect(await signer.replace('vault', 'example.signer/vault')).toEqual(success(undefined))
+    expect(await signer.swap('vault', 'example.signer/vault')).toEqual(success(undefined))
 
     // signer: generator → vault, signer → vault, vault.keys → map; client: tester → signer, tester → generator, map → log, log → probe.
     expect(signer.subscriptions()).toHaveLength(3)
