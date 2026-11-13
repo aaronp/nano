@@ -49,3 +49,9 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Decision:** A fresh package (`packages/nano`) beside the old code.
 **Why:** A clean break without breaking the running host until plan 2 switches it.
 **Cost if wrong:** One package rename.
+
+## 9. Can an implementation have ops outside an interface?
+
+**Decision:** No. Every op belongs to an interface; an implementation provides whole interfaces, and `make` throws `<coord>: missing <iface>/<op>` for any action or sink left without a handler.
+**Why:** Keeps the manifest and selectors one shape: everything on offer is an interface coordinate.
+**Cost if wrong:** A "local interface" helper later.
