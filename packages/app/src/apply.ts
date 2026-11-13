@@ -7,7 +7,7 @@ import { ApplicationOps as P, runtimeOf, type Screen } from './application'
 import type { AppCatalog } from './catalog'
 import { HOST_DRIVEN, MAIN, RESERVED, type NanoApp } from './document'
 import { parseRef } from './refs'
-import type { Resolution } from './resolve'
+import type { Resolution, Selector } from './resolve'
 import { PROFILE, value, type HostStores } from './snapshot'
 
 export interface ApplyDeps {
@@ -111,7 +111,7 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
       }
       const made = await call('application', P.createComponent, { kind: i.kind, name: i.id, system: sys.id, ...(mode && { mode }), ...(i.allow && { allow: i.allow }), ...(i.deny && { deny: i.deny }) })
       if ('error' in made) { fail(what, made); continue }
-      if (i.needs) needs.push({ system: sys.id, id: i.id, needs: i.needs })
+      needs.push({ system: sys.id, id: i.id, needs: i.needs ?? {} })
       if (i.config === undefined) continue
       if (codeOps(i.kind) && !consent(sys.id, i.id)) { notes.push(`${what}: its ${i.kind} code was not applied (not agreed to)`); continue }
       configuring.push(within(rt.call(from, i.id, `${k.component}/configure`, i.config), deps.waits?.configure ?? 5000, 'configure').catch((e: unknown) => ({ error: msg(e) }))
@@ -177,5 +177,17 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
     if ('bound' in v) continue
     notes.push(`${what}: ${'make' in v ? 'nothing matches' : v.reason}`)
     await call('application', P.unbindNeed, { ref: `instance:${n.system}/${n.id}`, need })   // auto-bind may have bound it meanwhile: a pin that fails leaves it disabled (none: nothing to undo)
+  }
+  // then the needs the document leaves out: auto-bind ran when each instance came, maybe before its provider did
+  for (const n of needs) {
+    const ref = `instance:${n.system}/${n.id}`
+    const declared = ((await value(host, from, 'application', Ops.key(P.needsOf), ref)) ?? []) as { need: string; selector: Selector; binding?: string }[]
+    for (const d of declared) {
+      if (d.binding || d.need in n.needs) continue
+      const r = await call('application', P.setSelector, { ref, need: d.need, selector: d.selector })
+      if ('error' in r) { fail(`${n.system}/${n.id} needs ${d.need}`, r); continue }
+      const v = r.value as Resolution
+      if (!('bound' in v)) notes.push(`${n.system}/${n.id} needs ${d.need}: ${'make' in v ? 'nothing matches' : v.reason}`)
+    }
   }
 }

@@ -128,3 +128,10 @@ test("bindNeed refuses to bind an instance to itself", async () => {
   expect((await ask(P.bindNeed, { ref: 'instance:host/svc', need: 'db', to: 'instance:host/svc' })).error).toBe("svc can't depend on itself")
   expect(host.registry.binding('svc', 'db')).toBeUndefined()
 })
+
+test("bind-need refuses a target that doesn't offer every op of the need's interface", async () => {
+  const { ask, make, host } = setup()
+  await make('service', 'svc'); await make('service', 'other'); await tick()
+  expect(await ask(P.bindNeed, { ref: 'instance:host/svc', need: 'db', to: 'instance:host/other' })).toEqual({ error: "host/other doesn't implement t/db" })
+  expect(host.registry.binding('svc', 'db')).toBeUndefined()
+})

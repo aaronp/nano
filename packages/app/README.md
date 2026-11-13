@@ -81,6 +81,8 @@ A project serves its components as a package and opens them in any nano host:
 - **Bundle** with `--external '@pritzlaff/*' --external typebox --external 'typebox/*'`: the host's import map
   supplies them.
 - **Serve with CORS** and open `<host>/?src=<url of nano.json>`.
+- **Binary data** in an op: core's `Bytes` schema, for host-mode (trusted) instances only; across a sandbox frame or
+  the network, use base64 strings.
 
 A Makefile target in that project, for example:
 

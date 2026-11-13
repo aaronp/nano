@@ -309,6 +309,7 @@ export function application(host: Runtime, catalog: AppCatalog,
   c.action(P.bindNeed, (s, { ref: r, need, to }) => {
     const n = needAt(s, r, need), t = instanceAt(s, to)
     if (t.system === n.reg.id && t.id === n.id) throw new Error(`${n.id} can't depend on itself`)
+    if (!Object.values(n.iface.ops).every(op => t.inst.actions.has(Ops.key(op)))) throw new Error(`${t.system}/${t.id} doesn't implement ${n.iface.id}`)   // as resolve checks a candidate
     must(n.reg.bind(n.id, need, { registry: t.system, instance: t.id }))
     s.selectors.set(n.key, { implements: n.iface.id, layer: t.system, at: t.id, tags: [...s.tags.tagsOf(to as Ref)].sort() })
   })

@@ -142,9 +142,24 @@ test('needs: checkApp validates needs, and a document without them still validat
   const doc = (needs?: unknown) => needsDoc([{ id: 'host', instances: [{ id: 'svc', kind: 'service', ...(needs !== undefined && { needs }) } as any], subscriptions: [] }])
   expect(checkApp(doc())).toEqual(doc())
   expect(typeof checkApp(doc({ db: { implements: 't/db', tags: ['a'], layer: 'storage', at: 'db1' } }))).toBe('object')
-  expect(typeof checkApp(doc({ Db: { implements: 't/db' } }))).toBe('string')
+  expect(typeof checkApp(doc({ Vault: { implements: 't/db' }, my_db: { implements: 't/db' } }))).toBe('object')   // any name code accepts
+  expect(typeof checkApp(doc({ 'a/b': { implements: 't/db' } }))).toBe('string')
   expect(typeof checkApp(doc({ db: { implements: 'x'.repeat(201) } }))).toBe('string')
   expect(typeof checkApp(doc({ db: { implements: 't/db', at: 'a/b' } }))).toBe('string')
   expect(typeof checkApp(doc({ db: { implements: 't/db', tags: Array.from({ length: 21 }, (_, i) => `t${i}`) } }))).toBe('string')
   expect(typeof checkApp(doc(Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`n${i}`, { implements: 't/db' }]))))).toBe('string')
+})
+
+test('needs: one the document leaves out is resolved once everything loads, though its provider comes later', async () => {
+  const a = needsApp()
+  const doc = needsDoc([{ id: 'host', instances: [{ id: 'svc', kind: 'service' }, { id: 'db1', kind: 'db' }], subscriptions: [] }])
+  expect(await applyApp(doc, 'replace', a.deps)).toEqual([])
+  expect(a.host.registry.binding('svc', 'db')).toEqual({ registry: 'host', instance: 'db1' })
+})
+
+test('needs: one the document leaves out, with nothing to bind, is a note', async () => {
+  const a = needsApp()
+  const doc = needsDoc([{ id: 'host', instances: [{ id: 'svc', kind: 'service' }], subscriptions: [] }])
+  expect(await applyApp(doc, 'replace', a.deps)).toEqual(['host/svc needs db: nothing matches'])
+  expect(a.host.registry.binding('svc', 'db')).toBeUndefined()
 })
