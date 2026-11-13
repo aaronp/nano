@@ -164,3 +164,39 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Decision:** As decision 22 for messages: the rewire (`subscribe`, `retarget`, `reorder`, `replace`, or a subscription provisioning makes) is denied with reason `policy threw: <message>` and nothing changes; it is observed (if the runtime has an observer) as an `exception` from the subscription's `from`, with `op` the subscription id.
 **Why:** No runtime call rejects because of user code.
 **Cost if wrong:** Let it throw; callers must guard.
+
+## 28. What does placing an instance check, and what does the receiving runtime hold?
+
+**Decision:** `place(instance, from, to)` fails `not-found` unless `from` holds the instance and `to` exists; then `to`'s policy approves `isAllowed(<from runtime id>, <to runtime id>, <instance coord>)` (a throw is `denied` with `policy threw: <message>`), and `to.add({ coord, pod, home })` with the instance's real home (so placing a placed instance keeps its home). `from` emits nothing; `to` emits `instance-added` with that home. The same pod serves both runtimes.
+**Why:** The runtime receiving something polices what enters it; one pod keeps one instance, and its calls out still go through its home (decision 11).
+**Cost if wrong:** A policy check on the sending side too; one more `isAllowed` call.
+
+## 29. What happens to placed copies when an instance leaves its home?
+
+**Decision:** Removing an instance at its home removes it from every runtime of the application it was placed into (each emits `instance-removed`, unregisters its publish delivery, and its subscriptions to it go `waiting`). Removing it from a runtime it was placed into touches only that runtime.
+**Why:** The home disposes the pod; a guest holding a disposed pod would show a live connection that can only fail.
+**Cost if wrong:** Guests keep a dead member; calls into it fail `not-found … is disposed`.
+
+## 30. Does a call in another runtime wait for the home's provisioning pass?
+
+**Decision:** Yes. A runtime made by the application consults every runtime's own unfinished passes (`Runtime.settling(coord)`; instance ids are unique, so only the home can have one) through `RuntimeOpts.settling`, so a call routed in a guest into or out of a placed member mid-pass waits for that pass, as at home (decision 26).
+**Why:** The half-wired state of a pass must be invisible to callers wherever they call from.
+**Cost if wrong:** Guests see the half-wired instance; their calls may fail `missing-component` during a pass.
+
+## 31. In what order is a defined runtime opened?
+
+**Decision:** `open(id)` returns an opened runtime as it is (a concurrent open gets the same promise). A defined one is built: its own instances first (`provision: false`, create order), then the runtimes its members come from are opened (one currently being opened is skipped), then its members are placed, then its subscriptions added (they may wait). Any failure is returned as the `NanoResult` fail; the runtime is taken down again (its members removed, it is no longer opened, its definition stays), while runtimes opened on the way stay open. An undefined, unopened id fails `not-found`.
+**Why:** Creating its own instances before opening others makes mutual placement work: when A's members come from B and B's from A, B (opened while A is opening) can already place A's instances. The plan's order (homes first) would fail that case with `not-found`.
+**Cost if wrong:** Swap two loops; mutually placing runtimes then fail to open.
+
+## 32. Which instance ids are taken in an application?
+
+**Decision:** Any id held by a member of the root or any child runtime, and any id a defined but unopened runtime declares among its instances. Applies to creates (and provisioning's generated ids) in runtimes the application makes.
+**Why:** Instance ids are unique across the application (ruling), including runtimes opened later on demand; otherwise opening a saved runtime could fail on an id created meanwhile.
+**Cost if wrong:** Opening a runtime can fail `exists`.
+
+## 33. What does the application share with adopted children, and what does `runtimes()` list?
+
+**Decision:** `createRuntime` and `open` make children that share the application's registry, tags and id check; an adopted runtime (another application included) keeps its own registry, tags and ids, and only its id must be free. `place` works between the root and direct children (adopted ones included, as they are runtimes); runtimes inside an adopted application are out of reach (placing across nested applications is out of scope). `runtime(<application id>)` gives the root; `runtimes()` lists child ids, opened and defined, not the root. Defined runtimes always use the allow-all policy (the only saved policy).
+**Why:** Nesting is adoption only (ruling); the root is the application itself.
+**Cost if wrong:** A cross-application place that walks nested applications.

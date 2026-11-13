@@ -51,6 +51,8 @@ export type Runtime = {
   /** Messages delivered over a subscription (calls and event deliveries) and the last result; undefined for an unknown id. */
   books(id: string): Book | undefined
   listen(fn: (e: RuntimeEvent) => void): () => void
+  /** While `coord` is in this runtime's own unfinished provisioning pass, the pass's end. */
+  settling(coord: string): Promise<void> | undefined
 }
 
 export type RuntimeOpts = {
@@ -58,6 +60,8 @@ export type RuntimeOpts = {
   policy?: Policy
   tagsOf?: (coord: string) => ReadonlySet<string>
   idTaken?: (id: string) => boolean
+  /** Unfinished passes elsewhere (the member's home runtime): calls here into or out of `coord` wait for them too. */
+  settling?: (coord: string) => Promise<void> | undefined
   pod?: { timeoutMs?: number; observe?(o: Observation): void }
 }
 
@@ -79,7 +83,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     status: sid => statuses.get(sid),
     member: c => members.get(c),
     observe: o => opts.pod?.observe?.(o),
-    settled: c => passOf.get(c),
+    settled: c => passOf.get(c) ?? opts.settling?.(c),
   }
   const deliver = deliverer(wiring)
 
@@ -278,6 +282,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       listeners.add(fn)
       return () => { listeners.delete(fn) }
     },
+    settling: c => passOf.get(c),
   }
   return rt
 }
