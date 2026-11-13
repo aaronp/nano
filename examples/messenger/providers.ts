@@ -21,11 +21,11 @@ const memoryStore = implementation('example.messenger/memory-store', {
   },
 })
 
-/** Whatever is published is passed on to every subscriber of `messages`. */
+/** Whatever is posted is passed on to every subscriber of `messages`. */
 const messaging = implementation('example.messenger/messaging', {
   provides: [Messaging],
   make: () => [provide(Messaging, {
-    async publish(ctx, message) {
+    async post(ctx, message) {
       await ctx.publish(Messaging.ops.messages, message)
       return success(null)
     },
@@ -62,7 +62,7 @@ const composer = implementation('example.messenger/composer', {
     async send(ctx, { text }) {
       if (!ctx.hasDependencies('messaging')) return success({ status: 'disabled' as const })
       const id = crypto.randomUUID()
-      const r = await ctx.one(Messaging, m => m.publish({ id, text }))
+      const r = await ctx.one(Messaging, m => m.post({ id, text }))
       return r.ok ? success({ status: 'sent' as const, id }) : r
     },
   })],

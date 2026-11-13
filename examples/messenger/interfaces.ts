@@ -2,7 +2,7 @@
  * The messenger's contracts: a key-value store, a messaging channel, and the inbox and composer widgets that use them.
  *
  *   ctx.one(KeyValueStore, kv => kv.put({ key: 'inbox', value: '[]' }))
- *   ctx.one(Messaging, m => m.publish({ id: 'm1', text: 'hi' }))   // every subscriber of `messages` gets it
+ *   ctx.one(Messaging, m => m.post({ id: 'm1', text: 'hi' }))   // every subscriber of `messages` gets it
  */
 import { Type } from 'typebox'
 import { defineSchema, iface, op } from '@pritzlaff/nano'
@@ -28,7 +28,7 @@ export const KeyValueStore = iface('example.messenger.KeyValueStore', {
 })
 
 export const Messaging = iface('example.messenger.Messaging', {
-  publish: op.action('publish', Message, Done),
+  post: op.action('post', Message, Done),
   messages: op.source('messages', Message),
 })
 

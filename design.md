@@ -56,7 +56,9 @@ subscription that is live now (both ends present and fitting). Verbs only see co
 
 **Why can't my code call any instance it finds?** Calls only travel over the caller's subscriptions (D3), so every
 reachable target is visible, saved and policed. To use something from another runtime, place it into yours first (D6).
-Hosts call in from outside through the pod (`member.pod.invoke`, D45).
+Known gap: there is no policed way in from outside the graph yet. The example tests call `member.pod.invoke`, which
+skips policy, books and the provisioning-pass wait; it is for tests only. Plan 2 adds a host-side invoke through the
+runtime's policy and books (D45).
 
 **What happens when two instances match `one`?** `Fail: ambiguous`. `one` never guesses: narrow the selector (tags,
 implementation), unplug one, or use `any`, `first` or `fallback` (`runtime/calls.ts`). Provisioning likewise leaves a

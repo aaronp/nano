@@ -116,13 +116,17 @@ describe('the external signer', () => {
 
     expect(await signer.replace(VAULT, 'example.signer/vault')).toEqual(success(VAULT))
 
+    // signer: generator → vault, signer → vault, vault.keys → map; client: tester → signer, tester → generator, map → log, log → probe.
+    expect(signer.subscriptions()).toHaveLength(3)
+    expect(client.subscriptions()).toHaveLength(4)
     for (const rt of [signer, client]) for (const s of rt.subscriptions()) expect(rt.status(s.id)).toBe('live')
     // A fresh vault: the old key is gone, new ones work, and the log keeps listening.
     expect(await press(client, SIGNER, Signer, Signer.ops.sign, { publicKey: oldKey, purpose: 'login', payload }))
       .toEqual(success({ status: 'unknown-key' }))
     const after = await runTest(client, { purpose: 'login', payload })
-    expect(after).toMatchObject({ ok: true, value: { result: { status: 'signed' } } })
-    expect(log.seen).toHaveLength(2)
+    if (!after.ok) throw new Error(after.fail.reason)
+    expect(after.value.result.status).toBe('signed')
+    expect(log.seen[1]).toEqual([`login: ${oldKey}`, `login: ${after.value.publicKey}`])
   })
 
   test('the committed nano.json is what saving writes, and loading it gives a working signer', async () => {

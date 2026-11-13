@@ -21,12 +21,6 @@ export const SignResult = defineSchema('SignResult', Type.Union([
   Type.Object({ status: Type.Literal('unknown-key') }),
 ]))
 
-/** Key pairs handed to the vault: a raw public key and a PKCS#8 private key. */
-export const StoreRequest = defineSchema('StoreRequest', Type.Object({
-  purpose: Type.String(),
-  keys: Type.Array(Type.Object({ publicKey: Base64, privateKey: Base64 })),
-}))
-export const Stored = defineSchema('Stored', Type.Object({ stored: Type.Integer() }))
 export const KeyList = defineSchema('KeyList', Type.Array(Type.Object({ publicKey: Base64, purpose: Type.String() })))
 
 export const LogLine = defineSchema('LogLine', Type.String())
@@ -49,9 +43,10 @@ export const Signer = iface('example.signer.Signer', {
 })
 
 export const Vault = iface('example.signer.Vault', {
-  store: op.action('store', StoreRequest, Stored),
+  /** Makes key pairs inside the vault; only the public keys come out. */
+  create: op.action('create', KeysRequest, NewKeys),
   'sign-with': op.action('sign-with', SignRequest, SignResult),
-  /** Published after each `store`: the keys just stored. */
+  /** Published after each `create`: the keys just made. */
   keys: op.source('keys', KeyList),
 })
 

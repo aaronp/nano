@@ -12,17 +12,21 @@ import { KeyFormatter, KeyGenerator, Log, Signer, Tester, Vault } from './interf
 const toBase64 = (b: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(b)))
 const fromBase64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0))
 
-/** Keys in memory, private ones never extractable again; a purpose other than the key's is `denied`. */
+/** Makes and keeps Ed25519 keys in memory; private keys never leave it. A purpose other than the key's is `denied`. */
 const vault = implementation('example.signer/vault', {
   provides: [Vault],
   make: () => {
     const keys = new Map<string, { purpose: string; key: CryptoKey }>()
     return [provide(Vault, {
-      async store(ctx, { purpose, keys: pairs }) {
-        for (const { publicKey, privateKey } of pairs)
-          keys.set(publicKey, { purpose, key: await crypto.subtle.importKey('pkcs8', fromBase64(privateKey), { name: 'Ed25519' }, false, ['sign']) })
-        await ctx.publish(Vault.ops.keys, pairs.map(p => ({ publicKey: p.publicKey, purpose })))
-        return success({ stored: pairs.length })
+      async create(ctx, { count, purpose }) {
+        const made = await Promise.all(Array.from({ length: count }, async () => {
+          const k = await crypto.subtle.generateKey({ name: 'Ed25519' }, false, ['sign', 'verify']) as CryptoKeyPair
+          const publicKey = toBase64(await crypto.subtle.exportKey('raw', k.publicKey))
+          keys.set(publicKey, { purpose, key: k.privateKey })
+          return publicKey
+        }))
+        await ctx.publish(Vault.ops.keys, made.map(publicKey => ({ publicKey, purpose })))
+        return success({ keys: made })
       },
       async 'sign-with'(_ctx, { publicKey, purpose, payload }) {
         const held = keys.get(publicKey)
@@ -35,22 +39,12 @@ const vault = implementation('example.signer/vault', {
   },
 })
 
-/** Makes key pairs and hands them to the vault; gives back only the public keys. */
+/** What others are given to make keys: it asks the vault, which keeps the private halves. */
 const generator = implementation('example.signer/generator', {
   provides: [KeyGenerator],
   dependencies: { vault: Vault },
   make: () => [provide(KeyGenerator, {
-    async 'create-keys'(ctx, { count, purpose }) {
-      const pairs = await Promise.all(Array.from({ length: count }, async () => {
-        const k = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']) as CryptoKeyPair
-        return {
-          publicKey: toBase64(await crypto.subtle.exportKey('raw', k.publicKey)),
-          privateKey: toBase64(await crypto.subtle.exportKey('pkcs8', k.privateKey)),
-        }
-      }))
-      const stored = await ctx.one(Vault, v => v.store({ purpose, keys: pairs }))
-      return stored.ok ? success({ keys: pairs.map(p => p.publicKey) }) : stored
-    },
+    'create-keys': (ctx, request) => ctx.one(Vault, v => v.create(request)),
   })],
 })
 

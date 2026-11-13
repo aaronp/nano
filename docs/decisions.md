@@ -31,6 +31,7 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 **Decision:** For each unsatisfied dependency: exactly one matching existing instance, subscribe to it; otherwise exactly one matching implementation in the registry, create it (recursively, with a cycle check) and subscribe; otherwise leave it unsatisfied. Loading a document never provisions.
 **Why:** Mirrors the dependencies work's resolver; ambiguity is left for the host to offer a choice.
 **Cost if wrong:** A preference or priority rule for several candidates.
+**Superseded by 26:** there is no cycle check; a pass creates first, then wires, so mutual dependencies connect.
 
 ## 6. Can a subscription cross runtimes?
 
@@ -279,7 +280,7 @@ Limits (50 runtimes, 500 instances or members, 2000 subscriptions) are still enf
 
 **Decision:** The vault and the map live in `signer`; the log lives in `signer-client`. `vault.keys → map.format` is an event subscription in `signer`; the map is placed into `signer-client`, where `map.line → log.append` is an event subscription. The vault is never placed anywhere.
 **Why:** Event subscriptions stay within one runtime (decision 6), and an instance publishes into every runtime it is a member of (decision 17). Placing the map, not the vault, keeps the vault private to `signer` while the client still sees a formatted view of what it stores; the log stays in the client, as in the spec's walkthrough.
-**Cost if wrong:** Place the vault into the client (exposing `store` and `sign-with` there) or move the log into `signer`; one example changes.
+**Cost if wrong:** Place the vault into the client (exposing `create` and `sign-with` there) or move the log into `signer`; one example changes.
 
 ## 44. Examples: how are the dependencies wired?
 
@@ -287,8 +288,14 @@ Limits (50 runtimes, 500 instances or members, 2000 subscriptions) are still enf
 **Why:** One example of each: provisioning is what a host does when a person adds a widget; explicit subscriptions are what the person does when plugging in, and named ids read better in `nano.json` and in `unsubscribe`.
 **Cost if wrong:** None to the model; the examples change.
 
-## 45. Examples: how does a test (or a host button) call into an instance?
+## 45. Examples: how does a test call into an instance from outside the graph?
 
-**Decision:** Through the member's pod: `rt.member(coord)!.pod.invoke(portKey(iface.coord, op.coord), input)`. This is the host's door from outside the graph; it is not a subscription, so it is not policed or booked. To see what a source publishes, a test subscribes a probe sink whose input is `Type.Unknown()` (it fits any source, `fits`).
-**Why:** There is no caller instance outside the graph, and calls between instances only travel through subscriptions; the public API already exposes the pod.
-**Cost if wrong:** A host-side `invoke(runtime, coord, iface, op, input)` that goes through the runtime's policy and books; the examples' `press` helper becomes that call.
+**Decision:** A known gap, test-only: the example tests call `rt.member(coord)!.pod.invoke(portKey(iface.coord, op.coord), input)` (their `press` helper). It skips the runtime's policy, its books and the provisioning-pass wait, so it is not how a host should call in. The planned fix (plan 2) is a host-side invoke through the runtime, policed and booked like any other message. To see what a source publishes, a test subscribes a probe sink whose input is `Type.Unknown()` (it fits any source, `fits`).
+**Why:** There is no caller instance outside the graph and no host-side invoke yet; calls between instances only travel through subscriptions.
+**Cost if wrong:** A host built on `pod.invoke` would let button presses past policy and leave them out of the books.
+
+## 46. External signer: who makes the keys?
+
+**Decision:** The vault. `Vault.create({ count, purpose })` makes Ed25519 key pairs inside the vault (private keys non-extractable) and returns only the public keys; `KeyGenerator.create-keys` asks the vault to do it. The vault has no `store`.
+**Why:** Private keys must never travel in messages: messages are observed and visible to policy, and a `store` would let any caller inject keys. This is also the shape the passkey and other-origin variants need, where the keys never leave their holder.
+**Cost if wrong:** An import action on the vault, guarded by policy, for keys made elsewhere.
