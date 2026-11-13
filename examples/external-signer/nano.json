@@ -1,0 +1,109 @@
+{
+  "nano": 2,
+  "title": "External signer",
+  "providers": [
+    "example.signer"
+  ],
+  "runtimes": [
+    {
+      "id": "signer",
+      "policy": "allow-all",
+      "instances": [
+        {
+          "id": "vault",
+          "implementation": "example.signer/vault"
+        },
+        {
+          "id": "generator",
+          "implementation": "example.signer/generator"
+        },
+        {
+          "id": "signer",
+          "implementation": "example.signer/signer"
+        },
+        {
+          "id": "map",
+          "implementation": "example.signer/map"
+        }
+      ],
+      "members": [],
+      "subscriptions": [
+        {
+          "kind": "call",
+          "from": "example.signer/generator#generator",
+          "to": "example.signer/vault#vault",
+          "id": "s1"
+        },
+        {
+          "kind": "call",
+          "from": "example.signer/signer#signer",
+          "to": "example.signer/vault#vault",
+          "id": "s2"
+        },
+        {
+          "kind": "event",
+          "from": "example.signer/vault#vault",
+          "source": "example.signer.Vault/f0f5c1583efb282af152779bb7c88d378a5b85a09507199ee80b26278f0a3a64",
+          "to": "example.signer/map#map",
+          "target": "example.signer.KeyFormatter/a2c897960fecffbd4805a6058909988796e6c79bd0838d598a79d3ab0c251050",
+          "id": "s3"
+        }
+      ]
+    },
+    {
+      "id": "signer-client",
+      "policy": "allow-all",
+      "instances": [
+        {
+          "id": "tester",
+          "implementation": "example.signer/tester"
+        },
+        {
+          "id": "log",
+          "implementation": "example.signer/log"
+        }
+      ],
+      "members": [
+        {
+          "instance": "example.signer/generator#generator",
+          "home": "signer"
+        },
+        {
+          "instance": "example.signer/signer#signer",
+          "home": "signer"
+        },
+        {
+          "instance": "example.signer/map#map",
+          "home": "signer"
+        }
+      ],
+      "subscriptions": [
+        {
+          "kind": "call",
+          "from": "example.signer/tester#tester",
+          "to": "example.signer/signer#signer",
+          "id": "s1"
+        },
+        {
+          "kind": "call",
+          "from": "example.signer/tester#tester",
+          "to": "example.signer/generator#generator",
+          "id": "s2"
+        },
+        {
+          "kind": "event",
+          "from": "example.signer/map#map",
+          "source": "example.signer.KeyFormatter/d96c86eb1ce0330750253755a2569e0588f2a4f97cf670e60f809dc32a6be75f",
+          "to": "example.signer/log#log",
+          "target": "example.signer.Log/77eaaecad3790471bcec8e0a22417fa471db78848dbfc9b61b9fdd761edbb56c",
+          "id": "s3"
+        }
+      ]
+    }
+  ],
+  "tags": {},
+  "open": [
+    "signer",
+    "signer-client"
+  ]
+}

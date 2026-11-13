@@ -1,0 +1,85 @@
+{
+  "nano": 2,
+  "title": "Messenger",
+  "providers": [
+    "example.messenger"
+  ],
+  "runtimes": [
+    {
+      "id": "messenger",
+      "policy": "allow-all",
+      "instances": [
+        {
+          "id": "inbox",
+          "implementation": "example.messenger/inbox"
+        },
+        {
+          "id": "composer",
+          "implementation": "example.messenger/composer"
+        }
+      ],
+      "members": [
+        {
+          "instance": "example.messenger/memory-store#store",
+          "home": "persistence"
+        },
+        {
+          "instance": "example.messenger/messaging#messaging",
+          "home": "messaging"
+        }
+      ],
+      "subscriptions": [
+        {
+          "id": "inbox-store",
+          "kind": "call",
+          "from": "example.messenger/inbox#inbox",
+          "to": "example.messenger/memory-store#store"
+        },
+        {
+          "id": "composer-messaging",
+          "kind": "call",
+          "from": "example.messenger/composer#composer",
+          "to": "example.messenger/messaging#messaging"
+        },
+        {
+          "id": "messages-inbox",
+          "kind": "event",
+          "from": "example.messenger/messaging#messaging",
+          "source": "example.messenger.Messaging/9ba68770d917788a22b30c5c2b3cb969bcbbc2942dce5c6f16a81d5821a48ac8",
+          "to": "example.messenger/inbox#inbox",
+          "target": "example.messenger.Inbox/4b0d7839d057efd5c6ed554224e0c3fb1e79cc83d2ae92cace81c053d9be30a5"
+        }
+      ]
+    },
+    {
+      "id": "persistence",
+      "policy": "allow-all",
+      "instances": [
+        {
+          "id": "store",
+          "implementation": "example.messenger/memory-store"
+        }
+      ],
+      "members": [],
+      "subscriptions": []
+    },
+    {
+      "id": "messaging",
+      "policy": "allow-all",
+      "instances": [
+        {
+          "id": "messaging",
+          "implementation": "example.messenger/messaging"
+        }
+      ],
+      "members": [],
+      "subscriptions": []
+    }
+  ],
+  "tags": {},
+  "open": [
+    "messenger",
+    "persistence",
+    "messaging"
+  ]
+}

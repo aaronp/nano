@@ -10,6 +10,13 @@
         "typescript": "^7.0.2",
       },
     },
+    "examples": {
+      "name": "@composable/examples",
+      "dependencies": {
+        "@pritzlaff/nano": "workspace:*",
+        "typebox": "^1.4.0",
+      },
+    },
     "packages/app": {
       "name": "@pritzlaff/nano-app",
       "version": "0.1.0",
@@ -192,6 +199,8 @@
     "@composable/circuit": ["@composable/circuit@workspace:packages/circuit"],
 
     "@composable/editor": ["@composable/editor@workspace:packages/editor"],
+
+    "@composable/examples": ["@composable/examples@workspace:examples"],
 
     "@composable/people": ["@composable/people@workspace:packages/people"],
 

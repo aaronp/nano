@@ -1,0 +1,9 @@
+{
+  "name": "@composable/examples",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@pritzlaff/nano": "workspace:*",
+    "typebox": "^1.4.0"
+  }
+}

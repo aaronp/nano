@@ -274,3 +274,21 @@ Pinned by the matching tests in `document.test.ts`.
 **Cost if wrong:** Runtimes fail to open; tags appear on the wrong instance; configs change unseen.
 
 Limits (50 runtimes, 500 instances or members, 2000 subscriptions) are still enforced only by the document. An application past them saves a document that `checkDoc` refuses.
+
+## 43. External signer: where do the map and the log live?
+
+**Decision:** The vault and the map live in `signer`; the log lives in `signer-client`. `vault.keys → map.format` is an event subscription in `signer`; the map is placed into `signer-client`, where `map.line → log.append` is an event subscription. The vault is never placed anywhere.
+**Why:** Event subscriptions stay within one runtime (decision 6), and an instance publishes into every runtime it is a member of (decision 17). Placing the map, not the vault, keeps the vault private to `signer` while the client still sees a formatted view of what it stores; the log stays in the client, as in the spec's walkthrough.
+**Cost if wrong:** Place the vault into the client (exposing `store` and `sign-with` there) or move the log into `signer`; one example changes.
+
+## 44. Examples: how are the dependencies wired?
+
+**Decision:** The external signer uses provisioning (`create(…, { provision: true })`): the generator and signer find the one vault beside them, and in `signer-client` the tester finds the placed generator and signer, because they are placed before the tester is created. The messenger subscribes explicitly, with named ids (`inbox-store`, `composer-messaging`, `messages-inbox`), since plugging in and unplugging is what it demonstrates. Event subscriptions are always explicit (provisioning only makes call subscriptions).
+**Why:** One example of each: provisioning is what a host does when a person adds a widget; explicit subscriptions are what the person does when plugging in, and named ids read better in `nano.json` and in `unsubscribe`.
+**Cost if wrong:** None to the model; the examples change.
+
+## 45. Examples: how does a test (or a host button) call into an instance?
+
+**Decision:** Through the member's pod: `rt.member(coord)!.pod.invoke(portKey(iface.coord, op.coord), input)`. This is the host's door from outside the graph; it is not a subscription, so it is not policed or booked. To see what a source publishes, a test subscribes a probe sink whose input is `Type.Unknown()` (it fits any source, `fits`).
+**Why:** There is no caller instance outside the graph, and calls between instances only travel through subscriptions; the public API already exposes the pod.
+**Cost if wrong:** A host-side `invoke(runtime, coord, iface, op, input)` that goes through the runtime's policy and books; the examples' `press` helper becomes that call.
