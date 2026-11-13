@@ -18,7 +18,7 @@ import type { EndSelector, Target } from '../selector.ts'
 import { connectionsOf, contextFor, deliverer, type Book, type Wiring } from './calls.ts'
 import { resolveEnd } from './connect.ts'
 import { provision, type Unsatisfied } from './provision.ts'
-import { badIndices, ID, instanceCoord, locate, parseInstance, podInfo, targetOf, type Holder, type Instance, type PodInfo, type PodRecord } from './pods.ts'
+import { badIndices, ID, instanceCoord, locate, MAX_INSTANCES, parseInstance, podInfo, targetOf, type Holder, type Instance, type PodInfo, type PodRecord } from './pods.ts'
 import { isJson } from '../schema.ts'
 import { invalid, nextId, reordered, statusOf, type NewSubscription, type Status, type SubscriptionData } from './subscriptions.ts'
 import { tracer, type RuntimeEvent } from './trace.ts'
@@ -29,8 +29,6 @@ export type { Book } from './calls.ts'
 export type { Unsatisfied } from './provision.ts'
 export type { RuntimeEvent } from './trace.ts'
 
-/** Instances of a runtime's own pods, at most (placed pods count at their home). */
-export const MAX_INSTANCES = 500
 /** The highest instance index a coord can carry. */
 const MAX_INDEX = 999_999_999
 
@@ -57,7 +55,7 @@ export type Runtime = {
   addInstance(pod: string): Promise<NanoResult<string>>
   /** Place a pod from its home: the record is shared, not copied, so its instances and their states are the home's. */
   add(pod: PodRecord): NanoResult<void>
-  /** Scale to `count` (0 to 500): up adds at the next indices, down removes the highest. Returns the instance coords after. Only at home. */
+  /** Scale to `count` (0 to MAX_INSTANCES): up adds at the next indices, down removes the highest. Returns the instance coords after. Only at home. */
   scale(pod: string, count: number): Promise<NanoResult<string[]>>
   /** Remove one instance (only at home): it is disposed and every subscription naming it is deleted (decision 49). */
   removeInstance(coord: string): NanoResult<void>
@@ -69,8 +67,8 @@ export type Runtime = {
    * Swap a pod's implementation (and config, when given) in place, only at home: coords, tags and subscriptions are kept;
    * every instance is remade off to the side (one added meanwhile too), then all switch at once and every runtime holding
    * the pod recomputes its statuses (ports that no longer fit → `broken`). Until the switch the old instances serve; calls
-   * already inside an old one finish there. A failing make changes nothing; so does a swap superseded by a later one
-   * (the last asked wins; the earlier fails `invalid-input`).
+   * already inside an old one finish there. A failing make changes nothing (each is a `failure` on the stream of every
+   * runtime holding the pod); so does a swap superseded by a later one (the last asked wins; the earlier fails `invalid-input`).
    */
   swap(pod: string, implementation: string, opts?: { config?: unknown }): Promise<NanoResult<void>>
   pod(id: string): PodInfo | undefined
@@ -96,6 +94,11 @@ export type Runtime = {
    * state; every `instance` state change, with the reason when it fails; `pod-swapped`; removal is `instance` `stopped`,
    * the cascade, then `pod-removed`), wiring, messages (`sent`, then `delivered` or `denied`) and problems (`failure`,
    * `warning`). A throwing listener is swallowed.
+   *
+   * Deliberately off the stream: calls a `make` makes through its own ctx (they fail at once), a message whose
+   * subscription vanished while it waited for a provisioning pass (it is never sent), and verb results `missing-component`
+   * and `ambiguous` (no message was sent; the caller has the fail). A listener that acts on the runtime re-enters it, so
+   * the events its action emits reach later listeners before the event it is handling.
    */
   listen(fn: (e: RuntimeEvent) => void): () => void
   /** Put a warning on this runtime's stream (the application's notes, as they happen). */
@@ -112,6 +115,8 @@ export type RuntimeOpts = {
   idTaken?: (id: string) => boolean
   /** Unfinished passes elsewhere (the pod's home runtime): calls here into or out of `coord` wait for them too. */
   settling?: (coord: string) => Promise<void> | undefined
+  /** Why `more` instances cannot be added across the application (its limit), or undefined. */
+  full?: (more: number) => string | undefined
   pod?: { timeoutMs?: number }
 }
 
@@ -176,8 +181,11 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
   }
   /** Instances of this runtime's own pods. */
   const own = () => [...pods.values()].reduce((n, p) => n + (p.home === id ? p.instances.size : 0), 0)
-  const tooMany = (pod: string, more: number): NanoResult<never> | undefined =>
-    own() + more > MAX_INSTANCES ? failure('invalid-input', `${pod}: ${id} would hold more than ${MAX_INSTANCES} instances`) : undefined
+  const tooMany = (pod: string, more: number): NanoResult<never> | undefined => {
+    if (own() + more > MAX_INSTANCES) return failure('invalid-input', `${pod}: ${id} would hold more than ${MAX_INSTANCES} instances`)
+    const why = more > 0 && opts.full?.(more)
+    if (why) return failure('invalid-input', `${pod}: ${why}`)
+  }
 
   const bad = (s: SubscriptionData): NanoResult<never> | undefined => {
     const why = invalid(s)
@@ -206,7 +214,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
   }
 
   const badCount = (pod: string, n: number, min = 1): NanoResult<never> | undefined =>
-    !Number.isInteger(n) || n < min || n > 500 ? failure('invalid-input', `${pod}: count must be a whole number from ${min} to 500`) : undefined
+    !Number.isInteger(n) || n < min || n > MAX_INSTANCES ? failure('invalid-input', `${pod}: count must be a whole number from ${min} to ${MAX_INSTANCES}`) : undefined
   /** A host for `coord`: a handler that throws or times out is a `failure` on the stream of every runtime holding the pod. */
   const host = (p: PodRecord, coord: string, impl: Implementation, ctx: Parameters<typeof createHostPod>[2]) =>
     createHostPod(coord, impl, ctx, { ...opts.pod, onFailure: reason => tell(p, { type: 'failure', coord, reason }) })
@@ -383,7 +391,10 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
         }))
       const fail = swaps.get(p) !== gen ? failure('invalid-input', `${pid}: superseded by a later swap`)
         : [...made.values()].flatMap(m => (m.host.ok ? [] : [m.host]))[0] ?? (pods.get(pid) !== p ? failure('not-found', `${pid} was removed while it was swapped`) : undefined)
-      if (fail) { for (const m of made.values()) if (m.host.ok) m.host.value.dispose(); return fail }
+      if (fail) {
+        for (const [coord, m] of made) if (m.host.ok) m.host.value.dispose(); else tell(p, { type: 'failure', coord, reason: m.host.fail.reason })
+        return fail
+      }
       const from = p.implementation.coord
       p.implementation = impl
       if (config === undefined) delete p.config

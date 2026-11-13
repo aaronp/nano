@@ -7,7 +7,7 @@
  */
 import { Type, type Static } from 'typebox'
 import { Value } from 'typebox/value'
-import { createApplication, RuntimeDefSchema, type Application, type RuntimeDef } from './application.ts'
+import { createApplication, MAX_DOC_INSTANCES, RuntimeDefSchema, type Application, type RuntimeDef } from './application.ts'
 import { Policies, type Policy } from './policy.ts'
 import type { Registry } from './registry.ts'
 import type { NanoResult } from './result.ts'
@@ -28,9 +28,6 @@ export const NanoDocSchema = Type.Object({
 })
 
 export type NanoDoc = Static<typeof NanoDocSchema>
-
-/** Instances across a document's runtimes, at most: a bound on what loading one file can make. */
-export const MAX_DOC_INSTANCES = 5000
 
 /** The document, or why it is not a v2 document (`<path>: <message>` for the first error). Never throws. */
 export function checkDoc(json: unknown): NanoDoc | string {

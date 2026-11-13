@@ -385,11 +385,13 @@ describe('runtime subscriptions', () => {
     expect(await rt.swap('z', 'acme/log/notes')).toEqual({ ok: false, fail: { type: 'denied', reason: 'z: swap it at its home runtime r2' } })
     expect(rt.pod('z')!.implementation).toBe('acme/log/mem')
   })
-  test('a swap whose make throws changes nothing', async () => {
-    const { rt } = setup()
+  test('a swap whose make throws changes nothing, and the failure is on the stream', async () => {
+    const { rt, events } = setup()
     await rt.create('d', 'acme/db/mem')
+    events.length = 0
     expect(await rt.swap('d', 'acme/bad/boom')).toMatchObject({ ok: false, fail: { type: 'threw' } })
     expect(rt.pod('d')).toMatchObject({ implementation: 'acme/db/mem', state: 'running' })
+    expect(events).toEqual([{ type: 'failure', coord: 'd#0', reason: 'd#0: nope' }])
   })
   test("reorder changes a consumer's call order; a partial list fails not-found", async () => {
     const { rt } = setup()

@@ -309,6 +309,8 @@ Pinned by the matching tests in `document.test.ts`.
 
 Limits: `define` enforces the per-runtime ones (500 instances or members, 2000 subscriptions) through `RuntimeDefSchema`; only live creation (`create`, `place`, `subscribe`, `createRuntime`) and the 50-runtime document limit are unenforced. An application past them saves a document that `checkDoc` refuses.
 
+Superseded in part by 53 and 54: live creation is capped at 500 instances per runtime and 5000 across the application; `place`, `subscribe`, `createRuntime` and the 50-runtime limit are still unenforced.
+
 ## 43. External signer: where do the map and the log live?
 
 **Decision:** The vault and the map live in `signer`; the log lives in `signer-client`. `vault.keys → map.format` is an event subscription in `signer`; the map is placed into `signer-client`, where `map.line → log.append` is an event subscription. The vault is never placed anywhere.
@@ -436,3 +438,14 @@ Superseded in part by 53: `pod-swapped { pod, from, to }`, told to every runtime
 
 **Why:** The spec's Observability section: one stream a person, a test or the host watches; tests assert behaviour through it. Telling a shared pod's news to every holder keeps "placed pods share one record" true on the stream too. The caps bound what loading one file can make.
 **Cost if wrong:** A host wanting a note on the runtime it concerns filters root warnings by the runtime id prefix (or the note gets a `runtime` field); a guest wanting no echo of its home's state changes filters by `pod-created`'s home (`rt.pod(id).home`).
+
+## 54. The application's instance cap, swap failures on the stream, and what `listen` leaves out (pods revision, task 7)
+
+**Decision:**
+- The application holds at most `MAX_DOC_INSTANCES` = 5000 instances across its runtimes: every runtime's own pods (root and children, adopted ones too) plus the pods of runtimes only defined. `create`, `addInstance` and `scale` in any runtime it made refuse beyond with `invalid-input` (`<pod>: the application would hold more than 5000 instances`), through `RuntimeOpts.full`; `define` refuses a definition that would pass it (`<runtime>: the application would hold more than 5000 instances`). The constant now lives in `application.ts`, beside `RuntimeDefSchema`. One `MAX_INSTANCES` (500, `runtime/pods.ts`) bounds a runtime's own instances, `create`/`scale` counts, `badIndices` and the schema's `instances`, `pods` and `members` lists.
+- A swap whose new make fails is a `failure { coord, reason }` on the stream of every runtime holding the pod, one per failed instance, as well as the swap's `threw`/`timeout` fail. (A failed make on create or restart stays the `instance` event `failed`, decision 53: there the instance changes state; a failed swap changes nothing.)
+- `rt.listen` documents what is deliberately not on the stream: calls during a `make` (they fail at once), a message whose subscription vanished during a pass wait (never `sent`), and the verb results `missing-component`/`ambiguous` (no message). A listener that acts on the runtime re-enters it, so later listeners see the events of that action before the event being handled.
+
+Pinned by "the application holds at most 5000 instances …" (`application.test.ts`) and "a swap whose make throws changes nothing, and the failure is on the stream" (`runtime.test.ts`).
+**Why:** Anything the application can save must load: `checkDoc` refuses more than 5000 instances (decision 53). A swap that failed silently left only the caller knowing.
+**Cost if wrong:** A long-lived application counts adopted runtimes it never saves, so it may refuse a little early; an exact count skips `adopted(id)`.

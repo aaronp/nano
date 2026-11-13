@@ -408,6 +408,17 @@ describe('runtimes on demand', () => {
       .toEqual({ ok: false, fail: { type: 'invalid-input', reason: 'big: 501 instances (at most 500)' } })
     expect(app.define({ id: 'big', pods: [many('a', 300), many('b', 200)], members: [], subscriptions: [] })).toEqual(success(undefined))
   })
+  test('the application holds at most 5000 instances across its runtimes, defined ones included, so what it saves can load', async () => {
+    const app = createApplication('app', { registry: registry() })
+    const many = (id: string, n: number) => ({ id, implementation: 'acme/keys/vault', instances: Array.from({ length: n }, (_, i) => i), next: n })
+    for (let n = 0; n < 10; n++) expect(app.define({ id: `d${n}`, pods: [many(`p${n}`, 500)], members: [], subscriptions: [] })).toEqual(success(undefined))
+    const full = { ok: false, fail: { type: 'invalid-input', reason: expect.stringContaining('more than 5000 instances') } }
+    expect(app.define({ id: 'more', pods: [many('q', 1)], members: [], subscriptions: [] })).toMatchObject(full)
+    const rt = app.createRuntime('x')
+    if (!rt.ok) throw new Error(rt.fail.reason)
+    expect(await rt.value.create('q', 'acme/keys/vault')).toMatchObject(full)
+    expect(await app.create('q', 'acme/keys/vault')).toMatchObject(full)
+  })
   test('a subscription that cannot be added is skipped with a note; the runtime starts with the rest', async () => {
     const app = createApplication('app', { registry: registry() })
     app.define(signerDef)

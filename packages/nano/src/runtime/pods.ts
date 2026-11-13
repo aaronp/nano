@@ -54,13 +54,16 @@ export type PodInfo = {
   instances: { coord: string; state: InstanceState; reason?: string }[]
 }
 
+/** Instances of a runtime's own pods, at most (placed pods count at their home); also the most one pod can have. */
+export const MAX_INSTANCES = 500
+
 export const instanceCoord = (pod: string, n: number): string => `${pod}#${n}`
 
-/** Why these saved instance indices and `next` cannot be a pod's (up to 500 distinct whole numbers, each below `next`), or undefined. */
+/** Why these saved instance indices and `next` cannot be a pod's (up to MAX_INSTANCES distinct whole numbers, each below `next`), or undefined. */
 export function badIndices(instances: readonly number[], next: number): string | undefined {
   const whole = (n: number, max: number) => Number.isInteger(n) && n >= 0 && n <= max
-  if (!whole(next, 1e9) || instances.length > 500 || new Set(instances).size !== instances.length || !instances.every(n => whole(n, next - 1)))
-    return 'instances must be up to 500 distinct whole numbers, each below next (at most 1000000000)'
+  if (!whole(next, 1e9) || instances.length > MAX_INSTANCES || new Set(instances).size !== instances.length || !instances.every(n => whole(n, next - 1)))
+    return `instances must be up to ${MAX_INSTANCES} distinct whole numbers, each below next (at most 1000000000)`
 }
 
 export function parseInstance(coord: string): { pod: string; index: number } | undefined {

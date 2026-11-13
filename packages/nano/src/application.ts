@@ -14,7 +14,7 @@ import { COORD } from './iface.ts'
 import type { Policy } from './policy.ts'
 import type { Registry } from './registry.ts'
 import { failure, success, type NanoResult } from './result.ts'
-import { badIndices, createRuntime, ID, MAX_INSTANCES, type Runtime, type SubscriptionData } from './runtime/index.ts'
+import { badIndices, createRuntime, ID, MAX_INSTANCES, parseInstance, type Runtime, type SubscriptionData } from './runtime/index.ts'
 import { isJson } from './schema.ts'
 
 const inner = (r: RegExp) => r.source.slice(1, -1) // COORD and ID are anchored `^…$` and flagless, so their bodies compose
@@ -22,6 +22,9 @@ const Id = Type.String({ pattern: ID.source })
 const Instance = Type.String({ pattern: `^${inner(ID)}#(0|[1-9][0-9]{0,8})$` })
 const Port = Type.String({ minLength: 1 })
 const Index = Type.Integer({ minimum: 0, maximum: 999_999_999 })
+
+/** Instances across an application's runtimes (and so a document's), at most: a bound on what loading one file can make. */
+export const MAX_DOC_INSTANCES = 5000
 
 /** What a `RuntimeDef` must be: `define` checks it, and the document holds runtimes of this shape. */
 export const RuntimeDefSchema = Type.Object({
@@ -31,10 +34,10 @@ export const RuntimeDefSchema = Type.Object({
     id: Id,
     implementation: Type.String({ pattern: COORD.source }),
     config: Type.Optional(Type.Unknown()),
-    instances: Type.Array(Index, { maxItems: 500 }),
+    instances: Type.Array(Index, { maxItems: MAX_INSTANCES }),
     next: Type.Integer({ minimum: 0, maximum: 1e9 }),
-  }), { maxItems: 500 }),
-  members: Type.Array(Type.Object({ pod: Id, home: Id }), { maxItems: 500 }),
+  }), { maxItems: MAX_INSTANCES }),
+  members: Type.Array(Type.Object({ pod: Id, home: Id }), { maxItems: MAX_INSTANCES }),
   subscriptions: Type.Array(Type.Union([
     Type.Object({ id: Id, kind: Type.Literal('call'), from: Instance, to: Instance }),
     Type.Object({ id: Id, kind: Type.Literal('event'), from: Instance, source: Port, to: Instance, target: Port }),
@@ -99,14 +102,18 @@ export function createApplication(id: string, opts: { registry: Registry; policy
     all().some(r => r.pod(pid)) || [...defs.values()].some(d => !kids.has(d.id) && d.pods.some(p => p.id === pid))
   // Pod ids are unique, so only the home runtime can have a pass for a coord.
   const settling = (c: string) => { for (const r of all()) { const p = r.settling(c); if (p) return p } }
-  const shared = { registry: opts.registry, tagsOf, idTaken, settling }
+  /** Instances of every runtime's own pods, defined-only runtimes included (what saving would write, and more: adopted ones too). */
+  const held = () => all().reduce((n, r) => n + r.pods().reduce((m, p) => { const rec = r.record(p)!; return m + (rec.home === r.id ? rec.instances.size : 0) }, 0), 0)
+    + [...defs.values()].reduce((n, d) => n + (kids.has(d.id) ? 0 : d.pods.reduce((m, p) => m + p.instances.length, 0)), 0)
+  const full = (more: number) => (held() + more > MAX_DOC_INSTANCES ? `the application would hold more than ${MAX_DOC_INSTANCES} instances` : undefined)
+  const shared = { registry: opts.registry, tagsOf, idTaken, settling, full }
 
   /**
    * A stopped instance held nowhere is gone: its tags go too. (Removal and swaps need nothing here: a placed pod is the
    * home's record, so removing it at home takes it out of every runtime holding it, and each sees a swap.)
    */
   const watch = (r: Runtime) => r.listen(e => {
-    if (e.type === 'instance' && e.state === 'stopped' && !all().some(o => o.instances().includes(e.coord))) tags.delete(e.coord)
+    if (e.type === 'instance' && e.state === 'stopped' && !all().some(o => o.record(parseInstance(e.coord)!.pod)?.instances.has(e.coord))) tags.delete(e.coord)
   })
   /** A note on the log and, as it happens, a warning on the root's stream (a runtime being started has no listener yet). */
   const note = (reason: string) => { notes.push(reason); root.warn(reason) }
@@ -209,6 +216,8 @@ export function createApplication(id: string, opts: { registry: Registry; policy
       }
       const total = def.pods.reduce((n, p) => n + p.instances.length, 0)
       if (total > MAX_INSTANCES) return failure('invalid-input', `${def.id}: ${total} instances (at most ${MAX_INSTANCES})`)
+      const why = full(total)
+      if (why) return failure('invalid-input', `${def.id}: ${why}`)
       if (taken(def.id)) return failure('exists', `runtime ${def.id} exists`)
       const twice = def.pods.find((p, n) => def.pods.findIndex(q => q.id === p.id) !== n)
       if (twice) return failure('exists', `pod id ${twice.id} is repeated`)
