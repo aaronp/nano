@@ -1,10 +1,12 @@
 /**
  * The runtime: pods (each owning its instances `<pod>#<n>` and their states) and their lifecycle (create first, then wire,
- * when asked to provision), subscriptions as data with live/waiting/broken status, policy on every rewire, books per subscription.
+ * when asked to provision; add, scale, restart and swap in place; removing an instance or a pod deletes the subscriptions
+ * naming it), subscriptions as data with live/waiting/broken status, policy on every rewire, books per subscription.
  *
  *   const rt = createRuntime('r1', { registry })
  *   await rt.create('b', 'acme/log/mem', { count: 2 })          // NanoResult<{ pod: 'b', instances: ['b#0', 'b#1'], unsatisfied: [] }>
  *   rt.pod('b')                                                  // { id: 'b', implementation: 'acme/log/mem', count: 2, state: 'running', home: 'r1', instances: [...] }
+ *   await rt.scale('b', 3); rt.removeInstance('b#0')             // b#2 added (indices are never reused); b#0 and its subscriptions gone
  *   rt.subscribe({ kind: 'call', from: 'a#0', to: 'b#0' }); rt.status('s1')   // 'waiting': no a#0 yet
  *   rt.books('s1')                                               // { calls: 0 }
  *   rt.listen(e => console.log(e))                               // { type: 'pod-created', … }, { type: 'instance', coord: 'b#0', state: 'running' }, …
@@ -18,7 +20,7 @@ import type { EndSelector, Target } from '../selector.ts'
 import { connectionsOf, contextFor, deliverer, type Book, type Wiring } from './calls.ts'
 import { resolveEnd } from './connect.ts'
 import { provision, type Unsatisfied } from './provision.ts'
-import { badIndices, ID, instanceCoord, locate, MAX_INSTANCES, parseInstance, podInfo, targetOf, type Holder, type Instance, type PodInfo, type PodRecord } from './pods.ts'
+import { badIndices, ID, instanceCoord, locate, MAX_INSTANCES, MAX_PODS, MAX_SUBSCRIPTIONS, parseInstance, podInfo, targetOf, type Holder, type Instance, type PodInfo, type PodRecord } from './pods.ts'
 import { isJson } from '../schema.ts'
 import { invalid, nextId, reordered, statusOf, type NewSubscription, type Status, type SubscriptionData } from './subscriptions.ts'
 import { tracer, type RuntimeEvent } from './trace.ts'
@@ -59,7 +61,7 @@ export type Runtime = {
   scale(pod: string, count: number): Promise<NanoResult<string[]>>
   /** Remove one instance (only at home): it is disposed and every subscription naming it is deleted (decision 49). */
   removeInstance(coord: string): NanoResult<void>
-  /** Remake an instance in place; a failing make returns `threw` and leaves it `failed`. Only at home. */
+  /** Remake a `failed` instance in place (a removed one is gone, not stopped); a failing make returns `threw` or `timeout` and leaves it `failed`. Only at home. */
   restart(coord: string): Promise<NanoResult<void>>
   /** At home, the pod's instances are disposed and every subscription naming them is deleted, in every runtime holding it; placed here from elsewhere, only this runtime's membership (and its subscriptions to it) go. */
   remove(pod: string): NanoResult<void>
@@ -146,8 +148,8 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     settled: c => passOf.get(c) ?? opts.settling?.(c),
   }
 
-  const recompute = () => {
-    for (const s of subs) {
+  const recompute = (only: readonly SubscriptionData[] = subs) => {
+    for (const s of only) {
       const now = statusOf(s, find, id)
       if (statuses.get(s.id) !== now) { statuses.set(s.id, now); emit({ type: 'status', id: s.id, status: now }) }
     }
@@ -186,6 +188,9 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     const why = more > 0 && opts.full?.(more)
     if (why) return failure('invalid-input', `${pod}: ${why}`)
   }
+
+  const noPodRoom = (pod: string): NanoResult<never> | undefined =>
+    pods.size >= MAX_PODS ? failure('invalid-input', `${pod}: ${id} would hold more than ${MAX_PODS} pods`) : undefined
 
   const bad = (s: SubscriptionData): NanoResult<never> | undefined => {
     const why = invalid(s)
@@ -249,6 +254,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
   async function make(pid: string, implementation: string, o: CreateOpts, pass?: Pass, depth = 0): Promise<NanoResult<Created>> {
     if (!ID.test(pid)) return failure('invalid-input', `bad pod id ${JSON.stringify(pid)}`)
     const restore = o.instances !== undefined || o.next !== undefined
+    if (restore && o.count !== undefined) return failure('invalid-input', `${pid}: give count, or instances and next, not both`)
     const bc = restore ? undefined : badCount(pid, o.count ?? 1)
     if (bc) return bc
     // Restored in index order, however they were saved.
@@ -256,7 +262,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     const next = o.next ?? indices.reduce((m, n) => Math.max(m, n + 1), 0)
     const why = restore && badIndices(indices, next)
     if (why) return failure('invalid-input', `${pid}: ${why}`)
-    const full = tooMany(pid, indices.length)
+    const full = tooMany(pid, indices.length) ?? noPodRoom(pid)
     if (full) return full
     const impl = registry.implementation(implementation)
     if (!impl) return failure('not-found', `no implementation ${implementation}`)
@@ -280,7 +286,8 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       await Promise.all([...p.instances.values()].map(i => start(p, i)))
       const gone = () => pods.get(pid) !== p // removed (or its id remade) meanwhile: nothing more is made or wired for it
       if (gone()) return failure('not-found', `${pid} was removed while it was made`)
-      if (!o.provision) return success({ pod: pid, instances: coords, unsatisfied: coords.flatMap(c => notProvisioned(c, impl)) })
+      // Read now, not before the makes: a swap meanwhile changed what runs, and so what it depends on.
+      if (!o.provision) return success({ pod: pid, instances: coords, unsatisfied: coords.flatMap(c => notProvisioned(c, p.implementation)) })
       // ponytail: the manifest per make; a registry count if provisioning gets hot. The limit should be unreachable:
       // a pod is only made when no instance matches, and once made it matches, so a pass makes each implementation once.
       const tooDeep = depth >= registry.manifest().implementations.length
@@ -292,7 +299,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
         make: (n, ic) => (gone() ? Promise.resolve(failure('not-found', `${pid} was removed`)) : make(n, ic, { provision: true }, pass, depth + 1)),
         subscribe: s => (gone() || !p.instances.has(c) || !find(s.to) ? failure('not-found', `${c} or ${s.to} was removed`) : rt.subscribe(s)),
         status: sid => statuses.get(sid),
-      }, c, impl))
+      }, c, p.implementation))
       return success({ pod: pid, instances: coords, unsatisfied })
     } finally {
       if (release) { for (const c of pass!.coords) passOf.delete(c); release() }
@@ -317,8 +324,8 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       p.instances.set(inst.coord, inst)
       tell(p, stateOf(inst))
       changed(p)
-      await start(p, inst)
-      return success(inst.coord)
+      await start(p, inst) // a failed make leaves it `failed`, as on create
+      return p.instances.get(inst.coord) === inst ? success(inst.coord) : failure('not-found', `${inst.coord} was removed while it started`)
     },
     async scale(pid, count) {
       const p = pods.get(pid)
@@ -347,7 +354,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const f = find(coord)
       if (!f) return failure('not-found', `${coord} is not an instance of ${id}`)
       if (f.pod.home !== id) return failure('denied', `${coord}: restart it at its home runtime ${f.pod.home}`)
-      if (f.instance.state !== 'failed' && f.instance.state !== 'stopped') return failure('invalid-input', `${coord} is ${f.instance.state}`)
+      if (f.instance.state !== 'failed') return failure('invalid-input', `${coord} is ${f.instance.state}`)
       delete f.instance.reason
       f.instance.state = 'starting'
       tell(f.pod, stateOf(f.instance))
@@ -356,6 +363,8 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     },
     add(p) {
       if (pods.has(p.id)) return failure('exists', `pod id ${p.id} is taken`)
+      const full = noPodRoom(p.id)
+      if (full) return full
       hold(p)
       return success(undefined)
     },
@@ -433,12 +442,13 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const sid = input.id ?? nextId(subs)
       if (!ID.test(sid)) return failure('invalid-input', `bad subscription id ${JSON.stringify(sid)}`)
       if (subs.some(s => s.id === sid)) return failure('exists', `subscription ${sid} exists`)
+      if (subs.length >= MAX_SUBSCRIPTIONS) return failure('invalid-input', `${id} would hold more than ${MAX_SUBSCRIPTIONS} subscriptions`)
       const s = { ...input, id: sid } as SubscriptionData
       const no = bad(s) ?? denied([s])
       if (no) return no
       subs.push(s)
       emit({ type: 'subscription-set', subscription: s })
-      recompute()
+      recompute([s]) // a new subscription changes no other's status
       return success(s)
     },
     unsubscribe(sid) {

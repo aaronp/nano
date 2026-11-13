@@ -11,7 +11,7 @@ import { createApplication, MAX_DOC_INSTANCES, RuntimeDefSchema, type Applicatio
 import { Policies, type Policy } from './policy.ts'
 import type { Registry } from './registry.ts'
 import type { NanoResult } from './result.ts'
-import { ID, instanceCoord, invalid, parseInstance, type Runtime } from './runtime/index.ts'
+import { ID, instanceCoord, invalid, MAX_RUNTIMES, parseInstance, type Runtime } from './runtime/index.ts'
 
 export type { RuntimeDef } from './application.ts'
 
@@ -19,7 +19,7 @@ export const NanoDocSchema = Type.Object({
   nano: Type.Literal(2),
   title: Type.String(),
   providers: Type.Array(Type.String()),
-  runtimes: Type.Array(RuntimeDefSchema, { maxItems: 50 }),
+  runtimes: Type.Array(RuntimeDefSchema, { maxItems: MAX_RUNTIMES }),
   tags: Type.Record(Type.String(), Type.Array(Type.String())),
   /** Runtimes to start on load. */
   start: Type.Optional(Type.Array(Type.String({ pattern: ID.source }))),

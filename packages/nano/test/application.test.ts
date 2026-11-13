@@ -419,6 +419,22 @@ describe('runtimes on demand', () => {
     expect(await rt.value.create('q', 'acme/keys/vault')).toMatchObject(full)
     expect(await app.create('q', 'acme/keys/vault')).toMatchObject(full)
   })
+  test('the application cap holds for addInstance and scale, and removing an instance anywhere frees it', async () => {
+    const app = createApplication('app', { registry: registry() })
+    const many = (id: string, n: number) => ({ id, implementation: 'acme/keys/vault', instances: Array.from({ length: n }, (_, i) => i), next: n })
+    for (let n = 0; n < 9; n++) app.define({ id: `d${n}`, pods: [many(`p${n}`, 500)], members: [], subscriptions: [] })
+    const x = app.createRuntime('x'), y = app.createRuntime('y')
+    if (!x.ok || !y.ok) throw new Error('setup')
+    await x.value.create('q', 'acme/keys/vault', { count: 499 })
+    await y.value.create('r', 'acme/keys/vault')
+    const full = { ok: false as const, fail: { type: 'invalid-input' as const, reason: 'q: the application would hold more than 5000 instances' } }
+    expect(await x.value.addInstance('q')).toEqual(full)
+    expect(await x.value.scale('q', 500)).toEqual(full)
+    y.value.removeInstance('r#0')
+    expect((await x.value.scale('q', 500)).ok).toBe(true)
+    x.value.removeInstance('q#0')
+    expect(await x.value.addInstance('q')).toEqual(success('q#500'))
+  })
   test('a subscription that cannot be added is skipped with a note; the runtime starts with the rest', async () => {
     const app = createApplication('app', { registry: registry() })
     app.define(signerDef)

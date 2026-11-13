@@ -56,6 +56,12 @@ export type PodInfo = {
 
 /** Instances of a runtime's own pods, at most (placed pods count at their home); also the most one pod can have. */
 export const MAX_INSTANCES = 500
+/** Pods a runtime holds, own and placed, at most (a document's `pods` and `members` of one runtime). */
+export const MAX_PODS = 500
+/** Subscriptions in one runtime, at most. */
+export const MAX_SUBSCRIPTIONS = 2000
+/** Runtimes in a document, at most; the application's root takes one when saved, so it makes or defines one fewer. */
+export const MAX_RUNTIMES = 50
 
 export const instanceCoord = (pod: string, n: number): string => `${pod}#${n}`
 

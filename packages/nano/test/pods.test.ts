@@ -507,3 +507,73 @@ describe('calls through pods', () => {
     expect(rt.books('s1')).toEqual({ calls: 1, last: success('acme/keys/vault x') })
   })
 })
+
+describe('races and guards (whole-branch review)', () => {
+  const tick = () => new Promise(r => setTimeout(r, 0))
+  test('given a provisioning create still making its instance, when the pod is swapped, then it provisions what the new implementation needs', async () => {
+    const rt = setup()
+    await rt.create('v', 'acme/keys/vault')
+    const created = rt.create('x', 'acme/keys/slow', { provision: true })
+    expect(await rt.swap('x', 'acme/ui/user')).toEqual(success(undefined))
+    await tick(); release()
+    expect(await created).toEqual(success({ pod: 'x', instances: ['x#0'], unsatisfied: [] }))
+    expect(rt.pod('x')).toMatchObject({ implementation: 'acme/ui/user', state: 'running' })
+    expect(edges(rt)).toEqual(['x#0 -> v#0 live'])
+  })
+  test('given an instance being added, when it is removed before its make finishes, then addInstance fails not-found', async () => {
+    const rt = setup()
+    const c = rt.create('v', 'acme/keys/slow'); await tick(); release(); await c
+    const added = rt.addInstance('v')
+    expect(rt.removeInstance('v#1')).toEqual(success(undefined))
+    await tick(); release()
+    expect(await added).toEqual({ ok: false, fail: { type: 'not-found', reason: 'v#1 was removed while it started' } })
+    expect(rt.instances()).toEqual(['v#0'])
+  })
+  test('given an instance still starting, when it is restarted, then the restart is refused', async () => {
+    const rt = setup()
+    const c = rt.create('v', 'acme/keys/slow')
+    expect(await rt.restart('v#0')).toEqual({ ok: false, fail: { type: 'invalid-input', reason: 'v#0 is starting' } })
+    await tick(); release(); await c
+    expect(rt.pod('v')).toMatchObject({ state: 'running' })
+  })
+  test('given a fast swap pending, when a slow second swap is asked for, then the first fails superseded and the second wins', async () => {
+    const rt = setup()
+    await rt.create('vault', 'acme/keys/vault')
+    const first = rt.swap('vault', 'acme/keys/vault2')
+    const second = rt.swap('vault', 'acme/keys/slow')
+    expect(await first).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: expect.stringContaining('superseded by a later swap') } })
+    expect(rt.pod('vault')).toMatchObject({ implementation: 'acme/keys/vault', state: 'running' })
+    await tick(); release()
+    expect(await second).toEqual(success(undefined))
+    expect(rt.pod('vault')).toMatchObject({ implementation: 'acme/keys/slow', state: 'running' })
+  })
+  test('given a removed instance of a pod placed in a guest, when the guest subscribes or retargets to it, then it is not-found', async () => {
+    const app = setup()
+    const home = app.createRuntime('home')
+    if (!home.ok) throw new Error('setup')
+    await home.value.create('vault', 'acme/keys/vault', { count: 2 })
+    await app.create('u', 'acme/ui/user')
+    expect(app.place('vault', 'home', 'app')).toEqual(success(undefined))
+    home.value.removeInstance('vault#0')
+    const removed = { ok: false as const, fail: { type: 'not-found' as const, reason: 'vault#0 was removed' } }
+    expect(app.subscribe({ kind: 'call', from: 'u#0', to: 'vault#0' })).toEqual(removed)
+    const s = app.subscribe({ kind: 'call', from: 'u#0', to: 'vault#1' })
+    expect(s.ok && app.retarget(s.value.id, 'vault#0')).toEqual(removed)
+    const h = home.value.subscribe({ kind: 'call', from: 'vault#1', to: 'vault#1' })
+    expect(h.ok && home.value.retarget(h.value.id, 'vault#0')).toEqual(removed)
+  })
+  test('a selector whose `by` is not JSON (a bigint, a cyclic object) is invalid-input, not a throw', async () => {
+    const rt = setup()
+    await rt.create('a', 'acme/keys/vault')
+    const cyclic: Record<string, unknown> = {}; cyclic.self = cyclic
+    for (const by of [1n, cyclic])
+      expect(rt.connect({ kind: 'call', from: { target: { pod: 'a' }, instance: { by } as never }, to: first('a') }))
+        .toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: expect.stringContaining('unknown instance selector') } })
+  })
+  test('create refuses count together with instances or next', async () => {
+    const rt = setup()
+    for (const o of [{ count: 2, instances: [0], next: 1 }, { count: 2, next: 3 }, { count: 1, instances: [] }])
+      expect(await rt.create('v', 'acme/keys/vault', o)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(rt.pods()).toEqual([])
+  })
+})

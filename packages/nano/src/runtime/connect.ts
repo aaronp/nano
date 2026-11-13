@@ -31,7 +31,7 @@ export function resolveEnd(rt: { pods: ReadonlyMap<string, PodRecord>; tagsOf: (
       case 'tags':
         if (!Array.isArray(sel.tags) || !sel.tags.every(x => typeof x === 'string')) return failure('invalid-input', 'tags must be strings')
         hits.push(...list.filter(i => sel.tags.every((x: string) => rt.tagsOf(i.coord).has(x))).map(i => i.coord)); break
-      default: return failure('invalid-input', `unknown instance selector ${JSON.stringify(sel.by)}`)
+      default: return failure('invalid-input', `unknown instance selector ${typeof sel.by === 'string' ? JSON.stringify(sel.by) : typeof sel.by}`)
     }
   }
   if (hits.length === 0) return failure('not-found', `nothing matches ${kind} ${t[kind]}`)

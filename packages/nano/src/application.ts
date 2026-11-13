@@ -14,7 +14,7 @@ import { COORD } from './iface.ts'
 import type { Policy } from './policy.ts'
 import type { Registry } from './registry.ts'
 import { failure, success, type NanoResult } from './result.ts'
-import { badIndices, createRuntime, ID, MAX_INSTANCES, parseInstance, type Runtime, type SubscriptionData } from './runtime/index.ts'
+import { badIndices, createRuntime, ID, MAX_INSTANCES, MAX_PODS, MAX_RUNTIMES, MAX_SUBSCRIPTIONS, parseInstance, type Runtime, type SubscriptionData } from './runtime/index.ts'
 import { isJson } from './schema.ts'
 
 const inner = (r: RegExp) => r.source.slice(1, -1) // COORD and ID are anchored `^…$` and flagless, so their bodies compose
@@ -36,12 +36,12 @@ export const RuntimeDefSchema = Type.Object({
     config: Type.Optional(Type.Unknown()),
     instances: Type.Array(Index, { maxItems: MAX_INSTANCES }),
     next: Type.Integer({ minimum: 0, maximum: 1e9 }),
-  }), { maxItems: MAX_INSTANCES }),
-  members: Type.Array(Type.Object({ pod: Id, home: Id }), { maxItems: MAX_INSTANCES }),
+  }), { maxItems: MAX_PODS }),
+  members: Type.Array(Type.Object({ pod: Id, home: Id }), { maxItems: MAX_PODS }),
   subscriptions: Type.Array(Type.Union([
     Type.Object({ id: Id, kind: Type.Literal('call'), from: Instance, to: Instance }),
     Type.Object({ id: Id, kind: Type.Literal('event'), from: Instance, source: Port, to: Instance, target: Port }),
-  ]), { maxItems: 2000 }),
+  ]), { maxItems: MAX_SUBSCRIPTIONS }),
 })
 
 /**
@@ -95,6 +95,10 @@ export function createApplication(id: string, opts: { registry: Registry; policy
   const all = (): Runtime[] => [root, ...kids.values()]
   const lookup = (rid: string) => (rid === id ? root : kids.get(rid))
   const taken = (rid: string) => rid === id || kids.has(rid) || defs.has(rid)
+  /** Saving writes the root and every child not adopted: one more would not fit a document. */
+  const noRoom = (rid: string): NanoResult<never> | undefined =>
+    new Set([...kids.keys(), ...defs.keys()].filter(k => !adopted.has(k))).size >= MAX_RUNTIMES - 1
+      ? failure('invalid-input', `${rid}: the application would hold more than ${MAX_RUNTIMES - 1} runtimes besides its root`) : undefined
 
   const tagsOf = (c: string): ReadonlySet<string> => tags.get(c) ?? new Set()
   // Pod ids are unique across the application: held in any runtime, or declared by a runtime not started yet.
@@ -197,7 +201,7 @@ export function createApplication(id: string, opts: { registry: Registry; policy
     createRuntime(rid, o = {}) {
       if (!ID.test(rid)) return failure('invalid-input', `bad runtime id ${JSON.stringify(rid)}`)
       if (taken(rid)) return failure('exists', `runtime ${rid} exists`)
-      return success(child(rid, o.policy))
+      return noRoom(rid) ?? success(child(rid, o.policy))
     },
     adopt(c) {
       if (taken(c.id)) return failure('exists', `runtime ${c.id} exists`)
@@ -218,7 +222,10 @@ export function createApplication(id: string, opts: { registry: Registry; policy
       if (total > MAX_INSTANCES) return failure('invalid-input', `${def.id}: ${total} instances (at most ${MAX_INSTANCES})`)
       const why = full(total)
       if (why) return failure('invalid-input', `${def.id}: ${why}`)
+      if (def.pods.length + def.members.length > MAX_PODS) return failure('invalid-input', `${def.id}: more than ${MAX_PODS} pods and members`)
       if (taken(def.id)) return failure('exists', `runtime ${def.id} exists`)
+      const room = noRoom(def.id)
+      if (room) return room
       const twice = def.pods.find((p, n) => def.pods.findIndex(q => q.id === p.id) !== n)
       if (twice) return failure('exists', `pod id ${twice.id} is repeated`)
       const clash = def.pods.find(p => idTaken(p.id))

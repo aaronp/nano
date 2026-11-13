@@ -297,6 +297,49 @@ describe('loading what does not fit', () => {
   })
 })
 
+describe('the document limits hold for what is built live', () => {
+  const refused = { ok: false, fail: { type: 'invalid-input' } }
+  const none = { instances: [], next: 0 }
+  /** Saved, the document is valid and loads without a note. */
+  const roundTrip = async (app: Application) => {
+    const doc = saveDoc(app)
+    expect(typeof checkDoc(JSON.parse(JSON.stringify(doc)))).toBe('object')
+    expect((await load(doc)).notes).toEqual([])
+  }
+  test('49 runtimes besides the root (made or defined) save with the root and load; a 50th is refused live', async () => {
+    const app = createApplication('app', { registry: registry() })
+    await app.create('w', 'acme/keys/vault')
+    for (let n = 0; n < 48; n++) expect(app.createRuntime(`r${n}`).ok).toBe(true)
+    expect(app.define({ id: 'd', pods: [], members: [], subscriptions: [] })).toEqual(success(undefined))
+    expect(app.createRuntime('more')).toMatchObject(refused)
+    expect(app.define({ id: 'more', pods: [], members: [], subscriptions: [] })).toMatchObject(refused)
+    expect(app.adopt(createRuntime('adopted', { registry: app.registry }))).toEqual(success(undefined)) // never saved, so not counted
+    await roundTrip(app)
+  })
+  test('2000 subscriptions in one runtime save and load; a 2001st is refused live', async () => {
+    const app = createApplication('app', { registry: registry() })
+    await app.create('a', 'acme/keys/vault')
+    for (let n = 0; n < 2000; n++) if (!app.subscribe({ kind: 'call', from: 'a#0', to: 'b#0' }).ok) throw new Error(`subscription ${n}`)
+    expect(app.subscribe({ kind: 'call', from: 'a#0', to: 'b#0' })).toMatchObject(refused)
+    await roundTrip(app)
+  })
+  test('500 pods in one runtime, own and placed, save and load; a 501st is refused live, made or placed', async () => {
+    const app = createApplication('app', { registry: registry() })
+    const home = app.createRuntime('home')
+    if (!home.ok) throw new Error('setup')
+    await home.value.create('m', 'acme/keys/vault', none)
+    await home.value.create('m2', 'acme/keys/vault', none)
+    for (let n = 0; n < 499; n++) expect((await app.create(`p${n}`, 'acme/keys/vault', none)).ok).toBe(true)
+    expect(app.place('m', 'home', 'app')).toEqual(success(undefined))
+    expect(await app.create('q', 'acme/keys/vault', none)).toMatchObject(refused)
+    expect(app.place('m2', 'home', 'app')).toMatchObject(refused)
+    const pods = Array.from({ length: 250 }, (_, n) => ({ id: `d${n}`, implementation: 'acme/keys/vault', ...none }))
+    const members = Array.from({ length: 251 }, (_, n) => ({ pod: `x${n}`, home: 'home' }))
+    expect(app.define({ id: 'd', pods, members, subscriptions: [] })).toMatchObject(refused)
+    await roundTrip(app)
+  })
+})
+
 describe('checkDoc', () => {
   const ok = { nano: 2 as const, title: 't', providers: [], runtimes: [], tags: {} }
 

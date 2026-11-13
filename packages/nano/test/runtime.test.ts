@@ -219,6 +219,15 @@ describe('runtime pods', () => {
     expect(await rt.scale('b', 50)).toMatchObject({ ok: true })
     expect((await rt.scale('a', 450)).ok).toBe(true)
   })
+  test('removing an instance frees a runtime\'s capacity for addInstance and scale', async () => {
+    const { rt } = setup()
+    await rt.create('a', 'acme/log/mem', { count: 500 })
+    expect(await rt.addInstance('a')).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    rt.removeInstance('a#0')
+    expect(await rt.addInstance('a')).toEqual(success('a#500'))
+    rt.removeInstance('a#1')
+    expect((await rt.scale('a', 500)).ok).toBe(true)
+  })
   test('addInstance and scale refuse once no instance index is left', async () => {
     const { rt } = setup()
     await rt.create('b', 'acme/log/mem', { instances: [], next: 999_999_999 })
