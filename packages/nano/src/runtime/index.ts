@@ -13,10 +13,9 @@ import { createHostPod, type Observation } from '../pod.ts'
 import { Policies, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
-import type { Target } from '../selector.ts'
+import type { EndSelector, Target } from '../selector.ts'
 import { connectionsOf, contextFor, deliverer, type Book, type Wiring } from './calls.ts'
 import { resolveEnd } from './connect.ts'
-import type { EndSelector } from '../selector.ts'
 import { provision, type Unsatisfied } from './provision.ts'
 import { ID, instanceCoord, locate, parseInstance, podInfo, targetOf, type Holder, type Instance, type PodInfo, type PodRecord } from './pods.ts'
 import { isJson } from '../schema.ts'
@@ -154,6 +153,11 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
   const bad = (s: SubscriptionData): NanoResult<never> | undefined => {
     const why = invalid(s)
     if (why) return failure('invalid-input', why)
+    // A coord of a pod here, below its `next`, yet missing, was deleted (indices are never reused); anything else may yet come.
+    for (const c of [s.from, s.to]) {
+      const l = parseInstance(c), p = l && pods.get(l.pod)
+      if (p && l.index < p.next && !p.instances.has(c)) return failure('not-found', `${c} was removed`)
+    }
   }
   /** The first denial among these subscriptions, as a fail. */
   const denied = (list: readonly SubscriptionData[]): NanoResult<never> | undefined => {

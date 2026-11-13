@@ -14,11 +14,14 @@ const isObj = (v: unknown): v is Record<string, any> => typeof v === 'object' &&
 export function resolveEnd(rt: { pods: ReadonlyMap<string, PodRecord>; tagsOf: (coord: string) => ReadonlySet<string> }, end: EndSelector): NanoResult<string> {
   const t: unknown = end?.target, sel: unknown = end?.instance
   if (!isObj(t) || !isObj(sel)) return failure('invalid-input', 'an end needs a target and an instance selector')
+  const kind = (['pod', 'implements', 'implementation'] as const).find(k => k in t)
+  if (!kind) return failure('invalid-input', 'a target is a pod, an interface it implements, or an implementation')
+  if (typeof t[kind] !== 'string') return failure('invalid-input', `target ${kind} must be a string`)
+  if (sel.by === 'index' && !Number.isInteger(sel.index)) return failure('invalid-input', 'index must be a whole number')
   const all = [...rt.pods.values()]
   const pods = 'pod' in t ? all.filter(p => p.id === t.pod)
     : 'implements' in t ? all.filter(p => p.implementation.provides.some(i => i.coord === t.implements))
-    : 'implementation' in t ? all.filter(p => p.implementation.coord === t.implementation) : undefined
-  if (!pods) return failure('invalid-input', 'a target is a pod, an interface it implements, or an implementation')
+    : all.filter(p => p.implementation.coord === t.implementation)
   const hits: string[] = []
   for (const p of pods) {
     const list = [...p.instances.values()]
@@ -31,7 +34,7 @@ export function resolveEnd(rt: { pods: ReadonlyMap<string, PodRecord>; tagsOf: (
       default: return failure('invalid-input', `unknown instance selector ${JSON.stringify(sel.by)}`)
     }
   }
-  if (hits.length === 0) return failure('not-found', `nothing matches ${JSON.stringify(end)}`)
-  if (hits.length > 1) return failure('ambiguous', `${hits.length} match ${JSON.stringify(end)}: ${hits.join(', ')}`)
+  if (hits.length === 0) return failure('not-found', `nothing matches ${kind} ${t[kind]}`)
+  if (hits.length > 1) return failure('ambiguous', `${hits.length} match ${kind} ${t[kind]}: ${hits.join(', ')}`)
   return success(hits[0]!)
 }
