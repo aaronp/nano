@@ -27,6 +27,8 @@ export const canonical = (value: unknown): string => canonicalize(value)
 export const hashOf = (text: string): string => bytesToHex(blake3(utf8ToBytes(text)))
 
 const NOTES = new Set(['description', 'title', 'examples', '$comment'])
+// Data values: copied as-is, so two schemas with different constants never hash equal.
+const DATA = new Set(['const', 'enum', 'default'])
 const MAPS = new Set(['properties', 'patternProperties', '$defs'])
 
 // Strip annotations at every depth; keys of a name map are property names, so they stay.
@@ -37,7 +39,7 @@ function strip(node: unknown, isMap = false): unknown {
   for (const [k, v] of Object.entries(node)) {
     if (!isMap && NOTES.has(k)) continue
     // `required` is a set: its order follows property order, which must not matter.
-    out[k] = !isMap && k === 'required' && Array.isArray(v) ? [...v].sort() : strip(v, !isMap && MAPS.has(k))
+    out[k] = isMap ? strip(v) : DATA.has(k) ? v : k === 'required' && Array.isArray(v) ? [...v].sort() : strip(v, MAPS.has(k))
   }
   return out
 }
