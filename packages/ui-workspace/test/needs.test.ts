@@ -13,6 +13,7 @@ const { catalog: people, definePeople } = await import('@composable/people')
 const { known } = await import('../src/app/known')
 const { busy, whileApplying } = await import('../src/app/boot')
 const { bootNeeds } = await import('../src/boot-needs')
+const { shownInstance } = await import('../src/lib/dock-layout')
 const { appHost, memoryStores, tick } = await import('./fixtures/app-host')
 
 const peopleApp = JSON.parse(readFileSync(new URL('../../people/people.nano.json', import.meta.url), 'utf8')) as NanoApp
@@ -34,35 +35,75 @@ test('the people example applies with no notes, nothing unbound, and no chooser'
   expect(snaps.flatMap(unboundOf)).toEqual([])
   expect(dlg()).toBeNull()
   // nothing asks while a document is applied, even for a need left unbound
-  await whileApplying(async () => { await a.call('application', P.createComponent, { kind: 'person-form', name: 'f2', system: 'app' }); await settle() })
+  // the reading is taken when the instance is added: settling after the apply is over still asks nothing
+  await whileApplying(() => a.call('application', P.createComponent, { kind: 'person-form', name: 'f2', system: 'app' }))
   await settle()
   expect(dlg()).toBeNull()
   a.stop()
 }, 10_000)
 
-test('a new form asks for each need in turn; cancelled, its element is dimmed and says what it needs', async () => {
+/** Clicks `sel` in the open dialog, then lets the next one open; returns the label of the dialog clicked in. */
+const answer = async (sel: string) => {
+  const d = dlg()!, label = d.getAttribute('aria-label')!
+  const b = d.querySelector(sel) as HTMLElement | null
+  if (!b) throw new Error(`${label}: no ${sel} in ${d.innerHTML}`)
+  b.click(); await settle()
+  return label
+}
+
+test('a new form asks for each need; cancelled it is disabled; making one asks for its own needs first', async () => {
   const a = setup()
   definePeople()
   provide(document, a.host.registry)
-  document.body.insertAdjacentHTML('beforeend', '<c-person-form name="f1"></c-person-form>')
-  const el = document.body.lastElementChild!
+  // shaped like a dock panel: the element is the container's first child
+  document.body.insertAdjacentHTML('beforeend', '<div class="lm_content"><c-person-form name="f1"></c-person-form></div>')
+  const panel = document.body.lastElementChild!, el = panel.firstElementChild!
   await settle()
   expect(dlg()?.getAttribute('aria-label')).toBe('Choose bff')
   expect([...dlg()!.querySelectorAll('[data-make]')].map(b => b.getAttribute('data-make'))).toEqual(['people-bff'])
-  ;(dlg()!.querySelector('[data-cancel]') as HTMLElement).click(); await settle()
-  expect(dlg()?.getAttribute('aria-label')).toBe('Choose rules')
-  ;(dlg()!.querySelector('[data-cancel]') as HTMLElement).click(); await settle()
+  expect([await answer('[data-cancel]'), await answer('[data-cancel]')]).toEqual(['Choose bff', 'Choose rules'])
   expect(dlg()).toBeNull()
   expect(el.getAttribute('data-unbound')).toBe('bff,rules')
+  expect(el.hasAttribute('inert')).toBe(true)
   expect(el.hasAttribute('data-needs')).toBe(true)
-  expect(el.previousElementSibling?.textContent).toBe('Needs bff, rules — Choose…')
-  // Choose… asks again; make one binds it, and the made bff asks for its own need
-  ;(el.previousElementSibling as HTMLElement).click(); await settle()
-  ;(dlg()!.querySelector('[data-make="people-bff"]') as HTMLElement).click(); await settle()
-  expect(a.host.registry.binding('f1', 'bff')).toEqual({ registry: 'host', instance: 'people-bff-1' })
-  const asked: string[] = []
-  for (let i = 0; i < 3 && dlg(); i++) { asked.push(dlg()!.getAttribute('aria-label')!); (dlg()!.querySelector('[data-cancel]') as HTMLElement).click(); await settle() }
-  expect(asked).toEqual(['Choose rules', 'Choose persons'])
-  expect(el.getAttribute('data-unbound')).toBe('rules')
-  el.remove(); a.stop()
+  const button = el.nextElementSibling as HTMLButtonElement
+  expect(button.textContent).toBe('Needs bff, rules — Choose…')
+  expect(button.closest('[inert]')).toBeNull()
+  // the overlay doesn't hide the panel's instance from the dock
+  expect(shownInstance(panel.firstElementChild as never)).toBe('f1')
+  // Choose…: make a bff; its own need is asked next, before the form's rules; cancelling it leaves the form's bff unbound
+  button.click(); await settle()
+  expect([await answer('[data-make="people-bff"]'), await answer('[data-cancel]'), await answer('[data-cancel]')]).toEqual(['Choose bff', 'Choose persons', 'Choose rules'])
+  expect(dlg()).toBeNull()
+  expect(a.host.registry.get('people-bff-1')).toBeDefined()
+  expect(a.host.registry.binding('f1', 'bff')).toBeUndefined()
+  expect(el.getAttribute('data-unbound')).toBe('bff,rules')
+  // a made provider with no needs binds at once
+  button.click(); await settle()
+  expect([await answer('[data-cancel]'), await answer('[data-make="person-rules"]')]).toEqual(['Choose bff', 'Choose rules'])
+  expect(a.host.registry.binding('f1', 'rules')).toEqual({ registry: 'host', instance: 'person-rules-1' })
+  expect(el.getAttribute('data-unbound')).toBe('bff')
+  a.stop()
+  expect(el.hasAttribute('data-unbound') || el.hasAttribute('inert') || !!el.nextElementSibling).toBe(false)
+  panel.remove()
+}, 10_000)
+
+test('Dependencies drills into a bound target, where Replace… makes a provider depth first and binds it', async () => {
+  const a = setup()
+  await whileApplying(async () => {
+    await a.call('application', P.createComponent, { kind: 'people-bff', name: 'b', system: 'host' })
+    await a.call('application', P.createComponent, { kind: 'person-form', name: 'f', system: 'host' })
+    await a.call('application', P.bindNeed, { ref: 'instance:host/f', need: 'bff', to: 'instance:host/b' })
+  })
+  await settle()
+  expect(dlg()).toBeNull()
+  document.dispatchEvent(new CustomEvent('dock:dependencies', { detail: { system: 'host', instance: 'f' } })); await settle()
+  expect(dlg()?.querySelector('th:last-child')?.textContent).toBe('Replace')
+  const asked = [await answer('[data-open="instance:host/b"]'), await answer('[data-replace="persons"]'), await answer('[data-make="person-service"]'),
+    await answer('[data-make="people-db"]'), await answer('[data-make="person-rules"]')]
+  expect(asked).toEqual(['Dependencies', 'Dependencies', 'Choose persons', 'Choose db', 'Choose rules'])
+  expect(dlg()).toBeNull()
+  expect(a.host.registry.binding('b', 'persons')).toEqual({ registry: 'host', instance: 'person-service-1' })
+  expect(a.host.registry.binding('person-service-1', 'db')).toEqual({ registry: 'host', instance: 'people-db-1' })
+  a.stop()
 }, 10_000)

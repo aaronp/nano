@@ -79,7 +79,7 @@ workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_item
 .lm_controls > .dock-deps:hover { color: var(--fg); }
 .lm_stack:not(:has(> .lm_items > :not([style*="none"]) [data-needs])) > .lm_header .dock-deps { display: none; }
 [data-unbound] { opacity: .35; filter: grayscale(1); pointer-events: none; }
-.needs-choose { position: sticky; top: 0; z-index: 1; display: block; margin: 0 auto 8px; padding: 6px 12px; font: 13px var(--font); color: var(--fg); background: var(--surface-2); border: 1px solid var(--accent); border-radius: 6px; cursor: pointer; }
+.needs-choose { position: sticky; bottom: 0; z-index: 1; display: block; margin: 8px auto 0; padding: 6px 12px; font: 13px var(--font); color: var(--fg); background: var(--surface-2); border: 1px solid var(--accent); border-radius: 6px; cursor: pointer; }
 `;
 
 const icon = (path: string) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="none" stroke="#7a808c" stroke-width="1.6">${path}</svg>`)}")`;

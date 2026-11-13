@@ -18,14 +18,19 @@ export function chooseBinding(doc: Document, need: { ref: string; need: string; 
   }, null);
 }
 
-/** An instance's needs and what each is bound to; Replace… closes the list and runs `replace` for that need. */
-export async function showDependencies(doc: Document, ref: string, needs: { need: string; implements: string; binding?: string }[], replace: (need: string) => Promise<void>): Promise<void> {
-  const rows = needs.map((n) => `<tr><td>${esc(n.need)}</td><td><code>${esc(n.implements)}</code></td><td>${n.binding ? `<code>${esc(n.binding)}</code>` : '<em>not bound</em>'}</td>
+/** An instance's needs and what each is bound to. Replace… closes the list and runs `replace` for that need; a bound
+ * row's Dependencies… closes it and runs `open` for its target (so a headless provider's needs can be reached). */
+export async function showDependencies(doc: Document, ref: string, needs: { need: string; implements: string; binding?: string }[], replace: (need: string) => Promise<void>, open?: (ref: string) => Promise<void>): Promise<void> {
+  const rows = needs.map((n) => `<tr><td>${esc(n.need)}</td><td><code>${esc(n.implements)}</code></td>
+    <td>${n.binding ? `<code>${esc(n.binding)}</code>${open ? ` <button type="button" data-open="${esc(n.binding)}">Dependencies…</button>` : ''}` : '<em>not bound</em>'}</td>
     <td><button type="button" data-replace="${esc(n.need)}">Replace…</button></td></tr>`).join('');
-  const picked = await ask<string | null>(doc, 'Dependencies', `<h2>Dependencies</h2><p><code>${esc(ref)}</code></p>
-    ${needs.length ? `<table><thead><tr><th>Need</th><th>Interface</th><th>Bound to</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p>It needs nothing.</p>'}
+  const hidden = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap';
+  const picked = await ask<{ replace: string } | { open: string } | null>(doc, 'Dependencies', `<h2>Dependencies</h2><p><code>${esc(ref)}</code></p>
+    ${needs.length ? `<table><thead><tr><th>Need</th><th>Interface</th><th>Bound to</th><th><span style="${hidden}">Replace</span></th></tr></thead><tbody>${rows}</tbody></table>` : '<p>It needs nothing.</p>'}
     <div class="actions"><button type="button" data-cancel>Close</button></div>`, (d, done) => {
-    for (const b of d.querySelectorAll<HTMLButtonElement>('[data-replace]')) b.addEventListener('click', () => done(b.dataset['replace']!));
+    for (const b of d.querySelectorAll<HTMLButtonElement>('[data-replace]')) b.addEventListener('click', () => done({ replace: b.dataset['replace']! }));
+    for (const b of d.querySelectorAll<HTMLButtonElement>('[data-open]')) b.addEventListener('click', () => done({ open: b.dataset['open']! }));
   }, null);
-  if (picked) await replace(picked);
+  if (picked && 'replace' in picked) await replace(picked.replace);
+  else if (picked) await open?.(picked.open);
 }
