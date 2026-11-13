@@ -22,7 +22,8 @@ export function iface<Ops extends Record<string, Op>>(coord: string, ops: Ops): 
   return { coord, ops, byCoord: new Map(Object.values(ops).map(o => [o.coord, o])) }
 }
 
-type Out<O extends Op> = [NonNullable<O['output']>] extends [never] ? void : NonNullable<O['output']> extends { schema: infer S extends import('typebox').TSchema } ? Static<S> : void
+type ISchema<D> = D extends { schema: infer S } ? S : never
+type Out<O extends Op> = [ISchema<O['output']>] extends [never] ? void : NonNullable<O['output']> extends { schema: infer S extends import('typebox').TSchema } ? Static<S> : void
 
 /** Typed caller for an interface: each action or sink is an async function. */
 export type Client<I extends Interface> = {
