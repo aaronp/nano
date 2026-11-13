@@ -8,18 +8,18 @@
 import { describe, expect, test } from 'bun:test'
 import { Type, type Static } from 'typebox'
 import {
-  createApplication, createRegistry, defineSchema, iface, implementation, loadDoc, op, portKey, provide, provider, saveDoc, success,
+  createApplication, createRegistry, defineSchema, iface, implementation, loadDoc, op, parseInstance, portKey, provide, provider, saveDoc, success,
   type Application, type Interface, type NanoResult, type Op, type Runtime,
 } from '@pritzlaff/nano'
 import { KeyFormatter, Log, Signer, Tester, TestRequest, TestResult, Vault } from './interfaces.ts'
 import { signerProvider } from './providers.ts'
 
-const VAULT = 'example.signer/vault#vault', GENERATOR = 'example.signer/generator#generator', SIGNER = 'example.signer/signer#signer'
-const TESTER = 'example.signer/tester#tester', LOG = 'example.signer/log#log', MAP = 'example.signer/map#map'
+const VAULT = 'vault#0', GENERATOR = 'generator#0', SIGNER = 'signer#0'
+const TESTER = 'tester#0', LOG = 'log#0', MAP = 'map#0'
 const DOC = new URL('./nano.json', import.meta.url)
 
-/** What a host does when a person presses a button: call one of a member's ops from outside. */
-const press = (rt: Runtime, coord: string, i: Interface, o: Op, input: unknown) => rt.member(coord)!.pod.invoke(portKey(i.coord, o.coord), input)
+/** What a host does when a person presses a button: call one of an instance's ops from outside. */
+const press = (rt: Runtime, coord: string, i: Interface, o: Op, input: unknown) => rt.record(parseInstance(coord)!.pod)!.instances.get(coord)!.host!.invoke(portKey(i.coord, o.coord), input)
 const runTest = (rt: Runtime, input: Static<typeof TestRequest.schema>) =>
   press(rt, TESTER, Tester, Tester.ops.test, input) as Promise<NanoResult<Static<typeof TestResult.schema>>>
 
@@ -68,7 +68,7 @@ function watchLog(app: Application) {
   return {
     seen: p.seen,
     ready: client.create('probe', 'example.probe/probe').then(() =>
-      client.subscribe({ kind: 'event', from: LOG, source: portKey(Log.coord, Log.ops.entries.coord), to: 'example.probe/probe#probe', target: p.port })),
+      client.subscribe({ kind: 'event', from: LOG, source: portKey(Log.coord, Log.ops.entries.coord), to: 'probe#0', target: p.port })),
   }
 }
 
@@ -114,7 +114,7 @@ describe('the external signer', () => {
     if (!before.ok) throw new Error(before.fail.reason)
     const oldKey = before.value.publicKey
 
-    expect(await signer.replace(VAULT, 'example.signer/vault')).toEqual(success(VAULT))
+    expect(await signer.replace('vault', 'example.signer/vault')).toEqual(success(undefined))
 
     // signer: generator → vault, signer → vault, vault.keys → map; client: tester → signer, tester → generator, map → log, log → probe.
     expect(signer.subscriptions()).toHaveLength(3)

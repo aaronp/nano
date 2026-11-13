@@ -1,10 +1,10 @@
 /**
- * The application: a runtime of runtimes — children made, adopted, or opened on demand from definitions; instances placed across them; tags and instance ids shared.
+ * The application: a runtime of runtimes — children made, adopted, or opened on demand from definitions; pods placed across them; tags and pod ids shared.
  *
  *   const app = createApplication('app', { registry })              // also its own root runtime
  *   app.define(clientDef)                                           // data only, until something needs it
  *   await app.open('client')                                        // opens the runtimes its members come from, then builds it
- *   app.place('acme/keys/signer#s', 'signer', 'client')             // a member of both; it still calls out through `signer`
+ *   app.place('s#0', 'signer', 'client')                            // pod s is a member of both; it still calls out through `signer`
  *   app.notes()                                                     // what it skipped or could not follow, e.g. a member whose home failed to open
  */
 import { Type } from 'typebox'
@@ -18,7 +18,7 @@ import { isJson } from './schema.ts'
 
 const inner = (r: RegExp) => r.source.slice(1, -1) // COORD and ID are anchored `^…$` and flagless, so their bodies compose
 const Id = Type.String({ pattern: ID.source })
-const Instance = Type.String({ pattern: `^${inner(COORD)}#${inner(ID)}$` })
+const Instance = Type.String({ pattern: `^${inner(ID)}#(0|[1-9][0-9]{0,8})$` })
 const Port = Type.String({ minLength: 1 })
 
 /** What a `RuntimeDef` must be: `define` checks it, and the document holds runtimes of this shape. */
@@ -33,7 +33,7 @@ export const RuntimeDefSchema = Type.Object({
   ]), { maxItems: 2000 }),
 })
 
-/** A runtime as saved: its own instances (create order), the members placed into it, and its subscriptions (in order). */
+/** A runtime as saved: its own pods (`instances`, create order, one instance each until pods are saved), the pods placed into it (by an instance coord), and its subscriptions (in order). */
 export type RuntimeDef = {
   id: string
   policy?: 'allow-all'
@@ -53,7 +53,7 @@ export type Application = Runtime & {
   place(instance: string, from: string, to: string): NanoResult<void>
   /** Child runtimes, opened and defined (not the root). */
   runtimes(): readonly string[]
-  /** What the application skipped or could not follow, oldest first: members an open skipped, guests that refused a replacement. */
+  /** What the application skipped or could not follow, oldest first: members an open skipped. */
   notes(): readonly string[]
   /** Whether this child was adopted (adopted runtimes are not saved). */
   adopted(id: string): boolean
@@ -77,31 +77,22 @@ export function createApplication(id: string, opts: { registry: Registry; policy
   const taken = (rid: string) => rid === id || kids.has(rid) || defs.has(rid)
 
   const tagsOf = (c: string): ReadonlySet<string> => tags.get(c) ?? new Set()
-  // Unique across the application: held in any runtime, or declared by a runtime not opened yet.
-  const idTaken = (iid: string) =>
-    all().some(r => r.members().some(c => parseInstance(c)?.id === iid)) ||
-    [...defs.values()].some(d => !kids.has(d.id) && d.instances.some(i => i.id === iid))
-  // Instance ids are unique, so only the home runtime can have a pass for a coord.
+  // Pod ids are unique across the application: held in any runtime, or declared by a runtime not opened yet.
+  const idTaken = (pid: string) =>
+    all().some(r => r.pod(pid)) || [...defs.values()].some(d => !kids.has(d.id) && d.instances.some(i => i.id === pid))
+  // Pod ids are unique, so only the home runtime can have a pass for a coord.
   const settling = (c: string) => { for (const r of all()) { const p = r.settling(c); if (p) return p } }
   const shared = { registry: opts.registry, tagsOf, idTaken, settling }
 
-  /** What happens to an instance at its home happens wherever it was placed: removal, and replacement. */
+  /**
+   * A pod removed at its home is removed wherever it was placed. (A replacement needs nothing here: the placed pod is
+   * the home's record, so every runtime holding it sees the new implementation.)
+   */
   const watch = (r: Runtime) => r.listen(e => {
-    if (e.type === 'instance-removed') {
-      for (const o of all()) if (o !== r && o.member(e.instance)?.home === r.id) o.remove(e.instance)
-      if (!all().some(o => o.member(e.instance))) tags.delete(e.instance)
-    }
-    if (e.type === 'instance-replaced') {
-      const next = r.member(e.to)
-      if (next?.home !== r.id) return
-      // A guest whose policy denies the rewrite keeps its subscriptions on the old coord, waiting (decision 34); noted.
-      for (const o of all()) if (o !== r && o.member(e.from)?.home === r.id) {
-        const done = o.rehome(e.from, next)
-        if (!done.ok) notes.push(`${o.id}: following ${e.from} -> ${e.to}: ${done.fail.reason}`)
-      }
-      const t = tags.get(e.from)
-      if (t) { tags.delete(e.from); tags.set(e.to, t) }
-    }
+    if (e.type !== 'instance-removed') return
+    const pid = parseInstance(e.instance)!.pod
+    if (!r.pod(pid)) for (const o of all()) if (o !== r && o.pod(pid)?.home === r.id) o.remove(pid)
+    if (!all().some(o => o.instances().includes(e.instance))) tags.delete(e.instance)
   })
   const child = (rid: string, policy?: Policy) => {
     const r = createRuntime(rid, { ...shared, ...(policy && { policy }) })
@@ -112,15 +103,17 @@ export function createApplication(id: string, opts: { registry: Registry; policy
   const root = createRuntime(id, { ...shared, ...(opts.policy && { policy: opts.policy }) })
   watch(root)
 
+  /** Places the pod of `instance`, with all its instances. */
   function place(instance: string, from: string, to: string): NanoResult<void> {
-    const m = lookup(from)?.member(instance)
-    if (!m) return failure('not-found', `${instance} is not a member of ${from}`)
+    const p = parseInstance(instance)
+    const rec = p && lookup(from)?.record(p.pod)
+    if (!rec?.instances.has(instance)) return failure('not-found', `${instance} is not in ${from}`)
     const dst = lookup(to)
     if (!dst) return failure('not-found', `no runtime ${to}`)
     let v
     try { v = dst.policy.isAllowed(from, to, instance) } catch (e) { return failure('denied', `policy threw: ${msg(e)}`) }
     if (!v.approved) return failure('denied', v.reason)
-    return dst.add({ coord: m.coord, pod: m.pod, home: m.home })
+    return dst.add(rec)
   }
 
   /**
@@ -134,7 +127,7 @@ export function createApplication(id: string, opts: { registry: Registry; policy
   async function build(def: RuntimeDef, chain: ReadonlySet<string>, made: () => void): Promise<NanoResult<Runtime>> {
     const rt = child(def.id) // 'allow-all' is the only saved policy, and the default
     const undo = (r: NanoResult<never>): NanoResult<Runtime> => {
-      for (const c of rt.members()) rt.remove(c)
+      for (const p of rt.pods()) rt.remove(p)
       kids.delete(def.id)
       return r
     }
@@ -202,9 +195,9 @@ export function createApplication(id: string, opts: { registry: Registry; policy
       if (notJson) return failure('invalid-input', `${notJson.id}: config is not JSON`)
       if (taken(def.id)) return failure('exists', `runtime ${def.id} exists`)
       const twice = def.instances.find((i, n) => def.instances.findIndex(j => j.id === i.id) !== n)
-      if (twice) return failure('exists', `instance id ${twice.id} is repeated`)
+      if (twice) return failure('exists', `pod id ${twice.id} is repeated`)
       const clash = def.instances.find(i => idTaken(i.id))
-      if (clash) return failure('exists', `instance id ${clash.id} is taken`)
+      if (clash) return failure('exists', `pod id ${clash.id} is taken`)
       defs.set(def.id, structuredClone(def)) // its own copy: a later edit to `def` never changes what opens
       return success(undefined)
     },

@@ -28,6 +28,7 @@ const fileDb = implementation('acme/db/file', { provides: [DB], make: () => [pro
 const app = implementation('acme/app/main', { provides: [], dependencies: { store: DB }, make: () => [] })
 const boom = implementation('acme/bad/boom', { provides: [], make: () => { throw new Error('nope') } })
 const configured = implementation('acme/app/conf', { provides: [], config: Num, make: () => [] })
+const DB_GET = portKey(DB.coord, DB.ops.get.coord)
 
 function setup(opts: { policy?: Policy; idTaken?: (id: string) => boolean } = {}) {
   const registry = createRegistry()
@@ -38,27 +39,28 @@ function setup(opts: { policy?: Policy; idTaken?: (id: string) => boolean } = {}
   const rt = createRuntime('r1', { registry, ...opts })
   const events: RuntimeEvent[] = []
   rt.listen(e => events.push(e))
-  return { rt, events }
+  return { rt, events, registry }
 }
 
-const tickToLog = { kind: 'event' as const, from: 'acme/clock/ticker#a', source: TICK, to: 'acme/log/mem#b', target: WRITE }
+const tickToLog = { kind: 'event' as const, from: 'a#0', source: TICK, to: 'b#0', target: WRITE }
 
 describe('instance coords', () => {
-  test('a coord is implementation#id and parses back', () => {
-    expect(instanceCoord('acme/log/mem', 'b')).toBe('acme/log/mem#b')
-    expect(parseInstance('acme/log/mem#b')).toEqual({ implementation: 'acme/log/mem', id: 'b' })
-    expect(parseInstance('no-hash')).toBeUndefined()
+  test('a coord is <pod>#<n> and parses back', () => {
+    expect(instanceCoord('log', 0)).toBe('log#0')
+    expect(parseInstance('log#12')).toEqual({ pod: 'log', index: 12 })
+    for (const bad of ['no-hash', 'log#x', 'log#01', 'log#-1', 'a#b#c', 'acme/log/mem#b', '#0']) expect(parseInstance(bad)).toBeUndefined()
   })
 })
 
-describe('runtime members', () => {
-  test('create adds a member and announces it', async () => {
+describe('runtime pods', () => {
+  test('create adds a pod and announces its instance', async () => {
     const { rt, events } = setup()
     const r = await rt.create('b', 'acme/log/mem')
-    expect(r).toEqual(success({ coord: 'acme/log/mem#b', unsatisfied: [] }))
-    expect(rt.members()).toEqual(['acme/log/mem#b'])
-    expect(rt.member('acme/log/mem#b')?.home).toBe('r1')
-    expect(events).toEqual([{ type: 'instance-added', instance: 'acme/log/mem#b', home: 'r1' }])
+    expect(r).toEqual(success({ pod: 'b', instances: ['b#0'], unsatisfied: [] }))
+    expect(rt.pods()).toEqual(['b'])
+    expect(rt.instances()).toEqual(['b#0'])
+    expect(rt.pod('b')?.home).toBe('r1')
+    expect(events).toEqual([{ type: 'instance-added', instance: 'b#0', home: 'r1' }])
   })
   test('an unknown implementation fails not-found', async () => {
     const { rt } = setup()
@@ -70,10 +72,17 @@ describe('runtime members', () => {
     expect(await rt.create('b', 'acme/db/mem')).toMatchObject({ ok: false, fail: { type: 'exists' } })
     expect(await rt.create('elsewhere', 'acme/db/mem')).toMatchObject({ ok: false, fail: { type: 'exists' } })
   })
-  test('a pod that cannot be made fails threw and adds nothing', async () => {
+  test('a bad pod id or count fails invalid-input', async () => {
     const { rt } = setup()
-    expect(await rt.create('x', 'acme/bad/boom')).toMatchObject({ ok: false, fail: { type: 'threw' } })
-    expect(rt.members()).toEqual([])
+    expect(await rt.create('a/b', 'acme/log/mem')).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(await rt.create('b', 'acme/log/mem', { count: 0 })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(await rt.create('b', 'acme/log/mem', { count: 1.5 })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(rt.pods()).toEqual([])
+  })
+  test('a pod whose make throws is created, with its instance failed', async () => {
+    const { rt } = setup()
+    expect(await rt.create('x', 'acme/bad/boom')).toEqual(success({ pod: 'x', instances: ['x#0'], unsatisfied: [] }))
+    expect(rt.pod('x')).toMatchObject({ state: 'failed', instances: [{ coord: 'x#0', state: 'failed' }] })
   })
   test('config that does not fit the implementation fails invalid-input', async () => {
     const { rt } = setup()
@@ -82,49 +91,53 @@ describe('runtime members', () => {
   })
   test('without provision, every dependency is unsatisfied as not provisioned', async () => {
     const { rt } = setup()
-    expect(await rt.create('a', 'acme/app/main')).toEqual(success({ coord: 'acme/app/main#a', unsatisfied: [{ role: 'store', reason: 'not provisioned' }] }))
+    expect(await rt.create('a', 'acme/app/main')).toEqual(success({ pod: 'a', instances: ['a#0'], unsatisfied: [{ role: 'store', reason: 'not provisioned' }] }))
   })
-  test("a member's target carries its implementation, provider, interfaces and tags", async () => {
+  test("an instance's target carries its pod's implementation, provider, interfaces and its tags", async () => {
     const registry = createRegistry()
     registry.add(provider('acme/log', [memLog, noteLog]))
-    const rt = createRuntime('r1', { registry, tagsOf: () => new Set(['cache']) })
+    const rt = createRuntime('r1', { registry, tagsOf: c => new Set(c === 'b#0' ? ['cache'] : []) })
     await rt.create('b', 'acme/log/mem')
-    expect(rt.target('acme/log/mem#b')).toEqual({
-      instance: 'acme/log/mem#b', implementation: 'acme/log/mem', provider: 'acme/log', provides: new Set(['acme/log']), tags: new Set(['cache']),
+    expect(rt.target('b#0')).toEqual({
+      instance: 'b#0', implementation: 'acme/log/mem', provider: 'acme/log', provides: new Set(['acme/log']), tags: new Set(['cache']),
     })
+    expect(rt.target('b#1')).toBeUndefined()
   })
-  test('removing a member placed from another runtime only drops the membership', async () => {
-    const { rt } = setup()
-    let disposed = false
-    rt.add({ coord: 'acme/log/mem#z', home: 'r2', pod: { instance: 'acme/log/mem#z', implementation: memLog, invoke: ok, dispose: () => { disposed = true } } })
-    expect(rt.remove('acme/log/mem#z')).toEqual(success(undefined))
-    expect(rt.members()).toEqual([])
-    expect(disposed).toBe(false)
+  test('removing a pod placed from another runtime only drops the membership', async () => {
+    const { rt, registry } = setup()
+    const r2 = createRuntime('r2', { registry })
+    await r2.create('z', 'acme/log/mem')
+    expect(rt.add(r2.record('z')!)).toEqual(success(undefined))
+    expect(rt.pod('z')).toMatchObject({ home: 'r2', state: 'running' })
+    expect(rt.remove('z')).toEqual(success(undefined))
+    expect(rt.pods()).toEqual([])
+    expect(r2.pod('z')!.state).toBe('running')
   })
-  test('members are listed in create order', async () => {
+  test('pods are listed in create order', async () => {
     const { rt } = setup()
     await rt.create('z', 'acme/log/mem')
-    await rt.create('a', 'acme/db/mem')
-    expect(rt.members()).toEqual(['acme/log/mem#z', 'acme/db/mem#a'])
+    await rt.create('a', 'acme/db/mem', { count: 2 })
+    expect(rt.pods()).toEqual(['z', 'a'])
+    expect(rt.instances()).toEqual(['z#0', 'a#0', 'a#1'])
   })
-  test('an id taken elsewhere while the pod was being made fails exists', async () => {
-    let taken = false
-    const { rt } = setup({ idTaken: () => taken })
+  test('a pod id is held from the moment create is called', async () => {
+    const { rt } = setup()
     const pending = rt.create('b', 'acme/log/mem')
-    taken = true
-    expect(await pending).toMatchObject({ ok: false, fail: { type: 'exists' } })
-    expect(rt.members()).toEqual([])
+    expect(await rt.create('b', 'acme/db/mem')).toMatchObject({ ok: false, fail: { type: 'exists' } })
+    expect((await pending).ok).toBe(true)
   })
-  test('a member records the config it was created with', async () => {
+  test('a pod records the config it was created with', async () => {
     const { rt } = setup()
     await rt.create('c', 'acme/app/conf', { config: 3 })
-    expect(rt.member('acme/app/conf#c')?.config).toBe(3)
+    expect(rt.pod('c')?.config).toBe(3)
   })
-  test('add fails invalid-input when the pod belongs to another coord', () => {
-    const { rt } = setup()
-    const pod = { instance: 'acme/log/mem#y', implementation: memLog, invoke: ok, dispose: () => {} }
-    expect(rt.add({ coord: 'acme/log/mem#z', home: 'r2', pod })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
-    expect(rt.members()).toEqual([])
+  test('add fails exists when the pod id is already held', async () => {
+    const { rt, registry } = setup()
+    const r2 = createRuntime('r2', { registry })
+    await r2.create('z', 'acme/log/mem')
+    await rt.create('z', 'acme/db/mem')
+    expect(rt.add(r2.record('z')!)).toMatchObject({ ok: false, fail: { type: 'exists' } })
+    expect(rt.pod('z')!.implementation).toBe('acme/db/mem')
   })
   test('a throwing listener does not break the runtime', async () => {
     const { rt } = setup()
@@ -150,11 +163,18 @@ describe('runtime subscriptions', () => {
     await rt.create('b', 'acme/log/mem')
     expect(rt.status('s1')).toBe('live')
   })
+  test('an end whose instance is not running leaves it waiting', async () => {
+    const { rt } = setup()
+    await rt.create('a', 'acme/app/main')
+    await rt.create('x', 'acme/bad/boom')
+    rt.subscribe({ kind: 'call', from: 'a#0', to: 'x#0' })
+    expect(rt.status('s1')).toBe('waiting')
+  })
   test('an event subscription whose ops do not fit is broken', async () => {
     const { rt } = setup()
     await rt.create('a', 'acme/clock/ticker')
     await rt.create('n', 'acme/log/notes')
-    rt.subscribe({ ...tickToLog, to: 'acme/log/notes#n', target: portKey(Notes.coord, Notes.ops.note.coord) })
+    rt.subscribe({ ...tickToLog, to: 'n#0', target: portKey(Notes.coord, Notes.ops.note.coord) })
     expect(rt.status('s1')).toBe('broken')
   })
   test('a call subscription to a target providing none of the consumer’s dependencies is broken', async () => {
@@ -162,8 +182,8 @@ describe('runtime subscriptions', () => {
     await rt.create('a', 'acme/app/main')
     await rt.create('d', 'acme/db/mem')
     await rt.create('b', 'acme/log/mem')
-    rt.subscribe({ kind: 'call', from: 'acme/app/main#a', to: 'acme/db/mem#d' })
-    rt.subscribe({ kind: 'call', from: 'acme/app/main#a', to: 'acme/log/mem#b' })
+    rt.subscribe({ kind: 'call', from: 'a#0', to: 'd#0' })
+    rt.subscribe({ kind: 'call', from: 'a#0', to: 'b#0' })
     expect([rt.status('s1'), rt.status('s2')]).toEqual(['live', 'broken'])
   })
   test('ids default to the first free s<n>, and a taken id fails exists', async () => {
@@ -174,14 +194,14 @@ describe('runtime subscriptions', () => {
     expect(rt.subscribe({ ...tickToLog, id: 's1' })).toMatchObject({ ok: false, fail: { type: 'exists' } })
   })
   test('a denied subscribe or retarget changes nothing and gives the reason', async () => {
-    const policy: Policy = { isAllowed: (_s, dest) => (dest.endsWith('#b') ? { approved: false, reason: 'no b' } : { approved: true }) }
+    const policy: Policy = { isAllowed: (_s, dest) => (dest.startsWith('b#') ? { approved: false, reason: 'no b' } : { approved: true }) }
     const { rt, events } = setup({ policy })
     expect(rt.subscribe(tickToLog)).toEqual({ ok: false, fail: { type: 'denied', reason: 'no b' } })
     expect(rt.subscriptions()).toEqual([])
-    const s = rt.subscribe({ ...tickToLog, to: 'acme/log/mem#c' })
+    const s = rt.subscribe({ ...tickToLog, to: 'c#0' })
     const before = structuredClone(rt.subscriptions())
     const seen = events.length
-    expect(s.ok && rt.retarget(s.value.id, 'acme/log/mem#b')).toEqual({ ok: false, fail: { type: 'denied', reason: 'no b' } })
+    expect(s.ok && rt.retarget(s.value.id, 'b#0')).toEqual({ ok: false, fail: { type: 'denied', reason: 'no b' } })
     expect(rt.subscriptions()).toEqual(before)
     expect(events.length).toBe(seen)
   })
@@ -192,7 +212,7 @@ describe('runtime subscriptions', () => {
     await rt.create('b', 'acme/log/mem')
     rt.subscribe(tickToLog)
     deny = true
-    expect(rt.retarget('s1', 'acme/log/mem#c')).toMatchObject({ ok: false, fail: { type: 'denied' } })
+    expect(rt.retarget('s1', 'c#0')).toMatchObject({ ok: false, fail: { type: 'denied' } })
     expect(rt.status('s1')).toBe('live')
   })
   test('subscribe and retarget reject ends that are not instance coords', () => {
@@ -200,6 +220,7 @@ describe('runtime subscriptions', () => {
     const bad = { ok: false, fail: { type: 'invalid-input' } }
     expect(rt.subscribe({ ...tickToLog, to: 'nohash' })).toMatchObject(bad)
     expect(rt.subscribe({ ...tickToLog, from: 'a#b#c' })).toMatchObject(bad)
+    expect(rt.subscribe({ ...tickToLog, from: 'acme/clock/ticker#a' })).toMatchObject(bad)
     expect(rt.subscribe({ ...tickToLog, source: '' })).toMatchObject(bad)
     expect(rt.subscribe({ ...tickToLog, kind: 'stream' } as any)).toMatchObject(bad)
     rt.subscribe(tickToLog)
@@ -211,8 +232,8 @@ describe('runtime subscriptions', () => {
     await rt.create('a', 'acme/clock/ticker')
     await rt.create('c', 'acme/log/mem')
     rt.subscribe(tickToLog)
-    expect(rt.retarget('s1', 'acme/log/mem#c')).toEqual(success(undefined))
-    expect(rt.subscriptions()[0]).toMatchObject({ to: 'acme/log/mem#c' })
+    expect(rt.retarget('s1', 'c#0')).toEqual(success(undefined))
+    expect(rt.subscriptions()[0]).toMatchObject({ to: 'c#0' })
     expect(rt.status('s1')).toBe('live')
   })
   test('removing a target leaves its subscriptions waiting', async () => {
@@ -220,95 +241,72 @@ describe('runtime subscriptions', () => {
     await rt.create('a', 'acme/clock/ticker')
     await rt.create('b', 'acme/log/mem')
     rt.subscribe(tickToLog)
-    expect(rt.remove('acme/log/mem#b')).toEqual(success(undefined))
+    expect(rt.remove('b')).toEqual(success(undefined))
     expect(rt.subscriptions()).toEqual([{ id: 's1', ...tickToLog }])
     expect(rt.status('s1')).toBe('waiting')
     await rt.create('b', 'acme/log/mem')
     expect(rt.status('s1')).toBe('live')
   })
-  test('removing the home member disposes its pod', async () => {
+  test('removing a pod at home disposes its instances', async () => {
     const { rt } = setup()
     await rt.create('d', 'acme/db/mem')
-    const pod = rt.member('acme/db/mem#d')!.pod
-    rt.remove('acme/db/mem#d')
-    expect(await pod.invoke(portKey(DB.coord, DB.ops.get.coord), 'k')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+    const host = rt.record('d')!.instances.get('d#0')!.host!
+    rt.remove('d')
+    expect(await host.invoke(DB_GET, 'k')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
   })
-  test('replace keeps subscriptions that still fit and marks an event subscription broken when the op is gone', async () => {
+  test('replace keeps the coords: subscriptions that still fit stay live, an event subscription whose op is gone is broken', async () => {
     const { rt, events } = setup()
     await rt.create('a', 'acme/app/main')
     await rt.create('d', 'acme/db/mem')
     await rt.create('t', 'acme/clock/ticker')
     await rt.create('b', 'acme/log/mem')
-    rt.subscribe({ kind: 'call', from: 'acme/app/main#a', to: 'acme/db/mem#d' })
-    rt.subscribe({ ...tickToLog, from: 'acme/clock/ticker#t' })
-    expect(await rt.replace('acme/db/mem#d', 'acme/db/file')).toEqual(success('acme/db/file#d'))
-    expect(await rt.replace('acme/log/mem#b', 'acme/log/notes')).toEqual(success('acme/log/notes#b'))
-    expect(rt.members()).toEqual(['acme/app/main#a', 'acme/db/file#d', 'acme/clock/ticker#t', 'acme/log/notes#b'])
-    expect(rt.subscriptions().map(s => s.to)).toEqual(['acme/db/file#d', 'acme/log/notes#b'])
+    rt.subscribe({ kind: 'call', from: 'a#0', to: 'd#0' })
+    rt.subscribe({ ...tickToLog, from: 't#0' })
+    expect(await rt.replace('d', 'acme/db/file')).toEqual(success(undefined))
+    expect(await rt.replace('b', 'acme/log/notes')).toEqual(success(undefined))
+    expect(rt.pods()).toEqual(['a', 'd', 't', 'b'])
+    expect(rt.pod('d')).toMatchObject({ implementation: 'acme/db/file', instances: [{ coord: 'd#0', state: 'running' }] })
+    expect(rt.subscriptions().map(s => s.to)).toEqual(['d#0', 'b#0'])
     expect([rt.status('s1'), rt.status('s2')]).toEqual(['live', 'broken'])
-    expect(events).toContainEqual({ type: 'instance-replaced', from: 'acme/db/mem#d', to: 'acme/db/file#d' })
+    expect(events).toContainEqual({ type: 'pod-replaced', pod: 'd', implementation: 'acme/db/file' })
   })
-  test('replace announces itself and its rewritten subscriptions, not an add and a remove', async () => {
+  test('replace announces itself, not an add and a remove', async () => {
     const { rt, events } = setup()
     await rt.create('a', 'acme/app/main')
     await rt.create('d', 'acme/db/mem')
-    rt.subscribe({ kind: 'call', from: 'acme/app/main#a', to: 'acme/db/mem#d' })
+    rt.subscribe({ kind: 'call', from: 'a#0', to: 'd#0' })
     const seen = events.length
-    await rt.replace('acme/db/mem#d', 'acme/db/file')
-    expect(events.slice(seen)).toEqual([
-      { type: 'instance-replaced', from: 'acme/db/mem#d', to: 'acme/db/file#d' },
-      { type: 'subscription-set', subscription: { id: 's1', kind: 'call', from: 'acme/app/main#a', to: 'acme/db/file#d' } },
-    ])
+    await rt.replace('d', 'acme/db/file')
+    expect(events.slice(seen)).toEqual([{ type: 'pod-replaced', pod: 'd', implementation: 'acme/db/file' }])
   })
   test('replace carries the config over unless a new one is given', async () => {
     const { rt } = setup()
     await rt.create('c', 'acme/app/conf', { config: 3 })
-    await rt.replace('acme/app/conf#c', 'acme/app/conf')
-    expect(rt.member('acme/app/conf#c')?.config).toBe(3)
-    await rt.replace('acme/app/conf#c', 'acme/app/conf', { config: 4 })
-    expect(rt.member('acme/app/conf#c')?.config).toBe(4)
+    await rt.replace('c', 'acme/app/conf')
+    expect(rt.pod('c')?.config).toBe(3)
+    await rt.replace('c', 'acme/app/conf', { config: 4 })
+    expect(rt.pod('c')?.config).toBe(4)
   })
-  test('replacing a member placed from another runtime is denied and changes nothing', () => {
-    const { rt } = setup()
-    rt.add({ coord: 'acme/log/mem#z', home: 'r2', pod: { instance: 'acme/log/mem#z', implementation: memLog, invoke: ok, dispose: () => {} } })
-    return rt.replace('acme/log/mem#z', 'acme/log/notes').then(r => {
-      expect(r).toEqual({ ok: false, fail: { type: 'denied', reason: 'acme/log/mem#z: replace it at its home runtime r2' } })
-      expect(rt.members()).toEqual(['acme/log/mem#z'])
-    })
+  test('replacing a pod placed from another runtime is denied and changes nothing', async () => {
+    const { rt, registry } = setup()
+    const r2 = createRuntime('r2', { registry })
+    await r2.create('z', 'acme/log/mem')
+    rt.add(r2.record('z')!)
+    expect(await rt.replace('z', 'acme/log/notes')).toEqual({ ok: false, fail: { type: 'denied', reason: 'z: replace it at its home runtime r2' } })
+    expect(rt.pod('z')!.implementation).toBe('acme/log/mem')
   })
-  test('a subscription added while a replace is pending is rewritten too', async () => {
-    const { rt } = setup()
-    await rt.create('d', 'acme/db/mem')
-    const pending = rt.replace('acme/db/mem#d', 'acme/db/file')
-    rt.subscribe({ kind: 'call', from: 'acme/app/main#a', to: 'acme/db/mem#d' })
-    await pending
-    expect(rt.subscriptions()[0]).toMatchObject({ to: 'acme/db/file#d' })
-  })
-  test('a subscription retargeted away while a replace is pending keeps its new target', async () => {
+  test('a replace whose make throws changes nothing', async () => {
     const { rt } = setup()
     await rt.create('d', 'acme/db/mem')
-    rt.subscribe({ kind: 'call', from: 'acme/app/main#a', to: 'acme/db/mem#d' })
-    const pending = rt.replace('acme/db/mem#d', 'acme/db/file')
-    rt.retarget('s1', 'acme/db/mem#e')
-    await pending
-    expect(rt.subscriptions()[0]).toMatchObject({ to: 'acme/db/mem#e' })
-  })
-  test('a replace the policy denies for a rewritten subscription changes nothing', async () => {
-    const policy: Policy = { isAllowed: (_s, dest) => (dest === 'acme/db/file#d' ? { approved: false, reason: 'no file' } : { approved: true }) }
-    const { rt } = setup({ policy })
-    await rt.create('a', 'acme/app/main')
-    await rt.create('d', 'acme/db/mem')
-    rt.subscribe({ kind: 'call', from: 'acme/app/main#a', to: 'acme/db/mem#d' })
-    expect(await rt.replace('acme/db/mem#d', 'acme/db/file')).toEqual({ ok: false, fail: { type: 'denied', reason: 'no file' } })
-    expect(rt.members()).toEqual(['acme/app/main#a', 'acme/db/mem#d'])
-    expect(rt.subscriptions()[0]).toMatchObject({ to: 'acme/db/mem#d' })
+    expect(await rt.replace('d', 'acme/bad/boom')).toMatchObject({ ok: false, fail: { type: 'threw' } })
+    expect(rt.pod('d')).toMatchObject({ implementation: 'acme/db/mem', state: 'running' })
   })
   test("reorder changes a consumer's call order; a partial list fails not-found", async () => {
     const { rt } = setup()
-    const A = 'acme/app/main#a'
-    rt.subscribe({ kind: 'call', from: A, to: 'acme/db/mem#d' })
+    const A = 'a#0'
+    rt.subscribe({ kind: 'call', from: A, to: 'd#0' })
     rt.subscribe({ ...tickToLog })
-    rt.subscribe({ kind: 'call', from: A, to: 'acme/db/file#e' })
+    rt.subscribe({ kind: 'call', from: A, to: 'e#0' })
     expect(rt.reorder(A, ['s3', 's1'])).toEqual(success(undefined))
     expect(rt.subscriptions().map(s => s.id)).toEqual(['s3', 's2', 's1'])
     expect(rt.reorder(A, ['s3'])).toMatchObject({ ok: false, fail: { type: 'not-found' } })
@@ -317,9 +315,9 @@ describe('runtime subscriptions', () => {
   test('a reorder the policy denies changes nothing', () => {
     let deny = false
     const { rt } = setup({ policy: { isAllowed: () => (deny ? { approved: false, reason: 'no' } : { approved: true }) } })
-    const A = 'acme/app/main#a'
-    rt.subscribe({ kind: 'call', from: A, to: 'acme/db/mem#d' })
-    rt.subscribe({ kind: 'call', from: A, to: 'acme/db/file#e' })
+    const A = 'a#0'
+    rt.subscribe({ kind: 'call', from: A, to: 'd#0' })
+    rt.subscribe({ kind: 'call', from: A, to: 'e#0' })
     deny = true
     expect(rt.reorder(A, ['s2', 's1'])).toEqual({ ok: false, fail: { type: 'denied', reason: 'no' } })
     expect(rt.subscriptions().map(s => s.id)).toEqual(['s1', 's2'])
@@ -327,7 +325,7 @@ describe('runtime subscriptions', () => {
   test('reordering a consumer with no call subscriptions to an empty list is a no-op', () => {
     const { rt } = setup()
     rt.subscribe(tickToLog)
-    expect(rt.reorder('acme/app/main#a', [])).toEqual(success(undefined))
+    expect(rt.reorder('a#0', [])).toEqual(success(undefined))
     expect(rt.subscriptions().map(s => s.id)).toEqual(['s1'])
   })
   test('unsubscribe removes the subscription and announces it', async () => {

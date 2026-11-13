@@ -1,24 +1,26 @@
 /**
- * The runtime: members and their lifecycle (create first, then wire, when asked to provision), subscriptions as data with live/waiting/broken status, policy on every rewire, books per subscription.
+ * The runtime: pods (each owning its instances `<pod>#<n>` and their states) and their lifecycle (create first, then wire,
+ * when asked to provision), subscriptions as data with live/waiting/broken status, policy on every rewire, books per subscription.
  *
  *   const rt = createRuntime('r1', { registry })
- *   await rt.create('b', 'acme/log/mem', { provision: true })             // NanoResult<{ coord: 'acme/log/mem#b', unsatisfied: [] }>
- *   rt.subscribe({ kind: 'call', from: 'acme/app/main#a', to: 'acme/log/mem#b' }); rt.status('s1')   // 'waiting': no acme/app/main#a yet
- *   rt.books('s1')                                                        // { calls: 0 }
+ *   await rt.create('b', 'acme/log/mem', { count: 2 })          // NanoResult<{ pod: 'b', instances: ['b#0', 'b#1'], unsatisfied: [] }>
+ *   rt.pod('b')                                                  // { id: 'b', implementation: 'acme/log/mem', count: 2, state: 'running', home: 'r1', instances: [...] }
+ *   rt.subscribe({ kind: 'call', from: 'a#0', to: 'b#0' }); rt.status('s1')   // 'waiting': no a#0 yet
+ *   rt.books('s1')                                               // { calls: 0 }
  */
 import type { Implementation } from '../implementation.ts'
-import { createHostPod, type Observation, type Pod } from '../pod.ts'
+import { createHostPod, type Observation } from '../pod.ts'
 import { Policies, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
 import type { Target } from '../selector.ts'
-import { connectionsOf, contextFor, deliverer, join, leave, type Book, type Wiring } from './calls.ts'
+import { connectionsOf, contextFor, deliverer, type Book, type Wiring } from './calls.ts'
 import { provision, type Unsatisfied } from './provision.ts'
-import { ID, instanceCoord, parseInstance, targetOf, type Member } from './members.ts'
+import { ID, instanceCoord, locate, parseInstance, podInfo, targetOf, type Holder, type Instance, type PodInfo, type PodRecord } from './pods.ts'
 import { isJson } from '../schema.ts'
 import { invalid, nextId, reordered, statusOf, type NewSubscription, type Status, type SubscriptionData } from './subscriptions.ts'
 
-export * from './members.ts'
+export * from './pods.ts'
 export * from './subscriptions.ts'
 export type { Book } from './calls.ts'
 export type { Unsatisfied } from './provision.ts'
@@ -26,28 +28,47 @@ export type { Unsatisfied } from './provision.ts'
 export type RuntimeEvent =
   | { type: 'instance-added'; instance: string; home: string }
   | { type: 'instance-removed'; instance: string }
-  | { type: 'instance-replaced'; from: string; to: string }
+  | { type: 'pod-replaced'; pod: string; implementation: string }
   | { type: 'subscription-set'; subscription: SubscriptionData }
   | { type: 'subscription-removed'; id: string }
   | { type: 'status'; id: string; status: Status }
+
+/** One end of a connection: a pod, and which of its instances. */
+export type EndSelector = { target: { pod: string }; instance: { by: 'first' } | { by: 'index'; index: number } }
+export type NewConnection =
+  | { id?: string; kind: 'call'; from: EndSelector; to: EndSelector }
+  | { id?: string; kind: 'event'; from: EndSelector; source: string; to: EndSelector; target: string }
+
+export type Created = { pod: string; instances: string[]; unsatisfied: Unsatisfied[] }
 
 export type Runtime = {
   readonly id: string
   readonly registry: Registry
   readonly policy: Policy
-  /** With `provision: true`, connects or makes what its dependencies need; `unsatisfied` lists the rest (`not provisioned` without it). */
-  create(id: string, implementation: string, opts?: { config?: unknown; provision?: boolean }): Promise<NanoResult<{ coord: string; unsatisfied: Unsatisfied[] }>>
-  add(m: Member): NanoResult<void>
-  remove(coord: string): NanoResult<void>
-  replace(coord: string, implementation: string, opts?: { config?: unknown }): Promise<NanoResult<string>>
   /**
-   * A placed member was replaced at its home: `to` takes `from`'s slot, and subscriptions are rewritten from → to under this
-   * runtime's policy. Denied, the member is still swapped but the subscriptions stay on `from` (waiting) and the denial comes back.
+   * A pod of `count` instances (default 1), `<pod>#0` up. A `make` that throws or times out leaves that instance `failed`;
+   * the create still succeeds. With `provision: true`, connects or makes what each instance's dependencies need;
+   * `unsatisfied` lists the rest (`not provisioned` without it).
    */
-  rehome(from: string, to: Member): NanoResult<void>
-  member(coord: string): Member | undefined
-  members(): readonly string[]
+  create(pod: string, implementation: string, opts?: { config?: unknown; count?: number; provision?: boolean }): Promise<NanoResult<Created>>
+  /** One more instance at the next index (indices are never reused); only at the pod's home. */
+  addInstance(pod: string): Promise<NanoResult<string>>
+  /** Place a pod from its home: the record is shared, not copied, so its instances and their states are the home's. */
+  add(pod: PodRecord): NanoResult<void>
+  /** At home, the pod's instances are disposed (stopped); placed here from elsewhere, only the membership goes. */
+  remove(pod: string): NanoResult<void>
+  /** Remake every instance of a pod with another implementation (or config), in place: coords and subscriptions are kept. Only at home. */
+  replace(pod: string, implementation: string, opts?: { config?: unknown }): Promise<NanoResult<void>>
+  pod(id: string): PodInfo | undefined
+  /** Pod ids, in create (or place) order. */
+  pods(): readonly string[]
+  /** Every instance coord, by pod, in index order. */
+  instances(): readonly string[]
+  /** The live pod record, for placing it into another runtime. */
+  record(id: string): PodRecord | undefined
   target(coord: string): Target | undefined
+  /** Resolve both ends to concrete instance coords, once, and subscribe them. */
+  connect(c: NewConnection): NanoResult<SubscriptionData>
   subscribe(s: NewSubscription): NanoResult<SubscriptionData>
   unsubscribe(id: string): NanoResult<void>
   retarget(id: string, to: string): NanoResult<void>
@@ -65,8 +86,9 @@ export type RuntimeOpts = {
   registry: Registry
   policy?: Policy
   tagsOf?: (coord: string) => ReadonlySet<string>
+  /** A pod id held elsewhere (in the application). */
   idTaken?: (id: string) => boolean
-  /** Unfinished passes elsewhere (the member's home runtime): calls here into or out of `coord` wait for them too. */
+  /** Unfinished passes elsewhere (the pod's home runtime): calls here into or out of `coord` wait for them too. */
   settling?: (coord: string) => Promise<void> | undefined
   pod?: { timeoutMs?: number; observe?(o: Observation): void }
 }
@@ -76,34 +98,45 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
   if (!ID.test(id)) throw new Error(`bad runtime id ${JSON.stringify(id)}`)
   const { registry } = opts
   const policy = opts.policy ?? Policies.allowAll()
-  let members = new Map<string, Member>() // insertion order is create order; saving relies on it
+  const pods = new Map<string, PodRecord>() // insertion order is create order; saving relies on it
   let subs: SubscriptionData[] = []
   const statuses = new Map<string, Status>()
   const listeners = new Set<(e: RuntimeEvent) => void>()
   const books = new Map<string, Book>()
+  const find = (coord: string) => locate(pods, coord)
   const target = (coord: string): Target | undefined => {
-    const m = members.get(coord)
-    return m && targetOf(m, opts.tagsOf?.(coord) ?? new Set())
+    const f = find(coord)
+    return f && targetOf(coord, f.pod.implementation, opts.tagsOf?.(coord) ?? new Set())
   }
+  const instances = () => [...pods.values()].flatMap(p => [...p.instances.keys()])
   const wiring: Wiring = {
     id, policy, books, target,
     subscriptions: () => subs,
     status: sid => statuses.get(sid),
-    member: c => members.get(c),
+    locate: find,
     observe: o => opts.pod?.observe?.(o),
     settled: c => passOf.get(c) ?? opts.settling?.(c),
   }
-  const deliver = deliverer(wiring)
 
   const emit = (e: RuntimeEvent) => {
     for (const fn of listeners) try { fn(e) } catch { /* a listener must never break the runtime */ }
   }
   const recompute = () => {
     for (const s of subs) {
-      const now = statusOf(s, c => members.get(c), id)
+      const now = statusOf(s, find, id)
       if (statuses.get(s.id) !== now) { statuses.set(s.id, now); emit({ type: 'status', id: s.id, status: now }) }
     }
   }
+  const holder: Holder = { deliver: deliverer(wiring), refresh: recompute }
+  /** A pod's instances changed: every runtime holding it recomputes its statuses. */
+  const changed = (p: PodRecord) => { for (const h of p.holders) h.refresh() }
+  const hold = (p: PodRecord) => {
+    pods.set(p.id, p)
+    p.holders.add(holder)
+    for (const c of p.instances.keys()) emit({ type: 'instance-added', instance: c, home: p.home })
+    recompute()
+  }
+
   const bad = (s: SubscriptionData): NanoResult<never> | undefined => {
     const why = invalid(s)
     if (why) return failure('invalid-input', why)
@@ -120,37 +153,18 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       if (!v.approved) return failure('denied', v.reason)
     }
   }
-  const reserved = new Set<string>() // ids of instances still being made (and provisioned)
-  const idHeld = (iid: string) => reserved.has(iid) || [...members.keys()].some(c => parseInstance(c)?.id === iid)
-
-  async function makePod(coord: string, impl: Implementation, config: unknown): Promise<NanoResult<Pod>> {
-    if (config !== undefined && !isJson(config)) return failure('invalid-input', `${coord}: config is not JSON`)
-    if (impl.config && !impl.config.check(config)) return failure('invalid-input', `${coord}: config does not fit ${impl.config.type}`)
-    const { ctx, bind } = contextFor(wiring, coord, impl, config)
-    const pod = await createHostPod(coord, impl, ctx, opts.pod)
-    if (pod.ok) bind(pod.value)
-    return pod
-  }
-  const drop = (m: Member) => {
-    if (m.home === id) m.pod.dispose()
-    leave(m.pod, deliver)
-    members.delete(m.coord)
+  const badConfig = (pod: string, impl: Implementation, config: unknown): NanoResult<never> | undefined => {
+    if (config !== undefined && !isJson(config)) return failure('invalid-input', `${pod}: config is not JSON`)
+    if (impl.config && !impl.config.check(config)) return failure('invalid-input', `${pod}: config does not fit ${impl.config.type}`)
   }
 
-  /** Subscriptions touching `from`, with that end changed to `to` (not yet applied). */
-  const rewritten = (from: string, to: string) => {
-    const end = (c: string) => (c === from ? to : c)
-    return subs.filter(s => s.from === from || s.to === from).map(s => ({ ...s, from: end(s.from), to: end(s.to) }))
-  }
-  /** `next` takes `old`'s slot (create order holds), publish delivery moves to its pod, `touched` subscriptions are applied. */
-  const swap = (old: Member, next: Member, touched: SubscriptionData[]) => {
-    leave(old.pod, deliver)
-    join(next.pod, deliver)
-    members = new Map([...members].map(([c, m]) => (c === old.coord ? [next.coord, next] : [c, m])))
-    subs = subs.map(s => touched.find(t => t.id === s.id) ?? s)
-    emit({ type: 'instance-replaced', from: old.coord, to: next.coord })
-    for (const s of touched) emit({ type: 'subscription-set', subscription: s })
-    recompute()
+  /** Make one instance's host; failing, the instance is `failed`. Stopped meanwhile (its pod removed), the host is dropped. */
+  async function start(p: PodRecord, inst: Instance): Promise<void> {
+    const { ctx, bind } = contextFor(wiring, inst.coord, p.implementation, p.config)
+    const host = await createHostPod(inst.coord, p.implementation, ctx, opts.pod)
+    if (inst.state !== 'starting') { if (host.ok) host.value.dispose(); return }
+    if (host.ok) { bind(host.value); inst.host = host.value; inst.state = 'running' } else inst.state = 'failed'
+    changed(p)
   }
 
   /** coord → the provisioning pass it was made in, while that pass is unfinished; calls into or out of it wait for it. */
@@ -160,111 +174,143 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     Object.entries(impl.dependencies).filter(([, d]) => connectionsOf(wiring, coord, d).length === 0).map(([role]) => ({ role, reason: 'not provisioned' }))
 
   /**
-   * Create; with `provision`, one pass: every instance it makes joins at once, then its dependencies are settled
-   * (made instances settle theirs in the same pass). Calls into or out of the pass's instances wait until it is done.
-   * Calls a `make` makes through its own ctx fail at once (construction is not use), so a make cannot wait on its own pass.
+   * Create; the pod is held (its id taken, its instances `starting`) before anything is awaited. With `provision`, one
+   * pass: every pod it makes joins at once, then its instances' dependencies are settled (made pods settle theirs in the
+   * same pass). Calls into or out of the pass's instances wait until it is done. Calls a `make` makes through its own ctx
+   * fail at once (construction is not use), so a make cannot wait on its own pass.
    */
-  async function make(iid: string, implementation: string, o: { config?: unknown; provision?: boolean }, pass?: Pass, depth = 0): Promise<NanoResult<{ coord: string; unsatisfied: Unsatisfied[] }>> {
-    if (!ID.test(iid)) return failure('invalid-input', `bad instance id ${JSON.stringify(iid)}`)
+  async function make(pid: string, implementation: string, o: { config?: unknown; count?: number; provision?: boolean }, pass?: Pass, depth = 0): Promise<NanoResult<Created>> {
+    if (!ID.test(pid)) return failure('invalid-input', `bad pod id ${JSON.stringify(pid)}`)
+    const count = o.count ?? 1
+    if (!Number.isInteger(count) || count < 1) return failure('invalid-input', `${pid}: count must be a whole number from 1`)
     const impl = registry.implementation(implementation)
     if (!impl) return failure('not-found', `no implementation ${implementation}`)
-    if (idHeld(iid) || opts.idTaken?.(iid)) return failure('exists', `instance id ${iid} is taken`)
-    const coord = instanceCoord(implementation, iid)
+    if (pods.has(pid) || opts.idTaken?.(pid)) return failure('exists', `pod id ${pid} is taken`)
+    const no = badConfig(pid, impl, o.config)
+    if (no) return no
+    const coords = Array.from({ length: count }, (_, n) => instanceCoord(pid, n))
+    const p: PodRecord = {
+      id: pid, implementation: impl, ...(o.config !== undefined && { config: o.config }), home: id, next: count,
+      instances: new Map(coords.map(c => [c, { coord: c, state: 'starting' }])), holders: new Set(),
+    }
     let release: (() => void) | undefined
     if (o.provision && !pass) {
       let r!: () => void
       pass = { done: new Promise<void>(res => { r = res }), coords: [] }
       release = r
     }
-    if (pass) { pass.coords.push(coord); passOf.set(coord, pass.done) }
-    reserved.add(iid)
+    if (pass) for (const c of coords) { pass.coords.push(c); passOf.set(c, pass.done) }
+    hold(p)
     try {
-      const pod = await makePod(coord, impl, o.config)
-      if (!pod.ok) return pod
-      // Another runtime may have taken the id during the await.
-      if (opts.idTaken?.(iid)) { pod.value.dispose(); return failure('exists', `instance id ${iid} is taken`) }
-      members.set(coord, { coord, pod: pod.value, home: id, ...(o.config !== undefined && { config: o.config }) })
-      join(pod.value, deliver)
-      emit({ type: 'instance-added', instance: coord, home: id })
-      recompute()
-      if (!o.provision) return success({ coord, unsatisfied: notProvisioned(coord, impl) })
+      await Promise.all([...p.instances.values()].map(i => start(p, i)))
+      if (!o.provision) return success({ pod: pid, instances: coords, unsatisfied: coords.flatMap(c => notProvisioned(c, impl)) })
       // ponytail: the manifest per make; a registry count if provisioning gets hot. The limit should be unreachable:
-      // an instance is only made when no member matches, and once made it matches, so a pass makes each implementation once.
+      // a pod is only made when no instance matches, and once made it matches, so a pass makes each implementation once.
       const tooDeep = depth >= registry.manifest().implementations.length
-      const unsatisfied = await provision({
-        registry, target, tooDeep,
-        members: () => [...members.keys()],
-        connected: d => connectionsOf(wiring, coord, d).length > 0,
-        idFree: n => !idHeld(n) && !opts.idTaken?.(n),
-        make: (n, c) => make(n, c, { provision: true }, pass, depth + 1),
+      const unsatisfied: Unsatisfied[] = []
+      for (const c of coords) unsatisfied.push(...await provision({
+        registry, target, tooDeep, instances,
+        connected: d => connectionsOf(wiring, c, d).length > 0,
+        idFree: n => !pods.has(n) && !opts.idTaken?.(n),
+        make: (n, ic) => make(n, ic, { provision: true }, pass, depth + 1),
         subscribe: s => rt.subscribe(s),
-      }, coord, impl)
-      return success({ coord, unsatisfied })
+        status: sid => statuses.get(sid),
+      }, c, impl))
+      return success({ pod: pid, instances: coords, unsatisfied })
     } finally {
-      reserved.delete(iid)
       if (release) { for (const c of pass!.coords) passOf.delete(c); release() }
     }
+  }
+
+  /** A pod end resolved to one instance: `first` is the lowest index that is running. */
+  const resolve = (e: EndSelector | undefined): NanoResult<string> => {
+    if (!e?.target || !e.instance) return failure('invalid-input', 'an end needs a target and an instance selector')
+    // ponytail: pod targets by first or index only; the connecting task adds implements/implementation targets and tags.
+    const p = 'pod' in e.target ? pods.get(e.target.pod) : undefined
+    const sel = e.instance
+    const all = [...(p?.instances.values() ?? [])]
+    const hit = sel.by === 'index' ? all.find(i => parseInstance(i.coord)!.index === sel.index) : all.find(i => i.state === 'running')
+    return hit ? success(hit.coord) : failure('not-found', `nothing matches ${JSON.stringify(e)}`)
   }
 
   const rt: Runtime = {
     id,
     registry,
     policy,
-    create: (iid, implementation, o = {}) => make(iid, implementation, o),
-    add(m) {
-      const parsed = parseInstance(m.coord)
-      if (!parsed) return failure('invalid-input', `bad instance coord ${m.coord}`)
-      if (m.pod.instance !== m.coord) return failure('invalid-input', `${m.coord}: its pod is ${m.pod.instance}`)
-      if (members.has(m.coord) || idHeld(parsed.id)) return failure('exists', `instance id ${parsed.id} is taken`)
-      members.set(m.coord, m)
-      join(m.pod, deliver)
-      emit({ type: 'instance-added', instance: m.coord, home: m.home })
+    create: (pid, implementation, o = {}) => make(pid, implementation, o),
+    async addInstance(pid) {
+      const p = pods.get(pid)
+      if (!p) return failure('not-found', `${pid} is not a pod of ${id}`)
+      if (p.home !== id) return failure('denied', `${pid}: add instances at its home runtime ${p.home}`)
+      const inst: Instance = { coord: instanceCoord(pid, p.next++), state: 'starting' }
+      p.instances.set(inst.coord, inst)
+      emit({ type: 'instance-added', instance: inst.coord, home: id })
+      changed(p)
+      await start(p, inst)
+      return success(inst.coord)
+    },
+    add(p) {
+      if (pods.has(p.id)) return failure('exists', `pod id ${p.id} is taken`)
+      hold(p)
+      return success(undefined)
+    },
+    remove(pid) {
+      const p = pods.get(pid)
+      if (!p) return failure('not-found', `${pid} is not a pod of ${id}`)
+      pods.delete(pid)
+      p.holders.delete(holder)
+      if (p.home === id) {
+        for (const i of p.instances.values()) { i.host?.dispose(); delete i.host; i.state = 'stopped' }
+        changed(p)
+      }
+      for (const c of p.instances.keys()) emit({ type: 'instance-removed', instance: c })
       recompute()
       return success(undefined)
     },
-    remove(coord) {
-      const m = members.get(coord)
-      if (!m) return failure('not-found', `${coord} is not a member`)
-      drop(m)
-      emit({ type: 'instance-removed', instance: coord })
-      recompute()
-      return success(undefined)
-    },
-    async replace(coord, implementation, o = {}) {
-      const old = members.get(coord)
-      if (!old) return failure('not-found', `${coord} is not a member`)
-      if (old.home !== id) return failure('denied', `${coord}: replace it at its home runtime ${old.home}`)
+    async replace(pid, implementation, o = {}) {
+      const p = pods.get(pid)
+      if (!p) return failure('not-found', `${pid} is not a pod of ${id}`)
+      if (p.home !== id) return failure('denied', `${pid}: replace it at its home runtime ${p.home}`)
       const impl = registry.implementation(implementation)
       if (!impl) return failure('not-found', `no implementation ${implementation}`)
-      const to = instanceCoord(implementation, parseInstance(coord)!.id)
-      const rewrite = () => rewritten(coord, to)
-      const early = denied(rewrite())
-      if (early) return early
-      const config = 'config' in o ? o.config : old.config
-      const pod = await makePod(to, impl, config)
-      if (!pod.ok) return pod
-      // Subscriptions may have changed during the await: rewrite and police what is there now.
-      const touched = rewrite()
-      const no = members.get(coord) !== old ? failure('not-found', `${coord} changed while it was replaced`) : denied(touched)
-      if (no) { pod.value.dispose(); return no }
-      old.pod.dispose()
-      swap(old, { coord: to, pod: pod.value, home: id, ...(config !== undefined && { config }) }, touched)
-      return success(to)
+      const config = 'config' in o ? o.config : p.config
+      const no = badConfig(pid, impl, config)
+      if (no) return no
+      // Every instance is remade off to the side; the old ones serve until all are made, then all swap at once.
+      const made = await Promise.all([...p.instances.keys()].map(async coord => {
+        const { ctx, bind } = contextFor(wiring, coord, impl, config)
+        return { coord, bind, host: await createHostPod(coord, impl, ctx, opts.pod) }
+      }))
+      const fail = made.flatMap(m => (m.host.ok ? [] : [m.host]))[0] ?? (pods.get(pid) !== p ? failure('not-found', `${pid} was removed while it was replaced`) : undefined)
+      if (fail) { for (const m of made) if (m.host.ok) m.host.value.dispose(); return fail }
+      p.implementation = impl
+      if (config === undefined) delete p.config
+      else p.config = config
+      for (const m of made) {
+        if (!m.host.ok) continue // never: any failure returned above
+        const inst = p.instances.get(m.coord)
+        if (!inst) { m.host.value.dispose(); continue } // removed meanwhile
+        inst.host?.dispose()
+        m.bind(m.host.value)
+        inst.host = m.host.value
+        inst.state = 'running'
+      }
+      emit({ type: 'pod-replaced', pod: pid, implementation })
+      changed(p)
+      return success(undefined)
     },
-    rehome(from, next) {
-      const old = members.get(from)
-      if (!old) return failure('not-found', `${from} is not a member`)
-      if (old.home === id) return failure('denied', `${from}: its home is this runtime; replace it`)
-      if (next.pod.instance !== next.coord || !parseInstance(next.coord)) return failure('invalid-input', `bad member ${next.coord}`)
-      if (next.coord !== from && members.has(next.coord)) return failure('exists', `${next.coord} is already a member`)
-      const touched = rewritten(from, next.coord)
-      const no = denied(touched)
-      swap(old, next, no ? [] : touched)
-      return no ?? success(undefined)
-    },
-    member: c => members.get(c),
-    members: () => [...members.keys()],
+    pod: pid => { const p = pods.get(pid); return p && podInfo(p) },
+    pods: () => [...pods.keys()],
+    instances,
+    record: pid => pods.get(pid),
     target,
+    connect(c) {
+      const from = resolve(c.from)
+      if (!from.ok) return from
+      const to = resolve(c.to)
+      if (!to.ok) return to
+      return rt.subscribe({ ...c, from: from.value, to: to.value })
+    },
     subscribe(input) {
       const sid = input.id ?? nextId(subs)
       if (!ID.test(sid)) return failure('invalid-input', `bad subscription id ${JSON.stringify(sid)}`)

@@ -22,7 +22,7 @@ const TICK = portKey(Ticks.coord, Ticks.ops.tick.coord)
 const WRITE = portKey(Log.coord, Log.ops.write.coord)
 const rec = { key: 'k', value: 'v' }
 
-const A = 'acme/db/a#a', B = 'acme/db/b#b', C = 'acme/db/c#c', S = 'acme/db/s#s', M = 'acme/app/main#m'
+const A = 'a#0', B = 'b#0', C = 'c#0', S = 's#0', M = 'm#0'
 
 function setup(opts: { deny?: (from: string, to: string, data: unknown) => boolean } = {}) {
   const stores = new Map<string, Map<string, string>>()
@@ -62,12 +62,12 @@ function setup(opts: { deny?: (from: string, to: string, data: unknown) => boole
   let denying = false
   const policy = { isAllowed: (from: string, to: string, data: unknown) => (denying && opts.deny?.(from, to, data) ? { approved: false as const, reason: `${to} refused` } : { approved: true as const }) }
   const rt = createRuntime('r1', { registry, policy, tagsOf: c => tags.get(c) ?? new Set(), pod: { observe: o => observed.push(o) } })
-  /** A consumer `main#m` with call subscriptions to the given DBs, in that order. */
+  /** A consumer `m#0` with call subscriptions to the given DBs, in that order. */
   async function wire(...dbs: ('a' | 'b' | 'c' | 's')[]) {
     await rt.create('m', 'acme/app/main')
     for (const d of dbs) {
       await rt.create(d, `acme/db/${d}`)
-      rt.subscribe({ kind: 'call', from: M, to: `acme/db/${d}#${d}` })
+      rt.subscribe({ kind: 'call', from: M, to: `${d}#0` })
     }
     denying = true
     return contexts.get(M)!
@@ -96,7 +96,7 @@ describe('one', () => {
   test('a connection whose target was removed is not a target', async () => {
     const { rt, wire } = setup()
     const ctx = await wire('a')
-    rt.remove(A)
+    rt.remove('a')
     expect(await ctx.one(DB, db => db.save(rec))).toMatchObject({ ok: false, fail: { type: 'missing-component' } })
   })
 })
@@ -305,37 +305,37 @@ describe('policy and books', () => {
 })
 
 describe('publish', () => {
-  const T = 'acme/clock/ticker#t'
+  const T = 't#0'
   async function wired() {
     const s = setup()
     await s.rt.create('t', 'acme/clock/ticker')
     await s.rt.create('l1', 'acme/log/mem')
-    s.rt.subscribe({ kind: 'event', from: T, source: TICK, to: 'acme/log/mem#l1', target: WRITE })
+    s.rt.subscribe({ kind: 'event', from: T, source: TICK, to: 'l1#0', target: WRITE })
     return { ...s, ctx: s.contexts.get(T)! }
   }
   test('publish reaches every live event subscription, in each runtime the instance belongs to', async () => {
     const { rt, registry, ctx, received } = await wired()
     const r2 = createRuntime('r2', { registry })
     await r2.create('l2', 'acme/log/mem')
-    expect(r2.add(rt.member(T)!).ok).toBe(true)
-    r2.subscribe({ kind: 'event', from: T, source: TICK, to: 'acme/log/mem#l2', target: WRITE })
+    expect(r2.add(rt.record('t')!).ok).toBe(true)
+    r2.subscribe({ kind: 'event', from: T, source: TICK, to: 'l2#0', target: WRITE })
     await ctx.publish(Ticks.ops.tick, 1)
-    expect(received.get('acme/log/mem#l1')).toEqual([1])
-    expect(received.get('acme/log/mem#l2')).toEqual([1])
+    expect(received.get('l1#0')).toEqual([1])
+    expect(received.get('l2#0')).toEqual([1])
     expect(rt.books('s1')).toEqual({ calls: 1, last: success(undefined) })
     expect(r2.books('s1')).toEqual({ calls: 1, last: success(undefined) })
-    r2.remove(T)
+    r2.remove('t')
     await ctx.publish(Ticks.ops.tick, 2)
-    expect(received.get('acme/log/mem#l1')).toEqual([1, 2])
-    expect(received.get('acme/log/mem#l2')).toEqual([1])
+    expect(received.get('l1#0')).toEqual([1, 2])
+    expect(received.get('l2#0')).toEqual([1])
   })
   test('once the instance is removed from its home runtime, its publishes go nowhere', async () => {
     const { rt, registry, ctx, received } = await wired()
     const r2 = createRuntime('r2', { registry })
     await r2.create('l2', 'acme/log/mem')
-    r2.add(rt.member(T)!)
-    r2.subscribe({ kind: 'event', from: T, source: TICK, to: 'acme/log/mem#l2', target: WRITE })
-    rt.remove(T)
+    r2.add(rt.record('t')!)
+    r2.subscribe({ kind: 'event', from: T, source: TICK, to: 'l2#0', target: WRITE })
+    rt.remove('t')
     await ctx.publish(Ticks.ops.tick, 1)
     expect(received.size).toBe(0)
   })
@@ -343,11 +343,11 @@ describe('publish', () => {
     const { rt, registry, ctx, received } = await wired()
     const r2 = createRuntime('r2', { registry, policy: { isAllowed: (_f, _t, d) => (typeof d === 'number' ? { approved: false, reason: 'no' } : { approved: true }) } })
     await r2.create('l2', 'acme/log/mem')
-    r2.add(rt.member(T)!)
-    r2.subscribe({ kind: 'event', from: T, source: TICK, to: 'acme/log/mem#l2', target: WRITE })
+    r2.add(rt.record('t')!)
+    r2.subscribe({ kind: 'event', from: T, source: TICK, to: 'l2#0', target: WRITE })
     await ctx.publish(Ticks.ops.tick, 1)
-    expect(received.get('acme/log/mem#l1')).toEqual([1])
-    expect(received.get('acme/log/mem#l2')).toBeUndefined()
+    expect(received.get('l1#0')).toEqual([1])
+    expect(received.get('l2#0')).toBeUndefined()
     expect(rt.books('s1')).toEqual({ calls: 1, last: success(undefined) })
     expect(r2.books('s1')).toEqual({ calls: 0 })
   })
@@ -357,21 +357,21 @@ describe('publish', () => {
     const policy = { isAllowed: (_f: string, _t: string, d: unknown) => { if (typeof d === 'number') throw new Error('bad policy'); return { approved: true as const } } }
     const r2 = createRuntime('r2', { registry, policy, pod: { observe: o => seen.push(o) } })
     await r2.create('l2', 'acme/log/mem')
-    r2.add(rt.member(T)!)
-    r2.subscribe({ kind: 'event', from: T, source: TICK, to: 'acme/log/mem#l2', target: WRITE })
+    r2.add(rt.record('t')!)
+    r2.subscribe({ kind: 'event', from: T, source: TICK, to: 'l2#0', target: WRITE })
     await ctx.publish(Ticks.ops.tick, 1)
-    expect(received.get('acme/log/mem#l1')).toEqual([1])
-    expect(received.get('acme/log/mem#l2')).toBeUndefined()
+    expect(received.get('l1#0')).toEqual([1])
+    expect(received.get('l2#0')).toBeUndefined()
     expect(seen).toContainEqual({ kind: 'exception', instance: T, op: WRITE, error: 'policy threw: bad policy' })
   })
   test('a context publishes only through the pod it was made for', async () => {
     const { rt, contexts, ctx, received } = await wired()
-    rt.remove(T)
+    rt.remove('t')
     await rt.create('t', 'acme/clock/ticker')
     await ctx.publish(Ticks.ops.tick, 1)
     expect(received.size).toBe(0)
     await contexts.get(T)!.publish(Ticks.ops.tick, 2)
-    expect(received.get('acme/log/mem#l1')).toEqual([2])
+    expect(received.get('l1#0')).toEqual([2])
   })
   test('with no event subscription nothing happens', async () => {
     const { rt, ctx, received } = await wired()
@@ -404,12 +404,12 @@ describe('dependencies', () => {
     expect(ctx.hasDependencies()).toBe(true)
     expect(ctx.hasDependencies('store')).toBe(true)
     expect(ctx.hasDependencies('nope')).toBe(false)
-    rt.remove(A)
+    rt.remove('a')
     expect(ctx.hasDependencies('store')).toBe(false)
   })
   test('an instance with no dependencies has them all', async () => {
     const { rt, contexts } = setup()
     await rt.create('t', 'acme/clock/ticker')
-    expect(contexts.get('acme/clock/ticker#t')!.hasDependencies()).toBe(true)
+    expect(contexts.get('t#0')!.hasDependencies()).toBe(true)
   })
 })

@@ -11,7 +11,7 @@ import { createApplication, RuntimeDefSchema, type Application, type RuntimeDef 
 import { Policies, type Policy } from './policy.ts'
 import type { Registry } from './registry.ts'
 import type { NanoResult } from './result.ts'
-import { ID, instanceCoord, invalid, parseInstance, type Runtime } from './runtime/index.ts'
+import { ID, instanceCoord, invalid, type Runtime } from './runtime/index.ts'
 
 export type { RuntimeDef } from './application.ts'
 
@@ -40,17 +40,20 @@ export function checkDoc(json: unknown): NanoDoc | string {
   }
 }
 
-/** An opened runtime as data: its own instances (create order, config if given), members placed in with their home, subscriptions in order. */
+/**
+ * An opened runtime as data: its own pods (create order, config if given), pods placed in (by their first instance) with
+ * their home, subscriptions in order. ponytail: a pod's count is not saved yet (each loads with one instance); saving pods comes with `start`.
+ */
 function live(rt: Runtime): RuntimeDef {
   const def: RuntimeDef = {
     id: rt.id,
     ...(rt.policy === Policies.allowAll() && { policy: 'allow-all' as const }),
     instances: [], members: [], subscriptions: rt.subscriptions().map(s => ({ ...s })),
   }
-  for (const c of rt.members()) {
-    const m = rt.member(c)!
-    if (m.home !== rt.id) def.members.push({ instance: c, home: m.home })
-    else def.instances.push({ id: parseInstance(c)!.id, implementation: m.pod.implementation.coord, ...(m.config !== undefined && { config: structuredClone(m.config) }) })
+  for (const id of rt.pods()) {
+    const p = rt.pod(id)!
+    if (p.home !== rt.id) def.members.push({ instance: p.instances[0]?.coord ?? instanceCoord(id, 0), home: p.home })
+    else def.instances.push({ id, implementation: p.implementation, ...(p.config !== undefined && { config: structuredClone(p.config) }) })
   }
   return def
 }
@@ -72,7 +75,7 @@ function saved(app: Application) {
   return { runtimes, withRoot, ids }
 }
 const coordsOf = (runtimes: RuntimeDef[]) =>
-  runtimes.flatMap(r => [...r.instances.map(i => instanceCoord(i.implementation, i.id)), ...r.members.map(m => m.instance)])
+  runtimes.flatMap(r => [...r.instances.map(i => instanceCoord(i.id, 0)), ...r.members.map(m => m.instance)])
 
 export function saveDoc(app: Application, opts: { title?: string; workspaces?: unknown[] } = {}): NanoDoc {
   const { runtimes, withRoot, ids } = saved(app)
@@ -119,7 +122,7 @@ export async function loadDoc(doc: NanoDoc, opts: { registry: Registry; policy?:
           if (placed.has(m.instance)) return !notes.push(`${d.id}: member ${m.instance} is repeated`)
           placed.add(m.instance)
           const home = m.home !== d.id && withImpl.find(h => h.id === m.home)
-          return (home && home.instances.some(i => instanceCoord(i.implementation, i.id) === m.instance)) ||
+          return (home && home.instances.some(i => instanceCoord(i.id, 0) === m.instance)) ||
             !notes.push(`${d.id}: member ${m.instance} has no home ${m.home}`)
         }),
         subscriptions: d.subscriptions.filter(s => {

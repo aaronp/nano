@@ -72,36 +72,36 @@ const ping = (coord: string, s: string): Promise<NanoResult<string>> => contexts
 beforeEach(() => { failing = false; made2 = 0 })
 
 describe('pod basics', () => {
-  test.todo('given an implementation, when a pod is created with count 2, then it has instances vault#0 and vault#1', async () => {
+  test('given an implementation, when a pod is created with count 2, then it has instances vault#0 and vault#1', async () => {
     const rt = setup()
     expect(await rt.create('vault', 'acme/keys/vault', { count: 2 })).toEqual(success({ pod: 'vault', instances: ['vault#0', 'vault#1'], unsatisfied: [] }))
   })
-  test.todo('given no count, when a pod is created, then it has one instance, vault#0', async () => {
+  test('given no count, when a pod is created, then it has one instance, vault#0', async () => {
     const rt = setup()
     expect(await rt.create('vault', 'acme/keys/vault')).toEqual(success({ pod: 'vault', instances: ['vault#0'], unsatisfied: [] }))
   })
-  test.todo('given a pod, when it is asked for by id, then it reports its implementation, config, count, state and instances', async () => {
+  test('given a pod, when it is asked for by id, then it reports its implementation, config, count, state and instances', async () => {
     const rt = setup()
     await rt.create('vault', 'acme/keys/vault', { config: { region: 'eu' }, count: 2 })
     expect(rt.pod('vault')).toEqual({
-      id: 'vault', implementation: 'acme/keys/vault', config: { region: 'eu' }, count: 2, state: 'running',
+      id: 'vault', implementation: 'acme/keys/vault', config: { region: 'eu' }, count: 2, state: 'running', home: 'app',
       instances: [{ coord: 'vault#0', state: 'running' }, { coord: 'vault#1', state: 'running' }],
     })
     expect(rt.pod('nope')).toBeUndefined()
   })
-  test.todo('given a pod id in use, when another pod is created with it, then it fails exists', async () => {
+  test('given a pod id in use, when another pod is created with it, then it fails exists', async () => {
     const rt = setup()
     await rt.create('vault', 'acme/keys/vault')
     expect(await rt.create('vault', 'acme/ui/user')).toMatchObject({ ok: false, fail: { type: 'exists' } })
     expect(rt.pod('vault')!.implementation).toBe('acme/keys/vault')
   })
-  test.todo("given an instance whose make throws, when its pod is created, then the create succeeds and the pod's state is failed", async () => {
+  test("given an instance whose make throws, when its pod is created, then the create succeeds and the pod's state is failed", async () => {
     const rt = setup()
     failing = true
     expect(await rt.create('vault', 'acme/keys/flaky')).toMatchObject({ ok: true, value: { instances: ['vault#0'] } })
     expect(rt.pod('vault')).toMatchObject({ state: 'failed', instances: [{ coord: 'vault#0', state: 'failed' }] })
   })
-  test.todo('given one failed instance and one running, when the pod is asked for, then its state is failed', async () => {
+  test('given one failed instance and one running, when the pod is asked for, then its state is failed', async () => {
     const rt = setup()
     failing = true
     await rt.create('vault', 'acme/keys/flaky')
@@ -109,7 +109,7 @@ describe('pod basics', () => {
     await rt.addInstance('vault')
     expect(rt.pod('vault')).toMatchObject({ state: 'failed', instances: [{ coord: 'vault#0', state: 'failed' }, { coord: 'vault#1', state: 'running' }] })
   })
-  test.todo('given an instance still being made, when the pod is asked for, then it and its pod are starting', async () => {
+  test('given an instance still being made, when the pod is asked for, then it and its pod are starting', async () => {
     const rt = setup()
     const pending = rt.create('vault', 'acme/keys/slow')
     await new Promise(r => setTimeout(r, 0))
@@ -118,7 +118,7 @@ describe('pod basics', () => {
     await pending
     expect(rt.pod('vault')!.state).toBe('running')
   })
-  test.todo('given an unknown implementation, when a pod is created, then it fails not-found and adds nothing', async () => {
+  test('given an unknown implementation, when a pod is created, then it fails not-found and adds nothing', async () => {
     const rt = setup()
     expect(await rt.create('vault', 'acme/nope/x')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
     expect(rt.pod('vault')).toBeUndefined()
@@ -388,7 +388,7 @@ describe('start', () => {
 })
 
 describe('calls through pods', () => {
-  test.todo('given user#0 connected to vault#0, when user calls vault, then the call is policed and counted on the subscription', async () => {
+  test('given user#0 connected to vault#0, when user calls vault, then the call is policed and counted on the subscription', async () => {
     const seen: string[] = []
     const rt = setup({ isAllowed: (src, dest) => { seen.push(`${src} -> ${dest}`); return { approved: true } } })
     await rt.create('user', 'acme/ui/user')

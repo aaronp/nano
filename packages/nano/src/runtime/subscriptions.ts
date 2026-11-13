@@ -1,11 +1,11 @@
 /**
  * Subscriptions as data: their shape, their live/waiting/broken status, ids and a consumer's call order.
  *
- *   const s: SubscriptionData = { id: 's1', kind: 'call', from: 'acme/app/main#a', to: 'acme/db/mem#d' }
- *   statusOf(s, coord => runtime.member(coord), runtime.id)   // 'live' | 'waiting' | 'broken'
+ *   const s: SubscriptionData = { id: 's1', kind: 'call', from: 'main#0', to: 'db#0' }
+ *   statusOf(s, coord => locate(pods, coord), runtime.id)   // 'live' | 'waiting' | 'broken'
  */
 import { fits } from '../op.ts'
-import { parseInstance, portOp, type Member } from './members.ts'
+import { parseInstance, portOp, type Instance, type PodRecord } from './pods.ts'
 
 /** `from`/`to` are instance coords; an event's `source`/`target` are port keys (`portKey(ifaceCoord, opCoord)`). */
 export type SubscriptionData =
@@ -17,12 +17,15 @@ export type NewSubscription = SubscriptionData extends infer S ? (S extends Subs
 
 export type Status = 'live' | 'waiting' | 'broken'
 
-/** In runtime `runtime`: a call from a member placed here (home elsewhere) is broken, since it calls out through its home (decision 11). */
-export function statusOf(s: SubscriptionData, member: (coord: string) => Member | undefined, runtime: string): Status {
-  const from = member(s.from)?.pod.implementation
-  const to = member(s.to)?.pod.implementation
-  if (!from || !to) return 'waiting'
-  if (s.kind === 'call' && member(s.from)!.home !== runtime) return 'broken'
+/**
+ * Waiting while an end is missing or its instance is not running. In runtime `runtime`: a call from a pod placed here
+ * (home elsewhere) is broken, since it calls out through its home (decision 11).
+ */
+export function statusOf(s: SubscriptionData, locate: (coord: string) => { pod: PodRecord; instance: Instance } | undefined, runtime: string): Status {
+  const a = locate(s.from), b = locate(s.to)
+  if (a?.instance.state !== 'running' || b?.instance.state !== 'running') return 'waiting'
+  const from = a.pod.implementation, to = b.pod.implementation
+  if (s.kind === 'call' && a.pod.home !== runtime) return 'broken'
   if (s.kind === 'event') {
     const src = portOp(from, s.source)
     const dst = portOp(to, s.target)

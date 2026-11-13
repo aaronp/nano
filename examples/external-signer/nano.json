@@ -30,21 +30,21 @@
       "subscriptions": [
         {
           "kind": "call",
-          "from": "example.signer/generator#generator",
-          "to": "example.signer/vault#vault",
+          "from": "generator#0",
+          "to": "vault#0",
           "id": "s1"
         },
         {
           "kind": "call",
-          "from": "example.signer/signer#signer",
-          "to": "example.signer/vault#vault",
+          "from": "signer#0",
+          "to": "vault#0",
           "id": "s2"
         },
         {
           "kind": "event",
-          "from": "example.signer/vault#vault",
+          "from": "vault#0",
           "source": "example.signer.Vault/f0f5c1583efb282af152779bb7c88d378a5b85a09507199ee80b26278f0a3a64",
-          "to": "example.signer/map#map",
+          "to": "map#0",
           "target": "example.signer.KeyFormatter/a2c897960fecffbd4805a6058909988796e6c79bd0838d598a79d3ab0c251050",
           "id": "s3"
         }
@@ -65,36 +65,36 @@
       ],
       "members": [
         {
-          "instance": "example.signer/generator#generator",
+          "instance": "generator#0",
           "home": "signer"
         },
         {
-          "instance": "example.signer/signer#signer",
+          "instance": "signer#0",
           "home": "signer"
         },
         {
-          "instance": "example.signer/map#map",
+          "instance": "map#0",
           "home": "signer"
         }
       ],
       "subscriptions": [
         {
           "kind": "call",
-          "from": "example.signer/tester#tester",
-          "to": "example.signer/signer#signer",
+          "from": "tester#0",
+          "to": "signer#0",
           "id": "s1"
         },
         {
           "kind": "call",
-          "from": "example.signer/tester#tester",
-          "to": "example.signer/generator#generator",
+          "from": "tester#0",
+          "to": "generator#0",
           "id": "s2"
         },
         {
           "kind": "event",
-          "from": "example.signer/map#map",
+          "from": "map#0",
           "source": "example.signer.KeyFormatter/d96c86eb1ce0330750253755a2569e0588f2a4f97cf670e60f809dc32a6be75f",
-          "to": "example.signer/log#log",
+          "to": "log#0",
           "target": "example.signer.Log/77eaaecad3790471bcec8e0a22417fa471db78848dbfc9b61b9fdd761edbb56c",
           "id": "s3"
         }

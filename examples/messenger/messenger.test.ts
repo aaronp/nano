@@ -6,16 +6,16 @@
  *               (store placed from `persistence`, messaging from `messaging`)
  */
 import { describe, expect, test } from 'bun:test'
-import { createApplication, createRegistry, loadDoc, portKey, saveDoc, success, type Application, type Interface, type NanoResult, type Op, type Runtime } from '@pritzlaff/nano'
+import { createApplication, createRegistry, loadDoc, parseInstance, portKey, saveDoc, success, type Application, type Interface, type NanoResult, type Op, type Runtime } from '@pritzlaff/nano'
 import { Composer, Inbox, KeyValueStore, Messaging } from './interfaces.ts'
 import { messengerProvider } from './providers.ts'
 
-const INBOX = 'example.messenger/inbox#inbox', COMPOSER = 'example.messenger/composer#composer'
-const STORE = 'example.messenger/memory-store#store', MESSAGING = 'example.messenger/messaging#messaging'
+const INBOX = 'inbox#0', COMPOSER = 'composer#0'
+const STORE = 'store#0', MESSAGING = 'messaging#0'
 const DOC = new URL('./nano.json', import.meta.url)
 
-/** What a host does when a person presses a button: call one of a member's ops from outside. */
-const press = (rt: Runtime, coord: string, i: Interface, o: Op, input: unknown) => rt.member(coord)!.pod.invoke(portKey(i.coord, o.coord), input)
+/** What a host does when a person presses a button: call one of an instance's ops from outside. */
+const press = (rt: Runtime, coord: string, i: Interface, o: Op, input: unknown) => rt.record(parseInstance(coord)!.pod)!.instances.get(coord)!.host!.invoke(portKey(i.coord, o.coord), input)
 const send = (rt: Runtime, text: string) =>
   press(rt, COMPOSER, Composer, Composer.ops.send, { text }) as Promise<NanoResult<{ status: 'sent'; id: string } | { status: 'disabled' }>>
 const inbox = (rt: Runtime) => press(rt, INBOX, Inbox, Inbox.ops.list, {})

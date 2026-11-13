@@ -33,7 +33,7 @@ const registry = () => {
   r.add(provider('acme/ui', [tester]))
   return r
 }
-const S = 'acme/keys/signer#s', V = 'acme/keys/vault#v', T = 'acme/ui/tester#t', W = 'acme/keys/vault#w', X = 'acme/keys/vault#x'
+const S = 's#0', V = 'v#0', T = 't#0', W = 'w#0', X = 'x#0'
 const spare: RuntimeDef = { id: 'spare', policy: 'allow-all', instances: [{ id: 'x', implementation: 'acme/keys/vault' }], members: [], subscriptions: [] }
 
 /** Root holds `w`; `signer` holds the vault (with config) and the signer; `client` holds the tester, the signer placed in, and `w`; `spare` is only defined. */
@@ -65,8 +65,8 @@ function snapshot(app: Application) {
     if (!rt) return { id, definition: app.definition(id) }
     return {
       id,
-      own: rt.members().filter(c => rt.member(c)!.home === id).map(c => ({ c, config: rt.member(c)!.config })),
-      placed: rt.members().filter(c => rt.member(c)!.home !== id).map(c => ({ c, home: rt.member(c)!.home })),
+      own: rt.pods().map(p => rt.pod(p)!).filter(p => p.home === id).map(p => ({ p: p.id, config: p.config })),
+      placed: rt.pods().map(p => rt.pod(p)!).filter(p => p.home !== id).map(p => ({ p: p.id, home: p.home })),
       subscriptions: rt.subscriptions().map(s => ({ ...s, status: rt.status(s.id) })),
     }
   })
@@ -84,7 +84,7 @@ describe('saving and loading', () => {
     const { app: back, notes } = await load(doc)
     expect(notes).toEqual([])
     expect(snapshot(back)).toEqual(snapshot(app))
-    expect(back.runtime('client')!.members()).toEqual([T, S, W]) // own instances first
+    expect(back.runtime('client')!.instances()).toEqual([T, S, W]) // own instances first
     expect(back.runtime('client')!.status('s1')).toBe('live') // and 'late' (tester → a vault) stays broken, as it was
   })
 
@@ -123,7 +123,7 @@ describe('saving and loading', () => {
   test('a root saved under another id loads as a child runtime, opened', async () => {
     const { app, notes } = await loadDoc(saveDoc(await setup()), { registry: registry(), id: 'other' })
     expect(notes).toEqual([])
-    expect(app.runtime('app')!.members()).toEqual([W])
+    expect(app.runtime('app')!.instances()).toEqual([W])
   })
 
   test('an adopted runtime is not saved', async () => {
@@ -140,7 +140,7 @@ describe('saving and loading', () => {
 
   test('a subscription to a removed target is still saved, and waits after loading', async () => {
     const app = await setup()
-    app.runtime('client')!.remove(S)
+    app.runtime('client')!.remove('s')
     expect(app.runtime('client')!.status('s1')).toBe('waiting')
     const doc = saveDoc(app)
     expect(doc.runtimes.find(r => r.id === 'client')!.subscriptions[0]).toEqual({ id: 's1', kind: 'call', from: T, to: S })
@@ -156,7 +156,7 @@ describe('saving and loading', () => {
     const r = app.createRuntime('r')
     if (!r.ok) throw new Error('setup')
     await r.value.create('k', 'acme/keys/ticker'); await r.value.create('v', 'acme/keys/vault')
-    const ev = { id: 'e', kind: 'event' as const, from: 'acme/keys/ticker#k', source: portKey(Ticks.coord, Ticks.ops.tick.coord), to: V, target: portKey(Vault.coord, Vault.ops.ping.coord) }
+    const ev = { id: 'e', kind: 'event' as const, from: 'k#0', source: portKey(Ticks.coord, Ticks.ops.tick.coord), to: V, target: portKey(Vault.coord, Vault.ops.ping.coord) }
     expect(r.value.subscribe(ev).ok).toBe(true)
     expect(r.value.status('e')).toBe('live')
     const { app: back, notes } = await load(saveDoc(app))
@@ -171,7 +171,7 @@ describe('saving and loading', () => {
     const doc = saveDoc(app)
     ;(doc.runtimes.find(r => r.id === 'signer')!.instances[0]!.config as { slot: number }).slot = 9
     ;(doc.runtimes.find(r => r.id === 'more')!.instances[0]!.config as { n: number }).n = 9
-    expect(app.runtime('signer')!.member(V)!.config).toEqual({ slot: 1 })
+    expect(app.runtime('signer')!.pod('v')!.config).toEqual({ slot: 1 })
     expect(app.definition('more')!.instances[0]!.config).toEqual({ n: 1 })
   })
 
@@ -203,32 +203,32 @@ describe('loading what does not fit', () => {
       { id: 'h', instances: [v], members: [], subscriptions: [] }, // not defined: v is taken, so it cannot open
       { id: 'r', instances: [], members: [{ instance: V, home: 'h' }], subscriptions: [] },
     ]))
-    expect(app.runtime('r')!.members()).toEqual([])
-    expect(notes).toEqual(['h: instance id v is taken', `r: member ${V} skipped: no runtime h`])
+    expect(app.runtime('r')!.instances()).toEqual([])
+    expect(notes).toEqual(['h: pod id v is taken', `r: member ${V} skipped: no runtime h`])
   })
 
   test('an unknown implementation gives a note and the rest loads', async () => {
     const { app, notes } = await load(doc([{
-      id: 'r', members: [], subscriptions: [{ id: 's1', kind: 'call', from: 'acme/nope/x#a', to: V }],
+      id: 'r', members: [], subscriptions: [{ id: 's1', kind: 'call', from: 'a#0', to: V }],
       instances: [{ id: 'a', implementation: 'acme/nope/x' }, { id: 'v', implementation: 'acme/keys/vault' }],
     }], { providers: ['acme/keys', 'acme/nope'] }))
     expect(notes).toEqual(['provider acme/nope is not registered', 'r/a: no implementation acme/nope/x'])
-    expect(app.runtime('r')!.members()).toEqual([V])
+    expect(app.runtime('r')!.instances()).toEqual([V])
     expect(app.runtime('r')!.status('s1')).toBe('waiting')
   })
 
   test('a member whose home is not in the document gives a note and is skipped', async () => {
     const { app, notes } = await load(doc([{ id: 'r', instances: [], members: [{ instance: S, home: 'gone' }], subscriptions: [] }]))
-    expect(notes).toEqual(['r: member acme/keys/signer#s has no home gone'])
-    expect(app.runtime('r')!.members()).toEqual([])
+    expect(notes).toEqual(['r: member s#0 has no home gone'])
+    expect(app.runtime('r')!.instances()).toEqual([])
   })
 
   test('a member whose instance was skipped at its home gives the same note', async () => {
     const { notes } = await load(doc([
       { id: 'h', instances: [{ id: 'a', implementation: 'acme/nope/x' }], members: [], subscriptions: [] },
-      { id: 'r', instances: [], members: [{ instance: 'acme/nope/x#a', home: 'h' }], subscriptions: [] },
+      { id: 'r', instances: [], members: [{ instance: 'a#0', home: 'h' }], subscriptions: [] },
     ]))
-    expect(notes).toEqual(['h/a: no implementation acme/nope/x', 'r: member acme/nope/x#a has no home h'])
+    expect(notes).toEqual(['h/a: no implementation acme/nope/x', 'r: member a#0 has no home h'])
   })
 
   test('a subscription that cannot be added gives a note and the rest loads', async () => {
@@ -244,8 +244,8 @@ describe('loading what does not fit', () => {
       { id: 'a', instances: [v], members: [], subscriptions: [] },
       { id: 'b', instances: [v], members: [], subscriptions: [] },
     ]))
-    expect(notes).toEqual(['b: instance id v is taken'])
-    expect(app.runtime('a')!.members()).toEqual([V])
+    expect(notes).toEqual(['b: pod id v is taken'])
+    expect(app.runtime('a')!.instances()).toEqual([V])
   })
 
   test('a member repeated in one runtime gives a note, and the runtime opens with it once', async () => {
@@ -255,15 +255,15 @@ describe('loading what does not fit', () => {
       { id: 'r', instances: [], members: [{ instance: V, home: 'h' }, { instance: V, home: 'h' }], subscriptions: [] },
     ]))
     expect(notes).toEqual([`r: member ${V} is repeated`])
-    expect(app.runtime('r')!.members()).toEqual([V])
+    expect(app.runtime('r')!.instances()).toEqual([V])
   })
 
   test('tags are applied only to what is held after loading', async () => {
     const { app } = await load(doc(
       [{ id: 'r', instances: [{ id: 'a', implementation: 'acme/nope/x' }, { id: 'v', implementation: 'acme/keys/vault' }], members: [], subscriptions: [] }],
-      { tags: { 'acme/nope/x#a': ['lost'], [V]: ['kept'] } },
+      { tags: { 'a#0': ['lost'], [V]: ['kept'] } },
     ))
-    expect([...app.tagsOf('acme/nope/x#a')]).toEqual([])
+    expect([...app.tagsOf('a#0')]).toEqual([])
     expect([...app.tagsOf(V)]).toEqual(['kept'])
   })
 
@@ -316,11 +316,11 @@ describe('only what the document can hold is made', () => {
     expect(() => createRuntime('my runtime', { registry: registry() })).toThrow('bad runtime id')
   })
 
-  test('an instance id outside the id rule is refused', async () => {
+  test('a pod id outside the id rule is refused', async () => {
     const rt = createRuntime('r', { registry: registry() })
     expect(await rt.create('a/b', 'acme/keys/vault')).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
     expect(await rt.create(long, 'acme/keys/vault')).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
-    expect(rt.members()).toEqual([])
+    expect(rt.instances()).toEqual([])
   })
 
   test('a subscription id outside the id rule is refused', () => {
@@ -330,7 +330,7 @@ describe('only what the document can hold is made', () => {
 
   test('a coord whose id is outside the id rule is not an instance coord', () => {
     const rt = createRuntime('r', { registry: registry() })
-    expect(rt.subscribe({ kind: 'call', from: 'acme/ui/tester#a b', to: V })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(rt.subscribe({ kind: 'call', from: 'a b#0', to: V })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   })
 
   test('a config that is not JSON is refused', async () => {
@@ -354,7 +354,7 @@ describe('only what the document can hold is made', () => {
     if (!r.ok) throw new Error('setup')
     await r.value.create('ü-1', 'acme/keys/vault', { config: { nested: [1, 'two', null, { three: true }] } })
     await r.value.create('s2', 'acme/keys/signer', { provision: true })
-    r.value.subscribe({ id: 'x'.repeat(64), kind: 'call', from: 'acme/keys/signer#s2', to: 'acme/keys/vault#ü-1' })
+    r.value.subscribe({ id: 'x'.repeat(64), kind: 'call', from: 's2#0', to: 'ü-1#0' })
     const doc = saveDoc(app)
     expect(typeof checkDoc(JSON.parse(JSON.stringify(doc)))).toBe('object')
     const { app: back, notes } = await load(doc)
