@@ -197,6 +197,24 @@ Append-only. One entry per decision: the question, the decision, why, and what i
 
 ## 33. What does the application share with adopted children, and what does `runtimes()` list?
 
-**Decision:** `createRuntime` and `open` make children that share the application's registry, tags and id check; an adopted runtime (another application included) keeps its own registry, tags and ids, and only its id must be free. `place` works between the root and direct children (adopted ones included, as they are runtimes); runtimes inside an adopted application are out of reach (placing across nested applications is out of scope). `runtime(<application id>)` gives the root; `runtimes()` lists child ids, opened and defined, not the root. Defined runtimes always use the allow-all policy (the only saved policy).
+**Decision:** `createRuntime` and `open` make children that share the application's registry, tags and id check; an adopted runtime (another application included) keeps its own registry, tags and ids, and only its id must be free. `place` works between the root and direct children (adopted ones included, as they are runtimes); runtimes inside an adopted application are out of reach (placing across nested applications is out of scope). `runtime(<application id>)` gives the root; `runtimes()` lists child ids, opened and defined, not the root. Defined runtimes always use the allow-all policy (the only saved policy). The id check and the pass wait (decision 30) cover the root and direct children only: the children of an adopted application are not consulted (out of scope with placing across nested applications).
 **Why:** Nesting is adoption only (ruling); the root is the application itself.
 **Cost if wrong:** A cross-application place that walks nested applications.
+
+## 34. What happens to placed copies when an instance is replaced at its home?
+
+**Decision:** Every runtime it was placed into follows: on the home's `instance-replaced`, the application calls `rehome(from, newMember)` on each runtime whose member `from` has that home. The new coord and pod take the old member's slot (create order holds), publish delivery moves to the new pod, the runtime emits `instance-replaced`, and its subscriptions are rewritten from → to under its own policy. If that policy denies the rewrite, the member is still swapped but its subscriptions stay on the old coord (now `waiting`) and `rehome` returns the denial. `rehome` refuses a member whose home is this runtime (`denied`: replace it there). The instance's tags move to the new coord.
+**Why:** The home disposes the old pod; a guest must not keep it. Each runtime polices its own rewires (decision 27), so a guest can refuse the new implementation without the home being blocked.
+**Cost if wrong:** Guests drop the member instead and the person reconnects by hand.
+
+## 35. Opens that overlap
+
+**Decision:** Each open carries its chain (the runtimes it is opening, outermost first). Building a runtime, a home on this chain is skipped (it made its instances already, decision 31); a home being opened by another, independent open is waited for until its own instances exist (not until it is fully open: two overlapping opens of runtimes placing into each other would wait on each other forever); any other home is opened in full. `open` never rejects: a throw while building fails `threw` (`opening <id>: <message>`) and the runtime is taken down. Taking a failed runtime down removes everything placed into it.
+**Why:** Skipping every runtime being opened made `Promise.all([open('signer'), open('client')])` fail `not-found` for the client, whose members signer had not made yet.
+**Cost if wrong:** An open may resolve while a home another caller is opening is still adding its subscriptions; that caller's own `open` tells when it is done.
+
+## 36. Definitions and tags keep ids and coords tidy
+
+**Decision:** `define` fails `exists` (`instance id <id> is taken`) when one of its instances' ids is already taken in the application (decision 32). An instance's tags are dropped once it is gone from every runtime (removed at home); removing it from a runtime it was placed into keeps them.
+**Why:** Ids are unique across the application, definitions included; tags keyed by a coord no runtime holds would reattach to an unrelated instance created later with that coord.
+**Cost if wrong:** A clash surfaces only at `open`; stale tags on reuse.

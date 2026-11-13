@@ -8,7 +8,7 @@
  */
 import type { Policy } from './policy.ts'
 import type { Registry } from './registry.ts'
-import { failure, success, type Fail, type NanoResult } from './result.ts'
+import { failure, success, type NanoResult } from './result.ts'
 import { createRuntime, parseInstance, type Runtime, type SubscriptionData } from './runtime/index.ts'
 
 /** A runtime as saved: its own instances (create order), the members placed into it, and its subscriptions (in order). */
@@ -42,7 +42,8 @@ export function createApplication(id: string, opts: { registry: Registry; policy
   const tags = new Map<string, Set<string>>()
   const kids = new Map<string, Runtime>() // made, adopted and opened children
   const defs = new Map<string, RuntimeDef>()
-  const opening = new Map<string, Promise<NanoResult<Runtime>>>()
+  /** Opens in progress: `made` once its own instances exist (or it failed), `done` when it is open or failed. */
+  const opening = new Map<string, { made: Promise<void>; done: Promise<NanoResult<Runtime>> }>()
   const all = (): Runtime[] => [root, ...kids.values()]
   const lookup = (rid: string) => (rid === id ? root : kids.get(rid))
   const taken = (rid: string) => rid === id || kids.has(rid) || defs.has(rid)
@@ -56,9 +57,20 @@ export function createApplication(id: string, opts: { registry: Registry; policy
   const settling = (c: string) => { for (const r of all()) { const p = r.settling(c); if (p) return p } }
   const shared = { registry: opts.registry, tagsOf, idTaken, settling }
 
-  /** Removing an instance at its home removes it from every runtime it was placed into. */
+  /** What happens to an instance at its home happens wherever it was placed: removal, and replacement. */
   const watch = (r: Runtime) => r.listen(e => {
-    if (e.type === 'instance-removed') for (const o of all()) if (o !== r && o.member(e.instance)?.home === r.id) o.remove(e.instance)
+    if (e.type === 'instance-removed') {
+      for (const o of all()) if (o !== r && o.member(e.instance)?.home === r.id) o.remove(e.instance)
+      if (!all().some(o => o.member(e.instance))) tags.delete(e.instance)
+    }
+    if (e.type === 'instance-replaced') {
+      const next = r.member(e.to)
+      if (next?.home !== r.id) return
+      // A guest whose policy denies the rewrite keeps its subscriptions on the old coord, waiting (decision 34).
+      for (const o of all()) if (o !== r && o.member(e.from)?.home === r.id) o.rehome(e.from, next)
+      const t = tags.get(e.from)
+      if (t) { tags.delete(e.from); tags.set(e.to, t) }
+    }
   })
   const child = (rid: string, policy?: Policy) => {
     const r = createRuntime(rid, { ...shared, ...(policy && { policy }) })
@@ -81,42 +93,55 @@ export function createApplication(id: string, opts: { registry: Registry; policy
   }
 
   /**
-   * Its own instances first (unprovisioned), then the runtimes its members come from (one being opened is skipped,
-   * which is safe because it made its instances already), then its members, then its subscriptions (they may wait).
-   * On a failure the runtime is taken down again; runtimes opened on the way stay open.
+   * Its own instances first (unprovisioned), then the runtimes its members come from, then its members, then its
+   * subscriptions (they may wait). A home on this open's own chain is skipped (it made its instances already); a home
+   * another open is building is waited for only until its instances exist (waiting for all of it could deadlock two
+   * overlapping opens); any other home is opened, in full. On a failure the runtime is taken down again; runtimes
+   * opened on the way stay open.
    */
-  async function build(def: RuntimeDef): Promise<NanoResult<Runtime>> {
+  async function build(def: RuntimeDef, chain: ReadonlySet<string>, made: () => void): Promise<NanoResult<Runtime>> {
     const rt = child(def.id) // 'allow-all' is the only saved policy, and the default
-    const undo = (r: { ok: false; fail: Fail }): NanoResult<Runtime> => {
+    const undo = (r: NanoResult<never>): NanoResult<Runtime> => {
       for (const c of rt.members()) rt.remove(c)
       kids.delete(def.id)
       return r
     }
-    for (const i of def.instances) {
-      const r = await rt.create(i.id, i.implementation, { ...(i.config !== undefined && { config: i.config }), provision: false })
-      if (!r.ok) return undo(r)
+    try {
+      for (const i of def.instances) {
+        const r = await rt.create(i.id, i.implementation, { ...(i.config !== undefined && { config: i.config }), provision: false })
+        if (!r.ok) return undo(r)
+      }
+      made()
+      for (const home of new Set(def.members.map(m => m.home))) {
+        if (chain.has(home)) continue
+        const other = opening.get(home)
+        if (other) { await other.made; continue }
+        const r = await open(home, chain)
+        if (!r.ok) return undo(r)
+      }
+      for (const m of def.members) { const r = place(m.instance, m.home, def.id); if (!r.ok) return undo(r) }
+      for (const s of def.subscriptions) { const r = rt.subscribe(s); if (!r.ok) return undo(r) }
+      return success(rt)
+    } catch (e) {
+      return undo(failure('threw', `opening ${def.id}: ${msg(e)}`))
     }
-    for (const home of new Set(def.members.map(m => m.home))) {
-      if (home === def.id || opening.has(home)) continue
-      const r = await open(home)
-      if (!r.ok) return undo(r)
-    }
-    for (const m of def.members) { const r = place(m.instance, m.home, def.id); if (!r.ok) return undo(r) }
-    for (const s of def.subscriptions) { const r = rt.subscribe(s); if (!r.ok) return undo(r) }
-    return success(rt)
   }
 
-  function open(rid: string): Promise<NanoResult<Runtime>> {
+  function open(rid: string, chain: ReadonlySet<string> = new Set()): Promise<NanoResult<Runtime>> {
     const pending = opening.get(rid)
-    if (pending) return pending
+    if (pending) return pending.done
     const have = lookup(rid)
     if (have) return Promise.resolve(success(have))
     const def = defs.get(rid)
     if (!def) return Promise.resolve(failure('not-found', `no runtime ${rid}`))
-    // Registered before the build starts, so a runtime it opens on the way sees it as opening.
-    const p = Promise.resolve().then(() => build(def)).finally(() => opening.delete(rid))
-    opening.set(rid, p)
-    return p
+    let made!: () => void
+    const m = new Promise<void>(res => { made = res })
+    // Registered before the build starts, so every open from here on sees it in progress.
+    const done = Promise.resolve()
+      .then(() => build(def, new Set(chain).add(rid), made))
+      .finally(() => { made(); opening.delete(rid) })
+    opening.set(rid, { made: m, done })
+    return done
   }
 
   return {
@@ -134,11 +159,13 @@ export function createApplication(id: string, opts: { registry: Registry; policy
     },
     define(def) {
       if (taken(def.id)) return failure('exists', `runtime ${def.id} exists`)
+      const clash = def.instances.find(i => idTaken(i.id))
+      if (clash) return failure('exists', `instance id ${clash.id} is taken`)
       defs.set(def.id, def)
       return success(undefined)
     },
     definition: rid => defs.get(rid),
-    open,
+    open: rid => open(rid),
     place,
     runtimes: () => [...new Set([...kids.keys(), ...defs.keys()])],
     tag(c, t) { tags.set(c, (tags.get(c) ?? new Set()).add(t)) },

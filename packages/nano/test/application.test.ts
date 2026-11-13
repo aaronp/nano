@@ -10,12 +10,14 @@ import { createRegistry } from '../src/registry.ts'
 import type { Policy } from '../src/policy.ts'
 import type { NanoContext } from '../src/context.ts'
 import type { Selector } from '../src/selector.ts'
-import type { RuntimeEvent } from '../src/runtime/index.ts'
+import type { RuntimeEvent, SubscriptionData } from '../src/runtime/index.ts'
 import { createApplication, type RuntimeDef } from '../src/application.ts'
 
 const Str = defineSchema('Str', Type.String())
 const face = (coord: string) => iface(coord, { ping: op.action('ping', Str, Str) })
-const Vault = face('acme/vault'), Signer = face('acme/signer'), Slow = face('acme/slow')
+const Vault = face('acme/vault'), Signer = face('acme/signer'), Slow = face('acme/slow'), Sink = face('acme/sink')
+const Ticks = iface('acme/ticks', { tick: op.source('tick', Str) })
+const TICK = portKey(Ticks.coord, Ticks.ops.tick.coord), PING = (i: Interface) => portKey(i.coord, Signer.ops.ping.coord)
 
 const contexts = new Map<string, NanoContext>()
 const echo: Handler = async (_c, s) => success(s)
@@ -40,11 +42,15 @@ const holder = impl('acme/keys/holder', [], { vault: Vault, slow: Slow }) // a p
 const tester = impl('acme/ui/tester', [], { signer: Signer })
 const user = impl('acme/ui/user', [], { vault: Vault })
 const cached = impl('acme/ui/cached', [], { cache: { tags: ['cache'] } })
+const signer2 = impl('acme/keys/signer2', [Signer], { vault: Vault }, sign)
+const ticker = impl('acme/keys/ticker', [Ticks]), ticker2 = impl('acme/keys/ticker2', [Ticks])
+const heard: string[] = []
+const sink = impl('acme/ui/sink', [Sink], {}, async (_c, s) => { heard.push(s as string); return success(s) })
 
 const registry = () => {
   const r = createRegistry()
-  r.add(provider('acme/keys', [vault, signer, slow, holder]))
-  r.add(provider('acme/ui', [tester, user, cached]))
+  r.add(provider('acme/keys', [vault, signer, slow, holder, signer2, ticker, ticker2]))
+  r.add(provider('acme/ui', [tester, user, cached, sink]))
   return r
 }
 const recording = (log: string[]): Policy => ({ isAllowed: (f, t) => { log.push(`${f} -> ${t}`); return { approved: true } } })
@@ -113,7 +119,11 @@ describe('placing', () => {
   test('removing it from a runtime it was placed into leaves its home alone', async () => {
     const { app, signerRt, client } = await setup()
     app.place(S, 'signer', 'client')
+    const inSigner: RuntimeEvent[] = [], inClient: RuntimeEvent[] = []
+    signerRt.listen(e => inSigner.push(e)); client.listen(e => inClient.push(e))
     client.remove(S)
+    expect(inSigner).toEqual([])
+    expect(inClient).toEqual([{ type: 'instance-removed', instance: S }])
     expect(signerRt.members()).toEqual([V, S])
     expect(await signerRt.member(S)!.pod.invoke(portKey(Signer.coord, Signer.ops.ping.coord), 'y')).toEqual(success('signed y'))
   })
@@ -131,6 +141,72 @@ describe('placing', () => {
     await pass
     expect(await call).toEqual(success('x'))
     expect(order).toEqual(['pass', 'call'])
+  })
+  test('an event delivered in another runtime into an instance of an unfinished pass at its home waits for the pass', async () => {
+    const { app, client } = await setup()
+    const home = app.createRuntime('home')
+    if (!home.ok) throw new Error('home')
+    const order: string[] = []
+    const pass = home.value.create('h', 'acme/keys/holder', { provision: true }).then(() => order.push('pass'))
+    await new Promise(r => setTimeout(r, 2))
+    expect(app.place('acme/keys/vault#vault-1', 'home', 'client')).toEqual(success(undefined))
+    await client.create('k', 'acme/keys/ticker')
+    client.subscribe({ kind: 'event', from: 'acme/keys/ticker#k', source: TICK, to: 'acme/keys/vault#vault-1', target: PING(Vault) })
+    const published = contexts.get('acme/keys/ticker#k')!.publish(Ticks.ops.tick, 'x').then(() => order.push('publish'))
+    await Promise.all([pass, published])
+    expect(order).toEqual(['pass', 'publish'])
+    expect(client.books(client.subscriptions()[0]!.id)).toEqual({ calls: 1, last: success('x') })
+  })
+})
+
+describe('replacing at home', () => {
+  const S2 = 'acme/keys/signer2#s'
+  test('a runtime it was placed into swaps the member in place and rewrites its subscriptions', async () => {
+    const { app, signerRt, client } = await setup()
+    app.place(S, 'signer', 'client')
+    await client.create('t', 'acme/ui/tester', { provision: true })
+    const events: RuntimeEvent[] = []
+    client.listen(e => events.push(e))
+    expect(await signerRt.replace(S, 'acme/keys/signer2')).toEqual(success(S2))
+    expect(client.members()).toEqual([S2, T])
+    expect(client.member(S2)).toMatchObject({ home: 'signer', pod: signerRt.member(S2)!.pod })
+    expect(client.subscriptions().map(s => `${s.from} -> ${s.to} ${client.status(s.id)}`)).toEqual([`${T} -> ${S2} live`])
+    expect(events[0]).toEqual({ type: 'instance-replaced', from: S, to: S2 })
+    expect(await contexts.get(T)!.one(Signer, s => s.ping('x'))).toEqual(success('signed x'))
+  })
+  test('a runtime whose policy denies the rewrite keeps its subscriptions waiting on the old coord', async () => {
+    const deny: Policy = { isAllowed: (_f, t) => (t === S2 ? { approved: false, reason: 'not the new one' } : { approved: true }) }
+    const { app, signerRt, client } = await setup({ client: deny })
+    app.place(S, 'signer', 'client')
+    await client.create('t', 'acme/ui/tester', { provision: true })
+    await signerRt.replace(S, 'acme/keys/signer2')
+    expect(client.members()).toEqual([S2, T])
+    expect(client.subscriptions().map(s => `${s.from} -> ${s.to} ${client.status(s.id)}`)).toEqual([`${T} -> ${S} waiting`])
+  })
+  test('publishes of the new instance are delivered in the runtimes it was placed into', async () => {
+    const { app, client } = await setup()
+    const home = app.createRuntime('home')
+    if (!home.ok) throw new Error('home')
+    await home.value.create('k', 'acme/keys/ticker')
+    app.place('acme/keys/ticker#k', 'home', 'client')
+    await client.create('n', 'acme/ui/sink')
+    client.subscribe({ kind: 'event', from: 'acme/keys/ticker#k', source: TICK, to: 'acme/ui/sink#n', target: PING(Sink) })
+    await home.value.replace('acme/keys/ticker#k', 'acme/keys/ticker2')
+    heard.length = 0
+    await contexts.get('acme/keys/ticker2#k')!.publish(Ticks.ops.tick, 'after')
+    expect(heard).toEqual(['after'])
+  })
+  test('a replaced instance keeps its tags', async () => {
+    const { app, signerRt } = await setup()
+    app.tag(S, 'primary')
+    await signerRt.replace(S, 'acme/keys/signer2')
+    expect(app.tagsOf(S2)).toEqual(new Set(['primary']))
+    expect(app.tagsOf(S)).toEqual(new Set())
+  })
+  test('rehome is only for members placed from elsewhere', async () => {
+    const { signerRt } = await setup()
+    expect(signerRt.rehome(S, signerRt.member(V)!)).toMatchObject({ ok: false, fail: { type: 'denied' } })
+    expect(signerRt.rehome('acme/keys/signer#nope', signerRt.member(V)!)).toMatchObject({ ok: false, fail: { type: 'not-found' } })
   })
 })
 
@@ -162,6 +238,15 @@ describe('the application', () => {
     expect(await client.create('c', 'acme/ui/cached', { provision: true })).toEqual(success({ coord: 'acme/ui/cached#c', unsatisfied: [] }))
     app.untag(V, 'cache')
     expect(client.target(V)!.tags).toEqual(new Set())
+  })
+  test('tags go when the instance is gone everywhere, not when it leaves a runtime it was placed into', async () => {
+    const { app, signerRt, client } = await setup()
+    app.tag(V, 'cache')
+    app.place(V, 'signer', 'client')
+    client.remove(V)
+    expect(app.tagsOf(V)).toEqual(new Set(['cache']))
+    signerRt.remove(V)
+    expect(app.tagsOf(V)).toEqual(new Set())
   })
   test('an application can be adopted as a child of another, keeping its own registry', () => {
     const outer = createApplication('outer', { registry: registry() })
@@ -204,6 +289,47 @@ describe('runtimes on demand', () => {
     expect(app.define(signerDef)).toMatchObject({ ok: false, fail: { type: 'exists' } })
     expect(app.define({ ...signerDef, id: 'made' })).toMatchObject({ ok: false, fail: { type: 'exists' } })
     expect(app.define({ ...signerDef, id: 'app' })).toMatchObject({ ok: false, fail: { type: 'exists' } })
+  })
+  test('define rejects an instance id already taken in the application', async () => {
+    const app = createApplication('app', { registry: registry() })
+    await app.create('v', 'acme/keys/vault')
+    expect(app.define(signerDef)).toEqual({ ok: false, fail: { type: 'exists', reason: 'instance id v is taken' } })
+    expect(app.runtimes()).toEqual([])
+  })
+  test('overlapping opens both succeed', async () => {
+    const app = createApplication('app', { registry: registry() })
+    app.define(signerDef); app.define(clientDef)
+    const [a, b] = await Promise.all([app.open('signer'), app.open('client')])
+    expect(a.ok && b.ok).toBe(true)
+    expect(app.runtime('client')!.members()).toEqual([T, S])
+    expect(await contexts.get(T)!.one(Signer, s => s.ping('x'))).toEqual(success('signed x'))
+  })
+  test('overlapping opens of runtimes whose members come from each other both succeed', async () => {
+    const app = createApplication('app', { registry: registry() })
+    app.define({ ...signerDef, members: [{ instance: T, home: 'client' }] })
+    app.define(clientDef)
+    const [a, b] = await Promise.all([app.open('client'), app.open('signer')])
+    expect(a.ok && b.ok).toBe(true)
+    expect(app.runtime('signer')!.members()).toEqual([V, S, T])
+    expect(app.runtime('client')!.members()).toEqual([T, S])
+  })
+  test('open never rejects: a definition that throws while built fails threw', async () => {
+    const app = createApplication('app', { registry: registry() })
+    app.define({ ...signerDef, subscriptions: null as unknown as SubscriptionData[] })
+    expect(await app.open('signer')).toMatchObject({ ok: false, fail: { type: 'threw' } })
+    expect(app.runtime('signer')).toBeUndefined()
+  })
+  test('placed members are removed when an open rolls back', async () => {
+    const app = createApplication('app', { registry: registry() })
+    app.define(signerDef)
+    app.define({ ...clientDef, subscriptions: [{ id: 's1', kind: 'call', from: T, to: 'not a coord' }] })
+    const p = app.open('client')
+    await Promise.resolve()
+    const half = app.runtime('client')!
+    expect(await p).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(half.members()).toEqual([])
+    expect(app.runtime('client')).toBeUndefined()
+    expect(app.runtime('signer')!.members()).toEqual([V, S])
   })
   test('opening a defined runtime opens the runtimes its members come from first', async () => {
     const app = createApplication('app', { registry: registry() })

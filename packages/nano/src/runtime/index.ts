@@ -39,6 +39,11 @@ export type Runtime = {
   add(m: Member): NanoResult<void>
   remove(coord: string): NanoResult<void>
   replace(coord: string, implementation: string, opts?: { config?: unknown }): Promise<NanoResult<string>>
+  /**
+   * A placed member was replaced at its home: `to` takes `from`'s slot, and subscriptions are rewritten from → to under this
+   * runtime's policy. Denied, the member is still swapped but the subscriptions stay on `from` (waiting) and the denial comes back.
+   */
+  rehome(from: string, to: Member): NanoResult<void>
   member(coord: string): Member | undefined
   members(): readonly string[]
   target(coord: string): Target | undefined
@@ -128,6 +133,22 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     members.delete(m.coord)
   }
 
+  /** Subscriptions touching `from`, with that end changed to `to` (not yet applied). */
+  const rewritten = (from: string, to: string) => {
+    const end = (c: string) => (c === from ? to : c)
+    return subs.filter(s => s.from === from || s.to === from).map(s => ({ ...s, from: end(s.from), to: end(s.to) }))
+  }
+  /** `next` takes `old`'s slot (create order holds), publish delivery moves to its pod, `touched` subscriptions are applied. */
+  const swap = (old: Member, next: Member, touched: SubscriptionData[]) => {
+    leave(old.pod, deliver)
+    join(next.pod, deliver)
+    members = new Map([...members].map(([c, m]) => (c === old.coord ? [next.coord, next] : [c, m])))
+    subs = subs.map(s => touched.find(t => t.id === s.id) ?? s)
+    emit({ type: 'instance-replaced', from: old.coord, to: next.coord })
+    for (const s of touched) emit({ type: 'subscription-set', subscription: s })
+    recompute()
+  }
+
   /** coord → the provisioning pass it was made in, while that pass is unfinished; calls into or out of it wait for it. */
   const passOf = new Map<string, Promise<void>>()
   type Pass = { done: Promise<void>; coords: string[] }
@@ -211,8 +232,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const impl = registry.implementation(implementation)
       if (!impl) return failure('not-found', `no implementation ${implementation}`)
       const to = instanceCoord(implementation, parseInstance(coord)!.id)
-      const swap = (c: string) => (c === coord ? to : c)
-      const rewrite = () => subs.filter(s => s.from === coord || s.to === coord).map(s => ({ ...s, from: swap(s.from), to: swap(s.to) }))
+      const rewrite = () => rewritten(coord, to)
       const early = denied(rewrite())
       if (early) return early
       const config = 'config' in o ? o.config : old.config
@@ -223,15 +243,19 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const no = members.get(coord) !== old ? failure('not-found', `${coord} changed while it was replaced`) : denied(touched)
       if (no) { pod.value.dispose(); return no }
       old.pod.dispose()
-      leave(old.pod, deliver)
-      join(pod.value, deliver)
-      const next: Member = { coord: to, pod: pod.value, home: id, ...(config !== undefined && { config }) }
-      members = new Map([...members].map(([c, m]) => (c === coord ? [to, next] : [c, m]))) // keeps the slot in create order
-      subs = subs.map(s => touched.find(t => t.id === s.id) ?? s)
-      emit({ type: 'instance-replaced', from: coord, to })
-      for (const s of touched) emit({ type: 'subscription-set', subscription: s })
-      recompute()
+      swap(old, { coord: to, pod: pod.value, home: id, ...(config !== undefined && { config }) }, touched)
       return success(to)
+    },
+    rehome(from, next) {
+      const old = members.get(from)
+      if (!old) return failure('not-found', `${from} is not a member`)
+      if (old.home === id) return failure('denied', `${from}: its home is this runtime; replace it`)
+      if (next.pod.instance !== next.coord || !parseInstance(next.coord)) return failure('invalid-input', `bad member ${next.coord}`)
+      if (members.has(next.coord)) return failure('exists', `${next.coord} is already a member`)
+      const touched = rewritten(from, next.coord)
+      const no = denied(touched)
+      swap(old, next, no ? [] : touched)
+      return no ?? success(undefined)
     },
     member: c => members.get(c),
     members: () => [...members.keys()],
