@@ -3,7 +3,7 @@ import { host, catalog } from './composable.ts'
 import { showStatus } from './lib/status.ts'
 import { applyApp, snapshotApp } from '@pritzlaff/nano-app'
 import { known } from './app/known.ts'
-import { rebase } from './app/boot.ts'
+import { rebase, whileApplying } from './app/boot.ts'
 import { fileCommands, showNotes } from './app/file.ts'
 import { app, stores, protect, importPackage, stopAutosave } from './boot-app.ts'
 import { mountWorkspace } from './components/saved-workspaces.ts'
@@ -16,7 +16,7 @@ const keptCopies = () => (['unrestored', 'bad'] as const).flatMap(key => { const
 const cmds = fileCommands({
   doc: document, app, catalog, snapshot: () => snapshotApp(host, stores),
   imports: () => stores.imports.list(),
-  merge: (a, consentCode) => applyApp(a, 'merge', { host, stores, catalog, known, importPackage, consentCode }),
+  merge: (a, consentCode) => whileApplying(() => applyApp(a, 'merge', { host, stores, catalog, known, importPackage, consentCode })),
   workspaces: () => savedScreens(host), mount: ws => mountWorkspace(document, ws),
   stopAutosave, reload: () => location.reload(), say: t => showStatus(document, t),
   download: (name, text) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000) },

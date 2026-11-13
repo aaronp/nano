@@ -14,6 +14,7 @@
     "@composable/bundle": "workspace:*",
     "@composable/circuit": "workspace:*",
     "@composable/editor": "workspace:*",
+    "@composable/people": "workspace:*",
     "@composable/platform": "workspace:*",
     "@composable/shell": "workspace:*",
     "@composable/wires": "workspace:*",

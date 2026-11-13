@@ -6,6 +6,12 @@ import type { AppCatalog } from '../sandbox/deploy.ts'
 import type { Stores } from './stores.ts'
 import type { appStore } from './store.ts'
 
+let applying = 0
+/** Whether a document is being applied: its needs settle after every instance is made, so nothing should ask for them meanwhile. */
+export const busy = () => applying > 0
+/** Runs `f` (an applyApp) with `busy()` true. */
+export async function whileApplying<T>(f: () => Promise<T>): Promise<T> { applying++; try { return await f() } finally { applying-- } }
+
 export type Deps = { host: Runtime; stores: Stores; app: ReturnType<typeof appStore>; catalog: AppCatalog; importPackage: ApplyDeps['importPackage']; waits?: ApplyDeps['waits'] }
 export type Restore = {
   /** A working copy was applied (so its imports are loaded and bootImports is not needed). */
@@ -42,8 +48,8 @@ export async function restoreApp({ host, stores, app, catalog, importPackage, wa
   const before = (() => { try { return stores.imports.list() } catch { return [] } })()
   try {
     stores.imports.set([])
-    notes = await applyApp(w, 'replace', { host, stores, catalog, known, consentCode: () => true, waits,
-      importPackage: async (url, trust) => { const r = await importPackage(url, trust); if (r.error) failed.push({ url, error: r.error }); return r } })
+    notes = await whileApplying(() => applyApp(w, 'replace', { host, stores, catalog, known, consentCode: () => true, waits,
+      importPackage: async (url, trust) => { const r = await importPackage(url, trust); if (r.error) failed.push({ url, error: r.error }); return r } }))
     const kept = stores.imports.list()
     stores.imports.set(w.imports.map(i => kept.find(k => k.url === i.url) ?? before.find(b => b.url === i.url) ?? { url: i.url, name: i.url, version: '', trust: i.trust }))
   } catch (e) {

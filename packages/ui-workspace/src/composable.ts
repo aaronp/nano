@@ -13,6 +13,7 @@ import { provide } from '@pritzlaff/nano-elements'
 import { catalog as bundle, Debounce, defineBundle, Input, Log, Map, Range } from '@composable/bundle'
 import { catalog as editor } from '@composable/editor'
 import { catalog as shell, defineShell, Profile } from '@composable/shell'
+import { catalog as people, definePeople } from '@composable/people'
 import type { Catalog } from '@pritzlaff/nano-elements'
 import { alerts, createApplication } from '@pritzlaff/nano-app'
 import { requestBus } from './lib/bus.ts'
@@ -26,9 +27,11 @@ import { defineSandboxed, provideDeploy } from './sandbox/sandboxed-el.ts'
 import { deploy, deployIn, type AppCatalog, type Mode } from './sandbox/deploy.ts'
 import { HOST_ENTRIES } from './app/stores.ts'
 import { placementsOf } from './lib/dock-layout.ts'
+import { bootNeeds } from './boot-needs.ts'
+import { busy } from './app/boot.ts'
 
 /** Every kind of component this host offers: its packages' catalogs. Add a package, add its catalog. */
-const kinds: AppCatalog = Object.fromEntries(Object.entries({ ...bundle, ...editor, ...shell } as Catalog).map(([k, e]) => [k, { ...e, modes: ['host'] as Mode[], trust: 'trusted' as const, ...(k === 'map' || k === 'filter' ? { code: ['setCode', 'configure'] } : {}) }]))
+const kinds: AppCatalog = Object.fromEntries(Object.entries({ ...bundle, ...editor, ...shell, ...people } as Catalog).map(([k, e]) => [k, { ...e, modes: ['host'] as Mode[], trust: 'trusted' as const, ...(k === 'map' || k === 'filter' ? { code: ['setCode', 'configure'] } : {}) }]))
 
 /** The page's runtime and its registry, `host`, with the app-bar gateway and the Application (made through the same sandbox-aware deploy). */
 const made = createApplication({
@@ -43,6 +46,11 @@ provide(document, host.registry)
 host.registry.add('alerts', Components.instantiate(alerts(({ message }) => {
   try { requestBus(document.querySelector<HTMLElement>('workspace-dock') ?? document.body).publish('dock:status', { message }, 'alerts') } catch { /* no shell yet: nowhere to show it */ }
 })), { kind: 'app', name: 'ui-workspace' })
+// needs: a new instance asks for what nothing settled (not while a document is applied); Import a package… is the drawer's dialog
+bootNeeds(document, host, { busy, importPackage: async () => {
+  const { openImportDialog } = await import('./components/import-dialog.ts')   // imports.ts imports this module: loaded when asked
+  await new Promise(r => openImportDialog(document).addEventListener('close', r, { once: true }))
+} })
 // <c-sandboxed> creates its instance in the registry it shows (a dock's system, or the page's) through the same deploy
 provideDeploy(document, (registry, id, kind, mode, owner) =>
   deployIn(host, catalog, registry, id, kind, mode as Mode, owner))
@@ -110,7 +118,7 @@ document.addEventListener('wires:open-panel', e => {
 defineBundle()
 definePlatform(); definePlatformTable(); defineSandboxed()
 defineEditor()
-defineShell(); defineWorkspaceControls()
+defineShell(); defineWorkspaceControls(); definePeople()
 defineWires(); defineCircuit()
 // the wiring view over the Workspace dock: it shows and edits the host system, and offers the merged catalog
 for (const w of document.querySelectorAll('c-wires')) Object.assign(w, { runtime: host, catalog })
