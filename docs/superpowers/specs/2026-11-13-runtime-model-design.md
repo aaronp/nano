@@ -41,10 +41,10 @@ Each domain has one responsibility, its own coordinate, and indexes keyed on tha
 | **Implementation** | code that implements one or more interfaces; declares its **dependencies**: data (config, code snippets) and interfaces | `<provider>/<name>` |
 | **Provider** | a package from an author (like an npm package); usually a bridge from an existing library into nano; creates instances of its implementations; later carries metadata (signatures over hashes, licence) | `<author or ns>/<name>` (+ version, later) |
 | **Registry** | a pool of providers, and so of implementations; produces a **manifest** of the interfaces, implementations and providers it holds; answers queries in O(1) (e.g. every op on offer, every implementation of an interface) | — |
-| **Instance** | one made implementation | implementation coord + instance id |
-| **Pod** | wraps one instance: where it runs (host, sandbox, another origin), proxies every message to it, observes messages and exceptions, and turns misbehaviour into a platform failure | the instance's coord |
-| **Subscription** | a description of an edge: from a source or a caller, to a sink or an action / interface on a target; mostly drawn at design time, updated at run time as users plug things in | id |
-| **Connection** | a live subscription: the subscription plus its two instances | subscription id + the two instance coords |
+| **Pod** | the deployment unit and failure boundary: `{ id, implementation, config, count }`, created through the implementation's provider. Owns its instances' lifecycle (make, **swap** the implementation or config in place, scale, dispose), their state, where they run (host, sandbox, another origin), every message to them (checks, timeouts, failure capture), and observation of messages and exceptions | its id (unique in the application) |
+| **Instance** | one made implementation inside a pod; usually a pod has one | `<pod id>#<n>`: deterministic, and indices are never reused |
+| **Subscription** | an explicit edge between **exactly two instances**, by concrete coordinate: from a source or a caller, to a sink or an action / interface on a target | id |
+| **Connection** | a live subscription: both ends available and policy approved | subscription id + the two instance coords |
 | **Runtime** | the orchestrator: holds a registry and its instances (in pods), creates instances through providers, runs lifecycle triggers, keeps the connections' books, applies its **policy**. Split into parts (event bus, call routing, lifecycle, eval) so it never becomes a god class | its id |
 | **Application** | the host: a runtime that contains runtimes (and can nest). It places an instance from one runtime into another, firing lifecycle events in both. It gets or creates a runtime when something needs it | its id |
 | **Tags** | user-driven grouping (logical layers, ownership) at every tier, keyed by coordinate; used to help users choose | — |
@@ -54,8 +54,10 @@ Each domain has one responsibility, its own coordinate, and indexes keyed on tha
 - An operation's coordinate is derived from its content, so two ops are the same op exactly when name and schemas
   agree. Hashes are taken over a **canonical** schema (annotations such as `description` stripped), so rewording a
   description changes nothing. A changed schema is a new op: versioning by design. *(Canonical form: my call.)*
-- An instance's coordinate is independent of any runtime. Being in a runtime is **membership**, so the same instance
-  can be placed in several runtimes without copying (this is how `signer` is offered to `signer-client`).
+- A pod's id, and so its instances' coordinates (`vault#0`), are independent of any runtime and of the implementation
+  it runs: swapping the implementation keeps them. Being in a runtime is **membership**: a pod is placed into several
+  runtimes without copying (this is how `signer` is offered to `signer-client`). Which implementation a pod runs is an
+  attribute, saved with the pod.
 
 ### What an action is
 
@@ -105,13 +107,64 @@ const sendMessage = async (ctx, message) =>
 
 ### Subscriptions become connections
 
-- Subscriptions are data: drawn at design time, saved in the document, edited at run time when a user plugs in,
-  replaces or unplugs. When both ends exist (and policy allows), the runtime makes the connection live. When an end
-  is missing, the subscription waits and becomes live when the end appears; when the ends no longer fit, it is shown
-  as broken rather than dropped.
+- Subscriptions are data: drawn at design time, saved in the document, edited at run time when a user plugs in or
+  unplugs. Each joins exactly two instances by concrete coordinate, so adding instances, components or interfaces
+  later never changes an existing connection. Fan-out ("write to both DBs") is two subscriptions.
+- **Unavailable vs deleted.** An end that is *unavailable* (its pod failed or is stopped, its runtime hasn't started,
+  provisioning is still running, or a swap is in progress) leaves the subscription **waiting**; it goes live when the
+  end is back. An end that is *deleted* (someone removed the instance or its pod) **deletes the subscription too**
+  (cascade). When the ends no longer fit (a swapped implementation lost a port), the subscription is **broken**.
 - The runtime is the bookkeeper. Because every message passes through it, the connections it reports are exactly the
   ones carrying traffic, with counts and last results. Flipping a widget over shows them.
-- Replacing an instance keeps its subscriptions by port: those that still fit go live again.
+- Swapping a pod's implementation keeps its instances' coordinates, so its subscriptions are untouched: those whose
+  ports still fit stay live, the rest are broken.
+
+### Connecting: selectors choose the two ends, once
+
+When a user clicks a source and a sink (or code wires two instances), each end is chosen with a **selector**, and a
+selector is never optional:
+
+```ts
+type EndSelector = {
+  target:   { pod: string } | { implements: InterfaceCoord } | { implementation: ImplementationCoord }
+  instance: { by: 'first' }                      // the lowest available index
+          | { by: 'index'; index: number }       // explicit (the UI may warn: positional)
+          | { by: 'tags'; tags: string[] }       // every tag present on the instance
+}
+```
+
+Each end must resolve to **exactly one** instance at the moment of connecting, or connecting fails with the reason
+(`2 match`, `nothing matches`). What is saved is the two concrete coordinates, not the selectors: the choice was
+resolved once and kept, so later changes to the system never re-route it. Tags keep two jobs: choosing ends at connect
+time, and the role filter in code (`ctx.one({ implements: DB, tags: ['cache'] }, fn)`).
+
+### Failure boundaries
+
+| Component | Fails how | What it never does |
+|---|---|---|
+| **Instance** | its handler throws, times out or misbehaves → that message is a `Fail`; its `make` fails → that instance is `failed` | affect another instance |
+| **Pod** | its state summarises its instances (`starting`, `running`, `failed`, `stopped`) | fail its runtime |
+| **Runtime** | never fails because a pod did: subscriptions to an unavailable instance wait | throw across the runtime |
+| **Application** | **starting** a runtime from its saved definition always gives a runtime; problems are notes and pod states | refuse a runtime because one of its pods failed |
+
+"Open" is renamed **start**: the application starts a runtime from its saved definition, making its pods (each with a
+state) and adding its subscriptions.
+
+### Behaviours (written as tests first)
+
+1. Given a source runtime with two `cache`-tagged instances, connecting a sink to `{ by: 'tags', tags: ['cache'] }`
+   fails `2 match` and adds nothing.
+2. Given `log#0` connected, scaling `log` to two instances adds `log#1`, and the connection to `log#0` is unchanged.
+3. Deleting pod `vault` deletes every subscription naming `vault#…`; deleting instance `vault#1` deletes only its own.
+4. A failed `vault#0` leaves its subscriptions waiting; restarting it makes them live again.
+5. Swapping `vault`'s implementation keeps `vault#0`, and every subscription whose ports still fit stays live; the rest
+   are broken.
+6. Removing `log#0` and adding an instance gives `log#1`, never a reused `log#0`.
+7. A pod placed into another runtime is swapped once, at its home, and every runtime holding it sees the new
+   implementation behind the same coordinates.
+8. Starting a runtime whose pod's `make` fails gives a running runtime with that pod `failed` and its subscriptions
+   waiting.
+9. `{ by: 'first' }` picks the lowest available index; with `vault#0` failed, it picks `vault#1`.
 
 ### Dependencies: informational, used for provisioning and display
 
@@ -144,7 +197,7 @@ roles need distinct, tagged instances.
 | Can change at run time | How | What saving then writes |
 |---|---|---|
 | A subscription is added, removed, retargeted or reordered (a user plugs in, replaces, unplugs, drags) | an edit to the data, checked by the runtime's policy, then reconciled live | the new subscriptions, with current target coordinates and order |
-| An instance is added, removed or replaced by another implementation | lifecycle; subscriptions to it go waiting or broken, and those that still fit go live again | instances and subscriptions as they are now |
+| A pod is scaled, swapped, fails or restarts; an instance or pod is deleted | lifecycle; unavailable ends wait, deleted ends cascade-delete their subscriptions, swapped ports that no longer fit are broken | pods (implementation, config, count) and subscriptions as they are now |
 | An instance's tags | a tag edit; tag-filtered selectors see the new set on the next call | the tags |
 | The selectors in code, and the declared dependencies | never: they are code | — |
 
@@ -182,11 +235,12 @@ and the same check filters what the UI offers.
 
 - The application is a runtime whose instances include runtimes. Nothing else is special about it, and applications
   can nest.
-- **Placing** an instance from one runtime into another is how a runtime offers something: `signer` runtime makes
-  `signer`, which can use the `vault` beside it, and the application places it into `signer-client` (or a chat
-  runtime). Both runtimes get a lifecycle event.
-- **On demand.** Opening a view that needs a runtime makes the application get or create it, from its saved
-  definition. Saving writes every runtime's definition, opened or not.
+- **Placing** a pod from one runtime into another is how a runtime offers something: `signer` runtime makes the
+  `signer` pod, which can use the `vault` beside it, and the application places it into `signer-client` (or a chat
+  runtime). Both runtimes get a lifecycle event. A placed pod is swapped and scaled only at its home; every runtime
+  holding it sees the change behind the same coordinates.
+- **On demand.** Opening a view that needs a runtime makes the application get it or **start** it from its saved
+  definition. Saving writes every runtime's definition, started or not.
 - A component built from other components is just an implementation whose factory creates its own runtime. There is
   no separate "composite" concept.
 
@@ -328,6 +382,13 @@ builder states the behaviour in the log and pins it with a test before relying o
 - `design.md` terse and pointing at code; code comments state responsibilities with examples; fast tests per area as
   documentation; the examples suite as e2e; readability first (runes as the model; explore annotations/proxies).
 - The external signer is the measuring stick for every choice.
+- **Pods (revision):** a pod is the deployment and failure unit, with a count of instances (usually one) whose
+  coordinates are deterministic (`<pod>#<n>`); replacing is swapping the implementation inside the pod; runtimes talk to
+  pods, and pods invoke their instances; "open" is "start", and starting never fails as a whole.
+- **Explicit subscriptions (revision):** every subscription joins exactly two instances by concrete coordinate;
+  mandatory selectors (target × instance choice) pick each end once, at connect time, and must resolve to exactly one;
+  deleting cascades to subscriptions, while an unavailable end only makes them wait.
+- **Behaviours first:** open questions are answered as tests (BDD) that pin the chosen behaviour.
 - A clean break: no backwards compatibility; correctness first. Other packages are deferred and noted; the current
   sandbox mode may lapse.
 - Code calls through selectors (interfaces, tags, …), not just interface coordinates, so one implementation can use
