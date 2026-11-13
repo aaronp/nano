@@ -1,0 +1,13 @@
+{
+  "name": "@pritzlaff/nano",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.8.0",
+    "json-canonicalize": "^1.0.6",
+    "typebox": "^1.4.0"
+  }
+}
