@@ -82,6 +82,12 @@ test('needs: a snapshot writes each need as a pin, and loading it gives the same
   expect(host.instances.find(i => i.id === 'form')!.needs).toEqual({ bff: { implements: 't/bff' } })   // unbound: its stored selector
   expect(doc.systems.find(s => s.id === 'storage')!.instances[0]!.needs).toBeUndefined()
   expect(typeof checkApp(doc)).toBe('object')
+  // a pin carries the target's tags now, not those it had when bound; none, no tags
+  await a.call(P.untag, { ref: 'instance:storage/db1', tag: 'fast' }); await a.call(P.tag, { ref: 'instance:storage/db1', tag: 'slow' })
+  expect((await snapshotApp(a.host, a.stores)).systems.find(s => s.id === 'host')!.instances.find(i => i.id === 'svc')!.needs!.db!.tags).toEqual(['slow'])
+  await a.call(P.untag, { ref: 'instance:storage/db1', tag: 'slow' })
+  expect((await snapshotApp(a.host, a.stores)).systems.find(s => s.id === 'host')!.instances.find(i => i.id === 'svc')!.needs!.db).toEqual({ implements: 't/db', layer: 'storage', at: 'db1' })
+  await a.call(P.tag, { ref: 'instance:storage/db1', tag: 'fast' })
   const b = needsApp()
   expect(await applyApp(doc, 'replace', b.deps)).toEqual(['host/form needs bff: nothing matches'])
   expect(await b.bindings()).toEqual(await a.bindings())

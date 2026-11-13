@@ -119,6 +119,23 @@ test('needs: an unknown need or instance is a note, never a throw, and the rest 
     'host/svc2 needs db: no system nowhere',
   ])
   expect(a.host.registry.snapshot().instances.map(i => i.id)).toEqual(expect.arrayContaining(['db1', 'svc', 'svc2']))
+  // auto-bind took db1 meanwhile: a pin that fails leaves the instance disabled, not bound to something else
+  expect(a.host.registry.binding('svc', 'db')).toBeUndefined()
+  expect(a.host.registry.binding('svc2', 'db')).toBeUndefined()
+})
+
+test('needs: a saved selector with a tag nothing has leaves the need unbound, though auto-bind matched more loosely', async () => {
+  const a = needsApp()
+  const doc = needsDoc([{ id: 'host', instances: [{ id: 'db1', kind: 'db' }, { id: 'svc', kind: 'service', needs: { db: { implements: 't/db', tags: ['fast'] } } }], subscriptions: [] }])
+  expect(await applyApp(doc, 'replace', a.deps)).toEqual(['host/svc needs db: nothing matches'])
+  expect(a.host.registry.binding('svc', 'db')).toBeUndefined()
+})
+
+test('needs: set-selector takes the same limits as the document', async () => {
+  const a = needsApp()
+  await a.make('service', 'svc')
+  const r = await a.host.call({ registry: 'host', instance: 'test' }, 'application', Ops.key(P.setSelector), { ref: 'instance:host/svc', need: 'db', selector: { implements: 'x'.repeat(201) } }) as any
+  expect(r.error).toBeDefined()
 })
 
 test('needs: checkApp validates needs, and a document without them still validates', () => {

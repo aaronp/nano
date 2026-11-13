@@ -67,14 +67,17 @@ are ids). A document without `needs` loads exactly as before.
 - **Never makes instances.** A need that doesn't resolve to one instance is a note,
   `<system>/<id> needs <need>: <reason>` (say `app/form needs bff: nothing matches`), and its instance stays
   disabled. An unknown need, instance or system is a note too; the rest loads.
+- **A pin to an instance the document doesn't contain** loads with a note and leaves its instance disabled, even if
+  auto-bind had picked another one meanwhile.
 
 ## Using nano from another project
 
 A project serves its components as a package and opens them in any nano host:
 
-- **`nano-package.json`**: `{ "manifest": 1, "name", "version", "module", "components" }`; the module exports
-  `catalog` and `define()`.
-- **`nano.json`**: a document whose `imports` lists that manifest's URL.
+- **`nano-package.json`**: `{ "manifest": 1, "name", "version", "module", "components" }`; each `components` entry
+  is `{ "kind", "id", "title" }`, and the module exports `catalog` and `define()`.
+- **`nano.json`**: a document whose `imports` lists that manifest as `{ "url", "trust" }` (`trust` is `trusted` or
+  `sandboxed`).
 - **Bundle** with `--external '@pritzlaff/*' --external typebox --external 'typebox/*'`: the host's import map
   supplies them.
 - **Serve with CORS** and open `<host>/?src=<url of nano.json>`.

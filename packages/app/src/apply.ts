@@ -172,7 +172,10 @@ async function apply(app: NanoApp, how: 'replace' | 'merge', deps: ApplyDeps, no
   // needs last: every instance a pin may name now exists, with its tags. A pin that resolves overrides auto-bind; loading never makes one.
   for (const n of needs) for (const [need, selector] of Object.entries(n.needs)) {
     const what = `${n.system}/${n.id} needs ${need}`, r = await call('application', P.setSelector, { ref: `instance:${n.system}/${n.id}`, need, selector })
-    if ('error' in r) fail(what, r)
-    else { const v = r.value as Resolution; if (!('bound' in v)) notes.push(`${what}: ${'make' in v ? 'nothing matches' : v.reason}`) }
+    if ('error' in r) { fail(what, r); continue }
+    const v = r.value as Resolution
+    if ('bound' in v) continue
+    notes.push(`${what}: ${'make' in v ? 'nothing matches' : v.reason}`)
+    await call('application', P.unbindNeed, { ref: `instance:${n.system}/${n.id}`, need })   // auto-bind may have bound it meanwhile: a pin that fails leaves it disabled (none: nothing to undo)
   }
 }

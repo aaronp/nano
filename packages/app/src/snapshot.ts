@@ -43,6 +43,7 @@ export async function snapshotApp(host: AppHandle, stores: HostStores): Promise<
   for (const k of kinds) if (!kindOf.has(k.component)) kindOf.set(k.component, k.kind)
   const snaps = ((await value(host, from, 'application', Ops.key(P.systems))) ?? []) as ReturnType<Runtime['registry']['snapshot']>[]
 
+  const allTags = ((await value(host, from, 'application', Ops.key(P.allTags))) ?? {}) as Record<string, string[]>
   const systems: NanoApp['systems'] = []
   for (const snap of snaps) {
     const rt = snap.id === host.registry.id ? host : runtimeOf(host.registry, snap.id)
@@ -55,11 +56,12 @@ export async function snapshotApp(host: AppHandle, stores: HostStores): Promise<
       const l = i.labels ?? {}, mode = l['nano/deploy'], allow = list(l['nano/allow']), deny = list(l['nano/deny'])
       const hasConfig = i.ops.some(o => Ops.key(o) === `${i.component}/config`)
       const config = hasConfig && rt ? await value(rt, from, i.id, `${i.component}/config`) : undefined
-      // each need as a pin to what it is bound to, or (unbound) as its stored selector
+      // each need as a pin to what it is bound to (with its tags), or (unbound) as its stored selector
       const declared = Object.keys(i.needs ?? {}).length ? ((await value(host, from, 'application', Ops.key(P.needsOf), `instance:${snap.id}/${i.id}`)) ?? []) as { need: string; selector: Selector }[] : []
       const needs = Object.fromEntries(declared.map(({ need, selector }) => {
         const to = snap.bindings.find(b => b.instance === i.id && b.need === need)?.to
-        return [need, to ? { implements: selector.implements, ...(selector.tags?.length && { tags: selector.tags }), layer: to.registry, at: to.instance } : selector]
+        const tags = to && allTags[`instance:${to.registry}/${to.instance}`]   // the target's tags now, not those it had when bound
+        return [need, to ? { implements: selector.implements, ...(tags?.length && { tags }), layer: to.registry, at: to.instance } : selector]
       }))
       return { id: i.id, kind, ...(mode === 'host' || mode === 'sandbox' || mode === 'isolated-sandbox' ? { mode } : {}),
         ...(allow && { allow }), ...(deny && { deny }), ...(config !== undefined && { config }), ...(declared.length && { needs }) } as NanoApp['systems'][number]['instances'][number]
@@ -77,7 +79,6 @@ export async function snapshotApp(host: AppHandle, stores: HostStores): Promise<
   const screens = ((await value(host, from, 'application', Ops.key(P.screens))) ?? []) as Screen[]
   const workspaces = screens.map(s => ({ id: s.id, title: s.title, system: s.system, ...(s.icon && { icon: s.icon }), layout: s.layout ?? null }))
   // tags, for what the document keeps: not an instance it leaves out
-  const allTags = ((await value(host, from, 'application', Ops.key(P.allTags))) ?? {}) as Record<string, string[]>
   const keptRefs = new Set([...systems.flatMap(sy => sy.instances.map(i => `instance:${sy.id}/${i.id}`)), ...workspaces.map(w => `screen:${w.id}`), ...snaps.map(sn => `system:${sn.id}`)])
   const tags = Object.fromEntries(Object.entries(allTags).filter(([r, ts]) => keptRefs.has(r) && ts.length))
   const user = await value(host, from, 'profile', PROFILE.user) as { name: string; avatar?: string } | undefined

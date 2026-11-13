@@ -4,6 +4,7 @@ import { Type, type Static } from 'typebox'
 import type { AppCatalog } from './catalog'
 import { parseRef, ref, type Ref } from './refs'
 import { resolve, type Resolution, type Selector } from './resolve'
+import { SelectorSchema } from './document'
 import { Components, CoordSchema, DeltaSchema, Tags, Ops, SnapshotSchema, SubscriptionSchema, Registries, Runtimes, type Component, type Environment, type Interface, type Owner, type Registry, type Result, type Runtime, type Selectors, type Snapshot } from '@pritzlaff/nano-core'
 
 const NS = 'nano.app/application', none = Type.Void()
@@ -52,11 +53,6 @@ export const PlacementSchema = Type.Object({
 export type Placement = Static<typeof PlacementSchema>
 
 const refArg = str('A ref: system:<id>, instance:<system>/<id> or screen:<path>', ['instance:host/r1'])
-/** Which instance a need should bind to: one implementing the interface, with every tag, in `layer`, maybe pinned `at` one. */
-export const SelectorSchema = Type.Object({
-  implements: str('The interface id', ['example/db']), tags: Type.Optional(Type.Array(Type.String({ description: 'A tag' }), { description: 'Tags it must have' })),
-  layer: Type.Optional(str("The system to look in (default: the requester's)", ['storage'])), at: Type.Optional(str('Pins an instance id', ['db'])),
-}, { title: 'Selector', description: 'Which instance a need binds to' })
 export const ResolutionSchema = Type.Union([
   Type.Object({ bound: CoordSchema }), Type.Object({ make: str('A catalog kind to make', ['db']) }),
   Type.Object({ choose: Type.Object({ candidates: Type.Array(CoordSchema), kinds: Type.Array(Type.String()) }), reason: str('Why it needs a choice', ['2 match']) }),

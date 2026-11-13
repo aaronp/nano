@@ -18,6 +18,13 @@ export const safeAvatar = (url?: string): string | undefined => (url && /^(https
 /** Whether a link target is safe to follow: #…, /…, http(s): or mailto: (anything else, javascript: above all, is not). */
 export const safeHref = (href: string) => /^(#|\/|https?:|mailto:)/i.test(href.trim())
 
+/** Which instance a need should bind to: one implementing the interface, with every tag, in `layer`, maybe pinned `at` one. */
+export const SelectorSchema = Type.Object({
+  implements: s(200, 'The interface id', { examples: ['example/db'] }), tags: Type.Optional(list(s(64, 'A tag'), 20, 'Tags it must have')),
+  layer: Type.Optional(s(64, "The system to look in (default: the requester's)", { pattern: ID, examples: ['storage'] })),
+  at: Type.Optional(s(64, 'Pins an instance id', { pattern: ID, examples: ['db'] })),
+}, { title: 'Selector', description: 'Which instance a need binds to' })
+
 export const NanoAppSchema = Type.Object({
   nano: Type.Literal(1, { description: 'The document version' }),
   title: s(120, 'The app title'),
@@ -37,10 +44,7 @@ export const NanoAppSchema = Type.Object({
       mode: Type.Optional(Type.Union([Type.Literal('host'), Type.Literal('sandbox'), Type.Literal('isolated-sandbox')], { description: 'Where it runs' })),
       allow: Type.Optional(list(s(200, 'A guard selector'), 50, 'Allowed ops')), deny: Type.Optional(list(s(200, 'A guard selector'), 50, 'Denied ops')),
       config: Type.Optional(Type.Unknown({ description: 'What the component needs to be recreated' })),
-      needs: Type.Optional(Type.Record(s(64, 'A need', { pattern: NEED }), Type.Object({
-        implements: s(200, 'The interface id'), tags: Type.Optional(list(s(64, 'A tag'), 20, 'Tags it must have')),
-        layer: Type.Optional(s(64, "The system to look in (default: the instance's)", { pattern: ID })), at: Type.Optional(s(64, 'Pins an instance id', { pattern: ID })),
-      }), { maxProperties: 20, additionalProperties: false, description: 'Its needs: each one\'s selector, saved pinned when bound' })),
+      needs: Type.Optional(Type.Record(s(64, 'A need', { pattern: NEED }), SelectorSchema, { maxProperties: 20, additionalProperties: false, description: 'Its needs: each one\'s selector, saved pinned when bound' })),
     }), 200, 'The system\'s instances'),
     subscriptions: list(Type.Object({ source: s(64, 'Publisher, or *', { pattern: ID }), op: s(200, 'Published op key'), listener: s(64, 'Listener instance', { pattern: ID }), target: s(200, 'Listener action key') }), 500, 'Connections'),
   }), 50, 'The systems'),
@@ -95,7 +99,7 @@ export function checkApp(x: unknown): NanoApp | string {
       systems: a.systems.map(sys => ({
         id: sys.id,
         instances: sys.instances.map(i => { const o = pick(i, ['id', 'kind', 'mode', 'allow', 'deny']); if (i.config !== undefined) o.config = i.config
-          if (i.needs) o.needs = Object.fromEntries(Object.entries(i.needs).map(([n, x]) => [n, pick({ ...x, ...(x.tags && { tags: [...x.tags] }) }, ['implements', 'tags', 'layer', 'at'])]))
+          if (i.needs) o.needs = Object.fromEntries(Object.entries(i.needs).map(([n, x]) => [n, { ...pick(x, ['implements', 'layer', 'at']), ...(x.tags && { tags: [...x.tags] }) }]))
           return o }),
         subscriptions: sys.subscriptions.map(u => ({ source: u.source, op: u.op, listener: u.listener, target: u.target })),
       })),
