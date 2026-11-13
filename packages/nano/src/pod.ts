@@ -41,27 +41,29 @@ export async function createHostPod(
   const timeoutMs = opts.timeoutMs ?? 30_000
   let disposed = false
 
+  const safeObserve = (o: Observation) => {
+    try { opts.observe?.(o) } catch { /* an observer must never break a call */ }
+  }
+
   async function run(port: string, input: unknown): Promise<NanoResult<unknown>> {
     const o = ops.get(port)
     const h = handlers.get(port)
     if (!o || !h) return failure('unknown-op', `${instance}: no port ${port}`)
     if (o.input && !o.input.check(input)) return failure('invalid-input', `${instance}: input does not fit ${o.name}`)
     let timer: ReturnType<typeof setTimeout> | undefined
-    const outcome = await new Promise<NanoResult<unknown>>(resolve => {
+    const outcome = await new Promise<unknown>(resolve => {
       let done = false // a late settle after the timeout is ignored: no second observation, no unhandled rejection
-      const finish = (r: NanoResult<unknown>) => { if (!done) { done = true; resolve(r) } }
+      const finish = (r: unknown) => { if (!done) { done = true; resolve(r) } }
       timer = setTimeout(() => finish(failure('timeout', `${instance}: ${o.name} did not settle in ${timeoutMs}ms`)), timeoutMs)
       const threw = (e: unknown) => {
         if (done) return
-        opts.observe?.({ kind: 'exception', instance, op: port, error: msg(e) })
+        safeObserve({ kind: 'exception', instance, op: port, error: msg(e) })
         finish(failure('threw', `${instance}: ${msg(e)}`))
       }
-      try {
-        h(ctx, input).then(finish, threw)
-      } catch (e) {
-        threw(e)
-      }
+      Promise.resolve().then(() => h(ctx, input)).then(finish, threw)
     }).finally(() => clearTimeout(timer))
+    if (!isNanoResult(outcome)) return failure('invalid-output', `${instance}: ${o.name} returned something other than a NanoResult`)
+    if (outcome.ok && o.output && !o.output.check(outcome.value)) return failure('invalid-output', `${instance}: ${o.name} output does not fit its schema`)
     return outcome
   }
 
@@ -69,15 +71,9 @@ export async function createHostPod(
     instance,
     implementation: impl,
     async invoke(port, input) {
-      if (disposed) return failure('not-found', `${instance} is disposed`)
       const t0 = performance.now()
-      let result = await run(port, input)
-      const o = ops.get(port)
-      if (o && handlers.has(port)) {
-        if (!isNanoResult(result)) result = failure('invalid-output', `${instance}: ${o.name} returned something other than a NanoResult`)
-        else if (result.ok && o.output && !o.output.check(result.value)) result = failure('invalid-output', `${instance}: ${o.name} output does not fit its schema`)
-      }
-      opts.observe?.({ kind: 'message', instance, op: port, input, result, ms: performance.now() - t0 })
+      const result = disposed ? failure('not-found', `${instance} is disposed`) : await run(port, input)
+      safeObserve({ kind: 'message', instance, op: port, input, result, ms: performance.now() - t0 })
       return result
     },
     dispose() { disposed = true },

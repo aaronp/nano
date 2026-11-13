@@ -18,9 +18,9 @@ const POKE = portKey('acme/api', api.ops.poke.coord)
 const impl = (len: (c: NanoContext, s: string) => Promise<any>) =>
   implementation('acme/x/api', { provides: [api], make: () => [provide(api, { len: len as any, poke: async () => success(undefined) })] })
 
-async function pod(len: (c: NanoContext, s: string) => Promise<any>, timeoutMs?: number) {
+async function pod(len: (c: NanoContext, s: string) => any, timeoutMs?: number) {
   const seen: Observation[] = []
-  const r = await createHostPod('acme/x/api#1', impl(len), ctx, { observe: o => seen.push(o), ...(timeoutMs && { timeoutMs }) })
+  const r = await createHostPod('acme/x/api#1', impl(len), ctx, { observe: o => seen.push(o), timeoutMs })
   if (!r.ok) throw new Error('pod failed')
   return { pod: r.value, seen }
 }
@@ -95,8 +95,41 @@ describe('host pod', () => {
     expect(seen[0]).toMatchObject({ kind: 'message', instance: 'acme/x/api#1', op: LEN, input: 'abc', result: success(3) })
   })
   test('a disposed pod fails not-found', async () => {
-    const { pod: p } = await pod(async () => success(1))
+    const { pod: p, seen } = await pod(async () => success(1))
     p.dispose()
     expect(await p.invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+    expect(seen.map(o => o.kind)).toEqual(['message'])
+  })
+  test('an unknown port still ends with one message observation', async () => {
+    const { pod: p, seen } = await pod(async () => success(1))
+    await p.invoke('nope', 'a')
+    expect(seen.map(o => o.kind)).toEqual(['message'])
+  })
+  test('a sync non-NanoResult return is invalid-output, a sync throw is threw', async () => {
+    expect(await (await pod(() => undefined)).pod.invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'invalid-output' } })
+    expect(await (await pod(() => 3)).pod.invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'invalid-output' } })
+    expect(await (await pod(() => { throw new Error('x') })).pod.invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'threw' } })
+  })
+  test('a throwing observer never changes invoke results', async () => {
+    const unhandled: unknown[] = []
+    const h = (e: unknown) => unhandled.push(e)
+    process.on('unhandledRejection', h)
+    const make = async (len: (c: NanoContext, s: string) => any, timeoutMs?: number) => {
+      const r = await createHostPod('acme/x/api#1', impl(len), ctx, { observe: () => { throw new Error('obs') }, timeoutMs })
+      if (!r.ok) throw new Error('pod failed')
+      return r.value
+    }
+    expect(await (await make(async (_c, s) => success(s.length))).invoke(LEN, 'abc')).toEqual(success(3))
+    expect(await (await make(async () => { throw new Error('b') })).invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'threw' } })
+    expect(await (await make(() => new Promise(() => {}), 20)).invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'timeout' } })
+    await new Promise(r => setTimeout(r, 10))
+    process.off('unhandledRejection', h)
+    expect(unhandled).toEqual([])
+  })
+  test('a fast success leaves no pending timer', async () => {
+    const t0 = performance.now()
+    const { pod: p } = await pod(async () => success(1), 5_000)
+    await p.invoke(LEN, 'a')
+    expect(performance.now() - t0).toBeLessThan(50)
   })
 })
