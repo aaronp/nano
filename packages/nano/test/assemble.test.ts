@@ -156,6 +156,10 @@ describe('assemble', () => {
     fails(assemble({ pods: { x: { implementation: 'acme/nope', eager: false } }, runtimes: {} }, registry), 'not-found', 'acme/nope')
     fails(assemble({ pods: {}, runtimes: { r: { pods: ['ghost'], subscriptions: [] } } }, registry), 'invalid-input', 'ghost')
   })
+  test("a runtime's shape and placement are reported in Runtime.create's words, not select's", () => {
+    fails(assemble({ pods: {}, runtimes: { r: { pods: 'x', subscriptions: [] } } }, registry), 'invalid-input', 'runtime r /pods')
+    fails(assemble({ pods: { c: Pod.lazy(counter) }, runtimes: { r: { pods: ['c', 'c'], subscriptions: [] } } }, registry), 'invalid-input', 'c is placed twice')
+  })
   test('more than 50 runtimes', () => {
     const runtimes = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`r${i}`, { pods: [], subscriptions: [] }]))
     fails(assemble({ pods: {}, runtimes }, registry), 'invalid-input', '/runtimes')

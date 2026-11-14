@@ -33,7 +33,8 @@ export function assemble(d: unknown, registry: Registry): NanoResult<Record<stri
     if (!pods.ok) return pods
     const out: Record<string, Runtime> = Object.create(null)
     for (const [id, r] of Object.entries(runtimes)) {
-      const scope = pods.value.select(r?.pods)
+      // Over its distinct pod names only, so Runtime.create reports a bad shape or a pod placed twice in its own words.
+      const scope = pods.value.select(Array.isArray(r?.pods) ? [...new Set(r.pods.filter(n => typeof n === 'string'))] : [])
       if (!scope.ok) return failure('invalid-input', `runtime ${id}: ${scope.fail.reason}`)
       const runtime = Runtime.create(id, r, scope.value)
       if (!runtime.ok) return runtime
