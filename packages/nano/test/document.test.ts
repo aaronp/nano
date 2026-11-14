@@ -144,6 +144,13 @@ describe('saving and loading', () => {
     const back = (await load(saveDoc(app))).app
     expect(back.runtime('r')!.register(Pod.create(vault))).toEqual(success('acme/keys/vault#1'))
   })
+  test('given the root\'s highest vault unregistered, when saved and loaded, then the root\'s next vault takes the next n, never a reused one', async () => {
+    const app = createApplication('app', { registry: registry() })
+    reg(app, Pod.create(vault)); reg(app, Pod.create(vault))
+    ok(app.unregister('acme/keys/vault#1'))
+    const back = (await load(saveDoc(app))).app
+    expect(back.register(Pod.create(vault))).toEqual(success('acme/keys/vault#2'))
+  })
   test('an event subscription survives a round trip, live', async () => {
     const app = createApplication('app', { registry: registry() })
     const r = ok(app.createRuntime('r'))

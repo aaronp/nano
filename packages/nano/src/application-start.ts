@@ -4,7 +4,7 @@
  *
  *   const pods = podsTable(registry, note)
  *   pods.check({ pods: { p0: { implementation: 'acme/keys/vault' } }, runtimes: [] })   // why not, or undefined
- *   pods.fill(rt, def)        // each entry registered at its coord, then the subscriptions; what cannot be, a note
+ *   pods.fill(rt, def, added) // each entry registered at its coord, then the subscriptions; what cannot be, a note
  *   pods.live(rt)             // a started runtime as data, its pods keyed application-wide
  */
 import { Type } from 'typebox'
@@ -67,17 +67,17 @@ export function podsTable(registry: Registry, note: (reason: string) => void) {
     }
     return k
   }
-  /** The pod behind a key, made now if it is not yet; or why there is none. */
-  const podOf = (key: string): Pod | string => {
+  /** The pod behind a key, made now if it is not yet (`fresh`); or why there is none. */
+  const podOf = (key: string): { pod: Pod; fresh: boolean } | string => {
     const have = made.get(key)
-    if (have) return have
+    if (have) return { pod: have, fresh: false }
     const d = table.get(key)
     if (!d) return `no pod ${key} in the pods table`
     const impl = registry.implementation(d.implementation)
     if (!impl) return `no implementation ${d.implementation}`
     const p = Pod.create(impl, { config: d.config })
     made.set(key, p); keys.set(p, key)
-    return p
+    return { pod: p, fresh: true }
   }
   return {
     /** Why a definition cannot be taken (its shape, a config not JSON, a key the application has), or undefined. */
@@ -86,17 +86,26 @@ export function podsTable(registry: Registry, note: (reason: string) => void) {
       if (e) return failure('invalid-input', `bad definition: ${e.instancePath || '/'}: ${e.message}`)
       for (const [k, p] of Object.entries(d.pods)) {
         if (p.config !== undefined && !isJson(p.config)) return failure('invalid-input', `${k}: config is not JSON`)
-        if (table.has(k) || made.has(k)) return failure('exists', `pod key ${k} exists`)
+        if (table.has(k)) return failure('exists', `pod key ${k} exists`)
       }
     },
     /** Its own copy: a later edit to `pods` never changes what starts. */
-    add(pods: Record<string, PodDef>) { for (const [k, p] of Object.entries(structuredClone(pods))) table.set(k, p) },
+    add(pods: Record<string, PodDef>) {
+      for (const [k, p] of Object.entries(structuredClone(pods))) {
+        table.set(k, p)
+        const live = made.get(k) // a key given to a live pod (never one of the table's): that pod takes another
+        if (live) { made.delete(k); keys.delete(live); keyOf(live) }
+      }
+    },
     /** A key's entry: its pod as it is now once made, else as defined. */
     entry(key: string): PodDef | undefined { const p = made.get(key), d = table.get(key); return p ? podDef(p) : d && structuredClone(d) },
-    fill(rt: Runtime, def: RuntimeDef) {
+    /** `added` hears each coord registered, so a start that throws can take back exactly those. */
+    fill(rt: Runtime, def: RuntimeDef, added: string[]) {
       for (const { coord, pod } of def.pods) {
-        const p = podOf(pod), r = typeof p === 'string' ? failure('not-found', p) : rt.register(p, coord)
-        if (!r.ok) note(`${def.id}/${coord}: ${r.fail.reason}`)
+        const p = podOf(pod), r = typeof p === 'string' ? failure('not-found', p) : rt.register(p.pod, coord)
+        if (r.ok) { added.push(r.value); continue }
+        note(`${def.id}/${coord}: ${r.fail.reason}`)
+        if (typeof p !== 'string' && p.fresh) { made.delete(pod); keys.delete(p.pod); void p.pod.dispose() } // made for nothing
       }
       for (const s of def.subscriptions) { const r = rt.subscribe(s); if (!r.ok) note(`${def.id}/${s.id}: ${r.fail.reason}`) }
     },

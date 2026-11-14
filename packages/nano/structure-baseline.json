@@ -55,7 +55,6 @@
     "canonicalSchema",
     "connectionsOf",
     "contextFor",
-    "createApplication",
     "createRegistry",
     "createRuntime",
     "defineSchema",

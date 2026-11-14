@@ -176,6 +176,39 @@ describe('starting', () => {
     ])
     expect(warnings).toEqual([...app.notes()])
   })
+  test('a pod made for an entry that cannot be registered is let go; one another runtime already holds is kept', async () => {
+    let makes = 0
+    const counted = implementation('acme/keys/counted', { provides: [Vault], make: () => { makes++; return [provide(Vault, { ping: async (_c, s) => success(s) })] } })
+    const reg = createRegistry()
+    reg.add(provider('acme/keys', [vault, counted]))
+    const app = createApplication('app', { registry: reg })
+    const C = 'acme/keys/counted#0', wrong = (id: string): RuntimeDef => ({ id, pods: [{ coord: V, pod: 'p5' }], next: {}, subscriptions: [] }) // p5 is no vault
+    ok(app.define({ pods: { p5: { implementation: 'acme/keys/counted' } }, runtimes: [wrong('x'), { ...wrong('a'), pods: [{ coord: C, pod: 'p5' }] }, wrong('y')] }))
+    ok(await app.start('x'))
+    expect(makes).toBe(1)
+    const a = ok(await app.start('a'))
+    expect(makes).toBe(2) // made afresh: the one `x` made was let go
+    ok(await app.start('y'))
+    expect(a.pod(C)!.state).not.toBe('stopped')
+  })
+  test('a key given to a live pod never collides with one defined later: that pod takes another key', async () => {
+    const app = createApplication('app', { registry: registry() })
+    const a = ok(app.createRuntime('a'))
+    const live = Pod.create(vault)
+    ok(a.register(live))
+    expect(Object.keys(app.definition('a')!.pods)).toEqual(['p0'])
+    ok(app.define({ pods: { p0: pods.p0! }, runtimes: [{ id: 'b', pods: [{ coord: V, pod: 'p0' }], next: {}, subscriptions: [] }] }))
+    expect(ok(await app.start('b')).pod(V)).not.toBe(live)
+    expect(Object.keys(app.definition('a')!.pods)).toEqual(['p1'])
+  })
+  test('a root start that throws takes back only what it registered', async () => {
+    const reg = registry()
+    const app = createApplication('app', { registry: { ...reg, implementation: c => { if (c === 'acme/keys/signer') throw new Error('bang'); return reg.implementation(c) } } })
+    ok(app.define({ pods, runtimes: [{ ...keys, id: 'app', pods: [{ coord: 'acme/keys/vault#5', pod: 'p0' }, { coord: S, pod: 'p1' }] }] }))
+    const mine = ok(app.register(Pod.create(vault)))
+    expect(await app.start('app')).toMatchObject({ ok: false, fail: { type: 'threw' } })
+    expect(app.pods()).toEqual([mine])
+  })
   test('start never rejects: a throw while building fails threw, and the runtime stays defined', async () => {
     const reg = registry()
     const app = createApplication('app', { registry: { ...reg, implementation: c => { if (c === 'acme/keys/signer') throw new Error('bang'); return reg.implementation(c) } } })

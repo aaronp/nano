@@ -23,9 +23,15 @@ export type Application = Runtime & {
   runtime(id: string): Runtime | undefined
   createRuntime(id: string, opts?: { policy?: Policy }): NanoResult<Runtime>
   adopt(child: Runtime): NanoResult<void>
-  /** Pods-table entries (keys new to the application) and runtimes (ids new; the root's own id while it is empty), all or nothing. */
+  /**
+   * Pods-table entries (keys not in the table) and runtimes (ids new; the root's own id too, while the root is empty,
+   * so a document's root loads like any runtime), all or nothing.
+   */
   define(d: Definition): NanoResult<void>
-  /** One runtime as data with the pods entries it refers to: a started one from live, keyed application-wide. */
+  /**
+   * One runtime as data, in define's shape (`{ pods, runtimes: [it] }`: the pods entries it refers to). A started one
+   * is from live, its pods keyed application-wide (a live pod gets a key on first ask); an unstarted one as defined.
+   */
   definition(id: string): Definition | undefined
   /**
    * The runtime, started from its definition if need be: each entry registered at its saved coord, then the
@@ -46,7 +52,8 @@ export type Application = Runtime & {
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-export function createApplication(id: string, opts: { registry: Registry; policy?: Policy }): Application {
+/** `next`: the root's saved counters, so a coord is never reused after loading (as `RuntimeOpts.next`). */
+export function createApplication(id: string, opts: { registry: Registry; policy?: Policy; next?: Record<string, number> }): Application {
   const tags = new Map<string, Set<string>>()
   const kids = new Map<string, Runtime>() // made, adopted and started children
   const defs = new Map<string, RuntimeDef>() // defined, not started yet (the root's too)
@@ -69,19 +76,20 @@ export function createApplication(id: string, opts: { registry: Registry; policy
     return r
   }
   const pods = podsTable(opts.registry, note)
-  const root = createRuntime(id, { registry: opts.registry, tagsOf, ...(opts.policy && { policy: opts.policy }) })
+  const root = createRuntime(id, { registry: opts.registry, tagsOf, ...(opts.policy && { policy: opts.policy }), ...(opts.next && { next: opts.next }) })
   watch(root)
 
   function start(rid: string): NanoResult<Runtime> {
     const def = defs.get(rid), have = lookup(rid)
     if (!def) return have ? success(have) : failure('not-found', `no runtime ${rid}`)
-    const rt = have ?? child(rid, { next: def.next }) // ponytail: the root's counters are not restored (it exists before its definition)
+    const rt = have ?? child(rid, { next: def.next }) // the root's come with createApplication
+    const added: string[] = []
     try {
-      pods.fill(rt, def)
+      pods.fill(rt, def, added)
       defs.delete(rid)
       return success(rt)
     } catch (e) {
-      for (const c of rt.pods()) rt.unregister(c)
+      for (const c of added) rt.unregister(c)
       if (rt !== root) kids.delete(rid)
       return failure('threw', `starting ${rid}: ${msg(e)}`)
     }

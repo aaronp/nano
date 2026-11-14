@@ -95,9 +95,10 @@ export function saveDoc(app: Application, opts: { title?: string; workspaces?: u
  */
 export async function loadDoc(doc: NanoDoc, opts: { registry: Registry; policy?: Policy; id?: string }): Promise<{ app: Application; notes: string[] }> {
   const { registry } = opts
-  const app = createApplication(opts.id ?? 'app', { registry, ...(opts.policy && { policy: opts.policy }) })
+  const checked = checkDoc(doc), id = opts.id ?? 'app'
+  const next = typeof checked === 'string' ? undefined : checked.runtimes.find(d => d.id === id)?.next
+  const app = createApplication(id, { registry, ...(opts.policy && { policy: opts.policy }), ...(next && { next }) })
   const notes: string[] = []
-  const checked = checkDoc(doc)
   if (typeof checked === 'string') return { app, notes: [checked] }
   const note = (where: string, r: NanoResult<unknown>) => { if (!r.ok) notes.push(`${where}: ${r.fail.reason}`); return r.ok }
   try {
