@@ -26,7 +26,7 @@ export function compose(runtimes: unknown): NanoResult<{ deployment: AppDeployme
       const origin = originOf(r.pods)!
       if ((root ??= origin.root) !== origin.root) return failure('invalid-input', `runtime ${id}: its pods come from another Pods`)
       out[id] = r.deployment()
-      Object.assign(tags, structuredClone(origin.tags))
+      for (const n of out[id].pods) if (origin.tags && Object.hasOwn(origin.tags, n)) tags[n] = structuredClone(origin.tags[n]!)
       for (const name of out[id].pods) placed.set(name, r.pods.get(name)!)
     }
     const pods: AppDeployment['pods'] = Object.create(null)

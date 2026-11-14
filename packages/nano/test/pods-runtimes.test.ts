@@ -105,6 +105,12 @@ describe('assembling', () => {
     expect(await app.call('r', 'p').inc(null)).toEqual(success(1))
     expect(app.deployment().tags).toEqual({ b: ['primary'] })
   })
+  test('given a runtime over a scope wider than it places, with a tag on an unplaced pod, when the application is made, then deployment() has no tag for it and re-assembles', async () => {
+    const pods = ok(Pods.create({ a: Pod.lazy(counter), b: Pod.lazy(counter) }, { registry: registry(), tags: { a: ['x'], b: ['y'] } }))
+    const app = ok(await Application.create({ r: ok(Runtime.create('r', { pods: ['a'], subscriptions: [] }, pods)) }, {}))
+    expect(app.deployment().tags).toEqual({ a: ['x'] })
+    expect(assemble(app.deployment(), registry()).ok).toBe(true)
+  })
   test('given tags that are not by pod name, or name a pod not in the deployment, when Pods.create runs, then it is invalid-input', () => {
     for (const tags of [{ a: 'x' }, { 'a/b': ['x'] }, { zz: ['x'] }, { constructor: ['x'] }])
       expect(Pods.create({ a: Pod.lazy(counter) }, { registry: registry(), tags: tags as never })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
@@ -222,11 +228,16 @@ describe('pipes and emissions', () => {
     const { app, events } = await create(d)
     expect(await app.call('r', 'db').save('x')).toEqual(success('db:x'))
     for (let i = 0; i < 5; i++) await tick()
-    const closing = app.close()
-    slowOpen()
-    expect(await closing).toEqual(success(undefined))
-    expect(logged).toEqual(['db:x'])
     const pipe = events.filter(isSent).find(e => e.kind === 'pipe')!
+    // The delivery finishes only after every pod has closed, so close() resolves after it only if it waits for it.
+    const order: string[] = []
+    app.listen(e => {
+      if (e.type === 'closed' && e.pod === 'slow') setTimeout(() => slowOpen(), 5)
+      if (e.type === 'delivered' && e.id === pipe.id) order.push('delivered')
+    })
+    expect(await app.close().then(r => { order.push('closed'); return r })).toEqual(success(undefined))
+    expect(order).toEqual(['delivered', 'closed'])
+    expect(logged).toEqual(['db:x'])
     expect(events).toContainEqual(expect.objectContaining({ type: 'delivered', id: pipe.id, result: success(null) }))
     expect(sent(events)).toEqual(['r:host->db', 'r:db->slow'])
   })
@@ -300,7 +311,7 @@ describe('selections and chains', () => {
   })
   test('given a pod wired to two stores, when its code selects one, then it is ambiguous, and all gives both in deployment order', async () => {
     let one: Selection<typeof Store> | undefined, all: Selection<typeof Store>[] = []
-    const picker = implementation('acme2/picker', { provides: [Log], make: ctx => { one = ctx.one(Store); all = ctx.all(Store); return [] } })
+    const picker = implementation('acme2/picker', { provides: [Log], make: ctx => { one = ctx.one(Store); all = ctx.all(Store); return [provide(Log, { record: async () => success(null) })] } })
     const reg = registry(); reg.add(provider('acme2', [picker]))
     await create({ pods: { p: Pod.eager(picker), a: Pod.lazy(store, { config: 'a' }), b: Pod.lazy(store, { config: 'b' }) },
       runtimes: { r: { pods: ['p', 'a', 'b'], subscriptions: [{ kind: 'call', from: 'p', to: 'b' }, { kind: 'call', from: 'p', to: 'a' }] } } }, reg)
@@ -309,11 +320,66 @@ describe('selections and chains', () => {
     expect(all.map(s => [s.ok, s.pod, s.runtime])).toEqual([[true, 'b', 'r'], [true, 'a', 'r']])
     expect(await all[1]!.call.save('x')).toEqual(success('a:x'))
   })
+  test('given an event piped twice and heard by one on, when it is published, then all three deliveries are one chain: the first delivery\'s id, no cause', async () => {
+    const pipe = (to: string) => ({ kind: 'pipe', from: 'db', source: 'acme.Store/saved', to, target: 'acme.Log/record' }) as const
+    const { app, events } = await create({ pods: { w: Pod.eager(watcher), db: Pod.lazy(store, { config: 'db' }), l1: Pod.lazy(logger), l2: Pod.lazy(logger) },
+      runtimes: { r: { pods: ['w', 'db', 'l1', 'l2'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }, pipe('l1'), pipe('l2')] } } })
+    await app.call('r', 'db').save('x')
+    await tick()
+    const saved = events.filter(isSent).filter(e => e.kind !== 'call')
+    expect(saved.map(e => `${e.kind}:${e.to}`)).toEqual(['pipe:l1', 'pipe:l2', 'on:w'])
+    expect(saved.every(e => e.correlation === saved[0]!.id && !('cause' in e))).toBe(true)
+  })
+  test("given an on subscription to an action's results, when the host calls it, then the on delivery is caused by that call, in its chain", async () => {
+    const results = implementation('acme2/results', { provides: [Log], make: ctx => {
+      ctx.one(Store).on(Store.ops.save, d => { heard.push(d as string) })
+      return [provide(Log, { record: async () => success(null) })]
+    } })
+    const reg = registry(); reg.add(provider('acme2', [results]))
+    const { app, events } = await create({ pods: { w: Pod.eager(results), db: Pod.lazy(store, { config: 'db' }) },
+      runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }, reg)
+    await app.call('r', 'db').save('x')
+    await tick()
+    expect(heard).toEqual(['db:x'])
+    const [call, on] = [events.filter(isSent).find(e => e.kind === 'call')!, events.filter(isSent).find(e => e.kind === 'on')!]
+    expect(on).toMatchObject({ from: 'db', to: 'w', port: 'acme.Store/save', correlation: call.id, cause: call.id })
+  })
+  test('given on with an op the selected pod lacks, when it subscribes, then there is one warning and fn is never called', async () => {
+    const wrong = implementation('acme2/wrong', { provides: [Log], make: ctx => {
+      ctx.one(Store).on(Log.ops.record, () => { heard.push('never') })
+      return [provide(Log, { record: async () => success(null) })]
+    } })
+    const reg = registry(); reg.add(provider('acme2', [wrong]))
+    const { app, events } = await create({ pods: { w: Pod.lazy(wrong), db: Pod.lazy(store, { config: 'db' }) },
+      runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }, reg)
+    expect(await app.call('r', 'w').record('a')).toEqual(success(null))   // builds w, which subscribes
+    await app.call('r', 'db').save('x')
+    await tick()
+    expect(events.filter(e => e.type === 'warning')).toHaveLength(1)
+    expect(heard).toEqual([])
+  })
+  test('given a selection kept past its build, when on is called after that build closed, then it is a no-op', async () => {
+    let kept: Selection<typeof Store> | undefined
+    const keeper = implementation('acme2/keeper', { provides: [Log], make: ctx => { kept ??= ctx.one(Store); return [provide(Log, { record: async () => success(null) })] } })
+    const reg = registry(); reg.add(provider('acme2', [keeper]))
+    const { app, events } = await create({ pods: { w: Pod.eager(keeper), db: Pod.lazy(store, { config: 'db' }) },
+      runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }, reg)
+    await app.restart('w')
+    const off = kept!.on(Store.ops.save, () => { heard.push('late') })
+    await app.call('r', 'db').save('x')
+    await tick()
+    expect(heard).toEqual([])
+    expect(sent(events, 'on')).toEqual([])
+    off()
+  })
   // Behaviour 14.
   test('given a pod not wired to any store, when its code selects one, then call resolves to not-found and on does nothing', async () => {
-    const { app } = await create({ pods: { l: Pod.eager(lonely) }, runtimes: { r: { pods: ['l'], subscriptions: [] } } })
+    const { app, events } = await create({ pods: { l: Pod.eager(lonely), db: Pod.lazy(store, { config: 'db' }) }, runtimes: { r: { pods: ['l', 'db'], subscriptions: [] } } })
     expect(await app.call('r', 'l').save('x')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+    expect(await app.call('r', 'db').save('y')).toEqual(success('db:y'))   // db does emit saved
+    await tick()
     expect(heard).toEqual([])
+    expect(sent(events, 'on')).toEqual([])
   })
   // Behaviour 15.
   test('given a pipe cycle a.save → b.check → a.save, when the host saves, then it runs until check fails, each message chained to the host call', async () => {

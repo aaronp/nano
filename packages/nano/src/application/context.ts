@@ -14,8 +14,8 @@ import { port } from '../iface.ts'
 import type { Op } from '../op.ts'
 import { failure, type Fail, type NanoResult } from '../result.ts'
 import { matches, selectorData, type SelectorData } from '../selector.ts'
-import { emit, type On } from './emit.ts'
-import { client, type Live } from './messages.ts'
+import { client, emit } from './emit.ts'
+import type { Live, On } from './messages.ts'
 
 /** The port of `o` on `pod`'s implementation, if it has `o`. */
 const portOf = (live: Live, pod: string, o: Op) => {
@@ -70,7 +70,7 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
     async publish(o, data) {
       const p = portOf(live, name, o)
       if (!p || o.kind !== 'event') return live.trace.emit({ type: 'warning', reason: `${name}: ${o.name} is not one of its events` })
-      await emit(live, name, p, data, {})
+      await emit(live, name, p, data)
     },
     addOnCloseListener: onClose,
   }

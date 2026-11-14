@@ -1,10 +1,10 @@
 /**
  * Messages: one message in one runtime — `sent` (with its kind and chain), policed, its input checked, the target built
- * or reused, run with the timeout, its output checked, then `delivered` (or `denied`); a successful action result is
- * then emitted, without waiting. And a client by op name over such messages.
+ * or reused, run with the timeout, its output checked, then `delivered` (or `denied`). What follows from a message
+ * (emissions) is `emit.ts`'s.
  *
- *   await send(live, 'r', 'host', 'db', 'acme.KV/get', 'k')                // NanoResult<unknown>; a call starting a chain
- *   await client(live, 'r', 'host', 'db', () => undefined).get('k')       // the same, by op name
+ *   await send(live, 'r', 'host', 'db', 'acme.KV/get', 'k')   // NanoResult<unknown>; a call starting a chain
+ *   await attempt(live, 'db', 'closing db', fn)               // fn within the timeout; a throw or timeout a `failure`
  */
 import type { AppDeployment } from '../deployment.ts'
 import { port } from '../iface.ts'
@@ -12,7 +12,6 @@ import type { Handler, Implementation } from '../implementation.ts'
 import { Policies, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import { failure, isNanoResult, success, type NanoResult } from '../result.ts'
-import { emit, type On } from './emit.ts'
 import type { stream } from './stream.ts'
 
 /** What a message needs of the application, read live. */
@@ -32,8 +31,11 @@ export type Live = {
   closed(): boolean
 }
 
-/** A message's kind and chain (`correlation`, `cause`); `run` carries an `on` delivery instead of an action. */
-type How = { kind: 'call' | 'pipe' | 'on'; correlation?: string; cause?: string; run?: () => Promise<NanoResult<unknown>> }
+/** A subscription made in code: `to` hears `from`'s port `port` in `runtime`, while `gone()` gives nothing. */
+export type On = { runtime: string; from: string; port: string; to: string; gone(): unknown; fn(data: unknown): unknown }
+
+/** A message's kind, its chain (`correlation`, `cause`), its id if already taken, and its `work` if not an action. */
+type How = { kind: 'call' | 'pipe' | 'on'; id?: string; correlation?: string; cause?: string; work?: () => Promise<NanoResult<unknown>> }
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const TIMEOUT = Symbol('timeout')
@@ -49,6 +51,13 @@ export async function within<T>(work: () => T | Promise<T>, ms: number, what: st
   } finally {
     clearTimeout(timer)
   }
+}
+
+/** `work()` within the timeout, as `pod`'s: a throw or a timeout is also a `failure` on the stream. */
+export async function attempt<T>(live: Live, pod: string, what: string, work: () => T | Promise<T>): Promise<NanoResult<T>> {
+  const r = await within(work, live.timeoutMs, what)
+  if (!r.ok) live.trace.emit({ type: 'failure', pod, reason: r.fail.reason })
+  return r
 }
 
 const impl = (live: Live, pod: string) => live.registry.implementation(live.now().pods[pod]?.implementation ?? '')
@@ -78,8 +87,8 @@ async function deliver(live: Live, to: string, p: string, input: unknown): Promi
   const o = action(made.value.implementation, p), h = made.value.handlers.get(p)
   if (!o || !h) return failure('unknown-op', `${to} has no action ${p}`)
   if (o.input && !o.input.check(input)) return failure('invalid-input', `${p}: input does not fit ${o.input.type}`)
-  const ran = await within(() => h(input), live.timeoutMs, `${to} ${p}`)
-  if (!ran.ok) { live.trace.emit({ type: 'failure', pod: to, reason: ran.fail.reason }); return ran }
+  const ran = await attempt(live, to, `${to} ${p}`, () => h(input))
+  if (!ran.ok) return ran
   const r = ran.value
   if (!isNanoResult(r)) return failure('invalid-output', `${p}: returned something other than a NanoResult`)
   if (r.ok && o.output && !o.output.check(r.value)) return failure('invalid-output', `${p}: output does not fit ${o.output.type}`)
@@ -87,34 +96,17 @@ async function deliver(live: Live, to: string, p: string, input: unknown): Promi
 }
 
 /**
- * One message from `from` to `to`'s port `p`, in runtime `runtime`, policed by `refusal`. With no `correlation` it
- * starts a chain. An action's successful result is emitted from `to`, each delivery caused by this message.
+ * One message from `from` to `to`'s port `p`, in runtime `runtime`: `sent` (as `how.id`, or a new id), policed by
+ * `refusal`, carried by `how.work` (by default the action at `p`), then `delivered`. With no `correlation` it starts a
+ * chain. It sends exactly this one message.
  */
 export async function send(live: Live, runtime: string, from: string, to: string, p: string, input: unknown, how: How = { kind: 'call' }): Promise<NanoResult<unknown>> {
-  const { trace } = live, id = trace.id(), { kind, correlation = id, cause, run } = how
+  const { trace } = live, { kind, id = trace.id(), cause, work } = how, correlation = how.correlation ?? id
   trace.emit({ type: 'sent', id, runtime, kind, from, to, port: p, correlation, ...(cause !== undefined && { cause }) })
   const reason = refusal(live, runtime, from, to, input)
   if (reason !== undefined) { trace.emit({ type: 'denied', id, reason }); return failure('denied', reason) }
   const t0 = performance.now()
-  const r = await (run ? run() : deliver(live, to, p, input))
+  const r = await (work ? work() : deliver(live, to, p, input))
   trace.emit({ type: 'delivered', id, result: r, ms: performance.now() - t0 })
-  if (r.ok && !run) void emit(live, to, p, r.value, { correlation, cause: id })
   return r
-}
-
-/**
- * A client by op name from `from` to `to` in `runtime`. `gone()` is asked at each call, before anything is sent: a
- * Fail it gives is the call's result.
- */
-export function client(live: Live, runtime: string, from: string, to: string, gone: () => NanoResult<never> | undefined): Record<string, (input: unknown) => Promise<NanoResult<unknown>>> {
-  const call = async (name: string, input: unknown): Promise<NanoResult<unknown>> => {
-    const why = gone()
-    if (why) return why
-    const ports = (impl(live, to)?.provides ?? []).flatMap(i => Object.values(i.ops).filter(o => o.kind === 'action' && o.name === name).map(o => port(i, o)))
-    if (ports.length === 0) return failure('unknown-op', `${to} has no action ${name}`)
-    if (ports.length > 1) return failure('ambiguous', `${to}: ${name} is an action of more than one interface`)
-    return send(live, runtime, from, to, ports[0]!, input)
-  }
-  // ponytail: any name reads as an op (a Proxy) except `then`, so awaiting a client is harmless; an op named `then` is unreachable.
-  return new Proxy({}, { get: (_, name) => (typeof name === 'string' && name !== 'then' ? (input: unknown) => call(name, input) : undefined) })
 }

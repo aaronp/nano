@@ -164,7 +164,7 @@ as before. `sent` gains `kind: 'call' | 'pipe' | 'on'`, and `cause` and `correla
   alert) can be added later without changing it.
 - *Later, in its own spec:* chains carried implicitly through calls a component's code makes while handling a message
   (async context), so they continue rather than start anew. Events: `built`, `restarted`, `closed`, `applied { added,
-removed, changed, rewired }`, `sent { id, runtime, kind, from, to, port }`, `delivered`, `denied`, `failure`,
+removed, changed, rewired }`, `sent { id, runtime, kind, from, to, port, correlation, cause? }`, `delivered`, `denied`, `failure`,
 `warning`.
 
 ## Behaviours (written as tests first)

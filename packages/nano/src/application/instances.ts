@@ -12,7 +12,7 @@
 import type { NanoContext } from '../context.ts'
 import { failure, success } from '../result.ts'
 import { contextFor } from './context.ts'
-import { within, type Live } from './messages.ts'
+import { attempt, within, type Live } from './messages.ts'
 
 type Made = ReturnType<Live['instance']>
 type OnClose = Parameters<NanoContext['addOnCloseListener']>[0]
@@ -25,10 +25,7 @@ type Reason = Parameters<OnClose>[0]['reason']
 function closer(live: Live, pod: string) {
   const listeners: OnClose[] = []
   let reason: Reason | undefined, closing: Promise<void> | undefined
-  const run = async (fn: OnClose) => {
-    const r = await within(() => fn({ reason: reason! }), live.timeoutMs, `closing ${pod}`)
-    if (!r.ok) live.trace.emit({ type: 'failure', pod, reason: r.fail.reason })
-  }
+  const run = (fn: OnClose) => attempt(live, pod, `closing ${pod}`, () => fn({ reason: reason! }))
   return {
     add(fn: OnClose) { if (reason) void run(fn); else listeners.push(fn) },
     close: (why: Reason) => closing ??= (async () => {
