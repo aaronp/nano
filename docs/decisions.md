@@ -705,3 +705,93 @@ Pinned by "the document limits hold for what is built live" (`document.test.ts`)
 
 **Why:** A live application must never be changed behind its back, and a public call must never reject.
 **Cost if wrong:** A clone per `apply` and `deployment()`; at 5000 pods it is still small.
+
+## 90. Each level has its own deployment and `create` (decided with the user, 2026-11-14)
+
+**Decision:** `PodDeployment` → `Pods.create(d, { registry, tags? })`, `RuntimeDeployment` → `Runtime.create(id, d, pods)`, `AppDeployment` → `Application.create(runtimes, opts)`; `assemble(appDeployment, registry)` goes from the whole data to the `Runtime`s. `Pods` and `Runtime` are cheap, inert, immutable values: assembling builds nothing and sends nothing. `Application.create` is the one step that makes it live. Each level checks what it owns (pods: names, implementations, configs, 5000; runtime: placed pods within scope, ends, ports, 2000; application: 50 runtimes, ids, one `Pods`). `Application` has six members (`close` added). Supersedes D70's `Application.create(deployment, opts)`, D74's `Deployment` (now `AppDeployment`), D77's "exactly five members" and D78's single place for the limits.
+**Why:** Each object owns the data for what it owns; no `start()` and no type that changes mode.
+**Cost if wrong:** One validator per level to keep in step; collapsing back means `assemble` alone.
+
+## 91. Call edges and pipes (decided with the user, 2026-11-14)
+
+**Decision:** A subscription is a call edge `{ kind: 'call', from, to }` (which pods a pod's code may reach) or a pipe `{ kind: 'pipe', from, source, to, target }` (an output into an action's input, outside any component's code). A pipe's source is an event or an action of `from` (its successful results); its target is an action of `to` whose input fits the source's data. The kind `'event'` is renamed `'pipe'`. Supersedes the `'event'` subscription of D75 and the earlier spec.
+**Why:** Edges are the swap point for dependencies; pipes let a packaged application expose its pieces.
+**Cost if wrong:** Renaming `'pipe'` back and a second source kind, in data and in `nano.json`.
+
+## 92. Selections and `on` in code (decided with the user, 2026-11-14)
+
+**Decision:** `ctx.one` returns a `Selection` and `ctx.all` a list of them. A `Selection` is its own result (`ok`, `fail`, `pod`, `runtime`), with `call` through its edge (policed and recorded there) and `on(op, fn)` to hear that pod's event or action results for as long as the subscribing instance lives. On a failed selection every call resolves to its `Fail` and `on` does nothing; nothing is thrown. An `on` subscription is not part of any deployment, and stops when its instance closes, when it is unsubscribed, or when `apply` removes its edge. Refines D76's `one`/`all`.
+**Why:** One fluent shape that a call site can check or not.
+**Cost if wrong:** Selections stay values; a throwing `one` would be a new context.
+
+## 93. Chains, and pipe cycles are allowed (decided with the user, 2026-11-14)
+
+**Decision:** `sent` gains `kind` (`call`, `pipe`, `on`), `correlation` (the id of a chain's first message) and `cause` (the message that led to this one). A host call starts a chain; a delivery of an action's result is caused by that call; an event published from code starts a new chain for now (async context is a later spec). Pipes may form cycles: the runtime records the chain and refuses nothing; a cycle stops when a step fails, as failed results are not piped. Supersedes D79's `sent` shape.
+**Why:** A later monitor (hops per chain, calls per window) needs the chain recorded now.
+**Cost if wrong:** A cycle that never fails runs until the host closes the application.
+
+## 94. Tags are an option on `Pods.create` (decided with the user, 2026-11-14)
+
+**Decision:** `Pods.create(podDeployment, { registry, tags? })` takes tags by pod name (`invalid-input` for a name it does not hold); `select` keeps the selected pods' tags; `assemble` passes `AppDeployment.tags` through it. Tags are not a field of `Pod`. Supersedes the controller ruling that carried tags on an internal record.
+**Why:** Tags drive live selectors, so they must survive assembly; this places them with the pod table without changing `Pod`.
+**Cost if wrong:** Moving tags onto `Pod` changes its shape and every saved `nano.json`.
+
+## 95. `select` with a duplicate name is `invalid-input` (decided with the user, 2026-11-14)
+
+**Decision:** `pods.select(['a', 'a'])` fails `invalid-input`; an unknown name is `not-found`.
+**Why:** A scope is a set; a duplicate is a mistake worth naming.
+**Cost if wrong:** A caller building names by concatenation dedupes first.
+
+## 96. `close()` lets deliveries finish (decided with the user, 2026-11-14)
+
+**Decision:** After `app.close()`, emissions already being delivered finish; nothing new is delivered. Every instance closes (its close listeners run within the timeout, then `closed`), then host calls are `not-found` and `apply`/`restart` are refused.
+**Why:** Work accepted must not be dropped silently; nothing may start once closing has.
+**Cost if wrong:** A host wanting a hard stop cancels its own handlers.
+
+## 97. Internal names are fine (decided with the user, 2026-11-14)
+
+**Decision:** Names inside the package that are not exported from it (`Id`, `shapeError`, `originOf`, `compose`, `RuntimeIds`, `isRuntime`, `instances`, `send`, `emit`, `refusal`, `within`, `attempt`, `contextFor`, `diff`) need no ruling; they are listed in `design.md`.
+**Why:** CLAUDE.md governs the public surface.
+**Cost if wrong:** Renaming them.
+
+## 98. No live runtime object (controller ruling, surfaced to the user)
+
+**Decision:** The live system is the `Application`. Host calls are `app.call(runtime, pod)`; a runtime's slice of the stream is `listen` filtered by `e.runtime`. The assembled `Runtime` is a value. Supersedes the earlier spec's `app.runtime(id)` view.
+**Why:** A second runtime type that changes mode is what D70 removed.
+**Cost if wrong:** A view over `Application` and the stream.
+
+## 99. Pods learn their runtimes from the data (controller ruling, surfaced to the user)
+
+**Decision:** `Runtime.create` does not write into `Pods`. At `Application.create` a pod's runtimes are worked out from the runtimes that place it; a pod placed in none is never built, and `deployment()` omits it. A runtime's own `id` must equal its key in the table (`invalid-input` otherwise). Runtimes from different `Pods` holding one name are `invalid-input`. An application created from no runtimes has an empty registry, so `apply` naming an implementation is `not-found`. Supersedes D89's "the application keeps its own copy of the deployment" (it is derived from the runtimes).
+**Why:** One source of truth; an unplaced pod cannot affect the application.
+**Cost if wrong:** A saved `nano.json` loses unplaced descriptions; restoring them is via the shared root `Pods`.
+
+## 100. `assemble` is the one-step path from data (controller ruling, surfaced to the user)
+
+**Decision:** `assemble(appDeployment, registry)` is pure: `Pods.create` of the pods and tags, then `Runtime.create(id, def, pods.select(def.pods))` per runtime; the first failure is returned, and a `select` failure is `invalid-input`.
+**Why:** Loading `nano.json` is one call.
+**Cost if wrong:** Callers compose the levels themselves.
+
+## 101. Emissions reach every runtime; the caller does not wait (controller ruling, surfaced to the user)
+
+**Decision:** An emission is an event a pod publishes, or the successful result of one of its actions, whoever called it. It is delivered along every pipe from that pod and operation, and to every `on` subscription to it, in every runtime the pod is placed in, each delivery a message policed and recorded there. Order: runtimes in order then pipes in order, then `on` subscriptions in the order made. Failed results are not emitted. The deliveries of one published event share one new chain. An action's caller gets its result and does not wait for deliveries. An `on` for an op the pod lacks is a `warning` and does nothing. Supersedes the earlier spec's event delivery for `'event'` subscriptions.
+**Why:** The simplest reading of "the pod's output".
+**Cost if wrong:** A pod placed in two runtimes sends twice where one was wanted.
+
+## 102. `close` and change are ordered (controller ruling, surfaced to the user)
+
+**Decision:** A forgotten instance's close listeners finish before its replacement is built ("close before rebuild"), chained when closes follow one another. A second `close()` returns the first's promise. `apply` and `restart` called before `close()` complete ahead of it and are serial with it; later calls are refused, and host calls are `not-found` from the moment `close()` is called. `restart` queues with `apply`. A build in flight is not waited for when forgotten; a failed build emits `closed` with no listeners; a listener calling its own closing pod waits until the timeout.
+**Why:** "Closed" means closed; accepted work is not dropped.
+**Cost if wrong:** A call waits up to `timeoutMs` during `apply`; `close` waits for queued changes.
+
+## 103. A policy with no verdict denies subscriptions too (controller ruling, surfaced to the user)
+
+**Decision:** `refusal` reads a policy's answer for messages and for added subscriptions: a throw, a Promise or a verdict whose fields throw refuses. Extends D82 and D89.
+**Why:** One reading of a policy, fail closed.
+**Cost if wrong:** One function to split.
+
+## 104. Does `publish` wait for its pipe deliveries? (open, not decided)
+
+**Decision:** Not decided. Today `publish` awaits its pipe deliveries (not its `on` subscriptions), keeping the earlier spec's tested contract; the new spec frees only the callers of actions. Whether `publish` should stop waiting like action callers is the user's call.
+**Why:** The two kinds of emitter are inconsistent; a slow pipe target slows a publisher.
+**Cost if wrong:** Changing it is one await in `emit` and a test.

@@ -1,11 +1,23 @@
 # Design: the nano model
 
-Spec: `docs/superpowers/specs/2026-11-14-values-and-application-design.md`. Decisions: `docs/decisions.md` (cited as D<n>;
-D70 on are this model). Worked examples: `examples/external-signer`, `examples/messenger` (each with its `nano.json`),
+Spec: `docs/superpowers/specs/2026-11-14-pods-runtimes-application-design.md`, and
+`docs/superpowers/specs/2026-11-14-values-and-application-design.md` for what it does not revise. Decisions:
+`docs/decisions.md` (cited as D<n>; D70 on are this model, D90 on are pods, runtimes and an application). Worked examples: `examples/external-signer`, `examples/messenger` (each with its `nano.json`),
 `examples/etl`, `examples/migration`.
 
 Nano is an event-driven RPC and pub/sub system made of plain values and one live `Application`. Everything is a
 synchronous value except the `Application`, which alone runs effects (D70).
+
+## Three levels
+
+| Level | Data | Assembled by | Owns |
+|---|---|---|---|
+| Pods | `PodDeployment` | `Pods.create(d, { registry, tags? })` | which components exist (descriptions, not instances); a scoped lookup |
+| Runtime | `RuntimeDeployment` | `Runtime.create(id, d, pods)` | which pods are placed together and how they are wired; where messages are policed and recorded |
+| Application | `AppDeployment` | `Application.create(runtimes, opts)` | the live system: instances, mounting, routing, change, closing |
+
+`assemble(appDeployment, registry)` goes from the whole data to the `Runtime`s in one step. `Pods` and `Runtime` are
+inert: assembling builds nothing and sends nothing; `Application.create` is the one step that makes it live (D90).
 
 ## Values and the live Application
 
@@ -52,47 +64,53 @@ shape of a table by runtime id (the id rule, at most 50). Inside `runtime.ts`: `
 
 1. **Define.** Schemas, ops, interfaces; an implementation provides interfaces and may declare dependencies; a
    provider groups implementations; the registry holds providers (`examples/*/interfaces.ts`, `providers.ts`).
-2. **Describe.** `Pod.lazy(impl, { config })` or `Pod.eager(impl)` is a value holding the implementation's coordinate
-   (D85). An `AppDeployment` names pods, places them in runtimes (a pod may be in several), and lists each runtime's
-   subscriptions, in order: a call edge `{ kind: 'call', from, to }` or a pipe `{ kind: 'pipe', from, source, to,
-   target }`, whose source is an event or an action (its results) of `from` and whose target an action of `to` that
-   fits it; pipes may form cycles. Each level checks its own part: `Pods.create` names, implementations (in the
-   registry), configs, tags (by its pod names) and 5000 pods; `Runtime.create` that every pod it places is in its scope, every subscription's
-   ends are placed in it, ports exist and fit, and 2000 subscriptions; `assemble` 50 runtimes and their ids (D75, D78).
-3. **Create.** `Application.create(runtimes, opts)`, or `Application.create(assemble(d, registry).value, opts)` from
-   data, validates (an invalid input is a `Fail` and nothing runs), builds every eager pod, and resolves once those
-   settle. A failed eager build is a `failure` on the stream, not a failed `create`.
-4. **Build.** One instance per pod name, made by the factory on first need, once: concurrent first calls share the
-   build. A factory that throws, rejects or times out fails the call that needed it and caches nothing, so the next
-   call builds again. State is whatever the factory closes over (D71).
-5. **Call.** `app.call(runtime, pod).op(input)` is a message from `'host'` in that runtime. A handler reaches others
-   through the `ctx` its factory closed over: `ctx.one(selector)` is a `Selection` of the single matching call
-   subscription from the pod (a failed one, `not-found` or `ambiguous`, otherwise: its `call.op(x)` resolves to that
-   `Fail` and `on` does nothing), `ctx.all(selector)` every one, in deployment order (D86); both read the deployment
-   now, across every runtime the pod is placed in, and a selector's `runtime` narrows them. `selection.on(op, fn)`
-   hears that pod's event or action results, as `on` messages in the edge's runtime, until the build closes, the
-   returned function is called or the edge is gone. An emission (`ctx.publish(op, data)`, or an action's successful
-   result, whoever called it) is delivered along every pipe from the pod with that source, in every runtime it is in,
-   then to `on` subscribers; the caller of an action doesn't wait for it.
-6. **Message.** Each message travels in exactly one runtime, that of the subscription it uses: policed by its policy
-   (a throw, or no `Verdict`, denies, D82), input checked, run under the timeout, output checked, and recorded: `sent` (its
-   `kind`, `correlation` the id of its chain's first message, `cause` the message that led to it), then `delivered`
-   or `denied`. Pipes may loop; a chain stops when a step fails. A handler never throws across this boundary: a throw, a timeout, bad input or bad
-   output is a `Fail` (D76).
-7. **Change.** `app.apply(next)` validates `next`, asks each affected runtime's policy about each added subscription
+2. **Deployments, per level.** `Pod.lazy(impl, { config })` or `Pod.eager(impl)` is a value holding the
+   implementation's coordinate (D85). A `PodDeployment` names pods; a `RuntimeDeployment` places some of them and lists
+   its subscriptions, in order: a call edge `{ kind: 'call', from, to }` (which pods `from`'s code may reach) or a pipe
+   `{ kind: 'pipe', from, source, to, target }` (source an event or an action's results of `from`, target an action of
+   `to` that fits it; pipes may form cycles, D91, D93); an `AppDeployment` holds both and the tags. Each level checks
+   its own part: `Pods.create` names, implementations (in the registry), configs, tags (by its pod names) and 5000
+   pods; `Runtime.create` that every pod it places is in its `Pods` scope, every subscription's ends are placed in it,
+   ports exist and fit, and 2000 subscriptions; `Application.create` 50 runtimes, their ids and one `Pods` (D75, D78).
+3. **Assemble.** `pods.select(names)` is a scope over the same descriptions; `assemble(d, registry)` does
+   `Pods.create`, then `Runtime.create` per runtime over `pods.select(def.pods)`, strictly: the first failure is the
+   result (D83, D100).
+4. **Create.** `Application.create(runtimes, opts)` (from data: `assemble(d, registry).value`) validates (an invalid
+   input is a `Fail` and nothing runs), builds every eager pod, and resolves once those settle. A failed eager build
+   is a `failure` on the stream, not a failed `create`.
+5. **Mount.** One instance per pod name, made by the factory when first needed, once: concurrent first calls share
+   the build. That is when the pod gets its context. A factory that throws, rejects or times out fails the call
+   that needed it and caches nothing. State is whatever the factory closes over (D71).
+6. **Calls through edges.** `app.call(runtime, pod).op(input)` is a message from `'host'` in that runtime. A handler
+   reaches others through the `ctx` its factory closed over: `ctx.one(selector)` is a `Selection` of the single
+   matching call edge from the pod (a failed one, `not-found` or `ambiguous`, otherwise: its `call.op(x)` resolves
+   to that `Fail` and `on` does nothing), `ctx.all(selector)` every one, in deployment order (D86); both read the
+   deployment now, across every runtime the pod is placed in, and a selector's `runtime` narrows them. Each message
+   travels in exactly one runtime, that of the edge it uses: policed (a throw, or no `Verdict`, denies, D82), input
+   checked, run under the timeout, output checked, and recorded: `sent` (its `kind`, `correlation` the id of its
+   chain's first message, `cause` the message that led to it), then `delivered` or `denied`. A handler never throws
+   across this boundary: a throw, timeout, bad input or bad output is a `Fail` (D76).
+7. **Emissions.** An emission is `ctx.publish(op, data)`, or an action's successful result, whoever called it. It is
+   delivered along every pipe from the pod with that source, in every runtime the pod is placed in, then to `on`
+   subscribers (`selection.on(op, fn)`, which lasts until the build closes, the returned function is called or the
+   edge is gone), each delivery its own message in its runtime. The caller of an action doesn't wait for it. A chain
+   stops when a step fails (D101, D93).
+8. **Change.** `app.apply(next)` validates `next`, asks each affected runtime's policy about each added subscription
    (`isAllowed(from, to, 'subscribe')`), then applies everything or nothing: pods added (eager ones built), removed
    (instances forgotten), changed (restarted with the new value), subscriptions added, removed, reordered; one
    `applied` event. `app.restart(pod)` forgets an instance (an eager pod rebuilds at once); calls in flight finish on
    the old one (D77). `apply` drops pods that no runtime places. An application created from no runtimes has no
-   registry, so `apply` naming any implementation is `not-found`. A forgotten instance is closed first (its close
-   listeners run with `restarted`, `removed` or `changed`); `app.close()` closes them all (`closed`); deliveries under
-   way settle and nothing new is delivered.
-8. **Watch.** `app.listen(e => …)` is the one stream, in order and synchronously, and returns an unsubscribe: `built`,
-   `closed`, `restarted`, `applied`, `sent`, `delivered`, `denied`, `failure`, `warning`. A throwing listener is
-   swallowed (D79).
-9. **Save.** `app.deployment()` is the current value (the pods placed in some runtime, the runtimes, and the tags
-   `assemble` carried in); saving is its JSON, and `assemble` + `Application.create` on it gives an equivalent
-   application (D74).
+   registry, so `apply` naming any implementation is `not-found`. A forgotten instance is closed first, its
+   replacement built after (D102).
+9. **Close.** `app.close()` closes every instance: each one's close listeners run in order within the timeout, then
+   `closed`. Deliveries under way settle and nothing new is delivered; host calls are then `not-found` and
+   `apply`/`restart` refused (D96).
+10. **Watch.** `app.listen(e => …)` is the one stream, in order and synchronously, and returns an unsubscribe: `built`,
+    `closed`, `restarted`, `applied`, `sent`, `delivered`, `denied`, `failure`, `warning`. A throwing listener is
+    swallowed (D79).
+11. **Save.** `app.deployment()` is the current value (the pods placed in some runtime, the runtimes, and the tags
+    `assemble` carried in); saving is its JSON, and `assemble` + `Application.create` on it gives an equivalent
+    application (D74).
 
 ## FAQ
 
@@ -128,12 +146,31 @@ the reason, in `create` and `apply`; nothing half-runs. A document with a missin
 added to the registry (D83). A call subscription is checked against the caller's declared dependencies only when
 they name an interface (D87).
 
+**Call edges, pipes or `on`?** A call edge says what a pod's code may call (`ctx.one(DB).call.save(x)`), and is the
+swap point: `apply` re-points it and the code stays. A pipe is deployment data connecting an event or an action's
+results to an action's input, outside any component's code. `selection.on(op, fn)` is the same hearing made from code,
+for as long as its instance lives; it is in no deployment (D91, D92).
+
+**Scoping with `select`?** `pods.select(['a', 'c'])` is a `Pods` over the same descriptions, keeping their tags; an
+unknown name is `not-found`, a duplicate `invalid-input`. A runtime built over it can place only those pods, so its
+code cannot reach others and `app.call` there is `not-found`; a pod in two scopes is one pod (D95).
+
+**Why are `Pods` and `Runtime` inert?** They are checked descriptions: no instance, no context, no message. Only
+`Application.create` is live, so there is no `start()` and a runtime need not be a second live type (D90, D98).
+
+**Closing?** `app.close()` closes every instance: close listeners (`ctx.addOnCloseListener`) run within the timeout,
+deliveries already under way finish, nothing new is delivered. A restarted or removed pod is closed the same way
+before its replacement is built (D96, D102).
+
 **Storage and messaging?** Components. Key-value stores, CRUD, queues, REST bridges are pods behind interfaces, chosen
 per environment; policies, enrichment and restriction between them are compute pods. Nano only routes, polices and
 records (D73). A component adapts to what is plugged in by testing `ctx.all(S).length` or `ctx.one(S).ok`.
 
 **Pods that call each other while building?** Don't: a factory should not wait on another pod during `make`. Two that
 do both wait on each other and fail by timeout (D84).
+
+**Does `publish` wait for its pipes?** Open: today it awaits its pipe deliveries, not its `on` subscribers, while an
+action's caller waits for neither; whether `publish` should stop waiting is the user's call (D104).
 
 **Where do domain failures go?** In the op's output, as values: the signer's `{ status: 'denied' }`, the composer's
 `{ status: 'disabled' }`. `Fail` is for platform failures (`threw`, `timeout`, `denied`, `invalid-input`,
