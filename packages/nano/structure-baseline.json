@@ -1,12 +1,9 @@
 {
-  "lines": {
-    "src/document.ts": 160,
-    "src/application.ts": 246
-  },
+  "lines": {},
   "members": {
     "src/runtime/index.ts:Runtime": 18,
     "src/context.ts:NanoContext": 13,
-    "src/application.ts:Application": 13
+    "src/application.ts:Application": 12
   },
   "undocumented": [
     "Application",
@@ -23,7 +20,6 @@
     "ID",
     "Implementation",
     "Interface",
-    "MAX_DOC_INSTANCES",
     "MAX_PODS",
     "MAX_RUNTIMES",
     "MAX_SUBSCRIPTIONS",

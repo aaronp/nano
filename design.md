@@ -31,8 +31,8 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 | — verbs | the context a runtime invokes a pod with: verbs over its live call subscriptions in every runtime it is in; publish | `runtime/verbs.ts` |
 | — provision | settles unconnected dependencies: one matching instance → subscribe, else one implementation → make | `runtime/provision.ts` |
 | — trace | the runtime's observable stream: lifecycle, wiring, messages, problems | `runtime/trace.ts` |
-| Application | a runtime of runtimes: defines, starts on demand, places pods across them, shares tags and pod ids | `application.ts` |
-| Document | `nano.json` v2: `saveDoc`, `checkDoc`, `loadDoc` | `document.ts` |
+| Application | a runtime of runtimes: defines, starts on demand, places pods across them, shares tags and pod ids. Being replaced: `define({ pods, runtimes })` takes one pods table (`PodDef` per key) and runtimes that refer to it; starting registers each key's one pod (made once, application-wide, in `podsTable`) at its saved coord; no `place` | `application.ts`, `application-start.ts` |
+| Document | `nano.json` v2: `saveDoc`, `checkDoc`, `loadDoc`; one `pods` table (keys `p0`, `p1`, … in first-registered order), at most 5000 pods | `document.ts` |
 
 ## How they work together
 

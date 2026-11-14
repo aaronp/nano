@@ -17,6 +17,8 @@ import { provider } from '../src/provider.ts'
 import { createRegistry } from '../src/registry.ts'
 import type { Policy } from '../src/policy.ts'
 import { createRuntime, type Runtime, type RuntimeEvent } from '../src/runtime/index.ts'
+import { createApplication } from '../src/application.ts'
+import { loadDoc, saveDoc } from '../src/document.ts'
 
 const Str = defineSchema('Str', Type.String())
 const face = (coord: string) => iface(coord, { ping: op.action('ping', Str, Str) })
@@ -67,8 +69,6 @@ const runtime = (id = 'r1', policy?: Policy) => {
   return { rt, events }
 }
 const reg = (rt: Runtime, pod: Pod): string => { const r = rt.register(pod); if (!r.ok) throw new Error(r.fail.reason); return r.value }
-// Behaviours 9 and 12 need the application and document rebuilt (Task 3): imported lazily, loosely typed, until then.
-const later = async (): Promise<any> => ({ ...await import('../src/application.ts'), ...await import('../src/document.ts') })
 const settle = () => new Promise(r => setTimeout(r, 0))
 /** The value of a result that must be ok. */
 const ok = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
@@ -238,9 +238,8 @@ describe('failure', () => {
     expect(rt.status(sub.id)).toBe('live')
   })
   // Behaviour 9. Saved form (spec): one `pods` section; runtimes refer to pods by document key.
-  test.todo('given a saved runtime whose pod fails to make, when it is loaded and started, then the runtime starts and that pod is failed', async () => {
+  test('given a saved runtime whose pod fails to make, when it is loaded and started, then the runtime starts and that pod is failed', async () => {
     const F = 'acme/keys/flaky#0', U = 'acme/ui/user#0'
-    const { loadDoc } = await later()
     const { app } = await loadDoc({
       nano: 2, title: 't', providers: ['acme/keys', 'acme/ui'], tags: {}, start: ['r'],
       pods: { p0: { implementation: 'acme/keys/flaky', config: { fail: true } }, p1: { implementation: 'acme/ui/user' } },
@@ -250,27 +249,27 @@ describe('failure', () => {
         subscriptions: [{ id: 's1', kind: 'call', from: U, to: F }],
       }],
     }, { registry: registry() })
-    const r = await app.start('r')
-    expect(r.ok).toBe(true)
-    expect(r.value.status('s1')).toBe('waiting')
-    expect(await r.value.call(F).ping('x')).toMatchObject({ ok: false, fail: { type: 'missing-component' } })
-    expect(await r.value.call(U).ping('x')).toMatchObject({ ok: true })
+    const r = ok(await app.start('r'))
+    await settle() // the make settles after start returns
+    expect(r.pod(F)!.state).toBe('failed')
+    expect(r.status('s1')).toBe('waiting')
+    expect(await r.call(F).ping('x')).toMatchObject({ ok: false, fail: { type: 'missing-component' } })
+    expect(await r.call(U).ping('x')).toMatchObject({ ok: true })
   })
 })
 
 describe('saving', () => {
   // Behaviour 12.
-  test.todo('given a pod registered in two runtimes, when saved and loaded, then the document has one pods entry referred to from both, and loading gives one instance behind both coords', async () => {
-    const { createApplication, saveDoc, loadDoc } = await later()
+  test('given a pod registered in two runtimes, when saved and loaded, then the document has one pods entry referred to from both, and loading gives one instance behind both coords', async () => {
     const app = createApplication('app', { registry: registry() })
-    const a = app.createRuntime('a').value, b = app.createRuntime('b').value
+    const a = ok(app.createRuntime('a')), b = ok(app.createRuntime('b'))
     const pod = Pod.create(counter, { config: 'c' })
     const inA = reg(a, pod), inB = reg(b, pod)
     const doc = saveDoc(app)
     expect(doc.pods).toEqual({ p0: { implementation: 'acme/keys/counter', config: 'c' } })
-    expect(doc.runtimes.map((r: any) => r.pods)).toEqual([[{ coord: inA, pod: 'p0' }], [{ coord: inB, pod: 'p0' }]])
+    expect(doc.runtimes.map(r => r.pods)).toEqual([[{ coord: inA, pod: 'p0' }], [{ coord: inB, pod: 'p0' }]])
     const loaded = (await loadDoc(doc, { registry: registry() })).app
-    const la = (await loaded.start('a')).value, lb = (await loaded.start('b')).value
+    const la = ok(await loaded.start('a')), lb = ok(await loaded.start('b'))
     // One instance behind both coords: the counter carries on across them.
     expect(await la.call(inA).ping('x')).toEqual(success('1'))
     expect(await lb.call(inB).ping('x')).toEqual(success('2'))
