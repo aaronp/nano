@@ -59,9 +59,12 @@ async function deliver(live: Live, to: string, p: string, input: unknown): Promi
 export async function send(live: Live, runtime: string, from: string, to: string, p: string, input: unknown): Promise<NanoResult<unknown>> {
   const { trace } = live, id = trace.id()
   trace.emit({ type: 'sent', id, runtime, from, to, port: p })
-  let v
-  try { v = (live.policies[runtime] ?? Policies.allowAll()).isAllowed(from, to, input) } catch (e) { v = { approved: false as const, reason: `policy threw: ${msg(e)}` } }
-  if (!v.approved) { trace.emit({ type: 'denied', id, reason: v.reason }); return failure('denied', v.reason) }
+  let v: { approved?: unknown; reason?: unknown } | undefined
+  try { v = (live.policies[runtime] ?? Policies.allowAll()).isAllowed(from, to, input) } catch (e) { v = { approved: false, reason: `policy threw: ${msg(e)}` } }
+  if (v?.approved !== true) {
+    const reason = v?.approved === false && typeof v.reason === 'string' ? v.reason : 'policy gave no verdict'
+    trace.emit({ type: 'denied', id, reason }); return failure('denied', reason)
+  }
   const t0 = performance.now()
   const r = await deliver(live, to, p, input)
   trace.emit({ type: 'delivered', id, result: r, ms: performance.now() - t0 })

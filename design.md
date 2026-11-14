@@ -32,7 +32,8 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 Inside `application/` (not exported from the package): `stream()` is the stream; `instances(live)` holds at most one
 build per pod name; `send` carries one message in one runtime and `client` calls by op name over it, both reading a
 `Live` (the application as a message needs it); `within` bounds a build or handler by the timeout;
-`contextFor(live, name)` is a pod's `NanoContext`.
+`contextFor(live, name)` is a pod's `NanoContext`. `diff(a, b)` is what `apply` changes: pods added, removed,
+changed, and runtimes rewired.
 
 ## How they work together
 
