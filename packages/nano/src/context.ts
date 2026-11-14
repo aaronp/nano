@@ -5,6 +5,7 @@
  *   const kv = ctx.one(KeyValueStore)            // NanoResult<Client>: not-found when none, ambiguous when several
  *   if (ctx.all(KeyValueStore).length === 0) …   // nothing wired: fall back
  *   await ctx.publish(Ticks.ops.tick, 1)         // to every event subscription from self with that source
+ *   ctx.addOnCloseListener(() => clearInterval(timer))   // when this build is closed: restarted, removed, changed or closed
  */
 import type { Client, Interface } from './iface.ts'
 import type { Op } from './op.ts'
@@ -17,4 +18,5 @@ export type NanoContext = {
   one<I extends Interface>(s: I | SelectorData): NanoResult<Client<I>>
   all<I extends Interface>(s: I | SelectorData): Client<I>[]
   publish(o: Op, data: unknown): Promise<void>
+  addOnCloseListener(fn: (e: { reason: 'restarted' | 'removed' | 'changed' | 'closed' }) => void | Promise<void>): void
 }

@@ -21,19 +21,19 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 | `Provider` | a namespace of implementations (`provider`) plus metadata | `provider.ts` |
 | `Registry` | a pool of providers (`createRegistry`); O(1) lookups (`implementationsOf`); a plain-data `Manifest` | `registry.ts` |
 | `Selector` | which call subscriptions a call may use: an interface, or `SelectorData` narrowed by tags, implementation, provider, `runtime` (`sel`, `selectorData`, `matches` over a `Target`) | `selector.ts` |
-| Context | what a pod's factory gets (`NanoContext`): `self`, `runtimes`, `one`, `all`, `publish` | `context.ts` |
+| Context | what a pod's factory gets (`NanoContext`): `self`, `runtimes`, `one`, `all`, `publish`, `addOnCloseListener` (each build has its own; runs on `restarted`, `removed`, `changed` or `closed`) | `context.ts` |
 | `Pod` | a value `{ implementation, config?, eager }` from `Pod.lazy(impl, { config })` / `Pod.eager(impl)`; no state, methods or instance | `pod.ts` |
 | `Policy` | `isAllowed(src, dest, data)` per runtime, answering a `Verdict`; `Policies.allowAll()` | `policy.ts` |
 | `Pods` | which components exist: `Pods.create(podDeployment, { registry })` checks a `PodDeployment` (names, implementations, configs, at most 5000) into an immutable lookup, `names`, `get`, `select` (a scope over the same descriptions), `deployment` | `pods.ts` |
 | `Runtime` | pods placed together and wired: `Runtime.create(id, runtimeDeployment, pods)` checks a `RuntimeDeployment` (pods placed, `Subscription`s, policy) over a `Pods` scope into an immutable `{ id, pods, deployment }` | `runtime.ts` |
 | `AppDeployment` | the whole system as data: pods, runtimes by id, tags; `assemble(d, registry)` checks it level by level into its `Runtime`s, strictly (D83) | `deployment.ts` |
-| `Application` | the one live thing: `Application.create(runtimes, { policies?, timeoutMs? })` (at most 50, ids by the id rule, every runtime's pods from one `Pods`) gives five members, `call`, `apply`, `restart`, `deployment`, `listen` (an `AppEvent` stream) | `application/` |
+| `Application` | the one live thing: `Application.create(runtimes, { policies?, timeoutMs? })` (at most 50, ids by the id rule, every runtime's pods from one `Pods`) gives six members, `call`, `apply`, `restart`, `deployment`, `listen` (an `AppEvent` stream), `close` (every instance closed; then calls are `not-found`, `apply`/`restart` refused) | `application/` |
 
 Inside `application/` (not exported from the package, one line each): `stream()` is the one stream and its ids;
-`instances(live)` holds at most one build per pod name; `send` carries one message in one runtime and `client` calls
+`instances(live)` holds at most one build per pod name and closes builds (each with its own close listeners, run in order within the timeout, then `closed` on the stream); `send` carries one message in one runtime and `client` calls
 by op name over it, both reading a `Live` (the application as a message needs it); `refusal` is a runtime policy's
 answer to a message or a new subscription (a throw, a Promise or no verdict refuses); `within` bounds a build or handler
-by the timeout; `contextFor(live, name)` is a pod's `NanoContext`; `diff(a, b)` is what `apply` changes: pods added,
+by the timeout; `contextFor(live, name, onClose)` is a pod's `NanoContext`, `onClose` adding a listener to that build; `diff(a, b)` is what `apply` changes: pods added,
 removed, changed, and runtimes rewired; `compose(runtimes)` is the application's deployment from its runtimes (the pods
 they place, in their `Pods`' order, and the tags their `Pods` carry) and their registry.
 
@@ -75,9 +75,10 @@ shape of a table by runtime id (the id rule, at most 50). Inside `runtime.ts`: `
    (instances forgotten), changed (restarted with the new value), subscriptions added, removed, reordered; one
    `applied` event. `app.restart(pod)` forgets an instance (an eager pod rebuilds at once); calls in flight finish on
    the old one (D77). `apply` drops pods that no runtime places. An application created from no runtimes has no
-   registry, so `apply` naming any implementation is `not-found`.
+   registry, so `apply` naming any implementation is `not-found`. A forgotten instance is closed first (its close
+   listeners run with `restarted`, `removed` or `changed`); `app.close()` closes them all (`closed`).
 8. **Watch.** `app.listen(e => …)` is the one stream, in order and synchronously, and returns an unsubscribe: `built`,
-   `restarted`, `applied`, `sent`, `delivered`, `denied`, `failure`, `warning`. A throwing listener is swallowed (D79).
+   `closed`, `restarted`, `applied`, `sent`, `delivered`, `denied`, `failure`, `warning`. A throwing listener is swallowed (D79).
 9. **Save.** `app.deployment()` is the current value (the pods placed in some runtime, the runtimes, and the tags
    `assemble` carried in); saving is its JSON, and `assemble` + `Application.create` on it gives an equivalent
    application (D74).

@@ -403,7 +403,7 @@ describe('edges of the live application', () => {
   test('given an eager pod, when restarted, then it is rebuilt at once', async () => {
     const { app, events } = await live(one({ e: Pod.eager(counter) }))
     await app.restart('e')
-    expect(events.map(e => e.type)).toEqual(['restarted', 'built'])
+    expect(events.map(e => e.type)).toEqual(['closed', 'restarted', 'built'])
   })
   test('given an unknown runtime, when the host calls, then it is not-found', async () => {
     const { app } = await live(one({ c: Pod.lazy(counter) }))

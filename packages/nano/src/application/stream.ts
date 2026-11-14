@@ -1,5 +1,5 @@
 /**
- * The application's one stream: builds, restarts, changes, messages (`sent`, then `delivered` or `denied`) and problems,
+ * The application's one stream: builds, closes, restarts, changes, messages (`sent`, then `delivered` or `denied`) and problems,
  * in order, synchronously. A throwing listener is swallowed.
  *
  *   const s = stream()
@@ -10,6 +10,7 @@ import type { NanoResult } from '../result.ts'
 
 export type AppEvent =
   | { type: 'built'; pod: string }
+  | { type: 'closed'; pod: string; reason: 'restarted' | 'removed' | 'changed' | 'closed' }
   | { type: 'restarted'; pod: string }
   | { type: 'applied'; added: string[]; removed: string[]; changed: string[]; rewired: string[] }
   | { type: 'sent'; id: string; runtime: string; from: string; to: string; port: string }

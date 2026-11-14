@@ -124,7 +124,7 @@ describe('the external signer', () => {
     expect(await app.restart('vault')).toEqual(success(undefined))
 
     // One event, and the deployment (every pod and subscription) is unchanged.
-    expect(events).toEqual([{ type: 'restarted', pod: 'vault' }])
+    expect(events).toEqual([{ type: 'closed', pod: 'vault', reason: 'restarted' }, { type: 'restarted', pod: 'vault' }])
     expect(app.deployment()).toEqual(deployment)
     // A fresh vault: the old key is gone, new ones work, and the log keeps listening.
     expect(await app.call('signer-client', 'signer').sign({ publicKey: oldKey, purpose: 'login', payload }))

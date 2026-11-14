@@ -1,8 +1,9 @@
 /**
  * The context a pod's factory gets, for pod `name`: it reads the deployment as it is at each call, over the call
- * subscriptions from `name` in every runtime the pod is placed in.
+ * subscriptions from `name` in every runtime the pod is placed in. `onClose` adds a listener to the build this context
+ * belongs to; the application's own per-build cleanup goes through it too.
  *
- *   const ctx = contextFor(live, 'send')
+ *   const ctx = contextFor(live, 'send', fn => …)
  *   ctx.one(KV)                    // the one KV wired from send, in whichever runtime; a client sends in that runtime
  *   await ctx.publish(tick, 1)     // one message per pipe from send with that source
  */
@@ -13,7 +14,7 @@ import { failure, success } from '../result.ts'
 import { matches, selectorData, type SelectorData } from '../selector.ts'
 import { client, send, type Live } from './messages.ts'
 
-export function contextFor(live: Live, name: string): NanoContext {
+export function contextFor(live: Live, name: string, onClose: NanoContext['addOnCloseListener']): NanoContext {
   const placed = () => Object.entries(live.now().runtimes).filter(([, r]) => r.pods.includes(name))
 
   /** A client for every call subscription from `name` matching `s`: runtimes in order, then subscriptions in order. */
@@ -48,5 +49,6 @@ export function contextFor(live: Live, name: string): NanoContext {
       await Promise.all(placed().flatMap(([runtime, r]) => r.subscriptions.flatMap(sub =>
         sub.kind === 'pipe' && sub.from === name && sub.source === source ? [send(live, runtime, name, sub.to, sub.target, data)] : [])))
     },
+    addOnCloseListener: onClose,
   }
 }
