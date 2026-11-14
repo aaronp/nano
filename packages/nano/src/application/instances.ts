@@ -61,7 +61,8 @@ export function instances(live: Live) {
     const e = made.get(name)
     if (!e) return
     made.delete(name)
-    const p = e.close(why)
+    // Chained: a build waits for every close of its name still settling, not only the latest.
+    const p = Promise.all([closing.get(name), e.close(why)]).then(() => {})
     closing.set(name, p)
     await p
     if (closing.get(name) === p) closing.delete(name)
