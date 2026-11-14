@@ -18,6 +18,7 @@ import { createRegistry } from '../src/registry.ts'
 import type { Policy } from '../src/policy.ts'
 import { createRuntime, type RuntimeEvent } from '../src/runtime/index.ts'
 import { createApplication } from '../src/application.ts'
+import { loadDoc, saveDoc } from '../src/document.ts'
 
 // Not exported yet: read off the module so this file still loads while every test is todo.
 const { Pod } = nano as unknown as { Pod: { create(i: unknown, opts?: { config?: unknown }): any } }
@@ -237,20 +238,40 @@ describe('failure', () => {
     expect(pod.state).toBe('running')
     expect(rt.status(sub.id)).toBe('live')
   })
-  // Behaviour 9. Saved form (spec): pods as { coord, implementation, config }, `next` per implementation.
-  test.todo('given a saved runtime whose pod fails to make, when it is started, then the runtime starts and that pod is failed', async () => {
-    const app = createApplication('app', { registry: registry() })
+  // Behaviour 9. Saved form (spec): one `pods` section; runtimes refer to pods by document key.
+  test.todo('given a saved runtime whose pod fails to make, when it is loaded and started, then the runtime starts and that pod is failed', async () => {
     const F = 'acme/keys/flaky#0', U = 'acme/ui/user#0'
-    app.define({
-      id: 'r',
-      pods: [{ coord: F, implementation: 'acme/keys/flaky', config: { fail: true } }, { coord: U, implementation: 'acme/ui/user' }],
-      next: { 'acme/keys/flaky': 1, 'acme/ui/user': 1 },
-      subscriptions: [{ id: 's1', kind: 'call', from: U, to: F }],
-    })
+    const { app } = await loadDoc({
+      nano: 2, title: 't', providers: ['acme/keys', 'acme/ui'], tags: {}, start: ['r'],
+      pods: { p0: { implementation: 'acme/keys/flaky', config: { fail: true } }, p1: { implementation: 'acme/ui/user' } },
+      runtimes: [{
+        id: 'r', pods: [{ coord: F, pod: 'p0' }, { coord: U, pod: 'p1' }],
+        next: { 'acme/keys/flaky': 1, 'acme/ui/user': 1 },
+        subscriptions: [{ id: 's1', kind: 'call', from: U, to: F }],
+      }],
+    }, { registry: registry() })
     const r = await app.start('r')
     expect(r.ok).toBe(true)
     expect(r.value.status('s1')).toBe('waiting')
     expect(await r.value.call(F).ping('x')).toMatchObject({ ok: false, fail: { type: 'missing' } })
     expect(await r.value.call(U).ping('x')).toMatchObject({ ok: true })
+  })
+})
+
+describe('saving', () => {
+  // Behaviour 12.
+  test.todo('given a pod registered in two runtimes, when saved and loaded, then the document has one pods entry referred to from both, and loading gives one instance behind both coords', async () => {
+    const app = createApplication('app', { registry: registry() })
+    const a = app.createRuntime('a').value, b = app.createRuntime('b').value
+    const pod = Pod.create(counter, { config: 'c' })
+    const inA = reg(a, pod), inB = reg(b, pod)
+    const doc = saveDoc(app)
+    expect(doc.pods).toEqual({ p0: { implementation: 'acme/keys/counter', config: 'c' } })
+    expect(doc.runtimes.map(r => r.pods)).toEqual([[{ coord: inA, pod: 'p0' }], [{ coord: inB, pod: 'p0' }]])
+    const loaded = (await loadDoc(doc, { registry: registry() })).app
+    const la = (await loaded.start('a')).value, lb = (await loaded.start('b')).value
+    // One instance behind both coords: the counter carries on across them.
+    expect(await la.call(inA).ping('x')).toEqual(success('1'))
+    expect(await lb.call(inB).ping('x')).toEqual(success('2'))
   })
 })

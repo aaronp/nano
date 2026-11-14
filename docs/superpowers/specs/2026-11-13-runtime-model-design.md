@@ -178,8 +178,9 @@ bad publish; *warning*: what the application notes as it happens). Tests assert 
 - **A runtime passes its own context** when it invokes a pod. A handler's onward calls (`ctx.one(DB, …)` and the
   other verbs) search the pod's subscriptions in **every runtime the pod is in**; each call is policed and recorded by
   the runtime whose subscription carries it, and the callee runs with that runtime's context. A match in two runtimes
-  is `ambiguous`, as with any `one`. Implementation code never names a runtime: the wiring decides where a dependency
-  comes from. Likewise `ctx.publish` delivers into every runtime the pod is in, each policing and recording its own
+  is `ambiguous`, as with any `one`; a selector's `runtime` narrows the search to one runtime. Implementation code
+  should not hard-code a runtime's name: the wiring decides where a dependency comes from, and where code must choose
+  (a migration), the name comes from its config. Likewise `ctx.publish` delivers into every runtime the pod is in, each policing and recording its own
   deliveries.
 - **Sharing is registering.** To offer a component to other runtimes, register the same pod in them. Its wiring in
   its own runtime stays private: the messaging `send` pod registered in `chat` and `support` reaches its `db` through
@@ -187,10 +188,12 @@ bad publish; *warning*: what the application notes as it happens). Tests assert 
   another the same way (the ETL example).
 - **The application** creates runtimes, registers pods in them, and connects them there with subscriptions. "Open" is **start**: starting a runtime from its saved definition always
   gives a runtime; problems are notes and pod states.
-- **Saved form.** A runtime saves each pod as `{ coord, implementation, config }` and, per implementation, its next
-  counter, so a coordinate is never reused after loading. A pod in several runtimes is saved in full in one runtime;
-  each other runtime lists it as `{ coord, shared: { runtime, coord } }`, and loading registers the one pod object
-  there. *(Shape of the shared entry: my call.)*
+- **Saved form.** The document has one `pods` section, `{ [key]: { implementation, config } }`, and every runtime
+  only refers to pods: `pods: [{ coord, pod: key }]`, plus its next counter per implementation
+  (`next: { [implementation]: n }`), so a coordinate is never reused after loading. A pod in several runtimes is one
+  entry, referred to from each; loading makes it once and registers that one object in each. The key exists only in
+  the document (written as `p0`, `p1`, … in first-registered order); a live pod still has no id. *(Key format: my
+  call.)*
 - **Stream.** `pod-created` on register, `pod-removed` on unregister, `pod-swapped` on swap, and the pod's state
   changes (`starting`, `running`, `failed`, `stopped`) in every runtime it is in. A call to a disposed or failed pod is
   a `Fail` of type `missing` with the reason; no new failure types.
@@ -218,6 +221,11 @@ bad publish; *warning*: what the application notes as it happens). Tests assert 
 9. Starting a runtime whose pod fails gives a running runtime with that pod `failed`.
 10. A pipeline (`examples/etl`): the `etl` pod is in `foo` (wired to `source`) and `bar` (wired to `sink`). `run`
     reads in `foo` and writes in `bar`; the read is on `foo`'s stream only and the write on `bar`'s only.
+11. A migration (`examples/migration`): `v2` and `v3` each have a `db` (same interface), and a `migrate` pod in both
+    is wired to each. A plain `one(DB)` is `ambiguous`; with `runtime: config.from` / `config.to` it copies `v2`'s
+    rows into `v3`, each call on its own runtime's stream.
+12. Saving an application whose pod is in two runtimes writes one `pods` entry referred to from both; loading it
+    gives one pod object in both (a swap through one is seen through the other).
 
 ### Dependencies: informational, used for provisioning and display
 
@@ -232,16 +240,17 @@ bad publish; *warning*: what the application notes as it happens). Tests assert 
 ### Selectors, and what can change at run time
 
 Code calls through a **selector**, not just an interface: `ctx.one(DB, fn)` is shorthand for
-`ctx.one({ implements: DB }, fn)`, and a selector may add `tags`, an `implementation` or a `provider`
+`ctx.one({ implements: DB }, fn)`, and a selector may add `tags`, an `implementation`, a `provider` or a `runtime`
 (`ctx.one({ implements: DB, tags: ['cache'] }, fn)`). This is how one implementation uses the same interface in two
-roles (a primary and a cache DB). Declared dependencies are selectors too, named by role.
+roles (a primary and a cache DB). `runtime` picks among a pod's runtimes, by name: a migration pod in `v2` and `v3`
+reads `ctx.one({ implements: DB, runtime: config.from }, …)` and writes to `config.to`. Declared dependencies are selectors too, named by role.
 
 How a call finds its targets, precisely:
 
 1. The consumer's **subscriptions** (data) list its call edges: each names a target instance, in saved order.
 2. Its **connections** are those subscriptions that are live (both ends present, policy approved).
 3. A verb's selector **filters** the connections to the targets that match now (the target implements the interface,
-   carries the tags, is of that implementation or provider). The verb then applies its cardinality to that set.
+   carries the tags, is of that implementation or provider, travels through that runtime). The verb then applies its cardinality to that set.
 
 The selector never creates a connection; it only chooses among existing ones. *(My call: keeps every reachable target
 visible as data.)* A selector's tags are matched against the **target instance's** tags *(my call)*, so per-consumer
