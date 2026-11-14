@@ -27,6 +27,12 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 | Pod | a value: `{ implementation, config?, eager }` from `Pod.lazy(impl, { config })` / `Pod.eager(…)`; no state or instance | `pod.ts` |
 | `Policy` | `isAllowed(src, dest, data)` per runtime, a `Verdict`; `Policies.allowAll()` only, for now | `policy.ts` |
 | `Deployment` | the whole system as data: pods by name, runtimes (pods placed, `Subscription`s, policy), tags; `checkDeployment(d, registry)` validates it strictly | `deployment.ts` |
+| `Application` | the one live thing: `Application.create(deployment, { registry, policies?, timeoutMs? })`; `call`, `apply`, `restart`, `deployment`, `listen` (an `AppEvent` stream) | `application/` |
+
+Inside `application/` (not exported from the package): `stream()` is the stream; `instances(live)` holds at most one
+build per pod name; `send` carries one message in one runtime and `client` calls by op name over it, both reading a
+`Live` (the application as a message needs it); `within` bounds a build or handler by the timeout;
+`contextFor(live, name)` is a pod's `NanoContext`.
 
 ## How they work together
 

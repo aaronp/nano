@@ -51,7 +51,7 @@ describe('checkDeployment', () => {
   test('a subscription end not placed in its runtime', () => {
     const d = one({ s: Pod.lazy(sender) }, [{ kind: 'call', from: 's', to: 'k' }])
     d.pods.k = Pod.lazy(kv)
-    fails(d, 'invalid-input', 'k')
+    fails(d, 'invalid-input', 'k is not placed')
   })
   test('a duplicate subscription in a runtime', () => {
     const s = { kind: 'call', from: 's', to: 'k' }
@@ -68,7 +68,7 @@ describe('checkDeployment', () => {
     fails(one({ t: Pod.eager(ticker), l: Pod.lazy(log) }, [ev('acme.Ticks/said', 'acme.Log/record')]), 'invalid-input', 'acme.Ticks/said')
   })
   test('a call target not providing a declared dependency', () => {
-    fails(one({ s: Pod.lazy(sender), c: Pod.lazy(counter) }, [{ kind: 'call', from: 's', to: 'c' }]), 'invalid-input', 'c')
+    fails(one({ s: Pod.lazy(sender), c: Pod.lazy(counter) }, [{ kind: 'call', from: 's', to: 'c' }]), 'invalid-input', 'c provides none')
   })
   test('a call from a pod that declares no dependencies may go anywhere', () => {
     expect(checkDeployment(one({ c: Pod.lazy(counter), k: Pod.lazy(kv) }, [{ kind: 'call', from: 'c', to: 'k' }]), registry).ok).toBe(true)

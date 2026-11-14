@@ -1,6 +1,6 @@
 /**
  * The nano model, headless: schemas, ops, interfaces, results, implementations, providers, the registry, selectors,
- * pods and deployments (plain values), and the context a pod's factory gets.
+ * pods and deployments (plain values), the context a pod's factory gets, and the one live `Application`.
  *
  *   const Key = defineSchema('Key', Type.String())
  *   const db = iface('acme/db', { get: op.action('get', Key, Key) })
@@ -18,3 +18,4 @@ export * from './registry.ts'
 export * from './policy.ts'
 export * from './pod.ts'
 export * from './deployment.ts'
+export * from './application/index.ts'

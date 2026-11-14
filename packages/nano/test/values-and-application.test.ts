@@ -1,4 +1,3 @@
-// @ts-nocheck — the values-and-application revision isn't built yet; remove when it lands
 /**
  * Values and a live application (spec: docs/superpowers/specs/2026-11-14-values-and-application-design.md), written
  * first. Pods and deployments are plain values; `Application.create(deployment)` is the one live thing. A factory
@@ -6,10 +5,10 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import * as nano from '../src/index.ts'
-
-// Not built yet: read off the module so this file loads while every test is todo.
-const { Pod, Application, implementation, provide, provider, createRegistry, defineSchema, iface, op, sel, success } = nano as any
+import {
+  Application, Pod, createRegistry, defineSchema, iface, implementation, op, provide, provider, sel, success,
+  type AppEvent, type Deployment, type NanoContext, type Policy,
+} from '../src/index.ts'
 
 const Str = defineSchema('Str', Type.String())
 const Num = defineSchema('Num', Type.Integer())
@@ -19,7 +18,7 @@ const Rows = defineSchema('Rows', Type.Array(Type.String()))
 const Counter = iface('acme.Counter', { inc: op.action('inc', Nothing, Num) })
 const KV = iface('acme.KV', { get: op.action('get', Str, Str), put: op.action('put', Str, Nothing) })
 const Send = iface('acme.Send', { send: op.action('send', Str, Nothing) })
-const Ticks = iface('acme.Ticks', { tick: (op.event ?? op.source)('tick', Num) }) // op.event once built
+const Ticks = iface('acme.Ticks', { tick: op.event('tick', Num) })
 const Log = iface('acme.Log', { record: op.action('record', Num, Nothing) })
 const DB = iface('acme.DB', { all: op.action('all', Nothing, Rows), insert: op.action('insert', Rows, Nothing) })
 const Run = iface('acme.Run', { run: op.action('run', Nothing, Num) })
@@ -49,7 +48,7 @@ const adaptive = implementation('acme/adaptive', { provides: [Send], dependencie
   const local: string[] = []
   return [provide(Send, { send: async msg => {
     if (ctx.all(KV).length === 0) { local.push(msg); return success(null) }
-    return ctx.one(KV).value.put(msg)
+    const s = ctx.one(KV); return s.ok ? s.value.put(msg) : s
   } })]
 } })
 const ticker = implementation('acme/ticker', { provides: [Ticks], make: () => [] })
@@ -80,7 +79,7 @@ const gated = implementation('acme/gated', { provides: [Counter], make: () => {
   return [provide(Counter, { inc: async () => { const mine = ++n; if (mine === 1) await new Promise<void>(r => gates.push(r)); return success(mine) } })]
 } })
 const bad = implementation('acme/bad', { provides: [Bad], make: () => [provide(Bad, { go: async (x: string) => {
-  if (x === 'out') return success('not a number')
+  if (x === 'out') return success('not a number' as unknown as number)
   if (x === 'slow') return new Promise(() => {})
   if (x === 'throw') throw new Error('bang')
   return success(1)
@@ -95,14 +94,15 @@ const registry = () => {
 }
 const ok = <T>(r: { ok: boolean; value?: T; fail?: { reason: string } }): T => { if (!r.ok) throw new Error(r.fail!.reason); return r.value as T }
 /** A live application and everything on its stream. */
-const live = async (deployment, opts = {}) => {
+const live = async (deployment: unknown, opts: { policies?: Record<string, Policy>; timeoutMs?: number } = {}) => {
   const app = ok(await Application.create(deployment, { registry: registry(), ...opts }))
-  const events = []
+  const events: AppEvent[] = []
   app.listen(e => events.push(e))
   return { app, events }
 }
-const sent = (events, runtime?) => events.filter(e => e.type === 'sent' && (!runtime || e.runtime === runtime)).map(e => `${e.from}->${e.to}`)
-const one = (pods, subscriptions = [], extra = {}) => ({ pods, runtimes: { r: { pods: Object.keys(pods), subscriptions } }, ...extra })
+const sent = (events: AppEvent[], runtime?: string) =>
+  events.flatMap(e => (e.type === 'sent' && (!runtime || e.runtime === runtime) ? [`${e.from}->${e.to}`] : []))
+const one = (pods: Deployment['pods'], subscriptions: Deployment['runtimes'][string]['subscriptions'] = [], extra = {}) => ({ pods, runtimes: { r: { pods: Object.keys(pods), subscriptions } }, ...extra })
 
 describe('values', () => {
   // Behaviour 1.
@@ -116,7 +116,7 @@ describe('values', () => {
 
 describe('building', () => {
   // Behaviour 2.
-  test.todo('given an eager and a lazy pod, when the application is created, then the eager one is built before it resolves and the lazy one only on its first call', async () => {
+  test('given an eager and a lazy pod, when the application is created, then the eager one is built before it resolves and the lazy one only on its first call', async () => {
     builds = []
     const { app, events } = await live(one({ e: Pod.eager(counter), l: Pod.lazy(counter) }))
     expect(builds).toEqual(['e'])
@@ -125,29 +125,29 @@ describe('building', () => {
     expect(events.filter(e => e.type === 'built').map(e => e.pod)).toEqual(['l'])
   })
   // Behaviour 3.
-  test.todo('given a lazy pod, when two first calls race, then it is built once', async () => {
+  test('given a lazy pod, when two first calls race, then it is built once', async () => {
     builds = []
     const { app } = await live(one({ c: Pod.lazy(counter) }))
     const [a, b] = await Promise.all([app.call('r', 'c').inc(null), app.call('r', 'c').inc(null)])
     expect(builds).toEqual(['c'])
-    expect([a.value, b.value].sort()).toEqual([1, 2])
+    expect([ok(a), ok(b)].sort()).toEqual([1, 2])
   })
   // Behaviour 4.
-  test.todo('given a factory that throws once, when called twice, then the first call fails threw and the second builds and answers', async () => {
+  test('given a factory that throws once, when called twice, then the first call fails threw and the second builds and answers', async () => {
     failNext = 1
     const { app, events } = await live(one({ f: Pod.lazy(flaky) }))
     expect(await app.call('r', 'f').inc(null)).toMatchObject({ ok: false, fail: { type: 'threw' } })
     expect(events).toContainEqual(expect.objectContaining({ type: 'failure', pod: 'f' }))
     expect(await app.call('r', 'f').inc(null)).toEqual(success(1))
   })
-  test.todo('given an eager pod whose factory throws, when the application is created, then create succeeds and the pod builds on its first call', async () => {
+  test('given an eager pod whose factory throws, when the application is created, then create succeeds and the pod builds on its first call', async () => {
     failNext = 1
     const r = await Application.create(one({ f: Pod.eager(flaky) }), { registry: registry() })
     expect(r.ok).toBe(true)
-    expect(await r.value.call('r', 'f').inc(null)).toEqual(success(1))
+    expect(await ok(r).call('r', 'f').inc(null)).toEqual(success(1))
   })
   // Behaviour 5.
-  test.todo('given a counter at 2 with a call in flight, when it is restarted, then the next call answers 1 and the call in flight finishes on the old instance', async () => {
+  test('given a counter at 2 with a call in flight, when it is restarted, then the next call answers 1 and the call in flight finishes on the old instance', async () => {
     const { app } = await live(one({ g: Pod.lazy(gated) }))
     gates = []
     const inFlight = app.call('r', 'g').inc(null)           // the old instance's first call waits at its gate
@@ -164,7 +164,7 @@ describe('building', () => {
 
 describe('placing', () => {
   // Behaviour 6.
-  test.todo('given one pod placed in two runtimes, when called through each, then there is one instance, ctx.runtimes names both, and each call is recorded only in its runtime', async () => {
+  test('given one pod placed in two runtimes, when called through each, then there is one instance, ctx.runtimes names both, and each call is recorded only in its runtime', async () => {
     const { app, events } = await live({ pods: { c: Pod.lazy(counter), w: Pod.lazy(where) },
       runtimes: { a: { pods: ['c', 'w'], subscriptions: [] }, b: { pods: ['c', 'w'], subscriptions: [] } } })
     expect(await app.call('a', 'c').inc(null)).toEqual(success(1))
@@ -175,7 +175,7 @@ describe('placing', () => {
     expect(seen).toEqual(['a', 'b'])
   })
   // Behaviour 7.
-  test.todo('given send in messaging, chat and support wired to db only in messaging, when chat sends, then the db call is recorded in messaging and chat cannot reach db', async () => {
+  test('given send in messaging, chat and support wired to db only in messaging, when chat sends, then the db call is recorded in messaging and chat cannot reach db', async () => {
     const { app, events } = await live({ pods: { send: Pod.lazy(sender), db: Pod.lazy(kv) }, runtimes: {
       messaging: { pods: ['send', 'db'], subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] },
       chat: { pods: ['send'], subscriptions: [] }, support: { pods: ['send'], subscriptions: [] },
@@ -187,7 +187,7 @@ describe('placing', () => {
     expect(await app.call('messaging', 'db').get('hi')).toEqual(success('v'))
   })
   // Behaviour 8.
-  test.todo('given etl wired to a source db in foo and a sink db in bar, when run, then it reads in foo and writes in bar', async () => {
+  test('given etl wired to a source db in foo and a sink db in bar, when run, then it reads in foo and writes in bar', async () => {
     const { app, events } = await live({ pods: { etl: Pod.lazy(migrate, { config: { from: 'foo', to: 'bar' } }), src: Pod.lazy(db, { config: ['a', 'b'] }), dst: Pod.lazy(db) }, runtimes: {
       foo: { pods: ['etl', 'src'], subscriptions: [{ kind: 'call', from: 'etl', to: 'src' }] },
       bar: { pods: ['etl', 'dst'], subscriptions: [{ kind: 'call', from: 'etl', to: 'dst' }] },
@@ -198,7 +198,7 @@ describe('placing', () => {
     expect(await app.call('bar', 'dst').all(null)).toEqual(success(['a', 'b']))
   })
   // Behaviour 9.
-  test.todo('given a db wired in v2 and in v3, when a pod asks one(DB) without a runtime, then it is ambiguous', async () => {
+  test('given a db wired in v2 and in v3, when a pod asks one(DB) without a runtime, then it is ambiguous', async () => {
     const { app } = await live({ pods: { m: Pod.lazy(careless), d2: Pod.lazy(db), d3: Pod.lazy(db) }, runtimes: {
       v2: { pods: ['m', 'd2'], subscriptions: [{ kind: 'call', from: 'm', to: 'd2' }] },
       v3: { pods: ['m', 'd3'], subscriptions: [{ kind: 'call', from: 'm', to: 'd3' }] },
@@ -209,30 +209,30 @@ describe('placing', () => {
 
 describe('messages', () => {
   // Behaviour 10.
-  test.todo('given a ticker in two runtimes with a log subscribed in each, when it publishes, then each subscription gets it, recorded in its runtime', async () => {
+  test('given a ticker in two runtimes with a log subscribed in each, when it publishes, then each subscription gets it, recorded in its runtime', async () => {
     logged = []
-    let ctxOut
+    let ctxOut: NanoContext | undefined
     const tick = implementation('acme2/tick', { provides: [Ticks], make: ctx => { ctxOut = ctx; return [] } })
     const reg = registry(); reg.add(provider('acme2', [tick]))
-    const ev = { kind: 'event', from: 't', source: 'acme.Ticks/tick', to: 'l', target: 'acme.Log/record' }
+    const ev = { kind: 'event', from: 't', source: 'acme.Ticks/tick', to: 'l', target: 'acme.Log/record' } as const
     const app = ok(await Application.create({ pods: { t: Pod.eager(tick), l: Pod.lazy(log) }, runtimes: {
       a: { pods: ['t', 'l'], subscriptions: [ev] }, b: { pods: ['t', 'l'], subscriptions: [ev] } } }, { registry: reg }))
-    const events = []; app.listen(e => events.push(e))
-    await ctxOut.publish(Ticks.ops.tick, 7)
+    const events: AppEvent[] = []; app.listen(e => events.push(e))
+    await ctxOut!.publish(Ticks.ops.tick, 7)
     expect(logged).toEqual([7, 7])
     expect(sent(events, 'a')).toEqual(['t->l'])
     expect(sent(events, 'b')).toEqual(['t->l'])
   })
   // Behaviour 11.
-  test.todo('given a policy that refuses, when the host calls, then the call fails denied and the stream shows sent then denied', async () => {
-    const policies = { r: { isAllowed: (_f, t) => ({ approved: false, reason: `no ${t}` }) } }
+  test('given a policy that refuses, when the host calls, then the call fails denied and the stream shows sent then denied', async () => {
+    const policies: Record<string, Policy> = { r: { isAllowed: (_f, t) => ({ approved: false, reason: `no ${t}` }) } }
     const { app, events } = await live(one({ c: Pod.lazy(counter) }), { policies })
     expect(await app.call('r', 'c').inc(null)).toMatchObject({ ok: false, fail: { type: 'denied', reason: 'no c' } })
-    const s = events.find(e => e.type === 'sent')
-    expect(events).toContainEqual(expect.objectContaining({ type: 'denied', id: s.id }))
+    const id = events.flatMap(e => (e.type === 'sent' ? [e.id] : []))[0]
+    expect(events).toContainEqual(expect.objectContaining({ type: 'denied', id }))
   })
   // Behaviour 14.
-  test.todo('given a misbehaving handler, when called with bad input, bad output, a throw and a hang, then each is the right Fail and the pod keeps serving', async () => {
+  test('given a misbehaving handler, when called with bad input, bad output, a throw and a hang, then each is the right Fail and the pod keeps serving', async () => {
     const { app } = await live(one({ b: Pod.lazy(bad) }), { timeoutMs: 20 })
     const c = app.call('r', 'b')
     expect(await c.go(42)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
@@ -243,7 +243,7 @@ describe('messages', () => {
     expect(await c.go('ok')).toEqual(success(1))
   })
   // Behaviour 16.
-  test.todo('given a component with no store wired, when it sends, then ctx.all(KV) is empty and it falls back', async () => {
+  test('given a component with no store wired, when it sends, then ctx.all(KV) is empty and it falls back', async () => {
     const { app } = await live(one({ a: Pod.lazy(adaptive) }))
     expect(await app.call('r', 'a').send('hi')).toEqual(success(null))
   })
@@ -252,11 +252,11 @@ describe('messages', () => {
 describe('changing', () => {
   // Behaviour 12.
   test.todo('given a running application, when a subscription is added, a pod removed and a config changed by apply, then each takes effect and deployment() is the value applied', async () => {
-    const d = { pods: { send: Pod.lazy(sender), db: Pod.lazy(kv), c: Pod.lazy(db, { config: ['x'] }), gone: Pod.lazy(counter) },
+    const d: Deployment = { pods: { send: Pod.lazy(sender), db: Pod.lazy(kv), c: Pod.lazy(db, { config: ['x'] }), gone: Pod.lazy(counter) },
       runtimes: { r: { pods: ['send', 'db', 'c', 'gone'], subscriptions: [] } } }
     const { app, events } = await live(d)
     expect(await app.call('r', 'send').send('k')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
-    const next = { pods: { send: d.pods.send, db: d.pods.db, c: Pod.lazy(db, { config: ['y'] }) },
+    const next: Deployment = { pods: { send: d.pods.send!, db: d.pods.db!, c: Pod.lazy(db, { config: ['y'] }) },
       runtimes: { r: { pods: ['send', 'db', 'c'], subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] } } }
     expect(await app.apply(next)).toMatchObject({ ok: true })
     expect(await app.call('r', 'send').send('k')).toEqual(success(null))
@@ -266,10 +266,10 @@ describe('changing', () => {
     expect(events).toContainEqual(expect.objectContaining({ type: 'applied' }))
   })
   test.todo('given a policy that refuses a new subscription, when apply adds it, then apply is denied and nothing changes', async () => {
-    const policies = { r: { isAllowed: (_f, _t, data) => (data === 'subscribe' ? { approved: false, reason: 'frozen' } : { approved: true }) } }
+    const policies: Record<string, Policy> = { r: { isAllowed: (_f, _t, data) => (data === 'subscribe' ? { approved: false, reason: 'frozen' } : { approved: true }) } }
     const d = one({ send: Pod.lazy(sender), db: Pod.lazy(kv) })
     const { app } = await live(d, { policies })
-    const next = { ...d, runtimes: { r: { ...d.runtimes.r, subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] } } }
+    const next: Deployment = { ...d, runtimes: { r: { ...d.runtimes.r!, subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] } } }
     expect(await app.apply(next)).toMatchObject({ ok: false, fail: { type: 'denied', reason: 'frozen' } })
     expect(app.deployment()).toEqual(d)
   })
@@ -295,7 +295,7 @@ describe('validation', () => {
     ['an unknown implementation', () => ({ pods: { x: { implementation: 'acme/nope', eager: false } }, runtimes: { r: { pods: ['x'], subscriptions: [] } } }), 'not-found'],
   ]
   for (const [name, d, type] of cases)
-    test.todo(`given ${name}, when the application is created, then it fails ${type}`, async () => {
+    test(`given ${name}, when the application is created, then it fails ${type}`, async () => {
       expect(await Application.create(d(), { registry: registry() })).toMatchObject({ ok: false, fail: { type } })
     })
 })
