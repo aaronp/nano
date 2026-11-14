@@ -306,6 +306,21 @@ describe('subscriptions in code', () => {
     expect(sent(events, 'on')).toEqual(['r:db->w'])
     expect(events).toContainEqual(expect.objectContaining({ type: 'failure', pod: 'w' }))
   })
+  test("given a store publishing data that breaks its event's schema, when it saves, then it is a failure on the stream and no pipe or on delivers it", async () => {
+    const liar = implementation('acme2/liar', { provides: [Store], make: ctx => [provide(Store, { save: async s => {
+      await ctx.publish(Store.ops.saved, 42)
+      return success(s)
+    } })] })
+    const reg = registry(); reg.add(provider('acme2', [liar]))
+    const { app, events } = await create({ pods: { w: Pod.eager(watcher), db: Pod.lazy(liar), log: Pod.lazy(logger) },
+      runtimes: { r: { pods: ['w', 'db', 'log'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' },
+        { kind: 'pipe', from: 'db', source: 'acme.Store/saved', to: 'log', target: 'acme.Log/record' }] } } }, reg)
+    expect(await app.call('r', 'db').save('x')).toEqual(success('x'))
+    await tick()
+    expect([heard, logged]).toEqual([[], []])
+    expect(sent(events)).toEqual(['r:host->db'])
+    expect(events).toContainEqual(expect.objectContaining({ type: 'failure', pod: 'db' }))
+  })
 })
 
 describe('selections and chains', () => {

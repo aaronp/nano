@@ -23,6 +23,9 @@ const portOf = (live: Live, pod: string, o: Op) => {
   return i && port(i, o)
 }
 
+/** Whether `data` fits event `o`'s schema; unreadable data does not. */
+const fitsData = (o: Op, data: unknown) => { try { return !o.output || o.output.check(data) } catch { return false } }
+
 export function contextFor(live: Live, name: string, onClose: NanoContext['addOnCloseListener']): NanoContext {
   const placed = () => Object.entries(live.now().runtimes).filter(([, r]) => r.pods.includes(name))
   /** This build's `on` subscriptions; undefined once it has closed. */
@@ -70,6 +73,7 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
     async publish(o, data) {
       const p = portOf(live, name, o)
       if (!p || o.kind !== 'event') return live.trace.emit({ type: 'warning', reason: `${name}: ${o.name} is not one of its events` })
+      if (!fitsData(o, data)) return live.trace.emit({ type: 'failure', pod: name, reason: `${name}: ${o.name} data does not fit ${o.output?.type}` })
       await emit(live, name, p, data)
     },
     addOnCloseListener: onClose,
