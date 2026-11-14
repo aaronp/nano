@@ -35,7 +35,7 @@ const Shape = Type.Object({
 const label = (s: Subscription) => (s.kind === 'call' ? `${s.from}->${s.to}` : `${s.from}->${s.to} (${s.source} to ${s.target})`)
 
 /** The op at port `p` among what `impl` provides. */
-const opAt = (impl: Implementation, p: string): Op | undefined =>
+export const opAt = (impl: Implementation, p: string): Op | undefined =>
   impl.provides.flatMap(i => Object.values(i.ops).filter(o => port(i, o) === p))[0]
 
 /** Why subscription `s` (both ends known) does not hold, or undefined. */

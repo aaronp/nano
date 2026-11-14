@@ -7,10 +7,10 @@
  *   await attempt(live, 'db', 'closing db', fn)               // fn within the timeout; a throw or timeout a `failure`
  */
 import type { AppDeployment } from '../deployment.ts'
-import { port } from '../iface.ts'
 import type { Handler, Implementation } from '../implementation.ts'
 import { Policies, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
+import { opAt } from '../runtime.ts'
 import { failure, isNanoResult, success, type NanoResult } from '../result.ts'
 import type { stream } from './stream.ts'
 
@@ -60,9 +60,11 @@ export async function attempt<T>(live: Live, pod: string, what: string, work: ()
   return r
 }
 
-const impl = (live: Live, pod: string) => live.registry.implementation(live.now().pods[pod]?.implementation ?? '')
-const action = (i: Implementation | undefined, p: string) =>
-  i?.provides.flatMap(i => Object.values(i.ops).filter(o => o.kind === 'action' && port(i, o) === p))[0]
+/** The implementation of `pod` in the deployment now, if it has one. */
+export const impl = (live: Live, pod: string) => live.registry.implementation(live.now().pods[pod]?.implementation ?? '')
+/** Every runtime `pod` is placed in, as [id, runtime deployment], in order. */
+export const placedIn = (live: Live, pod: string) => Object.entries(live.now().runtimes).filter(([, r]) => r.pods.includes(pod))
+const action = (i: Implementation | undefined, p: string) => { const o = i && opAt(i, p); return o?.kind === 'action' ? o : undefined }
 
 /** Why `runtime`'s policy refuses `from`->`to` with `data`, or undefined. A throw, a Promise or no verdict refuses. */
 export function refusal(live: Live, runtime: string, from: string, to: string, data: unknown): string | undefined {

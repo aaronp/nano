@@ -15,11 +15,11 @@ import type { Op } from '../op.ts'
 import { failure, type Fail, type NanoResult } from '../result.ts'
 import { matches, selectorData, type Selector, type SelectorData } from '../selector.ts'
 import { client, emit } from './emit.ts'
-import type { Live, On } from './messages.ts'
+import { impl, placedIn, type Live, type On } from './messages.ts'
 
 /** The port of `o` on `pod`'s implementation, if it has `o`. */
 const portOf = (live: Live, pod: string, o: Op) => {
-  const i = live.registry.implementation(live.now().pods[pod]?.implementation ?? '')?.provides.find(i => i.byCoord.has(o?.coord))
+  const i = impl(live, pod)?.provides.find(i => i.byCoord.has(o?.coord))
   return i && port(i, o)
 }
 
@@ -30,7 +30,6 @@ const dataOf = (s: unknown) => (typeof s === 'object' && s ? selectorData(s as S
 const fitsData = (o: Op, data: unknown) => { try { return !o.output || o.output.check(data) } catch { return false } }
 
 export function contextFor(live: Live, name: string, onClose: NanoContext['addOnCloseListener']): NanoContext {
-  const placed = () => Object.entries(live.now().runtimes).filter(([, r]) => r.pods.includes(name))
   /** This build's `on` subscriptions; undefined once it has closed. */
   let mine: Set<On> | undefined = new Set()
   onClose(() => { for (const o of mine!) live.ons.delete(o); mine = undefined })
@@ -55,18 +54,18 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
   const selections = <I extends Interface>(s: I | SelectorData): Selection<I>[] => {
     const want = dataOf(s), d = live.now()
     if (!want) return []
-    return placed().flatMap(([runtime, r]) => r.subscriptions.flatMap(sub => {
+    return placedIn(live, name).flatMap(([runtime, r]) => r.subscriptions.flatMap(sub => {
       if (sub.kind !== 'call' || sub.from !== name) return []
-      const impl = live.registry.implementation(d.pods[sub.to]!.implementation)!
-      const target = { name: sub.to, runtime, implementation: impl.coord, provider: impl.provider,
-        provides: new Set(impl.provides.map(i => i.coord)), tags: new Set(d.tags?.[sub.to] ?? []) }
+      const i = impl(live, sub.to)!
+      const target = { name: sub.to, runtime, implementation: i.coord, provider: i.provider,
+        provides: new Set(i.provides.map(i => i.coord)), tags: new Set(d.tags?.[sub.to] ?? []) }
       return matches(want, target) ? [selection<I>(runtime, sub.to)] : []
     }))
   }
 
   return {
     self: name,
-    get runtimes() { return placed().map(([id]) => id) },
+    get runtimes() { return placedIn(live, name).map(([id]) => id) },
     one<I extends Interface>(s: I | SelectorData) {
       const all = selections<I>(s), what = JSON.stringify(dataOf(s))
       if (all.length === 0) return failed<I>(failure('not-found', `${name}: nothing wired matches ${what}`))
