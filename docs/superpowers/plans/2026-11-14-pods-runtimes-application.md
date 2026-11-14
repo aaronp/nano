@@ -38,16 +38,15 @@ pipes and `on` subscriptions, and closes instances (running their close listener
 ## Decisions this plan makes (for the user to confirm before execution)
 
 1. `pods.select` with a duplicate name is `invalid-input`.
-2. A cycle of pipes whose sources are action results (A's action result → B's action whose result → … → A's action)
-   is refused by `Runtime.create` (`invalid-input`, naming the cycle). Cycles through events published in code can't
-   be seen statically and are not checked.
+2. Pipe cycles are allowed (decided with the user): the runtime records `correlation` and `cause` on every `sent` where
+   it can see the chain, for a later monitor; nothing is refused.
 3. After `app.close()`, emissions already being delivered finish; nothing new is delivered.
 
 ## Review Focus
 
 1. `pods.select(['a', 'a'])` → `invalid-input` — test in Task 1.
 2. Two runtimes built from different `Pods` holding the same name with different pod values → `Application.create` is `invalid-input` — test in Task 2.
-3. A pipe cycle among action results (`a.save → b.record`, `b.record → a.save`) → `Runtime.create` is `invalid-input` — test in Task 1.
+3. A pipe cycle stops when a step fails, and its messages share one `correlation` with `cause` links — test in Task 4 (spec behaviour 15).
 4. An `on` subscription whose call edge `apply` removes stops hearing; a later emission doesn't reach it — test in Task 4.
 5. `app.close()` while a pipe delivery is in flight: the delivery settles, and a later emission is not delivered — test in Task 4.
 
@@ -84,9 +83,9 @@ pipes and `on` subscriptions, and closes instances (running their close listener
   - `type AppDeployment = { pods: PodDeployment; runtimes: Record<string, RuntimeDeployment>; tags?: Record<string, string[]> }`; `assemble(d: unknown, registry: Registry): NanoResult<Record<string, Runtime>>`.
   - A pipe's source is an event **or an action** of `from`; its target an action of `to` whose input fits the source's data (event data, or the action's output).
 
-- [ ] **Step 1: Write the failing tests.** Flip behaviours 1–3. In `test/assemble.test.ts`, port every `deployment.test.ts` case to the level that owns it (pods: names, implementation, config, 5000; runtime: placed pods within scope, ends placed, duplicates, ports fit incl. action-result sources, dependency rule, 2000; app: 50 runtimes, runtime ids), keeping each reason assertion. Add Review Focus 1 and 3, and: a pipe from an action result whose output doesn't fit the target's input → `invalid-input`.
+- [ ] **Step 1: Write the failing tests.** Flip behaviours 1–3. In `test/assemble.test.ts`, port every `deployment.test.ts` case to the level that owns it (pods: names, implementation, config, 5000; runtime: placed pods within scope, ends placed, duplicates, ports fit incl. action-result sources, dependency rule, 2000; app: 50 runtimes, runtime ids), keeping each reason assertion. Add Review Focus 1, and: a runtime with a pipe cycle is accepted; and a pipe from an action result whose output doesn't fit the target's input → `invalid-input`.
 - [ ] **Step 2: Run** `cd packages/nano && bun test --isolate test/pods-runtimes.test.ts test/assemble.test.ts` — expected FAIL (`Pods` undefined).
-- [ ] **Step 3: Implement.** Move validation out of `deployment.ts` into `pods.ts` and `runtime.ts`; values are frozen copies (`structuredClone` in, clones out). Cycle check: a depth-first search over pipes whose source is an action. Keep today's `Application.create(appDeployment, opts)` working by calling `assemble` and reading the deployments back from the runtimes.
+- [ ] **Step 3: Implement.** Move validation out of `deployment.ts` into `pods.ts` and `runtime.ts`; values are frozen copies (`structuredClone` in, clones out). Keep today's `Application.create(appDeployment, opts)` working by calling `assemble` and reading the deployments back from the runtimes.
 - [ ] **Step 4: Run** all three commands — expected all PASS (todos stay todo).
 - [ ] **Step 5: Commit** `feat(nano): Pods and Runtime are validated values; pipes may come from action results`.
 
@@ -122,15 +121,15 @@ pipes and `on` subscriptions, and closes instances (running their close listener
 
 ### Task 4: Emissions and selections
 
-**Files:** Create `src/application/emit.ts`; Modify `src/application/context.ts`, `messages.ts`, `stream.ts`, `src/context.ts`; Modify `examples/**` (`ctx.one(X).value.op(…)` → `.value.call.op(…)`); Test `test/pods-runtimes.test.ts` (flip 7–11).
+**Files:** Create `src/application/emit.ts`; Modify `src/application/context.ts`, `messages.ts`, `stream.ts`, `src/context.ts`; Modify `examples/**` (`ctx.one(X).value.op(…)` → `ctx.one(X).call.op(…)`); Test `test/pods-runtimes.test.ts` (flip 7–11, 14, 15).
 
 **Interfaces:**
 - Consumes: Task 3's per-instance closed hook.
-- Produces: `type Selection = { readonly pod: string; readonly runtime: string; readonly call: Client; on(op: Op, fn: (data: unknown) => void | Promise<void>): () => void }`; `ctx.one(s): NanoResult<Selection>`, `ctx.all(s): Selection[]`; `sent` gains `kind: 'call' | 'pipe' | 'on'`.
+- Produces: `type Selection<I> = { readonly ok: boolean; readonly fail?: Fail; readonly pod?: string; readonly runtime?: string; readonly call: Client<I>; on(op: Op, fn: (data: unknown) => void | Promise<void>): () => void }` — on a failed selection `call.<op>` resolves to its `Fail` and `on` is a no-op returning a no-op; `ctx.one(s): Selection`, `ctx.all(s): Selection[]`; `sent` gains `kind: 'call' | 'pipe' | 'on'`, `correlation: string` and `cause?: string` (spec "Messages and the stream").
 
-- [ ] **Step 1: Write the failing tests.** Flip 7–11. Add Review Focus 4 and 5.
+- [ ] **Step 1: Write the failing tests.** Flip 7–11, 14, 15. Add Review Focus 4 and 5. Add: a host call's `sent` has `correlation` equal to its own `id` and no `cause`.
 - [ ] **Step 2: Run** `cd packages/nano && bun test --isolate test/pods-runtimes.test.ts` — expected FAIL.
-- [ ] **Step 3: Implement.** An emission (an event published, or a successful action result whoever called it) is handed to `emit.ts`, which sends one message per matching pipe and per live `on` subscription, in every runtime the pod is placed in, in deployment order then subscription order; the caller's result is returned without awaiting deliveries (keep the promises so `close()` can let in-flight ones settle). `on` subscriptions belong to the subscribing instance and are dropped when it closes, when its returned function is called, or when the call edge they were selected through is gone at delivery time.
+- [ ] **Step 3: Implement.** An emission (an event published, or a successful action result whoever called it) is handed to `emit.ts`, which sends one message per matching pipe and per live `on` subscription, in every runtime the pod is placed in, in deployment order then subscription order; each delivery's `sent` carries the chain (a delivery of an action's result: `correlation` from that call, `cause` = its id; an event published from code: a new chain, per the spec); the caller's result is returned without awaiting deliveries (keep the promises so `close()` can let in-flight ones settle). `on` subscriptions belong to the subscribing instance and are dropped when it closes, when its returned function is called, or when the call edge they were selected through is gone at delivery time.
 - [ ] **Step 4: Run** all three commands — expected all PASS, 0 todo anywhere.
 - [ ] **Step 5: Commit** `feat(nano): pipes carry events and action results; selections call and subscribe`.
 

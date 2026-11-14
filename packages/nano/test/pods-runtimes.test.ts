@@ -32,19 +32,27 @@ const logger = implementation('acme/log', { provides: [Log], make: () => [provid
 let slowOpen = () => {}
 const slowLogger = implementation('acme/slowlog', { provides: [Log], make: () => [provide(Log, { record: async s => { await new Promise(r => { slowOpen = r }); logged.push(s); return success(null) } })] })
 /** Domain-level app: its code saves through whichever Store its call edge points at. */
-const appImpl = implementation('acme/app', { provides: [App], dependencies: { store: Store }, make: ctx => [provide(App, { save: async s => {
-  const st = ctx.one(Store)
-  return st.ok ? st.value.call.save(s) : st
-} })] })
+const appImpl = implementation('acme/app', { provides: [App], dependencies: { store: Store }, make: ctx => [provide(App, {
+  save: async s => ctx.one(Store).call.save(s),     // fluent: a failed selection's call resolves to its Fail
+})] })
 /** Subscribes in code to its store's `saved` events. */
 let heard: string[] = []
 const watcher = implementation('acme/watcher', { provides: [Log], dependencies: { store: Store }, make: ctx => {
-  const st = ctx.one(Store)
-  if (st.ok) st.value.on(Store.ops.saved, d => { heard.push(d as string) })
+  ctx.one(Store).on(Store.ops.saved, d => { heard.push(d as string) })
   return [provide(Log, { record: async () => success(null) })]
 } })
 
-const registry = () => { const r = createRegistry(); r.add(provider('acme', [counter, store, logger, slowLogger, appImpl, watcher])); return r }
+const Check = iface('acme.Check', { check: op.action('check', Str, Str) })
+let checks = 0
+/** Passes its input on, failing from the third call: the loop ends there. */
+const checker = implementation('acme/check', { provides: [Check], make: () => [provide(Check, { check: async s => (++checks >= 3 ? failure('invalid-input', 'enough') : success(s)) })] })
+/** Its code asks for a store it isn't wired to. */
+const lonely = implementation('acme/lonely', { provides: [App], dependencies: { store: Store }, make: ctx => {
+  ctx.one(Store).on(Store.ops.saved, () => { heard.push('never') })
+  return [provide(App, { save: async s => ctx.one(Store).call.save(s) })]
+} })
+
+const registry = () => { const r = createRegistry(); r.add(provider('acme', [counter, store, logger, slowLogger, appImpl, watcher, checker, lonely])); return r }
 const ok = r => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const create = async (d, opts = {}) => {
   logged = []; heard = []
@@ -164,6 +172,31 @@ describe('subscriptions in code', () => {
     await app.call('r', 'db').save('x')
     await tick()
     expect(heard).toEqual(['db:x'])   // once: the old instance's subscription stopped
+  })
+})
+
+describe('selections and chains', () => {
+  // Behaviour 14.
+  test.todo('given a pod not wired to any store, when its code selects one, then call resolves to not-found and on does nothing', async () => {
+    const { app } = await create({ pods: { l: Pod.eager(lonely) }, runtimes: { r: { pods: ['l'], subscriptions: [] } } })
+    expect(await app.call('r', 'l').save('x')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+    expect(heard).toEqual([])
+  })
+  // Behaviour 15.
+  test.todo('given a pipe cycle a.save → b.check → a.save, when the host saves, then it runs until check fails, each message chained to the host call', async () => {
+    checks = 0
+    const { app, events } = await create({ pods: { a: Pod.lazy(store, { config: 'a' }), b: Pod.lazy(checker) }, runtimes: { r: { pods: ['a', 'b'], subscriptions: [
+      { kind: 'pipe', from: 'a', source: 'acme.Store/save', to: 'b', target: 'acme.Check/check' },
+      { kind: 'pipe', from: 'b', source: 'acme.Check/check', to: 'a', target: 'acme.Store/save' },
+    ] } } })
+    await app.call('r', 'a').save('x')
+    for (let i = 0; i < 10; i++) await tick()
+    expect(checks).toBe(3)
+    const all = events.filter(e => e.type === 'sent'), root = all[0]
+    expect(root).toMatchObject({ kind: 'call', from: 'host', correlation: root.id })
+    expect(root.cause).toBeUndefined()
+    expect(all.slice(1).every(e => e.correlation === root.id && e.kind === 'pipe')).toBe(true)
+    expect(all.slice(1).every((e, i) => e.cause === all[i].id)).toBe(true)
   })
 })
 
