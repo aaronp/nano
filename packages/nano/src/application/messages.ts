@@ -1,8 +1,9 @@
 /**
- * Messages: one message in one runtime — `sent`, policed, its input checked, the target built or reused, run with the
- * timeout, its output checked, then `delivered` (or `denied`). And a client by op name over such messages.
+ * Messages: one message in one runtime — `sent` (with its kind and chain), policed, its input checked, the target built
+ * or reused, run with the timeout, its output checked, then `delivered` (or `denied`); a successful action result is
+ * then emitted, without waiting. And a client by op name over such messages.
  *
- *   await send(live, 'r', 'host', 'db', 'acme.KV/get', 'k')                // NanoResult<unknown>
+ *   await send(live, 'r', 'host', 'db', 'acme.KV/get', 'k')                // NanoResult<unknown>; a call starting a chain
  *   await client(live, 'r', 'host', 'db', () => undefined).get('k')       // the same, by op name
  */
 import type { AppDeployment } from '../deployment.ts'
@@ -11,6 +12,7 @@ import type { Handler, Implementation } from '../implementation.ts'
 import { Policies, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import { failure, isNanoResult, success, type NanoResult } from '../result.ts'
+import { emit, type On } from './emit.ts'
 import type { stream } from './stream.ts'
 
 /** What a message needs of the application, read live. */
@@ -22,7 +24,16 @@ export type Live = {
   readonly trace: ReturnType<typeof stream>
   /** A build: the handlers by port, and the implementation they were made from. */
   instance(pod: string): Promise<NanoResult<{ implementation: Implementation; handlers: ReadonlyMap<string, Handler> }>>
+  /** The live `on` subscriptions, in the order made. */
+  readonly ons: Set<On>
+  /** Deliveries under way, so `close()` can let them settle. */
+  readonly flying: Set<Promise<unknown>>
+  /** Whether `close()` has been called: nothing new is delivered. */
+  closed(): boolean
 }
+
+/** A message's kind and chain (`correlation`, `cause`); `run` carries an `on` delivery instead of an action. */
+type How = { kind: 'call' | 'pipe' | 'on'; correlation?: string; cause?: string; run?: () => Promise<NanoResult<unknown>> }
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const TIMEOUT = Symbol('timeout')
@@ -75,26 +86,30 @@ async function deliver(live: Live, to: string, p: string, input: unknown): Promi
   return r
 }
 
-/** One message from `from` to `to`'s port `p`, in runtime `runtime`, policed by `refusal`. */
-export async function send(live: Live, runtime: string, from: string, to: string, p: string, input: unknown): Promise<NanoResult<unknown>> {
-  const { trace } = live, id = trace.id()
-  trace.emit({ type: 'sent', id, runtime, from, to, port: p })
+/**
+ * One message from `from` to `to`'s port `p`, in runtime `runtime`, policed by `refusal`. With no `correlation` it
+ * starts a chain. An action's successful result is emitted from `to`, each delivery caused by this message.
+ */
+export async function send(live: Live, runtime: string, from: string, to: string, p: string, input: unknown, how: How = { kind: 'call' }): Promise<NanoResult<unknown>> {
+  const { trace } = live, id = trace.id(), { kind, correlation = id, cause, run } = how
+  trace.emit({ type: 'sent', id, runtime, kind, from, to, port: p, correlation, ...(cause !== undefined && { cause }) })
   const reason = refusal(live, runtime, from, to, input)
   if (reason !== undefined) { trace.emit({ type: 'denied', id, reason }); return failure('denied', reason) }
   const t0 = performance.now()
-  const r = await deliver(live, to, p, input)
+  const r = await (run ? run() : deliver(live, to, p, input))
   trace.emit({ type: 'delivered', id, result: r, ms: performance.now() - t0 })
+  if (r.ok && !run) void emit(live, to, p, r.value, { correlation, cause: id })
   return r
 }
 
 /**
  * A client by op name from `from` to `to` in `runtime`. `gone()` is asked at each call, before anything is sent: a
- * reason makes the call `not-found`.
+ * Fail it gives is the call's result.
  */
-export function client(live: Live, runtime: string, from: string, to: string, gone: () => string | undefined): Record<string, (input: unknown) => Promise<NanoResult<unknown>>> {
+export function client(live: Live, runtime: string, from: string, to: string, gone: () => NanoResult<never> | undefined): Record<string, (input: unknown) => Promise<NanoResult<unknown>>> {
   const call = async (name: string, input: unknown): Promise<NanoResult<unknown>> => {
     const why = gone()
-    if (why) return failure('not-found', why)
+    if (why) return why
     const ports = (impl(live, to)?.provides ?? []).flatMap(i => Object.values(i.ops).filter(o => o.kind === 'action' && o.name === name).map(o => port(i, o)))
     if (ports.length === 0) return failure('unknown-op', `${to} has no action ${name}`)
     if (ports.length > 1) return failure('ambiguous', `${to}: ${name} is an action of more than one interface`)

@@ -42,14 +42,14 @@ const kv = implementation('acme/kv', { provides: [KV], make: () => {
 } })
 /** Sends by putting into whichever KV it is wired to; never names a runtime. */
 const sender = implementation('acme/sender', { provides: [Send], dependencies: { store: KV }, make: ctx => [provide(Send, {
-  send: async msg => { const s = ctx.one(KV); return s.ok ? s.value.put(msg) : s },
+  send: async msg => ctx.one(KV).call.put(msg),
 })] })
 /** Falls back to a local note when no KV is wired. */
 const adaptive = implementation('acme/adaptive', { provides: [Send], dependencies: { store: KV }, make: ctx => {
   const local: string[] = []
   return [provide(Send, { send: async msg => {
     if (ctx.all(KV).length === 0) { local.push(msg); return success(null) }
-    const s = ctx.one(KV); return s.ok ? s.value.put(msg) : s
+    return ctx.one(KV).call.put(msg)
   } })]
 } })
 const ticker = implementation('acme/ticker', { provides: [Ticks], make: () => [] })
@@ -62,15 +62,14 @@ const db = implementation('acme/db', { provides: [DB], make: (_ctx, seed: string
 /** Copies rows from config.from to config.to, naming runtimes only through config. */
 const migrate = implementation('acme/migrate', { provides: [Run], dependencies: { db: DB }, make: (ctx, cfg) => [provide(Run, { run: async () => {
   const from = ctx.one(sel(DB, { runtime: cfg.from })), to = ctx.one(sel(DB, { runtime: cfg.to }))
-  if (!from.ok) return from
-  if (!to.ok) return to
-  const rows = await from.value.all(null)
+  if (!to.ok) return { ok: false, fail: to.fail! }
+  const rows = await from.call.all(null)
   if (!rows.ok) return rows
-  const put = await to.value.insert(rows.value)
+  const put = await to.call.insert(rows.value)
   return put.ok ? success(rows.value.length) : put
 } })] })
 const careless = implementation('acme/careless', { provides: [Run], dependencies: { db: DB }, make: ctx => [provide(Run, { run: async () => {
-  const d = ctx.one(DB); return d.ok ? success(0) : d
+  const d = ctx.one(DB); return d.ok ? success(0) : { ok: false, fail: d.fail! }
 } })] })
 /** Each instance's first call waits until the test opens every gate. */
 let gates: (() => void)[] = []
@@ -171,7 +170,7 @@ describe('building', () => {
 describe('placing', () => {
   test('given two KVs, one tagged primary, when a pod selects the primary KV, then it reaches that one, straight after assemble and create', async () => {
     const picker = implementation('acme5/picker', { provides: [Send], dependencies: { store: KV }, make: ctx => [provide(Send, {
-      send: async msg => { const s = ctx.one(sel(KV, { tags: ['primary'] })); return s.ok ? s.value.put(msg) : s },
+      send: async msg => { return ctx.one(sel(KV, { tags: ['primary'] })).call.put(msg) },
     })] })
     const reg = registry(); reg.add(provider('acme5', [picker]))
     const calls = [{ kind: 'call', from: 'p', to: 'k1' }, { kind: 'call', from: 'p', to: 'k2' }] as const
@@ -311,7 +310,7 @@ describe('changing, at the edges', () => {
     let kept: Record<string, (i: unknown) => Promise<unknown>> | undefined
     const holder = implementation('acme3/holder', { provides: [Send], dependencies: { store: KV }, make: ctx => {
       return [provide(Send, { send: async msg => {
-        if (!kept) { const s = ctx.one(KV); if (!s.ok) return s; kept = s.value as never }
+        if (!kept) { const s = ctx.one(KV); if (!s.ok) return { ok: false, fail: s.fail! }; kept = s.call as never }
         return kept!.put(msg) as never
       } })]
     } })

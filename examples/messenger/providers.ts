@@ -40,9 +40,7 @@ const inbox = implementation('example.messenger/inbox', {
     const local = new Map<string, Message>()
     const unplugged = () => ctx.all(KeyValueStore).length === 0
     const stored = async () => {
-      const kv = ctx.one(KeyValueStore)
-      if (!kv.ok) return kv
-      const r = await kv.value.get('inbox')
+      const r = await ctx.one(KeyValueStore).call.get('inbox')
       return r.ok ? success<Message[]>(r.value ? JSON.parse(r.value) : []) : r
     }
     return [provide(Inbox, {
@@ -50,8 +48,7 @@ const inbox = implementation('example.messenger/inbox', {
         if (unplugged()) { local.set(message.id, message); return success(null) }
         const all = await stored()
         if (!all.ok) return all
-        const kv = ctx.one(KeyValueStore)
-        return kv.ok ? kv.value.put({ key: 'inbox', value: JSON.stringify([...all.value, message]) }) : kv
+        return ctx.one(KeyValueStore).call.put({ key: 'inbox', value: JSON.stringify([...all.value, message]) })
       },
       list: async () => (unplugged() ? success([...local.values()]) : stored()),
     })]
@@ -64,10 +61,8 @@ const composer = implementation('example.messenger/composer', {
   make: ctx => [provide(Composer, {
     async send({ text }) {
       if (ctx.all(Messaging).length === 0) return success({ status: 'disabled' as const })
-      const m = ctx.one(Messaging)
-      if (!m.ok) return m
       const id = crypto.randomUUID()
-      const r = await m.value.post({ id, text })
+      const r = await ctx.one(Messaging).call.post({ id, text })
       return r.ok ? success({ status: 'sent' as const, id }) : r
     },
   })],
@@ -78,8 +73,7 @@ export const send = implementation('example.messenger/send', {
   provides: [Send],
   dependencies: { db: KeyValueStore },
   make: ctx => [provide(Send, { send: async ({ contact, message }) => {
-    const kv = ctx.one(KeyValueStore)
-    return kv.ok ? kv.value.put({ key: contact, value: message }) : kv
+    return ctx.one(KeyValueStore).call.put({ key: contact, value: message })
   } })],
 })
 

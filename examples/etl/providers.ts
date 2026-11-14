@@ -18,10 +18,9 @@ export const etl = implementation('example.etl/etl', {
   dependencies: { from: Source, to: Sink },
   make: ctx => [provide(Pipeline, { run: async () => {
     const from = ctx.one(Source), to = ctx.one(Sink)
-    if (!from.ok) return from
-    if (!to.ok) return to
-    const rows = await from.value.read({})
-    return rows.ok ? to.value.write(rows.value.map(r => r.toUpperCase())) : rows
+    if (!to.ok) return { ok: false, fail: to.fail! }
+    const rows = await from.call.read({})
+    return rows.ok ? to.call.write(rows.value.map(r => r.toUpperCase())) : rows
   } })],
 })
 

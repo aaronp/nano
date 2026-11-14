@@ -44,7 +44,7 @@ const generator = implementation('example.signer/generator', {
   provides: [KeyGenerator],
   dependencies: { vault: Vault },
   make: ctx => [provide(KeyGenerator, {
-    'create-keys': async request => { const v = ctx.one(Vault); return v.ok ? v.value.create(request) : v },
+    'create-keys': async request => ctx.one(Vault).call.create(request),
   })],
 })
 
@@ -53,7 +53,7 @@ const signer = implementation('example.signer/signer', {
   provides: [Signer],
   dependencies: { vault: Vault },
   make: ctx => [provide(Signer, {
-    sign: async request => { const v = ctx.one(Vault); return v.ok ? v.value['sign-with'](request) : v },
+    sign: async request => ctx.one(Vault).call['sign-with'](request),
   })],
 })
 
@@ -63,12 +63,11 @@ const tester = implementation('example.signer/tester', {
   make: ctx => [provide(Tester, {
     async test({ purpose, payload, signAs }) {
       const g = ctx.one(KeyGenerator), s = ctx.one(Signer)
-      if (!g.ok) return g
-      if (!s.ok) return s
-      const made = await g.value['create-keys']({ count: 1, purpose })
+      if (!s.ok) return { ok: false, fail: s.fail! }
+      const made = await g.call['create-keys']({ count: 1, purpose })
       if (!made.ok) return made
       const publicKey = made.value.keys[0]!
-      const signed = await s.value.sign({ publicKey, purpose: signAs ?? purpose, payload })
+      const signed = await s.call.sign({ publicKey, purpose: signAs ?? purpose, payload })
       return signed.ok ? success({ publicKey, result: signed.value }) : signed
     },
   })],

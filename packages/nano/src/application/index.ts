@@ -5,7 +5,7 @@
  *   const app = (await Application.create(assemble(appDeployment, registry).value, {})).value
  *   await app.call('app', 'counter').inc(null)   // from 'host', through runtime 'app'
  *   app.listen(e => …)                           // built, sent, delivered, denied, failure, …
- *   await app.close()                            // every instance closed; later calls not-found, apply/restart refused
+ *   await app.close()                            // every instance closed, deliveries under way settled; later calls not-found
  */
 import { Value } from 'typebox/value'
 import { assemble, type AppDeployment } from '../deployment.ts'
@@ -47,7 +47,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts): Promise<Na
   const trace = stream()
   const live: Live = {
     now: () => current, registry, policies: opts.policies ?? {}, timeoutMs: opts.timeoutMs ?? 30_000, trace,
-    instance: name => pods.get(name),
+    instance: name => pods.get(name), ons: new Set(), flying: new Set(), closed: () => closing !== undefined,
   }
   const pods = instances(live)
   const buildEager = (names: string[]) => Promise.all(names.filter(n => current.pods[n]!.eager).map(n => pods.get(n)))
@@ -93,8 +93,8 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts): Promise<Na
   }
 
   return success({
-    call: (runtime, pod) => client(live, runtime, 'host', pod, () => closing ? 'application is closed'
-      : current.runtimes[runtime]?.pods.includes(pod) ? undefined : `${pod} is not placed in ${runtime}`),
+    call: (runtime, pod) => client(live, runtime, 'host', pod, () => closing ? failure('not-found', 'application is closed')
+      : current.runtimes[runtime]?.pods.includes(pod) ? undefined : failure('not-found', `${pod} is not placed in ${runtime}`)),
     apply: next => closing ? Promise.resolve(shut()) : queued(() => reconcile(next)),
     restart: pod => closing ? Promise.resolve(shut()) : queued(async () => {
       if (!current.pods[pod]) return failure('not-found', `no pod ${pod}`)
@@ -105,7 +105,8 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts): Promise<Na
     }),
     deployment: () => structuredClone(current),
     listen: trace.listen,
-    close: () => closing ??= queued(async () => { await pods.close(); return success(undefined) }),
+    // Deliveries under way settle; nothing new is delivered once `closing` is set.
+    close: () => closing ??= queued(async () => { await Promise.all([pods.close(), ...live.flying]); return success(undefined) }),
   })
 }
 

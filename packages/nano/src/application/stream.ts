@@ -1,6 +1,7 @@
 /**
  * The application's one stream: builds, closes, restarts, changes, messages (`sent`, then `delivered` or `denied`) and problems,
- * in order, synchronously. A throwing listener is swallowed.
+ * in order, synchronously. A `sent` names its kind and its chain: `correlation` is the first message's id, `cause` the
+ * message that led to it. A throwing listener is swallowed.
  *
  *   const s = stream()
  *   const off = s.listen(e => { if (e.type === 'denied') log(e.id, e.reason) })
@@ -16,7 +17,7 @@ export type AppEvent =
   | { type: 'closed'; pod: string; reason: Reason }
   | { type: 'restarted'; pod: string }
   | { type: 'applied'; added: string[]; removed: string[]; changed: string[]; rewired: string[] }
-  | { type: 'sent'; id: string; runtime: string; from: string; to: string; port: string }
+  | { type: 'sent'; id: string; runtime: string; kind: 'call' | 'pipe' | 'on'; from: string; to: string; port: string; correlation: string; cause?: string }
   | { type: 'delivered'; id: string; result: NanoResult<unknown>; ms: number }
   | { type: 'denied'; id: string; reason: string }
   | { type: 'failure'; pod?: string; reason: string }

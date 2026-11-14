@@ -21,7 +21,7 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 | `Provider` | a namespace of implementations (`provider`) plus metadata | `provider.ts` |
 | `Registry` | a pool of providers (`createRegistry`); O(1) lookups (`implementationsOf`); a plain-data `Manifest` | `registry.ts` |
 | `Selector` | which call subscriptions a call may use: an interface, or `SelectorData` narrowed by tags, implementation, provider, `runtime` (`sel`, `selectorData`, `matches` over a `Target`) | `selector.ts` |
-| Context | what a pod's factory gets (`NanoContext`): `self`, `runtimes`, `one`, `all`, `publish`, `addOnCloseListener` (each build has its own; runs on `restarted`, `removed`, `changed` or `closed`) | `context.ts` |
+| Context | what a pod's factory gets (`NanoContext`): `self`, `runtimes`, `one`, `all` (each a `Selection`: `ok`, `fail`, `pod`, `runtime`, `call` through that edge, `on` to hear the pod), `publish`, `addOnCloseListener` (each build has its own; runs on `restarted`, `removed`, `changed` or `closed`) | `context.ts` |
 | `Pod` | a value `{ implementation, config?, eager }` from `Pod.lazy(impl, { config })` / `Pod.eager(impl)`; no state, methods or instance | `pod.ts` |
 | `Policy` | `isAllowed(src, dest, data)` per runtime, answering a `Verdict`; `Policies.allowAll()` | `policy.ts` |
 | `Pods` | which components exist: `Pods.create(podDeployment, { registry, tags? })` checks a `PodDeployment` (names, implementations, configs, at most 5000) and its tags by pod name into an immutable lookup, `names`, `get`, `select` (a scope over the same descriptions, keeping their tags), `deployment` | `pods.ts` |
@@ -31,8 +31,10 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 
 Inside `application/` (not exported from the package, one line each): `stream()` is the one stream and its ids;
 `instances(live)` holds at most one build per pod name and closes builds (each with its own close listeners, run in
-order within the timeout, then `closed` on the stream); `send` carries one message in one runtime and `client` calls
-by op name over it, both reading a `Live` (the application as a message needs it); `refusal` is a runtime policy's
+order within the timeout, then `closed` on the stream); `send` carries one message in one runtime (a `call`, `pipe` or `on`,
+with its chain) and `client` calls by op name over it, both reading a `Live` (the application as a message needs it,
+with its `On` subscriptions and deliveries under way); `emit` delivers an emission along pipes and to `On`
+subscriptions; `refusal` is a runtime policy's
 answer to a message or a new subscription (a throw, a Promise or no verdict refuses); `within` bounds a build or
 handler by the timeout; `contextFor(live, name, onClose)` is a pod's `NanoContext`, `onClose` adding a listener to
 that build; `diff(a, b)` is what `apply` changes: pods added, removed, changed, and runtimes rewired;
@@ -64,13 +66,18 @@ shape of a table by runtime id (the id rule, at most 50). Inside `runtime.ts`: `
    build. A factory that throws, rejects or times out fails the call that needed it and caches nothing, so the next
    call builds again. State is whatever the factory closes over (D71).
 5. **Call.** `app.call(runtime, pod).op(input)` is a message from `'host'` in that runtime. A handler reaches others
-   through the `ctx` its factory closed over: `ctx.one(selector)` is the single matching call subscription from the
-   pod (`not-found` or `ambiguous` otherwise), `ctx.all(selector)` every one, in deployment order (D86); both read the
-   deployment now, across every runtime the pod is placed in, and a selector's `runtime` narrows them.
-   `ctx.publish(op, data)` delivers along every pipe from the pod with that source, in every runtime it is in.
+   through the `ctx` its factory closed over: `ctx.one(selector)` is a `Selection` of the single matching call
+   subscription from the pod (a failed one, `not-found` or `ambiguous`, otherwise: its `call.op(x)` resolves to that
+   `Fail` and `on` does nothing), `ctx.all(selector)` every one, in deployment order (D86); both read the deployment
+   now, across every runtime the pod is placed in, and a selector's `runtime` narrows them. `selection.on(op, fn)`
+   hears that pod's event or action results, as `on` messages in the edge's runtime, until the build closes, the
+   returned function is called or the edge is gone. An emission (`ctx.publish(op, data)`, or an action's successful
+   result, whoever called it) is delivered along every pipe from the pod with that source, in every runtime it is in,
+   then to `on` subscribers; the caller of an action doesn't wait for it.
 6. **Message.** Each message travels in exactly one runtime, that of the subscription it uses: policed by its policy
-   (a throw, or no `Verdict`, denies, D82), input checked, run under the timeout, output checked, and recorded: `sent`,
-   then `delivered` or `denied`. A handler never throws across this boundary: a throw, a timeout, bad input or bad
+   (a throw, or no `Verdict`, denies, D82), input checked, run under the timeout, output checked, and recorded: `sent` (its
+   `kind`, `correlation` the id of its chain's first message, `cause` the message that led to it), then `delivered`
+   or `denied`. Pipes may loop; a chain stops when a step fails. A handler never throws across this boundary: a throw, a timeout, bad input or bad
    output is a `Fail` (D76).
 7. **Change.** `app.apply(next)` validates `next`, asks each affected runtime's policy about each added subscription
    (`isAllowed(from, to, 'subscribe')`), then applies everything or nothing: pods added (eager ones built), removed
@@ -78,7 +85,8 @@ shape of a table by runtime id (the id rule, at most 50). Inside `runtime.ts`: `
    `applied` event. `app.restart(pod)` forgets an instance (an eager pod rebuilds at once); calls in flight finish on
    the old one (D77). `apply` drops pods that no runtime places. An application created from no runtimes has no
    registry, so `apply` naming any implementation is `not-found`. A forgotten instance is closed first (its close
-   listeners run with `restarted`, `removed` or `changed`); `app.close()` closes them all (`closed`).
+   listeners run with `restarted`, `removed` or `changed`); `app.close()` closes them all (`closed`); deliveries under
+   way settle and nothing new is delivered.
 8. **Watch.** `app.listen(e => …)` is the one stream, in order and synchronously, and returns an unsubscribe: `built`,
    `closed`, `restarted`, `applied`, `sent`, `delivered`, `denied`, `failure`, `warning`. A throwing listener is
    swallowed (D79).

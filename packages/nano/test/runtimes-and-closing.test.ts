@@ -61,14 +61,12 @@ const one = (pods: AppDeployment['pods']): AppDeployment => ({ pods, runtimes: {
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 describe("a runtime's slice", () => {
-  // Revised behaviour 17: no live runtime object; app.call and listen filtered by runtime. Waits for Task 3 (`counter`
-  // adds a close listener) and Task 4 (`sent` carries `kind`).
-  test.todo('given two runtimes, when the host calls through one, then only that runtime records it, and unknown runtimes or unplaced pods are not-found', async () => {
+  // Revised behaviour 17: no live runtime object; app.call and listen filtered by runtime.
+  test('given two runtimes, when the host calls through one, then only that runtime records it, and unknown runtimes or unplaced pods are not-found', async () => {
     const { app, events } = await live({ pods: { c: Pod.lazy(counter), d: Pod.lazy(counter) },
       runtimes: { chat: { pods: ['c'], subscriptions: [] }, other: { pods: ['c', 'd'], subscriptions: [] } } })
     expect(await app.call('chat', 'c').inc(null)).toEqual(success(1))
     expect(events.filter(e => 'runtime' in e && e.runtime === 'chat').map(e => e.type)).toEqual(['sent'])
-    // @ts-expect-error `sent` gains `kind` in Task 4; remove this line then
     expect(events.filter(e => e.type === 'sent').map(e => `${e.runtime}:${e.kind}:${e.from}->${e.to}`)).toEqual(['chat:call:host->c'])
     expect(events.filter(e => 'runtime' in e && e.runtime === 'other')).toEqual([])
     expect(await app.call('nope', 'c').inc(null)).toMatchObject({ ok: false, fail: { type: 'not-found' } })

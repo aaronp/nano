@@ -17,11 +17,10 @@ export const migrate = implementation('example.migration/migrate', {
   dependencies: { db: DB },
   make: (ctx, config: { from: string; to: string }) => [provide(Migrate, { run: async () => {
     const from = ctx.one(sel(DB, { runtime: config.from })), to = ctx.one(sel(DB, { runtime: config.to }))
-    if (!from.ok) return from
-    if (!to.ok) return to
-    const rows = await from.value.all({})
+    if (!to.ok) return { ok: false, fail: to.fail! }
+    const rows = await from.call.all({})
     if (!rows.ok) return rows
-    const put = await to.value.insert(rows.value)
+    const put = await to.call.insert(rows.value)
     return put.ok ? success(rows.value.length) : put
   } })],
 })
@@ -30,9 +29,7 @@ export const careless = implementation('example.migration/careless', {
   provides: [Migrate],
   dependencies: { db: DB },
   make: ctx => [provide(Migrate, { run: async () => {
-    const d = ctx.one(DB)
-    if (!d.ok) return d
-    const rows = await d.value.all({})
+    const rows = await ctx.one(DB).call.all({})
     return rows.ok ? success(rows.value.length) : rows
   } })],
 })

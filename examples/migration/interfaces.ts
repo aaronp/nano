@@ -1,7 +1,7 @@
 /**
  * The migration's contracts: a database of rows, and the migration that copies one to another.
  *
- *   ctx.one(sel(DB, { runtime: 'v2' }))   // NanoResult<Client>: .all({}) gives the rows in v2's db
+ *   ctx.one(sel(DB, { runtime: 'v2' }))   // Selection: .call.all({}) gives the rows in v2's db
  */
 import { Type } from 'typebox'
 import { defineSchema, iface, op } from '@pritzlaff/nano'
