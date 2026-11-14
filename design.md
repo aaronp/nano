@@ -57,7 +57,7 @@ and those pods' tags) and their registry.
 Inside `pods.ts` (not exported from the package): `Id` is the id rule for pod names and runtime ids, `shapeError` the
 first way a value breaks a level's shape, `originOf(pods)` where a `Pods` comes from: the registry it was checked
 against (which `Runtime.create` resolves implementations with), the `Pods` it was selected from (one per application)
-and the tags of its pods. Inside `deployment.ts`: `RuntimeIds` is the shape of a table by runtime id (the id rule, at
+and the tags of its pods, and its descriptions by name (read without copying). Inside `deployment.ts`: `RuntimeIds` is the shape of a table by runtime id (the id rule, at
 most 50). Inside `runtime.ts`: `isRuntime(r)` is whether `Runtime.create` made `r`.
 
 ## How it works

@@ -51,12 +51,12 @@ function unfit(s: Subscription, from: Implementation, to: Implementation): strin
 }
 
 function check(id: string, r: RuntimeDeployment, pods: Pods): string | undefined {
-  const registry = originOf(pods)?.registry
-  if (!registry) return `runtime ${id}: its pods do not come from Pods.create`
-  const placed = new Set(r.pods), seen = new Set<string>()
-  for (const [i, name] of r.pods.entries()) {
-    if (!pods.get(name)) return `runtime ${id}: no pod ${name}`
-    if (r.pods.indexOf(name) !== i) return `runtime ${id}: ${name} is placed twice`
+  const origin = originOf(pods)
+  if (!origin) return `runtime ${id}: its pods do not come from Pods.create`
+  const placed = new Set<string>(), seen = new Set<string>()
+  for (const name of r.pods) {
+    if (!origin.pods.has(name)) return `runtime ${id}: no pod ${name}`
+    if (placed.size === placed.add(name).size) return `runtime ${id}: ${name} is placed twice`
   }
   for (const s of r.subscriptions) {
     const end = [s.from, s.to].find(n => !placed.has(n))
@@ -64,7 +64,7 @@ function check(id: string, r: RuntimeDeployment, pods: Pods): string | undefined
     const key = JSON.stringify(s.kind === 'call' ? [s.from, s.to] : [s.from, s.to, s.source, s.target])
     if (seen.has(key)) return `runtime ${id}: ${label(s)} is there twice`
     seen.add(key)
-    const impl = (n: string) => registry.implementation(pods.get(n)!.implementation)!
+    const impl = (n: string) => origin.registry.implementation(origin.pods.get(n)!.implementation)!
     const why = unfit(s, impl(s.from), impl(s.to))
     if (why) return `runtime ${id}: ${label(s)}: ${why}`
   }

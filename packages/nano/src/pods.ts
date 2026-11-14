@@ -38,9 +38,9 @@ export function shapeError(schema: TSchema, d: unknown, what: string): string | 
 type Tags = Record<string, string[]>
 /**
  * Where a `Pods` comes from: the registry it was checked against, the `Pods.create` result it was selected from, and
- * the tags of its pods, when `Pods.create` was given tags.
+ * the tags of its pods, when `Pods.create` was given tags; and its descriptions by name, to read without copying.
  */
-type Origin = { readonly registry: Registry; readonly root: Pods; readonly tags?: Tags }
+type Origin = { readonly registry: Registry; readonly root: Pods; readonly tags?: Tags; readonly pods: ReadonlyMap<string, Pod> }
 /** Each `Pods`' origin, for `Runtime.create` and `Application.create`: carried, not a member. */
 const origins = new WeakMap<Pods, Origin>()
 export const originOf = (pods: Pods): Origin | undefined => origins.get(pods)
@@ -51,7 +51,7 @@ function view(all: ReadonlyMap<string, Pod>, registry: Registry, root?: Pods, ta
     get: (name: string) => structuredClone(all.get(name)),
     select(names: string[]) {
       if (!Array.isArray(names) || names.some(n => typeof n !== 'string')) return failure('invalid-input', 'select takes pod names')
-      const dup = names.find((n, i) => names.indexOf(n) !== i), unknown = names.find(n => !all.has(n))
+      const seen = new Set<string>(), dup = names.find(n => seen.size === seen.add(n).size), unknown = names.find(n => !all.has(n))
       if (dup !== undefined) return failure('invalid-input', `pod ${dup} is selected twice`)
       if (unknown !== undefined) return failure('not-found', `no pod ${unknown}`)
       const kept = tags && Object.fromEntries(names.filter(n => Object.hasOwn(tags, n)).map(n => [n, tags[n]!]))
@@ -59,7 +59,7 @@ function view(all: ReadonlyMap<string, Pod>, registry: Registry, root?: Pods, ta
     },
     deployment: () => structuredClone(Object.fromEntries(all)),
   })
-  origins.set(pods, Object.freeze({ registry, root: root ?? pods, ...(tags && { tags }) }))
+  origins.set(pods, Object.freeze({ registry, root: root ?? pods, ...(tags && { tags }), pods: all }))
   return pods
 }
 
