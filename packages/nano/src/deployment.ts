@@ -14,9 +14,11 @@ import { Runtime, type RuntimeDeployment } from './runtime.ts'
 export type AppDeployment = { pods: PodDeployment; runtimes: Record<string, RuntimeDeployment>; tags?: Record<string, string[]> }
 
 const strict = { additionalProperties: false } as const
+/** A table by runtime id: ids follow the id rule, at most 50. */
+export const RuntimeIds = Type.Record(Id, Type.Unknown(), { ...strict, maxProperties: 50 })
 const Shape = Type.Object({
   pods: Type.Unknown(),
-  runtimes: Type.Record(Id, Type.Unknown(), { ...strict, maxProperties: 50 }),
+  runtimes: RuntimeIds,
   tags: Type.Optional(Type.Record(Id, Type.Array(Type.String()), strict)),
 }, strict)
 

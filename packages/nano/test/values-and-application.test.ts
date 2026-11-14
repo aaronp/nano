@@ -1,12 +1,13 @@
 /**
  * Values and a live application (spec: docs/superpowers/specs/2026-11-14-values-and-application-design.md), written
- * first. Pods and deployments are plain values; `Application.create(deployment)` is the one live thing. A factory
+ * first; ported to `assemble` + `Application.create(runtimes)` (2026-11-14-pods-runtimes-application-design.md,
+ * behaviour 12). Pods and deployments are values; the `Application` is the one live thing. A factory
  * `make(ctx, config)` runs lazily (or eagerly), closes over its state and its pod-scoped ctx; handlers take input only.
  */
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import {
-  Application, Pod, createRegistry, defineSchema, iface, implementation, op, provide, provider, sel, success,
+  Application, Pod, assemble, createRegistry, defineSchema, iface, implementation, op, provide, provider, sel, success,
   type AppEvent, type AppDeployment, type NanoContext, type Policy,
 } from '../src/index.ts'
 
@@ -93,9 +94,14 @@ const registry = () => {
   return r
 }
 const ok = <T>(r: { ok: boolean; value?: T; fail?: { reason: string } }): T => { if (!r.ok) throw new Error(r.fail!.reason); return r.value as T }
+/** `d` assembled with `reg`, then made live: the first failure of either. */
+const create = async (d: unknown, opts: { policies?: Record<string, Policy>; timeoutMs?: number } = {}, reg = registry()) => {
+  const runtimes = assemble(d, reg)
+  return runtimes.ok ? Application.create(runtimes.value, opts) : runtimes
+}
 /** A live application and everything on its stream. */
 const live = async (deployment: unknown, opts: { policies?: Record<string, Policy>; timeoutMs?: number } = {}) => {
-  const app = ok(await Application.create(deployment, { registry: registry(), ...opts }))
+  const app = ok(await create(deployment, opts))
   const events: AppEvent[] = []
   app.listen(e => events.push(e))
   return { app, events }
@@ -142,7 +148,7 @@ describe('building', () => {
   })
   test('given an eager pod whose factory throws, when the application is created, then create succeeds and the pod builds on its first call', async () => {
     failNext = 1
-    const r = await Application.create(one({ f: Pod.eager(flaky) }), { registry: registry() })
+    const r = await create(one({ f: Pod.eager(flaky) }))
     expect(r.ok).toBe(true)
     expect(await ok(r).call('r', 'f').inc(null)).toEqual(success(1))
   })
@@ -215,8 +221,8 @@ describe('messages', () => {
     const tick = implementation('acme2/tick', { provides: [Ticks], make: ctx => { ctxOut = ctx; return [] } })
     const reg = registry(); reg.add(provider('acme2', [tick]))
     const ev = { kind: 'pipe', from: 't', source: 'acme.Ticks/tick', to: 'l', target: 'acme.Log/record' } as const
-    const app = ok(await Application.create({ pods: { t: Pod.eager(tick), l: Pod.lazy(log) }, runtimes: {
-      a: { pods: ['t', 'l'], subscriptions: [ev] }, b: { pods: ['t', 'l'], subscriptions: [ev] } } }, { registry: reg }))
+    const app = ok(await create({ pods: { t: Pod.eager(tick), l: Pod.lazy(log) }, runtimes: {
+      a: { pods: ['t', 'l'], subscriptions: [ev] }, b: { pods: ['t', 'l'], subscriptions: [ev] } } }, {}, reg))
     const events: AppEvent[] = []; app.listen(e => events.push(e))
     await ctxOut!.publish(Ticks.ops.tick, 7)
     expect(logged).toEqual([7, 7])
@@ -299,7 +305,7 @@ describe('changing, at the edges', () => {
       } })]
     } })
     const reg = registry(); reg.add(provider('acme3', [holder]))
-    const app = ok(await Application.create({ ...d, pods: { ...d.pods, send: Pod.lazy(holder) } }, { registry: reg }))
+    const app = ok(await create({ ...d, pods: { ...d.pods, send: Pod.lazy(holder) } }, {}, reg))
     expect(await app.call('r', 'send').send('k')).toEqual(success(null))
     expect(await app.apply({ ...app.deployment(), runtimes: { r: { pods: ['send', 'db'], subscriptions: [] } } })).toEqual(success(undefined))
     expect(await app.call('r', 'send').send('k')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
@@ -333,7 +339,7 @@ describe('changing, at the edges', () => {
       return [provide(Counter, { inc: async () => success(7) })]
     } })
     const reg = registry(); reg.add(provider('acme3', [slow]))
-    const app = ok(await Application.create(one({}), { registry: reg }))
+    const app = ok(await create(one({}), {}, reg))
     const applying = app.apply(one({ s: Pod.eager(slow) }))
     await tick()
     const calling = app.call('r', 's').inc(null)
@@ -374,7 +380,7 @@ describe('edges of the live application', () => {
   test('given a build that hangs, when called, then it is timeout and a failure event', async () => {
     const hang = implementation('acme3/hang', { provides: [Counter], make: () => new Promise<never>(() => {}) })
     const reg = registry(); reg.add(provider('acme3', [hang]))
-    const app = ok(await Application.create(one({ h: Pod.lazy(hang) }), { registry: reg, timeoutMs: 20 }))
+    const app = ok(await create(one({ h: Pod.lazy(hang) }), { timeoutMs: 20 }, reg))
     const events: AppEvent[] = []; app.listen(e => events.push(e))
     expect(await app.call('r', 'h').inc(null)).toMatchObject({ ok: false, fail: { type: 'timeout' } })
     expect(events).toContainEqual(expect.objectContaining({ type: 'failure', pod: 'h' }))
@@ -404,7 +410,7 @@ describe('validation', () => {
   ]
   for (const [name, d, type] of cases)
     test(`given ${name}, when the application is created, then it fails ${type}`, async () => {
-      expect(await Application.create(d(), { registry: registry() })).toMatchObject({ ok: false, fail: { type } })
+      expect(await create(d())).toMatchObject({ ok: false, fail: { type } })
     })
 })
 
@@ -445,10 +451,11 @@ describe('final review', () => {
     expect(await app.call('toString', 'constructor').inc(null)).toEqual(success(1))
     expect(await app.restart('constructor')).toEqual(success(undefined))
     expect(await app.call('toString', 'constructor').inc(null)).toEqual(success(1))
-    expect(app.deployment()).toEqual(d)
+    expect(app.deployment()).toEqual({ pods: d.pods, runtimes: d.runtimes })   // runtimes carry no tags
     expect(await app.apply(one({ c: Pod.lazy(counter) }))).toEqual(success(undefined))
     expect(await app.call('toString', 'constructor').inc(null)).toMatchObject({ ok: false, fail: { type: 'not-found' } })
     expect(await app.apply(d)).toEqual(success(undefined))
+    expect(app.deployment()).toEqual(d)   // apply carries the tags in
     expect(await app.call('toString', 'constructor').inc(null)).toEqual(success(1))
   })
   test('given a pod __proto__ from JSON, when called, then it answers', async () => {
@@ -493,7 +500,7 @@ describe('final review', () => {
       await new Promise<void>(r => { open = r }); return [provide(Counter, { inc: async () => success(7) })]
     } })
     const reg = registry(); reg.add(provider('acme4', [slow]))
-    const app = ok(await Application.create(one({ x: Pod.lazy(slow) }), { registry: reg }))
+    const app = ok(await create(one({ x: Pod.lazy(slow) }), {}, reg))
     const calling = app.call('r', 'x').inc(null)
     await tick()
     expect(await app.apply(one({ x: Pod.lazy(kv) }))).toEqual(success(undefined))

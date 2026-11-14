@@ -6,7 +6,7 @@
  *   messaging:  send → db        chat:  send        support:  send
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, createRegistry, Pod, success, type AppEvent } from '@pritzlaff/nano'
+import { Application, assemble, createRegistry, Pod, success, type AppEvent } from '@pritzlaff/nano'
 import { messengerProvider, send } from './providers.ts'
 
 const sent = (events: AppEvent[], runtime: string) => events.flatMap(e => (e.type === 'sent' && e.runtime === runtime ? [`${e.from}->${e.to}`] : []))
@@ -15,14 +15,16 @@ describe('send, shared', () => {
   test('given send wired to db in messaging and placed in chat and support, when chat sends, then chat records the send, messaging records the db call, and chat cannot reach db', async () => {
     const registry = createRegistry()
     registry.add(messengerProvider)
-    const r = await Application.create({
+    const runtimes = assemble({
       pods: { send: Pod.lazy(send), db: Pod.lazy(messengerProvider.implementations.get('example.messenger/memory-store')!) },
       runtimes: {
         messaging: { pods: ['send', 'db'], subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] },
         chat: { pods: ['send'], subscriptions: [] },
         support: { pods: ['send'], subscriptions: [] },
       },
-    }, { registry })
+    }, registry)
+    if (!runtimes.ok) throw new Error(runtimes.fail.reason)
+    const r = await Application.create(runtimes.value, {})
     if (!r.ok) throw new Error(r.fail.reason)
     const app = r.value, events: AppEvent[] = []
     app.listen(e => events.push(e))

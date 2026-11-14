@@ -10,7 +10,7 @@
 import { describe, expect, test } from 'bun:test'
 import { Type, type Static } from 'typebox'
 import {
-  Application, createRegistry, defineSchema, iface, implementation, op, Pod, port, provide, provider, success,
+  Application, assemble, createRegistry, defineSchema, iface, implementation, op, Pod, port, provide, provider, success,
   type AppEvent, type Application as App, type AppDeployment, type NanoResult,
 } from '@pritzlaff/nano'
 import { KeyFormatter, Log, TestRequest, TestResult, Vault } from './interfaces.ts'
@@ -58,7 +58,9 @@ function probe() {
 
 const registry = () => { const r = createRegistry(); r.add(signerProvider); return r }
 
-const build = async (r = registry()) => must(await Application.create(SIGNER, { registry: r }))
+/** `d` assembled with `r` and made live. */
+const open = async (d: unknown, r = registry()) => must(await Application.create(must(assemble(d, r)), {}))
+const build = (r = registry()) => open(SIGNER, r)
 
 /** Applies a probe in `signer-client` subscribed to the log's `entries`; `seen` holds every list it publishes. */
 async function watchLog(p: ReturnType<typeof probe>, app: App) {
@@ -139,7 +141,7 @@ describe('the external signer', () => {
     const committed = await Bun.file(DOC).json()
     expect(committed).toEqual(saved)
 
-    const r = await runTest(must(await Application.create(committed, { registry: registry() })), { purpose: 'login', payload })
+    const r = await runTest(await open(committed), { purpose: 'login', payload })
     if (!r.ok) throw new Error(r.fail.reason)
     const { publicKey, result } = r.value
     if (result.status !== 'signed') throw new Error(result.status)

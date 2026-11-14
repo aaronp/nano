@@ -27,18 +27,20 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 | `Pods` | which components exist: `Pods.create(podDeployment, { registry })` checks a `PodDeployment` (names, implementations, configs, at most 5000) into an immutable lookup, `names`, `get`, `select` (a scope over the same descriptions), `deployment` | `pods.ts` |
 | `Runtime` | pods placed together and wired: `Runtime.create(id, runtimeDeployment, pods)` checks a `RuntimeDeployment` (pods placed, `Subscription`s, policy) over a `Pods` scope into an immutable `{ id, pods, deployment }` | `runtime.ts` |
 | `AppDeployment` | the whole system as data: pods, runtimes by id, tags; `assemble(d, registry)` checks it level by level into its `Runtime`s, strictly (D83) | `deployment.ts` |
-| `Application` | the one live thing: `Application.create(deployment, { registry, policies?, timeoutMs? })` gives five members, `call`, `apply`, `restart`, `deployment`, `listen` (an `AppEvent` stream) | `application/` |
+| `Application` | the one live thing: `Application.create(runtimes, { policies?, timeoutMs? })` (at most 50, ids by the id rule, every runtime's pods from one `Pods`) gives five members, `call`, `apply`, `restart`, `deployment`, `listen` (an `AppEvent` stream) | `application/` |
 
 Inside `application/` (not exported from the package, one line each): `stream()` is the one stream and its ids;
 `instances(live)` holds at most one build per pod name; `send` carries one message in one runtime and `client` calls
 by op name over it, both reading a `Live` (the application as a message needs it); `refusal` is a runtime policy's
 answer to a message or a new subscription (a throw, a Promise or no verdict refuses); `within` bounds a build or handler
 by the timeout; `contextFor(live, name)` is a pod's `NanoContext`; `diff(a, b)` is what `apply` changes: pods added,
-removed, changed, and runtimes rewired.
+removed, changed, and runtimes rewired; `compose(runtimes)` is the application's deployment from its runtimes (the pods
+they place, in their `Pods`' order) and their registry.
 
 Inside `pods.ts` (not exported from the package): `Id` is the id rule for pod names and runtime ids, `shapeError` the
-first way a value breaks a level's shape, and `registryOf(pods)` the registry a `Pods` was checked against, which
-`Runtime.create` resolves implementations with.
+first way a value breaks a level's shape, and `originOf(pods)` where a `Pods` comes from: the registry it was checked
+against (which `Runtime.create` resolves implementations with) and the `Pods` it was selected from (one per
+application). Inside `deployment.ts`: `RuntimeIds` is the shape of a table by runtime id (the id rule, at most 50).
 
 ## How it works
 
@@ -51,8 +53,8 @@ first way a value breaks a level's shape, and `registryOf(pods)` the registry a 
    fits it; pipes may form cycles. Each level checks its own part: `Pods.create` names, implementations (in the
    registry), configs and 5000 pods; `Runtime.create` that every pod it places is in its scope, every subscription's
    ends are placed in it, ports exist and fit, and 2000 subscriptions; `assemble` 50 runtimes and their ids (D75, D78).
-3. **Create.** `Application.create(deployment, { registry })` validates (an invalid deployment is a `Fail` and nothing
-   runs), builds every eager pod, and resolves once those settle. A failed eager build is a `failure` on the stream,
+3. **Create.** `Application.create(runtimes, opts)`, or `Application.create(assemble(d, registry).value, opts)` from
+   data, validates (an invalid input is a `Fail` and nothing runs), builds every eager pod, and resolves once those settle. A failed eager build is a `failure` on the stream,
    not a failed `create`.
 4. **Build.** One instance per pod name, made by the factory on first need, once: concurrent first calls share the
    build. A factory that throws, rejects or times out fails the call that needed it and caches nothing, so the next
@@ -73,14 +75,15 @@ first way a value breaks a level's shape, and `registryOf(pods)` the registry a 
    the old one (D77).
 8. **Watch.** `app.listen(e => …)` is the one stream, in order and synchronously, and returns an unsubscribe: `built`,
    `restarted`, `applied`, `sent`, `delivered`, `denied`, `failure`, `warning`. A throwing listener is swallowed (D79).
-9. **Save.** `app.deployment()` is the current value; saving is its JSON, and `Application.create` on it gives an
-   equivalent application (D74).
+9. **Save.** `app.deployment()` is the current value (the pods placed in some runtime, the runtimes, and tags once
+   `apply` has carried them in); saving is its JSON, and `assemble` + `Application.create` on it gives an equivalent
+   application (D74).
 
 ## FAQ
 
-**Values vs live?** `Pod`, `Pods`, `Runtime`, `AppDeployment`, `Subscription`, `Selector`, `Policy`, `Registry` and the rest are plain data
-or plain lookups; only the `Application` does anything with effects. You have a running `Application` from
-`Application.create(deployment)`, or you have values. There is no `start()` and no type that behaves differently by
+**Values vs live?** `Pod`, `AppDeployment`, `Subscription`, `Selector`, `Policy`, `Registry` and the rest are plain
+data or plain lookups, and `Pods` and `Runtime` are inert values (frozen, with methods); only the `Application` does
+anything with effects. You have a running `Application` from `Application.create(runtimes)`, or you have values. There is no `start()` and no type that behaves differently by
 mode (D70).
 
 **Lazy vs eager?** `Pod.lazy` is built on its first call, like `IO`: describing costs nothing. `Pod.eager` is built

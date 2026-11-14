@@ -6,20 +6,22 @@
  *   v2:  migrate → db-v2 (rows a, b)      v3:  migrate → db-v3 (empty)
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, createRegistry, Pod, success, type AppEvent, type Implementation } from '@pritzlaff/nano'
+import { Application, assemble, createRegistry, Pod, success, type AppEvent, type Implementation } from '@pritzlaff/nano'
 import { careless, db, migrate, migrationProvider } from './providers.ts'
 
 /** v2 with rows a, b; v3 empty; `impl` placed in both as `migrate` and wired to each db. */
 async function setup(impl: Implementation, config?: unknown) {
   const registry = createRegistry()
   registry.add(migrationProvider)
-  const r = await Application.create({
+  const runtimes = assemble({
     pods: { migrate: Pod.lazy(impl, { config }), 'db-v2': Pod.lazy(db, { config: ['a', 'b'] }), 'db-v3': Pod.lazy(db) },
     runtimes: {
       v2: { pods: ['migrate', 'db-v2'], subscriptions: [{ kind: 'call', from: 'migrate', to: 'db-v2' }] },
       v3: { pods: ['migrate', 'db-v3'], subscriptions: [{ kind: 'call', from: 'migrate', to: 'db-v3' }] },
     },
-  }, { registry })
+  }, registry)
+  if (!runtimes.ok) throw new Error(runtimes.fail.reason)
+  const r = await Application.create(runtimes.value, {})
   if (!r.ok) throw new Error(r.fail.reason)
   const events: AppEvent[] = []
   r.value.listen(e => events.push(e))

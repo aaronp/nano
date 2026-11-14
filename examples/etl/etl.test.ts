@@ -6,13 +6,15 @@
  *   foo:  etl → source      bar:  etl → sink
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, createRegistry, Pod, success, type AppEvent, type AppDeployment } from '@pritzlaff/nano'
+import { Application, assemble, createRegistry, Pod, success, type AppEvent, type AppDeployment } from '@pritzlaff/nano'
 import { etl, etlProvider, sink, source, written } from './providers.ts'
 
 async function live(d: AppDeployment) {
   const registry = createRegistry()
   registry.add(etlProvider)
-  const r = await Application.create(d, { registry })
+  const runtimes = assemble(d, registry)
+  if (!runtimes.ok) throw new Error(runtimes.fail.reason)
+  const r = await Application.create(runtimes.value, {})
   if (!r.ok) throw new Error(r.fail.reason)
   const events: AppEvent[] = []
   r.value.listen(e => events.push(e))

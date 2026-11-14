@@ -54,7 +54,8 @@ const one = pods => ({ pods, runtimes: { r: { pods: Object.keys(pods), subscript
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 describe("a runtime's slice", () => {
-  // Revised behaviour 17: no live runtime object; app.call and listen filtered by runtime.
+  // Revised behaviour 17: no live runtime object; app.call and listen filtered by runtime. Waits for Task 3 (`counter`
+  // adds a close listener) and Task 4 (`sent` carries `kind`).
   test.todo('given two runtimes, when the host calls through one, then only that runtime records it, and unknown runtimes or unplaced pods are not-found', async () => {
     const { app, events } = await live({ pods: { c: Pod.lazy(counter), d: Pod.lazy(counter) },
       runtimes: { chat: { pods: ['c'], subscriptions: [] }, other: { pods: ['c', 'd'], subscriptions: [] } } })

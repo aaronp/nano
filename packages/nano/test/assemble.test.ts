@@ -65,10 +65,10 @@ describe('Pods.create', () => {
     fails(pods({ z: Pod.lazy(sized, { config: 'big' }) }), 'invalid-input', 'z')
   })
   test('more than 5000 pods', () => {
-    fails(pods(Object.fromEntries(Array.from({ length: 5001 }, (_, i) => [`p${i}`, Pod.lazy(counter)]))), 'invalid-input', 'pods')
+    fails(pods(Object.fromEntries(Array.from({ length: 5001 }, (_, i) => [`p${i}`, Pod.lazy(counter)]))), 'invalid-input', 'more than 5000')
   })
   test('pod names follow the id rule', () => {
-    for (const bad of ['', 'a/b', 'x'.repeat(65)]) fails(pods({ [bad]: Pod.lazy(counter) }), 'invalid-input', 'pods')
+    for (const bad of ['', 'a/b', 'x'.repeat(65)]) fails(pods({ [bad]: Pod.lazy(counter) }), 'invalid-input', 'the id rule')
   })
   test('select scopes the lookup; a duplicate name is invalid-input, an unknown one not-found', () => {
     const p = ok(pods({ a: Pod.lazy(counter), b: Pod.lazy(kv) }))
@@ -97,6 +97,10 @@ describe('Runtime.create', () => {
   test('a runtime placing a pod outside its scope', () => {
     const p = ok(pods({ a: Pod.lazy(counter), ghost: Pod.lazy(counter) }))
     fails(Runtime.create('r', { pods: ['ghost'], subscriptions: [] }, ok(p.select(['a']))), 'invalid-input', 'ghost')
+  })
+  test('a pod placed twice in a runtime', () => {
+    const p = ok(pods({ a: Pod.lazy(counter) }))
+    fails(Runtime.create('r', { pods: ['a', 'a'], subscriptions: [] }, p), 'invalid-input', 'a is placed twice')
   })
   test('a subscription end not placed in its runtime', () => {
     const p = ok(pods({ s: Pod.lazy(sender), k: Pod.lazy(kv) }))

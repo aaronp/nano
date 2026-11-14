@@ -31,8 +31,8 @@ export const op = {
   event: <O extends TSchema>(name: string, data: SchemaDef<O>, o?: Opts): Op<undefined, O, 'event'> => make(name, 'event', undefined, data, o),
 }
 
-/** The event's data is the action's input, or the action takes anything. */
-export function fits(event: Op, action: Op): boolean {
-  if (!event.output || !action.input) return false
-  return event.output.hash === action.input.hash || canonicalSchema(action.input.schema) === '{}'
+/** The source's data (an event's, or an action's result) is the target action's input, or the action takes anything. */
+export function fits(source: Op, action: Op): boolean {
+  if (!source.output || !action.input) return false
+  return source.output.hash === action.input.hash || canonicalSchema(action.input.schema) === '{}'
 }

@@ -8,7 +8,7 @@
  *               (store also in `persistence`, messaging also in `messaging`)
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, createRegistry, Pod, port, success, type AppEvent, type Application as App, type AppDeployment, type NanoResult } from '@pritzlaff/nano'
+import { Application, assemble, createRegistry, Pod, port, success, type AppEvent, type Application as App, type AppDeployment, type NanoResult } from '@pritzlaff/nano'
 import { Inbox, Messaging } from './interfaces.ts'
 import { messengerProvider } from './providers.ts'
 
@@ -55,7 +55,9 @@ function registry() {
 }
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
-const openAlone = async () => must(await Application.create(ALONE, { registry: registry() }))
+/** `d` assembled with a fresh registry and made live. */
+const open = async (d: unknown) => must(await Application.create(must(assemble(d, registry())), {}))
+const openAlone = () => open(ALONE)
 /** Opened alone, then plugged in: the store and messaging are added and wired by one `apply`. */
 async function stitched() {
   const app = await openAlone()
@@ -113,7 +115,7 @@ describe('the messenger, stitched', () => {
     const committed = await Bun.file(DOC).json()
     expect(committed).toEqual(saved)
 
-    const app = must(await Application.create(committed, { registry: registry() }))
+    const app = await open(committed)
     expect(await send(app, 'hi')).toMatchObject({ ok: true, value: { status: 'sent' } })
     expect(await stored(app)).toMatchObject([{ text: 'hi' }])
   })

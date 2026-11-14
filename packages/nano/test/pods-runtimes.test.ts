@@ -93,7 +93,7 @@ describe('assembling', () => {
 
 describe('scope and sharing', () => {
   // Behaviour 4.
-  test.todo('given one pod selected into two runtimes, when the application is created, then it is one instance', async () => {
+  test('given one pod selected into two runtimes, when the application is created, then it is one instance', async () => {
     const pods = ok(Pods.create({ a: Pod.lazy(counter), c: Pod.lazy(counter), d: Pod.lazy(counter) }, { registry: registry() }))
     const chat = ok(Runtime.create('chat', { pods: ['a', 'c'], subscriptions: [] }, ok(pods.select(['a', 'c']))))
     const support = ok(Runtime.create('support', { pods: ['c', 'd'], subscriptions: [] }, ok(pods.select(['c', 'd']))))
@@ -102,12 +102,12 @@ describe('scope and sharing', () => {
     expect(await app.call('support', 'c').inc(null)).toEqual(success(2))
   })
   // Behaviour 5.
-  test.todo('given a pod outside a runtime, when the host calls it there, then it is not-found', async () => {
+  test('given a pod outside a runtime, when the host calls it there, then it is not-found', async () => {
     const { app } = await create({ pods: { a: Pod.lazy(counter), d: Pod.lazy(counter) },
       runtimes: { chat: { pods: ['a'], subscriptions: [] }, support: { pods: ['d'], subscriptions: [] } } })
     expect(await app.call('chat', 'd').inc(null)).toMatchObject({ ok: false, fail: { type: 'not-found' } })
   })
-  // Behaviour 6.
+  // Behaviour 6. Waits for Task 4: appImpl saves through a Selection (`ctx.one(Store).call`).
   test.todo('given app saving through its call edge to db1, when apply points the edge at db2, then the same code saves to db2', async () => {
     const d = { pods: { app: Pod.lazy(appImpl), db1: Pod.lazy(store, { config: 'one' }), db2: Pod.lazy(store, { config: 'two' }) },
       runtimes: { r: { pods: ['app', 'db1', 'db2'], subscriptions: [{ kind: 'call', from: 'app', to: 'db1' }] } } }
@@ -115,6 +115,37 @@ describe('scope and sharing', () => {
     expect(await app.call('r', 'app').save('x')).toEqual(success('one:x'))
     ok(await app.apply({ ...d, runtimes: { r: { ...d.runtimes.r, subscriptions: [{ kind: 'call', from: 'app', to: 'db2' }] } } }))
     expect(await app.call('r', 'app').save('x')).toEqual(success('two:x'))
+  })
+})
+
+describe('composing runtimes', () => {
+  const root = () => ok(Pods.create({ a: Pod.lazy(counter), b: Pod.lazy(counter), c: Pod.lazy(counter), d: Pod.lazy(counter) }, { registry: registry() }))
+  const placing = (pods, id, names) => ok(Runtime.create(id, { pods: names, subscriptions: [] }, ok(pods.select(names))))
+  test('given no runtimes, when the application is created, then it succeeds with an empty deployment', async () => {
+    const app = ok(await Application.create({}, {}))
+    expect(app.deployment()).toEqual({ pods: {}, runtimes: {} })
+  })
+  // Review Focus 2.
+  test('given two runtimes from different Pods both naming a, when the application is created, then it is invalid-input', async () => {
+    const one = ok(Pods.create({ a: Pod.lazy(counter) }, { registry: registry() }))
+    const other = ok(Pods.create({ a: Pod.lazy(store, { config: 'x' }) }, { registry: registry() }))
+    const r = await Application.create({ x: placing(one, 'x', ['a']), y: placing(other, 'y', ['a']) }, {})
+    expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(r.fail.reason).toContain('y')
+  })
+  test('given runtimes from one Pods, when composed, then deployment() has the placed pods in Pods order and the runtimes in the given order', async () => {
+    const pods = root()
+    const app = ok(await Application.create({ t: placing(pods, 't', ['d']), s: placing(pods, 's', ['c', 'a']) }, {}))
+    const d = app.deployment()
+    expect(Object.keys(d.pods)).toEqual(['a', 'c', 'd'])
+    expect(Object.keys(d.runtimes)).toEqual(['t', 's'])
+    expect(d.runtimes.s).toEqual({ pods: ['c', 'a'], subscriptions: [] })
+  })
+  test('given more than 50 runtimes, a runtime id breaking the id rule, or something not a runtime, then it is invalid-input', async () => {
+    const pods = root(), r = placing(pods, 'r', ['a'])
+    const many = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`r${i}`, r]))
+    for (const runtimes of [many, { 'a/b': r }, { r: { id: 'r', pods, deployment: () => ({ pods: ['zz'], subscriptions: [] }) } }, { r: 3 }, null])
+      expect(await Application.create(runtimes, {})).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   })
 })
 
@@ -202,7 +233,7 @@ describe('selections and chains', () => {
 
 describe('the application deployment', () => {
   // Behaviour 13.
-  test.todo('given an assembled application, when its deployment is saved and re-assembled, then it is the same AppDeployment and answers the same', async () => {
+  test('given an assembled application, when its deployment is saved and re-assembled, then it is the same AppDeployment and answers the same', async () => {
     const d = { pods: { app: Pod.lazy(appImpl), db: Pod.lazy(store, { config: 'db' }) },
       runtimes: { r: { pods: ['app', 'db'], subscriptions: [{ kind: 'call', from: 'app', to: 'db' }] } } }
     const first = (await create(d)).app

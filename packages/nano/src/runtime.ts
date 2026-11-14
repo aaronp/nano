@@ -11,7 +11,7 @@ import { port } from './iface.ts'
 import type { Implementation } from './implementation.ts'
 import type { Op } from './op.ts'
 import { fits } from './op.ts'
-import { registryOf, shapeError, type Pods } from './pods.ts'
+import { originOf, shapeError, type Pods } from './pods.ts'
 import { failure, success, type NanoResult } from './result.ts'
 
 export type Subscription =
@@ -51,10 +51,13 @@ function unfit(s: Subscription, from: Implementation, to: Implementation): strin
 }
 
 function check(id: string, r: RuntimeDeployment, pods: Pods): string | undefined {
-  const registry = registryOf(pods)
+  const registry = originOf(pods)?.registry
   if (!registry) return `runtime ${id}: its pods do not come from Pods.create`
   const placed = new Set(r.pods), seen = new Set<string>()
-  for (const name of r.pods) if (!pods.get(name)) return `runtime ${id}: no pod ${name}`
+  for (const [i, name] of r.pods.entries()) {
+    if (!pods.get(name)) return `runtime ${id}: no pod ${name}`
+    if (r.pods.indexOf(name) !== i) return `runtime ${id}: ${name} is placed twice`
+  }
   for (const s of r.subscriptions) {
     const end = [s.from, s.to].find(n => !placed.has(n))
     if (end !== undefined) return `runtime ${id}: ${label(s)}: ${end} is not placed here`

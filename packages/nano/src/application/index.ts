@@ -1,17 +1,19 @@
 /**
- * The Application: the one live thing. It is created from a deployment value, builds eager pods at once and lazy ones
+ * The Application: the one live thing. It is created from runtimes (values), builds eager pods at once and lazy ones
  * on first need, carries every message through the runtime it travels in, and reports all of it on one stream.
  *
- *   const app = (await Application.create(deployment, { registry })).value
+ *   const app = (await Application.create(assemble(appDeployment, registry).value, {})).value
  *   await app.call('app', 'counter').inc(null)   // from 'host', through runtime 'app'
  *   app.listen(e => …)                           // built, sent, delivered, denied, failure, …
  */
 import { Value } from 'typebox/value'
 import { assemble, type AppDeployment } from '../deployment.ts'
 import type { Policy } from '../policy.ts'
-import type { Registry } from '../registry.ts'
+import { createRegistry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
+import type { Runtime } from '../runtime.ts'
 import { diff } from './apply.ts'
+import { compose } from './compose.ts'
 import { instances } from './instances.ts'
 import { client, refusal, type Live } from './messages.ts'
 import { stream, type AppEvent } from './stream.ts'
@@ -26,30 +28,21 @@ export type Application = {
   listen(fn: (e: AppEvent) => void): () => void
 }
 
-type Opts = { registry: Registry; policies?: Record<string, Policy>; timeoutMs?: number }
-
-const bare = <T>(o: Record<string, T>): Record<string, T> => Object.assign(Object.create(null), o)
+type Opts = { policies?: Record<string, Policy>; timeoutMs?: number }
 
 /**
- * `d` checked, as the application's own copy: nobody else holds it, so only `apply` changes it; and its maps have no
- * prototype, so a pod or runtime named `constructor` or `toString` is only ever a name.
+ * `runtimes` live. The application's deployment is its own: nobody else holds it, so only `apply` changes it; and its
+ * maps have no prototype, so a pod or runtime named `constructor` or `toString` is only ever a name.
  */
-function adopt(d: unknown, registry: Registry): NanoResult<AppDeployment> {
-  let copy: AppDeployment
-  try { copy = structuredClone(d) as AppDeployment } catch (e) { return failure('invalid-input', `unreadable deployment: ${e instanceof Error ? e.message : String(e)}`) }
-  const assembled = assemble(copy, registry)
-  if (!assembled.ok) return assembled
-  const runtimes = Object.fromEntries(Object.entries(assembled.value).map(([id, r]) => [id, r.deployment()]))
-  return success({ pods: bare(copy.pods), runtimes: bare(runtimes), ...(copy.tags && { tags: bare(copy.tags) }) })
-}
-
-async function create(d: unknown, opts: Opts): Promise<NanoResult<Application>> {
-  const checked = adopt(d, opts.registry)
-  if (!checked.ok) return checked
-  let current = checked.value, queue: Promise<unknown> = Promise.resolve()
+async function create(runtimes: Record<string, Runtime>, opts: Opts): Promise<NanoResult<Application>> {
+  const composed = compose(runtimes)
+  if (!composed.ok) return composed
+  // No runtimes, no Pods and so no registry: such an application can only apply deployments naming no implementation.
+  const registry = composed.value.registry ?? createRegistry()
+  let current = composed.value.deployment, queue: Promise<unknown> = Promise.resolve()
   const trace = stream()
   const live: Live = {
-    now: () => current, registry: opts.registry, policies: opts.policies ?? {}, timeoutMs: opts.timeoutMs ?? 30_000, trace,
+    now: () => current, registry, policies: opts.policies ?? {}, timeoutMs: opts.timeoutMs ?? 30_000, trace,
     instance: name => pods.get(name),
   }
   const pods = instances(live)
@@ -66,8 +59,19 @@ async function create(d: unknown, opts: Opts): Promise<NanoResult<Application>> 
       }
   }
 
-  async function reconcile(d: unknown): Promise<NanoResult<void>> {
-    const checked = adopt(d, opts.registry)
+  /** `d` assembled with the application's registry and composed; its tags (shape checked by assemble) carried over. */
+  function adopt(d: AppDeployment): NanoResult<AppDeployment> {
+    let copy: AppDeployment
+    try { copy = structuredClone(d) } catch (e) { return failure('invalid-input', `unreadable deployment: ${e instanceof Error ? e.message : String(e)}`) }
+    const assembled = assemble(copy, registry)
+    if (!assembled.ok) return assembled
+    const next = compose(assembled.value)
+    if (!next.ok) return next
+    return success({ ...next.value.deployment, ...(copy.tags && { tags: Object.assign(Object.create(null), copy.tags) }) })
+  }
+
+  async function reconcile(d: AppDeployment): Promise<NanoResult<void>> {
+    const checked = adopt(d)
     if (!checked.ok) return checked
     const why = refused(checked.value)
     if (why !== undefined) return failure('denied', why)

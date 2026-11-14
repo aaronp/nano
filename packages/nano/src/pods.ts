@@ -34,11 +34,13 @@ export function shapeError(schema: TSchema, d: unknown, what: string): string | 
   return `${what} ${e.instancePath || '/'}: ${why}`
 }
 
-/** The registry each `Pods` was checked against, for `Runtime.create`: carried, not a member. */
-const registries = new WeakMap<Pods, Registry>()
-export const registryOf = (pods: Pods): Registry | undefined => registries.get(pods)
+/** Where a `Pods` comes from: the registry it was checked against, and the `Pods.create` result it was selected from. */
+type Origin = { readonly registry: Registry; readonly root: Pods }
+/** Each `Pods`' origin, for `Runtime.create` and `Application.create`: carried, not a member. */
+const origins = new WeakMap<Pods, Origin>()
+export const originOf = (pods: Pods): Origin | undefined => origins.get(pods)
 
-function view(all: ReadonlyMap<string, Pod>, registry: Registry): Pods {
+function view(all: ReadonlyMap<string, Pod>, registry: Registry, root?: Pods): Pods {
   const pods: Pods = Object.freeze({
     names: () => [...all.keys()],
     get: (name: string) => structuredClone(all.get(name)),
@@ -47,11 +49,11 @@ function view(all: ReadonlyMap<string, Pod>, registry: Registry): Pods {
       const dup = names.find((n, i) => names.indexOf(n) !== i), unknown = names.find(n => !all.has(n))
       if (dup !== undefined) return failure('invalid-input', `pod ${dup} is selected twice`)
       if (unknown !== undefined) return failure('not-found', `no pod ${unknown}`)
-      return success(view(new Map(names.map(n => [n, all.get(n)!])), registry))
+      return success(view(new Map(names.map(n => [n, all.get(n)!])), registry, root ?? pods))
     },
     deployment: () => structuredClone(Object.fromEntries(all)),
   })
-  registries.set(pods, registry)
+  origins.set(pods, Object.freeze({ registry, root: root ?? pods }))
   return pods
 }
 
