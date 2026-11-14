@@ -1,139 +1,85 @@
 {
-  "nano": 2,
-  "title": "External signer",
-  "providers": [
-    "example.signer"
-  ],
   "pods": {
-    "p0": {
-      "implementation": "example.signer/vault"
+    "vault": {
+      "implementation": "example.signer/vault",
+      "eager": false
     },
-    "p1": {
-      "implementation": "example.signer/generator"
+    "generator": {
+      "implementation": "example.signer/generator",
+      "eager": false
     },
-    "p2": {
-      "implementation": "example.signer/signer"
+    "signer": {
+      "implementation": "example.signer/signer",
+      "eager": false
     },
-    "p3": {
-      "implementation": "example.signer/map"
+    "map": {
+      "implementation": "example.signer/map",
+      "eager": false
     },
-    "p4": {
-      "implementation": "example.signer/tester"
+    "tester": {
+      "implementation": "example.signer/tester",
+      "eager": false
     },
-    "p5": {
-      "implementation": "example.signer/log"
+    "log": {
+      "implementation": "example.signer/log",
+      "eager": false
     }
   },
-  "runtimes": [
-    {
-      "id": "signer",
-      "policy": "allow-all",
+  "runtimes": {
+    "signer": {
       "pods": [
-        {
-          "coord": "example.signer/vault#0",
-          "pod": "p0"
-        },
-        {
-          "coord": "example.signer/generator#0",
-          "pod": "p1"
-        },
-        {
-          "coord": "example.signer/signer#0",
-          "pod": "p2"
-        },
-        {
-          "coord": "example.signer/map#0",
-          "pod": "p3"
-        }
+        "vault",
+        "generator",
+        "signer",
+        "map"
       ],
-      "next": {
-        "example.signer/vault": 1,
-        "example.signer/generator": 1,
-        "example.signer/signer": 1,
-        "example.signer/map": 1
-      },
       "subscriptions": [
         {
           "kind": "call",
-          "from": "example.signer/generator#0",
-          "to": "example.signer/vault#0",
-          "id": "s1"
+          "from": "generator",
+          "to": "vault"
         },
         {
           "kind": "call",
-          "from": "example.signer/signer#0",
-          "to": "example.signer/vault#0",
-          "id": "s2"
+          "from": "signer",
+          "to": "vault"
         },
         {
           "kind": "event",
-          "from": "example.signer/vault#0",
-          "source": "example.signer.Vault/f0f5c1583efb282af152779bb7c88d378a5b85a09507199ee80b26278f0a3a64",
-          "to": "example.signer/map#0",
-          "target": "example.signer.KeyFormatter/a2c897960fecffbd4805a6058909988796e6c79bd0838d598a79d3ab0c251050",
-          "id": "s3"
+          "from": "vault",
+          "source": "example.signer.Vault/keys",
+          "to": "map",
+          "target": "example.signer.KeyFormatter/format"
         }
       ]
     },
-    {
-      "id": "signer-client",
-      "policy": "allow-all",
+    "signer-client": {
       "pods": [
-        {
-          "coord": "example.signer/generator#0",
-          "pod": "p1"
-        },
-        {
-          "coord": "example.signer/signer#0",
-          "pod": "p2"
-        },
-        {
-          "coord": "example.signer/map#0",
-          "pod": "p3"
-        },
-        {
-          "coord": "example.signer/tester#0",
-          "pod": "p4"
-        },
-        {
-          "coord": "example.signer/log#0",
-          "pod": "p5"
-        }
+        "generator",
+        "signer",
+        "map",
+        "tester",
+        "log"
       ],
-      "next": {
-        "example.signer/generator": 1,
-        "example.signer/signer": 1,
-        "example.signer/map": 1,
-        "example.signer/tester": 1,
-        "example.signer/log": 1
-      },
       "subscriptions": [
         {
           "kind": "call",
-          "from": "example.signer/tester#0",
-          "to": "example.signer/signer#0",
-          "id": "s1"
+          "from": "tester",
+          "to": "signer"
         },
         {
           "kind": "call",
-          "from": "example.signer/tester#0",
-          "to": "example.signer/generator#0",
-          "id": "s2"
+          "from": "tester",
+          "to": "generator"
         },
         {
           "kind": "event",
-          "from": "example.signer/map#0",
-          "source": "example.signer.KeyFormatter/d96c86eb1ce0330750253755a2569e0588f2a4f97cf670e60f809dc32a6be75f",
-          "to": "example.signer/log#0",
-          "target": "example.signer.Log/77eaaecad3790471bcec8e0a22417fa471db78848dbfc9b61b9fdd761edbb56c",
-          "id": "s3"
+          "from": "map",
+          "source": "example.signer.KeyFormatter/line",
+          "to": "log",
+          "target": "example.signer.Log/append"
         }
       ]
     }
-  ],
-  "tags": {},
-  "start": [
-    "signer",
-    "signer-client"
-  ]
+  }
 }

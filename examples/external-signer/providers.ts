@@ -3,8 +3,8 @@
  * of it, a tester widget that uses both, a log, and a map that turns stored keys into log lines.
  *
  *   registry.add(signerProvider)
- *   await rt.create('vault', 'example.signer/vault')
- *   await rt.create('signer', 'example.signer/signer', { provision: true })   // subscribes to the vault beside it
+ *   { pods: { vault: Pod.lazy(vault), signer: Pod.lazy(signer) },
+ *     runtimes: { signer: { pods: ['vault', 'signer'], subscriptions: [{ kind: 'call', from: 'signer', to: 'vault' }] } } }
  */
 import { implementation, provide, provider, success } from '@pritzlaff/nano'
 import { KeyFormatter, KeyGenerator, Log, Signer, Tester, Vault } from './interfaces.ts'
@@ -15,10 +15,10 @@ const fromBase64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0))
 /** Makes and keeps Ed25519 keys in memory; private keys never leave it. A purpose other than the key's is `denied`. */
 const vault = implementation('example.signer/vault', {
   provides: [Vault],
-  make: () => {
+  make: ctx => {
     const keys = new Map<string, { purpose: string; key: CryptoKey }>()
     return [provide(Vault, {
-      async create(ctx, { count, purpose }) {
+      async create({ count, purpose }) {
         const made = await Promise.all(Array.from({ length: count }, async () => {
           const k = await crypto.subtle.generateKey({ name: 'Ed25519' }, false, ['sign', 'verify']) as CryptoKeyPair
           const publicKey = toBase64(await crypto.subtle.exportKey('raw', k.publicKey))
@@ -28,7 +28,7 @@ const vault = implementation('example.signer/vault', {
         await ctx.publish(Vault.ops.keys, made.map(publicKey => ({ publicKey, purpose })))
         return success({ keys: made })
       },
-      async 'sign-with'(_ctx, { publicKey, purpose, payload }) {
+      async 'sign-with'({ publicKey, purpose, payload }) {
         const held = keys.get(publicKey)
         if (!held) return success({ status: 'unknown-key' as const })
         if (held.purpose !== purpose) return success({ status: 'denied' as const, reason: `this key is for ${held.purpose}` })
@@ -43,8 +43,8 @@ const vault = implementation('example.signer/vault', {
 const generator = implementation('example.signer/generator', {
   provides: [KeyGenerator],
   dependencies: { vault: Vault },
-  make: () => [provide(KeyGenerator, {
-    'create-keys': (ctx, request) => ctx.one(Vault, v => v.create(request)),
+  make: ctx => [provide(KeyGenerator, {
+    'create-keys': async request => { const v = ctx.one(Vault); return v.ok ? v.value.create(request) : v },
   })],
 })
 
@@ -52,20 +52,23 @@ const generator = implementation('example.signer/generator', {
 const signer = implementation('example.signer/signer', {
   provides: [Signer],
   dependencies: { vault: Vault },
-  make: () => [provide(Signer, {
-    sign: (ctx, request) => ctx.one(Vault, v => v['sign-with'](request)),
+  make: ctx => [provide(Signer, {
+    sign: async request => { const v = ctx.one(Vault); return v.ok ? v.value['sign-with'](request) : v },
   })],
 })
 
 const tester = implementation('example.signer/tester', {
   provides: [Tester],
   dependencies: { signer: Signer, generator: KeyGenerator },
-  make: () => [provide(Tester, {
-    async test(ctx, { purpose, payload, signAs }) {
-      const made = await ctx.one(KeyGenerator, g => g['create-keys']({ count: 1, purpose }))
+  make: ctx => [provide(Tester, {
+    async test({ purpose, payload, signAs }) {
+      const g = ctx.one(KeyGenerator), s = ctx.one(Signer)
+      if (!g.ok) return g
+      if (!s.ok) return s
+      const made = await g.value['create-keys']({ count: 1, purpose })
       if (!made.ok) return made
       const publicKey = made.value.keys[0]!
-      const signed = await ctx.one(Signer, s => s.sign({ publicKey, purpose: signAs ?? purpose, payload }))
+      const signed = await s.value.sign({ publicKey, purpose: signAs ?? purpose, payload })
       return signed.ok ? success({ publicKey, result: signed.value }) : signed
     },
   })],
@@ -73,13 +76,13 @@ const tester = implementation('example.signer/tester', {
 
 const log = implementation('example.signer/log', {
   provides: [Log],
-  make: () => {
+  make: ctx => {
     const entries: string[] = []
     return [provide(Log, {
-      async append(ctx, line) {
+      async append(line) {
         entries.push(line)
         await ctx.publish(Log.ops.entries, [...entries])
-        return success(undefined)
+        return success(null)
       },
     })]
   },
@@ -87,10 +90,10 @@ const log = implementation('example.signer/log', {
 
 const map = implementation('example.signer/map', {
   provides: [KeyFormatter],
-  make: () => [provide(KeyFormatter, {
-    async format(ctx, keys) {
+  make: ctx => [provide(KeyFormatter, {
+    async format(keys) {
       for (const k of keys) await ctx.publish(KeyFormatter.ops.line, `${k.purpose}: ${k.publicKey}`)
-      return success(undefined)
+      return success(null)
     },
   })],
 })

@@ -2,8 +2,8 @@
  * The external signer's contracts: make keys, sign with them, keep them in a vault, and log what happened.
  * Binary values (keys, payloads, signatures) are base64 strings (decision 2).
  *
- *   ctx.one(KeyGenerator, g => g['create-keys']({ count: 1, purpose: 'login' }))   // { keys: ['<base64 public key>'] }
- *   ctx.one(Signer, s => s.sign({ publicKey, purpose: 'login', payload }))          // { status: 'signed', signature }
+ *   const g = ctx.one(KeyGenerator)   // NanoResult<Client>: g.value['create-keys']({ count: 1, purpose: 'login' }) gives { keys: ['<base64 public key>'] }
+ *   const s = ctx.one(Signer)         // s.value.sign({ publicKey, purpose: 'login', payload }) gives { status: 'signed', signature }
  */
 import { Type } from 'typebox'
 import { defineSchema, iface, op } from '@pritzlaff/nano'
@@ -24,6 +24,7 @@ export const SignResult = defineSchema('SignResult', Type.Union([
 export const KeyList = defineSchema('KeyList', Type.Array(Type.Object({ publicKey: Base64, purpose: Type.String() })))
 
 export const LogLine = defineSchema('LogLine', Type.String())
+export const Done = defineSchema('Done', Type.Null())
 export const LogEntries = defineSchema('LogEntries', Type.Array(Type.String()))
 
 export const TestRequest = defineSchema('TestRequest', Type.Object({
@@ -47,19 +48,19 @@ export const Vault = iface('example.signer.Vault', {
   create: op.action('create', KeysRequest, NewKeys),
   'sign-with': op.action('sign-with', SignRequest, SignResult),
   /** Published after each `create`: the keys just made. */
-  keys: op.source('keys', KeyList),
+  keys: op.event('keys', KeyList),
 })
 
 export const Log = iface('example.signer.Log', {
-  append: op.sink('append', LogLine),
+  append: op.action('append', LogLine, Done),
   /** Published after each `append`: every entry so far. */
-  entries: op.source('entries', LogEntries),
+  entries: op.event('entries', LogEntries),
 })
 
 /** Turns the vault's `keys` into log lines. */
 export const KeyFormatter = iface('example.signer.KeyFormatter', {
-  format: op.sink('format', KeyList),
-  line: op.source('line', LogLine),
+  format: op.action('format', KeyList, Done),
+  line: op.event('line', LogLine),
 })
 
 /** The tester widget's button: make a key for a purpose, sign a payload with it. */

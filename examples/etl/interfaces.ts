@@ -1,8 +1,8 @@
 /**
  * The ETL's contracts: read rows from a source, write them to a sink, and the pipeline that moves them.
  *
- *   ctx.one(Source, s => s.read({}))        // string[]
- *   ctx.one(Sink, s => s.write(['A']))      // the count written
+ *   ctx.one(Source)            // NanoResult<Client>: .read({}) gives string[]
+ *   ctx.one(Sink)              // .write(['A']) gives the count written
  */
 import { Type } from 'typebox'
 import { defineSchema, iface, op } from '@pritzlaff/nano'

@@ -3,9 +3,9 @@
  * what is plugged in: the inbox falls back to a local map without a store, the composer reports itself disabled.
  *
  *   registry.add(messengerProvider)
- *   rt.register(Pod.create(inbox))   // works alone, on its fallback
+ *   { pods: { inbox: Pod.lazy(inbox) }, runtimes: { messenger: { pods: ['inbox'], subscriptions: [] } } }   // works alone, on its fallback
  */
-import { implementation, provide, provider, success, type NanoContext } from '@pritzlaff/nano'
+import { implementation, provide, provider, success } from '@pritzlaff/nano'
 import { Composer, Inbox, KeyValueStore, Messaging, Send } from './interfaces.ts'
 
 type Message = { id: string; text: string }
@@ -15,8 +15,8 @@ const memoryStore = implementation('example.messenger/memory-store', {
   make: () => {
     const data = new Map<string, string>()
     return [provide(KeyValueStore, {
-      get: async (_ctx, key) => success(data.get(key) ?? null),
-      put: async (_ctx, { key, value }) => { data.set(key, value); return success(null) },
+      get: async key => success(data.get(key) ?? null),
+      put: async ({ key, value }) => { data.set(key, value); return success(null) },
     })]
   },
 })
@@ -24,8 +24,8 @@ const memoryStore = implementation('example.messenger/memory-store', {
 /** Whatever is posted is passed on to every subscriber of `messages`. */
 const messaging = implementation('example.messenger/messaging', {
   provides: [Messaging],
-  make: () => [provide(Messaging, {
-    async post(ctx, message) {
+  make: ctx => [provide(Messaging, {
+    async post(message) {
       await ctx.publish(Messaging.ops.messages, message)
       return success(null)
     },
@@ -36,21 +36,24 @@ const messaging = implementation('example.messenger/messaging', {
 const inbox = implementation('example.messenger/inbox', {
   provides: [Inbox],
   dependencies: { store: KeyValueStore },
-  make: () => {
+  make: ctx => {
     const local = new Map<string, Message>()
-    const stored = async (ctx: NanoContext) => {
-      const r = await ctx.one(KeyValueStore, kv => kv.get('inbox'))
+    const unplugged = () => ctx.all(KeyValueStore).length === 0
+    const stored = async () => {
+      const kv = ctx.one(KeyValueStore)
+      if (!kv.ok) return kv
+      const r = await kv.value.get('inbox')
       return r.ok ? success<Message[]>(r.value ? JSON.parse(r.value) : []) : r
     }
     return [provide(Inbox, {
-      async receive(ctx, message) {
-        if (!ctx.hasDependencies('store')) { local.set(message.id, message); return success(undefined) }
-        const all = await stored(ctx)
+      async receive(message) {
+        if (unplugged()) { local.set(message.id, message); return success(null) }
+        const all = await stored()
         if (!all.ok) return all
-        const put = await ctx.one(KeyValueStore, kv => kv.put({ key: 'inbox', value: JSON.stringify([...all.value, message]) }))
-        return put.ok ? success(undefined) : put
+        const kv = ctx.one(KeyValueStore)
+        return kv.ok ? kv.value.put({ key: 'inbox', value: JSON.stringify([...all.value, message]) }) : kv
       },
-      list: async ctx => (ctx.hasDependencies('store') ? stored(ctx) : success([...local.values()])),
+      list: async () => (unplugged() ? success([...local.values()]) : stored()),
     })]
   },
 })
@@ -58,11 +61,13 @@ const inbox = implementation('example.messenger/inbox', {
 const composer = implementation('example.messenger/composer', {
   provides: [Composer],
   dependencies: { messaging: Messaging },
-  make: () => [provide(Composer, {
-    async send(ctx, { text }) {
-      if (!ctx.hasDependencies('messaging')) return success({ status: 'disabled' as const })
+  make: ctx => [provide(Composer, {
+    async send({ text }) {
+      if (ctx.all(Messaging).length === 0) return success({ status: 'disabled' as const })
+      const m = ctx.one(Messaging)
+      if (!m.ok) return m
       const id = crypto.randomUUID()
-      const r = await ctx.one(Messaging, m => m.post({ id, text }))
+      const r = await m.value.post({ id, text })
       return r.ok ? success({ status: 'sent' as const, id }) : r
     },
   })],
@@ -72,8 +77,10 @@ const composer = implementation('example.messenger/composer', {
 export const send = implementation('example.messenger/send', {
   provides: [Send],
   dependencies: { db: KeyValueStore },
-  make: () => [provide(Send, { send: async (ctx, { contact, message }) =>
-    ctx.one(KeyValueStore, kv => kv.put({ key: contact, value: message })) })],
+  make: ctx => [provide(Send, { send: async ({ contact, message }) => {
+    const kv = ctx.one(KeyValueStore)
+    return kv.ok ? kv.value.put({ key: contact, value: message }) : kv
+  } })],
 })
 
 export const messengerProvider = provider('example.messenger', [memoryStore, messaging, inbox, composer, send])

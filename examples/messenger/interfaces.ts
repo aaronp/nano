@@ -1,8 +1,8 @@
 /**
  * The messenger's contracts: a key-value store, a messaging channel, and the inbox and composer widgets that use them.
  *
- *   ctx.one(KeyValueStore, kv => kv.put({ key: 'inbox', value: '[]' }))
- *   ctx.one(Messaging, m => m.post({ id: 'm1', text: 'hi' }))   // every subscriber of `messages` gets it
+ *   const kv = ctx.one(KeyValueStore)               // NanoResult<Client>: kv.value.put({ key: 'inbox', value: '[]' })
+ *   if (ctx.all(Messaging).length === 0) …          // nothing wired: the composer is disabled
  */
 import { Type } from 'typebox'
 import { defineSchema, iface, op } from '@pritzlaff/nano'
@@ -29,11 +29,11 @@ export const KeyValueStore = iface('example.messenger.KeyValueStore', {
 
 export const Messaging = iface('example.messenger.Messaging', {
   post: op.action('post', Message, Done),
-  messages: op.source('messages', Message),
+  messages: op.event('messages', Message),
 })
 
 export const Inbox = iface('example.messenger.Inbox', {
-  receive: op.sink('receive', Message),
+  receive: op.action('receive', Message, Done),
   list: op.action('list', Nothing, Messages),
 })
 
@@ -42,5 +42,5 @@ export const Composer = iface('example.messenger.Composer', {
 })
 
 export const Outgoing = defineSchema('Outgoing', Type.Object({ contact: Type.String(), message: Type.String() }))
-/** `send(contact, message)`: one pod, shared by every runtime that registers it. */
+/** `send(contact, message)`: one pod, shared by every runtime it is placed in. */
 export const Send = iface('example.messenger.Send', { send: op.action('send', Outgoing, Done) })

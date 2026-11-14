@@ -2,23 +2,26 @@
  * The `example.migration` provider: an in-memory db, a migration that names its runtimes by config, and a careless one
  * that does not.
  *
- *   Pod.create(migrate, { config: { from: 'v2', to: 'v3' } })   // registered in both, wired to each db
+ *   Pod.lazy(migrate, { config: { from: 'v2', to: 'v3' } })   // placed in both, wired to each db
  */
 import { implementation, provide, provider, sel, success } from '@pritzlaff/nano'
 import { DB, Migrate } from './interfaces.ts'
 
-export const db = implementation('example.migration/db', { provides: [DB], make: (seed: string[] = []) => {
+export const db = implementation('example.migration/db', { provides: [DB], make: (_ctx, seed: string[] = []) => {
   const rows = [...seed]
-  return [provide(DB, { all: async () => success([...rows]), insert: async (_c, more) => { rows.push(...more); return success(null) } })]
+  return [provide(DB, { all: async () => success([...rows]), insert: async more => { rows.push(...more); return success(null) } })]
 } })
 /** Copies every row from `config.from` to `config.to`: the runtimes are named by config, chosen by the selector. */
 export const migrate = implementation('example.migration/migrate', {
   provides: [Migrate],
   dependencies: { db: DB },
-  make: (config: { from: string; to: string }) => [provide(Migrate, { run: async ctx => {
-    const rows = await ctx.one(sel(DB, { runtime: config.from }), d => d.all({}))
+  make: (ctx, config: { from: string; to: string }) => [provide(Migrate, { run: async () => {
+    const from = ctx.one(sel(DB, { runtime: config.from })), to = ctx.one(sel(DB, { runtime: config.to }))
+    if (!from.ok) return from
+    if (!to.ok) return to
+    const rows = await from.value.all({})
     if (!rows.ok) return rows
-    const put = await ctx.one(sel(DB, { runtime: config.to }), d => d.insert(rows.value))
+    const put = await to.value.insert(rows.value)
     return put.ok ? success(rows.value.length) : put
   } })],
 })
@@ -26,8 +29,10 @@ export const migrate = implementation('example.migration/migrate', {
 export const careless = implementation('example.migration/careless', {
   provides: [Migrate],
   dependencies: { db: DB },
-  make: () => [provide(Migrate, { run: async ctx => {
-    const rows = await ctx.one(DB, d => d.all({}))
+  make: ctx => [provide(Migrate, { run: async () => {
+    const d = ctx.one(DB)
+    if (!d.ok) return d
+    const rows = await d.value.all({})
     return rows.ok ? success(rows.value.length) : rows
   } })],
 })
