@@ -2,8 +2,9 @@
 
 Spec: `docs/superpowers/specs/2026-11-14-pods-runtimes-application-design.md`, and
 `docs/superpowers/specs/2026-11-14-values-and-application-design.md` for what it does not revise. Decisions:
-`docs/decisions.md` (cited as D<n>; D70 on are this model, D90 on are pods, runtimes and an application). Worked examples: `examples/external-signer`, `examples/messenger` (each with its `nano.json`),
-`examples/etl`, `examples/migration`.
+`docs/decisions.md` (cited as D<n>; D70 on are this model, D90 on are pods, runtimes and an application). Worked
+examples: `examples/external-signer`, `examples/messenger` (each with its `nano.json`), `examples/etl`,
+`examples/migration`.
 
 Nano is an event-driven RPC and pub/sub system made of plain values and one live `Application`. Everything is a
 synchronous value except the `Application`, which alone runs effects (D70).
@@ -48,17 +49,16 @@ order within the timeout, then `closed` on the stream); `send` carries exactly o
 and deliveries under way); `emit` is what follows a message: an emission delivered along pipes and to `On`
 subscriptions, and `client`, which calls by op name and emits each successful result; `refusal` is a runtime policy's
 answer to a message or a new subscription (a throw, a Promise or no verdict refuses); `within` bounds a build or
-handler by the timeout, and `attempt` also records its throw or timeout as a `failure`; `contextFor(live, name, onClose)` is a pod's `NanoContext`, `onClose` adding a listener to
-that build; `diff(a, b)` is what `apply` changes: pods added, removed, changed, and runtimes rewired;
+handler by the timeout, and `attempt` also records its throw or timeout as a `failure`; `contextFor(live, name,
+onClose)` is a pod's `NanoContext`, `onClose` adding a listener to that build; `diff(a, b)` is what `apply` changes: pods added, removed, changed, and runtimes rewired;
 `compose(runtimes)` is the application's deployment from its runtimes (the pods they place, in their `Pods`' order,
 and those pods' tags) and their registry.
 
 Inside `pods.ts` (not exported from the package): `Id` is the id rule for pod names and runtime ids, `shapeError` the
 first way a value breaks a level's shape, `originOf(pods)` where a `Pods` comes from: the registry it was checked
 against (which `Runtime.create` resolves implementations with), the `Pods` it was selected from (one per application)
-and the tags of its pods. Inside `deployment.ts`: `RuntimeIds` is the
-shape of a table by runtime id (the id rule, at most 50). Inside `runtime.ts`: `isRuntime(r)` is whether
-`Runtime.create` made `r`.
+and the tags of its pods. Inside `deployment.ts`: `RuntimeIds` is the shape of a table by runtime id (the id rule, at
+most 50). Inside `runtime.ts`: `isRuntime(r)` is whether `Runtime.create` made `r`.
 
 ## How it works
 

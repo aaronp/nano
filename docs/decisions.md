@@ -714,13 +714,13 @@ Pinned by "the document limits hold for what is built live" (`document.test.ts`)
 
 ## 91. Call edges and pipes (decided with the user, 2026-11-14)
 
-**Decision:** A subscription is a call edge `{ kind: 'call', from, to }` (which pods a pod's code may reach) or a pipe `{ kind: 'pipe', from, source, to, target }` (an output into an action's input, outside any component's code). A pipe's source is an event or an action of `from` (its successful results); its target is an action of `to` whose input fits the source's data. The kind `'event'` is renamed `'pipe'`. Supersedes the `'event'` subscription of D75 and the earlier spec.
+**Decision:** A subscription is a call edge `{ kind: 'call', from, to }` (which pods a pod's code may reach) or a pipe `{ kind: 'pipe', from, source, to, target }` (an output into an action's input, outside any component's code). A pipe's source is an event or an action of `from` (its successful results); its target is an action of `to` whose input fits the source's data. Supersedes the event subscription of D75 and the earlier spec.
 **Why:** Edges are the swap point for dependencies; pipes let a packaged application expose its pieces.
 **Cost if wrong:** Renaming `'pipe'` back and a second source kind, in data and in `nano.json`.
 
 ## 92. Selections and `on` in code (decided with the user, 2026-11-14)
 
-**Decision:** `ctx.one` returns a `Selection` and `ctx.all` a list of them. A `Selection` is its own result (`ok`, `fail`, `pod`, `runtime`), with `call` through its edge (policed and recorded there) and `on(op, fn)` to hear that pod's event or action results for as long as the subscribing instance lives. On a failed selection every call resolves to its `Fail` and `on` does nothing; nothing is thrown. An `on` subscription is not part of any deployment, and stops when its instance closes, when it is unsubscribed, or when `apply` removes its edge. Refines D76's `one`/`all`.
+**Decision:** `ctx.one` returns a `Selection` and `ctx.all` a list of them. A `Selection` is its own result (`ok`, `fail`, `pod`, `runtime`), with `call` through its edge (policed and recorded there) and `on(op, fn)` to hear that pod's event or action results for as long as the subscribing instance lives. On a failed selection every call resolves to its `Fail` and `on` does nothing; nothing is thrown. An `on` subscription is not part of any deployment, and stops when its instance closes, when it is unsubscribed, or when `apply` removes its edge. Replaces the earlier spec's `one` returning `NanoResult<Client>` (`2026-11-14-values-and-application-design.md`), so `ctx.one(DB).call.save(x)` needs no `.value`.
 **Why:** One fluent shape that a call site can check or not.
 **Cost if wrong:** Selections stay values; a throwing `one` would be a new context.
 
@@ -732,7 +732,7 @@ Pinned by "the document limits hold for what is built live" (`document.test.ts`)
 
 ## 94. Tags are an option on `Pods.create` (decided with the user, 2026-11-14)
 
-**Decision:** `Pods.create(podDeployment, { registry, tags? })` takes tags by pod name (`invalid-input` for a name it does not hold); `select` keeps the selected pods' tags; `assemble` passes `AppDeployment.tags` through it. Tags are not a field of `Pod`. Supersedes the controller ruling that carried tags on an internal record.
+**Decision:** `Pods.create(podDeployment, { registry, tags? })` takes tags by pod name (`invalid-input` for a name it does not hold); `select` keeps the selected pods' tags; `assemble` passes `AppDeployment.tags` through it. Tags are not a field of `Pod`.
 **Why:** Tags drive live selectors, so they must survive assembly; this places them with the pod table without changing `Pod`.
 **Cost if wrong:** Moving tags onto `Pod` changes its shape and every saved `nano.json`.
 
@@ -750,7 +750,7 @@ Pinned by "the document limits hold for what is built live" (`document.test.ts`)
 
 ## 97. Internal names are fine (decided with the user, 2026-11-14)
 
-**Decision:** Names inside the package that are not exported from it (`Id`, `shapeError`, `originOf`, `compose`, `RuntimeIds`, `isRuntime`, `instances`, `send`, `emit`, `refusal`, `within`, `attempt`, `contextFor`, `diff`) need no ruling; they are listed in `design.md`.
+**Decision:** The user approved `compose`, `RuntimeIds`, `originOf`, `tag` and `isRuntime` by name, and said internal names (not exported from the package) are fine. They are listed in `design.md`, not subject to the "new export" rule of CLAUDE.md.
 **Why:** CLAUDE.md governs the public surface.
 **Cost if wrong:** Renaming them.
 
@@ -762,7 +762,7 @@ Pinned by "the document limits hold for what is built live" (`document.test.ts`)
 
 ## 99. Pods learn their runtimes from the data (controller ruling, surfaced to the user)
 
-**Decision:** `Runtime.create` does not write into `Pods`. At `Application.create` a pod's runtimes are worked out from the runtimes that place it; a pod placed in none is never built, and `deployment()` omits it. A runtime's own `id` must equal its key in the table (`invalid-input` otherwise). Runtimes from different `Pods` holding one name are `invalid-input`. An application created from no runtimes has an empty registry, so `apply` naming an implementation is `not-found`. Supersedes D89's "the application keeps its own copy of the deployment" (it is derived from the runtimes).
+**Decision:** `Runtime.create` does not write into `Pods`. At `Application.create` a pod's runtimes are worked out from the runtimes that place it; a pod placed in none is never built, and `deployment()` omits it. A runtime's own `id` must equal its key in the table (`invalid-input` otherwise). Runtimes from different `Pods` holding one name are `invalid-input`. An application created from no runtimes has an empty registry, so `apply` naming an implementation is `not-found`. Refines D89's "the application keeps its own copy of the deployment" (it is derived from the runtimes).
 **Why:** One source of truth; an unplaced pod cannot affect the application.
 **Cost if wrong:** A saved `nano.json` loses unplaced descriptions; restoring them is via the shared root `Pods`.
 
@@ -795,3 +795,15 @@ Pinned by "the document limits hold for what is built live" (`document.test.ts`)
 **Decision:** Not decided. Today `publish` awaits its pipe deliveries (not its `on` subscriptions), keeping the earlier spec's tested contract; the new spec frees only the callers of actions. Whether `publish` should stop waiting like action callers is the user's call.
 **Why:** The two kinds of emitter are inconsistent; a slow pipe target slows a publisher.
 **Cost if wrong:** Changing it is one await in `emit` and a test.
+
+## 105. The subscription kind `'event'` is renamed `'pipe'` (controller call, accepted with the spec)
+
+**Decision:** The kind `'event'` is `'pipe'`, as it now carries action results as well as events. It was listed under "Open" in the spec; the user approved the spec and plan without objecting. Supersedes the `'event'` kind of D75 and the earlier spec.
+**Why:** The name no longer fits what it connects.
+**Cost if wrong:** Renaming back, in data and in `nano.json`.
+
+## 106. Internal names beyond those approved by name (controller ruling, surfaced to the user)
+
+**Decision:** Under D97, `instances`, `send`, `emit`, `refusal`, `within`, `attempt`, `contextFor`, `diff` and `On` are internal to `application/`, named by the controller and listed in `design.md`.
+**Why:** The user's approval covers internal names generally; these are the ones the work added.
+**Cost if wrong:** Renaming them.
