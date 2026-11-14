@@ -7,12 +7,12 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { createRegistry, createRuntime, Pod, success, type Runtime, type RuntimeEvent } from '@pritzlaff/nano'
-import { memoryStore, messengerProvider, send } from './providers.ts'
+import { messengerProvider, send } from './providers.ts'
 
 const runtime = (id: string) => {
   const registry = createRegistry()
   registry.add(messengerProvider)
-    const rt = createRuntime(id, { registry })
+  const rt = createRuntime(id, { registry })
   const events: RuntimeEvent[] = []
   rt.listen(e => events.push(e))
   return { rt, events }
@@ -23,7 +23,7 @@ const sentTo = (events: RuntimeEvent[]) => events.filter(e => e.type === 'sent')
 describe('send, shared', () => {
   test('given send wired to db in messaging and registered in chat and support, when chat sends, then chat records the send, messaging records the db call, and chat cannot reach db', async () => {
     const messaging = runtime('messaging'), chat = runtime('chat'), support = runtime('support')
-    const db = reg(messaging.rt, Pod.create(memoryStore))
+    const db = reg(messaging.rt, Pod.create(messengerProvider.implementations.get('example.messenger/memory-store')!))
     const pod = Pod.create(send)
     const home = reg(messaging.rt, pod)
     messaging.rt.subscribe({ kind: 'call', from: home, to: db })

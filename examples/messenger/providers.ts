@@ -3,14 +3,14 @@
  * what is plugged in: the inbox falls back to a local map without a store, the composer reports itself disabled.
  *
  *   registry.add(messengerProvider)
- *   await rt.create('inbox', 'example.messenger/inbox')   // works alone, on its fallback
+ *   rt.register(Pod.create(inbox))   // works alone, on its fallback
  */
 import { implementation, provide, provider, success, type NanoContext } from '@pritzlaff/nano'
 import { Composer, Inbox, KeyValueStore, Messaging, Send } from './interfaces.ts'
 
 type Message = { id: string; text: string }
 
-export const memoryStore = implementation('example.messenger/memory-store', {
+const memoryStore = implementation('example.messenger/memory-store', {
   provides: [KeyValueStore],
   make: () => {
     const data = new Map<string, string>()

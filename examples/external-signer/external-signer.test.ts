@@ -107,7 +107,7 @@ describe('the external signer', () => {
     expect(log.seen).toEqual([[`login: ${r.value.publicKey}`]])
   })
 
-  test('swapping the vault at its home keeps every coord and subscription; the client sees a fresh vault through the shared signer', async () => {
+  test('swapping the vault keeps every coord and subscription; the client sees a fresh vault through the shared signer', async () => {
     const p = probe(), reg = registry()
     reg.add(p.provider)
     const app = build(reg), log = watchLog(p, app)
