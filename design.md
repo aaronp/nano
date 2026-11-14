@@ -1,149 +1,115 @@
-> Being rewritten (plan `docs/superpowers/plans/2026-11-14-values-and-application.md`): the domain table is current; the
-> sections after it still describe the removed runtime, application and document.
-
-> The other packages (`core`, `app`, `runes`, `ui-workspace`, …) still run on the old core until plans 2 and 3 move
-> them; this file describes the new model in `packages/nano`.
-
 # Design: the nano model
 
-Spec: `docs/superpowers/specs/2026-11-13-runtime-model-design.md`. Decisions: `docs/decisions.md` (cited as D<n>).
-Worked examples: `examples/external-signer`, `examples/messenger` (each with its `nano.json`), `examples/etl`, `examples/migration`.
+Spec: `docs/superpowers/specs/2026-11-14-values-and-application-design.md`. Decisions: `docs/decisions.md` (cited as D<n>;
+D70 on are this model). Worked examples: `examples/external-signer`, `examples/messenger` (each with its `nano.json`),
+`examples/etl`, `examples/migration`.
 
-## The domains
+Nano is an event-driven RPC and pub/sub system made of plain values and one live `Application`. Everything is a
+synchronous value except the `Application`, which alone runs effects (D70).
+
+## Values and the live Application
 
 Each has one responsibility and one file in `packages/nano/src`; each file opens with a comment and an example.
 
-| Domain | Responsibility | File |
+| What | Responsibility | File |
 |---|---|---|
 | Schema | a TypeBox schema (`SchemaDef`, from `defineSchema`) with its blake3 `hashOf` (annotations stripped, `canonical`, `canonicalSchema`) and JSON codec; `isJson` refuses non-JSON schemas | `schema.ts` |
-| Op | an action (in → out) or an event (data out, its `output`) (`Op`, `OpKind`); coord = hash of name + schema hashes; `fits` checks an event against an action | `op.ts` |
-| `Interface` | a coord (`ns/name`, `com.example.DB`; the `COORD` rule) plus its ops; `port(i, op)` = `<interface>/<op name>` names one op as offered; `Client` is a typed client for one (actions only) | `iface.ts` |
-| Result | `NanoResult` = `success` or a platform `Fail` (`FailType`); never thrown; `isNanoResult` | `result.ts` |
-| `Implementation` | code providing whole interfaces, with declared dependencies (selectors by role) and optional config schema; its factory `make(ctx, config)` returns `Handlers` (a `Handler` per port, taking input only; `provide` / `Provided` pair them) | `implementation.ts` |
-| `Provider` | a namespace of implementations (`<provider>/<name>`) plus metadata | `provider.ts` |
-| `Registry` | a pool of providers (`createRegistry`); O(1) lookups (`implementationsFor`); a plain-data `Manifest` | `registry.ts` |
-| Selector | which call subscriptions a call may use (`Selector`: an interface, or `SelectorData` narrowed by tags, implementation, provider, `runtime`; `sel`, `selectorData`, `matches` over a `Target`) | `selector.ts` |
+| Op | an action (in, out) or an event (data out) (`Op`, `OpKind`, built with `op`); coord = hash of name + schema hashes; `fits` checks an event against an action | `op.ts` |
+| `Interface` | a coord (`ns/name`; the `COORD` rule) plus its ops (`iface`); `port(i, op)` = `<interface>/<op name>`; `Client` is a typed client for one (actions only) | `iface.ts` |
+| Result | `NanoResult` = `success` or a platform `Fail` (`failure`, `FailType`); never thrown; `isNanoResult` | `result.ts` |
+| `Implementation` | code providing whole interfaces (`implementation`), with dependencies (selectors by role) and an optional config schema; its factory `make(ctx, config)` returns `Provided` (`provide(iface, handlers)`), each `Handler` taking only its input (`Handlers`) | `implementation.ts` |
+| `Provider` | a namespace of implementations (`provider`) plus metadata | `provider.ts` |
+| `Registry` | a pool of providers (`createRegistry`); O(1) lookups (`implementationsOf`); a plain-data `Manifest` | `registry.ts` |
+| `Selector` | which call subscriptions a call may use: an interface, or `SelectorData` narrowed by tags, implementation, provider, `runtime` (`sel`, `selectorData`, `matches` over a `Target`) | `selector.ts` |
 | Context | what a pod's factory gets (`NanoContext`): `self`, `runtimes`, `one`, `all`, `publish` | `context.ts` |
-| Pod | a value: `{ implementation, config?, eager }` from `Pod.lazy(impl, { config })` / `Pod.eager(…)`; no state or instance | `pod.ts` |
-| `Policy` | `isAllowed(src, dest, data)` per runtime, a `Verdict`; `Policies.allowAll()` only, for now | `policy.ts` |
-| `Deployment` | the whole system as data: pods by name, runtimes (pods placed, `Subscription`s, policy), tags; `checkDeployment(d, registry)` validates it strictly | `deployment.ts` |
-| `Application` | the one live thing: `Application.create(deployment, { registry, policies?, timeoutMs? })`; `call`, `apply`, `restart`, `deployment`, `listen` (an `AppEvent` stream) | `application/` |
+| `Pod` | a value `{ implementation, config?, eager }` from `Pod.lazy(impl, { config })` / `Pod.eager(impl)`; no state, methods or instance | `pod.ts` |
+| `Policy` | `isAllowed(src, dest, data)` per runtime, answering a `Verdict`; `Policies.allowAll()` | `policy.ts` |
+| `Deployment` | the whole system as data: pods by name, runtimes (pods placed, `Subscription`s, policy), tags; `checkDeployment(d, registry)` validates it, strictly (D83) | `deployment.ts` |
+| `Application` | the one live thing: `Application.create(deployment, { registry, policies?, timeoutMs? })` gives five members, `call`, `apply`, `restart`, `deployment`, `listen` (an `AppEvent` stream) | `application/` |
 
-Inside `application/` (not exported from the package): `stream()` is the stream; `instances(live)` holds at most one
-build per pod name; `send` carries one message in one runtime and `client` calls by op name over it, both reading a
-`Live` (the application as a message needs it); `within` bounds a build or handler by the timeout;
-`contextFor(live, name)` is a pod's `NanoContext`. `diff(a, b)` is what `apply` changes: pods added, removed,
-changed, and runtimes rewired.
+Inside `application/` (not exported from the package, one line each): `stream()` is the one stream and its ids;
+`instances(live)` holds at most one build per pod name; `send` carries one message in one runtime and `client` calls
+by op name over it, both reading a `Live` (the application as a message needs it); `within` bounds a build or handler
+by the timeout; `contextFor(live, name)` is a pod's `NanoContext`; `diff(a, b)` is what `apply` changes: pods added,
+removed, changed, and runtimes rewired.
 
-## How they work together
+## How it works
 
-1. **Define.** Schemas → ops → interfaces; an implementation provides interfaces and depends on selectors; a provider
-   groups implementations; the registry holds providers (`examples/*/interfaces.ts`, `providers.ts`).
-2. **Make and register.** `Pod.create(impl, { config })` returns at once, `starting`; `rt.register(pod)` gives it the
-   coord `<implementation>#<n>` (`n` per implementation, never reused). The pod is `running` or `failed` when its make
-   settles; a throw or timeout is a `failed` pod, never a thrown error (D57, D58).
-3. **Connect, once.** `rt.subscribe({ kind, from, to, … })` takes each end as a coord or an `EndSelector` (a coord,
-   an interface it implements, or an implementation, with tags). Each must resolve to exactly one registered pod now,
-   else `not-found` or `ambiguous` and nothing is added; what is saved is the two coords, so later changes never
-   re-route it (D50, D60). A subscription is live when both ends are available and fit; waiting when an end is failed,
-   stopped or not registered (a starting pod is available, D59); broken when the ports no longer fit.
-4. **Call.** A handler calls out through `ctx.one/optional/any/all/first/fallback/each(selector, client => …)`; the
-   selector filters the pod's live call subscriptions in every runtime it is registered in, and a selector's `runtime`
-   narrows it to one (D3, D11, D65). `ctx.publish(op, data)` delivers to live event subscriptions in every one of them.
-   Every message is policed and booked by the runtime whose subscription carries it (D19).
-5. **Cascade or wait.** Unregistering a pod deletes every subscription naming it in that runtime (a coord is never
-   reused, so it would only mislead); the pod keeps serving in other runtimes. A pod that is failed or stopped is only
-   unavailable: its subscriptions wait and go live when it runs again.
-6. **Swap.** `pod.swap({ config })`: a new instance is made off to the side while the old one serves, then it is
-   switched to; calls in flight finish on the old one. Coords, tags and subscriptions are kept; ports that no longer
-   fit are broken. A swap whose make fails leaves a running pod as it was (D65). Of overlapping swaps the latest asked
-   wins even if its make fails (an earlier successful make is discarded and the pod keeps what it was serving); a
-   superseded swap resolves `invalid-input`. One swap changes the pod in every runtime holding it, each telling
-   `pod-swapped`.
-7. **Share.** Registering the same pod in another runtime is the whole of sharing (D63): it gets a coord there, and its
-   own wiring stays in the runtime that made it. Compose with `createApplication`: `define({ pods, runtimes })`, then
-   `start(id)` builds a runtime from its definition (each pod key made once application-wide, registered at its saved
-   coord, then its subscriptions) and always gives a runtime: what cannot be made is a note and a `warning` on the root
-   stream, a failed make is a failed pod (D52).
-8. **Watch.** `rt.listen(e => …)` is the runtime's one stream, in order: lifecycle (`pod-created`, `pod-state`,
-   `pod-swapped`, `pod-removed`), wiring (`subscription-set`, `subscription-removed` with `unsubscribed` or `cascade`,
-   `status`), messages (`sent`, then `delivered` or `denied`), problems (`failure`, `warning`) (D53, D62).
-9. **Save.** `saveDoc(app)` writes one `pods` table (implementation, config; keys only in the document) and every
-   runtime as data: its pods by saved coord, its `next` counters, its subscriptions in order; tags; which runtimes to
-   `start`. `loadDoc` defines them and starts those, never provisioning (D37–D42, D52, D63). What is built live stays
-   within what a document can hold, so what it saves loads (D56, D68): 49 runtimes besides the root (adopted ones are
-   not saved or counted), per runtime 500 pods and 2000 subscriptions, so at most 50 × 500 = 25000 pods in a document.
-   The root is saved whenever it holds pods, subscriptions or counters, so a coord is never reused after loading.
+1. **Define.** Schemas, ops, interfaces; an implementation provides interfaces and may declare dependencies; a
+   provider groups implementations; the registry holds providers (`examples/*/interfaces.ts`, `providers.ts`).
+2. **Describe.** `Pod.lazy(impl, { config })` or `Pod.eager(impl)` is a value holding the implementation's coordinate
+   (D85). A `Deployment` names pods, places them in runtimes (a pod may be in several), and lists each runtime's
+   subscriptions, in order: `{ kind: 'call', from, to }` or `{ kind: 'event', from, source, to, target }`. Valid
+   means every pod is placed in known runtimes, ends are placed in the runtime, ports exist and fit, implementations
+   are in the registry, configs fit, and limits hold (50 runtimes, 5000 pods, 2000 subscriptions per runtime) (D75, D78).
+3. **Create.** `Application.create(deployment, { registry })` validates (an invalid deployment is a `Fail` and nothing
+   runs), builds every eager pod, and resolves once those settle. A failed eager build is a `failure` on the stream,
+   not a failed `create`.
+4. **Build.** One instance per pod name, made by the factory on first need, once: concurrent first calls share the
+   build. A factory that throws, rejects or times out fails the call that needed it and caches nothing, so the next
+   call builds again. State is whatever the factory closes over (D71).
+5. **Call.** `app.call(runtime, pod).op(input)` is a message from `'host'` in that runtime. A handler reaches others
+   through the `ctx` its factory closed over: `ctx.one(selector)` is the single matching call subscription from the
+   pod (`not-found` or `ambiguous` otherwise), `ctx.all(selector)` every one, in deployment order (D86); both read the
+   deployment now, across every runtime the pod is placed in, and a selector's `runtime` narrows them.
+   `ctx.publish(op, data)` delivers to every event subscription from the pod with that source, in every runtime it is in.
+6. **Message.** Each message travels in exactly one runtime, that of the subscription it uses: policed by its policy
+   (a throw, or no `Verdict`, denies, D82), input checked, run under the timeout, output checked, and recorded: `sent`,
+   then `delivered` or `denied`. A handler never throws across this boundary: a throw, a timeout, bad input or bad
+   output is a `Fail` (D76).
+7. **Change.** `app.apply(next)` validates `next`, asks each affected runtime's policy about each added subscription
+   (`isAllowed(from, to, 'subscribe')`), then applies everything or nothing: pods added (eager ones built), removed
+   (instances forgotten), changed (restarted with the new value), subscriptions added, removed, reordered; one
+   `applied` event. `app.restart(pod)` forgets an instance (an eager pod rebuilds at once); calls in flight finish on
+   the old one (D77).
+8. **Watch.** `app.listen(e => …)` is the one stream, in order and synchronously, and returns an unsubscribe: `built`,
+   `restarted`, `applied`, `sent`, `delivered`, `denied`, `failure`, `warning`. A throwing listener is swallowed (D79).
+9. **Save.** `app.deployment()` is the current value; saving is its JSON, and `Application.create` on it gives an
+   equivalent application (D74).
 
 ## FAQ
 
-**Subscription or connection?** A subscription is the edge as data: saved, edited, possibly waiting. A connection is a
-subscription that is live now (both ends available and fitting). Verbs only see connections; saving writes
-subscriptions. `runtime/subscriptions.ts`, `rt.status(id)`.
+**Values vs live?** `Pod`, `Deployment`, `Subscription`, `Selector`, `Policy`, `Registry` and the rest are plain data
+or plain lookups; only the `Application` does anything with effects. You have a running `Application` from
+`Application.create(deployment)`, or you have values. There is no `start()` and no type that behaves differently by
+mode (D70).
 
-**Why must every end of a subscription be a coord or a selector?** So choosing an end is explicit and checked once. A
-selector that matches two pods fails `ambiguous` (`2 match`) rather than guessing; one that matches nothing fails
-`not-found`. The result is saved as concrete coords, so registering more pods later never changes an existing
-subscription (D50, `runtime/connect.ts`). Use `{ coord }` for a specific pod, `{ implements }` for "whichever store is
-here" (`examples/messenger/messenger.test.ts`).
+**Lazy vs eager?** `Pod.lazy` is built on its first call, like `IO`: describing costs nothing. `Pod.eager` is built
+when it is in an application (at `create`, or when `apply` adds it): use it for a pod that starts a timer or opens a
+socket in `make`, since the factory is the mount (D72). Calling through another pod builds a lazy one on the way.
 
-**How does sharing work, and where did place and gateways go?** Sharing is registering: to offer a pod to another
-runtime, `b.register(a.pod(coord))`. There is no `place`, home, gateway or `expose`. The shared pod's wiring stays in
-its own runtime: the messenger's `send` pod, wired to `db` in `messaging` and registered in `chat` and `support`,
-reaches `db` through `messaging`'s subscription, and `db` is never in `chat` (D63, `examples/messenger/send.test.ts`).
+**Restart and state?** Nano holds no component state. A pod's state is its factory's closure (`let n = 0`, a REST
+client), so `restart` gives a fresh closure: a counter at 2 answers 1 next. Anything that must survive is a storage
+component behind an interface (D71, D73).
 
-**Can one verb reach across runtimes?** Yes, by the pod's registrations. A handler's `ctx.one(DB, …)` searches its
-pod's subscriptions in every runtime it is in; a match in two is `ambiguous`, and a selector's `runtime` narrows the
-search to one, by name (`sel(DB, { runtime: 'v2' })`). The ETL pod reads in `foo` and writes in `bar` with no runtime
-named in code; the migration pod takes `{ from, to }` in its config and names runtimes only through that
-(`examples/etl`, `examples/migration`, D65). Each call is policed and recorded by the runtime that carries it.
+**Sharing a pod across runtimes?** Place its name in several runtimes' `pods`. It has one instance, `ctx.runtimes`
+names every runtime, and its wiring stays where the subscriptions are. The messenger's `send` is wired to `db` only
+in `messaging` and placed in `chat` and `support`: a send from `chat` reaches `db`, recorded in `messaging`, and
+`app.call('chat', 'db')` is `not-found` (D75, `examples/messenger/send.test.ts`).
 
-**What happens when I delete vs when it fails?** Deleting (`rt.unregister`) is final for that runtime: its
-subscriptions naming the coord are deleted (`subscription-removed`, `cascade`), the coord is never reused, and the pod
-keeps running where else it is registered. Failing (a make that throws, a pod `dispose`d or `stopped`) is temporary:
-the pod is `failed` or `stopped` with its reason, its subscriptions wait, and a `swap` brings a failed one back (D59, D65).
+**Cross-runtime calls and the `runtime` selector?** `ctx.one`/`ctx.all` search the pod's call subscriptions in every
+runtime it is in. ETL: `etl` is wired to `source` in `foo` and to `sink` in `bar`, reads and writes with no runtime
+named in code, each call recorded in its own runtime (`examples/etl`). Migration: with a `db` wired in `v2` and `v3`,
+`one(DB)` is `ambiguous`, and `sel(DB, { runtime: 'v2' })` picks one (`examples/migration`, D86).
 
-**What is a host call?** `rt.call(coord).<op>(input)`: how a host or a test reaches a pod, through the runtime. It is
-policed (`isAllowed` sees `'host'` as the source), `sent` then `delivered` on the stream, and not booked (it is over no
-subscription). An unknown coord is `not-found`; an op name the pod does not offer is `unknown-op`; an op name two
-interfaces offer is `ambiguous` (D62, D64, `runtime/calls.ts`). Nothing else can invoke a pod: `pod.invoke` needs a context, and only a runtime makes one.
+**What does saving write?** The `Deployment`: pods (implementation coordinate, config, eager), runtimes (pods placed,
+subscriptions in order, policy), tags. Not instances, not state, not custom policies (they come in `opts.policies`,
+D80), not the registry. `nano.json` is one, serialised.
 
-**What is start?** What "open" was: `app.start(id)` gives the runtime, building it from its definition if it is not
-running yet. It never refuses a runtime because a pod failed; pods it cannot make, entries it cannot register and
-subscriptions it cannot add are skipped with a note (`app.notes()`, and a `warning` on `app.listen`). It fails only for
-an unknown id or a throw while building (D52, `application.ts`).
+**Strict validation?** An invalid deployment (including one naming an unknown implementation) fails as a whole with
+the reason, in `create` and `apply`; nothing half-runs. A document with a missing provider loads once the provider is
+added to the registry (D83). A call subscription is checked against the caller's declared dependencies only when
+they name an interface (D87).
 
-**How do I watch what a runtime does?** `rt.listen(e => …)` returns an unsubscribe. Every message is `sent` then
-exactly one of `delivered` (with its result and duration) or `denied` (with the reason); a shared pod's news reaches
-every runtime it is registered in. Not on the stream: verb results `missing-component`/`ambiguous` and a host call to an
-unknown coord (no message was sent). A listener that acts on the runtime re-enters it, so later listeners see that
-action's events first (D53, D54, `runtime/trace.ts`). The examples assert with it.
+**Storage and messaging?** Components. Key-value stores, CRUD, queues, REST bridges are pods behind interfaces, chosen
+per environment; policies, enrichment and restriction between them are compute pods. Nano only routes, polices and
+records (D73). A component adapts to what is plugged in by testing `ctx.all(S).length` or `ctx.one(S).ok`.
 
-**Why can't my code call any pod it finds?** Calls only travel over the caller's subscriptions (D3), so every reachable
-target is visible, saved and policed. To use something from another runtime, register its pod in yours (D63); to call it
-from outside the graph, use `rt.call`.
-
-**What happens when two pods match `one`?** `Fail: ambiguous`. `one` never guesses: narrow the selector (tags,
-implementation, `runtime`), unplug one, or use `any`, `first` or `fallback` (`runtime/calls.ts`). Provisioning likewise
-leaves a dependency with two matching pods unsatisfied (`2 match`, D25).
+**Pods that call each other while building?** Don't: a factory should not wait on another pod during `make`. Two that
+do both wait on each other and fail by timeout (D84).
 
 **Where do domain failures go?** In the op's output, as values: the signer's `{ status: 'denied' }`, the composer's
-`{ status: 'disabled' }`. `Fail` is for platform failures only (threw, timeout, denied by policy, invalid input or
-output, `missing-component`, `ambiguous`); the pod turns every misbehaviour into one (`pod.ts`, `result.ts`).
-
-**What does saving write?** `nano.json` v2: one `pods` table (each pod once: implementation, config; the keys `p0`,
-`p1`, … exist only in the document, in first-registered order), then each runtime's pods by key and saved coord, its
-`next` counters, its subscriptions in order, tags, the providers used, and which runtimes to start (D37–D39, D52, D63).
-A pod in two runtimes is one entry, referred to from both; loading makes it once. Not live state (an instance's data),
-not custom policies (D39), not adopted runtimes (D33).
-
-**Does loading provision?** No. It makes what the document says and adds its subscriptions; anything that does not fit
-is skipped with a note (D24, D40).
-
-**Mutual dependencies?** Allowed: `rt.provision` makes and registers every pod first, then wires, in one synchronous
-pass. A starting pod is available, so nothing waits on the pass (D26, D59, D61).
-
-**How does a component adapt to what is plugged in?** `ctx.hasDependencies(role)` / `ctx.listDependencies()`: the
-messenger's inbox falls back to a local map, its composer reports disabled (`examples/messenger/providers.ts`).
+`{ status: 'disabled' }`. `Fail` is for platform failures (`threw`, `timeout`, `denied`, `invalid-input`,
+`invalid-output`, `unknown-op`, `ambiguous`, `not-found`).
 
 **Where do binary values go?** Base64 strings in the schema (D2); the signer's keys and signatures.

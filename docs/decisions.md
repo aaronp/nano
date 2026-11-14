@@ -579,3 +579,111 @@ Pinned by "the document limits hold for what is built live" (`document.test.ts`)
 
 **Why:** The spec: an end not registered (yet) leaves the subscription waiting; a coord is never reused; a pod made for nothing must not be left running.
 **Cost if wrong:** A subscription naming a coord that was unregistered in an earlier session (before saving) can be added again after loading; it waits rather than failing `not-found`.
+
+## 70. Values, then one live thing (decided with the user, 2026-11-14)
+
+**Decision:** Everything is a plain, synchronous value except the `Application`, the only thing that runs effects. You get one from `Application.create(deployment, opts)` or you have only values; there is no `start()` and no type that behaves differently by mode. Supersedes the runtime-as-object model of D48–D69 (pods in the runtime, `start`/`define`/`definition`, the pods table, adoption, `Pod.create`/`join`/`swap`/`dispose`, the effect boundary of D57–D63), the provisioning of D24–D26, and the documents (`saveDoc`/`loadDoc`) of D37–D42, D52, D56 and D68.
+**Why:** The last two revisions spent most of their machinery and bugs on counters, lazy starting and pod lifecycles; fewer moving parts is easier to reason about.
+**Cost if wrong:** Anything wanting a runtime with methods builds it over `Application` and a deployment value.
+
+## 71. State is a closure (decided with the user, 2026-11-14)
+
+**Decision:** A component's state is whatever its factory closes over. Nano holds only routing data. Restarting a pod gives a fresh closure. Supersedes D57 and D58 (pod state, `make(config)` without context) and the instance and swap rulings of D51, D65 and D69.
+**Why:** Few foot-guns around state; nothing for nano to save, migrate or swap.
+**Cost if wrong:** State that must survive a restart is a storage component (D73), not nano's.
+
+## 72. Lazy by default, like `IO` (decided with the user, 2026-11-14)
+
+**Decision:** `Pod.lazy` is built on first need, once (concurrent first calls share the build; a failed build caches nothing); `Pod.eager` is built at `create` and when `apply` adds it. The factory is the mount. Supersedes D59 (a starting pod is available), D52 (start) and D69's starting rules.
+**Why:** Describing a pod costs nanoseconds; eager is for pods whose `make` does work.
+**Cost if wrong:** A lazy pod's first caller pays the build time and its failure.
+
+## 73. Storage and messaging are components (decided with the user, 2026-11-14)
+
+**Decision:** Key-value stores, CRUD APIs, queues and REST bridges are pods behind interfaces, chosen per environment; flows between them are compute pods. Nano implements none of them: it routes, polices and records.
+**Why:** Keeps the core small and lets environments choose.
+**Cost if wrong:** A needed built-in is a pod in a provider, not core.
+
+## 74. The data is the truth (decided with the user, 2026-11-14)
+
+**Decision:** A `Deployment` describes the whole system; the application reconciles to it, `deployment()` returns what runs, saving is its JSON, and every message and change is on one stream. Supersedes saved coords, `next` counters and notes (D37–D42, D52, D63, D67–D69).
+**Why:** A value that round-trips exactly leaves nothing to restore.
+**Cost if wrong:** Custom policies and the registry are not in it (D80).
+
+## 75. Pods, runtimes and subscriptions are data (decided with the user, 2026-11-14)
+
+**Decision:** A pod name is unique in a deployment and the same in every runtime it is placed in; a runtime is a named section (pods placed, ordered subscriptions, policy), not an object. A subscription's ends must be placed in its runtime; it has no id and no duplicates. A shared pod has one instance. Supersedes coords `<impl>#<n>` and their counters (D36, D41), registering and placing (D28–D35, D63, D66), subscription status and `EndSelector` connect (D50, D60) and the `exists` rulings of D66.
+**Why:** Names chosen by the deployment's author remove counters and never-reuse bookkeeping; removing a pod removes the subscriptions naming it.
+**Cost if wrong:** Reusing a name for a different pod is allowed and harmless but invisible in history.
+
+## 76. A message is policed, checked, recorded, in one runtime (decided with the user, 2026-11-14)
+
+**Decision:** The context belongs to the pod, not a call, and handlers close over it. Every message travels in the runtime of the subscription it uses (or the one named in `app.call`): policed, input checked, run under the timeout, output checked, recorded `sent` then `delivered` or `denied`. A handler's throw, timeout or bad input/output is a `Fail`. `one`/`all` replace `optional`, `any`, `first`, `fallback`, `each`, `hasDependencies` and `listDependencies`. Supersedes D3, D11, D17–D23, D62 and D64 where they differ, and the books of D19.
+**Why:** One place each message is judged and seen.
+**Cost if wrong:** Fan-out and fallback are ordinary code over `all`.
+
+## 77. `apply` is all or nothing; `restart` forgets (decided with the user, 2026-11-14)
+
+**Decision:** `apply(next)` validates, asks each runtime's policy about each added subscription (`isAllowed(from, to, 'subscribe')`), then applies everything or nothing; changes are one `applied` event; applies run in order. `restart(pod)` forgets the instance (an eager pod rebuilds now); calls in flight finish on the old one; an unknown pod is `not-found`. `Application` has exactly five members. Supersedes D12, D13, D15, D16, D35 and D51 (replace, reorder, swap in place).
+**Why:** A refusal must never leave half a deployment.
+**Cost if wrong:** A host wanting a partial apply splits the deployment.
+
+## 78. Deployment limits (decided with the user, 2026-11-14)
+
+**Decision:** At most 50 runtimes, 5000 pods and 2000 subscriptions per runtime; ids follow one rule. Supersedes D54, D56 and D68 (25000 pods).
+**Why:** Bounds what one file can make.
+**Cost if wrong:** One constant in `deployment.ts`.
+
+## 79. The one stream (decided with the user, 2026-11-14)
+
+**Decision:** `built`, `restarted`, `applied`, `sent`, `delivered`, `denied`, `failure`, `warning`, in order and synchronously; a throwing listener is swallowed. Supersedes D53, D54, D62 (per-runtime streams and their lifecycle events).
+**Why:** One stream is easy to observe and query.
+**Cost if wrong:** Per-runtime views are a filter on `runtime`.
+
+## 80. Host policies win over a deployment's (controller ruling, surfaced to the user)
+
+**Decision:** A host's `opts.policies[runtime]` wins over the deployment runtime's `policy` field (which can only be `'allow-all'`); otherwise allow-all. Supersedes D39 (which policies are saved).
+**Why:** A deployment is data and cannot carry code.
+**Cost if wrong:** A deployment cannot override a host's policy.
+
+## 81. A registry clash is `invalid-input` (controller ruling, surfaced to the user)
+
+**Decision:** `registry.add` of a provider already present or an interface that differs fails `invalid-input`; `exists` left with the reduced `FailType` list. Supersedes D66's `exists`.
+**Why:** No new failure type for one case.
+**Cost if wrong:** A caller cannot tell a clash from other bad input except by the reason.
+
+## 82. A policy with no verdict denies (controller ruling, surfaced to the user)
+
+**Decision:** A policy that returns no `Verdict` (undefined, a Promise) denies with `policy gave no verdict`; a throwing policy denies too. Supersedes D22 and D27 on what a bad policy does.
+**Why:** Fail closed; policies are synchronous.
+**Cost if wrong:** An async policy denies everything until it is made synchronous.
+
+## 83. Strict validation (controller ruling, surfaced to the user)
+
+**Decision:** An invalid deployment, including an unknown implementation, fails as a whole instead of loading what it can with notes. Supersedes D40 and D42.
+**Why:** Simpler; nothing half-runs.
+**Cost if wrong:** A document with a missing provider does not load until the provider is added.
+
+## 84. Builds that call each other end by timeout (controller ruling, surfaced to the user)
+
+**Decision:** A factory may call out while building. If two factories call each other while both build, both wait and fail by timeout; factories should call during `make` only to start work that does not wait on the answer. Supersedes D26 and D61 (mutual dependencies by provisioning).
+**Why:** Detecting cycles needs machinery for a case that should not occur.
+**Cost if wrong:** Cycle detection, in `instances`.
+
+## 85. Pods hold the implementation's coordinate (controller ruling, surfaced to the user)
+
+**Decision:** A pod's `implementation` is a coordinate string, resolved through the registry at `create` and `apply`, so a pod value is plain JSON. Supersedes D16 (a member remembers its config) and D48's pod-as-object.
+**Why:** Values must serialise.
+**Cost if wrong:** A pod cannot be created without a registry in sight.
+
+## 86. `all` order across runtimes (controller ruling, surfaced to the user)
+
+**Decision:** `ctx.all` lists matches by runtimes in deployment order, then subscriptions in order. Supersedes D14 (member order).
+**Why:** The simplest stable order.
+**Cost if wrong:** Callers relying on order across runtimes depend on the deployment's runtime order.
+
+## 87. The call-target check counts only interface dependencies (controller ruling, surfaced to the user)
+
+**Decision:** A call subscription must reach a pod providing an interface the caller declares as a dependency, when it declares any naming an interface; tag-only dependencies are not checked. Supersedes D5 and D25 on dependency matching.
+**Why:** Tags are narrowing, not a type; checking them would reject valid wiring.
+**Cost if wrong:** A tag-only dependency can be wired to anything.
