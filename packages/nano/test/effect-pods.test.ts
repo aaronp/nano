@@ -2,7 +2,8 @@
 /**
  * The effect-pod revision, written first (spec: "The pod is the effect boundary"). A pod is standalone around one
  * instance of one implementation; registering it gives it `<implementation>#<n>` in a runtime; only a runtime makes a
- * `NanoContext`, so every call is policed and recorded on the stream of the runtime it travels through.
+ * `NanoContext`, so every call is policed and recorded on the stream of the runtime it travels through. A handler's
+ * onward calls search its pod's subscriptions in every runtime the pod is in (sharing is registering; no gateways).
  */
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
@@ -167,32 +168,41 @@ describe('only a runtime calls a pod', () => {
     expect(events).toContainEqual(expect.objectContaining({ type: 'denied', id: sent.id }))
   })
   // Behaviour 5.
-  test.todo("given one signer pod in two runtimes and a vault subscription only in R, when called through each, then its onward call goes through that runtime's subscriptions", async () => {
+  test.todo("given one signer pod in R and other with its vault subscription only in R, when called through other, then its vault call goes through R and is recorded only there", async () => {
     const r = runtime('R'), other = runtime('other')
     const pod = Pod.create(signer)
     const s = reg(r.rt, pod), v = reg(r.rt, Pod.create(vault, { config: 'v' }))
     r.rt.subscribe({ kind: 'call', from: s, to: v })
     const elsewhere = reg(other.rt, pod)
-    expect(await r.rt.call(s).ping('x')).toEqual(success('signed v x'))
-    expect(delivered(r.events).map(d => d.to)).toEqual([s, v])
-    expect(await other.rt.call(elsewhere).ping('x')).toMatchObject({ ok: false, fail: { type: 'missing-component' } })
+    expect(await other.rt.call(elsewhere).ping('x')).toEqual(success('signed v x'))
+    expect(delivered(other.events).map(d => d.to)).toEqual([elsewhere])
+    expect(delivered(r.events).map(d => d.to)).toEqual([v])
+  })
+  // Behaviour 5: a match in two runtimes.
+  test.todo('given a signer pod wired to a vault in each of two runtimes, when its handler calls one vault, then the call is ambiguous', async () => {
+    const a = runtime('a'), b = runtime('b')
+    const pod = Pod.create(signer)
+    const sa = reg(a.rt, pod), va = reg(a.rt, Pod.create(vault, { config: 'a' }))
+    const sb = reg(b.rt, pod), vb = reg(b.rt, Pod.create(vault, { config: 'b' }))
+    a.rt.subscribe({ kind: 'call', from: sa, to: va })
+    b.rt.subscribe({ kind: 'call', from: sb, to: vb })
+    expect(await a.rt.call(sa).ping('x')).toMatchObject({ ok: false, fail: { type: 'ambiguous' } })
   })
 })
 
-describe('gateways', () => {
-  // Behaviour 6: the external signer.
-  test.todo('given a gateway exposed by signer and registered in client, when a tester in client calls it, then both streams record it and the vault call stays in signer, out of client’s sight', async () => {
-    const sr = runtime('signer'), cr = runtime('client')
-    const s = reg(sr.rt, Pod.create(signer)), v = reg(sr.rt, Pod.create(vault, { config: 'v' }))
-    sr.rt.subscribe({ kind: 'call', from: s, to: v }) // private to signer
-    const gateway = reg(cr.rt, sr.rt.expose(s))
-    const t = reg(cr.rt, Pod.create(tester))
-    cr.rt.subscribe({ kind: 'call', from: t, to: gateway })
-    expect(await cr.rt.call(t).ping('x')).toEqual(success('signed v x'))
-    expect(delivered(cr.events).map(d => d.to)).toEqual([t, gateway])
-    expect(delivered(sr.events).map(d => d.to)).toEqual([s, v])
-    expect(JSON.stringify(cr.events)).not.toContain(v)
-    expect(await cr.rt.call(v).ping('x')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+describe('the runtimes a pod is in', () => {
+  // Behaviour 6 (the full story is examples/messenger/send.test.ts).
+  test.todo("given a pod registered in three runtimes and unregistered from one, then its runtimes and its handlers' ctx.runtimes name the other two", async () => {
+    let seen: string[] = []
+    const where = implementation('acme/keys/where', { provides: [Vault], make: () => [provide(Vault, { ping: async ctx => { seen = ctx.runtimes; return success('ok') } })] })
+    const rts = ['messaging', 'chat', 'support'].map(id => { const registry = createRegistry(); registry.add(provider('acme/keys', [where])); return createRuntime(id, { registry }) })
+    const pod = Pod.create(where)
+    const coords = rts.map(rt => reg(rt, pod))
+    expect(pod.runtimes).toEqual(['messaging', 'chat', 'support'])
+    expect(rts[1].unregister(coords[1])).toEqual(success(undefined))
+    expect(pod.runtimes).toEqual(['messaging', 'support'])
+    await rts[2].call(coords[2]).ping('x')
+    expect(seen).toEqual(['messaging', 'support'])
   })
 })
 
@@ -227,20 +237,20 @@ describe('failure', () => {
     expect(pod.state).toBe('running')
     expect(rt.status(sub.id)).toBe('live')
   })
-  // Behaviour 9. The saved definition's shape is today's (pod ids, instances, next): see the report's questions.
+  // Behaviour 9. Saved form (spec): pods as { coord, implementation, config }, `next` per implementation.
   test.todo('given a saved runtime whose pod fails to make, when it is started, then the runtime starts and that pod is failed', async () => {
     const app = createApplication('app', { registry: registry() })
     const F = 'acme/keys/flaky#0', U = 'acme/ui/user#0'
     app.define({
       id: 'r',
-      pods: [{ id: 'f', implementation: 'acme/keys/flaky', config: { fail: true }, instances: [0], next: 1 }, { id: 'u', implementation: 'acme/ui/user', instances: [0], next: 1 }],
-      members: [],
+      pods: [{ coord: F, implementation: 'acme/keys/flaky', config: { fail: true } }, { coord: U, implementation: 'acme/ui/user' }],
+      next: { 'acme/keys/flaky': 1, 'acme/ui/user': 1 },
       subscriptions: [{ id: 's1', kind: 'call', from: U, to: F }],
     })
     const r = await app.start('r')
     expect(r.ok).toBe(true)
     expect(r.value.status('s1')).toBe('waiting')
-    expect(await r.value.call(F).ping('x')).toMatchObject({ ok: false })
+    expect(await r.value.call(F).ping('x')).toMatchObject({ ok: false, fail: { type: 'missing' } })
     expect(await r.value.call(U).ping('x')).toMatchObject({ ok: true })
   })
 })

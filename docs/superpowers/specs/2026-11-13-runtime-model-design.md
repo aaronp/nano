@@ -41,12 +41,12 @@ Each domain has one responsibility, its own coordinate, and indexes keyed on tha
 | **Implementation** | code that implements one or more interfaces; declares its **dependencies**: data (config, code snippets) and interfaces | `<provider>/<name>` |
 | **Provider** | a package from an author (like an npm package); usually a bridge from an existing library into nano; creates instances of its implementations; later carries metadata (signatures over hashes, licence) | `<author or ns>/<name>` (+ version, later) |
 | **Registry** | a pool of providers, and so of implementations; produces a **manifest** of the interfaces, implementations and providers it holds; answers queries in O(1) (e.g. every op on offer, every implementation of an interface) | — |
-| **Pod** | the **effect boundary**: the only way a runtime reaches code (like `IO.pure` / `IO.effect`). Holds one **instance** of one implementation (fixed for its life), or is a **gateway** onto another runtime. `invoke(ctx, port, input)` with checks, timeouts and failure capture; `swap` replaces its instance (same implementation); `dispose`. Direct and sandboxed pods are two implementations of the same interface. Knows nothing about runtimes | none of its own: a runtime gives it one when it is registered |
+| **Pod** | the **effect boundary**: the only way a runtime reaches code (like `IO.pure` / `IO.effect`). Holds one **instance** of one implementation (fixed for its life). `invoke(ctx, port, input)` with checks, timeouts and failure capture; `swap` replaces its instance (same implementation); `dispose`. Direct and sandboxed pods are two implementations of the same interface. Knows the names of the runtimes it is registered in (`runtimes`), and nothing else about them | none of its own: a runtime gives it one when it is registered |
 | **Instance** | the state and config of one implementation (an object of that class), held by a pod; replaced by `swap` | — |
 | **Subscription** | an explicit edge between **exactly two instances**, by concrete coordinate: from a source or a caller, to a sink or an action / interface on a target | id |
 | **Connection** | a live subscription: both ends available and policy approved | subscription id + the two instance coords |
-| **Runtime** | a map of pod coordinates to pods, the subscriptions between them, its **policy** and its event stream. It creates a `NanoContext` for every invocation, and can **expose** a gateway pod onto itself. No pod lifecycle of its own | its id |
-| **Application** | creates runtimes and places pods (usually gateways) from one runtime into others, then connects them there with subscriptions: the app-gateway pattern | its id |
+| **Runtime** | a map of pod coordinates to pods, the subscriptions between them, its **policy** and its event stream. It creates a `NanoContext` for every invocation; registering a pod adds the runtime to the pod's `runtimes`. No pod lifecycle of its own | its id |
+| **Application** | creates runtimes, registers a pod in several of them and connects it in each: a pod's wiring in one runtime stays private to that runtime | its id |
 | **Tags** | user-driven grouping (logical layers, ownership) at every tier, keyed by coordinate; used to help users choose | — |
 
 ### Coordinates, precisely
@@ -160,25 +160,42 @@ bad publish; *warning*: what the application notes as it happens). Tests assert 
 
 - **Nothing is ever handed an instance.** Between pods there are only messages, through subscriptions. Between
   runtimes there is only a pod registered in more than one runtime.
-- **A pod is standalone.** It is created from one implementation with a factory for its instance
-  (`Pod.create(Foo, () => new Foo(1))`); the implementation is fixed for the pod's life. `swap(make)` replaces the
+- **A pod is standalone.** It is created from one implementation and a config
+  (`Pod.create(Foo, { config })`); the instance is `implementation.make(config)`, with no context at make time. The
+  implementation is fixed for the pod's life. `Pod.create` returns at once, `starting`, and the pod is `running` or
+  `failed` when the make settles. `swap({ config })` replaces the
   instance (state and config) and keeps the pod, so every coordinate, subscription and reference still reaches it;
   calls already in flight finish on the old instance. A different implementation is a different pod.
 - **Registering gives a coordinate.** `rt.register(pod)` gives the pod the coordinate `(implementation, n)` in that
   runtime, where `n` is that runtime's counter for that implementation and is never reused. The same pod registered
-  in two runtimes has two coordinates; subscriptions are local to a runtime, so each names its own.
+  in two runtimes has two coordinates; subscriptions are local to a runtime, so each names its own. Registering adds
+  the runtime's id to the pod's `runtimes` (`['messaging', 'chat', 'support']`), unregistering removes it; the pod
+  and its handlers' context see these names only, never a runtime.
 - **Only a runtime calls a pod.** A call needs a `NanoContext`, and only a runtime makes one:
   `pod.invoke(ctx, port, input)` (typed sugar: `pod.call.inc(ctx, params)`). So every call is policed and recorded on
-  the stream of the runtime it travels through. A host or a test calls through a runtime (`rt.call(coord).inc(...)`).
-- **A runtime passes its own context** when it invokes a pod; a handler's onward calls go through that context.
-- **A runtime can expose a gateway pod onto itself** (`rt.expose(coord)`): invoking the gateway enters that runtime,
-  where the call is policed and recorded again and the handler runs with that runtime's context. Its private wiring
-  (the signer's vault) stays private; the gateway is all other runtimes ever hold of it.
-- **The application** creates runtimes, places gateway pods into other runtimes, and connects them there with
-  subscriptions: the app-gateway pattern. "Open" is **start**: starting a runtime from its saved definition always
+  the stream of the runtime it travels through. A host or a test calls through a runtime (`rt.call(coord).inc(...)`); such a call comes from `'host'`, on the
+  stream and in `isAllowed`.
+- **A runtime passes its own context** when it invokes a pod. A handler's onward calls (`ctx.one(DB, …)` and the
+  other verbs) search the pod's subscriptions in **every runtime the pod is in**; each call is policed and recorded by
+  the runtime whose subscription carries it, and the callee runs with that runtime's context. A match in two runtimes
+  is `ambiguous`, as with any `one`. Implementation code never names a runtime: the wiring decides where a dependency
+  comes from. Likewise `ctx.publish` delivers into every runtime the pod is in, each policing and recording its own
+  deliveries.
+- **Sharing is registering.** To offer a component to other runtimes, register the same pod in them. Its wiring in
+  its own runtime stays private: the messaging `send` pod registered in `chat` and `support` reaches its `db` through
+  `messaging`'s subscription, and `db` is never registered in `chat`. A pipeline reads in one runtime and writes in
+  another the same way (the ETL example).
+- **The application** creates runtimes, registers pods in them, and connects them there with subscriptions. "Open" is **start**: starting a runtime from its saved definition always
   gives a runtime; problems are notes and pod states.
+- **Saved form.** A runtime saves each pod as `{ coord, implementation, config }` and, per implementation, its next
+  counter, so a coordinate is never reused after loading. A pod in several runtimes is saved in full in one runtime;
+  each other runtime lists it as `{ coord, shared: { runtime, coord } }`, and loading registers the one pod object
+  there. *(Shape of the shared entry: my call.)*
+- **Stream.** `pod-created` on register, `pod-removed` on unregister, `pod-swapped` on swap, and the pod's state
+  changes (`starting`, `running`, `failed`, `stopped`) in every runtime it is in. A call to a disposed or failed pod is
+  a `Fail` of type `missing` with the reason; no new failure types.
 - **Gone from the model:** pod ids, instance counts and scaling, pods shared as mutable records, holders, "home",
-  rehoming, and any pod lifecycle kept by the runtime.
+  rehoming, gateways and `expose`, and any pod lifecycle kept by the runtime.
 
 ### Behaviours (written as tests first)
 
@@ -188,15 +205,19 @@ bad publish; *warning*: what the application notes as it happens). Tests assert 
 3. `swap` keeps the pod: every subscription to it stays live, the next call reaches the new instance, and a call in
    flight finishes on the old one.
 4. A pod cannot be invoked without a context: there is no call path that bypasses a runtime's policy and stream.
-5. A runtime passes its own context: a handler invoked through runtime R makes its onward calls through R's
-   subscriptions.
-6. A gateway pod exposed by `signer` and registered in `client`: a call from `client` is recorded on both streams,
-   and the signer's call to the vault goes through `signer`, where `client` cannot see the vault.
+5. A handler's onward calls search the subscriptions in every runtime its pod is in: a signer pod in `R` and
+   `other`, with its vault subscription only in `R`, reaches the vault when called through either, and the vault call
+   is recorded on `R`'s stream only. A match in both runtimes is `ambiguous`.
+6. Sharing (`examples/messenger`): the `send` pod, wired to `db` in `messaging`, is registered in `chat` and
+   `support`. A call from `chat` is recorded on `chat`'s stream, its database call on `messaging`'s; `db` is not in
+   `chat` (`rt.call` there is `not-found`), and `send.runtimes` is `['messaging', 'chat', 'support']`.
 7. Unregistering a pod from a runtime deletes that runtime's subscriptions to it (cascade); other runtimes holding the
    same pod are unaffected.
 8. A pod whose instance fails to make is `failed`; subscriptions to it wait; `swap` with a working factory makes them
    live.
 9. Starting a runtime whose pod fails gives a running runtime with that pod `failed`.
+10. A pipeline (`examples/etl`): the `etl` pod is in `foo` (wired to `source`) and `bar` (wired to `sink`). `run`
+    reads in `foo` and writes in `bar`; the read is on `foo`'s stream only and the write on `bar`'s only.
 
 ### Dependencies: informational, used for provisioning and display
 
@@ -267,9 +288,9 @@ and the same check filters what the UI offers.
 
 - The application is a runtime whose instances include runtimes. Nothing else is special about it, and applications
   can nest.
-- **Placing** a pod is registering the same pod object in another runtime, where it gets its own coordinate. Usually
-  the pod placed is a **gateway** a runtime exposes onto itself (`signer` exposes its `signer`; the application
-  registers that gateway in `signer-client`), so the providing runtime's wiring stays private.
+- **Placing** a pod is registering the same pod object in another runtime, where it gets its own coordinate. The
+  signer pod is wired to its vault in `signer` and registered in `signer-client`; the vault never is, so it stays
+  private.
 - **On demand.** Opening a view that needs a runtime makes the application get it or **start** it from its saved
   definition. Saving writes every runtime's definition, started or not.
 - A component built from other components is just an implementation whose factory creates its own runtime. There is
@@ -410,7 +431,7 @@ builder states the behaviour in the log and pins it with a test before relying o
 - Each domain has a clear coordinate; an op's is a blake3 hash of name, input and output; an instance's is its
   implementation's plus an id; lookups are O(1) on coordinates.
 - The application is the host: a runtime containing runtimes, nestable, placing instances across them; it provides
-  the gateway behaviour the external signer needs.
+  what the external signer needs.
 - A pod wraps an instance: sandbox vs host, observing messages and exceptions, proxying.
 - Actions are `(ctx, input) => Promise<NanoResult>`; `NanoResult` is the platform's Success | Fail; domain failures
   belong to the op's own union.
