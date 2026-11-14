@@ -2,7 +2,8 @@
  * Instances: at most one build per pod name, shared by everyone who needs it meanwhile. Each build has its own close
  * listeners. A failed build closes (`closed`) and caches nothing, so the next need builds again; forgetting drops the
  * entry and closes that build at once, even one still under way (a listener it adds later runs as it is added), without
- * waiting for or touching calls already handed it. A pod being closed is built again only once its close has settled.
+ * waiting for or touching calls already handed it. A pod being closed is built again only once its close has settled,
+ * and a build forgotten meanwhile never starts. `close` also waits for builds under way, which then build nothing.
  *
  *   const pods = instances(live)
  *   await pods.get('db')                 // NanoResult<{ implementation, handlers by port }>: built now, or the build already made or under way
@@ -28,6 +29,7 @@ function closer(live: Live, pod: string) {
   const run = (fn: OnClose) => attempt(live, pod, `closing ${pod}`, () => fn({ reason: reason! }))
   return {
     add(fn: OnClose) { if (reason) void run(fn); else listeners.push(fn) },
+    began: () => reason !== undefined,
     close: (why: Reason) => closing ??= (async () => {
       reason = why
       for (const fn of listeners) await run(fn)
@@ -43,10 +45,13 @@ export function instances(live: Live) {
 
   async function build(name: string, c: ReturnType<typeof closer>): Made {
     await closing.get(name)
+    if (c.began()) return failure('not-found', `${name} was closed before it was built`)
     const pod = live.now().pods[name]
     const impl = pod && live.registry.implementation(pod.implementation)
     if (!pod || !impl) return failure('not-found', `no pod ${name}`)
     const r = await within(() => impl.make(contextFor(live, name, c.add), pod.config), live.timeoutMs, `building ${name}`)
+    // Closed while `make` ran: its listeners have run as added; nothing is built after `closed`.
+    if (closed) return failure('not-found', 'application is closed')
     live.trace.emit(r.ok ? { type: 'built', pod: name } : { type: 'failure', pod: name, reason: r.fail.reason })
     if (!r.ok) await c.close('closed')
     return r.ok ? success({ implementation: impl, handlers: r.value }) : r
@@ -76,7 +81,8 @@ export function instances(live: Live) {
     forget,
     async close() {
       closed = true
-      await Promise.all([...made.keys()].map(n => forget(n, 'closed')))
+      const builds = [...made.values()].map(e => e.build)
+      await Promise.all([...[...made.keys()].map(n => forget(n, 'closed')), ...builds])
     },
   }
 }

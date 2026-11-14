@@ -48,7 +48,13 @@ const slowClose = implementation('acme/slowclose', { provides: [Counter], make: 
   return [provide(Counter, { inc: async () => success(1) })]
 } })
 
-const registry = () => { const r = createRegistry(); r.add(provider('acme', [counter, ticker, halfBuilt, messy, slowClose])); return r }
+/** Takes 30ms to build, then logs; its inc logs too. */
+const slowMake = implementation('acme/slowmake', { provides: [Counter], make: async ctx => {
+  await wait(30); log.push(`made ${ctx.self}`)
+  return [provide(Counter, { inc: async () => { log.push('handler ran'); return success(1) } })]
+} })
+
+const registry = () => { const r = createRegistry(); r.add(provider('acme', [counter, ticker, halfBuilt, messy, slowClose, slowMake])); return r }
 const ok = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const live = async (deployment: AppDeployment, opts: { timeoutMs?: number } = {}) => {
   log = []
@@ -156,6 +162,16 @@ describe('closing', () => {
     expect(log.slice(4).sort()).toEqual(['close a closed', 'close b closed'])   // instances close together, in no set order
     expect(await app.apply(app.deployment())).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'application is closed' } })
     expect(await app.restart('a')).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'application is closed' } })
+  })
+  test('given a lazy build under way, when the application closes, then close waits for it, no built follows closed and its handler never runs', async () => {
+    const { app, events } = await live(one({ s: Pod.lazy(slowMake) }))
+    const calling = app.call('r', 's').inc(null)
+    await wait(5)
+    await app.close(); log.push('close resolved')
+    expect(await calling).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+    await wait(40)
+    expect(log).toEqual(['made s', 'close resolved'])
+    expect(events.filter(e => e.type === 'built' || e.type === 'closed').map(e => e.type)).toEqual(['closed'])
   })
   // Behaviour 23.
   test('given a ticker started in make, when the application closes, then nothing ticks after close', async () => {
