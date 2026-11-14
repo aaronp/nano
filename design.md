@@ -24,10 +24,11 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 | Pod | the deployment unit and failure boundary: `{ id, implementation, config, instances }`, owned by its home runtime and shared (not copied) where placed; made, scaled, swapped and removed as one; its state summarises its instances'. Id unique in the application. Being replaced by the standalone `Pod` (the effect boundary: `Pod.create(impl, { config })`, `invoke(ctx, port, input)`, `swap`, `dispose`, `join`; its `PodState`), which the runtime still wraps once per instance | `runtime/pods.ts` (record), `runtime/index.ts` (lifecycle), `pod.ts` (`Pod`) |
 | Instance | one made implementation in a pod, `<pod>#<n>`; indices start at 0 and are never reused. Made from its config inside a `Pod`, which turns throws, timeouts and bad output into `Fail`s | `pod.ts` (`Pod`) |
 | Policy | `isAllowed(src, dest, data)` per runtime; `Policies.allowAll()` only, for now | `policy.ts` |
-| Runtime | pods, subscriptions (data) and their status (live/waiting/broken), provisioning, books, its one stream | `runtime/index.ts` |
-| — subscriptions | call and event edges between two instance coords, as data; their status, order | `runtime/subscriptions.ts` |
+| Runtime | pods by coord (`podTable`; `wirings`: each pod's runtimes), subscriptions (data) and their status (live/waiting/broken), provisioning, books, its one stream | `runtime/index.ts`, `runtime/pods.ts` |
+| — subscriptions | call and event edges between two coords, as data; their status, order, edits and cascade (`subscriptionTable`) | `runtime/subscriptions.ts` |
 | — connect | resolves an end selector, once, to exactly one instance coord | `runtime/connect.ts` |
-| — calls | the verbs over live call subscriptions; publish delivery; books | `runtime/calls.ts` |
+| — calls | one policed, recorded, booked message (`send`); a host's calls from `'host'` (`hostCall`) | `runtime/calls.ts` |
+| — verbs | the context a runtime invokes a pod with: verbs over its live call subscriptions in every runtime it is in; publish | `runtime/verbs.ts` |
 | — provision | settles unconnected dependencies: one matching instance → subscribe, else one implementation → make | `runtime/provision.ts` |
 | — trace | the runtime's observable stream: lifecycle, wiring, messages, problems | `runtime/trace.ts` |
 | Application | a runtime of runtimes: defines, starts on demand, places pods across them, shares tags and pod ids | `application.ts` |

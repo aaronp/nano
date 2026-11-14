@@ -1,5 +1,6 @@
 /**
- * The context a handler runs in: which instance, in which runtime, and the verbs it calls out with.
+ * The context a runtime invokes a handler with: the pod's coord there, that runtime, every runtime the pod is in, and
+ * the verbs it calls out with (over its subscriptions in all of them).
  *
  *   const h: Handler = async (ctx, msg) => ctx.one(DB, db => db.save({ key: 'k', value: msg }))
  *   await ctx.publish(Ticks.ops.tick, 1)        // to every live event subscription, in every runtime it belongs to
@@ -20,6 +21,7 @@ export type Call<I extends Interface, T> = (c: Client<I>) => Promise<NanoResult<
 export type NanoContext = {
   readonly instance: string
   readonly runtime: string
+  readonly runtimes: readonly string[]
   one<I extends Interface, T>(s: CallSelector<I>, fn: Call<I, T>): Promise<NanoResult<T>>
   optional<I extends Interface, T>(s: CallSelector<I>, fn: Call<I, T>): Promise<NanoResult<Found<T> | { none: true }>>
   any<I extends Interface, T>(s: CallSelector<I>, fn: Call<I, T>): Promise<NanoResult<Found<T>>>

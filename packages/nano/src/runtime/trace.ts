@@ -7,15 +7,15 @@
  *   t.message()   // 'm1', then 'm2', …: this runtime's next message id
  */
 import type { NanoResult } from '../result.ts'
-import type { InstanceState } from './pods.ts'
+import type { PodState } from '../pod.ts'
 import type { Status, SubscriptionData } from './subscriptions.ts'
 
 export type RuntimeEvent =
   // lifecycle
-  | { type: 'pod-created'; pod: string; implementation: string }
-  | { type: 'pod-removed'; pod: string }
-  | { type: 'pod-swapped'; pod: string; from: string; to: string }
-  | { type: 'instance'; coord: string; state: InstanceState; reason?: string }
+  | { type: 'pod-created'; coord: string; implementation: string }
+  | { type: 'pod-removed'; coord: string }
+  | { type: 'pod-swapped'; coord: string }
+  | { type: 'pod-state'; coord: string; state: PodState; reason?: string }
   // wiring
   | { type: 'subscription-set'; subscription: SubscriptionData }
   | { type: 'subscription-removed'; id: string; reason: 'unsubscribed' | 'cascade' }

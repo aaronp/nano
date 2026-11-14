@@ -3,22 +3,30 @@ import { Type } from 'typebox'
 import { defineSchema } from '../src/schema.ts'
 import { op } from '../src/op.ts'
 import { iface, type Interface } from '../src/iface.ts'
-import { failure, success } from '../src/result.ts'
+import { success } from '../src/result.ts'
 import { implementation, provide, type Implementation } from '../src/implementation.ts'
 import { provider } from '../src/provider.ts'
 import { createRegistry } from '../src/registry.ts'
 import type { Policy } from '../src/policy.ts'
 import type { NanoContext } from '../src/context.ts'
 import type { Selector } from '../src/selector.ts'
-import { createRuntime } from '../src/runtime/index.ts'
+import { Pod } from '../src/pod.ts'
+import { createRuntime, type Runtime } from '../src/runtime/index.ts'
 
 const Str = defineSchema('Str', Type.String())
 const face = (coord: string) => iface(coord, { ping: op.action('ping', Str, Str) })
 const Foo = face('acme/foo'), Bar = face('acme/bar'), Baz = face('acme/baz'), DB = face('acme/db'), CycA = face('acme/cyc-a'), CycB = face('acme/cyc-b')
+const Probe = iface('acme/probe', { probe: op.action('probe', Str, Str) })
 
-const contexts = new Map<string, NanoContext>()
+/** Contexts are made by a runtime per invocation: the probe keeps the last one it was given. */
+let caught: NanoContext | undefined
+const probe = provide(Probe, { probe: async c => { caught = c; return success('') } })
+async function ctxOf(rt: Runtime, coord: string): Promise<NanoContext> {
+  await rt.call(coord).probe('')
+  return caught!
+}
 const impl = (coord: string, provides: Interface[], dependencies: Record<string, Selector> = {}): Implementation =>
-  implementation(coord, { provides, dependencies, make: (ctx: NanoContext) => { contexts.set(ctx.instance, ctx); return provides.map(i => provide(i, { ping: async (_c, s) => success(s) })) } })
+  implementation(coord, { provides: [...provides, Probe], dependencies, make: () => [probe, ...provides.map(i => provide(i, { ping: async (_c, s) => success(s) }))] })
 
 const foo = impl('acme/app/foo', [Foo], { bar: Bar })
 const bar = impl('acme/app/bar', [Bar], { baz: Baz })
@@ -36,185 +44,122 @@ const loopA = impl('acme/loop/a', [LA], { d: LD, b: LB })
 const loopB = impl('acme/loop/b', [LB], { c: LC })
 const loopC = impl('acme/loop/c', [LC], { b: LB, d: LD })
 const loopD = impl('acme/loop/d', [LD])
-// A make that awaits its dependency: construction is not use, so it fails at once instead of waiting.
-const during = new Map<string, unknown[]>()
-const blocking = implementation('acme/loop/blocking', { provides: [], dependencies: { d: LD }, make: async (ctx: NanoContext) => {
-  during.set(ctx.instance, [await ctx.one(LD, d => d.ping('hi')), await ctx.optional(LD, d => d.ping('hi')), await ctx.all(LD, d => d.ping('hi'))])
-  return []
-} })
-// A pass held open by a slow make, and an outside instance that calls into it meanwhile.
-const Slow = face('acme/l-slow')
-const slow = implementation('acme/loop/slow', { provides: [Slow], make: async () => { await new Promise(r => setTimeout(r, 10)); return [provide(Slow, { ping: async (_c, s) => success(s) })] } })
-const waits = impl('acme/loop/waits', [], { d: LD, s: Slow })
-const outsider = impl('acme/loop/outsider', [], { d: LD })
-// An instance that, once made, calls its dependency while a slow make still holds the pass open.
-const early = new Map<string, Promise<unknown>>()
-const eager = implementation('acme/loop/eager', { provides: [], dependencies: { s: Slow, d: LD }, make: (ctx: NanoContext) => {
-  setTimeout(() => early.set(ctx.instance, ctx.one(LD, d => d.ping('hi'))), 0)
-  return []
-} })
 const boom = implementation('acme/bad/boom', { provides: [], make: () => { throw new Error('nope') } })
 
-function setup(policy?: Policy, idTaken?: (id: string) => boolean) {
+function setup(policy?: Policy) {
   const registry = createRegistry()
   for (const p of [
     provider('acme/app', [foo, bar, baz, user, tagged, byImpl, needsBoom]),
     provider('acme/db', [impl('acme/db/mem', [DB]), impl('acme/db/file', [DB])]),
     provider('acme/cyc', [cycA, cycB]),
     provider('acme/bad', [boom]),
-    provider('acme/loop', [loopR, loopA, loopB, loopC, loopD, eager, blocking, slow, waits, outsider]),
+    provider('acme/loop', [loopR, loopA, loopB, loopC, loopD]),
   ]) registry.add(p)
-  return createRuntime('r1', { registry, ...(policy && { policy }), ...(idTaken && { idTaken }) })
+  const rt = createRuntime('r1', { registry, ...(policy && { policy }) })
+  /** Register a new pod of `implementation`: its coord. */
+  const add = (implementation: string) => { const r = rt.register(Pod.create(registry.implementation(implementation)!)); if (!r.ok) throw new Error(r.fail.reason); return r.value }
+  return { rt, add }
 }
-const edges = (rt: ReturnType<typeof setup>) => rt.subscriptions().map(s => `${s.from} -> ${s.to} ${rt.status(s.id)}`)
+const edges = (rt: Runtime) => rt.subscriptions().map(s => `${s.from} -> ${s.to} ${rt.status(s.id)}`)
+const settle = () => new Promise(r => setTimeout(r, 0))
+const none = success([])
 
 describe('provisioning', () => {
-  test('an existing single match is connected, nothing is made', async () => {
-    const rt = setup()
-    await rt.create('z', 'acme/app/baz')
-    expect(await rt.create('b', 'acme/app/bar', { provision: true })).toEqual(success({ pod: 'b', instances: ['b#0'], unsatisfied: [] }))
-    expect(rt.instances()).toEqual(['z#0', 'b#0'])
-    expect(edges(rt)).toEqual(['b#0 -> z#0 live'])
-  })
-  test('a single provider is made and connected, recursively', async () => {
-    const rt = setup()
-    expect(await rt.create('f', 'acme/app/foo', { provision: true })).toEqual(success({ pod: 'f', instances: ['f#0'], unsatisfied: [] }))
-    expect(rt.instances()).toEqual(['f#0', 'bar-1#0', 'baz-1#0'])
-    expect(edges(rt)).toEqual(['bar-1#0 -> baz-1#0 live', 'f#0 -> bar-1#0 live'])
-  })
-  test('a made instance takes the first free id', async () => {
-    const rt = setup()
-    await rt.create('bar-1', 'acme/db/mem')
-    await rt.create('f', 'acme/app/foo', { provision: true })
-    expect(rt.instances()).toContain('bar-2#0')
-  })
-  test('a made instance skips ids taken elsewhere in the application', async () => {
-    const rt = setup(undefined, id => id === 'bar-1')
-    await rt.create('f', 'acme/app/foo', { provision: true })
-    expect(rt.instances()).toContain('bar-2#0')
-  })
-  test('two matching implementations leave it unsatisfied with `2 match`', async () => {
-    const rt = setup()
-    expect(await rt.create('u', 'acme/app/user', { provision: true })).toEqual(success({ pod: 'u', instances: ['u#0'], unsatisfied: [{ role: 'store', reason: '2 match' }] }))
-    expect(rt.instances()).toEqual(['u#0'])
-  })
-  test('two matching members leave it unsatisfied with `2 match`, even when one implementation matches', async () => {
-    const rt = setup()
-    await rt.create('z1', 'acme/app/baz')
-    await rt.create('z2', 'acme/app/baz')
-    expect(await rt.create('b', 'acme/app/bar', { provision: true })).toEqual(success({ pod: 'b', instances: ['b#0'], unsatisfied: [{ role: 'baz', reason: '2 match' }] }))
+  test('registering makes nothing: provisioning is asked for', () => {
+    const { rt, add } = setup()
+    add('acme/app/foo')
+    expect(rt.pods()).toEqual(['acme/app/foo#0'])
     expect(rt.subscriptions()).toEqual([])
   })
-  test('a dependency already connected is left alone', async () => {
-    const rt = setup()
-    await rt.create('z1', 'acme/app/baz')
-    await rt.create('z2', 'acme/app/baz')
-    rt.subscribe({ kind: 'call', from: 'b#0', to: 'z2#0' })
-    expect(await rt.create('b', 'acme/app/bar', { provision: true })).toEqual(success({ pod: 'b', instances: ['b#0'], unsatisfied: [] }))
-    expect(edges(rt)).toEqual(['b#0 -> z2#0 live'])
+  test('an unknown coord fails not-found', () => {
+    expect(setup().rt.provision('acme/app/foo#0')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
   })
-  test('a selector naming only tags matches no implementation', async () => {
-    const rt = setup()
-    expect(await rt.create('t', 'acme/app/tagged', { provision: true })).toEqual(success({ pod: 't', instances: ['t#0'], unsatisfied: [{ role: 'cache', reason: 'nothing matches' }] }))
+  test('an existing single match is connected, nothing is made', () => {
+    const { rt, add } = setup()
+    add('acme/app/baz')
+    expect(rt.provision(add('acme/app/bar'))).toEqual(none)
+    expect(rt.pods()).toEqual(['acme/app/baz#0', 'acme/app/bar#0'])
+    expect(edges(rt)).toEqual(['acme/app/bar#0 -> acme/app/baz#0 live'])
   })
-  test('a selector may name the implementation', async () => {
-    const rt = setup()
-    expect((await rt.create('i', 'acme/app/by-impl', { provision: true })).ok).toBe(true)
-    expect(edges(rt)).toEqual(['i#0 -> baz-1#0 live'])
+  test('a single implementation is made, registered and connected, recursively, in the same turn', () => {
+    const { rt, add } = setup()
+    expect(rt.provision(add('acme/app/foo'))).toEqual(none)
+    expect(rt.pods()).toEqual(['acme/app/foo#0', 'acme/app/bar#0', 'acme/app/baz#0'])
+    expect(edges(rt)).toEqual(['acme/app/bar#0 -> acme/app/baz#0 live', 'acme/app/foo#0 -> acme/app/bar#0 live'])
+  })
+  test('two matching implementations leave it unsatisfied with `2 match`', () => {
+    const { rt, add } = setup()
+    expect(rt.provision(add('acme/app/user'))).toEqual(success([{ role: 'store', reason: '2 match' }]))
+    expect(rt.pods()).toEqual(['acme/app/user#0'])
+  })
+  test('two matching pods leave it unsatisfied with `2 match`, even when one implementation matches', () => {
+    const { rt, add } = setup()
+    add('acme/app/baz'); add('acme/app/baz')
+    expect(rt.provision(add('acme/app/bar'))).toEqual(success([{ role: 'baz', reason: '2 match' }]))
+    expect(rt.subscriptions()).toEqual([])
+  })
+  test('a dependency already connected is left alone', () => {
+    const { rt, add } = setup()
+    add('acme/app/baz'); add('acme/app/baz')
+    rt.subscribe({ kind: 'call', from: 'acme/app/bar#0', to: 'acme/app/baz#1' })
+    expect(rt.provision(add('acme/app/bar'))).toEqual(none)
+    expect(edges(rt)).toEqual(['acme/app/bar#0 -> acme/app/baz#1 live'])
+  })
+  test('a selector naming only tags matches no implementation', () => {
+    const { rt, add } = setup()
+    expect(rt.provision(add('acme/app/tagged'))).toEqual(success([{ role: 'cache', reason: 'nothing matches' }]))
+  })
+  test('a selector may name the implementation', () => {
+    const { rt, add } = setup()
+    expect(rt.provision(add('acme/app/by-impl'))).toEqual(none)
+    expect(edges(rt)).toEqual(['acme/app/by-impl#0 -> acme/app/baz#0 live'])
   })
   test('mutual dependencies connect both ways', async () => {
-    const rt = setup()
-    expect(await rt.create('a', 'acme/cyc/a', { provision: true })).toEqual(success({ pod: 'a', instances: ['a#0'], unsatisfied: [] }))
-    expect(rt.instances()).toEqual(['a#0', 'b-1#0'])
-    expect(edges(rt)).toEqual(['b-1#0 -> a#0 live', 'a#0 -> b-1#0 live'])
-    expect(await contexts.get('a#0')!.one(CycB, b => b.ping('to b'))).toEqual(success('to b'))
-    expect(await contexts.get('b-1#0')!.one(CycA, a => a.ping('to a'))).toEqual(success('to a'))
+    const { rt, add } = setup()
+    const a = add('acme/cyc/a'), b = 'acme/cyc/b#0'
+    expect(rt.provision(a)).toEqual(none)
+    expect(rt.pods()).toEqual([a, b])
+    expect(edges(rt)).toEqual([`${b} -> ${a} live`, `${a} -> ${b} live`])
+    expect(await (await ctxOf(rt, a)).one(CycB, x => x.ping('to b'))).toEqual(success('to b'))
+    expect(await (await ctxOf(rt, b)).one(CycA, x => x.ping('to a'))).toEqual(success('to a'))
   })
-  test('a longer loop connects, making each implementation at most once per pass', async () => {
-    const rt = setup()
-    expect(await rt.create('r', 'acme/loop/r', { provision: true })).toEqual(success({ pod: 'r', instances: ['r#0'], unsatisfied: [] }))
-    expect(rt.instances()).toEqual(['r#0', 'a-1#0', 'd-1#0', 'b-1#0', 'c-1#0'])
-    expect(edges(rt)).toEqual([
-      'a-1#0 -> d-1#0 live',
-      'c-1#0 -> b-1#0 live',
-      'c-1#0 -> d-1#0 live',
-      'b-1#0 -> c-1#0 live',
-      'a-1#0 -> b-1#0 live',
-      'r#0 -> a-1#0 live',
+  test('a longer loop connects, making each implementation at most once per pass', () => {
+    const { rt, add } = setup()
+    expect(rt.provision(add('acme/loop/r'))).toEqual(none)
+    expect(rt.pods()).toEqual(['r', 'a', 'd', 'b', 'c'].map(x => `acme/loop/${x}#0`))
+    expect(edges(rt).map(e => e.replaceAll('acme/loop/', '').replaceAll('#0', ''))).toEqual([
+      'a -> d live',
+      'c -> b live',
+      'c -> d live',
+      'b -> c live',
+      'a -> b live',
+      'r -> a live',
     ])
   })
-  test('a make that awaits a dependency call fails at once: dependencies are not available while it is being made', async () => {
-    const rt = setup()
-    await rt.create('k', 'acme/loop/blocking', { provision: true })
-    const fail = failure('missing-component', 'k#0: dependencies are not available while it is being made')
-    expect(during.get('k#0')).toEqual([fail, fail, []])
-    expect(edges(rt)).toEqual(['k#0 -> d-1#0 live'])
+  test('a policy that throws while provisioning subscribes is a denial with its error', () => {
+    const { rt, add } = setup({ isAllowed: (_f, to) => { if (to === 'acme/app/baz#0') throw new Error('bad policy'); return { approved: true } } })
+    add('acme/app/baz')
+    expect(rt.provision(add('acme/app/bar'))).toEqual(success([{ role: 'baz', reason: 'policy threw: bad policy' }]))
   })
-  test('a call from outside into an instance of an unfinished pass waits for the pass, then succeeds', async () => {
-    const rt = setup()
-    await rt.create('o', 'acme/loop/outsider')
-    rt.subscribe({ kind: 'call', from: 'o#0', to: 'd-1#0' })
-    const order: string[] = []
-    const created = rt.create('w', 'acme/loop/waits', { provision: true }).then(() => order.push('pass'))
-    await new Promise(r => setTimeout(r, 2))
-    expect(rt.instances()).toContain('d-1#0')
-    const call = contexts.get('o#0')!.one(LD, d => d.ping('x')).then(r => { order.push('call'); return r })
-    await created
-    expect(await call).toEqual(success('x'))
-    expect(order).toEqual(['pass', 'call'])
+  test('a subscription the policy denies leaves the role unsatisfied with the reason', () => {
+    const { rt, add } = setup({ isAllowed: (_f, to) => (to === 'acme/app/baz#0' ? { approved: false, reason: 'no baz' } : { approved: true }) })
+    add('acme/app/baz')
+    expect(rt.provision(add('acme/app/bar'))).toEqual(success([{ role: 'baz', reason: 'no baz' }]))
   })
-  test('a call made after make, during the pass, waits for it, then gets the real result', async () => {
-    const rt = setup()
-    await rt.create('e', 'acme/loop/eager', { provision: true })
-    expect(await early.get('e#0')).toEqual(success('hi'))
+  // A starting pod is available: its subscription is live when made, and waits once the make fails.
+  test('a made pod (here one named by provider) whose make fails: the subscription is made live, then waits', async () => {
+    const { rt, add } = setup()
+    expect(rt.provision(add('acme/app/needs-boom'))).toEqual(none)
+    expect(rt.pods()).toEqual(['acme/app/needs-boom#0', 'acme/bad/boom#0'])
+    await settle()
+    expect(rt.pod('acme/bad/boom#0')!.state).toBe('failed')
+    expect(edges(rt)).toEqual(['acme/app/needs-boom#0 -> acme/bad/boom#0 waiting'])
   })
-  test('a policy that throws while provisioning subscribes is a denial with its error', async () => {
-    const rt = setup({ isAllowed: (_f, to) => { if (to.startsWith('z#')) throw new Error('bad policy'); return { approved: true } } })
-    await rt.create('z', 'acme/app/baz')
-    expect(await rt.create('b', 'acme/app/bar', { provision: true })).toEqual(success({ pod: 'b', instances: ['b#0'], unsatisfied: [{ role: 'baz', reason: 'policy threw: bad policy' }] }))
-  })
-  // Review Focus 5.
-  test('a made pod whose make fails (here one named by provider) still gets a waiting subscription; the role is unsatisfied', async () => {
-    const rt = setup()
-    expect(await rt.create('n', 'acme/app/needs-boom', { provision: true })).toEqual(success({
-      pod: 'n', instances: ['n#0'], unsatisfied: [{ role: 'boom', reason: 'subscription s1 to boom-1#0 is waiting' }],
-    }))
-    expect(rt.instances()).toEqual(['n#0', 'boom-1#0'])
-    expect(rt.pod('boom-1')).toMatchObject({ implementation: 'acme/bad/boom', state: 'failed' })
-    expect(edges(rt)).toEqual(['n#0 -> boom-1#0 waiting'])
-  })
-  test('an existing failed instance that matches is connected, and the subscription waits', async () => {
-    const rt = setup()
-    await rt.create('x', 'acme/bad/boom')
-    expect(await rt.create('n', 'acme/app/needs-boom', { provision: true })).toEqual(success({
-      pod: 'n', instances: ['n#0'], unsatisfied: [{ role: 'boom', reason: 'subscription s1 to x#0 is waiting' }],
-    }))
-    expect(rt.pods()).toEqual(['x', 'n'])
-    expect(edges(rt)).toEqual(['n#0 -> x#0 waiting'])
-  })
-  test('provisioning a pod of two settles each instance', async () => {
-    const rt = setup()
-    expect(await rt.create('b', 'acme/app/bar', { count: 2, provision: true })).toEqual(success({ pod: 'b', instances: ['b#0', 'b#1'], unsatisfied: [] }))
-    expect(edges(rt)).toEqual(['b#0 -> baz-1#0 live', 'b#1 -> baz-1#0 live'])
-  })
-  test('a subscription the policy denies leaves the role unsatisfied with the reason', async () => {
-    const rt = setup({ isAllowed: (_f, to) => (to.startsWith('z#') ? { approved: false, reason: 'no baz' } : { approved: true }) })
-    await rt.create('z', 'acme/app/baz')
-    expect(await rt.create('b', 'acme/app/bar', { provision: true })).toEqual(success({ pod: 'b', instances: ['b#0'], unsatisfied: [{ role: 'baz', reason: 'no baz' }] }))
-  })
-  test('a throwing policy on a plain subscribe is a denial, observed', () => {
-    const seen: unknown[] = []
-    const rt = createRuntime('r1', { registry: createRegistry(), policy: { isAllowed: () => { throw new Error('bad policy') } } })
-    rt.listen(e => seen.push(e))
-    expect(rt.subscribe({ kind: 'call', from: 'b#0', to: 'z#0' })).toEqual({ ok: false, fail: { type: 'denied', reason: 'policy threw: bad policy' } })
-    expect(seen).toEqual([{ type: 'failure', coord: 'b#0', reason: 'policy threw: bad policy' }])
-    expect(rt.subscriptions()).toEqual([])
-  })
-  test('`provision: false` makes nothing', async () => {
-    const rt = setup()
-    expect(await rt.create('f', 'acme/app/foo', { provision: false })).toEqual(success({ pod: 'f', instances: ['f#0'], unsatisfied: [{ role: 'bar', reason: 'not provisioned' }] }))
-    expect(await rt.create('g', 'acme/app/foo')).toEqual(success({ pod: 'g', instances: ['g#0'], unsatisfied: [{ role: 'bar', reason: 'not provisioned' }] }))
-    expect(rt.instances()).toEqual(['f#0', 'g#0'])
-    expect(rt.subscriptions()).toEqual([])
+  test('an existing failed pod that matches is connected, and the subscription waits', async () => {
+    const { rt, add } = setup()
+    add('acme/bad/boom')
+    await settle()
+    expect(rt.provision(add('acme/app/needs-boom'))).toEqual(success([{ role: 'boom', reason: 'subscription s1 to acme/bad/boom#0 is waiting' }]))
+    expect(edges(rt)).toEqual(['acme/app/needs-boom#0 -> acme/bad/boom#0 waiting'])
   })
 })

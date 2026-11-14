@@ -1,4 +1,3 @@
-// @ts-nocheck — the effect-pod revision isn't built yet; remove when it lands
 /**
  * The effect-pod revision, written first (spec: "The pod is the effect boundary"). A pod is standalone around one
  * instance of one implementation; registering it gives it `<implementation>#<n>` in a runtime; only a runtime makes a
@@ -7,27 +6,23 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import * as nano from '../src/index.ts'
 import { defineSchema } from '../src/schema.ts'
 import { op } from '../src/op.ts'
 import { iface, type Interface } from '../src/iface.ts'
 import { success, type NanoResult } from '../src/result.ts'
-import { implementation, provide, type Handler } from '../src/implementation.ts'
+import { Pod } from '../src/pod.ts'
+import { implementation, provide } from '../src/implementation.ts'
+import type { NanoContext } from '../src/context.ts'
 import { provider } from '../src/provider.ts'
 import { createRegistry } from '../src/registry.ts'
 import type { Policy } from '../src/policy.ts'
-import { createRuntime, type RuntimeEvent } from '../src/runtime/index.ts'
-import { createApplication } from '../src/application.ts'
-import { loadDoc, saveDoc } from '../src/document.ts'
-
-// Not exported yet: read off the module so this file still loads while every test is todo.
-const { Pod } = nano as unknown as { Pod: { create(i: unknown, opts?: { config?: unknown }): any } }
+import { createRuntime, type Runtime, type RuntimeEvent } from '../src/runtime/index.ts'
 
 const Str = defineSchema('Str', Type.String())
 const face = (coord: string) => iface(coord, { ping: op.action('ping', Str, Str) })
 const Vault = face('acme/vault'), Signer = face('acme/signer'), Tester = face('acme/tester')
 
-const echo = (prefix: string): Handler => async (_c, s) => success(`${prefix} ${s}`)
+const echo = (prefix: string) => async (_c: NanoContext, s: unknown) => success(`${prefix} ${s}`)
 /** An implementation whose instance answers ping with `<config> <input>`; make receives the config, no ctx. */
 const echoing = (coord: string, provides: Interface[]) =>
   implementation(coord, { provides, make: (config: unknown) => provides.map(i => provide(i, { ping: echo(String(config)) })) })
@@ -36,8 +31,8 @@ const user = echoing('acme/ui/user', [Tester])
 // One counter per instance: the same instance answers 1, 2, 3 …
 const counter = implementation('acme/keys/counter', { provides: [Vault], make: () => { let n = 0; return [provide(Vault, { ping: async () => success(String(++n)) })] } })
 // The signer calls the vault beside it through the ctx it was invoked with.
-const sign: Handler = async (ctx, s) => {
-  const r: NanoResult<string> = await ctx.one(Vault, v => v.ping(s as string))
+const sign = async (ctx: NanoContext, s: string): Promise<NanoResult<string>> => {
+  const r: NanoResult<string> = await ctx.one(Vault, v => v.ping(s))
   return r.ok ? success(`signed ${r.value}`) : r
 }
 const signer = implementation('acme/keys/signer', { provides: [Signer], dependencies: { vault: Vault }, make: () => [provide(Signer, { ping: sign })] })
@@ -71,16 +66,20 @@ const runtime = (id = 'r1', policy?: Policy) => {
   rt.listen(e => events.push(e))
   return { rt, events }
 }
-const reg = (rt, pod): string => { const r = rt.register(pod); if (!r.ok) throw new Error(r.fail.reason); return r.value }
+const reg = (rt: Runtime, pod: Pod): string => { const r = rt.register(pod); if (!r.ok) throw new Error(r.fail.reason); return r.value }
+// Behaviours 9 and 12 need the application and document rebuilt (Task 3): imported lazily, loosely typed, until then.
+const later = async (): Promise<any> => ({ ...await import('../src/application.ts'), ...await import('../src/document.ts') })
 const settle = () => new Promise(r => setTimeout(r, 0))
+/** The value of a result that must be ok. */
+const ok = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 /** sent → delivered pairs on a stream, as `to` and result. */
-const delivered = (events: RuntimeEvent[]) => events.filter(e => e.type === 'sent').map(s => ({
-  to: s.to, result: events.find(e => e.type === 'delivered' && e.id === s.id)?.result,
-}))
+const delivered = (events: RuntimeEvent[]) => events.flatMap(s => (s.type === 'sent' ? [{
+  to: s.to, result: events.flatMap(e => (e.type === 'delivered' && e.id === s.id ? [e.result] : []))[0],
+}] : []))
 
 describe('registering', () => {
   // Behaviour 1.
-  test.todo('given two pods of one implementation, when the first is unregistered and another registered, then the coords are #0, #1 and #2, never a reused #0', async () => {
+  test('given two pods of one implementation, when the first is unregistered and another registered, then the coords are #0, #1 and #2, never a reused #0', async () => {
     const { rt } = runtime()
     expect(rt.register(Pod.create(vault))).toEqual(success('acme/keys/vault#0'))
     expect(rt.register(Pod.create(vault))).toEqual(success('acme/keys/vault#1'))
@@ -88,7 +87,7 @@ describe('registering', () => {
     expect(rt.register(Pod.create(vault))).toEqual(success('acme/keys/vault#2'))
   })
   // Behaviour 2.
-  test.todo('given one pod registered in two runtimes, when called through each, then each has its own coord and both reach the same instance', async () => {
+  test('given one pod registered in two runtimes, when called through each, then each has its own coord and both reach the same instance', async () => {
     const a = runtime('a').rt, b = runtime('b').rt
     const pod = Pod.create(counter)
     const inA = reg(a, pod), inB = reg(b, pod)
@@ -96,7 +95,7 @@ describe('registering', () => {
     expect(await a.call(inA).ping('x')).toEqual(success('1'))
     expect(await b.call(inB).ping('x')).toEqual(success('2'))
   })
-  test.todo('given an unknown coord, when it is called or unregistered, then it fails not-found', async () => {
+  test('given an unknown coord, when it is called or unregistered, then it fails not-found', async () => {
     const { rt } = runtime()
     expect(await rt.call('acme/keys/vault#0').ping('x')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
     expect(rt.unregister('acme/keys/vault#0')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
@@ -104,7 +103,7 @@ describe('registering', () => {
 })
 
 describe('a pod', () => {
-  test.todo('given an implementation and config, when a pod is created, then it names the implementation, runs, and its instance is made from that config', async () => {
+  test('given an implementation and config, when a pod is created, then it names the implementation, runs, and its instance is made from that config', async () => {
     const pod = Pod.create(vault, { config: 'eu' })
     await settle()
     expect(pod.implementation).toBe('acme/keys/vault')
@@ -113,26 +112,26 @@ describe('a pod', () => {
     expect(await rt.call(reg(rt, pod)).ping('x')).toEqual(success('eu x'))
   })
   // Behaviour 3.
-  test.todo('given a subscribed pod with a call in flight, when it is swapped, then the subscription stays live, the next call reaches the new instance and the call in flight finishes on the old one', async () => {
+  test('given a subscribed pod with a call in flight, when it is swapped, then the subscription stays live, the next call reaches the new instance and the call in flight finishes on the old one', async () => {
     const { rt } = runtime()
     const pod = Pod.create(gated, { config: 'old' })
     const g = reg(rt, pod), u = reg(rt, Pod.create(user))
-    const sub = rt.subscribe({ kind: 'call', from: u, to: g })
+    const sub = ok(rt.subscribe({ kind: 'call', from: u, to: g }))
     const inFlight = rt.call(g).ping('a')
     await settle()
     expect(await pod.swap({ config: 'new' })).toEqual(success(undefined))
-    expect(rt.status(sub.value.id)).toBe('live')
+    expect(rt.status(sub.id)).toBe('live')
     expect(await rt.call(g).ping('b')).toEqual(success('new b'))
     openGate()
     expect(await inFlight).toEqual(success('old a'))
-    expect(rt.subscriptions()).toEqual([sub.value])
+    expect(rt.subscriptions()).toEqual([sub])
   })
-  test.todo('given a disposed pod, when it is swapped, then the swap fails', async () => {
+  test('given a disposed pod, when it is swapped, then the swap fails', async () => {
     const pod = Pod.create(vault)
     await pod.dispose()
     expect(await pod.swap({ config: 'new' })).toMatchObject({ ok: false })
   })
-  test.todo('given a handler that throws, when it is called through a runtime, then the call is a Fail threw and the pod keeps running', async () => {
+  test('given a handler that throws, when it is called through a runtime, then the call is a Fail threw and the pod keeps running', async () => {
     const { rt, events } = runtime()
     const pod = Pod.create(thrower)
     const c = reg(rt, pod)
@@ -144,7 +143,7 @@ describe('a pod', () => {
 
 describe('only a runtime calls a pod', () => {
   // Behaviour 4: no ctx, no call. A NanoContext comes only from a runtime.
-  test.todo('given a pod, when it is invoked without a context, then it does not type-check', () => {
+  test('given a pod, when it is invoked without a context, then it does not type-check', () => {
     const bypass = (pod: ReturnType<typeof Pod.create>) => {
       // @ts-expect-error — invoke needs a ctx, and only a runtime makes one
       pod.invoke('port', 'x')
@@ -154,22 +153,22 @@ describe('only a runtime calls a pod', () => {
     expect(typeof Pod?.create).toBe('function')
   })
   // Behaviour 4: every call via rt.call is on that runtime's stream.
-  test.todo('given a runtime, when a host calls a pod through it, then every call appears on its stream as sent then delivered', async () => {
+  test('given a runtime, when a host calls a pod through it, then every call appears on its stream as sent then delivered', async () => {
     const { rt, events } = runtime()
     const c = reg(rt, Pod.create(vault, { config: 'v' }))
     await rt.call(c).ping('a')
     await rt.call(c).ping('b')
     expect(delivered(events)).toEqual([{ to: c, result: success('v a') }, { to: c, result: success('v b') }])
   })
-  test.todo('given a policy that refuses the pod, when a host calls it through the runtime, then the call is denied and recorded as denied', async () => {
+  test('given a policy that refuses the pod, when a host calls it through the runtime, then the call is denied and recorded as denied', async () => {
     const { rt, events } = runtime('r1', { isAllowed: (_f, t) => ({ approved: false, reason: `no ${t}` }) })
     const c = reg(rt, Pod.create(vault))
     expect(await rt.call(c).ping('x')).toMatchObject({ ok: false, fail: { type: 'denied' } })
-    const sent = events.find(e => e.type === 'sent')
-    expect(events).toContainEqual(expect.objectContaining({ type: 'denied', id: sent.id }))
+    const sent = events.flatMap(e => (e.type === 'sent' ? [e.id] : []))
+    expect(events).toContainEqual(expect.objectContaining({ type: 'denied', id: sent[0] }))
   })
   // Behaviour 5.
-  test.todo("given one signer pod in R and other with its vault subscription only in R, when called through other, then its vault call goes through R and is recorded only there", async () => {
+  test("given one signer pod in R and other with its vault subscription only in R, when called through other, then its vault call goes through R and is recorded only there", async () => {
     const r = runtime('R'), other = runtime('other')
     const pod = Pod.create(signer)
     const s = reg(r.rt, pod), v = reg(r.rt, Pod.create(vault, { config: 'v' }))
@@ -180,7 +179,7 @@ describe('only a runtime calls a pod', () => {
     expect(delivered(r.events).map(d => d.to)).toEqual([v])
   })
   // Behaviour 5: a match in two runtimes.
-  test.todo('given a signer pod wired to a vault in each of two runtimes, when its handler calls one vault, then the call is ambiguous', async () => {
+  test('given a signer pod wired to a vault in each of two runtimes, when its handler calls one vault, then the call is ambiguous', async () => {
     const a = runtime('a'), b = runtime('b')
     const pod = Pod.create(signer)
     const sa = reg(a.rt, pod), va = reg(a.rt, Pod.create(vault, { config: 'a' }))
@@ -193,9 +192,9 @@ describe('only a runtime calls a pod', () => {
 
 describe('the runtimes a pod is in', () => {
   // Behaviour 6 (the full story is examples/messenger/send.test.ts).
-  test.todo("given a pod registered in three runtimes and unregistered from one, then its runtimes and its handlers' ctx.runtimes name the other two", async () => {
+  test("given a pod registered in three runtimes and unregistered from one, then its runtimes and its handlers' ctx.runtimes name the other two", async () => {
     let seen: string[] = []
-    const where = implementation('acme/keys/where', { provides: [Vault], make: () => [provide(Vault, { ping: async ctx => { seen = ctx.runtimes; return success('ok') } })] })
+    const where = implementation('acme/keys/where', { provides: [Vault], make: () => [provide(Vault, { ping: async ctx => { seen = [...ctx.runtimes]; return success('ok') } })] })
     const rts = ['messaging', 'chat', 'support'].map(id => { const registry = createRegistry(); registry.add(provider('acme/keys', [where])); return createRuntime(id, { registry }) })
     const pod = Pod.create(where)
     const coords = rts.map(rt => reg(rt, pod))
@@ -209,12 +208,12 @@ describe('the runtimes a pod is in', () => {
 
 describe('unregistering', () => {
   // Behaviour 7.
-  test.todo('given a pod in two runtimes with a subscription to it in each, when unregistered from one, then only that runtime’s subscription is deleted', async () => {
+  test('given a pod in two runtimes with a subscription to it in each, when unregistered from one, then only that runtime’s subscription is deleted', async () => {
     const a = runtime('a'), b = runtime('b')
     const pod = Pod.create(vault, { config: 'v' })
     const inA = reg(a.rt, pod), inB = reg(b.rt, pod)
     const ua = reg(a.rt, Pod.create(user)), ub = reg(b.rt, Pod.create(user))
-    const sa = a.rt.subscribe({ kind: 'call', from: ua, to: inA }).value, sb = b.rt.subscribe({ kind: 'call', from: ub, to: inB }).value
+    const sa = ok(a.rt.subscribe({ kind: 'call', from: ua, to: inA })), sb = ok(b.rt.subscribe({ kind: 'call', from: ub, to: inB }))
     expect(a.rt.unregister(inA)).toEqual(success(undefined))
     expect(a.rt.subscriptions()).toEqual([])
     expect(a.events).toContainEqual({ type: 'subscription-removed', id: sa.id, reason: 'cascade' })
@@ -226,13 +225,13 @@ describe('unregistering', () => {
 
 describe('failure', () => {
   // Behaviour 8.
-  test.todo('given a pod whose instance fails to make, when subscribed to and then swapped with a working config, then it is failed, the subscription waits, and then goes live', async () => {
+  test('given a pod whose instance fails to make, when subscribed to and then swapped with a working config, then it is failed, the subscription waits, and then goes live', async () => {
     const { rt } = runtime()
     const pod = Pod.create(flaky, { config: { fail: true } })
     await settle()
     expect(pod.state).toBe('failed')
     const f = reg(rt, pod), u = reg(rt, Pod.create(user))
-    const sub = rt.subscribe({ kind: 'call', from: u, to: f }).value
+    const sub = ok(rt.subscribe({ kind: 'call', from: u, to: f }))
     expect(rt.status(sub.id)).toBe('waiting')
     expect(await pod.swap({ config: { fail: false } })).toEqual(success(undefined))
     expect(pod.state).toBe('running')
@@ -241,6 +240,7 @@ describe('failure', () => {
   // Behaviour 9. Saved form (spec): one `pods` section; runtimes refer to pods by document key.
   test.todo('given a saved runtime whose pod fails to make, when it is loaded and started, then the runtime starts and that pod is failed', async () => {
     const F = 'acme/keys/flaky#0', U = 'acme/ui/user#0'
+    const { loadDoc } = await later()
     const { app } = await loadDoc({
       nano: 2, title: 't', providers: ['acme/keys', 'acme/ui'], tags: {}, start: ['r'],
       pods: { p0: { implementation: 'acme/keys/flaky', config: { fail: true } }, p1: { implementation: 'acme/ui/user' } },
@@ -261,13 +261,14 @@ describe('failure', () => {
 describe('saving', () => {
   // Behaviour 12.
   test.todo('given a pod registered in two runtimes, when saved and loaded, then the document has one pods entry referred to from both, and loading gives one instance behind both coords', async () => {
+    const { createApplication, saveDoc, loadDoc } = await later()
     const app = createApplication('app', { registry: registry() })
     const a = app.createRuntime('a').value, b = app.createRuntime('b').value
     const pod = Pod.create(counter, { config: 'c' })
     const inA = reg(a, pod), inB = reg(b, pod)
     const doc = saveDoc(app)
     expect(doc.pods).toEqual({ p0: { implementation: 'acme/keys/counter', config: 'c' } })
-    expect(doc.runtimes.map(r => r.pods)).toEqual([[{ coord: inA, pod: 'p0' }], [{ coord: inB, pod: 'p0' }]])
+    expect(doc.runtimes.map((r: any) => r.pods)).toEqual([[{ coord: inA, pod: 'p0' }], [{ coord: inB, pod: 'p0' }]])
     const loaded = (await loadDoc(doc, { registry: registry() })).app
     const la = (await loaded.start('a')).value, lb = (await loaded.start('b')).value
     // One instance behind both coords: the counter carries on across them.

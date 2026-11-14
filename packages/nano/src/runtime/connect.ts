@@ -1,40 +1,29 @@
 /**
- * Connecting: an end selector (which pod, then which instance of it) resolved once to one concrete instance coord.
- * Pure over the runtime's pods (own and placed) and their tags; never throws — a malformed selector is `invalid-input`.
+ * Connecting: an end given as a coord is used as is; an `EndSelector` is resolved once to the one registered pod it
+ * matches. Pure over the runtime's pods and their targets; never throws — a malformed selector is `invalid-input`.
  *
- *   resolveEnd({ pods, tagsOf }, { target: { pod: 'vault' }, instance: { by: 'first' } })   // success('vault#0')
- *   resolveEnd({ pods, tagsOf }, { target: { implements: 'acme/vault' }, instance: { by: 'index', index: 0 } })   // fail ambiguous: 2 match
+ *   resolveEnd(rt, { implements: 'acme/vault' })                 // success('acme/keys/vault#0'), or ambiguous: 2 match
+ *   resolveEnd(rt, { implementation: 'acme/db/mem', tags: ['cache'] })
  */
 import { failure, success, type NanoResult } from '../result.ts'
-import type { EndSelector } from '../selector.ts'
-import { parseInstance, type PodRecord } from './pods.ts'
+import { matches, type EndSelector, type Target } from '../selector.ts'
 
-const isObj = (v: unknown): v is Record<string, any> => typeof v === 'object' && v !== null
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 
-export function resolveEnd(rt: { pods: ReadonlyMap<string, PodRecord>; tagsOf: (coord: string) => ReadonlySet<string> }, end: EndSelector): NanoResult<string> {
-  const t: unknown = end?.target, sel: unknown = end?.instance
-  if (!isObj(t) || !isObj(sel)) return failure('invalid-input', 'an end needs a target and an instance selector')
-  const kind = (['pod', 'implements', 'implementation'] as const).find(k => k in t)
-  if (!kind) return failure('invalid-input', 'a target is a pod, an interface it implements, or an implementation')
-  if (typeof t[kind] !== 'string') return failure('invalid-input', `target ${kind} must be a string`)
-  if (sel.by === 'index' && !Number.isInteger(sel.index)) return failure('invalid-input', 'index must be a whole number')
-  const all = [...rt.pods.values()]
-  const pods = 'pod' in t ? all.filter(p => p.id === t.pod)
-    : 'implements' in t ? all.filter(p => p.implementation.provides.some(i => i.coord === t.implements))
-    : all.filter(p => p.implementation.coord === t.implementation)
-  const hits: string[] = []
-  for (const p of pods) {
-    const list = [...p.instances.values()]
-    switch (sel.by) {
-      case 'first': { const i = list.filter(i => i.state === 'running').sort((a, b) => parseInstance(a.coord)!.index - parseInstance(b.coord)!.index)[0]; if (i) hits.push(i.coord); break }
-      case 'index': hits.push(...list.filter(i => parseInstance(i.coord)!.index === sel.index).map(i => i.coord)); break
-      case 'tags':
-        if (!Array.isArray(sel.tags) || !sel.tags.every(x => typeof x === 'string')) return failure('invalid-input', 'tags must be strings')
-        hits.push(...list.filter(i => sel.tags.every((x: string) => rt.tagsOf(i.coord).has(x))).map(i => i.coord)); break
-      default: return failure('invalid-input', `unknown instance selector ${typeof sel.by === 'string' ? JSON.stringify(sel.by) : typeof sel.by}`)
-    }
-  }
-  if (hits.length === 0) return failure('not-found', `nothing matches ${kind} ${t[kind]}`)
-  if (hits.length > 1) return failure('ambiguous', `${hits.length} match ${kind} ${t[kind]}: ${hits.join(', ')}`)
+export function resolveEnd(rt: { coords: Iterable<string>; target(coord: string): Target | undefined }, sel: string | EndSelector): NanoResult<string> {
+  if (typeof sel === 'string') return success(sel)
+  const end: unknown = sel
+  if (!isObj(end)) return failure('invalid-input', 'an end is a coord or a selector')
+  const kind = (['coord', 'implements', 'implementation'] as const).find(k => k in end)
+  if (!kind) return failure('invalid-input', 'an end selector names a coord, an interface it implements, or an implementation')
+  const named = end[kind], tags = end.tags ?? []
+  if (typeof named !== 'string') return failure('invalid-input', `${kind} must be a string`)
+  if (!Array.isArray(tags) || !tags.every(t => typeof t === 'string')) return failure('invalid-input', 'tags must be strings')
+  const hits = [...rt.coords].filter(c => {
+    const t = rt.target(c)
+    return !!t && (kind === 'coord' ? c === named : matches({ [kind]: named, tags }, t))
+  })
+  if (hits.length === 0) return failure('not-found', `nothing matches ${kind} ${named}`)
+  if (hits.length > 1) return failure('ambiguous', `${hits.length} match ${kind} ${named}: ${hits.join(', ')}`)
   return success(hits[0]!)
 }
