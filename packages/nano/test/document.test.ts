@@ -266,3 +266,18 @@ describe('checkDoc', () => {
     expect(snapshot(back).runtimes).toEqual(snapshot(app).runtimes)
   })
 })
+
+describe('only what the document can hold is made', () => {
+  const refused = { ok: false, fail: { type: 'invalid-input' } }
+  test('a runtime id outside the id rule is refused', () => {
+    const app = createApplication('app', { registry: registry() })
+    expect(app.createRuntime('my runtime')).toMatchObject(refused)
+    expect(app.createRuntime('x'.repeat(65))).toMatchObject(refused)
+    expect(() => createRuntime('my runtime', { registry: registry() })).toThrow('bad runtime id')
+  })
+  test('a subscription id outside the id rule, or an end that is not a coord, is refused', () => {
+    const rt = createRuntime('r', { registry: registry() })
+    expect(rt.subscribe({ id: 'my sub', kind: 'call', from: T, to: V })).toMatchObject(refused)
+    expect(rt.subscribe({ kind: 'call', from: 'a b#0', to: V })).toMatchObject(refused)
+  })
+})
