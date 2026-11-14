@@ -6,11 +6,11 @@
  *   await rt.create('inbox', 'example.messenger/inbox')   // works alone, on its fallback
  */
 import { implementation, provide, provider, success, type NanoContext } from '@pritzlaff/nano'
-import { Composer, Inbox, KeyValueStore, Messaging } from './interfaces.ts'
+import { Composer, Inbox, KeyValueStore, Messaging, Send } from './interfaces.ts'
 
 type Message = { id: string; text: string }
 
-const memoryStore = implementation('example.messenger/memory-store', {
+export const memoryStore = implementation('example.messenger/memory-store', {
   provides: [KeyValueStore],
   make: () => {
     const data = new Map<string, string>()
@@ -68,4 +68,12 @@ const composer = implementation('example.messenger/composer', {
   })],
 })
 
-export const messengerProvider = provider('example.messenger', [memoryStore, messaging, inbox, composer])
+/** Stores each message under its contact. Never names a runtime: the wiring decides which store. */
+export const send = implementation('example.messenger/send', {
+  provides: [Send],
+  dependencies: { db: KeyValueStore },
+  make: () => [provide(Send, { send: async (ctx, { contact, message }) =>
+    ctx.one(KeyValueStore, kv => kv.put({ key: contact, value: message })) })],
+})
+
+export const messengerProvider = provider('example.messenger', [memoryStore, messaging, inbox, composer, send])

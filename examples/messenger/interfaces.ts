@@ -40,3 +40,7 @@ export const Inbox = iface('example.messenger.Inbox', {
 export const Composer = iface('example.messenger.Composer', {
   send: op.action('send', Draft, Sent),
 })
+
+export const Outgoing = defineSchema('Outgoing', Type.Object({ contact: Type.String(), message: Type.String() }))
+/** `send(contact, message)`: one pod, shared by every runtime that registers it. */
+export const Send = iface('example.messenger.Send', { send: op.action('send', Outgoing, Done) })

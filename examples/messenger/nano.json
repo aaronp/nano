@@ -4,57 +4,67 @@
   "providers": [
     "example.messenger"
   ],
+  "pods": {
+    "p0": {
+      "implementation": "example.messenger/inbox"
+    },
+    "p1": {
+      "implementation": "example.messenger/composer"
+    },
+    "p2": {
+      "implementation": "example.messenger/memory-store"
+    },
+    "p3": {
+      "implementation": "example.messenger/messaging"
+    }
+  },
   "runtimes": [
     {
       "id": "messenger",
       "policy": "allow-all",
       "pods": [
         {
-          "id": "inbox",
-          "implementation": "example.messenger/inbox",
-          "instances": [
-            0
-          ],
-          "next": 1
+          "coord": "example.messenger/inbox#0",
+          "pod": "p0"
         },
         {
-          "id": "composer",
-          "implementation": "example.messenger/composer",
-          "instances": [
-            0
-          ],
-          "next": 1
-        }
-      ],
-      "members": [
-        {
-          "pod": "store",
-          "home": "persistence"
+          "coord": "example.messenger/composer#0",
+          "pod": "p1"
         },
         {
-          "pod": "messaging",
-          "home": "messaging"
+          "coord": "example.messenger/memory-store#0",
+          "pod": "p2"
+        },
+        {
+          "coord": "example.messenger/messaging#0",
+          "pod": "p3"
         }
       ],
+      "next": {
+        "example.messenger/inbox": 1,
+        "example.messenger/composer": 1,
+        "example.messenger/memory-store": 1,
+        "example.messenger/messaging": 1
+      },
       "subscriptions": [
         {
           "id": "inbox-store",
           "kind": "call",
-          "from": "inbox#0",
-          "to": "store#0"
+          "from": "example.messenger/inbox#0",
+          "to": "example.messenger/memory-store#0"
         },
         {
           "id": "composer-messaging",
           "kind": "call",
-          "from": "composer#0",
-          "to": "messaging#0"
+          "from": "example.messenger/composer#0",
+          "to": "example.messenger/messaging#0"
         },
         {
           "id": "messages-inbox",
           "kind": "event",
-          "from": "messaging#0",
+          "from": "example.messenger/messaging#0",
           "source": "example.messenger.Messaging/9ba68770d917788a22b30c5c2b3cb969bcbbc2942dce5c6f16a81d5821a48ac8",
-          "to": "inbox#0",
+          "to": "example.messenger/inbox#0",
           "target": "example.messenger.Inbox/4b0d7839d057efd5c6ed554224e0c3fb1e79cc83d2ae92cace81c053d9be30a5"
         }
       ]
@@ -64,15 +74,13 @@
       "policy": "allow-all",
       "pods": [
         {
-          "id": "store",
-          "implementation": "example.messenger/memory-store",
-          "instances": [
-            0
-          ],
-          "next": 1
+          "coord": "example.messenger/memory-store#0",
+          "pod": "p2"
         }
       ],
-      "members": [],
+      "next": {
+        "example.messenger/memory-store": 1
+      },
       "subscriptions": []
     },
     {
@@ -80,15 +88,13 @@
       "policy": "allow-all",
       "pods": [
         {
-          "id": "messaging",
-          "implementation": "example.messenger/messaging",
-          "instances": [
-            0
-          ],
-          "next": 1
+          "coord": "example.messenger/messaging#0",
+          "pod": "p3"
         }
       ],
-      "members": [],
+      "next": {
+        "example.messenger/messaging": 1
+      },
       "subscriptions": []
     }
   ],
