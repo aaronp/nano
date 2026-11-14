@@ -10,7 +10,7 @@ Each domain object has its own deployment, the data for what it owns, and its ow
 
 | Level | Data | Assembled | Owns |
 |---|---|---|---|
-| Pods | `PodDeployment` | `Pods.create(podDeployment, { registry })` | which components exist (descriptions, not instances); a scoped lookup |
+| Pods | `PodDeployment` | `Pods.create(podDeployment, { registry, tags? })` | which components exist (descriptions, not instances); a scoped lookup |
 | Runtime | `RuntimeDeployment` | `Runtime.create(id, runtimeDeployment, pods)` | which pods are placed together and how they are wired; the boundary messages are policed and recorded in |
 | Application | `AppDeployment` | `Application.create(runtimes, opts)` | the live system: instances, mounting, routing, change, closing |
 
@@ -53,13 +53,14 @@ type Subscription =
 ### Validation, per level
 
 - `Pods.create`: names follow the id rule; every implementation is in the registry (`not-found`); every config fits
-  its implementation's schema; at most 5000 pods.
+  its implementation's schema; at most 5000 pods; `tags` (`Record<PodName, string[]>`) name only its pods
+  (`invalid-input` otherwise), and `select` keeps the selected pods' tags.
 - `Runtime.create`: every placed pod is in the given `Pods` (so a runtime cannot place what it wasn't given); every
   subscription's ends are placed here; no duplicates; ports exist and fit (above); a call edge's target provides an
   interface `from` declares as a dependency, when it declares any; at most 2000 subscriptions.
 - `Application.create`: at most 50 runtimes; runtime ids follow the id rule; every runtime's pods come from one
   `Pods` (the same name means the same pod everywhere, `invalid-input` otherwise).
-- `assemble(appDeployment, registry)`: `Pods.create` of `pods`, then for each runtime `Runtime.create(id, def,
+- `assemble(appDeployment, registry)`: `Pods.create` of `pods` with `tags`, then for each runtime `Runtime.create(id, def,
   pods.select(def.pods))`. Pure; the first failure is returned.
 
 ## Assembled values

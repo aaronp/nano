@@ -52,7 +52,12 @@ const lonely = implementation('acme/lonely', { provides: [App], dependencies: { 
   return [provide(App, { save: async s => ctx.one(Store).call.save(s) })]
 } })
 
-const registry = () => { const r = createRegistry(); r.add(provider('acme', [counter, store, logger, slowLogger, appImpl, watcher, checker, lonely])); return r }
+/** Counts the stores wired to it that are tagged primary. */
+const primaries = implementation('acme/primaries', { provides: [Counter], dependencies: { store: Store }, make: ctx => [provide(Counter, {
+  inc: async () => success(ctx.all(sel(Store, { tags: ['primary'] })).length),
+})] })
+
+const registry = () => { const r = createRegistry(); r.add(provider('acme', [counter, store, logger, slowLogger, appImpl, watcher, checker, lonely, primaries])); return r }
 const ok = r => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const create = async (d, opts = {}) => {
   logged = []; heard = []
@@ -88,6 +93,18 @@ describe('assembling', () => {
     expect(Runtime.create('r', { pods: ['a', 'b'], subscriptions: [] }, ok(pods.select(['a'])))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
     expect(ok(Runtime.create('r', { pods: ['a'], subscriptions: [] }, ok(pods.select(['a'])))).id).toBe('r')
     expect(n).toBe(0)
+  })
+  test('given tags on Pods.create, when runtimes and the application are made from it, then a tag selector matches and deployment() carries the placed pods\' tags', async () => {
+    const d = { p: Pod.lazy(primaries), a: Pod.lazy(store, { config: 'a' }), b: Pod.lazy(store, { config: 'b' }), x: Pod.lazy(counter) }
+    const pods = ok(Pods.create(d, { registry: registry(), tags: { b: ['primary'], x: ['unplaced'] } }))
+    const r = ok(Runtime.create('r', { pods: ['p', 'a', 'b'], subscriptions: [{ kind: 'call', from: 'p', to: 'a' }, { kind: 'call', from: 'p', to: 'b' }] }, ok(pods.select(['p', 'a', 'b']))))
+    const app = ok(await Application.create({ r }, {}))
+    expect(await app.call('r', 'p').inc(null)).toEqual(success(1))
+    expect(app.deployment().tags).toEqual({ b: ['primary'] })
+  })
+  test('given tags that are not by pod name, or name a pod not in the deployment, when Pods.create runs, then it is invalid-input', () => {
+    for (const tags of [{ a: 'x' }, { 'a/b': ['x'] }, { zz: ['x'] }, { constructor: ['x'] }])
+      expect(Pods.create({ a: Pod.lazy(counter) }, { registry: registry(), tags })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   })
 })
 

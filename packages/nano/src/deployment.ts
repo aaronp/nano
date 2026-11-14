@@ -6,7 +6,7 @@
  *   assemble(d, registry)   // success({ app: Runtime }), or the first failure naming the offender; never throws
  */
 import { Type } from 'typebox'
-import { Id, Pods, shapeError, tag, type PodDeployment } from './pods.ts'
+import { Id, Pods, shapeError, type PodDeployment } from './pods.ts'
 import type { Registry } from './registry.ts'
 import { failure, success, type NanoResult } from './result.ts'
 import { Runtime, type RuntimeDeployment } from './runtime.ts'
@@ -29,9 +29,8 @@ export function assemble(d: unknown, registry: Registry): NanoResult<Record<stri
     const why = shapeError(Shape, copy, 'deployment')
     if (why) return failure('invalid-input', why)
     const { pods: podDeployment, runtimes, tags } = copy as AppDeployment
-    const pods = Pods.create(podDeployment, { registry })
+    const pods = Pods.create(podDeployment, { registry, tags })
     if (!pods.ok) return pods
-    if (tags) tag(pods.value, tags)
     const out: Record<string, Runtime> = Object.create(null)
     for (const [id, r] of Object.entries(runtimes)) {
       const scope = pods.value.select(r?.pods)

@@ -24,7 +24,7 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 | Context | what a pod's factory gets (`NanoContext`): `self`, `runtimes`, `one`, `all`, `publish`, `addOnCloseListener` (each build has its own; runs on `restarted`, `removed`, `changed` or `closed`) | `context.ts` |
 | `Pod` | a value `{ implementation, config?, eager }` from `Pod.lazy(impl, { config })` / `Pod.eager(impl)`; no state, methods or instance | `pod.ts` |
 | `Policy` | `isAllowed(src, dest, data)` per runtime, answering a `Verdict`; `Policies.allowAll()` | `policy.ts` |
-| `Pods` | which components exist: `Pods.create(podDeployment, { registry })` checks a `PodDeployment` (names, implementations, configs, at most 5000) into an immutable lookup, `names`, `get`, `select` (a scope over the same descriptions), `deployment` | `pods.ts` |
+| `Pods` | which components exist: `Pods.create(podDeployment, { registry, tags? })` checks a `PodDeployment` (names, implementations, configs, at most 5000) and its tags by pod name into an immutable lookup, `names`, `get`, `select` (a scope over the same descriptions, keeping their tags), `deployment` | `pods.ts` |
 | `Runtime` | pods placed together and wired: `Runtime.create(id, runtimeDeployment, pods)` checks a `RuntimeDeployment` (pods placed, `Subscription`s, policy) over a `Pods` scope into an immutable `{ id, pods, deployment }` | `runtime.ts` |
 | `AppDeployment` | the whole system as data: pods, runtimes by id, tags; `assemble(d, registry)` checks it level by level into its `Runtime`s, strictly (D83) | `deployment.ts` |
 | `Application` | the one live thing: `Application.create(runtimes, { policies?, timeoutMs? })` (at most 50, ids by the id rule, every runtime's pods from one `Pods`) gives six members, `call`, `apply`, `restart`, `deployment`, `listen` (an `AppEvent` stream), `close` (every instance closed; then calls are `not-found`, `apply`/`restart` refused) | `application/` |
@@ -37,12 +37,12 @@ answer to a message or a new subscription (a throw, a Promise or no verdict refu
 handler by the timeout; `contextFor(live, name, onClose)` is a pod's `NanoContext`, `onClose` adding a listener to
 that build; `diff(a, b)` is what `apply` changes: pods added, removed, changed, and runtimes rewired;
 `compose(runtimes)` is the application's deployment from its runtimes (the pods they place, in their `Pods`' order,
-and the tags their `Pods` carry) and their registry.
+and those pods' tags) and their registry.
 
 Inside `pods.ts` (not exported from the package): `Id` is the id rule for pod names and runtime ids, `shapeError` the
 first way a value breaks a level's shape, `originOf(pods)` where a `Pods` comes from: the registry it was checked
 against (which `Runtime.create` resolves implementations with), the `Pods` it was selected from (one per application)
-and, on that root, the tags `assemble` put there with `tag(root, tags)`. Inside `deployment.ts`: `RuntimeIds` is the
+and the tags of its pods. Inside `deployment.ts`: `RuntimeIds` is the
 shape of a table by runtime id (the id rule, at most 50). Inside `runtime.ts`: `isRuntime(r)` is whether
 `Runtime.create` made `r`.
 
@@ -55,7 +55,7 @@ shape of a table by runtime id (the id rule, at most 50). Inside `runtime.ts`: `
    subscriptions, in order: a call edge `{ kind: 'call', from, to }` or a pipe `{ kind: 'pipe', from, source, to,
    target }`, whose source is an event or an action (its results) of `from` and whose target an action of `to` that
    fits it; pipes may form cycles. Each level checks its own part: `Pods.create` names, implementations (in the
-   registry), configs and 5000 pods; `Runtime.create` that every pod it places is in its scope, every subscription's
+   registry), configs, tags (by its pod names) and 5000 pods; `Runtime.create` that every pod it places is in its scope, every subscription's
    ends are placed in it, ports exist and fit, and 2000 subscriptions; `assemble` 50 runtimes and their ids (D75, D78).
 3. **Create.** `Application.create(runtimes, opts)`, or `Application.create(assemble(d, registry).value, opts)` from
    data, validates (an invalid input is a `Fail` and nothing runs), builds every eager pod, and resolves once those
