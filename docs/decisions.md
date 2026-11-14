@@ -493,3 +493,69 @@ Pinned by "the application holds at most 5000 instances …" (`application.test.
 Pinned by "the document limits hold for what is built live" (`document.test.ts`), "races and guards (whole-branch review)" (`pods.test.ts`), "the application cap holds for addInstance and scale …" (`application.test.ts`) and "removing an instance frees a runtime's capacity …" (`runtime.test.ts`).
 **Why:** Decision 54's promise, "anything the application can save must load", was only true of instances: 51 runtimes, 2001 subscriptions or 501 pods each saved fine and loaded as an empty application.
 **Cost if wrong:** An application loaded under a different id than it was saved with turns the saved root into a child; a document of 50 runtimes then loses one to the 49-child limit, with a note.
+
+## 57. The pod is standalone, and the effect boundary (effect pods)
+
+**Decision:** `Pod.create(implementation, { config? })` (`pod.ts`) makes a pod around one instance of one implementation: `implementation` (coord string), `config`, `state` (`starting` | `running` | `failed` | `stopped`), `runtimes` (names), `invoke(ctx, port, input)`, `call.<op>(ctx, input)` (by op name), `swap({ config? })`, `dispose()`, `join(runtime, changed)` (returns the leave function). A runtime invokes a pod only through `send`; nothing is ever handed an instance. `createHostPod` and the pod record with homes, counts and holders are gone. Approved by the user (the effect-pods design).
+**Why:** One place turns throws, timeouts and bad output into `Fail`s, and the only way to code is a call a runtime polices and records.
+**Cost if wrong:** A host that wants a pod with no runtime has none to call it with (only a runtime makes a context).
+
+## 58. `make(config)` has no context; `ctx.config` is gone
+
+**Decision:** `Implementation.make(config)` takes no context; a handler closes over the config `make` got. `NanoContext` stays at 13 members: `config` goes, `runtimes` (every runtime the pod is in, by name) comes. Approved by the user.
+**Why:** A pod is made before it is registered anywhere, so there is no runtime to give a context at make time.
+**Cost if wrong:** An implementation that wants its config after a swap reads the one its handlers closed over; a swap makes a new instance, so it does.
+
+## 59. A starting pod is available; no provisioning gate
+
+**Decision:** `invoke` waits for the make in progress. A subscription is `waiting` only while an end is `failed`, `stopped` or not registered. The old provisioning pass-gate (calls into a pass's pods waiting for it) is gone. Approved by the user.
+**Why:** With a pod standalone and created before registering, waiting on the pod's own make says exactly what is true; a runtime-wide gate would be a second, wider wait for the same thing.
+**Cost if wrong:** A call during a long make waits up to the pod's timeout instead of failing at once.
+
+## 60. The runtime has 18 members, and one way to add an edge
+
+**Decision:** `id`, `policy`, `register(pod, coord?)`, `unregister(coord)`, `pod(coord)`, `pods()`, `next()`, `call(coord)`, `subscribe`, `unsubscribe`, `retarget`, `reorder`, `subscriptions()`, `status`, `books`, `listen`, `warn`, `provision(coord)`. Gone: `create`, `addInstance`, `add`, `scale`, `removeInstance`, `restart`, `remove`, `swap`, `record`, `instances`, `target`, `registry`, `connect`, `settling`. `subscribe` takes each end as a coord or an `EndSelector` (`{ coord } | { implements, tags? } | { implementation, tags? }`) matching exactly one registered pod, resolved once and saved as coords (D50). Approved by the user.
+**Why:** Pods have no lifecycle in a runtime, so there is nothing to scale or restart; two ways to add an edge (`connect`, `subscribe`) became one.
+**Cost if wrong:** A host that wants "make me one of these" calls `Pod.create` then `register`.
+
+## 61. Provisioning is synchronous
+
+**Decision:** `rt.provision(coord)` returns `NanoResult<Unsatisfied[]>` in one pass (`runtime/provision.ts`): one matching pod here, else one matching implementation made and registered, create first then wire (D24-D26). Approved by the user.
+**Why:** Registering is synchronous and a starting pod is available (D59), so nothing in a pass needs to await.
+**Cost if wrong:** A provision that must wait for makes to settle needs an async variant.
+
+## 62. The stream follows pods
+
+**Decision:** `pod-created { coord, implementation }`, `pod-removed { coord }`, `pod-swapped { coord }`, `pod-state { coord, state, reason? }` (replacing `instance`). A host's calls are `sent` with `from: 'host'`, and `isAllowed` sees `'host'` as the source. Approved by the user.
+**Why:** The event names what happened to the coord a runtime knows; there is no instance apart from the pod.
+**Cost if wrong:** A listener that wants to tell a swap from a first start reads `pod-swapped` (a swap landing during the first make shows as `pod-state` alone).
+
+## 63. Sharing is registering; the application keeps one pods table
+
+**Decision:** `place` is gone: register `a.pod(c)` in `b` (a pod's wiring in its own runtime stays private). `define({ pods, runtimes })` takes one pods table and runtimes that refer to it by key; starting makes each key once application-wide and registers it at its saved coord; `RuntimeOpts.next` restores counters. Approved by the user.
+**Why:** One pod object in two runtimes is the whole of sharing, so a document is one entry referred to twice (spec: Saved form).
+**Cost if wrong:** None to the model; a document with the same pod twice under two keys loads as two pods.
+
+## 64. An op name offered by two interfaces is `ambiguous`
+
+**Decision:** `rt.call(coord).<op>` and `pod.call.<op>` fail `ambiguous` when two of the pod's interfaces offer the op name; the caller invokes the port. Approved by the user.
+**Why:** `call` is sugar by name; guessing which interface would be a silent choice.
+**Cost if wrong:** A pod with two interfaces sharing an op name is reached only by port key from a test.
+
+## 65. Failure rulings (controller ruling, surfaced to the user)
+
+**Decision:** A call to a failed or disposed pod is `missing-component` (there is no `missing` `FailType`). A config that does not fit the implementation's schema leaves the pod `failed` (`invalid-input`); a swap to one fails `invalid-input` and changes nothing. A swap whose make fails leaves a running pod on its old instance (a failed pod stays failed, with the new reason). A match in two runtimes is `ambiguous` for `one`; a selector's `runtime` narrows it.
+**Why:** No new failure types; a swap must never make a working pod worse.
+**Cost if wrong:** A caller cannot tell "never made" from "disposed" except by the reason text.
+
+## 66. Registering twice and unknown implementations (controller ruling, surfaced to the user)
+
+**Decision:** Registering a pod twice in one runtime, or in another runtime with the same id, fails `exists`. `register` fails `not-found` when the runtime's registry lacks the implementation, and `invalid-input` for a coord not of that implementation or past the pod limit.
+**Why:** `runtimes` names must stay unique per pod, and a pod the runtime cannot describe could not be wired or saved.
+**Cost if wrong:** Two runtimes with the same id cannot share a pod; ids must differ (they already must be unique in an application).
+
+## 67. Application details and internal exports (controller ruling, surfaced to the user)
+
+**Decision:** `createApplication` takes `next` (the root's counters, restored on load); `definition(id)` returns define's shape `{ pods, runtimes }`; `define` accepts the root's id while the root is empty, so a document's root loads like any runtime. Module-internal, not re-exported by the package: `podTable`, `subscriptionTable`, `send`, `hostCall`, `wirings`, `podsTable`.
+**Why:** Saving then loading gives the same root; the internals are what the guardrail's "new export" rule should not count as model.
+**Cost if wrong:** A host wanting the internals imports the module file directly.
