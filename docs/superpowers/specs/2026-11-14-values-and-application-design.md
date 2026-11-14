@@ -1,6 +1,6 @@
 # Nano: values and a live application
 
-*Decided with the user on 2026-11-14. Supersedes the model of `2026-11-13-runtime-model-design.md` (its domains,
+*Decided with the user on 2026-11-14; live runtimes, `app.close()` and close listeners added the same day. Supersedes the model of `2026-11-13-runtime-model-design.md` (its domains,
 "How they work together", "The pod is the effect boundary", Application, Provisioning and saving sections) wherever
 they disagree. That document stays as history; `design.md` is rewritten from this one.*
 
@@ -119,14 +119,22 @@ type Subscription =
 ```ts
 const r = await Application.create(deployment, { registry, policies?, timeoutMs? })   // NanoResult<Application>
 const app = r.value
-await app.call('app', 'counter').inc()       // from 'host', through runtime 'app'
+const chat = app.runtime('app')              // the live runtime: Runtime | undefined
+await chat.call('counter').inc()             // from 'host', policed and recorded by runtime 'app'
 await app.apply(next)                        // reconcile to a new deployment value
-await app.restart('counter')                 // forget its instance; eager pods rebuild now
+await app.restart('counter')                 // close its instance; eager pods rebuild now
 app.deployment()                             // the current value (save = JSON of it)
-app.listen(e => …)                           // the one stream; returns an unsubscribe
+app.listen(e => …)                           // the whole stream; returns an unsubscribe
+await app.close()                            // NanoResult<void>: close every instance; the application is finished
 ```
 
-`Application` has exactly these five members. `policies` supplies custom `Policy` functions by runtime id (a
+**Data and its materialisation.** A `Deployment` is data; an `Application` is its materialisation. Each
+`deployment.runtimes[id]` (data) materialises as a live `Runtime`, `app.runtime(id)`; each `Pod` (data) materialises
+as an instance, built lazily or eagerly. Instances are application-wide: a pod placed in three runtimes is one
+instance, so building, restarting and closing belong to the application, while a `Runtime` is the boundary messages
+travel through.
+
+`Application` has exactly these six members (`runtime`, `apply`, `restart`, `deployment`, `listen`, `close`). `policies` supplies custom `Policy` functions by runtime id (a
 deployment can only name `'allow-all'`, the default). `timeoutMs` (default 30 000) bounds each build and each handler.
 
 - **`create`** validates the deployment (an invalid one is a `Fail`, `invalid-input` or `not-found`, and nothing
@@ -135,15 +143,56 @@ deployment can only name `'allow-all'`, the default). `timeoutMs` (default 30 00
 - **Building.** One instance per pod name per application. The factory runs on first need (a call, or eagerness),
   once: concurrent first calls share the same build. A factory that throws, rejects or times out fails the call that
   needed it (`threw` / `timeout`, also a `failure` on the stream) and caches nothing; the next call tries again.
-- **`restart(name)`** forgets the pod's instance (an eager pod is rebuilt at once). Calls already in flight finish on
-  the instance they started on. Unknown name → `not-found`.
+- **`restart(name)`** closes the pod's instance (reason `'restarted'`, below), then rebuilds it at once if it is
+  eager. Calls already in flight finish on the instance they started on. Unknown name → `not-found`.
 - **`apply(next)`** validates `next`, asks each affected runtime's policy about each added subscription
   (`isAllowed(from, to, 'subscribe')`), and then applies everything or nothing: pods added (eager ones built), pods
-  removed (instances forgotten; their subscriptions are gone because `next` no longer has them), pods whose value
-  changed restarted with the new value, subscriptions added, removed and reordered. A refusal is `denied` with the
+  removed (instances closed with reason `'removed'`; their subscriptions are gone because `next` no longer has them),
+  pods whose value changed closed with reason `'changed'` and rebuilt from the new value if eager, subscriptions added, removed and reordered. A refusal is `denied` with the
   reason and nothing changes. The changes are one `applied` event.
-- **`call(runtime, pod)`** gives a client by op name, for the host. Each call is a message from `'host'` in that
-  runtime. Unknown runtime or a pod not placed there → `not-found`; unknown op → `unknown-op`.
+- **`runtime(id)`** gives the live `Runtime` for a runtime in the current deployment, or `undefined`.
+- **`close()`** closes every built instance (reason `'closed'`) and resolves when their close listeners have settled.
+  It is idempotent. After it, calls are `not-found`, `apply` and `restart` are `invalid-input` (`application is
+  closed`), and nothing is built again.
+
+### The live Runtime
+
+```ts
+type Runtime = {
+  readonly id: string
+  call(pod: string): Client                  // by op name; each call a message from 'host' in this runtime
+  listen(fn: (e: AppEvent) => void): () => void   // this runtime's messages only (sent, delivered, denied)
+}
+```
+
+A `Runtime` is a view of the live application through one runtime: its policy, its slice of the stream, and the
+way in for the host. It holds no state of its own. `call` on a pod not placed here, or after the runtime was removed
+by `apply` or the application closed, is `not-found`; an unknown op is `unknown-op`.
+
+### Closing an instance
+
+An instance is closed when it is forgotten: on `restart` (`'restarted'`), when `apply` removes its pod
+(`'removed'`) or changes its value (`'changed'`), when its build fails (`'closed'`), and on `app.close()`
+(`'closed'`). The factory registers what to do through a fixed, discoverable listener on its context:
+
+```ts
+make: (ctx, config) => {
+  const timer = setInterval(tick, 1000)
+  ctx.addOnCloseListener(({ reason }) => clearInterval(timer))
+  return [provide(…)]
+}
+```
+
+- The set of lifecycle events is **fixed**: `addOnCloseListener` is the only one now (opening is the factory
+  itself). There is no generic `addEventListener` and no custom events; a new lifecycle event is a spec change, and
+  follows the same `addOn<Event>Listener(fn)` pattern with its own event argument.
+- The listener gets `{ reason: 'restarted' | 'removed' | 'changed' | 'closed' }`. It may be async; listeners run in
+  the order added, each awaited and bounded by `timeoutMs`. One that throws or times out is a `failure` on the
+  stream and doesn't stop the others.
+- An instance is closed **before** its replacement is built, so a restart that rebinds a port doesn't clash.
+- Calls already in flight on a closed instance keep running and are not waited for; they may find their resources
+  closed.
+- A listener added after its instance was closed runs at once.
 
 ### The context a factory gets
 
@@ -157,6 +206,7 @@ came through.
 | `one(selector)` | `NanoResult<Client>`: the single matching call subscription from `self`, across every runtime the pod is in; none → `not-found`, several → `ambiguous` (a selector's `runtime` narrows) |
 | `all(selector)` | `Client[]`: every matching call subscription, in deployment order (runtimes in order, then subscriptions in order); `[]` when none |
 | `publish(op, data)` | delivers to every event subscription from `self` with that source, in every runtime the pod is in |
+| `addOnCloseListener(fn)` | runs `fn({ reason })` when this instance is closed (see "Closing an instance"); each build has its own context |
 
 `one` and `all` are synchronous: they read the deployment as it is now. A client's calls are asynchronous. Fan-out,
 fallback, "any" and "each" are ordinary code over `all`. A component adapts to what is plugged in by testing
@@ -165,7 +215,7 @@ fallback, "any" and "each" are ordinary code over `all`. A component adapts to w
 ### Messages
 
 Every message, whether a host call, a call through a client, or an event delivery, travels in exactly one
-runtime: the runtime of the subscription it uses (or the one named in `app.call`). There it is:
+runtime: the runtime of the subscription it uses (or the `Runtime` a host call went through). There it is:
 
 1. **policed** by that runtime's policy (`isAllowed(from, to, data)`; a throwing policy denies);
 2. **checked** against the op's input schema, then run with the timeout, then its output checked;
@@ -176,7 +226,7 @@ A handler never throws across this boundary: a throw, a timeout, bad input or ba
 
 ### The stream
 
-`built { pod }`, `restarted { pod }`, `applied { added, removed, changed }` (pod names and subscriptions), `sent
+`built { pod }`, `restarted { pod }`, `closed { pod, reason }`, `applied { added, removed, changed }` (pod names and subscriptions), `sent
 { id, runtime, from, to, port }`, `delivered { id, result, ms }`, `denied { id, reason }`, `failure { pod?, reason }`,
 `warning { reason }`. In order, synchronously; a throwing listener is swallowed.
 
@@ -204,6 +254,18 @@ A handler never throws across this boundary: a throw, a timeout, bad input or ba
 15. An invalid deployment (a runtime placing an unknown pod, a subscription end not placed, ports that don't fit, an
     unknown implementation, a config that doesn't fit) fails `create` and `apply` with the reason.
 16. A component adapts: with no store wired, `ctx.all(KeyValueStore)` is `[]` and it falls back.
+17. A live runtime: `app.runtime('chat').call('send')` is recorded in `chat`; `app.runtime('chat').listen` sees only
+    `chat`'s messages; `app.runtime('nope')` is `undefined`; a call to a pod not placed there is `not-found`.
+18. `restart` runs the old instance's close listeners with `'restarted'` before the new instance is built.
+19. `apply` closes a removed pod's instance with `'removed'` and a changed one's with `'changed'`; a rewire-only
+    `apply` closes nothing.
+20. `app.close()` closes every built instance with `'closed'` (lazy pods never built have nothing to close); after
+    it, calls are `not-found` and `apply`/`restart` are `invalid-input`; a second `close()` does nothing.
+21. A build that throws after adding a close listener runs it with `'closed'`.
+22. A close listener that throws or hangs is a `failure` on the stream; the other listeners still run and `close()`
+    still resolves.
+23. A ticker started in `make` and stopped by its close listener stops ticking after `restart`.
+24. Each close is a `closed { pod, reason }` event on the stream.
 
 ## Removed
 
@@ -217,6 +279,9 @@ Provisioning may come back later as a pure function over values (`(deployment, r
 as runtime behaviour.
 
 ## Open (my calls, flagged for the user)
+
+- **The `closed { pod, reason }` stream event** (added with closing) and listeners running in the order added, each
+  awaited with the timeout.
 
 - **Strict validation.** An invalid deployment (including an unknown implementation) fails as a whole rather than
   loading what it can with notes. Simpler and nothing half-runs; it means a document from a marketplace with a missing
