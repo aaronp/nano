@@ -1,5 +1,7 @@
 # The nano model: providers, pods, runtimes, connections
 
+> **Superseded in part (2026-11-14)** by `2026-11-14-values-and-application-design.md`: its model of values and a live
+> `Application` replaces this document's domains, runtimes, pods, application, provisioning and saving sections.
 ## Why
 
 Nano is the foundation for a modular, shareable app ecosystem. Teams publish components with web-component UIs;
