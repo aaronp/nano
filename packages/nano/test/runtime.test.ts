@@ -293,6 +293,21 @@ describe('subscriptions', () => {
     expect(rt.reorder(M, ['s2', 's1'])).toEqual({ ok: false, fail: { type: 'denied', reason: 'no' } })
     expect(rt.subscriptions().map(s => s.id)).toEqual(['s1', 's2'])
   })
+  test('a denied retarget leaves the status as it was', () => {
+    let deny = false
+    const { rt, add } = setup({ policy: { isAllowed: () => (deny ? { approved: false, reason: 'no' } : { approved: true }) } })
+    add(ticker); add(memLog)
+    rt.subscribe(tickToLog)
+    deny = true
+    expect(rt.retarget('s1', 'acme/log/mem#1')).toMatchObject({ ok: false, fail: { type: 'denied' } })
+    expect(rt.status('s1')).toBe('live')
+  })
+  test('reordering a consumer with no call subscriptions to an empty list is a no-op', () => {
+    const { rt } = setup()
+    rt.subscribe(tickToLog)
+    expect(rt.reorder(T, [])).toEqual(success(undefined))
+    expect(rt.subscriptions().map(s => s.id)).toEqual(['s1'])
+  })
   test('unsubscribe removes the subscription and announces it', () => {
     const { rt, events } = setup()
     rt.subscribe(tickToLog)
