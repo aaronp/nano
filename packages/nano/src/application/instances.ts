@@ -3,15 +3,14 @@
  * so the next need builds again; forgetting drops the entry without touching builds already handed out.
  *
  *   const pods = instances(live)
- *   await pods.get('db')   // NanoResult<handlers by port>: built now, or the build already made or under way
+ *   await pods.get('db')   // NanoResult<{ implementation, handlers by port }>: built now, or the build already made or under way
  *   pods.forget('db')      // the next get builds a fresh closure; calls in flight keep the old one
  */
-import type { Handler } from '../implementation.ts'
-import { failure, type NanoResult } from '../result.ts'
+import { failure, success } from '../result.ts'
 import { contextFor } from './context.ts'
 import { within, type Live } from './messages.ts'
 
-type Made = Promise<NanoResult<ReadonlyMap<string, Handler>>>
+type Made = ReturnType<Live['instance']>
 
 export function instances(live: Live) {
   const made = new Map<string, Made>()
@@ -22,7 +21,7 @@ export function instances(live: Live) {
     if (!pod || !impl) return failure('not-found', `no pod ${name}`)
     const r = await within(() => impl.make(contextFor(live, name), pod.config), live.timeoutMs, `building ${name}`)
     live.trace.emit(r.ok ? { type: 'built', pod: name } : { type: 'failure', pod: name, reason: r.fail.reason })
-    return r
+    return r.ok ? success({ implementation: impl, handlers: r.value }) : r
   }
 
   return {

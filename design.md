@@ -29,7 +29,8 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 
 Inside `application/` (not exported from the package, one line each): `stream()` is the one stream and its ids;
 `instances(live)` holds at most one build per pod name; `send` carries one message in one runtime and `client` calls
-by op name over it, both reading a `Live` (the application as a message needs it); `within` bounds a build or handler
+by op name over it, both reading a `Live` (the application as a message needs it); `refusal` is a runtime policy's
+answer to a message or a new subscription (a throw, a Promise or no verdict refuses); `within` bounds a build or handler
 by the timeout; `contextFor(live, name)` is a pod's `NanoContext`; `diff(a, b)` is what `apply` changes: pods added,
 removed, changed, and runtimes rewired.
 
@@ -40,7 +41,7 @@ removed, changed, and runtimes rewired.
 2. **Describe.** `Pod.lazy(impl, { config })` or `Pod.eager(impl)` is a value holding the implementation's coordinate
    (D85). A `Deployment` names pods, places them in runtimes (a pod may be in several), and lists each runtime's
    subscriptions, in order: `{ kind: 'call', from, to }` or `{ kind: 'event', from, source, to, target }`. Valid
-   means every pod is placed in known runtimes, ends are placed in the runtime, ports exist and fit, implementations
+   means every pod a runtime places is in `pods`, every subscription's ends are placed in its runtime, ports exist and fit, implementations
    are in the registry, configs fit, and limits hold (50 runtimes, 5000 pods, 2000 subscriptions per runtime) (D75, D78).
 3. **Create.** `Application.create(deployment, { registry })` validates (an invalid deployment is a `Fail` and nothing
    runs), builds every eager pod, and resolves once those settle. A failed eager build is a `failure` on the stream,

@@ -7,7 +7,7 @@
  */
 import type { Deployment } from '../deployment.ts'
 import { port } from '../iface.ts'
-import type { Handler } from '../implementation.ts'
+import type { Handler, Implementation } from '../implementation.ts'
 import { Policies, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import { failure, isNanoResult, success, type NanoResult } from '../result.ts'
@@ -20,7 +20,8 @@ export type Live = {
   readonly policies: Record<string, Policy>
   readonly timeoutMs: number
   readonly trace: ReturnType<typeof stream>
-  instance(pod: string): Promise<NanoResult<ReadonlyMap<string, Handler>>>
+  /** A build: the handlers by port, and the implementation they were made from. */
+  instance(pod: string): Promise<NanoResult<{ implementation: Implementation; handlers: ReadonlyMap<string, Handler> }>>
 }
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -40,14 +41,33 @@ export async function within<T>(work: () => T | Promise<T>, ms: number, what: st
 }
 
 const impl = (live: Live, pod: string) => live.registry.implementation(live.now().pods[pod]?.implementation ?? '')
+const action = (i: Implementation | undefined, p: string) =>
+  i?.provides.flatMap(i => Object.values(i.ops).filter(o => o.kind === 'action' && port(i, o) === p))[0]
+
+/** Why `runtime`'s policy refuses `from`->`to` with `data`, or undefined. A throw, a Promise or no verdict refuses. */
+export function refusal(live: Live, runtime: string, from: string, to: string, data: unknown): string | undefined {
+  const policy = Object.hasOwn(live.policies, runtime) ? live.policies[runtime]! : Policies.allowAll()
+  try {
+    const v = policy.isAllowed(from, to, data) as { approved?: unknown; reason?: unknown; then?: unknown } | undefined
+    if (typeof v?.then === 'function') { Promise.resolve(v).catch(() => {}); return 'policy gave no verdict' }
+    if (v?.approved === true) return undefined
+    return v?.approved === false && typeof v.reason === 'string' ? v.reason : 'policy gave no verdict'
+  } catch (e) {
+    return `policy threw: ${msg(e)}`
+  }
+}
 
 async function deliver(live: Live, to: string, p: string, input: unknown): Promise<NanoResult<unknown>> {
-  const o = impl(live, to)?.provides.flatMap(i => Object.values(i.ops).filter(o => o.kind === 'action' && port(i, o) === p))[0]
-  if (!o) return failure('unknown-op', `${to} has no action ${p}`)
-  if (o.input && !o.input.check(input)) return failure('invalid-input', `${p}: input does not fit ${o.input.type}`)
+  const asked = action(impl(live, to), p)
+  if (!asked) return failure('unknown-op', `${to} has no action ${p}`)
+  if (asked.input && !asked.input.check(input)) return failure('invalid-input', `${p}: input does not fit ${asked.input.type}`)
   const made = await live.instance(to)
   if (!made.ok) return made
-  const ran = await within(() => made.value.get(p)!(input), live.timeoutMs, `${to} ${p}`)
+  // The op as the build knows it: an apply may have changed the pod while this build was under way.
+  const o = action(made.value.implementation, p), h = made.value.handlers.get(p)
+  if (!o || !h) return failure('unknown-op', `${to} has no action ${p}`)
+  if (o.input && !o.input.check(input)) return failure('invalid-input', `${p}: input does not fit ${o.input.type}`)
+  const ran = await within(() => h(input), live.timeoutMs, `${to} ${p}`)
   if (!ran.ok) { live.trace.emit({ type: 'failure', pod: to, reason: ran.fail.reason }); return ran }
   const r = ran.value
   if (!isNanoResult(r)) return failure('invalid-output', `${p}: returned something other than a NanoResult`)
@@ -55,16 +75,12 @@ async function deliver(live: Live, to: string, p: string, input: unknown): Promi
   return r
 }
 
-/** One message from `from` to `to`'s port `p`, in runtime `runtime`. A throwing policy denies. */
+/** One message from `from` to `to`'s port `p`, in runtime `runtime`, policed by `refusal`. */
 export async function send(live: Live, runtime: string, from: string, to: string, p: string, input: unknown): Promise<NanoResult<unknown>> {
   const { trace } = live, id = trace.id()
   trace.emit({ type: 'sent', id, runtime, from, to, port: p })
-  let v: { approved?: unknown; reason?: unknown } | undefined
-  try { v = (live.policies[runtime] ?? Policies.allowAll()).isAllowed(from, to, input) } catch (e) { v = { approved: false, reason: `policy threw: ${msg(e)}` } }
-  if (v?.approved !== true) {
-    const reason = v?.approved === false && typeof v.reason === 'string' ? v.reason : 'policy gave no verdict'
-    trace.emit({ type: 'denied', id, reason }); return failure('denied', reason)
-  }
+  const reason = refusal(live, runtime, from, to, input)
+  if (reason !== undefined) { trace.emit({ type: 'denied', id, reason }); return failure('denied', reason) }
   const t0 = performance.now()
   const r = await deliver(live, to, p, input)
   trace.emit({ type: 'delivered', id, result: r, ms: performance.now() - t0 })

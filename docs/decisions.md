@@ -624,13 +624,13 @@ Pinned by "the document limits hold for what is built live" (`document.test.ts`)
 
 ## 77. `apply` is all or nothing; `restart` forgets (decided with the user, 2026-11-14)
 
-**Decision:** `apply(next)` validates, asks each runtime's policy about each added subscription (`isAllowed(from, to, 'subscribe')`), then applies everything or nothing; changes are one `applied` event; applies run in order. `restart(pod)` forgets the instance (an eager pod rebuilds now); calls in flight finish on the old one; an unknown pod is `not-found`. `Application` has exactly five members. Supersedes D12, D13, D15, D16, D35 and D51 (replace, reorder, swap in place).
+**Decision:** `apply(next)` validates, asks each runtime's policy about each added subscription (`isAllowed(from, to, 'subscribe')`), then applies everything or nothing; changes are one `applied` event. `restart(pod)` forgets the instance (an eager pod rebuilds now); calls in flight finish on the old one; an unknown pod is `not-found`. `Application` has exactly five members. Supersedes D12, D13, D15, D16, D35 and D51 (replace, reorder, swap in place).
 **Why:** A refusal must never leave half a deployment.
 **Cost if wrong:** A host wanting a partial apply splits the deployment.
 
 ## 78. Deployment limits (decided with the user, 2026-11-14)
 
-**Decision:** At most 50 runtimes, 5000 pods and 2000 subscriptions per runtime; ids follow one rule. Supersedes D54, D56 and D68 (25000 pods).
+**Decision:** At most 50 runtimes, 5000 pods and 2000 subscriptions per runtime. Supersedes D54, D56 and D68 (25000 pods).
 **Why:** Bounds what one file can make.
 **Cost if wrong:** One constant in `deployment.ts`.
 
@@ -648,7 +648,7 @@ Pinned by "the document limits hold for what is built live" (`document.test.ts`)
 
 ## 81. A registry clash is `invalid-input` (controller ruling, surfaced to the user)
 
-**Decision:** `registry.add` of a provider already present or an interface that differs fails `invalid-input`; `exists` left with the reduced `FailType` list. Supersedes D66's `exists`.
+**Decision:** `registry.add` of a provider already present or an interface that differs fails `invalid-input`; `exists` is no longer a `FailType`. Supersedes D66's `exists`.
 **Why:** No new failure type for one case.
 **Cost if wrong:** A caller cannot tell a clash from other bad input except by the reason.
 
@@ -687,3 +687,21 @@ Pinned by "the document limits hold for what is built live" (`document.test.ts`)
 **Decision:** A call subscription must reach a pod providing an interface the caller declares as a dependency, when it declares any naming an interface; tag-only dependencies are not checked. Supersedes D5 and D25 on dependency matching.
 **Why:** Tags are narrowing, not a type; checking them would reject valid wiring.
 **Cost if wrong:** A tag-only dependency can be wired to anything.
+
+## 88. Applies in order, one id rule (controller ruling, surfaced to the user)
+
+**Decision:** Moved out of D77 and D78, which were decided with the user without these parts. Applies run in call order, each after the one before settles. Pod names and runtime ids follow one rule, `/^[^/\s#\x00-\x1f\x7f]{1,64}$/`: 1 to 64 characters, no `/`, `#`, whitespace or control characters.
+**Why:** Two applies at once must not interleave; one rule for every name is the least to learn.
+**Cost if wrong:** One queue in `application/index.ts`; one constant in `deployment.ts`.
+
+## 89. Final review rulings for values and the live application (controller ruling, surfaced to the user)
+
+**Decision:**
+- The `applied` event's `rewired` field (the runtime ids whose placing or subscriptions changed) is the spec's "and subscriptions" part of what an apply changes.
+- The application keeps its own copy of the deployment: `create` and `apply` clone the value they are given (`structuredClone`) before checking it, and `deployment()` returns a fresh clone. Mutating either object changes nothing; only `apply` does, through validation, policy and the diff. A value that cannot be cloned fails `invalid-input`.
+- Names are looked up as own properties only: the application's copy holds pods, runtimes and tags in prototype-less maps and host policies are read with `Object.hasOwn`, so `constructor`, `toString` or `__proto__` are ordinary names.
+- One internal check (`refusal`) reads a policy's verdict for messages and for added subscriptions: a throw, a Promise (its rejection swallowed) or a verdict whose fields throw refuses.
+- A call waiting on a build uses the op as the build's implementation knows it.
+
+**Why:** A live application must never be changed behind its back, and a public call must never reject.
+**Cost if wrong:** A clone per `apply` and `deployment()`; at 5000 pods it is still small.
