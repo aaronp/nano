@@ -42,6 +42,7 @@ export function podTable(w: Wiring, known: (implementation: string) => boolean, 
   const held = new Map<string, Pod>() // insertion order is register order; saving relies on it
   const coords = new Map<Pod, string>()
   const leaves = new Map<string, () => void>()
+  const left = new Set<string>() // unregistered here; a coord below a restored counter but never held is not one
 
   function register(pod: Pod, coord?: string): NanoResult<string> {
     const impl = pod.implementation, here = coords.get(pod)
@@ -78,6 +79,7 @@ export function podTable(w: Wiring, known: (implementation: string) => boolean, 
     const pod = held.get(coord)
     if (!pod) return failure('not-found', `${coord} is not registered in ${w.id}`)
     held.delete(coord)
+    left.add(coord)
     coords.delete(pod)
     wirings.get(pod)?.delete(w.id)
     leaves.get(coord)?.()
@@ -87,10 +89,7 @@ export function podTable(w: Wiring, known: (implementation: string) => boolean, 
     return success(undefined)
   }
 
-  /** Below its implementation's counter yet not held: it was unregistered, and a coord is never reused. */
-  const gone = (coord: string) => {
-    const p = parseInstance(coord)
-    return !!p && p.index < (next[p.implementation] ?? 0) && !held.has(coord)
-  }
+  /** Held in this runtime and unregistered since (a coord is never reused); one not registered (yet) is not gone. */
+  const gone = (coord: string) => left.has(coord) && !held.has(coord)
   return { register, unregister, held, coords, gone, next }
 }

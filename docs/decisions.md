@@ -544,7 +544,7 @@ Pinned by "the document limits hold for what is built live" (`document.test.ts`)
 
 ## 65. Failure rulings (controller ruling, surfaced to the user)
 
-**Decision:** A call to a failed or disposed pod is `missing-component` (there is no `missing` `FailType`). A config that does not fit the implementation's schema leaves the pod `failed` (`invalid-input`); a swap to one fails `invalid-input` and changes nothing. A swap whose make fails leaves a running pod on its old instance (a failed pod stays failed, with the new reason). A match in two runtimes is `ambiguous` for `one`; a selector's `runtime` narrows it.
+**Decision:** A call to a failed or disposed pod is `missing-component` (there is no `missing` `FailType`). A config that does not fit the implementation's schema leaves the pod `failed`, and calls to it are `missing-component` with that cause in the reason (D69); a swap to one fails `invalid-input` and changes nothing. A swap whose make fails leaves a running pod on its old instance (a failed pod stays failed, with the new reason). A match in two runtimes is `ambiguous` for `one`; a selector's `runtime` narrows it.
 **Why:** No new failure types; a swap must never make a working pod worse.
 **Cost if wrong:** A caller cannot tell "never made" from "disposed" except by the reason text.
 
@@ -559,3 +559,23 @@ Pinned by "the document limits hold for what is built live" (`document.test.ts`)
 **Decision:** `createApplication` takes `next` (the root's counters, restored on load); `definition(id)` returns define's shape `{ pods, runtimes }`; `define` accepts the root's id while the root is empty, so a document's root loads like any runtime. Module-internal, not re-exported by the package: `podTable`, `subscriptionTable`, `send`, `hostCall`, `wirings`, `podsTable`.
 **Why:** Saving then loading gives the same root; the internals are what the guardrail's "new export" rule should not count as model.
 **Cost if wrong:** A host wanting the internals imports the module file directly.
+
+## 68. A document holds what live building permits: 25000 pods (controller ruling, surfaced to the user)
+
+**Decision:** `MAX_DOC_PODS` (`document.ts`) is `MAX_RUNTIMES * MAX_PODS` = 50 × 500 = 25000, computed from those constants, so anything an application can build live saves and loads. Supersedes the 5000 cap of D54 and D56: with pods standalone there is no live application-wide count, and 50 runtimes of 500 distinct pods each were buildable but would not have loaded.
+**Why:** D56's promise, "what it saves loads", must hold for pods too; the per-runtime and runtime limits already bound what one file can make.
+**Cost if wrong:** If 25000 pods is too many to make on one load, a 5000 cap needs a live application-wide check (every register, in every runtime, counting distinct pods across the application).
+
+## 69. Final whole-branch review rulings (controller ruling, surfaced to the user)
+
+**Decision:**
+- Starting a runtime no longer starts others on demand for a subscription end: with no homes, an end not registered (yet) leaves the subscription `waiting`. A coord is "gone" (subscribing to it is `not-found`) only when it was held in that runtime and unregistered, not because it is below a restored counter; so loading without an end's provider keeps the subscription, waiting, and saving again keeps it.
+- The root is saved whenever it holds pods, subscriptions or counters (`next`), so a root that registered then unregistered everything still never reuses a coord after loading.
+- A call to any failed pod is `missing-component`, the cause in the reason (e.g. `<impl>: config does not fit <Type>`); this refines D65, where a pod failed by an unfit config answered `invalid-input`. A swap to an unfit config still fails `invalid-input` (it changes nothing).
+- A superseded swap resolves `invalid-input`; the latest asked wins even if its make fails (the earlier successful make is discarded; the pod keeps what it was serving).
+- Pods made but never registered are disposed: one provisioning made whose register failed, and those a start made before it threw (dropped from the pods table's made pods too).
+- `PodDef` (a pod as saved, in the pods table) and `Pod.create`'s `timeoutMs` option (make and call timeout, default 30 s) are recorded as controller rulings.
+- `Pod.join` is for runtimes (`register` calls it); calling it by hand adds a name to `pod.runtimes` and `ctx.runtimes`.
+
+**Why:** The spec: an end not registered (yet) leaves the subscription waiting; a coord is never reused; a pod made for nothing must not be left running.
+**Cost if wrong:** A subscription naming a coord that was unregistered in an earlier session (before saving) can be added again after loading; it waits rather than failing `not-found`.

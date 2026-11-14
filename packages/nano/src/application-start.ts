@@ -4,7 +4,7 @@
  *
  *   const pods = podsTable(registry, note)
  *   pods.check({ pods: { p0: { implementation: 'acme/keys/vault' } }, runtimes: [] })   // why not, or undefined
- *   pods.fill(rt, def, added) // each entry registered at its coord, then the subscriptions; what cannot be, a note
+ *   pods.fill(rt, def)        // each entry registered at its coord, then the subscriptions; what cannot be, a note
  *   pods.live(rt)             // a started runtime as data, its pods keyed application-wide
  */
 import { Type } from 'typebox'
@@ -99,15 +99,25 @@ export function podsTable(registry: Registry, note: (reason: string) => void) {
     },
     /** A key's entry: its pod as it is now once made, else as defined. */
     entry(key: string): PodDef | undefined { const p = made.get(key), d = table.get(key); return p ? podDef(p) : d && structuredClone(d) },
-    /** `added` hears each coord registered, so a start that throws can take back exactly those. */
-    fill(rt: Runtime, def: RuntimeDef, added: string[]) {
-      for (const { coord, pod } of def.pods) {
-        const p = podOf(pod), r = typeof p === 'string' ? failure('not-found', p) : rt.register(p.pod, coord)
-        if (r.ok) { added.push(r.value); continue }
-        note(`${def.id}/${coord}: ${r.fail.reason}`)
-        if (typeof p !== 'string' && p.fresh) { made.delete(pod); keys.delete(p.pod); void p.pod.dispose() } // made for nothing
+    /** A throw takes back exactly what this fill registered and lets go of the pods it made, then rethrows. */
+    fill(rt: Runtime, def: RuntimeDef) {
+      const added: string[] = [], fresh: [string, Pod][] = []
+      const drop = (key: string, p: Pod) => { made.delete(key); keys.delete(p); void p.dispose() } // made for nothing
+      try {
+        for (const { coord, pod } of def.pods) {
+          const p = podOf(pod)
+          if (typeof p !== 'string' && p.fresh) fresh.push([pod, p.pod])
+          const r = typeof p === 'string' ? failure('not-found', p) : rt.register(p.pod, coord)
+          if (r.ok) { added.push(r.value); continue }
+          note(`${def.id}/${coord}: ${r.fail.reason}`)
+          if (typeof p !== 'string' && p.fresh) { fresh.pop(); drop(pod, p.pod) }
+        }
+        for (const s of def.subscriptions) { const r = rt.subscribe(s); if (!r.ok) note(`${def.id}/${s.id}: ${r.fail.reason}`) }
+      } catch (e) {
+        for (const c of added) rt.unregister(c)
+        for (const [key, p] of fresh) drop(key, p)
+        throw e
       }
-      for (const s of def.subscriptions) { const r = rt.subscribe(s); if (!r.ok) note(`${def.id}/${s.id}: ${r.fail.reason}`) }
     },
     live(rt: Runtime): Definition {
       const pods: Record<string, PodDef> = {}

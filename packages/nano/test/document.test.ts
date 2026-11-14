@@ -187,6 +187,25 @@ describe('loading what does not fit', () => {
     expect(app.runtime('r')!.pods()).toEqual([V])
     expect(app.runtime('r')!.status('s1')).toBe('waiting')
   })
+  test('a subscription to a pod that could not be made waits after loading, and saving again keeps it', async () => {
+    const app = createApplication('app', { registry: registry() })
+    const c = ok(app.createRuntime('c'))
+    reg(c, Pod.create(tester)); reg(c, Pod.create(signer))
+    const sub = ok(c.subscribe({ id: 'ts', kind: 'call', from: T, to: S }))
+    const ui = createRegistry()
+    ui.add(provider('acme/ui', [tester]))
+    const { app: back, notes } = await loadDoc(saveDoc(app), { registry: ui })
+    expect(notes).toEqual(['provider acme/keys is not registered', `c/${S}: no implementation acme/keys/signer`])
+    expect(back.runtime('c')!.subscriptions()).toEqual([sub])
+    expect(back.runtime('c')!.status('ts')).toBe('waiting')
+    expect(saveDoc(back).runtimes.find(r => r.id === 'c')!.subscriptions).toEqual([sub])
+  })
+  test("a root that unregistered everything keeps its counters: a coord is not reused after loading", async () => {
+    const app = createApplication('app', { registry: registry() })
+    ok(app.unregister(reg(app, Pod.create(vault))))
+    const { app: back } = await load(saveDoc(app))
+    expect(reg(back, Pod.create(vault))).toBe('acme/keys/vault#1')
+  })
   test('a subscription that cannot be added, or a runtime that cannot be defined, gives a note and the rest loads', async () => {
     const twice = { id: 's1', kind: 'call' as const, from: V, to: V }
     const { app, notes } = await load(doc([r([{ coord: V, pod: 'p0' }], [twice, twice]), r([])]))
@@ -238,10 +257,10 @@ describe('checkDoc', () => {
   const good = { nano: 2 as const, title: 't', providers: [], pods: {}, runtimes: [], tags: {} }
   const rt = (x: object) => ({ ...good, runtimes: [{ id: 'r', pods: [], next: {}, subscriptions: [], ...x }] })
 
-  test('refuses a document of more than 5000 pods, naming the count', () => {
+  test('refuses a document of more pods than live building permits (50 runtimes of 500), naming the count', () => {
     const many = (n: number) => ({ ...good, pods: Object.fromEntries(Array.from({ length: n }, (_, i) => [`p${i}`, { implementation: 'acme/keys/vault' }])) })
-    expect(checkDoc(many(5001))).toContain('5001')
-    expect(typeof checkDoc(many(5000))).toBe('object')
+    expect(checkDoc(many(25001))).toContain('25001')
+    expect(typeof checkDoc(many(25000))).toBe('object')
   })
   test('refuses a v1 document, or anything not an object, with a reason and without throwing', () => {
     expect(checkDoc({ nano: 1, title: 'Demo', imports: [], systems: [] })).toBe('not a nano v2 document')

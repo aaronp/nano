@@ -83,13 +83,11 @@ export function createApplication(id: string, opts: { registry: Registry; policy
     const def = defs.get(rid), have = lookup(rid)
     if (!def) return have ? success(have) : failure('not-found', `no runtime ${rid}`)
     const rt = have ?? child(rid, { next: def.next }) // the root's come with createApplication
-    const added: string[] = []
     try {
-      pods.fill(rt, def, added)
+      pods.fill(rt, def) // a throw takes back what it registered and made
       defs.delete(rid)
       return success(rt)
     } catch (e) {
-      for (const c of added) rt.unregister(c)
       if (rt !== root) kids.delete(rid)
       return failure('threw', `starting ${rid}: ${msg(e)}`)
     }

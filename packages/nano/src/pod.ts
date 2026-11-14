@@ -24,10 +24,14 @@ export type Pod = {
   invoke(ctx: NanoContext, port: string, input: unknown): Promise<NanoResult<unknown>>
   /** Typed sugar for invoke, by op name: `pod.call.len(ctx, 'abc')`. */
   readonly call: Record<string, (ctx: NanoContext, input: unknown) => Promise<NanoResult<unknown>>>
-  /** A new instance (from this config, or the same) made off to the side, switched to if it is made and no later swap was asked meanwhile. */
+  /**
+   * A new instance (from this config, or the same) made off to the side, switched to if it is made and no later swap was
+   * asked meanwhile. Superseded, it resolves `invalid-input`: the latest asked wins even if its make fails (an earlier
+   * successful make is discarded, and the pod keeps what it was serving).
+   */
   swap(opts?: { config?: unknown }): Promise<NanoResult<void>>
   dispose(): Promise<void>
-  /** Registered in `runtime`: `changed` hears every state change from now; the function returned leaves. */
+  /** For runtimes only (`register` calls it): `changed` hears every state change from now; the function returned leaves. Called by hand, it adds `runtime` to `runtimes` and `ctx.runtimes`. */
   join(runtime: string, changed: (state: PodState, reason?: string) => void): () => void
 }
 
@@ -107,7 +111,7 @@ function create(impl: Implementation, opts: { config?: unknown; timeoutMs?: numb
       const made = await current
       if (stopped()) return gone()
       if (made.ok) return run(made.value, ctx, port, input)
-      return made.fail.type === 'invalid-input' ? made : failure('missing-component', made.fail.reason) // made from an unfit config
+      return failure('missing-component', made.fail.reason) // failed, whatever the cause (an unfit config too): the reason says
     },
     async swap(o = {}) {
       if (stopped()) return gone()

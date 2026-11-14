@@ -13,12 +13,12 @@ import { COORD } from './iface.ts'
 import type { Policy } from './policy.ts'
 import type { Registry } from './registry.ts'
 import type { NanoResult } from './result.ts'
-import { ID, MAX_RUNTIMES } from './runtime/index.ts'
+import { ID, MAX_PODS, MAX_RUNTIMES } from './runtime/index.ts'
 
 export type { RuntimeDef } from './application.ts'
 
-/** Pods in a document, at most: a bound on what loading one file can make. */
-const MAX_DOC_PODS = 5000
+/** Pods in a document, at most: what live building permits (every runtime full of distinct pods), so whatever is built saves and loads. */
+const MAX_DOC_PODS = MAX_RUNTIMES * MAX_PODS
 
 export const NanoDocSchema = Type.Object({
   nano: Type.Literal(2),
@@ -50,13 +50,13 @@ export function checkDoc(json: unknown): NanoDoc | string {
 }
 
 /**
- * The root (when it holds pods or subscriptions) and every child but adopted ones, started ones from live, the rest as
+ * The root (when it holds pods, subscriptions or counters) and every child but adopted ones, started ones from live, the rest as
  * defined; pods keyed `p0`, `p1`, … in first-registered order, one entry per pod however many runtimes refer to it.
  */
 function saved(app: Application) {
   const ids = app.runtimes().filter(id => !app.adopted(id))
   const rootDef = app.definition(app.id)!, root = rootDef.runtimes[0]!
-  const withRoot = root.pods.length + root.subscriptions.length > 0
+  const withRoot = root.pods.length + root.subscriptions.length + Object.keys(root.next).length > 0
   const keys = new Map<string, string>(), pods: Record<string, PodDef> = {}
   const runtimes = [...(withRoot ? [rootDef] : []), ...ids.map(id => app.definition(id)!)].map(d => ({
     ...d.runtimes[0]!,

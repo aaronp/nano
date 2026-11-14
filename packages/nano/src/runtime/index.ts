@@ -137,7 +137,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       return success(provision({
         registry, target, coords: () => pods.held.keys(),
         connected: (c, d) => { const p = pods.held.get(c); return !!p && connectionsOf(p, d).length > 0 },
-        make: impl => pods.register(Pod.create(impl, { ...opts.pod })),
+        make: impl => { const p = Pod.create(impl, { ...opts.pod }), r = pods.register(p); if (!r.ok) void p.dispose(); return r },
         subscribe: rt.subscribe, status: rt.status, subscriptions: rt.subscriptions,
       }, coord, registry.implementation(pod.implementation)!))
     },

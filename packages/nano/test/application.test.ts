@@ -201,13 +201,17 @@ describe('starting', () => {
     expect(ok(await app.start('b')).pod(V)).not.toBe(live)
     expect(Object.keys(app.definition('a')!.pods)).toEqual(['p1'])
   })
-  test('a root start that throws takes back only what it registered', async () => {
+  test('a root start that throws takes back only what it registered, and lets go of the pods it made', async () => {
     const reg = registry()
     const app = createApplication('app', { registry: { ...reg, implementation: c => { if (c === 'acme/keys/signer') throw new Error('bang'); return reg.implementation(c) } } })
     ok(app.define({ pods, runtimes: [{ ...keys, id: 'app', pods: [{ coord: 'acme/keys/vault#5', pod: 'p0' }, { coord: S, pod: 'p1' }] }] }))
     const mine = ok(app.register(Pod.create(vault)))
+    const made: Pod[] = []
+    app.listen(e => { if (e.type === 'pod-created') made.push(app.pod(e.coord)!) })
     expect(await app.start('app')).toMatchObject({ ok: false, fail: { type: 'threw' } })
     expect(app.pods()).toEqual([mine])
+    expect(made.map(p => p.state)).toEqual(['stopped'])
+    expect(app.pod(mine)!.state).not.toBe('stopped')
   })
   test('start never rejects: a throw while building fails threw, and the runtime stays defined', async () => {
     const reg = registry()

@@ -31,7 +31,7 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 | — provision | settles unconnected dependencies, synchronously: one matching pod → subscribe, else one implementation → make and register (`provision`, `Provisioner`, `Unsatisfied`) | `runtime/provision.ts` |
 | — trace | the runtime's observable stream (`tracer`, `Tracer`, `RuntimeEvent`): lifecycle, wiring, messages, problems | `runtime/trace.ts` |
 | Application | a runtime of runtimes (`createApplication`, `Application`): defines, starts on demand, shares tags and the pods table; sharing a pod is registering it. `define({ pods, runtimes })` (`RuntimeDef`, `RuntimeDefSchema`, `PodDef`); starting makes each pod key once (`podsTable`) and registers it at its saved coord | `application.ts`, `application-start.ts` |
-| Document | `nano.json` v2 (`NanoDoc`, `NanoDocSchema`): `saveDoc`, `checkDoc`, `loadDoc`; one `pods` table (keys `p0`, `p1`, … in first-registered order), at most 5000 pods | `document.ts` |
+| Document | `nano.json` v2 (`NanoDoc`, `NanoDocSchema`): `saveDoc`, `checkDoc`, `loadDoc`; one `pods` table (keys `p0`, `p1`, … in first-registered order), at most 25000 pods (`MAX_RUNTIMES` × `MAX_PODS`) | `document.ts` |
 
 ## How they work together
 
@@ -54,8 +54,10 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
    unavailable: its subscriptions wait and go live when it runs again.
 6. **Swap.** `pod.swap({ config })`: a new instance is made off to the side while the old one serves, then it is
    switched to; calls in flight finish on the old one. Coords, tags and subscriptions are kept; ports that no longer
-   fit are broken. A swap whose make fails leaves a running pod as it was (D65). One swap changes the pod in every
-   runtime holding it, each telling `pod-swapped`.
+   fit are broken. A swap whose make fails leaves a running pod as it was (D65). Of overlapping swaps the latest asked
+   wins even if its make fails (an earlier successful make is discarded and the pod keeps what it was serving); a
+   superseded swap resolves `invalid-input`. One swap changes the pod in every runtime holding it, each telling
+   `pod-swapped`.
 7. **Share.** Registering the same pod in another runtime is the whole of sharing (D63): it gets a coord there, and its
    own wiring stays in the runtime that made it. Compose with `createApplication`: `define({ pods, runtimes })`, then
    `start(id)` builds a runtime from its definition (each pod key made once application-wide, registered at its saved
@@ -67,8 +69,9 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 9. **Save.** `saveDoc(app)` writes one `pods` table (implementation, config; keys only in the document) and every
    runtime as data: its pods by saved coord, its `next` counters, its subscriptions in order; tags; which runtimes to
    `start`. `loadDoc` defines them and starts those, never provisioning (D37–D42, D52, D63). What is built live stays
-   within what a document can hold, so what it saves loads (D56): at most 5000 pods across a document, 49 runtimes
-   besides the root (adopted ones are not saved or counted), and per runtime 500 pods and 2000 subscriptions.
+   within what a document can hold, so what it saves loads (D56, D68): 49 runtimes besides the root (adopted ones are
+   not saved or counted), per runtime 500 pods and 2000 subscriptions, so at most 50 × 500 = 25000 pods in a document.
+   The root is saved whenever it holds pods, subscriptions or counters, so a coord is never reused after loading.
 
 ## FAQ
 
@@ -100,8 +103,8 @@ the pod is `failed` or `stopped` with its reason, its subscriptions wait, and a 
 
 **What is a host call?** `rt.call(coord).<op>(input)`: how a host or a test reaches a pod, through the runtime. It is
 policed (`isAllowed` sees `'host'` as the source), `sent` then `delivered` on the stream, and not booked (it is over no
-subscription). An unknown coord is `not-found`; an op name two interfaces offer is `ambiguous` (D62, D64,
-`runtime/calls.ts`). Nothing else can invoke a pod: `pod.invoke` needs a context, and only a runtime makes one.
+subscription). An unknown coord is `not-found`; an op name the pod does not offer is `unknown-op`; an op name two
+interfaces offer is `ambiguous` (D62, D64, `runtime/calls.ts`). Nothing else can invoke a pod: `pod.invoke` needs a context, and only a runtime makes one.
 
 **What is start?** What "open" was: `app.start(id)` gives the runtime, building it from its definition if it is not
 running yet. It never refuses a runtime because a pod failed; pods it cannot make, entries it cannot register and
