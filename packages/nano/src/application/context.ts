@@ -41,7 +41,7 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
       ? undefined : failure('not-found', `${name}->${to} is no longer in ${runtime}`)
     return { ok: true, pod: to, runtime, call: client(live, runtime, name, to, gone) as Client<I>, on(o, fn) {
       const p = portOf(live, to, o)
-      if (!p || !mine) { if (!p) live.trace.emit({ type: 'warning', reason: `${name}: ${o.name} is not an op of ${to}` }); return () => {} }
+      if (!p || !mine || gone()) { if (!p) live.trace.emit({ type: 'warning', reason: `${name}: ${o.name} is not an op of ${to}` }); return () => {} }
       const sub: On = { runtime, from: to, port: p, to: name, gone, fn }
       live.ons.add(sub); mine.add(sub)
       return () => { live.ons.delete(sub); mine?.delete(sub) }

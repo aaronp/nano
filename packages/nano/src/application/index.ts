@@ -87,6 +87,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     if (why !== undefined) return failure('denied', why)
     const changes = diff(current, checked.value)
     current = checked.value
+    for (const o of [...live.ons]) if (o.gone()) live.ons.delete(o)   // an edge removed now stays gone if re-added
     await Promise.all([...changes.removed.map(n => pods.forget(n, 'removed')), ...changes.changed.map(n => pods.forget(n, 'changed'))])
     await buildEager([...changes.added, ...changes.changed])
     trace.emit({ type: 'applied', ...changes })

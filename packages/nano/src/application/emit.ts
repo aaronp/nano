@@ -42,7 +42,6 @@ export function emit(live: Live, from: string, port: string, data: unknown, chai
       ? [fly(live, act(live, runtime, from, s.to, s.target, data, 'pipe', link()))] : []))
   for (const o of [...live.ons]) {
     if (o.from !== from || o.port !== port) continue
-    if (o.gone()) { live.ons.delete(o); continue }
     const work = async () => { const r = await attempt(live, o.to, `${o.to} hearing ${port}`, () => o.fn(data)); return r.ok ? success(undefined) : r }
     fly(live, send(live, o.runtime, from, o.to, port, data, { kind: 'on', ...link(), work }))
   }

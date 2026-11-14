@@ -293,6 +293,31 @@ describe('subscriptions in code', () => {
     expect(heard).toEqual([])
     expect(sent(events, 'on')).toEqual([])
   })
+  test('given a watcher subscribed through its call edge, when apply removes that edge and a later apply restores it, then the old subscription stays dropped', async () => {
+    const d = watched()
+    const { app, events } = await create(d)
+    ok(await app.apply({ ...d, runtimes: { r: { ...d.runtimes.r, subscriptions: [] } } }))
+    ok(await app.apply(d))
+    await app.call('r', 'db').save('x')
+    await tick()
+    expect(heard).toEqual([])
+    expect(sent(events, 'on')).toEqual([])
+  })
+  test('given a selection kept past the removal of its edge, when on is called and the edge is then restored, then it hears nothing', async () => {
+    let kept: Selection<typeof Store> | undefined
+    const keeper = implementation('acme2/keeper', { provides: [Log], make: ctx => { kept = ctx.one(Store); return [provide(Log, { record: async () => success(null) })] } })
+    const reg = registry(); reg.add(provider('acme2', [keeper]))
+    const d: AppDeployment = { pods: { w: Pod.eager(keeper), db: Pod.lazy(store, { config: 'db' }) },
+      runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }
+    const { app, events } = await create(d, reg)
+    ok(await app.apply({ ...d, runtimes: { r: { ...d.runtimes.r!, subscriptions: [] } } }))
+    kept!.on(Store.ops.save, () => { heard.push('late') })
+    ok(await app.apply(d))
+    await app.call('r', 'db').save('x')
+    await tick()
+    expect(heard).toEqual([])
+    expect(sent(events, 'on')).toEqual([])
+  })
   test('given a watcher whose on callback throws, when the store saves, then it is a failure on the stream and the caller still gets its result', async () => {
     const thrower = implementation('acme2/thrower', { provides: [Log], make: ctx => {
       ctx.one(Store).on(Store.ops.save, () => { throw new Error('boom') })
