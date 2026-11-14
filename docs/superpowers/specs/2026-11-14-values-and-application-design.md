@@ -1,5 +1,8 @@
 # Nano: values and a live application
 
+> **Revised (2026-11-14)** by `2026-11-14-pods-runtimes-application-design.md`: per-level deployments (`Pods`,
+> `Runtime`, `Application.create(runtimes)`), pipes (from events and action results) and selections. Where they
+> differ, that document wins; in particular there is no live `app.runtime(id)` view.
 *Decided with the user on 2026-11-14; live runtimes, `app.close()` and close listeners added the same day. Supersedes the model of `2026-11-13-runtime-model-design.md` (its domains,
 "How they work together", "The pod is the effect boundary", Application, Provisioning and saving sections) wherever
 they disagree. That document stays as history; `design.md` is rewritten from this one.*

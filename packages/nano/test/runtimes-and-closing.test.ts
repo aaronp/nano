@@ -1,14 +1,14 @@
 // @ts-nocheck — live runtimes and closing aren't built yet; remove when they land
 /**
- * Live runtimes and closing (spec: 2026-11-14-values-and-application-design.md, "The live Runtime", "Closing an
- * instance", behaviours 17–24), written first. `app.runtime(id)` is the live runtime; an instance is closed on
+ * A runtime's slice of the application and closing (specs: 2026-11-14-values-and-application-design.md "Closing an
+ * instance", behaviours 18–24, as revised by 2026-11-14-pods-runtimes-application-design.md), written first. An instance is closed on
  * restart, removal, change, a failed build and `app.close()`, running its `ctx.addOnCloseListener` listeners.
  */
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import * as nano from '../src/index.ts'
 
-const { Pod, Application, implementation, provide, provider, createRegistry, defineSchema, iface, op, success } = nano as any
+const { Pod, Application, assemble, implementation, provide, provider, createRegistry, defineSchema, iface, op, success } = nano as any
 
 const Num = defineSchema('Num', Type.Integer())
 const Nothing = defineSchema('Nothing', Type.Null())
@@ -45,7 +45,7 @@ const registry = () => { const r = createRegistry(); r.add(provider('acme', [cou
 const ok = r => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const live = async (deployment, opts = {}) => {
   log = []
-  const app = ok(await Application.create(deployment, { registry: registry(), ...opts }))
+  const app = ok(await Application.create(ok(assemble(deployment, registry())), opts))
   const events = []
   app.listen(e => events.push(e))
   return { app, events }
@@ -53,20 +53,17 @@ const live = async (deployment, opts = {}) => {
 const one = pods => ({ pods, runtimes: { r: { pods: Object.keys(pods), subscriptions: [] } } })
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-describe('the live runtime', () => {
-  // Behaviour 17.
-  test.todo('given two runtimes, when the host calls through one, then it is recorded there only, listen sees only that runtime, and unknown runtimes or unplaced pods are absent', async () => {
-    const { app } = await live({ pods: { c: Pod.lazy(counter), d: Pod.lazy(counter) },
+describe("a runtime's slice", () => {
+  // Revised behaviour 17: no live runtime object; app.call and listen filtered by runtime.
+  test.todo('given two runtimes, when the host calls through one, then only that runtime records it, and unknown runtimes or unplaced pods are not-found', async () => {
+    const { app, events } = await live({ pods: { c: Pod.lazy(counter), d: Pod.lazy(counter) },
       runtimes: { chat: { pods: ['c'], subscriptions: [] }, other: { pods: ['c', 'd'], subscriptions: [] } } })
-    const chat = app.runtime('chat'), seen = [], seenOther = []
-    chat.listen(e => seen.push(e)); app.runtime('other').listen(e => seenOther.push(e))
-    expect(chat.id).toBe('chat')
-    expect(await chat.call('c').inc(null)).toEqual(success(1))
-    expect(seen.filter(e => e.type === 'sent').map(e => `${e.runtime}:${e.from}->${e.to}`)).toEqual(['chat:host->c'])
-    expect(seen.map(e => e.type)).toEqual(['sent', 'delivered'])
-    expect(seenOther).toEqual([])
-    expect(app.runtime('nope')).toBeUndefined()
-    expect(await chat.call('d').inc(null)).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+    expect(await app.call('chat', 'c').inc(null)).toEqual(success(1))
+    expect(events.filter(e => e.runtime === 'chat').map(e => e.type)).toEqual(['sent'])
+    expect(events.filter(e => e.type === 'sent').map(e => `${e.runtime}:${e.kind}:${e.from}->${e.to}`)).toEqual(['chat:call:host->c'])
+    expect(events.filter(e => e.runtime === 'other')).toEqual([])
+    expect(await app.call('nope', 'c').inc(null)).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+    expect(await app.call('chat', 'd').inc(null)).toMatchObject({ ok: false, fail: { type: 'not-found' } })
   })
 })
 
@@ -93,7 +90,7 @@ describe('closing', () => {
     const { app } = await live(one({ a: Pod.eager(counter), b: Pod.lazy(counter) }))
     expect(await app.close()).toEqual(success(undefined))
     expect(log).toEqual(['build a', 'close a closed'])
-    expect(await app.runtime('r')?.call('a').inc(null) ?? { ok: false, fail: { type: 'not-found' } }).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+    expect(await app.call('r', 'a').inc(null)).toMatchObject({ ok: false, fail: { type: 'not-found' } })
     expect(await app.restart('a')).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
     expect(await app.apply(app.deployment())).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
     expect(await app.close()).toEqual(success(undefined))
@@ -102,7 +99,7 @@ describe('closing', () => {
   // Behaviour 21.
   test.todo('given a factory that adds a close listener and then throws, when it is built, then the listener runs with closed', async () => {
     const { app } = await live(one({ h: Pod.lazy(halfBuilt) }))
-    expect(await app.runtime('r').call('h').inc(null)).toMatchObject({ ok: false, fail: { type: 'threw' } })
+    expect(await app.call('r', 'h').inc(null)).toMatchObject({ ok: false, fail: { type: 'threw' } })
     expect(log).toEqual(['close h closed'])
   })
   // Behaviour 22.
