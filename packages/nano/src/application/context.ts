@@ -4,7 +4,7 @@
  *
  *   const ctx = contextFor(live, 'send')
  *   ctx.one(KV)                    // the one KV wired from send, in whichever runtime; a client sends in that runtime
- *   await ctx.publish(tick, 1)     // one message per event subscription from send with that source
+ *   await ctx.publish(tick, 1)     // one message per pipe from send with that source
  */
 import type { NanoContext } from '../context.ts'
 import type { Client, Interface } from '../iface.ts'
@@ -46,7 +46,7 @@ export function contextFor(live: Live, name: string): NanoContext {
       if (!i || o.kind !== 'event') return live.trace.emit({ type: 'warning', reason: `${name}: ${o.name} is not one of its events` })
       const source = port(i, o)
       await Promise.all(placed().flatMap(([runtime, r]) => r.subscriptions.flatMap(sub =>
-        sub.kind === 'event' && sub.from === name && sub.source === source ? [send(live, runtime, name, sub.to, sub.target, data)] : [])))
+        sub.kind === 'pipe' && sub.from === name && sub.source === source ? [send(live, runtime, name, sub.to, sub.target, data)] : [])))
     },
   }
 }

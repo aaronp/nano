@@ -8,7 +8,7 @@
  *               (store also in `persistence`, messaging also in `messaging`)
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, createRegistry, Pod, port, success, type AppEvent, type Application as App, type Deployment, type NanoResult } from '@pritzlaff/nano'
+import { Application, createRegistry, Pod, port, success, type AppEvent, type Application as App, type AppDeployment, type NanoResult } from '@pritzlaff/nano'
 import { Inbox, Messaging } from './interfaces.ts'
 import { messengerProvider } from './providers.ts'
 
@@ -17,13 +17,13 @@ const DOC = new URL('./nano.json', import.meta.url)
 const pod = (name: string) => Pod.lazy(messengerProvider.implementations.get(`example.messenger/${name}`)!)
 
 /** The messenger alone: nothing is wired, so the widgets show disabled or fall back. */
-const ALONE: Deployment = {
+const ALONE: AppDeployment = {
   pods: { inbox: pod('inbox'), composer: pod('composer') },
   runtimes: { messenger: { pods: ['inbox', 'composer'], subscriptions: [] } },
 }
 const INBOX_STORE = { kind: 'call', from: 'inbox', to: 'store' } as const
 /** `persistence` and `messaging` with their pods, placed in the messenger too and plugged in. */
-const STITCHED: Deployment = {
+const STITCHED: AppDeployment = {
   pods: { ...ALONE.pods, store: pod('memory-store'), messaging: pod('messaging') },
   runtimes: {
     messenger: {
@@ -31,7 +31,7 @@ const STITCHED: Deployment = {
       subscriptions: [
         INBOX_STORE,
         { kind: 'call', from: 'composer', to: 'messaging' },
-        { kind: 'event', from: 'messaging', source: port(Messaging, Messaging.ops.messages), to: 'inbox', target: port(Inbox, Inbox.ops.receive) },
+        { kind: 'pipe', from: 'messaging', source: port(Messaging, Messaging.ops.messages), to: 'inbox', target: port(Inbox, Inbox.ops.receive) },
       ],
     },
     persistence: { pods: ['store'], subscriptions: [] },

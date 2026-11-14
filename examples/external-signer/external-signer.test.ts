@@ -11,7 +11,7 @@ import { describe, expect, test } from 'bun:test'
 import { Type, type Static } from 'typebox'
 import {
   Application, createRegistry, defineSchema, iface, implementation, op, Pod, port, provide, provider, success,
-  type AppEvent, type Application as App, type Deployment, type NanoResult,
+  type AppEvent, type Application as App, type AppDeployment, type NanoResult,
 } from '@pritzlaff/nano'
 import { KeyFormatter, Log, TestRequest, TestResult, Vault } from './interfaces.ts'
 import { signerProvider } from './providers.ts'
@@ -22,7 +22,7 @@ const DOC = new URL('./nano.json', import.meta.url)
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const pod = (name: string) => Pod.lazy(signerProvider.implementations.get(`example.signer/${name}`)!)
 
-const SIGNER: Deployment = {
+const SIGNER: AppDeployment = {
   pods: { vault: pod('vault'), generator: pod('generator'), signer: pod('signer'), map: pod('map'), tester: pod('tester'), log: pod('log') },
   runtimes: {
     signer: {
@@ -30,7 +30,7 @@ const SIGNER: Deployment = {
       subscriptions: [
         { kind: 'call', from: 'generator', to: 'vault' },
         { kind: 'call', from: 'signer', to: 'vault' },
-        { kind: 'event', from: 'vault', source: port(Vault, Vault.ops.keys), to: 'map', target: port(KeyFormatter, KeyFormatter.ops.format) },
+        { kind: 'pipe', from: 'vault', source: port(Vault, Vault.ops.keys), to: 'map', target: port(KeyFormatter, KeyFormatter.ops.format) },
       ],
     },
     'signer-client': {
@@ -38,7 +38,7 @@ const SIGNER: Deployment = {
       subscriptions: [
         { kind: 'call', from: 'tester', to: 'signer' },
         { kind: 'call', from: 'tester', to: 'generator' },
-        { kind: 'event', from: 'map', source: port(KeyFormatter, KeyFormatter.ops.line), to: 'log', target: port(Log, Log.ops.append) },
+        { kind: 'pipe', from: 'map', source: port(KeyFormatter, KeyFormatter.ops.line), to: 'log', target: port(Log, Log.ops.append) },
       ],
     },
   },
@@ -67,7 +67,7 @@ async function watchLog(p: ReturnType<typeof probe>, app: App) {
     ...d,
     pods: { ...d.pods, probe: Pod.lazy(p.impl) },
     runtimes: { ...d.runtimes, 'signer-client': { ...client, pods: [...client.pods, 'probe'], subscriptions: [...client.subscriptions,
-      { kind: 'event', from: 'log', source: port(Log, Log.ops.entries), to: 'probe', target: p.port }] } },
+      { kind: 'pipe', from: 'log', source: port(Log, Log.ops.entries), to: 'probe', target: p.port }] } },
   }))
   return { seen: p.seen }
 }

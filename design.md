@@ -24,7 +24,9 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 | Context | what a pod's factory gets (`NanoContext`): `self`, `runtimes`, `one`, `all`, `publish` | `context.ts` |
 | `Pod` | a value `{ implementation, config?, eager }` from `Pod.lazy(impl, { config })` / `Pod.eager(impl)`; no state, methods or instance | `pod.ts` |
 | `Policy` | `isAllowed(src, dest, data)` per runtime, answering a `Verdict`; `Policies.allowAll()` | `policy.ts` |
-| `Deployment` | the whole system as data: pods by name, runtimes (pods placed, `Subscription`s, policy), tags; `checkDeployment(d, registry)` validates it, strictly (D83) | `deployment.ts` |
+| `Pods` | which components exist: `Pods.create(podDeployment, { registry })` checks a `PodDeployment` (names, implementations, configs, at most 5000) into an immutable lookup, `names`, `get`, `select` (a scope over the same descriptions), `deployment` | `pods.ts` |
+| `Runtime` | pods placed together and wired: `Runtime.create(id, runtimeDeployment, pods)` checks a `RuntimeDeployment` (pods placed, `Subscription`s, policy) over a `Pods` scope into an immutable `{ id, pods, deployment }` | `runtime.ts` |
+| `AppDeployment` | the whole system as data: pods, runtimes by id, tags; `assemble(d, registry)` checks it level by level into its `Runtime`s, strictly (D83) | `deployment.ts` |
 | `Application` | the one live thing: `Application.create(deployment, { registry, policies?, timeoutMs? })` gives five members, `call`, `apply`, `restart`, `deployment`, `listen` (an `AppEvent` stream) | `application/` |
 
 Inside `application/` (not exported from the package, one line each): `stream()` is the one stream and its ids;
@@ -34,15 +36,21 @@ answer to a message or a new subscription (a throw, a Promise or no verdict refu
 by the timeout; `contextFor(live, name)` is a pod's `NanoContext`; `diff(a, b)` is what `apply` changes: pods added,
 removed, changed, and runtimes rewired.
 
+Inside `pods.ts` (not exported from the package): `Id` is the id rule for pod names and runtime ids, `shapeError` the
+first way a value breaks a level's shape, and `registryOf(pods)` the registry a `Pods` was checked against, which
+`Runtime.create` resolves implementations with.
+
 ## How it works
 
 1. **Define.** Schemas, ops, interfaces; an implementation provides interfaces and may declare dependencies; a
    provider groups implementations; the registry holds providers (`examples/*/interfaces.ts`, `providers.ts`).
 2. **Describe.** `Pod.lazy(impl, { config })` or `Pod.eager(impl)` is a value holding the implementation's coordinate
-   (D85). A `Deployment` names pods, places them in runtimes (a pod may be in several), and lists each runtime's
-   subscriptions, in order: `{ kind: 'call', from, to }` or `{ kind: 'event', from, source, to, target }`. Valid
-   means every pod a runtime places is in `pods`, every subscription's ends are placed in its runtime, ports exist and fit, implementations
-   are in the registry, configs fit, and limits hold (50 runtimes, 5000 pods, 2000 subscriptions per runtime) (D75, D78).
+   (D85). An `AppDeployment` names pods, places them in runtimes (a pod may be in several), and lists each runtime's
+   subscriptions, in order: a call edge `{ kind: 'call', from, to }` or a pipe `{ kind: 'pipe', from, source, to,
+   target }`, whose source is an event or an action (its results) of `from` and whose target an action of `to` that
+   fits it; pipes may form cycles. Each level checks its own part: `Pods.create` names, implementations (in the
+   registry), configs and 5000 pods; `Runtime.create` that every pod it places is in its scope, every subscription's
+   ends are placed in it, ports exist and fit, and 2000 subscriptions; `assemble` 50 runtimes and their ids (D75, D78).
 3. **Create.** `Application.create(deployment, { registry })` validates (an invalid deployment is a `Fail` and nothing
    runs), builds every eager pod, and resolves once those settle. A failed eager build is a `failure` on the stream,
    not a failed `create`.
@@ -53,7 +61,7 @@ removed, changed, and runtimes rewired.
    through the `ctx` its factory closed over: `ctx.one(selector)` is the single matching call subscription from the
    pod (`not-found` or `ambiguous` otherwise), `ctx.all(selector)` every one, in deployment order (D86); both read the
    deployment now, across every runtime the pod is placed in, and a selector's `runtime` narrows them.
-   `ctx.publish(op, data)` delivers to every event subscription from the pod with that source, in every runtime it is in.
+   `ctx.publish(op, data)` delivers along every pipe from the pod with that source, in every runtime it is in.
 6. **Message.** Each message travels in exactly one runtime, that of the subscription it uses: policed by its policy
    (a throw, or no `Verdict`, denies, D82), input checked, run under the timeout, output checked, and recorded: `sent`,
    then `delivered` or `denied`. A handler never throws across this boundary: a throw, a timeout, bad input or bad
@@ -70,7 +78,7 @@ removed, changed, and runtimes rewired.
 
 ## FAQ
 
-**Values vs live?** `Pod`, `Deployment`, `Subscription`, `Selector`, `Policy`, `Registry` and the rest are plain data
+**Values vs live?** `Pod`, `Pods`, `Runtime`, `AppDeployment`, `Subscription`, `Selector`, `Policy`, `Registry` and the rest are plain data
 or plain lookups; only the `Application` does anything with effects. You have a running `Application` from
 `Application.create(deployment)`, or you have values. There is no `start()` and no type that behaves differently by
 mode (D70).
@@ -93,7 +101,7 @@ runtime it is in. ETL: `etl` is wired to `source` in `foo` and to `sink` in `bar
 named in code, each call recorded in its own runtime (`examples/etl`). Migration: with a `db` wired in `v2` and `v3`,
 `one(DB)` is `ambiguous`, and `sel(DB, { runtime: 'v2' })` picks one (`examples/migration`, D86).
 
-**What does saving write?** The `Deployment`: pods (implementation coordinate, config, eager), runtimes (pods placed,
+**What does saving write?** The `AppDeployment`: pods (implementation coordinate, config, eager), runtimes (pods placed,
 subscriptions in order, policy), tags. Not instances, not state, not custom policies (they come in `opts.policies`,
 D80), not the registry. `nano.json` is one, serialised.
 

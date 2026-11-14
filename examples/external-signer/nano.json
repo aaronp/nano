@@ -45,7 +45,7 @@
           "to": "vault"
         },
         {
-          "kind": "event",
+          "kind": "pipe",
           "from": "vault",
           "source": "example.signer.Vault/keys",
           "to": "map",
@@ -73,7 +73,7 @@
           "to": "generator"
         },
         {
-          "kind": "event",
+          "kind": "pipe",
           "from": "map",
           "source": "example.signer.KeyFormatter/line",
           "to": "log",

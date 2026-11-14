@@ -4,9 +4,9 @@
  *   diff(a, b)   // { added: ['x'], removed: [], changed: ['c'], rewired: ['r'] }
  */
 import { Value } from 'typebox/value'
-import type { Deployment } from '../deployment.ts'
+import type { AppDeployment } from '../deployment.ts'
 
-export function diff(a: Deployment, b: Deployment) {
+export function diff(a: AppDeployment, b: AppDeployment) {
   const names = (o: object, p: object) => Object.keys(o).filter(k => !(k in p))
   const runtimes = [...new Set([...Object.keys(a.runtimes), ...Object.keys(b.runtimes)])]
   return {

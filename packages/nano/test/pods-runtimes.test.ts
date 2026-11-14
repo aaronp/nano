@@ -66,14 +66,14 @@ const tick = () => new Promise(r => setTimeout(r, 0))
 
 describe('assembling', () => {
   // Behaviour 1.
-  test.todo('given a pod deployment, when Pods.create runs, then it only checks data: unknown implementation not-found, bad config invalid-input, nothing built', () => {
+  test('given a pod deployment, when Pods.create runs, then it only checks data: unknown implementation not-found, bad config invalid-input, nothing built', () => {
     n = 0
     expect(ok(Pods.create({ c: Pod.eager(counter) }, { registry: registry() })).names()).toEqual(['c'])
     expect(n).toBe(0)
     expect(Pods.create({ x: { implementation: 'acme/nope', eager: false } }, { registry: registry() })).toMatchObject({ ok: false, fail: { type: 'not-found' } })
   })
   // Behaviour 2.
-  test.todo('given pods a, b, c, when a subset is selected, then the lookup is scoped and an unknown name is not-found', () => {
+  test('given pods a, b, c, when a subset is selected, then the lookup is scoped and an unknown name is not-found', () => {
     const pods = ok(Pods.create({ a: Pod.lazy(counter), b: Pod.lazy(counter), c: Pod.lazy(counter) }, { registry: registry() }))
     const sub = ok(pods.select(['a', 'c']))
     expect(sub.names()).toEqual(['a', 'c'])
@@ -82,7 +82,7 @@ describe('assembling', () => {
     expect(pods.select(['a', 'zz'])).toMatchObject({ ok: false, fail: { type: 'not-found' } })
   })
   // Behaviour 3.
-  test.todo('given a runtime deployment placing a pod outside its scope, when Runtime.create runs, then it is invalid-input and nothing is built', () => {
+  test('given a runtime deployment placing a pod outside its scope, when Runtime.create runs, then it is invalid-input and nothing is built', () => {
     n = 0
     const pods = ok(Pods.create({ a: Pod.eager(counter), b: Pod.eager(counter) }, { registry: registry() }))
     expect(Runtime.create('r', { pods: ['a', 'b'], subscriptions: [] }, ok(pods.select(['a'])))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })

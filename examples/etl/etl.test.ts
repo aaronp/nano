@@ -6,10 +6,10 @@
  *   foo:  etl → source      bar:  etl → sink
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, createRegistry, Pod, success, type AppEvent, type Deployment } from '@pritzlaff/nano'
+import { Application, createRegistry, Pod, success, type AppEvent, type AppDeployment } from '@pritzlaff/nano'
 import { etl, etlProvider, sink, source, written } from './providers.ts'
 
-async function live(d: Deployment) {
+async function live(d: AppDeployment) {
   const registry = createRegistry()
   registry.add(etlProvider)
   const r = await Application.create(d, { registry })
@@ -20,7 +20,7 @@ async function live(d: Deployment) {
 }
 /** `from->to` of each message recorded in `runtime`. */
 const sent = (events: AppEvent[], runtime: string) => events.flatMap(e => (e.type === 'sent' && e.runtime === runtime ? [`${e.from}->${e.to}`] : []))
-const placedIn = (d: Deployment, pod: string) => Object.entries(d.runtimes).flatMap(([id, r]) => (r.pods.includes(pod) ? [id] : []))
+const placedIn = (d: AppDeployment, pod: string) => Object.entries(d.runtimes).flatMap(([id, r]) => (r.pods.includes(pod) ? [id] : []))
 
 describe('etl', () => {
   test('given etl wired to a source in foo and a sink in bar, when run through foo, then it reads in foo, writes in bar, and each call is on its own runtime’s stream only', async () => {

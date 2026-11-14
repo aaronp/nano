@@ -37,7 +37,7 @@
           "to": "messaging"
         },
         {
-          "kind": "event",
+          "kind": "pipe",
           "from": "messaging",
           "source": "example.messenger.Messaging/messages",
           "to": "inbox",

@@ -5,7 +5,7 @@
  *   await send(live, 'r', 'host', 'db', 'acme.KV/get', 'k')                // NanoResult<unknown>
  *   await client(live, 'r', 'host', 'db', () => undefined).get('k')       // the same, by op name
  */
-import type { Deployment } from '../deployment.ts'
+import type { AppDeployment } from '../deployment.ts'
 import { port } from '../iface.ts'
 import type { Handler, Implementation } from '../implementation.ts'
 import { Policies, type Policy } from '../policy.ts'
@@ -15,7 +15,7 @@ import type { stream } from './stream.ts'
 
 /** What a message needs of the application, read live. */
 export type Live = {
-  now(): Deployment
+  now(): AppDeployment
   readonly registry: Registry
   readonly policies: Record<string, Policy>
   readonly timeoutMs: number

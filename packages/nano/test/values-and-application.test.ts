@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import {
   Application, Pod, createRegistry, defineSchema, iface, implementation, op, provide, provider, sel, success,
-  type AppEvent, type Deployment, type NanoContext, type Policy,
+  type AppEvent, type AppDeployment, type NanoContext, type Policy,
 } from '../src/index.ts'
 
 const Str = defineSchema('Str', Type.String())
@@ -102,7 +102,7 @@ const live = async (deployment: unknown, opts: { policies?: Record<string, Polic
 }
 const sent = (events: AppEvent[], runtime?: string) =>
   events.flatMap(e => (e.type === 'sent' && (!runtime || e.runtime === runtime) ? [`${e.from}->${e.to}`] : []))
-const one = (pods: Deployment['pods'], subscriptions: Deployment['runtimes'][string]['subscriptions'] = [], extra = {}) => ({ pods, runtimes: { r: { pods: Object.keys(pods), subscriptions } }, ...extra })
+const one = (pods: AppDeployment['pods'], subscriptions: AppDeployment['runtimes'][string]['subscriptions'] = [], extra = {}) => ({ pods, runtimes: { r: { pods: Object.keys(pods), subscriptions } }, ...extra })
 
 describe('values', () => {
   // Behaviour 1.
@@ -214,7 +214,7 @@ describe('messages', () => {
     let ctxOut: NanoContext | undefined
     const tick = implementation('acme2/tick', { provides: [Ticks], make: ctx => { ctxOut = ctx; return [] } })
     const reg = registry(); reg.add(provider('acme2', [tick]))
-    const ev = { kind: 'event', from: 't', source: 'acme.Ticks/tick', to: 'l', target: 'acme.Log/record' } as const
+    const ev = { kind: 'pipe', from: 't', source: 'acme.Ticks/tick', to: 'l', target: 'acme.Log/record' } as const
     const app = ok(await Application.create({ pods: { t: Pod.eager(tick), l: Pod.lazy(log) }, runtimes: {
       a: { pods: ['t', 'l'], subscriptions: [ev] }, b: { pods: ['t', 'l'], subscriptions: [ev] } } }, { registry: reg }))
     const events: AppEvent[] = []; app.listen(e => events.push(e))
@@ -252,11 +252,11 @@ describe('messages', () => {
 describe('changing', () => {
   // Behaviour 12.
   test('given a running application, when a subscription is added, a pod removed and a config changed by apply, then each takes effect and deployment() is the value applied', async () => {
-    const d: Deployment = { pods: { send: Pod.lazy(sender), db: Pod.lazy(kv), c: Pod.lazy(db, { config: ['x'] }), gone: Pod.lazy(counter) },
+    const d: AppDeployment = { pods: { send: Pod.lazy(sender), db: Pod.lazy(kv), c: Pod.lazy(db, { config: ['x'] }), gone: Pod.lazy(counter) },
       runtimes: { r: { pods: ['send', 'db', 'c', 'gone'], subscriptions: [] } } }
     const { app, events } = await live(d)
     expect(await app.call('r', 'send').send('k')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
-    const next: Deployment = { pods: { send: d.pods.send!, db: d.pods.db!, c: Pod.lazy(db, { config: ['y'] }) },
+    const next: AppDeployment = { pods: { send: d.pods.send!, db: d.pods.db!, c: Pod.lazy(db, { config: ['y'] }) },
       runtimes: { r: { pods: ['send', 'db', 'c'], subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] } } }
     expect(await app.apply(next)).toMatchObject({ ok: true })
     expect(await app.call('r', 'send').send('k')).toEqual(success(null))
@@ -269,7 +269,7 @@ describe('changing', () => {
     const policies: Record<string, Policy> = { r: { isAllowed: (_f, _t, data) => (data === 'subscribe' ? { approved: false, reason: 'frozen' } : { approved: true }) } }
     const d = one({ send: Pod.lazy(sender), db: Pod.lazy(kv) })
     const { app } = await live(d, { policies })
-    const next: Deployment = { ...d, runtimes: { r: { ...d.runtimes.r!, subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] } } }
+    const next: AppDeployment = { ...d, runtimes: { r: { ...d.runtimes.r!, subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] } } }
     expect(await app.apply(next)).toMatchObject({ ok: false, fail: { type: 'denied', reason: 'frozen' } })
     expect(app.deployment()).toEqual(d)
   })
@@ -289,7 +289,7 @@ describe('changing', () => {
 describe('changing, at the edges', () => {
   const tick = () => new Promise(r => setTimeout(r, 0))
   test('given a pod holding a client from ctx.one(KV), when apply removes that subscription, then its next send is not-found', async () => {
-    const d: Deployment = { pods: { send: Pod.lazy(sender), db: Pod.lazy(kv) },
+    const d: AppDeployment = { pods: { send: Pod.lazy(sender), db: Pod.lazy(kv) },
       runtimes: { r: { pods: ['send', 'db'], subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] } } }
     let kept: Record<string, (i: unknown) => Promise<unknown>> | undefined
     const holder = implementation('acme3/holder', { provides: [Send], dependencies: { store: KV }, make: ctx => {
@@ -410,7 +410,7 @@ describe('validation', () => {
 
 describe('final review', () => {
   const tick = () => new Promise(r => setTimeout(r, 0))
-  const wired = (): Deployment => ({ pods: { send: Pod.lazy(sender), db: Pod.lazy(kv) }, runtimes: { r: { pods: ['send', 'db'], subscriptions: [] } } })
+  const wired = (): AppDeployment => ({ pods: { send: Pod.lazy(sender), db: Pod.lazy(kv) }, runtimes: { r: { pods: ['send', 'db'], subscriptions: [] } } })
   const sub = { kind: 'call', from: 'send', to: 'db' } as const
 
   // I1: the application keeps its own copy.

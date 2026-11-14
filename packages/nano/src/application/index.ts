@@ -7,7 +7,7 @@
  *   app.listen(e => …)                           // built, sent, delivered, denied, failure, …
  */
 import { Value } from 'typebox/value'
-import { checkDeployment, type Deployment } from '../deployment.ts'
+import { assemble, type AppDeployment } from '../deployment.ts'
 import type { Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
@@ -20,9 +20,9 @@ export type { AppEvent } from './stream.ts'
 
 export type Application = {
   call(runtime: string, pod: string): Record<string, (input: unknown) => Promise<NanoResult<unknown>>>
-  apply(next: Deployment): Promise<NanoResult<void>>
+  apply(next: AppDeployment): Promise<NanoResult<void>>
   restart(pod: string): Promise<NanoResult<void>>
-  deployment(): Deployment
+  deployment(): AppDeployment
   listen(fn: (e: AppEvent) => void): () => void
 }
 
@@ -34,13 +34,13 @@ const bare = <T>(o: Record<string, T>): Record<string, T> => Object.assign(Objec
  * `d` checked, as the application's own copy: nobody else holds it, so only `apply` changes it; and its maps have no
  * prototype, so a pod or runtime named `constructor` or `toString` is only ever a name.
  */
-function adopt(d: unknown, registry: Registry): NanoResult<Deployment> {
-  let copy: unknown
-  try { copy = structuredClone(d) } catch (e) { return failure('invalid-input', `unreadable deployment: ${e instanceof Error ? e.message : String(e)}`) }
-  const checked = checkDeployment(copy, registry)
-  if (!checked.ok) return checked
-  const { pods, runtimes, tags } = checked.value
-  return success({ ...checked.value, pods: bare(pods), runtimes: bare(runtimes), ...(tags && { tags: bare(tags) }) })
+function adopt(d: unknown, registry: Registry): NanoResult<AppDeployment> {
+  let copy: AppDeployment
+  try { copy = structuredClone(d) as AppDeployment } catch (e) { return failure('invalid-input', `unreadable deployment: ${e instanceof Error ? e.message : String(e)}`) }
+  const assembled = assemble(copy, registry)
+  if (!assembled.ok) return assembled
+  const runtimes = Object.fromEntries(Object.entries(assembled.value).map(([id, r]) => [id, r.deployment()]))
+  return success({ pods: bare(copy.pods), runtimes: bare(runtimes), ...(copy.tags && { tags: bare(copy.tags) }) })
 }
 
 async function create(d: unknown, opts: Opts): Promise<NanoResult<Application>> {
@@ -57,7 +57,7 @@ async function create(d: unknown, opts: Opts): Promise<NanoResult<Application>> 
   await buildEager(Object.keys(current.pods))
 
   /** The first refusal of a subscription `next` adds, by the policy of the runtime it is added in. */
-  function refused(next: Deployment): string | undefined {
+  function refused(next: AppDeployment): string | undefined {
     for (const [id, r] of Object.entries(next.runtimes))
       for (const s of r.subscriptions) {
         if (current.runtimes[id]?.subscriptions.some(x => Value.Equal(x, s))) continue
