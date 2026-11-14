@@ -2,7 +2,7 @@
  * Instances: at most one build per pod name, shared by everyone who needs it meanwhile. Each build has its own close
  * listeners. A failed build closes (`closed`) and caches nothing, so the next need builds again; forgetting drops the
  * entry and closes that build at once, even one still under way (a listener it adds later runs as it is added), without
- * waiting for or touching calls already handed it.
+ * waiting for or touching calls already handed it. A pod being closed is built again only once its close has settled.
  *
  *   const pods = instances(live)
  *   await pods.get('db')                 // NanoResult<{ implementation, handlers by port }>: built now, or the build already made or under way
@@ -41,9 +41,11 @@ function closer(live: Live, pod: string) {
 
 export function instances(live: Live) {
   const made = new Map<string, { build: Made; close: (why: Reason) => Promise<void> }>()
+  const closing = new Map<string, Promise<void>>()
   let closed = false
 
   async function build(name: string, c: ReturnType<typeof closer>): Made {
+    await closing.get(name)
     const pod = live.now().pods[name]
     const impl = pod && live.registry.implementation(pod.implementation)
     if (!pod || !impl) return failure('not-found', `no pod ${name}`)
@@ -57,7 +59,10 @@ export function instances(live: Live) {
     const e = made.get(name)
     if (!e) return
     made.delete(name)
-    await e.close(why)
+    const p = e.close(why)
+    closing.set(name, p)
+    await p
+    if (closing.get(name) === p) closing.delete(name)
   }
 
   return {

@@ -41,7 +41,14 @@ const messy = implementation('acme/messy', { provides: [Counter], make: ctx => {
   return [provide(Counter, { inc: async () => success(1) })]
 } })
 
-const registry = () => { const r = createRegistry(); r.add(provider('acme', [counter, ticker, halfBuilt, messy])); return r }
+/** Logs its build; its close listener takes 20ms, then logs. */
+const slowClose = implementation('acme/slowclose', { provides: [Counter], make: ctx => {
+  log.push(`build ${ctx.self}`)
+  ctx.addOnCloseListener(async ({ reason }) => { await wait(20); log.push(`close ${ctx.self} ${reason}`) })
+  return [provide(Counter, { inc: async () => success(1) })]
+} })
+
+const registry = () => { const r = createRegistry(); r.add(provider('acme', [counter, ticker, halfBuilt, messy, slowClose])); return r }
 const ok = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const live = async (deployment: AppDeployment, opts: { timeoutMs?: number } = {}) => {
   log = []
@@ -85,7 +92,28 @@ describe('closing', () => {
     log = []
     ok(await app.apply({ pods: { changed: Pod.eager(counter, { config: 2 }), kept: d.pods.kept },
       runtimes: { r: { pods: ['changed', 'kept'], subscriptions: [] }, s: { pods: ['kept'], subscriptions: [] } } }))
-    expect(log.sort()).toEqual(['build changed', 'close changed changed', 'close gone removed'])
+    // The two closes may come in either order; the rebuild comes after both (see the close-before-rebuild tests).
+    expect(log.at(-1)).toBe('build changed')
+    expect(log.slice(0, -1).sort()).toEqual(['close changed changed', 'close gone removed'])
+  })
+  // Close before rebuild, for a lazy pod called while it closes.
+  test('given a lazy pod with a slow close listener, when it is restarted and called meanwhile, then it closes before it is built again', async () => {
+    const { app } = await live(one({ s: Pod.lazy(slowClose) }))
+    ok(await app.call('r', 's').inc(null))
+    const restarting = app.restart('s')
+    await wait(5)
+    ok(await app.call('r', 's').inc(null))
+    ok(await restarting)
+    expect(log).toEqual(['build s', 'close s restarted', 'build s'])
+  })
+  test('given a lazy pod with a slow close listener, when apply changes it and it is called meanwhile, then it closes before it is built again', async () => {
+    const { app } = await live(one({ s: Pod.lazy(slowClose, { config: 1 }) }))
+    ok(await app.call('r', 's').inc(null))
+    const applying = app.apply(one({ s: Pod.lazy(slowClose, { config: 2 }) }))
+    await wait(5)
+    ok(await app.call('r', 's').inc(null))
+    ok(await applying)
+    expect(log).toEqual(['build s', 'close s changed', 'build s'])
   })
   // Behaviour 20.
   test('given an application with built and unbuilt pods, when it is closed, then built ones close with closed, later calls are not-found, apply and restart are refused, and closing again does nothing', async () => {
@@ -110,6 +138,26 @@ describe('closing', () => {
     expect(await app.close()).toEqual(success(undefined))
     expect(log).toEqual(['close m closed'])
     expect(events.filter(e => e.type === 'failure' && e.pod === 'm')).toHaveLength(2)
+  })
+  test('given a slow close listener, when close is called twice, then the second resolves only once the first has closed everything', async () => {
+    const { app } = await live(one({ c: Pod.eager(slowClose) }))
+    const first = app.close()
+    expect(await app.close()).toEqual(success(undefined))
+    expect(log).toEqual(['build c', 'close c closed'])
+    expect(await first).toEqual(success(undefined))
+  })
+  test('given an apply and a restart called before close, when the application closes, then both complete first; ones called after are refused', async () => {
+    const { app } = await live(one({ a: Pod.eager(counter) }))
+    const applying = app.apply(one({ a: Pod.eager(counter), b: Pod.eager(counter) }))
+    const restarting = app.restart('a')
+    const closing = app.close()
+    expect(await applying).toEqual(success(undefined))
+    expect(await restarting).toEqual(success(undefined))
+    expect(await closing).toEqual(success(undefined))
+    expect(log.slice(0, 4)).toEqual(['build a', 'build b', 'close a restarted', 'build a'])
+    expect(log.slice(4).sort()).toEqual(['close a closed', 'close b closed'])   // instances close together, in no set order
+    expect(await app.apply(app.deployment())).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'application is closed' } })
+    expect(await app.restart('a')).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'application is closed' } })
   })
   // Behaviour 23.
   test('given a ticker started in make, when the application closes, then nothing ticks after close', async () => {

@@ -41,7 +41,9 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts): Promise<Na
   if (!composed.ok) return composed
   // No runtimes, no Pods and so no registry: such an application can only apply deployments naming no implementation.
   const registry = composed.value.registry ?? createRegistry()
-  let current = composed.value.deployment, queue: Promise<unknown> = Promise.resolve(), closed = false
+  let current = composed.value.deployment, queue: Promise<unknown> = Promise.resolve()
+  /** Set when `close()` is called: from then on `apply` and `restart` are refused; work queued before still runs. */
+  let closing: Promise<NanoResult<void>> | undefined
   const trace = stream()
   const live: Live = {
     now: () => current, registry, policies: opts.policies ?? {}, timeoutMs: opts.timeoutMs ?? 30_000, trace,
@@ -70,7 +72,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts): Promise<Na
   }
 
   const shut = () => failure('invalid-input', 'application is closed')
-  /** `work` after every change queued before it. */
+  /** `work` after every change (apply, restart, close) queued before it. */
   function queued<T>(work: () => Promise<T>): Promise<T> {
     const done = queue.then(work)
     queue = done.catch(() => undefined)
@@ -78,7 +80,6 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts): Promise<Na
   }
 
   async function reconcile(d: AppDeployment): Promise<NanoResult<void>> {
-    if (closed) return shut()
     const checked = adopt(d)
     if (!checked.ok) return checked
     const why = refused(checked.value)
@@ -92,24 +93,19 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts): Promise<Na
   }
 
   return success({
-    call: (runtime, pod) => client(live, runtime, 'host', pod, () => closed ? 'application is closed'
+    call: (runtime, pod) => client(live, runtime, 'host', pod, () => closing ? 'application is closed'
       : current.runtimes[runtime]?.pods.includes(pod) ? undefined : `${pod} is not placed in ${runtime}`),
-    apply: next => queued(() => reconcile(next)),
-    async restart(pod) {
-      if (closed) return shut()
+    apply: next => closing ? Promise.resolve(shut()) : queued(() => reconcile(next)),
+    restart: pod => closing ? Promise.resolve(shut()) : queued(async () => {
       if (!current.pods[pod]) return failure('not-found', `no pod ${pod}`)
       await pods.forget(pod, 'restarted')
       trace.emit({ type: 'restarted', pod })
       if (current.pods[pod].eager) await pods.get(pod)
       return success(undefined)
-    },
+    }),
     deployment: () => structuredClone(current),
     listen: trace.listen,
-    async close() {
-      if (closed) return success(undefined)
-      closed = true
-      return queued(async () => { await pods.close(); return success(undefined) })
-    },
+    close: () => closing ??= queued(async () => { await pods.close(); return success(undefined) }),
   })
 }
 

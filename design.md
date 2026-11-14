@@ -30,12 +30,14 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 | `Application` | the one live thing: `Application.create(runtimes, { policies?, timeoutMs? })` (at most 50, ids by the id rule, every runtime's pods from one `Pods`) gives six members, `call`, `apply`, `restart`, `deployment`, `listen` (an `AppEvent` stream), `close` (every instance closed; then calls are `not-found`, `apply`/`restart` refused) | `application/` |
 
 Inside `application/` (not exported from the package, one line each): `stream()` is the one stream and its ids;
-`instances(live)` holds at most one build per pod name and closes builds (each with its own close listeners, run in order within the timeout, then `closed` on the stream); `send` carries one message in one runtime and `client` calls
+`instances(live)` holds at most one build per pod name and closes builds (each with its own close listeners, run in
+order within the timeout, then `closed` on the stream); `send` carries one message in one runtime and `client` calls
 by op name over it, both reading a `Live` (the application as a message needs it); `refusal` is a runtime policy's
-answer to a message or a new subscription (a throw, a Promise or no verdict refuses); `within` bounds a build or handler
-by the timeout; `contextFor(live, name, onClose)` is a pod's `NanoContext`, `onClose` adding a listener to that build; `diff(a, b)` is what `apply` changes: pods added,
-removed, changed, and runtimes rewired; `compose(runtimes)` is the application's deployment from its runtimes (the pods
-they place, in their `Pods`' order, and the tags their `Pods` carry) and their registry.
+answer to a message or a new subscription (a throw, a Promise or no verdict refuses); `within` bounds a build or
+handler by the timeout; `contextFor(live, name, onClose)` is a pod's `NanoContext`, `onClose` adding a listener to
+that build; `diff(a, b)` is what `apply` changes: pods added, removed, changed, and runtimes rewired;
+`compose(runtimes)` is the application's deployment from its runtimes (the pods they place, in their `Pods`' order,
+and the tags their `Pods` carry) and their registry.
 
 Inside `pods.ts` (not exported from the package): `Id` is the id rule for pod names and runtime ids, `shapeError` the
 first way a value breaks a level's shape, `originOf(pods)` where a `Pods` comes from: the registry it was checked
@@ -78,7 +80,8 @@ shape of a table by runtime id (the id rule, at most 50). Inside `runtime.ts`: `
    registry, so `apply` naming any implementation is `not-found`. A forgotten instance is closed first (its close
    listeners run with `restarted`, `removed` or `changed`); `app.close()` closes them all (`closed`).
 8. **Watch.** `app.listen(e => …)` is the one stream, in order and synchronously, and returns an unsubscribe: `built`,
-   `closed`, `restarted`, `applied`, `sent`, `delivered`, `denied`, `failure`, `warning`. A throwing listener is swallowed (D79).
+   `closed`, `restarted`, `applied`, `sent`, `delivered`, `denied`, `failure`, `warning`. A throwing listener is
+   swallowed (D79).
 9. **Save.** `app.deployment()` is the current value (the pods placed in some runtime, the runtimes, and the tags
    `assemble` carried in); saving is its JSON, and `assemble` + `Application.create` on it gives an equivalent
    application (D74).
