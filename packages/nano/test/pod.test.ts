@@ -35,6 +35,17 @@ describe('pod', () => {
   test('call is typed sugar for invoke, by op name', async () => {
     expect(await pod(async (_c, s) => success(s.length)).call.len!(ctx, 'ab')).toEqual(success(2))
   })
+  test('call works for op names on Object.prototype, and is ambiguous for a name two interfaces share', async () => {
+    const odd = iface('acme/odd', { toString: op.action('toString', Str, Str), len: op.action('len', Str, Num) })
+    const both = implementation('acme/x/both', { provides: [api, odd], make: () => [
+      provide(api, { len: async () => success(1), poke: async () => success(undefined) }),
+      provide(odd, { toString: async () => success('s'), len: async () => success(2) }),
+    ] })
+    const p = Pod.create(both)
+    expect(await p.call['toString' as string]!(ctx, 'x')).toEqual(success('s'))
+    expect(await p.call.len!(ctx, 'x')).toMatchObject({ ok: false, fail: { type: 'ambiguous' } })
+    expect(await p.invoke(ctx, portKey('acme/odd', odd.ops.len.coord), 'x')).toEqual(success(2))
+  })
   test('an unknown port is unknown-op', async () => {
     expect(await pod(async () => success(1)).invoke(ctx, 'nope', 'a')).toMatchObject({ ok: false, fail: { type: 'unknown-op' } })
   })
@@ -130,6 +141,35 @@ describe('pod lifecycle', () => {
     expect(await p.invoke(ctx, LEN, 'a')).toEqual(success(5))
     open()
     expect(await inFlight).toEqual(success(3))
+  })
+  test('a swap whose make fails leaves a running pod on its old instance, running', async () => {
+    const p = Pod.create(configured, { config: { n: 1 } })
+    await settle()
+    expect(await p.swap({ config: null })).toMatchObject({ ok: false, fail: { type: 'threw' } })
+    expect([p.state, p.config]).toEqual(['running', { n: 1 }])
+    expect(await p.invoke(ctx, LEN, 'a')).toEqual(success(1))
+  })
+  test('a failed pod stays failed after a failing swap, with the new reason, and runs after a working one', async () => {
+    const reasons: (string | undefined)[] = []
+    const p = Pod.create(configured, { config: null })
+    await settle()
+    p.join('a', (_s, why) => reasons.push(why))
+    expect(p.state).toBe('failed')
+    expect(await p.swap({ config: undefined })).toMatchObject({ ok: false, fail: { type: 'threw' } })
+    expect(p.state).toBe('failed')
+    expect(reasons).toHaveLength(1)
+    expect(await p.swap({ config: { n: 3 } })).toEqual(success(undefined))
+    expect(p.state).toBe('running')
+    expect(await p.invoke(ctx, LEN, 'a')).toEqual(success(3))
+  })
+  test('a swap asked during the first make does not hide that it is running while the first instance serves', async () => {
+    const p = Pod.create(configured, { config: { n: 1, ms: 5 } })
+    const swapped = p.swap({ config: { n: 2, ms: 40 } })
+    await new Promise(r => setTimeout(r, 20))
+    expect(p.state).toBe('running')
+    expect(await p.invoke(ctx, LEN, 'a')).toEqual(success(1))
+    expect(await swapped).toEqual(success(undefined))
+    expect(await p.invoke(ctx, LEN, 'a')).toEqual(success(2))
   })
   test('a disposed pod is stopped, says so, and fails calls and swaps', async () => {
     const heard: PodState[] = []

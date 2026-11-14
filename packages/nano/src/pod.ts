@@ -24,7 +24,7 @@ export type Pod = {
   invoke(ctx: NanoContext, port: string, input: unknown): Promise<NanoResult<unknown>>
   /** Typed sugar for invoke, by op name: `pod.call.len(ctx, 'abc')`. */
   readonly call: Record<string, (ctx: NanoContext, input: unknown) => Promise<NanoResult<unknown>>>
-  /** A new instance (from this config, or the same) made off to the side, switched to if no later swap was asked meanwhile. */
+  /** A new instance (from this config, or the same) made off to the side, switched to if it is made and no later swap was asked meanwhile. */
   swap(opts?: { config?: unknown }): Promise<NanoResult<void>>
   dispose(): Promise<void>
   /** Registered in `runtime`: `changed` hears every state change from now; the function returned leaves. */
@@ -39,12 +39,14 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 function create(impl: Implementation, opts: { config?: unknown; timeoutMs?: number } = {}): Pod {
   const name = impl.coord, timeoutMs = opts.timeoutMs ?? 30_000
   const ops = new Map<string, Op>()
-  const call: Pod['call'] = {}
+  const call: Pod['call'] = Object.create(null) // so op names like `toString` are plain keys
   for (const i of impl.provides)
     for (const o of Object.values(i.ops)) {
       const port = portKey(i.coord, o.coord)
       ops.set(port, o)
-      if (o.kind !== 'source' && !(o.name in call)) call[o.name] = (ctx, input) => pod.invoke(ctx, port, input)
+      if (o.kind !== 'source') call[o.name] = o.name in call
+        ? async () => failure('ambiguous', `${name}: ${o.name} is an op of more than one interface; invoke its port`)
+        : (ctx, input) => pod.invoke(ctx, port, input)
     }
   const members: Member[] = []
   let config = opts.config, state: PodState = 'starting', asked = 0
@@ -60,16 +62,18 @@ function create(impl: Implementation, opts: { config?: unknown; timeoutMs?: numb
     try {
       const late = new Promise<'timeout'>(res => { timer = setTimeout(() => res('timeout'), timeoutMs) })
       const made = await Promise.race([Promise.resolve().then(() => impl.make(cfg)), late])
-      return made === 'timeout' ? failure('missing-component', `${name}: make did not settle in ${timeoutMs}ms`) : success(made)
+      return made === 'timeout' ? failure('timeout', `${name}: make did not settle in ${timeoutMs}ms`) : success(made)
     } catch (e) {
-      return failure('missing-component', `${name}: ${msg(e)}`)
+      return failure('threw', `${name}: ${msg(e)}`)
     } finally {
       clearTimeout(timer)
     }
   }
   /** The instance calls go to, as a promise of its handlers: a call waits for a make in progress. */
-  let current = make(config)
-  void current.then(r => { if (asked === 0 && state === 'starting') set(r.ok ? 'running' : 'failed', r.ok ? undefined : r.fail.reason) })
+  const first = make(config)
+  let current = first
+  // Still the one serving (no swap switched meanwhile): its outcome is the pod's state.
+  void first.then(r => { if (current === first && state === 'starting') set(r.ok ? 'running' : 'failed', r.ok ? undefined : r.fail.reason) })
 
   async function run(handlers: ReadonlyMap<string, Handler>, ctx: NanoContext, port: string, input: unknown): Promise<NanoResult<unknown>> {
     const o = ops.get(port)
@@ -98,7 +102,7 @@ function create(impl: Implementation, opts: { config?: unknown; timeoutMs?: numb
       if (stopped()) return gone()
       const made = await current
       if (stopped()) return gone()
-      return made.ok ? run(made.value, ctx, port, input) : made
+      return made.ok ? run(made.value, ctx, port, input) : failure('missing-component', made.fail.reason)
     },
     async swap(o = {}) {
       if (stopped()) return gone()
@@ -106,9 +110,12 @@ function create(impl: Implementation, opts: { config?: unknown; timeoutMs?: numb
       const next = make(cfg), made = await next
       if (stopped()) return gone()
       if (mine !== asked) return failure('invalid-input', `${name}: swap superseded by a later one`)
-      current = next
-      config = cfg
-      set(made.ok ? 'running' : 'failed', made.ok ? undefined : made.fail.reason)
+      // A failing make leaves a running (or starting) pod on its old instance; a failed one stays failed, with the new reason.
+      if (made.ok || state === 'failed') {
+        current = next
+        config = cfg
+        set(made.ok ? 'running' : 'failed', made.ok ? undefined : made.fail.reason)
+      }
       return made.ok ? success(undefined) : made
     },
     async dispose() { if (state !== 'stopped') set('stopped') },
