@@ -24,7 +24,7 @@ const echo: Handler = async (_c, s) => success(s)
 const impl = (coord: string, provides: Interface[], dependencies: Record<string, Selector> = {}, ping: Handler = echo, wait = 0): Implementation =>
   implementation(coord, {
     provides, dependencies,
-    make: async ctx => {
+    make: async (ctx: NanoContext) => {
       contexts.set(ctx.instance, ctx)
       if (wait) await new Promise(r => setTimeout(r, wait))
       return provides.map(i => provide(i, { ping }))

@@ -6,123 +6,140 @@ import { iface, portKey } from '../src/iface.ts'
 import { failure, success } from '../src/result.ts'
 import type { NanoContext } from '../src/context.ts'
 import { implementation, provide } from '../src/implementation.ts'
-import { createHostPod } from '../src/pod.ts'
+import { Pod, type PodState } from '../src/pod.ts'
 
 const Str = defineSchema('Str', Type.String())
 const Num = defineSchema('Num', Type.Number())
 const api = iface('acme/api', { len: op.action('len', Str, Num), poke: op.sink('poke', Str) })
-const ctx = { instance: 'acme/x/api#1', runtime: 'r1', config: undefined } as NanoContext // handlers here never call out
+const ctx = { runtime: 't', instance: 'x#0' } as NanoContext // handlers here never call out
 const LEN = portKey('acme/api', api.ops.len.coord)
 const POKE = portKey('acme/api', api.ops.poke.coord)
+const settle = () => new Promise(r => setTimeout(r, 0))
 
 const impl = (len: (c: NanoContext, s: string) => Promise<any>) =>
   implementation('acme/x/api', { provides: [api], make: () => [provide(api, { len: len as any, poke: async () => success(undefined) })] })
+const pod = (len: (c: NanoContext, s: string) => any, timeoutMs?: number) => Pod.create(impl(len), { timeoutMs })
+/** Answers len with the config it was made from; its make takes `ms` when config says so. */
+const configured = implementation('acme/x/conf', { provides: [api], make: async (config: { n: number; ms?: number }) => {
+  if (config.ms) await new Promise(r => setTimeout(r, config.ms))
+  return [provide(api, { len: async () => success(config.n), poke: async () => success(undefined) })]
+} })
 
-async function pod(len: (c: NanoContext, s: string) => any, timeoutMs?: number) {
-  const seen: string[] = [] // failures reported
-  const r = await createHostPod('acme/x/api#1', impl(len), ctx, { onFailure: reason => seen.push(reason), timeoutMs })
-  if (!r.ok) throw new Error('pod failed')
-  return { pod: r.value, seen }
-}
-
-describe('host pod', () => {
-  test("a handler's success comes back as is", async () => {
-    const { pod: p } = await pod(async (_c, s) => success(s.length))
-    expect(await p.invoke(LEN, 'abc')).toEqual(success(3))
-  })
-  test('handlers receive the pod context', async () => {
+describe('pod', () => {
+  test("a handler's success comes back as is, and the handler receives the ctx it was invoked with", async () => {
     let got: NanoContext | undefined
-    const { pod: p } = await pod(async c => { got = c; return success(1) })
-    await p.invoke(LEN, 'a')
+    const p = pod(async (c, s) => { got = c; return success(s.length) })
+    expect(await p.invoke(ctx, LEN, 'abc')).toEqual(success(3))
     expect(got).toBe(ctx)
   })
+  test('call is typed sugar for invoke, by op name', async () => {
+    expect(await pod(async (_c, s) => success(s.length)).call.len!(ctx, 'ab')).toEqual(success(2))
+  })
   test('an unknown port is unknown-op', async () => {
-    const { pod: p } = await pod(async () => success(1))
-    expect((await p.invoke('nope', 'a'))).toMatchObject({ ok: false, fail: { type: 'unknown-op' } })
+    expect(await pod(async () => success(1)).invoke(ctx, 'nope', 'a')).toMatchObject({ ok: false, fail: { type: 'unknown-op' } })
   })
   test('invalid input never reaches the handler', async () => {
     let called = false
-    const { pod: p } = await pod(async () => { called = true; return success(1) })
-    expect(await p.invoke(LEN, 5)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    const p = pod(async () => { called = true; return success(1) })
+    expect(await p.invoke(ctx, LEN, 5)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
     expect(called).toBe(false)
   })
-  test('a synchronous throw becomes threw and a failure', async () => {
-    const { pod: p, seen } = await pod((() => { throw new Error('boom') }) as any)
-    expect(await p.invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'threw' } })
-    expect(seen).toEqual(['acme/x/api#1: boom'])
+  test('a synchronous throw or a rejection becomes threw, with the reason', async () => {
+    expect(await pod((() => { throw new Error('boom') }) as any).invoke(ctx, LEN, 'a')).toEqual(failure('threw', 'acme/x/api: boom'))
+    expect(await pod(async () => { throw new Error('boom') }).invoke(ctx, LEN, 'a')).toEqual(failure('threw', 'acme/x/api: boom'))
   })
-  test('a rejection becomes threw and a failure', async () => {
-    const { pod: p, seen } = await pod(async () => { throw new Error('boom') })
-    const r = await p.invoke(LEN, 'a')
-    expect(r).toMatchObject({ ok: false, fail: { type: 'threw' } })
-    expect(seen).toEqual(['acme/x/api#1: boom'])
+  test('a handler that never settles times out', async () => {
+    expect(await pod(() => new Promise(() => {}), 20).invoke(ctx, LEN, 'a')).toEqual(failure('timeout', 'acme/x/api: len did not settle in 20ms'))
   })
-  test('a handler that never settles times out, and is a failure', async () => {
-    const { pod: p, seen } = await pod(() => new Promise(() => {}), 20)
-    expect(await p.invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'timeout' } })
-    expect(seen).toEqual(['acme/x/api#1: len did not settle in 20ms'])
-  })
-  test('a make that never settles times out', async () => {
-    const stuck = implementation('acme/x/api', { provides: [api], make: () => new Promise(() => {}) })
-    expect(await createHostPod('acme/x/api#1', stuck, ctx, { timeoutMs: 20 })).toMatchObject({ ok: false, fail: { type: 'timeout' } })
-  })
-  test('a handler settling after the timeout adds no second failure and no rejection', async () => {
-    const { pod: p, seen } = await pod(() => new Promise((_, rej) => setTimeout(() => rej(new Error('late')), 40)), 20)
-    await p.invoke(LEN, 'a')
-    await new Promise(r => setTimeout(r, 50))
-    expect(seen).toHaveLength(1)
-  })
-  test('a non-NanoResult return is invalid-output', async () => {
-    const { pod: p } = await pod(async () => 3)
-    expect(await p.invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'invalid-output' } })
-  })
-  test('an ok value that breaks the output schema is invalid-output', async () => {
-    const { pod: p } = await pod(async () => success('not a number'))
-    expect(await p.invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'invalid-output' } })
-  })
-  test('a handler fail passes through unchanged', async () => {
-    const { pod: p } = await pod(async () => failure('denied', 'no'))
-    expect(await p.invoke(LEN, 'a')).toEqual(failure('denied', 'no'))
-  })
-  test('a sink ok value is not checked', async () => {
-    const { pod: p } = await pod(async () => success(1))
-    expect(await p.invoke(POKE, 'a')).toEqual(success(undefined))
-  })
-  test('make throwing fails pod creation with threw', async () => {
-    const bad = implementation('acme/x/bad', { provides: [api], make: () => { throw new Error('nope') } })
-    expect(await createHostPod('acme/x/bad#1', bad, ctx)).toEqual(failure('threw', 'acme/x/bad#1: nope'))
-  })
-  test('a disposed pod fails not-found, and is no failure', async () => {
-    const { pod: p, seen } = await pod(async () => success(1))
-    p.dispose()
-    expect(await p.invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
-    expect(seen).toEqual([])
-  })
-  test('a sync non-NanoResult return is invalid-output, a sync throw is threw', async () => {
-    expect(await (await pod(() => undefined)).pod.invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'invalid-output' } })
-    expect(await (await pod(() => 3)).pod.invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'invalid-output' } })
-    expect(await (await pod(() => { throw new Error('x') })).pod.invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'threw' } })
-  })
-  test('a throwing observer never changes invoke results', async () => {
+  test('a handler settling after the timeout is ignored: no rejection escapes', async () => {
     const unhandled: unknown[] = []
     const h = (e: unknown) => unhandled.push(e)
     process.on('unhandledRejection', h)
-    const make = async (len: (c: NanoContext, s: string) => any, timeoutMs?: number) => {
-      const r = await createHostPod('acme/x/api#1', impl(len), ctx, { onFailure: () => { throw new Error('obs') }, timeoutMs })
-      if (!r.ok) throw new Error('pod failed')
-      return r.value
-    }
-    expect(await (await make(async (_c, s) => success(s.length))).invoke(LEN, 'abc')).toEqual(success(3))
-    expect(await (await make(async () => { throw new Error('b') })).invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'threw' } })
-    expect(await (await make(() => new Promise(() => {}), 20)).invoke(LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'timeout' } })
-    await new Promise(r => setTimeout(r, 10))
+    const p = pod(() => new Promise((_, rej) => setTimeout(() => rej(new Error('late')), 40)), 20)
+    expect(await p.invoke(ctx, LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'timeout' } })
+    await new Promise(r => setTimeout(r, 50))
     process.off('unhandledRejection', h)
     expect(unhandled).toEqual([])
   })
+  test('a non-NanoResult return, or an ok value breaking the output schema, is invalid-output', async () => {
+    for (const len of [async () => 3, () => undefined, async () => success('not a number')])
+      expect(await pod(len).invoke(ctx, LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'invalid-output' } })
+  })
+  test('a handler fail passes through unchanged; a sink ok value is not checked', async () => {
+    expect(await pod(async () => failure('denied', 'no')).invoke(ctx, LEN, 'a')).toEqual(failure('denied', 'no'))
+    expect(await pod(async () => success(1)).invoke(ctx, POKE, 'a')).toEqual(success(undefined))
+  })
   test('a fast success leaves no pending timer', async () => {
     const t0 = performance.now()
-    const { pod: p } = await pod(async () => success(1), 5_000)
-    await p.invoke(LEN, 'a')
+    await pod(async () => success(1), 5_000).invoke(ctx, LEN, 'a')
     expect(performance.now() - t0).toBeLessThan(50)
+  })
+})
+
+describe('pod lifecycle', () => {
+  test('it is starting at once and running once the make settles, made from its config', async () => {
+    const p = Pod.create(configured, { config: { n: 7 } })
+    expect([p.implementation, p.state, p.config]).toEqual(['acme/x/conf', 'starting', { n: 7 }])
+    await settle()
+    expect(p.state).toBe('running')
+    expect(await p.invoke(ctx, LEN, 'a')).toEqual(success(7))
+  })
+  test('an invoke before the make settles waits for it', async () => {
+    expect(await Pod.create(configured, { config: { n: 1, ms: 20 } }).invoke(ctx, LEN, 'a')).toEqual(success(1))
+  })
+  test('a make that throws or never settles leaves it failed; calls fail missing-component with the reason', async () => {
+    const bad = Pod.create(implementation('acme/x/bad', { provides: [api], make: () => { throw new Error('nope') } }))
+    await settle()
+    expect(bad.state).toBe('failed')
+    expect(await bad.invoke(ctx, LEN, 'a')).toEqual(failure('missing-component', 'acme/x/bad: nope'))
+    const stuck = Pod.create(implementation('acme/x/stuck', { provides: [api], make: () => new Promise(() => {}) }), { timeoutMs: 20 })
+    expect(await stuck.invoke(ctx, LEN, 'a')).toEqual(failure('missing-component', 'acme/x/stuck: make did not settle in 20ms'))
+    expect(stuck.state).toBe('failed')
+  })
+  test('joining names the runtimes; leaving removes one; changed hears the make settle', async () => {
+    const heard: PodState[] = []
+    const p = Pod.create(configured, { config: { n: 1 } })
+    const leaveA = p.join('a', s => heard.push(s))
+    p.join('b', () => {})
+    expect(p.runtimes).toEqual(['a', 'b'])
+    leaveA()
+    expect(p.runtimes).toEqual(['b'])
+    const q = Pod.create(configured, { config: { n: 1 } })
+    q.join('a', s => heard.push(s))
+    await settle()
+    expect(heard).toEqual(['running'])
+  })
+  test('of two overlapping swaps the last asked wins; the earlier fails invalid-input', async () => {
+    const p = Pod.create(configured, { config: { n: 0 } })
+    const first = p.swap({ config: { n: 1, ms: 20 } }), second = p.swap({ config: { n: 2, ms: 10 } })
+    expect(await first).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(await second).toEqual(success(undefined))
+    expect(p.config).toEqual({ n: 2, ms: 10 })
+    expect(await p.invoke(ctx, LEN, 'a')).toEqual(success(2))
+  })
+  test('a call already inside the old instance finishes there; the next reaches the new one', async () => {
+    let open = () => {}
+    const gated = implementation('acme/x/gated', { provides: [api], make: (config: string) => [provide(api, {
+      len: async () => { if (config === 'old') await new Promise<void>(r => { open = r }); return success(config.length) },
+      poke: async () => success(undefined),
+    })] })
+    const p = Pod.create(gated, { config: 'old' })
+    const inFlight = p.invoke(ctx, LEN, 'a')
+    await settle()
+    expect(await p.swap({ config: 'newer' })).toEqual(success(undefined))
+    expect(await p.invoke(ctx, LEN, 'a')).toEqual(success(5))
+    open()
+    expect(await inFlight).toEqual(success(3))
+  })
+  test('a disposed pod is stopped, says so, and fails calls and swaps', async () => {
+    const heard: PodState[] = []
+    const p = Pod.create(configured, { config: { n: 1 } })
+    await settle()
+    p.join('a', s => heard.push(s))
+    await p.dispose()
+    expect(p.state).toBe('stopped')
+    expect(heard).toEqual(['stopped'])
+    expect(await p.invoke(ctx, LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'missing-component' } })
+    expect(await p.swap({ config: { n: 2 } })).toMatchObject({ ok: false })
   })
 })

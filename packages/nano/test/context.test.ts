@@ -33,7 +33,7 @@ function setup(opts: { deny?: (from: string, to: string, data: unknown) => boole
   const db = (name: string, down = false, ms = 1) =>
     implementation(`acme/db/${name}`, {
       provides: [DB],
-      make: ctx => {
+      make: (ctx: NanoContext) => {
         const store = new Map<string, string>()
         stores.set(ctx.instance, store)
         return [provide(DB, {
@@ -53,7 +53,7 @@ function setup(opts: { deny?: (from: string, to: string, data: unknown) => boole
   const ticker = implementation('acme/clock/ticker', { provides: [Ticks], make: capture })
   const memLog = implementation('acme/log/mem', {
     provides: [Log],
-    make: ctx => [provide(Log, { write: async (_c, n) => { received.set(ctx.instance, [...(received.get(ctx.instance) ?? []), n]); return success(undefined) } })],
+    make: (ctx: NanoContext) => [provide(Log, { write: async (_c, n) => { received.set(ctx.instance, [...(received.get(ctx.instance) ?? []), n]); return success(undefined) } })],
   })
   const registry = createRegistry()
   for (const p of [provider('acme/db', [db('a'), db('b'), db('c', true), db('s', false, 15)]), provider('acme/app', [main]), provider('acme/clock', [ticker]), provider('acme/log', [memLog])])

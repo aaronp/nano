@@ -18,7 +18,7 @@ const Foo = face('acme/foo'), Bar = face('acme/bar'), Baz = face('acme/baz'), DB
 
 const contexts = new Map<string, NanoContext>()
 const impl = (coord: string, provides: Interface[], dependencies: Record<string, Selector> = {}): Implementation =>
-  implementation(coord, { provides, dependencies, make: ctx => { contexts.set(ctx.instance, ctx); return provides.map(i => provide(i, { ping: async (_c, s) => success(s) })) } })
+  implementation(coord, { provides, dependencies, make: (ctx: NanoContext) => { contexts.set(ctx.instance, ctx); return provides.map(i => provide(i, { ping: async (_c, s) => success(s) })) } })
 
 const foo = impl('acme/app/foo', [Foo], { bar: Bar })
 const bar = impl('acme/app/bar', [Bar], { baz: Baz })
@@ -38,7 +38,7 @@ const loopC = impl('acme/loop/c', [LC], { b: LB, d: LD })
 const loopD = impl('acme/loop/d', [LD])
 // A make that awaits its dependency: construction is not use, so it fails at once instead of waiting.
 const during = new Map<string, unknown[]>()
-const blocking = implementation('acme/loop/blocking', { provides: [], dependencies: { d: LD }, make: async ctx => {
+const blocking = implementation('acme/loop/blocking', { provides: [], dependencies: { d: LD }, make: async (ctx: NanoContext) => {
   during.set(ctx.instance, [await ctx.one(LD, d => d.ping('hi')), await ctx.optional(LD, d => d.ping('hi')), await ctx.all(LD, d => d.ping('hi'))])
   return []
 } })
@@ -49,7 +49,7 @@ const waits = impl('acme/loop/waits', [], { d: LD, s: Slow })
 const outsider = impl('acme/loop/outsider', [], { d: LD })
 // An instance that, once made, calls its dependency while a slow make still holds the pass open.
 const early = new Map<string, Promise<unknown>>()
-const eager = implementation('acme/loop/eager', { provides: [], dependencies: { s: Slow, d: LD }, make: ctx => {
+const eager = implementation('acme/loop/eager', { provides: [], dependencies: { s: Slow, d: LD }, make: (ctx: NanoContext) => {
   setTimeout(() => early.set(ctx.instance, ctx.one(LD, d => d.ping('hi'))), 0)
   return []
 } })

@@ -3,20 +3,21 @@
  * Every message is on the runtime's stream: `sent`, then `delivered` (result, ms) or `denied` (reason).
  * Calls into or out of an instance in an unfinished provisioning pass wait for the pass; calls during its own `make` fail at once.
  *
- *   const { ctx, bind } = contextFor(wiring, 'main#0', impl, config)   // bind(host) once the instance is made
+ *   const { ctx, bind } = contextFor(wiring, 'main#0', impl)   // bind(host) once the instance is made
  *   await ctx.one(DB, db => db.save(r))     // policed, invoked on the target instance, counted on the subscription's books
  *   const deliver = deliverer(wiring)       // a runtime's delivery of publishes, held in each pod record's holders
  */
 import type { Call, CallSelector, Each, Found, NanoContext } from '../context.ts'
 import { portKey, type Client, type Interface } from '../iface.ts'
 import type { Implementation } from '../implementation.ts'
-import type { Pod } from '../pod.ts'
 import type { Policy } from '../policy.ts'
 import { failure, success, type Fail, type NanoResult } from '../result.ts'
 import { matches, selectorData, type SelectorData, type Target } from '../selector.ts'
 import type { Instance, PodRecord } from './pods.ts'
 import type { Status, SubscriptionData } from './subscriptions.ts'
 import type { Tracer } from './trace.ts'
+
+type Host = NonNullable<Instance['host']>
 
 export type Book = { calls: number; last?: NanoResult<unknown> }
 
@@ -88,8 +89,8 @@ export function connectionsOf(w: Wiring, instance: string, d: SelectorData): Con
 }
 
 /** An instance's context, and `bind` to give it its host once made: publish goes only through that host. */
-export function contextFor(w: Wiring, instance: string, impl: Implementation, config: unknown): { ctx: NanoContext; bind(pod: Pod): void } {
-  let own: Pod | undefined
+export function contextFor(w: Wiring, instance: string, impl: Implementation): { ctx: NanoContext; bind(host: Host): void } {
+  let own: Host | undefined
   const connections = <I extends Interface>(s: CallSelector<I>) => connectionsOf(w, instance, selectorData(s))
   /** A verb made during this instance's provisioning pass waits for the pass to wire it; otherwise it reads connections at once. */
   const busy = () => w.settled?.(instance)
@@ -124,7 +125,6 @@ export function contextFor(w: Wiring, instance: string, impl: Implementation, co
   const ctx = {
     instance,
     runtime: w.id,
-    config,
     async one<I extends Interface, T>(s: CallSelector<I>, fn: Call<I, T>) {
       const m = making()
       if (m) return m
@@ -203,5 +203,5 @@ export function contextFor(w: Wiring, instance: string, impl: Implementation, co
       return role === undefined ? ds.every(d => d.satisfied) : ds.some(d => d.role === role && d.satisfied)
     },
   } satisfies NanoContext
-  return { ctx, bind: pod => { own = pod } }
+  return { ctx, bind: host => { own = host } }
 }

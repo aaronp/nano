@@ -196,7 +196,7 @@ bad publish; *warning*: what the application notes as it happens). Tests assert 
   call.)*
 - **Stream.** `pod-created` on register, `pod-removed` on unregister, `pod-swapped` on swap, and the pod's state
   changes (`starting`, `running`, `failed`, `stopped`) in every runtime it is in. A call to a disposed or failed pod is
-  a `Fail` of type `missing` with the reason; no new failure types.
+  a `Fail` of type `missing-component` with the reason; no new failure types.
 - **Gone from the model:** pod ids, instance counts and scaling, pods shared as mutable records, holders, "home",
   rehoming, gateways and `expose`, and any pod lifecycle kept by the runtime.
 

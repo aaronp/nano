@@ -253,7 +253,7 @@ describe('failure', () => {
     const r = await app.start('r')
     expect(r.ok).toBe(true)
     expect(r.value.status('s1')).toBe('waiting')
-    expect(await r.value.call(F).ping('x')).toMatchObject({ ok: false, fail: { type: 'missing' } })
+    expect(await r.value.call(F).ping('x')).toMatchObject({ ok: false, fail: { type: 'missing-component' } })
     expect(await r.value.call(U).ping('x')).toMatchObject({ ok: true })
   })
 })

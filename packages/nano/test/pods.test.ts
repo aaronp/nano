@@ -28,11 +28,11 @@ const contexts = new Map<string, NanoContext>()
 type Ping = (ctx: NanoContext, s: string) => Promise<NanoResult<string>>
 const echo = (prefix: string): Ping => async (_c, s) => success(`${prefix} ${s}`)
 const impl = (coord: string, provides: Interface[], dependencies: Record<string, Selector> = {}, ping = echo(coord)): Implementation =>
-  implementation(coord, { provides, dependencies, make: ctx => { contexts.set(ctx.instance, ctx); return provides.map(i => provide(i, { ping: ping as Handler })) } })
+  implementation(coord, { provides, dependencies, make: (ctx: NanoContext) => { contexts.set(ctx.instance, ctx); return provides.map(i => provide(i, { ping: ping as Handler })) } })
 
 // While `failing` is set, every flaky make throws: the instance it was making is `failed`.
 let failing = false
-const flaky = implementation('acme/keys/flaky', { provides: [Vault], make: ctx => {
+const flaky = implementation('acme/keys/flaky', { provides: [Vault], make: (ctx: NanoContext) => {
   if (failing) throw new Error('vault down')
   contexts.set(ctx.instance, ctx)
   return [provide(Vault, { ping: echo('flaky') })]
@@ -434,7 +434,7 @@ describe('swap', () => {
     expect(await ping('user#0', 'b')).toEqual(success('v2 b'))
     openGate()
     expect(await inFlight).toEqual(success('gated a'))
-    expect(await old.invoke(portKey(Vault.coord, Vault.ops.ping.coord), 'c')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+    expect(await old.invoke(portKey(Vault.coord, Vault.ops.ping.coord), 'c')).toMatchObject({ ok: false, fail: { type: 'missing-component' } })
   })
   test('given a swap pending, when an instance is added, then it runs the new implementation too', async () => {
     const rt = setup()

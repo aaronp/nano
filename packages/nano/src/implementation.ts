@@ -1,9 +1,9 @@
 /**
- * Implementations: code that provides interfaces, made per instance into a map of handlers by port key.
+ * Implementations: code that provides interfaces, made per instance from its config into a map of handlers by port key.
  *
  *   const memDb = implementation('acme/mem/db', {
  *     provides: [DB],
- *     make: ctx => [provide(DB, { get: async (ctx, key) => success(store.get(key)) })],
+ *     make: config => [provide(DB, { get: async (ctx, key) => success(store.get(key)) })],
  *   })
  */
 import { COORD, portKey, type Client, type Interface } from './iface.ts'
@@ -39,7 +39,7 @@ export type Implementation = {
   readonly dependencies: Readonly<Record<string, SelectorData>>
   readonly config?: SchemaDef
   readonly description?: string
-  make(ctx: NanoContext): Promise<ReadonlyMap<string, Handler>>
+  make(config: unknown): Promise<ReadonlyMap<string, Handler>>
 }
 
 type Spec = {
@@ -47,7 +47,7 @@ type Spec = {
   dependencies?: Record<string, Selector>
   config?: SchemaDef
   description?: string
-  make(ctx: NanoContext): Provided[] | Promise<Provided[]>
+  make(config: unknown): Provided[] | Promise<Provided[]>
 }
 
 export function implementation(coord: string, spec: Spec): Implementation {
@@ -60,11 +60,11 @@ export function implementation(coord: string, spec: Spec): Implementation {
     dependencies: Object.fromEntries(Object.entries(spec.dependencies ?? {}).map(([role, s]) => [role, selectorData(s)])),
     ...(spec.config && { config: spec.config }),
     ...(spec.description !== undefined && { description: spec.description }),
-    async make(ctx) {
+    async make(config) {
       const declared = new Set(spec.provides.map(i => i.coord))
       const given = new Set<string>()
       const out = new Map<string, Handler>()
-      for (const part of await spec.make(ctx)) {
+      for (const part of await spec.make(config)) {
         const ic = part.iface.coord
         if (!declared.has(ic)) throw new Error(`${coord}: ${ic} is not provided`)
         if (given.has(ic)) throw new Error(`${coord}: ${ic} is provided twice`)

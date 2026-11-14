@@ -13,7 +13,7 @@ const Str = defineSchema('Str', Type.String())
 const Num = defineSchema('Num', Type.Number())
 const db = iface('acme/db', { get: op.action('get', Str, Num), put: op.sink('put', Str), changed: op.source('changed', Str) })
 const log = iface('acme/log', { write: op.sink('write', Str) })
-const ctx = { instance: 'acme/mem/db#1', runtime: 'r1', config: undefined } as NanoContext // handlers here never call out
+const ctx = { instance: 'acme/mem/db#1', runtime: 'r1' } as NanoContext // handlers here never call out
 
 const memDb = implementation('acme/mem/db', {
   provides: [db],
@@ -25,7 +25,7 @@ const mem = provider('acme/mem', [memDb, memLog], { author: 'acme' })
 
 describe('implementations', () => {
   test('make keys handlers by port: interface coord and op coord', async () => {
-    const handlers = await memDb.make(ctx)
+    const handlers = await memDb.make(undefined)
     expect([...handlers.keys()].sort()).toEqual([portKey('acme/db', db.ops.get.coord), portKey('acme/db', db.ops.put.coord)].sort())
     expect(await handlers.get(portKey('acme/db', db.ops.get.coord))!(ctx, 'abc')).toEqual(success(3))
   })
@@ -35,7 +35,7 @@ describe('implementations', () => {
       // @ts-expect-error put is required
       make: () => [provide(db, { get: async () => success(1) })],
     })
-    await expect(half.make(ctx)).rejects.toThrow('acme/mem/half: missing acme/db/put')
+    await expect(half.make(undefined)).rejects.toThrow('acme/mem/half: missing acme/db/put')
   })
   test('two interfaces sharing an identical op get distinct handlers, one per port', async () => {
     const audit = iface('acme/audit', { write: op.sink('write', Str) })
@@ -48,7 +48,7 @@ describe('implementations', () => {
         provide(audit, { write: async (_c, s) => (seen.push(`audit ${s}`), success(undefined)) }),
       ],
     })
-    const handlers = await both.make(ctx)
+    const handlers = await both.make(undefined)
     await handlers.get(portKey('acme/log', log.ops.write.coord))!(ctx, 'a')
     await handlers.get(portKey('acme/audit', audit.ops.write.coord))!(ctx, 'b')
     expect(seen).toEqual(['log a', 'audit b'])
@@ -56,11 +56,11 @@ describe('implementations', () => {
   test("one interface's handler does not satisfy another's", async () => {
     const audit = iface('acme/audit', { write: op.sink('write', Str) })
     const one = implementation('acme/mem/one', { provides: [log, audit], make: () => [provide(log, { write: async () => success(undefined) })] })
-    await expect(one.make(ctx)).rejects.toThrow('acme/mem/one: missing acme/audit/write')
+    await expect(one.make(undefined)).rejects.toThrow('acme/mem/one: missing acme/audit/write')
   })
   test('a part for an interface not in provides throws', async () => {
     const stray = implementation('acme/mem/stray', { provides: [], make: () => [provide(log, { write: async () => success(undefined) })] })
-    await expect(stray.make(ctx)).rejects.toThrow('acme/mem/stray: acme/log is not provided')
+    await expect(stray.make(undefined)).rejects.toThrow('acme/mem/stray: acme/log is not provided')
   })
   test('a bad implementation coordinate throws', () => {
     for (const c of ['acme', 'acme/', 'acme/mem/', '/db', 'acme//db'])
@@ -68,7 +68,7 @@ describe('implementations', () => {
   })
   test('an interface provided twice throws', async () => {
     const twice = implementation('acme/mem/twice', { provides: [log], make: () => [provide(log, { write: async () => success(undefined) }), provide(log, { write: async () => success(undefined) })] })
-    await expect(twice.make(ctx)).rejects.toThrow('acme/mem/twice: acme/log is provided twice')
+    await expect(twice.make(undefined)).rejects.toThrow('acme/mem/twice: acme/log is provided twice')
   })
   test('handlers are typed from the op schemas', () => {
     // @ts-expect-error get returns a number, not a string

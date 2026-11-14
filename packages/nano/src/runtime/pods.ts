@@ -10,18 +10,18 @@
 import { portKey } from '../iface.ts'
 import type { Implementation } from '../implementation.ts'
 import type { Op } from '../op.ts'
-import type { Pod } from '../pod.ts'
+import type { PodState } from '../pod.ts'
+import type { NanoResult } from '../result.ts'
 import type { Target } from '../selector.ts'
 import type { RuntimeEvent } from './trace.ts'
 
 /** Runtime, pod and subscription ids: the one rule the runtime, the application and the document share. */
 export const ID = /^[^/\s#\x00-\x1f\x7f]{1,64}$/
 
-export type InstanceState = 'starting' | 'running' | 'failed' | 'stopped'
-export type PodState = InstanceState
+export type InstanceState = PodState
 
-/** One made implementation in a pod. `host` is its invoker (a host pod from `pod.ts`) while it is running. */
-export type Instance = { readonly coord: string; state: InstanceState; host?: Pod; /** Why its make failed, while it is `failed`. */ reason?: string }
+/** One made implementation in a pod. `host` is its invoker (a `Pod` from `pod.ts`, with the instance's ctx) while it is running. */
+export type Instance = { readonly coord: string; state: InstanceState; host?: { readonly implementation: Implementation; invoke(port: string, input: unknown): Promise<NanoResult<unknown>>; dispose(): void }; /** Why its make failed, while it is `failed`. */ reason?: string }
 
 /** A runtime that holds a pod: it delivers the pod's publishes, refreshes its statuses and tells its stream when the pod changes. */
 export type Holder = {

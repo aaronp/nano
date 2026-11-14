@@ -20,8 +20,8 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 | Provider | a namespace of implementations (`<provider>/<name>`) plus metadata | `provider.ts` |
 | Registry | a pool of providers; O(1) lookups; a plain-data manifest | `registry.ts` |
 | Selector | which targets a call may use (an interface, narrowed by tags, implementation or provider); `EndSelector` picks one end of a connection | `selector.ts` |
-| Context | what a handler gets: its instance, runtime, config, the call verbs, `publish`, dependency queries | `context.ts` |
-| Pod | the deployment unit and failure boundary: `{ id, implementation, config, instances }`, owned by its home runtime and shared (not copied) where placed; made, scaled, swapped and removed as one; its state summarises its instances'. Id unique in the application | `runtime/pods.ts` (record), `runtime/index.ts` (lifecycle) |
+| Context | what a handler gets: its instance, runtime, the call verbs, `publish`, dependency queries | `context.ts` |
+| Pod | the deployment unit and failure boundary: `{ id, implementation, config, instances }`, owned by its home runtime and shared (not copied) where placed; made, scaled, swapped and removed as one; its state summarises its instances'. Id unique in the application. Being replaced by the standalone `Pod` (the effect boundary: `Pod.create(impl, { config })`, `invoke(ctx, port, input)`, `swap`, `dispose`, `join`; its `PodState`), which the runtime still wraps once per instance | `runtime/pods.ts` (record), `runtime/index.ts` (lifecycle), `pod.ts` (`Pod`) |
 | Instance | one made implementation in a pod, `<pod>#<n>`; indices start at 0 and are never reused. Its host turns throws, timeouts and bad output into `Fail`s | `pod.ts` (host) |
 | Policy | `isAllowed(src, dest, data)` per runtime; `Policies.allowAll()` only, for now | `policy.ts` |
 | Runtime | pods, subscriptions (data) and their status (live/waiting/broken), provisioning, books, its one stream | `runtime/index.ts` |

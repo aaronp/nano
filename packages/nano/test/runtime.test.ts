@@ -351,7 +351,7 @@ describe('runtime subscriptions', () => {
     await rt.create('d', 'acme/db/mem')
     const host = rt.record('d')!.instances.get('d#0')!.host!
     rt.remove('d')
-    expect(await host.invoke(DB_GET, 'k')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+    expect(await host.invoke(DB_GET, 'k')).toMatchObject({ ok: false, fail: { type: 'missing-component' } })
   })
   test('swap keeps the coords: subscriptions that still fit stay live, an event subscription whose op is gone is broken', async () => {
     const { rt, events } = setup()

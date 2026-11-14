@@ -12,7 +12,7 @@
  *   rt.listen(e => console.log(e))                               // { type: 'pod-created', … }, { type: 'instance', coord: 'b#0', state: 'running' }, …
  */
 import type { Implementation } from '../implementation.ts'
-import { createHostPod, type Pod } from '../pod.ts'
+import { Pod } from '../pod.ts'
 import { Policies, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
@@ -217,15 +217,17 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     if (config !== undefined && !isJson(config)) return failure('invalid-input', `${pod}: config is not JSON`)
     if (impl.config && !impl.config.check(config)) return failure('invalid-input', `${pod}: config does not fit ${impl.config.type}`)
   }
-
   const badCount = (pod: string, n: number, min = 1): NanoResult<never> | undefined =>
     !Number.isInteger(n) || n < min || n > MAX_INSTANCES ? failure('invalid-input', `${pod}: count must be a whole number from ${min} to ${MAX_INSTANCES}`) : undefined
-  /** A host for `coord`: a handler that throws or times out is a `failure` on the stream of every runtime holding the pod. */
-  const host = (p: PodRecord, coord: string, impl: Implementation, ctx: Parameters<typeof createHostPod>[2]) =>
-    createHostPod(coord, impl, ctx, { ...opts.pod, onFailure: reason => tell(p, { type: 'failure', coord, reason }) })
+  /** A host for `coord` (ponytail: a bridge until Task 2: a Pod named by the coord, its make handed the ctx): its own throw or timeout is a `failure` on the stream of every runtime holding the pod. */
+  const host = (p: PodRecord, coord: string, impl: Implementation, ctx: ReturnType<typeof contextFor>['ctx']) => new Promise<NanoResult<NonNullable<Instance['host']>>>(resolve => {
+    const pod = Pod.create({ ...impl, coord, make: () => impl.make(ctx) }, opts.pod)
+    const invoke = (port: string, input: unknown) => pod.invoke(ctx, port, input).then(r => { if (!r.ok && /^(threw|timeout)$/.test(r.fail.type) && r.fail.reason.startsWith(`${coord}: `)) tell(p, { type: 'failure', coord, reason: r.fail.reason }); return r })
+    pod.join(id, (s, why = '') => resolve(s === 'running' ? success({ implementation: impl, invoke, dispose: () => void pod.dispose() }) : failure('threw', why)))
+  })
   /** Make one instance's host; failing, the instance is `failed` with the reason. Stopped meanwhile (removed), the host is dropped. */
   async function start(p: PodRecord, inst: Instance): Promise<NanoResult<void>> {
-    const { ctx, bind } = contextFor(wiring, inst.coord, p.implementation, p.config)
+    const { ctx, bind } = contextFor(wiring, inst.coord, p.implementation)
     const made = await host(p, inst.coord, p.implementation, ctx)
     if (inst.state !== 'starting') {
       if (made.ok) made.value.dispose()
@@ -238,7 +240,6 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
     changed(p)
     return made.ok ? success(undefined) : made
   }
-
   /** coord → the provisioning pass it was made in, while that pass is unfinished; calls into or out of it wait for it. */
   const passOf = new Map<string, Promise<void>>()
   type Pass = { done: Promise<void>; coords: string[] }
@@ -305,7 +306,6 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       if (release) { for (const c of pass!.coords) passOf.delete(c); release() }
     }
   }
-
   const swaps = new WeakMap<PodRecord, number>() // per pod, the latest swap asked for
   const ends = { pods, tagsOf: (c: string) => opts.tagsOf?.(c) ?? new Set<string>() }
   const rt: Runtime = {
@@ -392,10 +392,10 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
       const gen = (swaps.get(p) ?? 0) + 1 // the last swap asked for wins
       swaps.set(p, gen)
       // Every instance is remade off to the side, including any added meanwhile; the old ones serve until all are made.
-      const made = new Map<string, { bind(pod: Pod): void; host: NanoResult<Pod> }>()
+      const made = new Map<string, { bind: ReturnType<typeof contextFor>['bind']; host: Awaited<ReturnType<typeof host>> }>()
       for (let todo = [...p.instances.keys()]; todo.length > 0; todo = [...p.instances.keys()].filter(c => !made.has(c)))
         await Promise.all(todo.map(async coord => {
-          const { ctx, bind } = contextFor(wiring, coord, impl, config)
+          const { ctx, bind } = contextFor(wiring, coord, impl)
           made.set(coord, { bind, host: await host(p, coord, impl, ctx) })
         }))
       const fail = swaps.get(p) !== gen ? failure('invalid-input', `${pid}: superseded by a later swap`)
