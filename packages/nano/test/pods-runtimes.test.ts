@@ -178,6 +178,13 @@ describe('composing runtimes', () => {
     const r = await Application.create({ r: { id: 'r', pods: real.pods, deployment: real.deployment } }, {})
     expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'runtime r: not made by Runtime.create' } })
   })
+  test('given the package, when its names are listed, then the internal isRuntime and RuntimeIds are not among them', async () => {
+    const names = Object.keys(await import('../src/index.ts'))
+    expect(names.filter(n => n === 'isRuntime' || n === 'RuntimeIds')).toEqual([])
+  })
+  test('given runtimes and no opts, when the application is created, then it succeeds', async () => {
+    expect(await Application.create({})).toMatchObject({ ok: true })
+  })
   test("given a runtime under a key other than its id, when the application is created, then it is invalid-input naming both", async () => {
     const r = await Application.create({ x: placing(root(), 'y', ['a']) }, {})
     expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'runtime x: its id is y' } })

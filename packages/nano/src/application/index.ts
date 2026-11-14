@@ -37,7 +37,7 @@ type Opts = { policies?: Record<string, Policy>; timeoutMs?: number }
  * `runtimes` live. The application's deployment is its own: nobody else holds it, so only `apply` changes it; and its
  * maps have no prototype, so a pod or runtime named `constructor` or `toString` is only ever a name.
  */
-async function create(runtimes: Record<string, Runtime>, opts: Opts): Promise<NanoResult<Application>> {
+async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promise<NanoResult<Application>> {
   const composed = compose(runtimes)
   if (!composed.ok) return composed
   // No runtimes, no Pods and so no registry: such an application can only apply deployments naming no implementation.
