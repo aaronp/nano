@@ -162,4 +162,13 @@ describe('provisioning', () => {
     expect(rt.provision(add('acme/app/needs-boom'))).toEqual(success([{ role: 'boom', reason: 'subscription s1 to acme/bad/boom#0 is waiting' }]))
     expect(edges(rt)).toEqual(['acme/app/needs-boom#0 -> acme/bad/boom#0 waiting'])
   })
+  test('provisioning again keeps a waiting subscription to a match: no duplicate', async () => {
+    const { rt, add } = setup()
+    add('acme/bad/boom')
+    await settle()
+    const n = add('acme/app/needs-boom')
+    rt.provision(n)
+    expect(rt.provision(n)).toEqual(success([{ role: 'boom', reason: 'subscription s1 to acme/bad/boom#0 is waiting' }]))
+    expect(edges(rt)).toEqual(['acme/app/needs-boom#0 -> acme/bad/boom#0 waiting'])
+  })
 })

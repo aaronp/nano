@@ -56,8 +56,12 @@ function create(impl: Implementation, opts: { config?: unknown; timeoutMs?: numb
   }
   const stopped = () => state === 'stopped', gone = () => failure('missing-component', `${name} is disposed`)
 
-  /** Make an instance: a throw, or a make not settled in time (settling late is ignored), is a fail with the reason. */
+  /** A config that does not fit the implementation's schema, as a fail. */
+  const unfit = (cfg: unknown) => (impl.config && !impl.config.check(cfg) ? failure('invalid-input', `${name}: config does not fit ${impl.config.type}`) : undefined)
+  /** Make an instance: an unfit config, a throw, or a make not settled in time (settling late is ignored), is a fail with the reason. */
   async function make(cfg: unknown): Promise<Made> {
+    const no = unfit(cfg)
+    if (no) return no
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
       const late = new Promise<'timeout'>(res => { timer = setTimeout(() => res('timeout'), timeoutMs) })
@@ -102,11 +106,14 @@ function create(impl: Implementation, opts: { config?: unknown; timeoutMs?: numb
       if (stopped()) return gone()
       const made = await current
       if (stopped()) return gone()
-      return made.ok ? run(made.value, ctx, port, input) : failure('missing-component', made.fail.reason)
+      if (made.ok) return run(made.value, ctx, port, input)
+      return made.fail.type === 'invalid-input' ? made : failure('missing-component', made.fail.reason) // made from an unfit config
     },
     async swap(o = {}) {
       if (stopped()) return gone()
-      const mine = ++asked, cfg = 'config' in o ? o.config : config
+      const cfg = 'config' in o ? o.config : config, no = unfit(cfg)
+      if (no) return no // changes nothing, and supersedes no swap in progress
+      const mine = ++asked
       const next = make(cfg), made = await next
       if (stopped()) return gone()
       if (mine !== asked) return failure('invalid-input', `${name}: swap superseded by a later one`)

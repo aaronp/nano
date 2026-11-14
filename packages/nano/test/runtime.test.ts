@@ -105,6 +105,12 @@ describe('registering', () => {
     expect(rt.register(pod)).toMatchObject({ ok: false, fail: { type: 'exists', reason: expect.stringContaining('already here as acme/keys/vault#0') } })
     expect(rt.pods()).toEqual(['acme/keys/vault#0'])
   })
+  test('a pod already in another runtime with the same id fails exists', () => {
+    const pod = Pod.create(memLog)
+    setup().rt.register(pod)
+    expect(setup().rt.register(pod)).toMatchObject({ ok: false, fail: { type: 'exists', reason: expect.stringContaining('already in a runtime r1') } })
+    expect(pod.runtimes).toEqual(['r1'])
+  })
   test('pod(coord) is the registered pod; pods() is register order', () => {
     const { rt } = setup()
     const a = Pod.create(memLog), b = Pod.create(memDb)

@@ -138,7 +138,7 @@ export function createRuntime(id: string, opts: RuntimeOpts): Runtime {
         registry, target, coords: () => pods.held.keys(),
         connected: (c, d) => { const p = pods.held.get(c); return !!p && connectionsOf(p, d).length > 0 },
         make: impl => pods.register(Pod.create(impl, { ...opts.pod })),
-        subscribe: rt.subscribe, status: rt.status,
+        subscribe: rt.subscribe, status: rt.status, subscriptions: rt.subscriptions,
       }, coord, registry.implementation(pod.implementation)!))
     },
   }

@@ -46,6 +46,7 @@ export function podTable(w: Wiring, known: (implementation: string) => boolean, 
   function register(pod: Pod, coord?: string): NanoResult<string> {
     const impl = pod.implementation, here = coords.get(pod)
     if (here !== undefined) return failure('exists', `${impl}: already here as ${here}`)
+    if (wirings.get(pod)?.has(w.id)) return failure('exists', `${impl}: already in a runtime ${w.id}`) // runtime ids must differ
     if (!known(impl)) return failure('not-found', `no implementation ${impl} in ${w.id}'s registry`)
     if (held.size >= MAX_PODS) return failure('invalid-input', `${w.id} would hold more than ${MAX_PODS} pods`)
     const p = coord === undefined ? { implementation: impl, index: next[impl] ?? 0 } : parseInstance(coord)

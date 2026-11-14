@@ -45,6 +45,7 @@ export async function send(rt: Through, sid: string | undefined, from: string, t
   const pod = rt.pod(to)
   const t0 = performance.now()
   const r = pod ? await pod.invoke(contextFor(rt.wiring, to, pod), port, input) : failure('not-found', `${to} is not registered in ${rt.wiring.id}`)
+  // The callee's own throw or timeout, not one it passed on: pod.ts prefixes its own fails' reasons with `<implementation>: `.
   if (pod && !r.ok && (r.fail.type === 'threw' || r.fail.type === 'timeout') && r.fail.reason.startsWith(`${pod.implementation}: `))
     trace.emit({ type: 'failure', coord: to, reason: r.fail.reason })
   trace.emit({ type: 'delivered', id, result: r, ms: performance.now() - t0 })

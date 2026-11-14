@@ -182,4 +182,23 @@ describe('pod lifecycle', () => {
     expect(await p.invoke(ctx, LEN, 'a')).toMatchObject({ ok: false, fail: { type: 'missing-component' } })
     expect(await p.swap({ config: { n: 2 } })).toMatchObject({ ok: false })
   })
+  // Ported from the old runtime's create: "config that does not fit the implementation fails invalid-input".
+  const sized = implementation('acme/x/sized', { provides: [api], config: Num, make: (n: number) => [provide(api, { len: async () => success(n), poke: async () => success(undefined) })] })
+  test('a config that does not fit the implementation leaves the pod failed, and calls fail invalid-input', async () => {
+    const p = Pod.create(sized, { config: 'x' })
+    await settle()
+    expect(p.state).toBe('failed')
+    expect(await p.invoke(ctx, LEN, 'a')).toEqual(failure('invalid-input', 'acme/x/sized: config does not fit Num'))
+    expect(await p.swap({ config: 3 })).toEqual(success(undefined))
+    expect(await p.invoke(ctx, LEN, 'a')).toEqual(success(3))
+  })
+  test('a swap to a config that does not fit fails invalid-input and changes nothing', async () => {
+    const heard: PodState[] = []
+    const p = Pod.create(sized, { config: 1 })
+    await settle()
+    p.join('a', s => heard.push(s))
+    expect(await p.swap({ config: 'x' })).toEqual(failure('invalid-input', 'acme/x/sized: config does not fit Num'))
+    expect([p.state, p.config, heard]).toEqual(['running', 1, []])
+    expect(await p.invoke(ctx, LEN, 'a')).toEqual(success(1))
+  })
 })

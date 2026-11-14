@@ -27,6 +27,7 @@ export type Provisioner = {
   make(impl: Implementation): NanoResult<string>
   subscribe(s: NewSubscription): NanoResult<SubscriptionData>
   status(id: string): Status | undefined
+  subscriptions(): readonly SubscriptionData[]
 }
 
 /** Implementations a selector names by interface, coord or provider. Tags can't be known before creation, so they never block; a selector naming none of the three matches none. */
@@ -47,6 +48,9 @@ export function provision(p: Provisioner, coord: string, impl: Implementation, d
   for (const [role, d] of Object.entries(impl.dependencies)) {
     if (p.connected(coord, d)) continue
     const leave = (reason: string) => { unsatisfied.push({ role, reason }) }
+    // A call subscription here to a match that is not live (it waits, say) is the choice already made: never a second one.
+    const had = p.subscriptions().find(s => { const t = s.kind === 'call' && s.from === coord && p.target(s.to); return !!t && matches(d, t) })
+    if (had) { leave(`subscription ${had.id} to ${had.to} is ${p.status(had.id)}`); continue }
     const found = [...p.coords()].filter(c => { const t = c !== coord && p.target(c); return !!t && matches(d, t) })
     // Several pods: a choice for the user, not a reason to make yet another.
     if (found.length > 1) { leave(`${found.length} match`); continue }
