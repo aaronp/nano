@@ -1,8 +1,9 @@
 /**
- * Interfaces: a coordinate plus a set of ops, indexed by name and by op coord.
+ * Interfaces: a coordinate plus a set of ops, indexed by name and by op coord. A port is one op as offered by one
+ * interface, written readably.
  *
  *   const db = iface('acme/db', { get: op.action('get', Key, Value) })
- *   db.byCoord.get(db.ops.get.coord)   // the op
+ *   port(db, db.ops.get)   // 'acme/db/get'
  */
 import type { Static, TSchema } from 'typebox'
 import type { Op } from './op.ts'
@@ -16,8 +17,8 @@ export type Interface<Ops extends Record<string, Op> = Record<string, Op>> = {
 
 export const COORD = /^[a-zA-Z][a-zA-Z0-9-]*([./][a-zA-Z0-9-]+)+$/
 
-/** A port: one op as offered by one interface. Handlers are keyed by it, since an op coord alone is content-only and two interfaces may share it. */
-export const portKey = (ifaceCoord: string, opCoord: string): string => `${ifaceCoord}/${opCoord}`
+/** A port: `<interface>/<op name>`. Handlers are keyed by it; op hashes only check that two ports fit. */
+export const port = (i: Interface, o: Op): string => `${i.coord}/${o.name}`
 
 export function iface<Ops extends Record<string, Op>>(coord: string, ops: Ops): Interface<Ops> {
   if (!COORD.test(coord)) throw new Error(`bad interface coordinate ${coord}`)
@@ -25,13 +26,9 @@ export function iface<Ops extends Record<string, Op>>(coord: string, ops: Ops): 
   return { coord, ops, byCoord: new Map(Object.values(ops).map(o => [o.coord, o])) }
 }
 
-type ISchema<D> = D extends { schema: infer S } ? S : never
-// [X] extends [never]: a sink's output is absent (never), so it yields void rather than distributing.
-type Out<O extends Op> = [ISchema<O['output']>] extends [never] ? void : NonNullable<O['output']> extends { schema: infer S extends TSchema } ? Static<S> : void
+type Data<D> = NonNullable<D> extends { schema: infer S extends TSchema } ? Static<S> : never
 
-/** Typed caller for an interface: each action or sink is an async function. */
+/** Typed caller for an interface: each action is an async function. Events have none: they are published. */
 export type Client<I extends Interface> = {
-  [K in keyof I['ops'] as I['ops'][K]['kind'] extends 'source' ? never : K]: NonNullable<I['ops'][K]['input']> extends { schema: infer S extends TSchema }
-    ? (input: Static<S>) => Promise<NanoResult<Out<I['ops'][K]>>>
-    : never
+  [K in keyof I['ops'] as I['ops'][K]['kind'] extends 'event' ? never : K]: (input: Data<I['ops'][K]['input']>) => Promise<NanoResult<Data<I['ops'][K]['output']>>>
 }

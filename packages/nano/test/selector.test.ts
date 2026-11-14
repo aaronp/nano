@@ -8,7 +8,7 @@ import { matches, selectorData, type Target } from '../src/selector.ts'
 const Str = defineSchema('Str', Type.String())
 const db = iface('acme/db', { get: op.action('get', Str, Str) })
 const target: Target = {
-  instance: 'acme/mem/db#1', implementation: 'acme/mem/db', provider: 'acme/mem',
+  name: 'db', runtime: 'v3', implementation: 'acme/mem/db', provider: 'acme/mem',
   provides: new Set(['acme/db']), tags: new Set(['primary', 'fast']),
 }
 
@@ -26,5 +26,9 @@ describe('selectors', () => {
     expect(matches({ implements: 'acme/db', implementation: 'acme/mem/db', provider: 'acme/mem' }, target)).toBe(true)
     expect(matches({ implements: 'acme/db', implementation: 'acme/sql/db' }, target)).toBe(false)
     expect(matches({ implements: 'acme/db', provider: 'acme/sql' }, target)).toBe(false)
+  })
+  test('runtime narrows it to the runtime the target is reached in', () => {
+    expect(matches({ runtime: 'v2' }, target)).toBe(false)
+    expect(matches({ runtime: 'v2' }, { ...target, runtime: 'v2' })).toBe(true)
   })
 })

@@ -2,7 +2,7 @@
  * The registry: a pool of providers, answering lookups by coord in O(1) and describing itself as a plain-data manifest.
  *
  *   const r = createRegistry()
- *   r.add(mem)                        // NanoResult<void>; fails `exists` on a clash
+ *   r.add(mem)                        // NanoResult<void>; fails `invalid-input` on a clash
  *   r.implementationsOf('acme/db')    // [memDb]
  */
 import type { Interface } from './iface.ts'
@@ -41,13 +41,13 @@ export function createRegistry(): Registry {
   return {
     add(p) {
       // An implementation's coord fixes its provider and a provider lists each once, so a new provider brings no clashing implementation.
-      if (providers.has(p.coord)) return failure('exists', `provider ${p.coord} is already registered`)
+      if (providers.has(p.coord)) return failure('invalid-input', `provider ${p.coord} is already registered`)
       // Check everything before writing anything, so a clash adds nothing.
       const seen = new Map<string, Interface>()
       for (const impl of p.implementations.values()) {
         for (const i of impl.provides) {
           const known = ifaces.get(i.coord) ?? seen.get(i.coord)
-          if (known && opSet(known) !== opSet(i)) return failure('exists', `interface ${i.coord} differs`)
+          if (known && opSet(known) !== opSet(i)) return failure('invalid-input', `interface ${i.coord} differs`)
           seen.set(i.coord, known ?? i)
         }
       }

@@ -1,3 +1,6 @@
+> Being rewritten (plan `docs/superpowers/plans/2026-11-14-values-and-application.md`): the domain table is current; the
+> sections after it still describe the removed runtime, application and document.
+
 > The other packages (`core`, `app`, `runes`, `ui-workspace`, …) still run on the old core until plans 2 and 3 move
 > them; this file describes the new model in `packages/nano`.
 
@@ -13,25 +16,17 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 | Domain | Responsibility | File |
 |---|---|---|
 | Schema | a TypeBox schema (`SchemaDef`, from `defineSchema`) with its blake3 `hashOf` (annotations stripped, `canonical`, `canonicalSchema`) and JSON codec; `isJson` refuses non-JSON schemas | `schema.ts` |
-| Op | an action (in → out), source (out) or sink (in) (`Op`, `OpKind`); coord = hash of name + schema hashes; `fits` for events | `op.ts` |
-| `Interface` | a coord (`ns/name`, `com.example.DB`; the `COORD` rule) plus its ops; `portKey(iface, op)` names one op as offered; `Client` is a typed client for one | `iface.ts` |
+| Op | an action (in → out) or an event (data out, its `output`) (`Op`, `OpKind`); coord = hash of name + schema hashes; `fits` checks an event against an action | `op.ts` |
+| `Interface` | a coord (`ns/name`, `com.example.DB`; the `COORD` rule) plus its ops; `port(i, op)` = `<interface>/<op name>` names one op as offered; `Client` is a typed client for one (actions only) | `iface.ts` |
 | Result | `NanoResult` = `success` or a platform `Fail` (`FailType`); never thrown; `isNanoResult` | `result.ts` |
-| `Implementation` | code providing whole interfaces, with declared dependencies (selectors by role) and optional config schema; `make(config)` returns `Handlers` (a `Handler` per port; `provide` / `Provided` pair them); no context at make | `implementation.ts` |
+| `Implementation` | code providing whole interfaces, with declared dependencies (selectors by role) and optional config schema; its factory `make(ctx, config)` returns `Handlers` (a `Handler` per port, taking input only; `provide` / `Provided` pair them) | `implementation.ts` |
 | `Provider` | a namespace of implementations (`<provider>/<name>`) plus metadata | `provider.ts` |
 | `Registry` | a pool of providers (`createRegistry`); O(1) lookups (`implementationsFor`); a plain-data `Manifest` | `registry.ts` |
-| Selector | which pods a call may use (`Selector`: an interface, or `SelectorData` narrowed by tags, implementation, provider, `runtime`; `sel`, `selectorData`, `matches` over a `Target`); `EndSelector` picks one end of a subscription | `selector.ts` |
-| Context | what a handler gets, from a runtime: its coord, runtime, `runtimes`, the call verbs (`CallSelector`, `Call`, `Found`, `Each`), `publish`, dependency queries (`NanoContext`) | `context.ts` |
-| Pod | the effect boundary a runtime invokes through, standalone: `Pod.create(impl, { config })`; `invoke`, `call.<op>`, `swap`, `dispose`, `join`; state `PodState`; knows its runtimes' names, nothing else. Turns throws, timeouts and bad output into `Fail`s | `pod.ts` |
+| Selector | which call subscriptions a call may use (`Selector`: an interface, or `SelectorData` narrowed by tags, implementation, provider, `runtime`; `sel`, `selectorData`, `matches` over a `Target`) | `selector.ts` |
+| Context | what a pod's factory gets (`NanoContext`): `self`, `runtimes`, `one`, `all`, `publish` | `context.ts` |
+| Pod | a value: `{ implementation, config?, eager }` from `Pod.lazy(impl, { config })` / `Pod.eager(…)`; no state or instance | `pod.ts` |
 | `Policy` | `isAllowed(src, dest, data)` per runtime, a `Verdict`; `Policies.allowAll()` only, for now | `policy.ts` |
-| Runtime | pods by coord `<implementation>#<n>` (`createRuntime`, `Runtime`, `RuntimeOpts`; `podTable`, `wirings`, `instanceCoord`, `parseInstance`; limits `MAX_PODS`, `MAX_RUNTIMES`, `MAX_SUBSCRIPTIONS`, id rule `ID`), subscriptions and their status, provisioning, books, one stream | `runtime/index.ts`, `runtime/pods.ts` |
-| — subscriptions | edges between two coords, as data (`SubscriptionData`, `NewSubscription`, `Status`: live/waiting/broken); order, edits and cascade (`subscriptionTable`, `statusOf`, `reordered`, `nextId`, `invalid`) | `runtime/subscriptions.ts` |
-| — connect | resolves an end (`NewConnection`) once to exactly one registered coord (`resolveEnd`) | `runtime/connect.ts` |
-| — calls | one policed, recorded, booked message (`send`, `Book`); a host's calls from `'host'` (`hostCall`) | `runtime/calls.ts` |
-| — verbs | the context a runtime invokes a pod with (`contextFor`): verbs over its live call subscriptions in every runtime it is in (`connectionsOf`, `Wiring`); publish | `runtime/verbs.ts` |
-| — provision | settles unconnected dependencies, synchronously: one matching pod → subscribe, else one implementation → make and register (`provision`, `Provisioner`, `Unsatisfied`) | `runtime/provision.ts` |
-| — trace | the runtime's observable stream (`tracer`, `Tracer`, `RuntimeEvent`): lifecycle, wiring, messages, problems | `runtime/trace.ts` |
-| Application | a runtime of runtimes (`createApplication`, `Application`): defines, starts on demand, shares tags and the pods table; sharing a pod is registering it. `define({ pods, runtimes })` (`RuntimeDef`, `RuntimeDefSchema`, `PodDef`); starting makes each pod key once (`podsTable`) and registers it at its saved coord | `application.ts`, `application-start.ts` |
-| Document | `nano.json` v2 (`NanoDoc`, `NanoDocSchema`): `saveDoc`, `checkDoc`, `loadDoc`; one `pods` table (keys `p0`, `p1`, … in first-registered order), at most 25000 pods (`MAX_RUNTIMES` × `MAX_PODS`) | `document.ts` |
+| `Deployment` | the whole system as data: pods by name, runtimes (pods placed, `Subscription`s, policy), tags; `checkDeployment(d, registry)` validates it strictly | `deployment.ts` |
 
 ## How they work together
 

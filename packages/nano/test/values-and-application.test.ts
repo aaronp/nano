@@ -106,7 +106,7 @@ const one = (pods, subscriptions = [], extra = {}) => ({ pods, runtimes: { r: { 
 
 describe('values', () => {
   // Behaviour 1.
-  test.todo('given lazy and eager pods in a deployment, when it is JSON round-tripped, then it is unchanged plain data', () => {
+  test('given lazy and eager pods in a deployment, when it is JSON round-tripped, then it is unchanged plain data', () => {
     const d = one({ c: Pod.lazy(counter, { config: { start: 1 } }), t: Pod.eager(ticker) })
     expect(d.pods.c).toEqual({ implementation: 'acme/counter', config: { start: 1 }, eager: false })
     expect(d.pods.t).toEqual({ implementation: 'acme/ticker', eager: true })
