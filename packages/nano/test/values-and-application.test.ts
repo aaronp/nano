@@ -169,6 +169,17 @@ describe('building', () => {
 })
 
 describe('placing', () => {
+  test('given two KVs, one tagged primary, when a pod selects the primary KV, then it reaches that one, straight after assemble and create', async () => {
+    const picker = implementation('acme5/picker', { provides: [Send], dependencies: { store: KV }, make: ctx => [provide(Send, {
+      send: async msg => { const s = ctx.one(sel(KV, { tags: ['primary'] })); return s.ok ? s.value.put(msg) : s },
+    })] })
+    const reg = registry(); reg.add(provider('acme5', [picker]))
+    const calls = [{ kind: 'call', from: 'p', to: 'k1' }, { kind: 'call', from: 'p', to: 'k2' }] as const
+    const app = ok(await create({ pods: { p: Pod.lazy(picker), k1: Pod.lazy(kv), k2: Pod.lazy(kv) },
+      runtimes: { r: { pods: ['p', 'k1', 'k2'], subscriptions: [...calls] } }, tags: { k2: ['primary'] } }, {}, reg))
+    expect(await app.call('r', 'p').send('m')).toEqual(success(null))
+    expect([await app.call('r', 'k1').get('m'), await app.call('r', 'k2').get('m')]).toEqual([success(''), success('v')])
+  })
   // Behaviour 6.
   test('given one pod placed in two runtimes, when called through each, then there is one instance, ctx.runtimes names both, and each call is recorded only in its runtime', async () => {
     const { app, events } = await live({ pods: { c: Pod.lazy(counter), w: Pod.lazy(where) },
@@ -451,11 +462,11 @@ describe('final review', () => {
     expect(await app.call('toString', 'constructor').inc(null)).toEqual(success(1))
     expect(await app.restart('constructor')).toEqual(success(undefined))
     expect(await app.call('toString', 'constructor').inc(null)).toEqual(success(1))
-    expect(app.deployment()).toEqual({ pods: d.pods, runtimes: d.runtimes })   // runtimes carry no tags
+    expect(app.deployment()).toEqual(d)
     expect(await app.apply(one({ c: Pod.lazy(counter) }))).toEqual(success(undefined))
     expect(await app.call('toString', 'constructor').inc(null)).toMatchObject({ ok: false, fail: { type: 'not-found' } })
     expect(await app.apply(d)).toEqual(success(undefined))
-    expect(app.deployment()).toEqual(d)   // apply carries the tags in
+    expect(app.deployment()).toEqual(d)
     expect(await app.call('toString', 'constructor').inc(null)).toEqual(success(1))
   })
   test('given a pod __proto__ from JSON, when called, then it answers', async () => {

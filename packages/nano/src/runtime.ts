@@ -70,13 +70,19 @@ function check(id: string, r: RuntimeDeployment, pods: Pods): string | undefined
   }
 }
 
+/** Every value `Runtime.create` made: carried, not a member, so `Application.create` can tell a Runtime from a look-alike. */
+const made = new WeakSet<Runtime>()
+export const isRuntime = (r: unknown): r is Runtime => made.has(r as Runtime)
+
 /** Runtime `id` placing and wiring pods of `pods`, if `d` checks out. Never throws. */
 function create(id: string, d: unknown, pods: Pods): NanoResult<Runtime> {
   try {
     const copy = structuredClone(d)
     const why = shapeError(Shape, copy, `runtime ${id}`) ?? check(id, copy as RuntimeDeployment, pods)
     if (why) return failure('invalid-input', why)
-    return success(Object.freeze({ id, pods, deployment: () => structuredClone(copy as RuntimeDeployment) }))
+    const runtime: Runtime = Object.freeze({ id, pods, deployment: () => structuredClone(copy as RuntimeDeployment) })
+    made.add(runtime)
+    return success(runtime)
   } catch (e) {
     return failure('invalid-input', `unreadable runtime ${id}: ${e instanceof Error ? e.message : String(e)}`)
   }

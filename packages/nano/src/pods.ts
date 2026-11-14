@@ -34,11 +34,19 @@ export function shapeError(schema: TSchema, d: unknown, what: string): string | 
   return `${what} ${e.instancePath || '/'}: ${why}`
 }
 
-/** Where a `Pods` comes from: the registry it was checked against, and the `Pods.create` result it was selected from. */
-type Origin = { readonly registry: Registry; readonly root: Pods }
+/**
+ * Where a `Pods` comes from: the registry it was checked against, the `Pods.create` result it was selected from, and on
+ * that root, the tags `assemble` carried in with it.
+ */
+type Origin = { readonly registry: Registry; readonly root: Pods; readonly tags?: Record<string, string[]> }
 /** Each `Pods`' origin, for `Runtime.create` and `Application.create`: carried, not a member. */
 const origins = new WeakMap<Pods, Origin>()
 export const originOf = (pods: Pods): Origin | undefined => origins.get(pods)
+/** `root` (a `Pods.create` result) with `tags` on its origin, for `assemble` before anything is selected from it. */
+export function tag(root: Pods, tags: Record<string, string[]>): void {
+  const o = origins.get(root)
+  if (o?.root === root) origins.set(root, Object.freeze({ ...o, tags: structuredClone(tags) }))
+}
 
 function view(all: ReadonlyMap<string, Pod>, registry: Registry, root?: Pods): Pods {
   const pods: Pods = Object.freeze({

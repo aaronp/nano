@@ -120,7 +120,7 @@ describe('scope and sharing', () => {
 
 describe('composing runtimes', () => {
   const root = () => ok(Pods.create({ a: Pod.lazy(counter), b: Pod.lazy(counter), c: Pod.lazy(counter), d: Pod.lazy(counter) }, { registry: registry() }))
-  const placing = (pods, id, names) => ok(Runtime.create(id, { pods: names, subscriptions: [] }, ok(pods.select(names))))
+  const placing = (pods: nano.Pods, id: string, names: string[]) => ok(Runtime.create(id, { pods: names, subscriptions: [] }, ok(pods.select(names))))
   test('given no runtimes, when the application is created, then it succeeds with an empty deployment', async () => {
     const app = ok(await Application.create({}, {}))
     expect(app.deployment()).toEqual({ pods: {}, runtimes: {} })
@@ -131,7 +131,7 @@ describe('composing runtimes', () => {
     const other = ok(Pods.create({ a: Pod.lazy(store, { config: 'x' }) }, { registry: registry() }))
     const r = await Application.create({ x: placing(one, 'x', ['a']), y: placing(other, 'y', ['a']) }, {})
     expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
-    expect(r.fail.reason).toContain('y')
+    expect(r.fail.reason).toBe('runtime y: its pods come from another Pods')
   })
   test('given runtimes from one Pods, when composed, then deployment() has the placed pods in Pods order and the runtimes in the given order', async () => {
     const pods = root()
@@ -144,8 +144,17 @@ describe('composing runtimes', () => {
   test('given more than 50 runtimes, a runtime id breaking the id rule, or something not a runtime, then it is invalid-input', async () => {
     const pods = root(), r = placing(pods, 'r', ['a'])
     const many = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`r${i}`, r]))
-    for (const runtimes of [many, { 'a/b': r }, { r: { id: 'r', pods, deployment: () => ({ pods: ['zz'], subscriptions: [] }) } }, { r: 3 }, null])
+    for (const runtimes of [many, { 'a/b': r }, { r: 3 }, null])
       expect(await Application.create(runtimes, {})).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+  })
+  test('given a hand-made runtime, when the application is created, then it is invalid-input', async () => {
+    const pods = root(), real = placing(pods, 'r', ['a'])
+    const r = await Application.create({ r: { id: 'r', pods: real.pods, deployment: real.deployment } }, {})
+    expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'runtime r: not made by Runtime.create' } })
+  })
+  test("given a runtime under a key other than its id, when the application is created, then it is invalid-input naming both", async () => {
+    const r = await Application.create({ x: placing(root(), 'y', ['a']) }, {})
+    expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'runtime x: its id is y' } })
   })
 })
 
@@ -233,12 +242,19 @@ describe('selections and chains', () => {
 
 describe('the application deployment', () => {
   // Behaviour 13.
-  test('given an assembled application, when its deployment is saved and re-assembled, then it is the same AppDeployment and answers the same', async () => {
-    const d = { pods: { app: Pod.lazy(appImpl), db: Pod.lazy(store, { config: 'db' }) },
-      runtimes: { r: { pods: ['app', 'db'], subscriptions: [{ kind: 'call', from: 'app', to: 'db' }] } } }
-    const first = (await create(d)).app
-    expect(first.deployment()).toEqual(d)
+  const saved = () => ({ pods: { app: Pod.lazy(appImpl), db: Pod.lazy(store, { config: 'db' }) },
+    runtimes: { r: { pods: ['app', 'db'], subscriptions: [{ kind: 'call', from: 'app', to: 'db' }] } }, tags: { db: ['primary'] } })
+  test('given an assembled application, when its deployment is saved and re-assembled, then it is the same AppDeployment', async () => {
+    const first = (await create(saved())).app
+    expect(first.deployment()).toEqual(saved())
     const again = (await create(JSON.parse(JSON.stringify(first.deployment())))).app
-    expect(await again.call('r', 'app').save('x')).toEqual(await first.call('r', 'app').save('x'))
+    expect(again.deployment()).toEqual(first.deployment())
+  })
+  // Behaviour 13, calls. Waits for Task 4: appImpl saves through a Selection (`ctx.one(Store).call`).
+  test.todo('given a saved and re-assembled application, when app saves, then both answer db:x', async () => {
+    const first = (await create(saved())).app
+    const again = (await create(JSON.parse(JSON.stringify(first.deployment())))).app
+    expect(await first.call('r', 'app').save('x')).toEqual(success('db:x'))
+    expect(await again.call('r', 'app').save('x')).toEqual(success('db:x'))
   })
 })

@@ -59,15 +59,12 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts): Promise<Na
       }
   }
 
-  /** `d` assembled with the application's registry and composed; its tags (shape checked by assemble) carried over. */
+  /** `d` assembled with the application's registry, then composed. */
   function adopt(d: AppDeployment): NanoResult<AppDeployment> {
-    let copy: AppDeployment
-    try { copy = structuredClone(d) } catch (e) { return failure('invalid-input', `unreadable deployment: ${e instanceof Error ? e.message : String(e)}`) }
-    const assembled = assemble(copy, registry)
+    const assembled = assemble(d, registry)
     if (!assembled.ok) return assembled
     const next = compose(assembled.value)
-    if (!next.ok) return next
-    return success({ ...next.value.deployment, ...(copy.tags && { tags: Object.assign(Object.create(null), copy.tags) }) })
+    return next.ok ? success(next.value.deployment) : next
   }
 
   async function reconcile(d: AppDeployment): Promise<NanoResult<void>> {

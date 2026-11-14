@@ -35,12 +35,14 @@ by op name over it, both reading a `Live` (the application as a message needs it
 answer to a message or a new subscription (a throw, a Promise or no verdict refuses); `within` bounds a build or handler
 by the timeout; `contextFor(live, name)` is a pod's `NanoContext`; `diff(a, b)` is what `apply` changes: pods added,
 removed, changed, and runtimes rewired; `compose(runtimes)` is the application's deployment from its runtimes (the pods
-they place, in their `Pods`' order) and their registry.
+they place, in their `Pods`' order, and the tags their `Pods` carry) and their registry.
 
 Inside `pods.ts` (not exported from the package): `Id` is the id rule for pod names and runtime ids, `shapeError` the
-first way a value breaks a level's shape, and `originOf(pods)` where a `Pods` comes from: the registry it was checked
-against (which `Runtime.create` resolves implementations with) and the `Pods` it was selected from (one per
-application). Inside `deployment.ts`: `RuntimeIds` is the shape of a table by runtime id (the id rule, at most 50).
+first way a value breaks a level's shape, `originOf(pods)` where a `Pods` comes from: the registry it was checked
+against (which `Runtime.create` resolves implementations with), the `Pods` it was selected from (one per application)
+and, on that root, the tags `assemble` put there with `tag(root, tags)`. Inside `deployment.ts`: `RuntimeIds` is the
+shape of a table by runtime id (the id rule, at most 50). Inside `runtime.ts`: `isRuntime(r)` is whether
+`Runtime.create` made `r`.
 
 ## How it works
 
@@ -54,8 +56,8 @@ application). Inside `deployment.ts`: `RuntimeIds` is the shape of a table by ru
    registry), configs and 5000 pods; `Runtime.create` that every pod it places is in its scope, every subscription's
    ends are placed in it, ports exist and fit, and 2000 subscriptions; `assemble` 50 runtimes and their ids (D75, D78).
 3. **Create.** `Application.create(runtimes, opts)`, or `Application.create(assemble(d, registry).value, opts)` from
-   data, validates (an invalid input is a `Fail` and nothing runs), builds every eager pod, and resolves once those settle. A failed eager build is a `failure` on the stream,
-   not a failed `create`.
+   data, validates (an invalid input is a `Fail` and nothing runs), builds every eager pod, and resolves once those
+   settle. A failed eager build is a `failure` on the stream, not a failed `create`.
 4. **Build.** One instance per pod name, made by the factory on first need, once: concurrent first calls share the
    build. A factory that throws, rejects or times out fails the call that needed it and caches nothing, so the next
    call builds again. State is whatever the factory closes over (D71).
@@ -72,19 +74,20 @@ application). Inside `deployment.ts`: `RuntimeIds` is the shape of a table by ru
    (`isAllowed(from, to, 'subscribe')`), then applies everything or nothing: pods added (eager ones built), removed
    (instances forgotten), changed (restarted with the new value), subscriptions added, removed, reordered; one
    `applied` event. `app.restart(pod)` forgets an instance (an eager pod rebuilds at once); calls in flight finish on
-   the old one (D77).
+   the old one (D77). `apply` drops pods that no runtime places. An application created from no runtimes has no
+   registry, so `apply` naming any implementation is `not-found`.
 8. **Watch.** `app.listen(e => …)` is the one stream, in order and synchronously, and returns an unsubscribe: `built`,
    `restarted`, `applied`, `sent`, `delivered`, `denied`, `failure`, `warning`. A throwing listener is swallowed (D79).
-9. **Save.** `app.deployment()` is the current value (the pods placed in some runtime, the runtimes, and tags once
-   `apply` has carried them in); saving is its JSON, and `assemble` + `Application.create` on it gives an equivalent
+9. **Save.** `app.deployment()` is the current value (the pods placed in some runtime, the runtimes, and the tags
+   `assemble` carried in); saving is its JSON, and `assemble` + `Application.create` on it gives an equivalent
    application (D74).
 
 ## FAQ
 
 **Values vs live?** `Pod`, `AppDeployment`, `Subscription`, `Selector`, `Policy`, `Registry` and the rest are plain
 data or plain lookups, and `Pods` and `Runtime` are inert values (frozen, with methods); only the `Application` does
-anything with effects. You have a running `Application` from `Application.create(runtimes)`, or you have values. There is no `start()` and no type that behaves differently by
-mode (D70).
+anything with effects. You have a running `Application` from `Application.create(runtimes)`, or you have values.
+There is no `start()` and no type that behaves differently by mode (D70).
 
 **Lazy vs eager?** `Pod.lazy` is built on its first call, like `IO`: describing costs nothing. `Pod.eager` is built
 when it is in an application (at `create`, or when `apply` adds it): use it for a pod that starts a timer or opens a
