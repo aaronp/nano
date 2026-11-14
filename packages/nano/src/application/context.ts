@@ -13,15 +13,18 @@ import type { Client, Interface } from '../iface.ts'
 import { port } from '../iface.ts'
 import type { Op } from '../op.ts'
 import { failure, type Fail, type NanoResult } from '../result.ts'
-import { matches, selectorData, type SelectorData } from '../selector.ts'
+import { matches, selectorData, type Selector, type SelectorData } from '../selector.ts'
 import { client, emit } from './emit.ts'
 import type { Live, On } from './messages.ts'
 
 /** The port of `o` on `pod`'s implementation, if it has `o`. */
 const portOf = (live: Live, pod: string, o: Op) => {
-  const i = live.registry.implementation(live.now().pods[pod]?.implementation ?? '')?.provides.find(i => i.byCoord.has(o.coord))
+  const i = live.registry.implementation(live.now().pods[pod]?.implementation ?? '')?.provides.find(i => i.byCoord.has(o?.coord))
   return i && port(i, o)
 }
+
+/** `s` as selector data; undefined if it is no selector at all. */
+const dataOf = (s: unknown) => (typeof s === 'object' && s ? selectorData(s as Selector) : undefined)
 
 /** Whether `data` fits event `o`'s schema; unreadable data does not. */
 const fitsData = (o: Op, data: unknown) => { try { return !o.output || o.output.check(data) } catch { return false } }
@@ -41,7 +44,7 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
       ? undefined : failure('not-found', `${name}->${to} is no longer in ${runtime}`)
     return { ok: true, pod: to, runtime, call: client(live, runtime, name, to, gone) as Client<I>, on(o, fn) {
       const p = portOf(live, to, o)
-      if (!p || !mine || gone()) { if (!p) live.trace.emit({ type: 'warning', reason: `${name}: ${o.name} is not an op of ${to}` }); return () => {} }
+      if (!p || !mine || gone()) { if (!p) live.trace.emit({ type: 'warning', reason: `${name}: ${o?.name} is not an op of ${to}` }); return () => {} }
       const sub: On = { runtime, from: to, port: p, to: name, gone, fn }
       live.ons.add(sub); mine.add(sub)
       return () => { live.ons.delete(sub); mine?.delete(sub) }
@@ -50,7 +53,8 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
 
   /** Every call subscription from `name` matching `s`: runtimes in order, then subscriptions in order. */
   const selections = <I extends Interface>(s: I | SelectorData): Selection<I>[] => {
-    const want = selectorData(s), d = live.now()
+    const want = dataOf(s), d = live.now()
+    if (!want) return []
     return placed().flatMap(([runtime, r]) => r.subscriptions.flatMap(sub => {
       if (sub.kind !== 'call' || sub.from !== name) return []
       const impl = live.registry.implementation(d.pods[sub.to]!.implementation)!
@@ -64,7 +68,7 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
     self: name,
     get runtimes() { return placed().map(([id]) => id) },
     one<I extends Interface>(s: I | SelectorData) {
-      const all = selections<I>(s), what = JSON.stringify(selectorData(s))
+      const all = selections<I>(s), what = JSON.stringify(dataOf(s))
       if (all.length === 0) return failed<I>(failure('not-found', `${name}: nothing wired matches ${what}`))
       if (all.length > 1) return failed<I>(failure('ambiguous', `${name}: ${all.length} wired match ${what}`))
       return all[0]!
@@ -72,7 +76,7 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
     all: selections,
     async publish(o, data) {
       const p = portOf(live, name, o)
-      if (!p || o.kind !== 'event') return live.trace.emit({ type: 'warning', reason: `${name}: ${o.name} is not one of its events` })
+      if (!p || o.kind !== 'event') return live.trace.emit({ type: 'warning', reason: `${name}: ${o?.name} is not one of its events` })
       if (!fitsData(o, data)) return live.trace.emit({ type: 'failure', pod: name, reason: `${name}: ${o.name} data does not fit ${o.output?.type}` })
       await emit(live, name, p, data)
     },

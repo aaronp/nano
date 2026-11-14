@@ -106,7 +106,7 @@ export async function send(live: Live, runtime: string, from: string, to: string
   const reason = refusal(live, runtime, from, to, input)
   if (reason !== undefined) { trace.emit({ type: 'denied', id, reason }); return failure('denied', reason) }
   const t0 = performance.now()
-  const r = await (work ? work() : deliver(live, to, p, input))
+  const r = await (work ? work() : deliver(live, to, p, input)).catch(e => failure('invalid-input', `${p}: unreadable input: ${msg(e)}`))
   trace.emit({ type: 'delivered', id, result: r, ms: performance.now() - t0 })
   return r
 }

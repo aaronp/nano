@@ -464,3 +464,31 @@ describe('the application deployment', () => {
     expect(await again.call('r', 'app').save('x')).toEqual(success('db:x'))
   })
 })
+
+describe('nothing throws', () => {
+  test('given a host call whose input has a throwing getter, when it is sent, then it resolves to a Fail', async () => {
+    const Rec = defineSchema('Rec', Type.Object({ x: Type.String() }))
+    const Take = iface('acme.Take', { take: op.action('take', Rec, Nothing) })
+    const taker = implementation('acme2/taker', { provides: [Take], make: () => [provide(Take, { take: async () => success(null) })] })
+    const reg = registry(); reg.add(provider('acme2', [taker]))
+    const { app } = await create({ pods: { t: Pod.lazy(taker) }, runtimes: { r: { pods: ['t'], subscriptions: [] } } }, reg)
+    const input = { get x(): string { throw new Error('getter') } }
+    expect(await app.call('r', 't').take(input)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+  })
+  test('given undefined for an op or a selector (a typo in plain JS), when a pod uses it, then on and publish warn, one fails and all is empty', async () => {
+    const seen: unknown[] = []
+    const sloppy = implementation('acme2/sloppy', { provides: [Log], make: async ctx => {
+      const none = undefined as never
+      ctx.one(Store).on(none, () => { heard.push('never') })
+      await ctx.publish(none, 1)
+      seen.push(ctx.one(none), ctx.all(none))
+      return [provide(Log, { record: async () => success(null) })]
+    } })
+    const reg = registry(); reg.add(provider('acme2', [sloppy]))
+    const { app, events } = await create({ pods: { w: Pod.lazy(sloppy), db: Pod.lazy(store, { config: 'db' }) },
+      runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }, reg)
+    expect(await app.call('r', 'w').record('a')).toEqual(success(null))
+    expect(events.filter(e => e.type === 'warning')).toHaveLength(2)
+    expect(seen).toMatchObject([{ ok: false, fail: { type: 'not-found' } }, []])
+  })
+})
