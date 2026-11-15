@@ -387,24 +387,65 @@ test('given HostUI.approve called from a pod, then a dialog opens and choosing A
 
 ---
 
-### Task 9: Retire nano-core
+### Task 9: Retire the old stack; the new model takes the name `@pritzlaff/nano-core`
 
 **Files:**
 - Delete: `packages/core`, `packages/app`, `packages/runes`, `packages/editor`, `packages/wires`, `packages/shell`,
-  `packages/people`, `packages/platform`, `packages/bundle` and `packages/circuit`; `scripts/smoke-packages.ts`.
-- Modify: `packages/elements`:
-  - delete `model-element.ts`, `placed-element.ts`, `catalog.ts` and their tests, and their exports in
-    `src/index.ts`;
-  - remove `@pritzlaff/nano-core` from its `package.json`.
-- Modify: the `Makefile`. `publish`, `packages` and `smoke` publish `elements`, `nano` and `ui`. Remove
-  `serve-template`, `serve-inbox`, `link-templates` and `template-check` only if the user decided to retire
-  `templates/`.
-- `templates/nano-template` and `templates/inbox` depend on nano-core, and `kerits/` is untracked and never touched.
-  What happens to `templates/` is the user's call, asked before this task runs.
+  `packages/people`, `packages/platform`, `packages/bundle`, `packages/circuit` and `templates/inbox` (inbox returns as
+  use case 2).
+- Modify: `packages/elements`. Delete `model-element.ts`, `placed-element.ts`, `catalog.ts` and their tests and
+  exports, drop its `@pritzlaff/nano-core` dependency, and set its version to `0.4.0`.
+- Rename: `packages/nano/package.json` gets the name `@pritzlaff/nano-core` and version `0.4.0`. Its folder stays
+  `packages/nano`. Replace every `'@pritzlaff/nano'` specifier (exact, not `nano-*`) in `packages/`, `examples/`,
+  `e2e/`, `scripts/`, `docs/`, `design.md`, `README.md` and the ui-workspace import map and build externals. Its
+  README gets a "0.4.0 replaces the 0.3 model" note linking the model spec.
+- Modify: the publish list, which becomes `['nano', 'elements', 'ui']` in dependency order:
+  - `scripts/build-packages-list.ts`;
+  - the Makefile's `publish` loop and comments;
+  - `.github/workflows/publish.yml`'s test loop.
 
-- [ ] **Step 1:** Run `grep -rl "nano-core\|nano-app\|nano-runes\|@composable/" --include=*.ts --include=*.json packages examples scripts e2e Makefile`.
-  Expected: only the paths listed for deletion above.
-- [ ] **Step 2:** Delete them, then run `bun install`.
-- [ ] **Step 3:** Run every suite from Global Constraints and `bunx playwright test`. Expected: PASS, and the grep from
-  Step 1 prints nothing.
-- [ ] **Step 4:** Commit `chore: retire nano-core and the packages built on it; one stack`.
+  `packages/ui` is published as `@pritzlaff/nano-ui` `0.1.0`.
+- Modify: `scripts/smoke-packages.ts`. A scratch consumer installs the built `nano-core`, `nano-elements` and
+  `nano-ui`, type-checks, and runs the Task 2 slice headlessly.
+- Not done here: `nano-runes` is no longer published, and its 0.3.0 stays on npm. Deprecating anything on npm is the
+  user's to do.
+
+- [ ] **Step 1:** Run `grep -rl "nano-app\|nano-runes\|@composable/\|ModelElement\|PlacedElement" --include=*.ts --include=*.json packages examples scripts e2e templates Makefile`.
+  Expected: only the paths listed for deletion, plus `templates/nano-template` (Task 10).
+- [ ] **Step 2:** Delete them, rename the package, then run `bun install`.
+- [ ] **Step 3:** Run every suite from Global Constraints, `bunx playwright test` and `make smoke`. Expected: PASS.
+  The Step 1 grep prints only `templates/nano-template`.
+- [ ] **Step 4:** Commit `chore: one stack — the new model is @pritzlaff/nano-core 0.4.0; the old packages are retired`.
+
+---
+
+### Task 10: `nano-template` on the new stack
+
+**Files:**
+- Rewrite: `templates/nano-template/src`. Its Timer, Picker and Store become one provider, `acme.template` (the
+  template's README already says to rename it), with implementations `acme.template/timer`, `picker` and `store`:
+  - **timer:** `start`, `stop`, and the event `tick`;
+  - **picker:** `pick`, `setOptions`, and the event `changed`;
+  - **store:** `get`, `set`, `remove`, and the event `changed`. It keeps the store in `localStorage`, or in memory
+    when there is none.
+
+  Each has a view (`<nano-timer>`, `<nano-picker>`, `<nano-store>`) built from the kit and exported in the module's
+  `views` map. Add a `nano.json` that places all three in runtime `main`, with a pipe `picker.changed → store.set`.
+  For that pipe, `pick` publishes `{ key: 'choice', value }`.
+- Modify: `templates/nano-template/package.json`. Dependencies become `@pritzlaff/nano-core ^0.4.0`,
+  `@pritzlaff/nano-elements ^0.4.0` and `@pritzlaff/nano-ui ^0.1.0`. The build emits `dist/index.js`, with the
+  three libraries external, and `dist/nano.json`. Remove `manifest.json`.
+- Modify: `README.md`, `AGENTS.md` and `CLAUDE.md` of the template, for the new model and the import-by-URL flow.
+- Modify: `scripts/link-local.ts`, `scripts/template-check.ts`, the Makefile's `link-templates` (template only) and
+  `serve-inbox` (removed).
+- Test: the template's `test/*.test.ts`, run headlessly through `assemble` and `Application.create`, plus one view
+  test each. In `e2e/slice.e2e.ts`, add a second test that imports the template's built `nano.json` into the host,
+  served under `/examples/template/`, and sees `<nano-timer>` tick.
+
+- [ ] **Step 1:** Write the template's failing tests (timer ticks then stops; a pick reaches the store through the pipe;
+  the store falls back to memory without `localStorage`).
+- [ ] **Step 2:** Run `make link-templates && cd templates/nano-template && bun test --isolate`. Expected: FAIL.
+- [ ] **Step 3:** Rewrite as specified.
+- [ ] **Step 4:** Run the template tests, `make template-check`, and `bunx playwright test`. Expected: PASS. The Task 9
+  grep prints nothing.
+- [ ] **Step 5:** Commit `feat(template): nano-template on nano-core 0.4 — a provider module, its views and a nano.json`.
