@@ -4,6 +4,7 @@
   "type": "module",
   "dependencies": {
     "@pritzlaff/nano": "workspace:*",
+    "@pritzlaff/nano-ui": "workspace:*",
     "typebox": "^1.4.0"
   }
 }
