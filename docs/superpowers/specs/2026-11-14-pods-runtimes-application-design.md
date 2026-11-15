@@ -31,7 +31,7 @@ const app2 = ok(await Application.create(ok(assemble(appDeployment, registry)), 
 ```ts
 type PodDeployment = Record<PodName, Pod>                     // Pod = { implementation, config?, eager }
 type RuntimeDeployment = { pods: PodName[]; subscriptions: Subscription[]; policy?: 'allow-all' }
-type AppDeployment = { pods: PodDeployment; runtimes: Record<RuntimeId, RuntimeDeployment>; tags?: Record<PodName, string[]> }
+type AppDeployment = { pods: PodDeployment; runtimes: Record<RuntimeId, RuntimeDeployment>; tags?: Record<PodName, string[]>; providers?: Record<string, string>; views?: Record<string, string> }
 type Subscription =
   | { kind: 'call'; from: PodName; to: PodName }                                   // a call edge
   | { kind: 'pipe'; from: PodName; source: Port; to: PodName; target: Port }       // a pipe
@@ -39,6 +39,7 @@ type Subscription =
 
 `AppDeployment` is the previous `Deployment` with the subscription kind `'event'` renamed `'pipe'`; `nano.json` is an
 `AppDeployment`.
+`providers` and `views` are host-owned: nano shape-checks them and otherwise ignores them.
 
 ### Two kinds of subscription, both designed
 

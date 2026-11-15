@@ -11,7 +11,11 @@ import type { Registry } from './registry.ts'
 import { failure, success, type NanoResult } from './result.ts'
 import { Runtime, type RuntimeDeployment } from './runtime.ts'
 
-export type AppDeployment = { pods: PodDeployment; runtimes: Record<string, RuntimeDeployment>; tags?: Record<string, string[]> }
+export type AppDeployment = {
+  pods: PodDeployment; runtimes: Record<string, RuntimeDeployment>; tags?: Record<string, string[]>
+  /** Host-owned: nano shape-checks these and otherwise ignores them. */
+  providers?: Record<string, string>; views?: Record<string, string>
+}
 
 const strict = { additionalProperties: false } as const
 /** A table by runtime id: ids follow the id rule, at most 50. */
@@ -20,6 +24,8 @@ const Shape = Type.Object({
   pods: Type.Unknown(),
   runtimes: RuntimeIds,
   tags: Type.Optional(Type.Record(Id, Type.Array(Type.String()), strict)),
+  providers: Type.Optional(Type.Record(Id, Type.String({ minLength: 1 }), strict)),
+  views: Type.Optional(Type.Record(Id, Type.String({ minLength: 1 }), strict)),
 }, strict)
 
 /** `d`'s runtimes, if every level of it checks out; the first failure otherwise. Pure; never throws. */
