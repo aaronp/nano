@@ -23,6 +23,16 @@ describe('the template, headless', () => {
     expect(await app.call('main', 'store').get('choice')).toEqual(success('green'))
   })
 
+  test('a pick outside the options fails, and setOptions changes what is accepted', async () => {
+    const { app } = await open()
+    const picker = app.call('main', 'picker')
+    expect((await picker.pick('purple')).ok).toBe(false)
+    must(await picker.setOptions(['purple']))
+    expect(await picker.options(null)).toEqual(success(['purple']))
+    must(await picker.pick('purple'))
+    expect((await picker.pick('red')).ok).toBe(false)
+  })
+
   test('the store sets, lists and removes', async () => {
     const { app } = await open()
     const store = app.call('main', 'store')

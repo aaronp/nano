@@ -17,6 +17,7 @@ export const Timer = iface('acme.template.Timer', {
 export const Picker = iface('acme.template.Picker', {
   pick: op.action('pick', Text, Nothing),
   setOptions: op.action('setOptions', Texts, Nothing),
+  options: op.action('options', Nothing, Texts),
   changed: op.event('changed', Entry),   // { key: 'choice', value }
 })
 export const Store = iface('acme.template.Store', {

@@ -7,14 +7,16 @@ The build is a provider module (`dist/index.js`) and a `dist/nano.json`; a host 
 It ships three pods in one provider, `acme.template`, to start from:
 
 - **timer** (`src/timer.ts`): `start`, `stop`, and the event `tick` (each count, as `{ key: 'tick', value }`);
-  its view `<nano-timer>` (`src/timer-view.ts`) has Start and Stop and counts the ticks it hears;
-- **picker** (`src/picker.ts`): `pick` and `setOptions`, and the event `changed` (`{ key: 'choice', value }`); its view
-  `<nano-picker>` shows the kit's filterable `<nano-select>`;
+  its view `<nano-timer>` (`src/timer-view.ts`) has Start and Stop and labels the count "ticks seen" (the ticks it has seen since it opened);
+- **picker** (`src/picker.ts`): `pick` (a value outside the options fails), `setOptions`, `options`, and the event `changed`
+  (`{ key: 'choice', value }`); its view `<nano-picker>` reads `options` and shows the kit's filterable `<nano-select>`;
 - **store** (`src/store.ts`): `get`, `set`, `remove`, `entries` and the event `changed`, kept in `localStorage` (memory
   where there is none); its view `<nano-store>` lists the entries.
 
 `nano.json` places all three in runtime `main`, and pipes `picker.changed` and `timer.tick` to `store.set`: an event
 can be piped to an action when its data has the action's input schema (`Entry`, in `src/interfaces.ts`).
+The `timer.tick` pipe is there for a second reason: an event nobody subscribes to is not on the application's stream, so a
+view could not see it; the pipe makes each tick visible to `<nano-timer>`, and stores the count as a bonus.
 
 ## Make it yours
 

@@ -33,6 +33,8 @@ describe('the views', () => {
   test('<nano-picker> renders the kit select, whose change picks', async () => {
     const { app, registry } = await open()
     const el = await mount('nano-picker', { app, registry, runtime: 'main', pod: 'picker' })
+    await sleep(10)
+    await el.updateComplete
     const select = el.shadowRoot!.querySelector('nano-select') as HTMLElement & { value: string }
     select.value = 'blue'
     select.dispatchEvent(new Event('change'))
