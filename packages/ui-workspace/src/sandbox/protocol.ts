@@ -111,12 +111,17 @@ const FIELDS: Record<Msg['type'], Record<string, Check>> = {
   described: { providers: Array.isArray }, warn: { reason: str },
 }
 
-/** `x` as a message, or why it is not one. Never throws. */
-export function checkMsg(x: unknown): Msg | string {
-  let size: number
-  try { size = JSON.stringify(x)?.length ?? 0 } catch { return 'not JSON' }
-  if (size > MAX) return `${size} characters of JSON is over 1 MiB`
+/** `x` as a message, or why it is not one: a JSON copy of it, so only JSON crosses (a Map, an ArrayBuffer or a Blob is
+ * `{}`) and the size is the copy's. Never throws. */
+export function checkMsg(input: unknown): Msg | string {
+  let text: string | undefined
+  try { text = JSON.stringify(input) } catch { return 'not JSON' }
+  if (text === undefined) return 'not JSON'
+  if (text.length > MAX) return `${text.length} characters of JSON is over 1 MiB`
+  const x: unknown = JSON.parse(text)
   if (!obj(x) || !str(x.type) || !Object.hasOwn(FIELDS, x.type as string)) return `unknown type ${obj(x) ? String(x.type) : typeof x}`
+  // JSON drops an undefined value: success(undefined) is still a result.
+  if (obj(x.result) && x.result.ok === true && !('value' in x.result)) x.result.value = undefined
   const bad = Object.entries(FIELDS[x.type as Msg['type']]).find(([k, c]) => !c(x[k]))
   if (bad) return `${x.type}: bad ${bad[0]}`
   if (x.type === 'described') { const why = (x.providers as unknown[]).map(described).find(w => w !== undefined); if (why) return `described: ${why}` }

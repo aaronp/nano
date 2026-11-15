@@ -146,3 +146,10 @@ test('given apply removes s → h, then the frame sees no H and an outcall sent 
   expect(seen).toEqual([])
   await app.close()
 })
+
+test('given non-JSON clone types, then checkMsg sizes and returns only their JSON', () => {
+  expect(checkMsg({ type: 'publish', op: 'tick', data: new Map([['k', 'x'.repeat(5 * 1024 * 1024)]]) })).toEqual({ type: 'publish', op: 'tick', data: {} })
+  expect(checkMsg({ type: 'publish', op: 'tick', data: new ArrayBuffer(50 * 1024 * 1024) })).toEqual({ type: 'publish', op: 'tick', data: {} })
+  expect(checkMsg({ type: 'publish', op: 'tick', data: { big: 'x'.repeat(2 * 1024 * 1024), m: new Map() } })).toContain('over 1 MiB')
+  expect(checkMsg({ type: 'result', id: 1, result: success(undefined) })).toEqual({ type: 'result', id: 1, result: success(undefined) })
+})
