@@ -1,2 +1,2 @@
-// The host's lit, for packages it imports (see specifiers.ts).
+// The host's lit, for modules it imports.
 export * from 'lit'
