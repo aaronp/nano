@@ -11,7 +11,9 @@
  *   await pods.close()                   // every build closed (`closed`); every later get is not-found
  */
 import type { NanoContext } from '../context.ts'
-import { failure, success } from '../result.ts'
+import type { Implementation } from '../implementation.ts'
+import type { Pod } from '../pod.ts'
+import { failure, success, type NanoResult } from '../result.ts'
 import { contextFor } from './context.ts'
 import { attempt, within, type Live } from './messages.ts'
 
@@ -38,6 +40,16 @@ function closer(live: Live, pod: string) {
   }
 }
 
+/** `pod`'s implementation: the registry's for a host pod, else `live.isolate`'s stand-in, which must keep its coord. */
+async function implementationOf(live: Live, name: string, pod: Pod): Promise<NanoResult<Implementation> | undefined> {
+  if ((pod.isolation ?? 'host') === 'host') { const i = live.registry.implementation(pod.implementation); return i && success(i) }
+  const { isolate } = live
+  if (!isolate) return failure('invalid-input', `no host for isolation ${pod.isolation}`)
+  const r = await within(() => isolate(name, structuredClone(pod)), live.timeoutMs, `isolating ${name}`)
+  if (!r.ok || r.value.coord === pod.implementation) return r
+  return failure('invalid-input', `isolate gave ${r.value.coord} for ${pod.implementation}`)
+}
+
 export function instances(live: Live) {
   const made = new Map<string, { build: Made; close: (why: Reason) => Promise<void> }>()
   const closing = new Map<string, Promise<void>>()
@@ -47,8 +59,10 @@ export function instances(live: Live) {
     await closing.get(name)
     if (c.began()) return failure('not-found', `${name} was closed before it was built`)
     const pod = live.now().pods[name]
-    const impl = pod && live.registry.implementation(pod.implementation)
-    if (!pod || !impl) return failure('not-found', `no pod ${name}`)
+    const found = pod && await implementationOf(live, name, pod)
+    if (!pod || !found) return failure('not-found', `no pod ${name}`)
+    if (!found.ok) { live.trace.emit({ type: 'failure', pod: name, reason: found.fail.reason }); await c.close('closed'); return found }
+    const impl = found.value
     const r = await within(() => impl.make(contextFor(live, name, c.add), pod.config), live.timeoutMs, `building ${name}`)
     // Closed while `make` ran: its listeners have run as added; nothing is built after `closed`.
     if (closed) return failure('not-found', 'application is closed')

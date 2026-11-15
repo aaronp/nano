@@ -9,6 +9,8 @@
  */
 import { Value } from 'typebox/value'
 import { assemble, type AppDeployment } from '../deployment.ts'
+import type { Implementation } from '../implementation.ts'
+import type { Pod } from '../pod.ts'
 import type { Policy } from '../policy.ts'
 import { createRegistry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
@@ -31,7 +33,8 @@ export type Application = {
   close(): Promise<NanoResult<void>>
 }
 
-type Opts = { policies?: Record<string, Policy>; timeoutMs?: number }
+/** `isolate` gives the host's stand-in for a pod whose isolation isn't 'host' (same coord); without it such a pod fails. */
+type Opts = { policies?: Record<string, Policy>; timeoutMs?: number; isolate?: (name: string, pod: Pod) => Implementation }
 
 /**
  * `runtimes` live. The application's deployment is its own: nobody else holds it, so only `apply` changes it; and its
@@ -48,7 +51,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
   const trace = stream()
   const live: Live = {
     now: () => current, registry, policies: opts.policies ?? {}, timeoutMs: opts.timeoutMs ?? 30_000, trace,
-    instance: name => pods.get(name), ons: new Set(), flying: new Set(), closed: () => closing !== undefined,
+    instance: name => pods.get(name), ons: new Set(), flying: new Set(), closed: () => closing !== undefined, isolate: opts.isolate,
   }
   const pods = instances(live)
   const buildEager = (names: string[]) => Promise.all(names.filter(n => current.pods[n]!.eager).map(n => pods.get(n)))

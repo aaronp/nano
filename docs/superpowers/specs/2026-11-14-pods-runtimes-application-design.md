@@ -92,7 +92,9 @@ type Application = {
 ```
 
 `Application.create(runtimes: Record<RuntimeId, Runtime>, opts: { policies?: Record<RuntimeId, Policy>; timeoutMs?:
-number })`. Everything the previous spec says about creating, building, `restart`, `apply` (with an `AppDeployment`),
+number; isolate?: (name: PodName, pod: Pod) => Implementation })`. A pod whose `isolation` isn't `host` is built from
+`isolate(name, pod)`, the host's stand-in, instead of the registry: no `isolate` fails `invalid-input` (`no host for
+isolation <mode>`), a stand-in with another coord fails `invalid-input`, and a throw is `threw`. Everything the previous spec says about creating, building, `restart`, `apply` (with an `AppDeployment`),
 `close`, closing an instance and `addOnCloseListener` stands. In particular:
 
 - **Mounting is the factory.** `make(ctx, config)` runs when a pod is first needed, or during `create`/`apply` for an

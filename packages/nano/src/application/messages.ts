@@ -8,6 +8,7 @@
  */
 import type { AppDeployment } from '../deployment.ts'
 import type { Handler, Implementation } from '../implementation.ts'
+import type { Pod } from '../pod.ts'
 import { Policies, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import { opAt } from '../runtime.ts'
@@ -29,6 +30,8 @@ export type Live = {
   readonly flying: Set<Promise<unknown>>
   /** Whether `close()` has been called: nothing new is delivered. */
   closed(): boolean
+  /** The host's stand-in implementation for a pod whose isolation isn't 'host'. */
+  readonly isolate?: (name: string, pod: Pod) => Implementation
 }
 
 /** A subscription made in code: `to` hears `from`'s port `port` in `runtime`, while `gone()` gives nothing. */
