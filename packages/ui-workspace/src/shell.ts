@@ -11,11 +11,15 @@ import type { Host } from './host.ts'
 import { createBus, provideBus } from './lib/bus.ts'
 import './components/split-pane.ts'
 import './components/theme-picker.ts'
+import './sandbox/sandboxed-view.ts'
 
 /** The config a built-in starts with, where it needs one. */
 const starts: Record<string, unknown> = { map: { code: 'return x' } }
 type Pick = { from?: string; source?: string; to?: string; target?: string }
 const value = (e: Event) => (e.target as HTMLElement & { value: string }).value
+const away = (h: Host, pod: string) => (h.data().pods[pod]?.isolation ?? 'host') !== 'host'
+/** A pod's view tag: its selector, else `nano-sandboxed` for a non-host pod, else its implementation's default. */
+const chosen = (h: Host, pod: string) => (away(h, pod) && !customElements.get(h.data().views?.[pod] ?? '') ? 'nano-sandboxed' : viewFor(pod, h.data(), h.defaults()))
 
 class WorkspaceShell extends LitElement {
   static properties = { host: { attribute: false }, heading: {}, opened: { state: true }, events: { state: true }, pick: { state: true } }
@@ -86,7 +90,7 @@ class WorkspaceShell extends LitElement {
 
   /** The opened pod's view element, made again only when its tag or pod changes. */
   private view(h: Host, at: { runtime: string; pod: string }) {
-    const tag = viewFor(at.pod, h.data(), h.defaults()), key = `${tag} ${at.runtime} ${at.pod}`
+    const tag = chosen(h, at.pod), key = `${tag} ${at.runtime} ${at.pod}`
     if (this.shown?.key !== key) {   // the target is set once: a new object on every render would restart the view's listening, and its calls would re-render the shell
       this.shown = { key, el: document.createElement(tag) }
       this.shown.el.target = { app: h.app, registry: h.registry, runtime: at.runtime, pod: at.pod }
@@ -100,12 +104,12 @@ class WorkspaceShell extends LitElement {
       this.shown = undefined   // a pod removed and added again gets a fresh view
       return html`<p class="muted">Choose a pod in the explorer.</p>`
     }
-    const tags = [...new Set([h.defaults()[p.implementation], 'nano-pod-view'].filter((x): x is string => !!x))]
+    const tags = [...new Set([away(h, at.pod) && 'nano-sandboxed', h.defaults()[p.implementation], 'nano-pod-view'].filter((x): x is string => !!x))]
     const same = (a: readonly string[]) => [...a].sort().join()
     const mine = same(h.registry.implementation(p.implementation)?.provides.map(i => i.coord) ?? [])
     const impls = h.registry.manifest().implementations.filter(i => same(i.provides) === mine).map(i => i.coord)
     return html`<div class="row"><b>${at.pod}</b>
-        <nano-select label="View" .options=${tags} .value=${viewFor(at.pod, d, h.defaults())}
+        <nano-select label="View" .options=${tags} .value=${chosen(h, at.pod)}
           @change=${(e: Event) => h.apply({ ...d, views: { ...d.views, [at.pod]: value(e) } })}></nano-select>
         <nano-select label="Change implementation" .options=${impls} .value=${p.implementation}
           @change=${(e: Event) => this.swap(h, at.pod, value(e))}></nano-select></div>

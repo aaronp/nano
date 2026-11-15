@@ -7,10 +7,14 @@
  *   await host.importUrl('/examples/slice/nano.json')   // importApp, then apply
  *   host.saved()                                         // { ...app.deployment(), providers, views }, without ui
  */
-import { Application, assemble, createRegistry, Pod, success, type AppDeployment, type NanoResult, type Registry } from '@pritzlaff/nano-core'
+import { Application, assemble, createRegistry, Pod, success, type AppDeployment, type NanoResult, type Pod as PodData, type Registry } from '@pritzlaff/nano-core'
 import uiProvider, { importApp, views as uiViews, type Loaded, type ViewMap } from '@pritzlaff/nano-ui'
 import { toast } from '@pritzlaff/nano-elements'
 import { hostProvider, hostUi } from './host-ui.ts'
+import { edgesFor } from './sandbox/edges.ts'
+import { openFrame } from './sandbox/frames.ts'
+import { framesOf } from './sandbox/sandboxed-view.ts'
+import { standIn, type Frame } from './sandbox/stand-in.ts'
 
 export type Host = {
   readonly app: Application
@@ -70,10 +74,26 @@ export async function start(): Promise<NanoResult<Host>> {
   const first = placed({ pods: {}, runtimes: {}, providers: { 'nano.ui': nanoUi }, views: {} })
   const runtimes = assemble(first, registry)
   if (!runtimes.ok) return runtimes
-  const created = await Application.create(runtimes.value, {})
+  let loaded: Loaded = { deployment: first, registry, views: { ...uiViews } }
+  // A non-host pod runs in a frame, from its provider's URL as kept in `providers`; its open frame is in `frames`.
+  const frames = new Map<string, Frame>()
+  function isolate(name: string, pod: PodData) {
+    const real = registry.implementation(pod.implementation), at = real && loaded.deployment.providers?.[real.provider]
+    if (!real || !at) throw new Error(`${name}: no provider URL for ${pod.implementation}`)
+    return standIn(real, {
+      url: new URL(at, document.baseURI).href, edges: p => edgesFor(app.deployment(), registry, p), app: () => app,
+      onApplied: fn => app.listen(e => { if (e.type === 'applied') fn() }), warn: reason => void toast(reason, { variant: 'warn' }),
+      open(p) {
+        const f = openFrame(pod.isolation === 'sandbox' ? 'sandbox' : 'isolated-sandbox')
+        frames.set(p, f)
+        return { ...f, dispose() { if (frames.get(p) === f) frames.delete(p); f.dispose() } }
+      },
+    })
+  }
+  const created = await Application.create(runtimes.value, { isolate })
   if (!created.ok) return created
   const app = created.value
-  let loaded: Loaded = { deployment: first, registry, views: { ...uiViews } }
+  framesOf.set(app, frames)
 
   const data = (): AppDeployment => ({ ...app.deployment(), providers: { ...loaded.deployment.providers }, views: { ...loaded.deployment.views } })
   async function apply(next: AppDeployment, views = loaded.views): Promise<NanoResult<void>> {

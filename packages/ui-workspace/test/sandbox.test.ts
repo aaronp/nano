@@ -56,6 +56,7 @@ async function harness(o: { readyMs?: number; silent?: boolean } = {}) {
     edges: (pod: string) => edgesFor(app.deployment(), registry, pod),
     onApplied: (fn: () => void) => { applied.add(fn); return () => { applied.delete(fn) } },
     warn: (r: string) => { toasts.push(r) },
+    app: () => app,
   }
   const rts = assemble(dep(), registry)
   if (!rts.ok) throw new Error(rts.fail.reason)

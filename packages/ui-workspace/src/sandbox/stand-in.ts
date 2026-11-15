@@ -3,9 +3,9 @@
  * config, whose `make` opens a frame and whose handlers cross its port. The frame's outcalls go through the pod's own
  * context (so its own call edges, policed and on the stream), its publishes through `ctx.publish`.
  *
- *   isolate: (name, pod) => standIn(registry.implementation(pod.implementation)!, { url, open, edges, onApplied, warn })
+ *   isolate: (name, pod) => standIn(registry.implementation(pod.implementation)!, { url, open, edges, onApplied, warn, app })
  */
-import { failure, port, type Handler, type Implementation, type NanoResult } from '@pritzlaff/nano-core'
+import { failure, port, type AppEvent, type Application, type Handler, type Implementation, type NanoResult } from '@pritzlaff/nano-core'
 import type { Edge } from './edges.ts'
 import { checkMsg, type Msg } from './protocol.ts'
 
@@ -20,11 +20,22 @@ type Deps = {
   edges(pod: string): Edge[]
   onApplied(fn: () => void): () => void
   warn(reason: string): void
+  /** The application, for the frame's view: its `view-call`s and the stream events naming its pod. */
+  app(): Application
   readyMs?: number
 }
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 type Calls = Record<string, ((input: unknown) => Promise<NanoResult<unknown>>) | undefined>
+
+/** Whether `e` names `pod`, keeping the ids of its `sent` so their `delivered`/`denied` count too. */
+function naming(pod: string) {
+  const ids = new Set<string>()   // ponytail: an id whose call never settles stays; nano settles every sent
+  return (e: AppEvent) => e.type === 'sent' ? (e.from === pod || e.to === pod) && !!ids.add(e.id)
+    : e.type === 'delivered' || e.type === 'denied' ? ids.delete(e.id)
+    : e.type === 'applied' ? [...e.added, ...e.removed, ...e.changed, ...e.rewired].includes(pod)
+    : 'pod' in e && e.pod === pod
+}
 
 /** `p` settled within `ms`; else rejects with `why`. */
 function bounded<T>(p: Promise<T>, ms: number, why: string): Promise<T> {
@@ -52,8 +63,8 @@ export function standIn(real: Implementation, deps: Deps): Implementation {
         pending.clear()
         abort(new Error(failed))
       }
-      const reply = (id: number, r: NanoResult<unknown>) => {
-        try { post({ type: 'outresult', id, result: r }) } catch (e) { try { post({ type: 'outresult', id, result: failure('invalid-output', message(e)) }) } catch { /* port gone */ } }
+      const answer = (type: 'outresult' | 'view-result', id: number, r: NanoResult<unknown>) => {
+        try { post({ type, id, result: r }) } catch (e) { try { post({ type, id, result: failure('invalid-output', message(e)) }) } catch { /* port gone */ } }
       }
 
       frame.port.onmessage = ({ data }) => {
@@ -75,21 +86,28 @@ export function standIn(real: Implementation, deps: Deps): Implementation {
             if (!o) return drop(`${m.op} is not an event of ${real.coord}`)
             return void ctx.publish(o, m.data)
           }
+          case 'view-call': {
+            const f = (deps.app().call(ctx.runtimes[0]!, self) as Calls)[m.op]
+            const r = f ? Promise.resolve().then(() => f(m.input)) : Promise.resolve(failure('unknown-op', `${self} has no op ${m.op}`))
+            return void r.then(x => answer('view-result', m.id, x), e => answer('view-result', m.id, failure('threw', message(e))))
+          }
           case 'outcall': {
             if (failed) return
             const sel = ctx.all({}).find(s => s.pod === m.pod && s.runtime === m.runtime)
             const f = sel && (sel.call as Calls)[m.op]
             const r = f ? Promise.resolve().then(() => f(m.input)) : Promise.resolve(failure('not-found', `${self}->${m.pod} is not in ${m.runtime}`))
-            return void r.then(x => reply(m.id, x), e => reply(m.id, failure('threw', message(e))))
+            return void r.then(x => answer('outresult', m.id, x), e => answer('outresult', m.id, failure('threw', message(e))))
           }
           default: return drop(`unexpected ${m.type}`)
         }
       }
 
       const off = deps.onApplied(() => { if (!failed) try { post({ type: 'edges', edges: deps.edges(self) }) } catch (e) { fail(message(e)) } })
+      const mine = naming(self)
+      const unheard = deps.app().listen(e => { if (!failed && mine(e)) try { post({ type: 'stream', event: e }) } catch (x) { drop(`stream: ${message(x)}`) } })
       // Added first, so a failed build (nano closes it) lets go of the frame too.
       ctx.addOnCloseListener(async ({ reason }) => {
-        off()
+        off(); unheard()
         if (!failed) {
           const done = new Promise<void>(res => { closed = res })
           try { post({ type: 'close', reason }); await bounded(done, ms, 'no closed') } catch { /* gone or late: disposed anyway */ }
