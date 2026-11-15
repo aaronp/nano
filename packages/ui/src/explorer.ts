@@ -32,7 +32,10 @@ export class NanoExplorer extends LitElement {
     this.watching = t
     this.off = t.app.listen(e => {
       if (e.type === 'built' || e.type === 'closed') this.states = { ...this.states, [e.pod]: e.type }
-      else if (e.type === 'applied') this.requestUpdate()
+      else if (e.type === 'applied') {
+        const live = new Set(Object.keys(t.app.deployment().pods)), gone = new Set([...e.removed, ...e.changed])
+        this.states = Object.fromEntries(Object.entries(this.states).filter(([pod]) => live.has(pod) && !gone.has(pod)))
+      }
     })
   }
   private stop() { this.off?.(); this.off = undefined; this.watching = undefined }

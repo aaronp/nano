@@ -49,7 +49,12 @@ describe('the explorer', () => {
     const el = await mount(await open(slice))
     await settle(el)
     const t = text(el)
-    for (const s of ['main', 'in', 'wait', 'up', 'out', 'submit → wait.push', 'flushed → up.map', 'map → out.log']) expect(t).toContain(s)
+    for (const s of ['main', 'in', 'wait', 'up', 'out']) expect(t).toContain(s)
+    const under = (pod: string) => tree(el).shadowRoot.querySelector(`li[data-id="p:main:${pod}"]`)!.textContent!
+    expect(under('in')).toContain('submit → wait.push')
+    expect(under('wait')).toContain('flushed → up.map')
+    expect(under('up')).toContain('map → out.log')
+    expect(under('out')).not.toContain('→')
   })
 
   test('given an edge api → db, when "built on → db" is chosen, then nano-open fires with { runtime, pod: "db" }', async () => {
@@ -71,5 +76,34 @@ describe('the explorer', () => {
     must(await o.app.apply({ pods: { ...d.pods, extra: Pod.lazy(log) }, runtimes: { main: { ...d.runtimes.main!, pods: [...d.runtimes.main!.pods, 'extra'] } } }))
     await settle(el)
     expect(text(el)).toContain('extra')
+  })
+
+  describe('pod state', () => {
+    const badge = (el: El, pod: string) => tree(el).shadowRoot.querySelector(`li[data-id="p:main:${pod}"] > .line .tag`)?.textContent
+    test('given a lazy pod first called, then it shows built; when apply changes or removes it, then the badge clears; when restarted, then it follows closed', async () => {
+      const o = await open(slice)
+      const el = await mount(o)
+      await settle(el)
+      expect(badge(el, 'out')).toBeUndefined()
+      await o.app.call('main', 'out').log(1)
+      await settle(el)
+      expect(badge(el, 'out')).toBe('built')
+      await o.app.call('main', 'up').map(1)
+      await settle(el)
+      expect(badge(el, 'up')).toBe('built')
+      const d = o.app.deployment()
+      must(await o.app.apply({ ...d, pods: { ...d.pods, out: Pod.lazy(log, { config: { max: 3 } }) } }))
+      await settle(el)
+      expect(badge(el, 'out')).toBeUndefined()
+      expect(badge(el, 'up')).toBe('built')
+      must(await o.app.restart('up'))
+      await settle(el)
+      expect(badge(el, 'up')).not.toBe(undefined)
+      const d2 = o.app.deployment()
+      must(await o.app.apply({ pods: { in: d2.pods.in!, wait: d2.pods.wait!, out: d2.pods.out! }, runtimes: { main: { pods: ['in', 'wait', 'out'], subscriptions: [] } } }))
+      await settle(el)
+      expect(text(el)).not.toContain('up')
+      expect(badge(el, 'up')).toBeUndefined()
+    })
   })
 })
