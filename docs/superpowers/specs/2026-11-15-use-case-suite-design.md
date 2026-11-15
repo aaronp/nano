@@ -95,6 +95,13 @@ time. Built-in components, example applications and the host ship separately, an
 being imported: its `nano.json` plus the code of its providers, loaded as ES modules when it is imported. The
 isolation comes from pods, runtimes and the application, not from bundling.
 
+**The host is a pod too.** The host's own abilities, such as "show alert", "approve action" and "set app bar", are
+an interface provided by a host pod. It is placed in the runtimes that may use them, so a call edge to it is the
+capability. An application asks for an approval through its edge, and each host provides the same interface in its
+own style. A policy pod (use case 7) can ask the host to approve an action. The interface's ops are proposed to the
+user with the thin slice. (My call: the pod isn't named `host`, because `host` is already the sender of
+`app.call`'s messages.)
+
 **Swappable hosts (later).** The same applications run in other hosts, which may use a different style or a different
 UI framework. Those hosts reuse the runtimes and applications already built. They change only the view selectors,
 for a different look and feel, or they theme the same web components. Nothing in a component or an application may
