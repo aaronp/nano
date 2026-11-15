@@ -1,37 +1,14 @@
-// The build: a module that leaves the shared packages to the host, its manifest, and the preview page.
+// The build: a module that leaves the shared packages to the host, and the nano.json beside it.
 import { expect, test } from 'bun:test'
 import { $ } from 'bun'
 import { join } from 'node:path'
-import { SHARED_IMPORTS } from '../src/manifest'
 
-const dist = join(import.meta.dir, '..', 'dist')
+const root = join(import.meta.dir, '..')
 
-test('the build writes the module, manifest and preview; the module carries no copy of the shared packages', async () => {
-  await $`bun scripts/build.ts`.cwd(join(import.meta.dir, '..')).quiet()
-  const js = await Bun.file(join(dist, 'index.js')).text()
-  for (const p of ['@pritzlaff/nano-runes', '@pritzlaff/nano-elements', 'lit', 'typebox']) expect(js).toMatch(new RegExp(`from"${p}"`))
+test('dist/index.js leaves the shared packages bare; dist/nano.json names ./index.js', async () => {
+  await $`bun scripts/build.ts`.cwd(root).quiet()
+  const js = await Bun.file(join(root, 'dist/index.js')).text()
+  for (const p of ['@pritzlaff/nano-core', '@pritzlaff/nano-elements', 'lit', 'typebox']) expect(js).toMatch(new RegExp(`from"${p}"`))
   expect(js).not.toContain('ReactiveElement')   // lit's base class
-  expect(js).not.toContain('TypeBox')           // typebox's own code
-  const manifest = await Bun.file(join(dist, 'manifest.json')).json()
-  expect(manifest.components.map((c: { tag: string }) => c.tag)).toEqual(['nano-timer', 'nano-picker', 'nano-store'])
-  const html = await Bun.file(join(dist, 'index.html')).text()
-  expect(html).toContain('"@pritzlaff/nano-core": "https://esm.sh/*@pritzlaff/nano-core@^0.2.0"')
-  // exactly the host's shared imports (anything else is bundled in), so what passes the preview imports into a host
-  const map = JSON.parse(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)![1]!).imports as Record<string, string>
-  expect(Object.keys(map).sort()).toEqual([...SHARED_IMPORTS].sort())
-  expect(map['typebox/value']).toBe('https://esm.sh/typebox@^1.4.0/value')
-  expect(map['lit/decorators.js']).toBe('https://esm.sh/lit@^3.0.0/decorators.js')
-  expect(html).not.toContain('%IMPORTMAP%')
+  expect((await Bun.file(join(root, 'dist/nano.json')).json()).providers).toEqual({ 'acme.template': './index.js' })
 }, 30000)
-
-test('the preview is themed: a swatch per theme, the components, and the kit on show', async () => {
-  const { THEMES } = await import('../preview/themes')
-  const html = await Bun.file(join(dist, 'index.html')).text()   // built by the test above
-  expect(html).not.toContain('%THEMES%')
-  const themes = JSON.parse(html.match(/<script type="application\/json" id="themes">([\s\S]*?)<\/script>/)![1]!)
-  expect(themes.map((t: { id: string }) => t.id)).toEqual(THEMES.map(t => t.id))
-  for (const t of themes) expect(t.vars.accent, t.id).toMatch(/^#/)
-  expect(html).toContain('role="group" aria-label="Theme"')
-  for (const tag of ['<nano-timer name="timer">', '<nano-picker name="speed"', '<nano-store name="prefs"', '<nano-select multiple', '<nano-date-picker', '<nano-data-table', '<nano-tool', 'toast('])
-    expect(html, tag).toContain(tag)
-})

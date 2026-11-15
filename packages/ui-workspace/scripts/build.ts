@@ -1,6 +1,6 @@
 /**
  * The host's build, into public/: main.js; the shared libraries in shared/ (one copy, named in index.html's import map);
- * bundle/nano-ui.js (packages/ui, itself shared); and the slice example in examples/slice/. Every output imports
+ * bundle/nano-ui.js (packages/ui, itself shared); the slice example in examples/slice/, and the template in examples/template/ (index.js, nano.json). Every output imports
  * @pritzlaff/nano-core, nano-elements, nano-ui, lit and typebox through the import map, so a module loaded later shares them.
  * With --watch, it builds again on every source change.
  */
@@ -24,12 +24,14 @@ async function all() {
   await build([join(repo, 'packages/ui/src/index.ts')], join(pub, 'bundle'), { entry: 'nano-ui.[ext]' })
   await build([join(repo, 'examples/slice/shout.ts')], join(pub, 'examples/slice'))
   copyFileSync(join(repo, 'examples/slice/nano.json'), join(pub, 'examples/slice/nano.json'))
+  await build([join(repo, 'templates/nano-template/src/index.ts')], join(pub, 'examples/template'))
+  copyFileSync(join(repo, 'templates/nano-template/nano.json'), join(pub, 'examples/template/nano.json'))
 }
 
 await all()
 if (watching) {
   let timer: ReturnType<typeof setTimeout> | undefined
   const again = () => { clearTimeout(timer); timer = setTimeout(() => void all().catch(e => console.error(e)), 100) }
-  for (const d of ['packages/ui-workspace/src', 'packages/ui/src', 'packages/nano/src', 'packages/elements/src', 'examples/slice'])
+  for (const d of ['packages/ui-workspace/src', 'packages/ui/src', 'packages/nano/src', 'packages/elements/src', 'examples/slice', 'templates/nano-template/src'])
     watch(join(repo, d), { recursive: true }, again)
 }

@@ -1,90 +1,60 @@
 # nano-template
 
-A package of components for nano hosts, built on the published
-[`@pritzlaff/nano-core`](https://www.npmjs.com/package/@pritzlaff/nano-core), `nano-runes` and `nano-elements`.
-Its build is a module plus a `manifest.json`; a host imports the package by the manifest's URL.
+A starting point for components of a nano app, built on the published
+[`@pritzlaff/nano-core`](https://www.npmjs.com/package/@pritzlaff/nano-core), `nano-elements` and `nano-ui`.
+The build is a provider module (`dist/index.js`) and a `dist/nano.json`; a host imports the app by the `nano.json`'s URL.
 
-It ships two examples to start from:
+It ships three pods in one provider, `acme.template`, to start from:
 
-- a **Timer** (`src/timer.ts`), which counts while running and publishes each count as `tick`, and its element
-  `<nano-timer>` (`src/timer-el.ts`), built from the component library's buttons, badge and input group;
-- a **Picker** (`src/picker.ts`), one choice from a list of options (`pick`, `setOptions`), published as `changed`,
-  and its element `<nano-picker label="…">` (`src/picker-el.ts`), which shows it in the kit's filterable
-  `<nano-select>`;
-- a **Store** (`src/store.ts`), key/value pairs (`get`, `set`, `remove`, each change published as `changed`) kept
-  in the storage of the origin it runs in: the host's `localStorage`, or memory in an isolated sandbox (`backing`
-  says which), and its element `<nano-store>` (`src/store-el.ts`).
+- **timer** (`src/timer.ts`): `start`, `stop`, and the event `tick` (each count, as `{ key: 'tick', value }`);
+  its view `<nano-timer>` (`src/timer-view.ts`) has Start and Stop and counts the ticks it hears;
+- **picker** (`src/picker.ts`): `pick` and `setOptions`, and the event `changed` (`{ key: 'choice', value }`); its view
+  `<nano-picker>` shows the kit's filterable `<nano-select>`;
+- **store** (`src/store.ts`): `get`, `set`, `remove`, `entries` and the event `changed`, kept in `localStorage` (memory
+  where there is none); its view `<nano-store>` lists the entries.
+
+`nano.json` places all three in runtime `main`, and pipes `picker.changed` and `timer.tick` to `store.set`: an event
+can be piped to an action when its data has the action's input schema (`Entry`, in `src/interfaces.ts`).
 
 ## Make it yours
 
 Use this repository as a template (GitHub's "Use this template"), then rename:
 
 1. `package.json`: `name`, `description`, `version`.
-2. Component ids: `nano.template/timer` and `nano.template/picker` → `your.name/thing`. The namespace must be yours: a host refuses a
-   package whose ids clash with ones it already has.
-3. Element tags: `nano-timer` and `nano-picker` → `your-thing` (custom element names need a dash), in `src/index.ts`'s catalog.
-4. Catalog kinds and titles in `src/index.ts`.
+2. The provider `acme.template` (`src/index.ts`, `nano.json`'s `providers` and pod `implementation`s), the
+   implementation coordinates `acme.template/…` and the interfaces `acme.template.Timer`… (`src/interfaces.ts`, and the
+   pipes' `source` and `target`): use your own namespace. A host refuses an import that clashes with a name it has.
+3. The tags (`nano-timer`…) in `src/index.ts`: custom element names need a dash.
 
 ## Develop
 
 ```sh
 bun install
-bun test           # the components, the element, the manifest and the build
-bun run build      # dist/: index.js, manifest.json, index.html
-bun run preview    # build, then serve dist/ at http://localhost:4000
+bun test           # the pods through assemble + Application, the views, the build
+bun run build      # dist/: index.js, nano.json
+bun run serve      # build, then serve dist/ with CORS at http://localhost:4000
 ```
 
-A component is a rune component (state, getters, actions and `event()`s) from `@pritzlaff/nano-runes`; its element
-is a `PlacedElement` from `@pritzlaff/nano-elements`, which places the component in the page's registry by its
-`name` attribute and re-renders when it publishes.
+Import `http://localhost:4000/nano.json` into a host (the nano workspace's "Import URL"): it fetches the `nano.json`,
+loads each `providers` entry (relative to the `nano.json`, on the same origin) and shows the pods.
 
 ## What a host gets
 
-- **`dist/manifest.json`**: the package name and version, the shared packages and versions it was built against,
-  and each component's kind, id, title, element tag and ops. `module` is the module's path, relative to the
-  manifest.
-- **`dist/index.js`**: the module. It exports `catalog` (each kind: its component, title and element tag) and
-  `define()` (defines the elements). `@pritzlaff/nano-*`, `lit` and `typebox` are left as bare imports: the host
-  provides them, so everything shares one copy.
-- **`dist/index.html`**: a preview that runs the components on their own, with an import map to those shared
-  packages on esm.sh, a theme picker (a few themes' `--nano-*` tokens, from `preview/themes.ts`) and the kit on
-  show, so you see your elements as a host would.
+- **`dist/nano.json`**: the pods, runtimes and pipes, and `providers`: `{ "acme.template": "./index.js" }`.
+- **`dist/index.js`**: the module. Its default export is the provider; its named export `views` maps each
+  implementation to its view's tag, and importing it defines the tags. `@pritzlaff/nano-core`, `nano-elements`,
+  `nano-ui`, `lit` and `typebox` are left as bare imports: the host provides them through its import map, so there
+  is one copy of each.
 
-## Looks and skins
+## Views and looks
 
-The component is the work; its element is a thin UI. Style elements with the `--nano-*` tokens (the contract in
-`@pritzlaff/nano-elements`' README: colours, fonts, radius, series), with fallbacks, so they take on any host's
-theme. Use `@pritzlaff/nano-elements`' stylesheets for the shared component library: `base` (`.btn`, `.badge`,
-`.card`, `.field`, `.table`…) and `kit` (`.input-group`, `.avatar`, `.toggle`…), and its kit elements
-(`<nano-select>`, `<nano-date-picker>`, `<nano-data-table>`, `toast()`…), as the Timer and Picker do.
+A view is a custom element with a `target: { app, registry, runtime, pod }` property. It reaches its pod only through
+`target.app.call(target.runtime, target.pod)` and `target.app.listen`, so it works in any host (`src/view.ts` is the
+small base these use). Style with the `--nano-*` tokens (colours, fonts, radius), with fallbacks, so a view takes on any
+host's theme; start from `base` and `kit` (`.btn`, `.badge`, `.input-group`…) and the kit's elements
+(`<nano-select>`, `<nano-date-picker>`, `<nano-data-table>`, `toast()`…) from `@pritzlaff/nano-elements`.
 
-A **skin** is another element set over the same components: same component ids and ops, so a host's connections
-don't change when it swaps the UI. Ship it as a second catalog (say `catalogCompact`, with its own tags and a
-`defineCompact()`), or as a separate package that imports this one's components.
+## Publishing
 
-## What a package may import
-
-A host gives the packages it imports its own copies of the shared libraries, so the module must leave them as bare
-imports (the build does) and use only these:
-
-`@pritzlaff/nano-core`, `@pritzlaff/nano-runes`, `@pritzlaff/nano-elements`, `lit`, `lit/decorators.js`,
-`lit/directive.js`, `lit/directives/class-map.js`, `lit/directives/style-map.js`, `lit/directives/repeat.js`,
-`lit/directives/if-defined.js`, `typebox`, `typebox/value`.
-
-Anything else (other `lit` or `typebox` subpaths too) is bundled into the module by the build.
-
-## Import it
-
-In a host, open a workspace's Components drawer, click **Import**, and paste the manifest's URL. Locally:
-`bun run preview` serves `dist/` at `http://localhost:4000/manifest.json`, and lets other origins fetch it.
-
-## Publish
-
-Pushes to `main` build and deploy `dist/` to GitHub Pages (`.github/workflows/pages.yml`; set Settings → Pages →
-Source to "GitHub Actions" once). The URL to import is then:
-
-```
-https://<owner>.github.io/<repo>/manifest.json
-```
-
-Every push and pull request is tested and built (`.github/workflows/ci.yml`).
+CI (`.github/workflows/ci.yml`) tests and builds on every push. `pages.yml` publishes `dist/` to GitHub Pages, so
+`https://<owner>.github.io/<repo>/nano.json` is the URL to import.

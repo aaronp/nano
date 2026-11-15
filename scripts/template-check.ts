@@ -24,7 +24,7 @@ for (const dir of PUBLISHED) {
 await Bun.write(join(at, 'package.json'), JSON.stringify(pkg, null, 2))
 await $`rm -f bun.lock`.cwd(at)
 await $`bun install`.cwd(at).quiet()
-await Bun.write(join(at, 'package.json'), original)   // the template's own ranges again, for its manifest and preview
+await Bun.write(join(at, 'package.json'), original)   // the template's own ranges again, for its nano.json
 await $`bun test`.cwd(at)
 await $`bun run build`.cwd(at)
 console.log(`the template passes against this commit's libraries (${at})`)

@@ -1,7 +1,7 @@
 # @pritzlaff/nano-elements
 
 Lit elements: the nano kit (command, select, calendar, menu, data table, tree, agent parts, ...), `base` (the shared
-styles) and the `--nano-*` theme contract. 0.4.0 drops `ModelElement` and `PlacedElement` with the 0.3 model.
+styles) and the `--nano-*` theme contract.
 
 ## Theming: the `--nano-*` contract
 

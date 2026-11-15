@@ -8,7 +8,7 @@ endif
 test:
 	@for p in packages/*/; do echo "== $$p"; (cd $$p && bun test --isolate) || exit 1; done
 
-# Browser tests (e2e/*.e2e.ts) in your Chrome; starts `make ui` and `make serve-template` unless they're running.
+# Browser tests (e2e/*.e2e.ts) in your Chrome; starts `make ui` unless it is running.
 test-ui:
 	bunx playwright test
 
@@ -26,8 +26,8 @@ dev:
 	@cd packages/ui-workspace && bun ../../scripts/quiet.ts bun run --silent build
 	@(cd packages/ui-workspace && bun ../../scripts/quiet.ts bun run --silent dev) & trap 'kill $$!' EXIT; bun scripts/serve.ts packages/ui-workspace/public $(PORT) --live
 
-# Build the template package and serve it on another origin, to import into `make ui`
-# (http://localhost:5174/manifest.json; TEMPLATE_PORT=5174 by default).
+# Build the template package and serve it on another origin, to import into `make ui` (Import URL)
+# (http://localhost:5174/nano.json; TEMPLATE_PORT=5174 by default).
 TEMPLATE_PORT ?= 5174
 serve-template:
 	$(MAKE) -C templates/nano-template serve PORT=$(TEMPLATE_PORT)

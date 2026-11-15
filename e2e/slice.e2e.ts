@@ -37,3 +37,12 @@ test('use case 1: import, see, swap live, save', async ({ page }) => {
   expect(saved.pods.up.implementation).toBe('example.slice/shout')
   expect(saved.views.out).toBe('nano-pod-view')
 })
+
+test('the template: import its nano.json, open the timer, see it tick', async ({ page }) => {
+  await page.goto('/?src=/examples/template/nano.json')
+  await page.locator('nano-explorer').getByText('timer', { exact: true }).first().click()
+  const timer = page.locator('nano-timer')
+  await expect(timer).toBeVisible()
+  await timer.getByRole('button', { name: 'Start' }).click()
+  await expect(timer.locator('.badge')).not.toHaveText('0', { timeout: 4000 })
+})
