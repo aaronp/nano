@@ -90,8 +90,15 @@ It needs:
 A visual web component is how you **see** a functional piece: values moving through debounce and map, and steps
 firing.
 
-**Swappable hosts:** the same `nano.json` and custom components run under a different host look and feel, without
-rewriting them.
+**Composable micro-frontends, decoupled from the host.** The host knows nothing about any application at build
+time. Built-in components, example applications and the host ship separately, and an application arrives only by
+being imported: its `nano.json` plus the code of its providers, loaded as ES modules when it is imported. The
+isolation comes from pods, runtimes and the application, not from bundling.
+
+**Swappable hosts (later).** The same applications run in other hosts, which may use a different style or a different
+UI framework. Those hosts reuse the runtimes and applications already built. They change only the view selectors,
+for a different look and feel, or they theme the same web components. Nothing in a component or an application may
+depend on a particular host.
 
 ### Two low-level abstractions everything stands on
 
@@ -175,8 +182,15 @@ Two projects, done in this order:
 ## Where things live
 
 New pieces go in their own packages over `@pritzlaff/nano`, never inside it: storage, messaging and REST clients
-are application-layer components, not part of nano (the user's rule). That covers the built-in pods, the storage
-and messaging interfaces, the pod views and the host. `packages/nano` gains an export only with the user's say.
+are application-layer components, not part of nano (the user's rule). `packages/nano` gains an export only with the
+user's say. Three things stay separate, and none imports another's internals:
+
+- **A bundle of default components:** the built-in pods (input, debounce, map, log and so on), their views and the
+  generic "View Pod", built as an importable ES module.
+- **Examples:** full applications (email, AI with settings, ETL and so on), each a `nano.json` with its providers'
+  code built as ES modules. They depend on nano and on shared interfaces, never on the host.
+- **The host (`ui-workspace`):** it loads the default bundle and imports examples the way a user would. An example
+  that works only when compiled into the host fails the decoupling goal.
 
 ## Decided with the user (2026-11-15)
 
@@ -185,6 +199,8 @@ and messaging interfaces, the pod views and the host. `packages/nano` gains an e
   instance (D60). A runtime view is added only if a concrete use case shows it is needed.
 - **A view is web components associated with a pod**, chosen by a selector in the deployment, with a default per
   pod and generic fallbacks ("Pod views" above).
+- **Decoupled, not bundled.** The default components, the examples and the host are separate, and applications come
+  in by import ("Where things live"). Showing the same applications in several hosts comes later.
 
 ## Left to the builder
 
@@ -209,7 +225,9 @@ and messaging interfaces, the pod views and the host. `packages/nano` gains an e
   it, and nothing bridges the two stacks.
 - Importing an app whose pod or runtime names clash with what's loaded is refused, with a message naming the clash.
   Namespacing is decided when use case 6 needs it.
-- Every provider's code is bundled into the host at build time for this round. Loading by ES-module URL (with its
-  sandbox and CORS work) is a later use case.
+- For this round, an imported application's providers are ES modules loaded with `import()` from URLs on the
+  host's own origin. Cross-origin loading, iframe sandboxing and CORS come later. How a `nano.json` names its
+  modules (a field on `AppDeployment`, or a small import manifest next to it) is proposed to the user in the
+  foundation plan, alongside the `views` shape.
 - Use case 7's policy is a pod placed in the path, not a runtime `Policy`, so it is saved and can be inserted live.
 - Tests use a fake chat; a real AI call is optional.
