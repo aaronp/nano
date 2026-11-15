@@ -29,9 +29,9 @@ const app2 = ok(await Application.create(ok(assemble(appDeployment, registry)), 
 ## Data
 
 ```ts
-type PodDeployment = Record<PodName, Pod>                     // Pod = { implementation, config?, eager }
+type PodDeployment = Record<PodName, Pod>                     // Pod = { implementation, config?, eager, isolation?: 'host'|'sandbox'|'isolated-sandbox' }  (isolation: host-owned, absent = host)
 type RuntimeDeployment = { pods: PodName[]; subscriptions: Subscription[]; policy?: 'allow-all' }
-type AppDeployment = { pods: PodDeployment; runtimes: Record<RuntimeId, RuntimeDeployment>; tags?: Record<PodName, string[]>; providers?: Record<string, string>; views?: Record<string, string> }
+type AppDeployment = { pods: PodDeployment; runtimes: Record<RuntimeId, RuntimeDeployment>; tags?: Record<PodName, string[]>; providers?: Record<string, string>; views?: Record<string, string>; layout?: Record<string, unknown> }  // layout: the deployer's choice, a plain object; deployment() omits it
 type Subscription =
   | { kind: 'call'; from: PodName; to: PodName }                                   // a call edge
   | { kind: 'pipe'; from: PodName; source: Port; to: PodName; target: Port }       // a pipe

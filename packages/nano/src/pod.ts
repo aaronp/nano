@@ -7,9 +7,14 @@
  */
 import type { Implementation } from './implementation.ts'
 
-export type Pod = { implementation: string; config?: unknown; eager: boolean }
+export type Pod = {
+  implementation: string; config?: unknown; eager: boolean
+  /** Where it runs; absent means `host`. */
+  isolation?: 'host' | 'sandbox' | 'isolated-sandbox'
+}
 
-const describe = (eager: boolean) => (impl: Implementation, opts: { config?: unknown } = {}): Pod =>
-  ({ implementation: impl.coord, ...(opts.config !== undefined && { config: opts.config }), eager })
+const describe = (eager: boolean) => (impl: Implementation, opts: { config?: unknown; isolation?: Pod['isolation'] } = {}): Pod =>
+  ({ implementation: impl.coord, ...(opts.config !== undefined && { config: opts.config }), eager,
+    ...(opts.isolation !== undefined && opts.isolation !== 'host' && { isolation: opts.isolation }) })
 
 export const Pod = { lazy: describe(false), eager: describe(true) }
