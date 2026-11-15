@@ -12,7 +12,7 @@ import { Type, type Static } from 'typebox'
 import {
   Application, assemble, createRegistry, defineSchema, iface, implementation, op, Pod, port, provide, provider, success,
   type AppEvent, type Application as App, type AppDeployment, type NanoResult,
-} from '@pritzlaff/nano'
+} from '@pritzlaff/nano-core'
 import { KeyFormatter, Log, TestRequest, TestResult, Vault } from './interfaces.ts'
 import { signerProvider } from './providers.ts'
 

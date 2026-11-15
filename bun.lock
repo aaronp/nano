@@ -13,152 +13,36 @@
     "examples": {
       "name": "@composable/examples",
       "dependencies": {
-        "@pritzlaff/nano": "workspace:*",
+        "@pritzlaff/nano-core": "workspace:*",
         "@pritzlaff/nano-ui": "workspace:*",
         "typebox": "^1.4.0",
       },
     },
-    "packages/app": {
-      "name": "@pritzlaff/nano-app",
-      "version": "0.1.0",
-      "dependencies": {
-        "@pritzlaff/nano-core": "workspace:*",
-        "@pritzlaff/nano-runes": "workspace:*",
-        "typebox": "^1.4.0",
-      },
-      "devDependencies": {
-        "@composable/bundle": "workspace:*",
-      },
-    },
-    "packages/bundle": {
-      "name": "@composable/bundle",
-      "version": "0.1.0",
-      "dependencies": {
-        "@pritzlaff/nano-core": "workspace:*",
-        "@pritzlaff/nano-elements": "workspace:*",
-        "@pritzlaff/nano-runes": "workspace:*",
-        "lit": "^3.0.0",
-        "typebox": "^1.4.0",
-      },
-      "devDependencies": {
-        "@happy-dom/global-registrator": "^21.0.4",
-      },
-    },
-    "packages/circuit": {
-      "name": "@composable/circuit",
-      "version": "0.1.0",
-      "dependencies": {
-        "@pritzlaff/nano-app": "workspace:*",
-        "@pritzlaff/nano-core": "workspace:*",
-        "lit": "^3.0.0",
-        "typebox": "^1.4.0",
-      },
-      "devDependencies": {
-        "@composable/bundle": "workspace:*",
-        "@happy-dom/global-registrator": "^21.0.4",
-      },
-    },
-    "packages/core": {
-      "name": "@pritzlaff/nano-core",
-      "version": "0.3.0",
-      "dependencies": {
-        "typebox": "^1.4.0",
-      },
-    },
-    "packages/editor": {
-      "name": "@composable/editor",
-      "version": "0.1.0",
-      "dependencies": {
-        "@pritzlaff/nano-core": "workspace:*",
-        "@pritzlaff/nano-elements": "workspace:*",
-        "@pritzlaff/nano-runes": "workspace:*",
-        "lit": "^3.0.0",
-        "typebox": "^1.4.0",
-      },
-      "devDependencies": {
-        "@happy-dom/global-registrator": "^21.0.4",
-      },
-    },
     "packages/elements": {
       "name": "@pritzlaff/nano-elements",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
-        "@pritzlaff/nano-core": "workspace:*",
         "lit": "^3.0.0",
         "typebox": "^1.4.0",
       },
       "devDependencies": {
         "@happy-dom/global-registrator": "^21.0.4",
-        "@pritzlaff/nano-runes": "workspace:*",
       },
     },
     "packages/nano": {
-      "name": "@pritzlaff/nano",
-      "version": "0.0.0",
+      "name": "@pritzlaff/nano-core",
+      "version": "0.4.0",
       "dependencies": {
         "@noble/hashes": "^1.8.0",
         "json-canonicalize": "^1.0.6",
         "typebox": "^1.4.0",
       },
     },
-    "packages/people": {
-      "name": "@composable/people",
-      "version": "0.1.0",
-      "dependencies": {
-        "@pritzlaff/nano-core": "workspace:*",
-        "@pritzlaff/nano-elements": "workspace:*",
-        "@pritzlaff/nano-runes": "workspace:*",
-        "lit": "^3.0.0",
-        "typebox": "^1.4.0",
-      },
-      "devDependencies": {
-        "@happy-dom/global-registrator": "^21.0.4",
-        "@pritzlaff/nano-app": "workspace:*",
-      },
-    },
-    "packages/platform": {
-      "name": "@composable/platform",
-      "version": "0.1.0",
-      "dependencies": {
-        "@pritzlaff/nano-app": "workspace:*",
-        "@pritzlaff/nano-core": "workspace:*",
-        "@pritzlaff/nano-elements": "workspace:*",
-        "lit": "^3.0.0",
-        "typebox": "^1.4.0",
-      },
-      "devDependencies": {
-        "@composable/bundle": "workspace:*",
-        "@happy-dom/global-registrator": "^21.0.4",
-      },
-    },
-    "packages/runes": {
-      "name": "@pritzlaff/nano-runes",
-      "version": "0.3.0",
-      "dependencies": {
-        "@pritzlaff/nano-core": "workspace:*",
-        "typebox": "^1.4.0",
-      },
-    },
-    "packages/shell": {
-      "name": "@composable/shell",
-      "version": "0.1.0",
-      "dependencies": {
-        "@pritzlaff/nano-app": "workspace:*",
-        "@pritzlaff/nano-core": "workspace:*",
-        "@pritzlaff/nano-elements": "workspace:*",
-        "@pritzlaff/nano-runes": "workspace:*",
-        "lit": "^3.0.0",
-        "typebox": "^1.4.0",
-      },
-      "devDependencies": {
-        "@happy-dom/global-registrator": "^21.0.4",
-      },
-    },
     "packages/ui": {
       "name": "@pritzlaff/nano-ui",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
-        "@pritzlaff/nano": "workspace:*",
+        "@pritzlaff/nano-core": "workspace:*",
         "@pritzlaff/nano-elements": "workspace:*",
         "lit": "^3.3.3",
         "typebox": "1.4.4",
@@ -171,7 +55,7 @@
       "name": "@composable/ui-workspace",
       "version": "0.1.0",
       "dependencies": {
-        "@pritzlaff/nano": "workspace:*",
+        "@pritzlaff/nano-core": "workspace:*",
         "@pritzlaff/nano-elements": "workspace:*",
         "@pritzlaff/nano-ui": "workspace:*",
         "lit": "^3.3.3",
@@ -181,41 +65,11 @@
         "@happy-dom/global-registrator": "^21.0.4",
       },
     },
-    "packages/wires": {
-      "name": "@composable/wires",
-      "version": "0.1.0",
-      "dependencies": {
-        "@composable/platform": "workspace:*",
-        "@pritzlaff/nano-app": "workspace:*",
-        "@pritzlaff/nano-core": "workspace:*",
-        "@pritzlaff/nano-elements": "workspace:*",
-        "lit": "^3.0.0",
-        "typebox": "^1.4.0",
-      },
-      "devDependencies": {
-        "@composable/bundle": "workspace:*",
-        "@happy-dom/global-registrator": "^21.0.4",
-      },
-    },
   },
   "packages": {
-    "@composable/bundle": ["@composable/bundle@workspace:packages/bundle"],
-
-    "@composable/circuit": ["@composable/circuit@workspace:packages/circuit"],
-
-    "@composable/editor": ["@composable/editor@workspace:packages/editor"],
-
     "@composable/examples": ["@composable/examples@workspace:examples"],
 
-    "@composable/people": ["@composable/people@workspace:packages/people"],
-
-    "@composable/platform": ["@composable/platform@workspace:packages/platform"],
-
-    "@composable/shell": ["@composable/shell@workspace:packages/shell"],
-
     "@composable/ui-workspace": ["@composable/ui-workspace@workspace:packages/ui-workspace"],
-
-    "@composable/wires": ["@composable/wires@workspace:packages/wires"],
 
     "@happy-dom/global-registrator": ["@happy-dom/global-registrator@21.0.4", "", { "dependencies": { "@types/node": ">=20.0.0", "happy-dom": "^21.0.4" } }, "sha512-Bbr0hW9hhDhBf3Jp0EyDlkCbFgbr0z2jd3BMKYOYW+fOkPM4Nx195GMXyCtRCGEgoNn6i09FabXrSkNFm2ONzg=="],
 
@@ -227,15 +81,9 @@
 
     "@playwright/test": ["@playwright/test@1.65.0", "", { "dependencies": { "playwright": "1.65.0" }, "bin": { "playwright": "cli.js" } }, "sha512-iGURLGuKDLakSEl7Pgfv8h7f+XLT+V861Wfhz0zlEl5nyFuKUopdkFBPKqTllTUp06aOwPuH8iuUEb3yp3MpbQ=="],
 
-    "@pritzlaff/nano": ["@pritzlaff/nano@workspace:packages/nano"],
-
-    "@pritzlaff/nano-app": ["@pritzlaff/nano-app@workspace:packages/app"],
-
-    "@pritzlaff/nano-core": ["@pritzlaff/nano-core@workspace:packages/core"],
+    "@pritzlaff/nano-core": ["@pritzlaff/nano-core@workspace:packages/nano"],
 
     "@pritzlaff/nano-elements": ["@pritzlaff/nano-elements@workspace:packages/elements"],
-
-    "@pritzlaff/nano-runes": ["@pritzlaff/nano-runes@workspace:packages/runes"],
 
     "@pritzlaff/nano-ui": ["@pritzlaff/nano-ui@workspace:packages/ui"],
 

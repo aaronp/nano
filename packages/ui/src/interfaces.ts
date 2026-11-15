@@ -4,7 +4,7 @@
  *   port(Input, Input.ops.submit)   // pipe source: what was submitted
  */
 import { Type } from 'typebox'
-import { defineSchema, iface, op } from '@pritzlaff/nano'
+import { defineSchema, iface, op } from '@pritzlaff/nano-core'
 
 export const Any = defineSchema('Any', Type.Unknown())
 export const Nothing = defineSchema('Nothing', Type.Null())

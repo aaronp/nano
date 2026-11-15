@@ -1,5 +1,5 @@
 import { Type } from 'typebox'
-import { defineSchema, implementation, provide, success } from '@pritzlaff/nano'
+import { defineSchema, implementation, provide, success } from '@pritzlaff/nano-core'
 import { Debounce } from '../interfaces.ts'
 
 /** `push` returns at once; after `quietMs` without a push, the last value is published as `flushed`. */

@@ -4,7 +4,7 @@
  *   ctx.one(sel(DB, { runtime: 'v2' }))   // Selection: .call.all({}) gives the rows in v2's db
  */
 import { Type } from 'typebox'
-import { defineSchema, iface, op } from '@pritzlaff/nano'
+import { defineSchema, iface, op } from '@pritzlaff/nano-core'
 
 export const Rows = defineSchema('Rows', Type.Array(Type.String()))
 export const Nothing = defineSchema('Nothing', Type.Object({}))

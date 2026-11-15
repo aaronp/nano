@@ -5,7 +5,7 @@
  *   registry.add(messengerProvider)
  *   { pods: { inbox: Pod.lazy(inbox) }, runtimes: { messenger: { pods: ['inbox'], subscriptions: [] } } }   // works alone, on its fallback
  */
-import { implementation, provide, provider, success } from '@pritzlaff/nano'
+import { implementation, provide, provider, success } from '@pritzlaff/nano-core'
 import { Composer, Inbox, KeyValueStore, Messaging, Send } from './interfaces.ts'
 
 type Message = { id: string; text: string }

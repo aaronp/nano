@@ -1,13 +1,12 @@
 {
   "name": "@pritzlaff/nano-elements",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
-  "description": "Lit elements over core components: show and drive a model, or place a component by name.",
+  "description": "Lit elements: the nano kit and the --nano-* theme contract.",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@pritzlaff/nano-core": "workspace:*",
     "lit": "^3.0.0",
     "typebox": "^1.4.0"
   },
-  "devDependencies": { "@pritzlaff/nano-runes": "workspace:*", "@happy-dom/global-registrator": "^21.0.4" }
+  "devDependencies": { "@happy-dom/global-registrator": "^21.0.4" }
 }

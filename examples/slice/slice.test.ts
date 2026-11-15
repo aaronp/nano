@@ -3,7 +3,7 @@
  * upper-casing `nano.ui/map` to `example.slice/shout`, and a submitted `hi` is logged as `hi!`.
  */
 import { expect, test } from 'bun:test'
-import { Application, assemble, createRegistry, Pod, success, type AppDeployment, type NanoResult } from '@pritzlaff/nano'
+import { Application, assemble, createRegistry, Pod, success, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider from '@pritzlaff/nano-ui'
 import slice from './shout.ts'
 

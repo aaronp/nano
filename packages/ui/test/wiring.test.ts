@@ -2,7 +2,7 @@
  * The wiring view: the circuit of a deployment, and the mounted <nano-wiring> lighting a cable per message.
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, assemble, createRegistry, Pod, port, type AppDeployment, type NanoResult } from '@pritzlaff/nano'
+import { Application, assemble, createRegistry, Pod, port, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider, { circuitOf, Debounce, debounce, defineViews, input, Input, Log, log, map, MapIface } from '../src/index.ts'
 import './dom.ts'
 

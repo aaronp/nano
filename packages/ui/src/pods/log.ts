@@ -1,5 +1,5 @@
 import { Type } from 'typebox'
-import { defineSchema, implementation, provide, success } from '@pritzlaff/nano'
+import { defineSchema, implementation, provide, success } from '@pritzlaff/nano-core'
 import { Log } from '../interfaces.ts'
 
 /** Keeps the newest `max` entries (default 100). */

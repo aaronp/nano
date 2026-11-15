@@ -5,7 +5,7 @@
  *   viewFor('up', { ...app.deployment(), views }, defaults)   // the selector, else the default, else 'nano-pod-view'
  */
 import { LitElement, html } from 'lit'
-import type { AppDeployment, AppEvent, Application, Registry } from '@pritzlaff/nano'
+import type { AppDeployment, AppEvent, Application, Registry } from '@pritzlaff/nano-core'
 import { base } from '@pritzlaff/nano-elements'
 
 export type ViewTarget = { app: Application; registry: Registry; runtime: string; pod: string }

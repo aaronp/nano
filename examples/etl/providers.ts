@@ -4,7 +4,7 @@
  *   registry.add(etlProvider)
  *   Pod.lazy(etl)   // reads from whichever source a runtime wires it to, writes to whichever sink
  */
-import { implementation, provide, provider, success } from '@pritzlaff/nano'
+import { implementation, provide, provider, success } from '@pritzlaff/nano-core'
 import { Pipeline, Sink, Source } from './interfaces.ts'
 
 /** The rows last written to any sink, for a test to read. */

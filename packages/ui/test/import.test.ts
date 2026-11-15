@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { createRegistry, type AppDeployment } from '@pritzlaff/nano'
+import { createRegistry, type AppDeployment } from '@pritzlaff/nano-core'
 import { importApp, merge, type Loaded } from '../src/import.ts'
 
 const fx = (name: string) => new URL(`./fixtures/${name}`, import.meta.url).href

@@ -3,7 +3,7 @@
  * `nano-map` (its code and last output) and `nano-log` (its entries).
  */
 import { css, html } from 'lit'
-import { port, type AppEvent, type NanoResult } from '@pritzlaff/nano'
+import { port, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
 import { base, t } from '@pritzlaff/nano-elements'
 import { Debounce, Log, MapIface } from '../interfaces.ts'
 import { shown, ViewElement, type ViewTarget } from './view.ts'

@@ -2,7 +2,7 @@
  * Builds the published packages into publishable folders: `bun scripts/build-packages.ts`.
  * Each `packages/<dir>/dist/` gets the bundled ES module, `.d.ts` types, the README and LICENSE, and a package.json
  * made from the source one: exports point at the build, the version is filled in for sibling packages, and
- * typebox, lit and sibling packages become peer dependencies so a host and what it imports share one copy.
+ * typebox, lit and sibling packages become peer dependencies (other dependencies stay dependencies) so a host and what it imports share one copy.
  * CI publishes each `dist/` folder (`npm publish packages/<dir>/dist`).
  */
 import { $ } from 'bun'
@@ -13,6 +13,9 @@ import { PUBLISHED } from './build-packages-list'
 const root = join(import.meta.dir, '..')
 const REPO = { type: 'git', url: 'git+https://github.com/aaronp/nano.git' }
 const PEERS = ['typebox', 'lit']
+
+const versions = new Map<string, string>()
+for (const dir of PUBLISHED) { const j = await Bun.file(join(root, 'packages', dir, 'package.json')).json(); versions.set(j.name, j.version) }
 
 type Pkg = { name: string; version: string; description?: string; dependencies?: Record<string, string> }
 
@@ -25,31 +28,34 @@ for (const dir of PUBLISHED) {
   const built = await Bun.build({ entrypoints: [join(at, 'src/index.ts')], outdir: out, format: 'esm', target: 'browser', packages: 'external', sourcemap: 'linked' })
   if (!built.success) throw new AggregateError(built.logs, `building ${src.name} failed`)
 
-  // the types: one .d.ts per source file, with relative imports given .js so every module resolution finds them
+  // the types: one .d.ts per source file, with relative imports given .js (a .ts becomes .js) so every module resolution finds them
   // (sibling packages resolve to their built types, so only this package's sources are emitted)
-  const paths = Object.fromEntries(PUBLISHED.filter(d => d !== dir).map(d => [`@pritzlaff/nano-${d}`, [`../${d}/dist/index.d.ts`]]))
+  const paths: Record<string, string[]> = {}
+  for (const d of PUBLISHED.filter(d => d !== dir)) paths[(await Bun.file(join(root, 'packages', d, 'package.json')).json()).name] = [`../${d}/dist/index.d.ts`]
   const config = join(at, 'tsconfig.build.json')
   await Bun.write(config, JSON.stringify({
     compilerOptions: { strict: true, module: 'ESNext', moduleResolution: 'bundler', target: 'ESNext', lib: ['ESNext', 'DOM'], skipLibCheck: true, types: [],
-      declaration: true, emitDeclarationOnly: true, rootDir: 'src', outDir: 'dist', paths },
+      declaration: true, emitDeclarationOnly: true, allowImportingTsExtensions: true, rootDir: 'src', outDir: 'dist', paths },
     files: ['src/index.ts'],
   }))
   try { await $`${join(root, 'node_modules/.bin/tsc')} -p ${config}` } finally { rmSync(config) }
   // (in subfolders too; `from '…'`, `import('…')` and side-effect `import '…'`)
   for (const f of readdirSync(out, { recursive: true, encoding: 'utf8' }).filter(f => f.endsWith('.d.ts'))) {
     const text = await Bun.file(join(out, f)).text()
-    await Bun.write(join(out, f), text.replace(/(from\s+|import\s*\(|import\s+)(['"])(\.\.?\/[^'"]+?)(?<!\.js)\2/g, '$1$2$3.js$2'))
+    await Bun.write(join(out, f), text.replace(/(from\s+|import\s*\(|import\s+)(['"])(\.\.?\/[^'"]+?)(?<!\.js)\2/g, (_m, a, q, path) => `${a}${q}${path.replace(/\.ts$/, '')}.js${q}`))
   }
 
   const deps = src.dependencies ?? {}
-  const peerDependencies = Object.fromEntries(Object.entries(deps).map(([k, v]) => [k, v === 'workspace:*' ? `^${src.version}` : v]))
+  // siblings and the shared libraries are peers; any other dependency stays a dependency
+  const peers = Object.entries(deps).filter(([k, v]) => PEERS.includes(k) || v === 'workspace:*')
+  const dependencies = Object.fromEntries(Object.entries(deps).filter(([k, v]) => !PEERS.includes(k) && v !== 'workspace:*'))
+  const peerDependencies = Object.fromEntries(peers.map(([k, v]) => [k, v === 'workspace:*' ? `^${versions.get(k)}` : v]))
   const pkg = {
     name: src.name, version: src.version, description: src.description, license: 'MIT', type: 'module',
     repository: { ...REPO, directory: `packages/${dir}` },
     exports: { '.': { types: './index.d.ts', import: './index.js' } }, types: './index.d.ts', module: './index.js',
-    sideEffects: false, peerDependencies, publishConfig: { access: 'public' },
+    sideEffects: false, dependencies, peerDependencies, publishConfig: { access: 'public' },
   }
-  if (Object.keys(deps).some(d => !PEERS.includes(d) && deps[d] !== 'workspace:*')) throw new Error(`${src.name} has a dependency that is neither shared nor a sibling`)
   await Bun.write(join(out, 'package.json'), JSON.stringify(pkg, null, 2) + '\n')
   await Bun.write(join(out, 'README.md'), Bun.file(join(at, 'README.md')))
   await Bun.write(join(out, 'LICENSE'), Bun.file(join(root, 'LICENSE')))

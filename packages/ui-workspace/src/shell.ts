@@ -4,7 +4,7 @@
  * the stream. Every change is an `apply` through `host`.
  */
 import { LitElement, css, html, nothing } from 'lit'
-import { port, type AppEvent } from '@pritzlaff/nano'
+import { port, type AppEvent } from '@pritzlaff/nano-core'
 import { viewFor, type ViewTarget } from '@pritzlaff/nano-ui'
 import { base, kit, t, toast } from '@pritzlaff/nano-elements'
 import type { Host } from './host.ts'

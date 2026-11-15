@@ -8,7 +8,7 @@
  *               (store also in `persistence`, messaging also in `messaging`)
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, assemble, createRegistry, Pod, port, success, type AppEvent, type Application as App, type AppDeployment, type NanoResult } from '@pritzlaff/nano'
+import { Application, assemble, createRegistry, Pod, port, success, type AppEvent, type Application as App, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
 import { Inbox, Messaging } from './interfaces.ts'
 import { messengerProvider } from './providers.ts'
 

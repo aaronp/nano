@@ -7,23 +7,23 @@ import { linkLocal } from './link-local'
 // a fake repo with the three packages and a template whose @pritzlaff copies are real directories, plus lit beside them
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'link-local-'))), repo = join(root, 'repo'), dir = join(root, 'templates', 't')
-  for (const p of ['core', 'runes', 'elements']) mkdirSync(join(repo, 'packages', p), { recursive: true })
+  for (const p of ['nano', 'elements', 'ui']) mkdirSync(join(repo, 'packages', p), { recursive: true })
   const scope = join(dir, 'node_modules', '@pritzlaff')
   mkdirSync(join(scope, 'nano-core'), { recursive: true }); writeFileSync(join(scope, 'nano-core', 'x.js'), '')
-  mkdirSync(join(scope, 'nano-runes'), { recursive: true })
+  mkdirSync(join(scope, 'nano-ui'), { recursive: true })
   symlinkSync('/nowhere', join(scope, 'nano-elements'))   // an existing (stale) link is replaced too
   mkdirSync(join(scope, 'other')); mkdirSync(join(dir, 'node_modules', 'lit'), { recursive: true })
   return { repo, dir, scope }
 }
 
-test('links node_modules/@pritzlaff/nano-{core,runes,elements} to packages/{core,runes,elements}', () => {
+test('links node_modules/@pritzlaff/nano-{core,elements,ui} to packages/{nano,elements,ui}', () => {
   const { repo, dir, scope } = fixture()
   const made = linkLocal(dir, repo)
   expect(made.length).toBe(3)
-  for (const p of ['core', 'runes', 'elements']) {
-    expect(lstatSync(join(scope, `nano-${p}`)).isSymbolicLink()).toBe(true)
-    expect(readlinkSync(join(scope, `nano-${p}`))).toStartWith('..')   // relative
-    expect(realpathSync(join(scope, `nano-${p}`))).toBe(join(repo, 'packages', p))
+  for (const [p, name] of [['nano', 'nano-core'], ['elements', 'nano-elements'], ['ui', 'nano-ui']]) {
+    expect(lstatSync(join(scope, name)).isSymbolicLink()).toBe(true)
+    expect(readlinkSync(join(scope, name))).toStartWith('..')   // relative
+    expect(realpathSync(join(scope, name))).toBe(join(repo, 'packages', p))
   }
 })
 
@@ -39,7 +39,7 @@ test('running it twice changes nothing', () => {
 test('touches nothing else in node_modules', () => {
   const { repo, dir, scope } = fixture()
   linkLocal(dir, repo)
-  expect(readdirSync(scope).sort()).toEqual(['nano-core', 'nano-elements', 'nano-runes', 'other'])
+  expect(readdirSync(scope).sort()).toEqual(['nano-core', 'nano-elements', 'nano-ui', 'other'])
   expect(lstatSync(join(scope, 'other')).isDirectory()).toBe(true)
   expect(lstatSync(join(dir, 'node_modules', 'lit')).isDirectory()).toBe(true)
 })

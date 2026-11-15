@@ -1,6 +1,6 @@
 # ui-workspace
 
-The host: one `@pritzlaff/nano` `Application`, with its own pod `ui` (`workspace.host/ui`, the `HostUI` of
+The host: one `@pritzlaff/nano-core` `Application`, with its own pod `ui` (`workspace.host/ui`, the `HostUI` of
 `@pritzlaff/nano-ui`) in runtime `main`.
 
 - **Built-ins:** the `nano.ui` implementations; choosing one adds a pod `<kind><n>` to `main`.

@@ -5,7 +5,7 @@
  *   ctx.one(Sink)              // .call.write(['A']) gives the count written
  */
 import { Type } from 'typebox'
-import { defineSchema, iface, op } from '@pritzlaff/nano'
+import { defineSchema, iface, op } from '@pritzlaff/nano-core'
 
 export const Rows = defineSchema('Rows', Type.Array(Type.String()))
 export const Nothing = defineSchema('Nothing', Type.Object({}))

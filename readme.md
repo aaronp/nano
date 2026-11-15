@@ -6,9 +6,10 @@ View it [here](https://aaronp.github.io/nano/)
 
 ## Published packages
 
-`@pritzlaff/nano-core` (ops, components, registries, runtimes), `@pritzlaff/nano-runes` (components written as
-state and functions) and `@pritzlaff/nano-elements` (Lit elements over components) are published to npm, so a
-component can be built in its own repo. Everything else here is private.
+`@pritzlaff/nano-core` (the model: pods, runtimes, deployments and the one live `Application`; in `packages/nano`),
+`@pritzlaff/nano-elements` (Lit elements and the `--nano-*` theme) and `@pritzlaff/nano-ui` (the `nano.ui` provider
+and its views; in `packages/ui`) are published to npm. `@pritzlaff/nano-runes` is no longer published; its 0.3.0 stays
+on npm. Everything else here is private.
 
 - `make packages` builds each into `packages/<name>/dist`, a ready-to-publish folder; `make smoke` installs those
   into a scratch folder as a stranger would, type-checks and runs a consumer.
@@ -21,9 +22,9 @@ component can be built in its own repo. Everything else here is private.
 
 ## Publishing
 
-The three packages are released together, at one version. From your machine:
+The three packages are released from one tag, which names `nano-core`'s version (`nano-ui` has its own, starting at 0.1.0). From your machine:
 
-1. **Set the version** (if it isn't already): `bun scripts/version.ts 0.2.0` bumps core, runes and elements; commit it.
+1. **Set the version** (if it isn't already): `bun scripts/version.ts 0.5.0` sets all three to one version, or edit a package's `package.json`; commit it.
 2. **Log in to npm** once per machine: `npm login` (as `pritzlaff`); `npm whoami` checks.
 3. **Publish:** `make publish OTP=123456`. It builds the packages, smoke-tests them as a stranger would, then
    publishes each version not already on npm (so a re-run after a failure is safe).

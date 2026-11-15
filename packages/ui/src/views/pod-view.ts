@@ -3,7 +3,7 @@
  * with each op's name and kind, and per port the calls to it and the last result delivered.
  */
 import { css, html } from 'lit'
-import type { AppEvent, NanoResult } from '@pritzlaff/nano'
+import type { AppEvent, NanoResult } from '@pritzlaff/nano-core'
 import { base, t } from '@pritzlaff/nano-elements'
 import { shown, ViewElement, type ViewTarget } from './view.ts'
 

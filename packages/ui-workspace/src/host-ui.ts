@@ -4,7 +4,7 @@
  *
  *   registry.add(hostProvider); Pod.eager(hostUi)   // the pod `ui` in runtime `main`
  */
-import { implementation, provide, provider, success } from '@pritzlaff/nano'
+import { implementation, provide, provider, success } from '@pritzlaff/nano-core'
 import { HostUI } from '@pritzlaff/nano-ui'
 import { toast } from '@pritzlaff/nano-elements'
 

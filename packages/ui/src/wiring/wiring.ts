@@ -3,7 +3,7 @@
  * placed in more than one runtime. Read-only. It rebuilds on `applied` and lights a cable for 600ms when it carries a message.
  */
 import { LitElement } from 'lit'
-import type { Application, Registry } from '@pritzlaff/nano'
+import type { Application, Registry } from '@pritzlaff/nano-core'
 import { MARGIN, ZOOM_MAX, ZOOM_MIN } from './constants'
 import { frameId, layout, posKey, type Layout, type Rect } from './layout'
 import { circuitOf } from './model'

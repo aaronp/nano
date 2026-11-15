@@ -7,7 +7,7 @@
  *   await host.importUrl('/examples/slice/nano.json')   // importApp, then apply
  *   host.saved()                                         // { ...app.deployment(), providers, views }, without ui
  */
-import { Application, assemble, createRegistry, Pod, success, type AppDeployment, type NanoResult, type Registry } from '@pritzlaff/nano'
+import { Application, assemble, createRegistry, Pod, success, type AppDeployment, type NanoResult, type Registry } from '@pritzlaff/nano-core'
 import uiProvider, { importApp, views as uiViews, type Loaded, type ViewMap } from '@pritzlaff/nano-ui'
 import { toast } from '@pritzlaff/nano-elements'
 import { hostProvider, hostUi } from './host-ui.ts'

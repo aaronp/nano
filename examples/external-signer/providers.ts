@@ -6,7 +6,7 @@
  *   { pods: { vault: Pod.lazy(vault), signer: Pod.lazy(signer) },
  *     runtimes: { signer: { pods: ['vault', 'signer'], subscriptions: [{ kind: 'call', from: 'signer', to: 'vault' }] } } }
  */
-import { implementation, provide, provider, success } from '@pritzlaff/nano'
+import { implementation, provide, provider, success } from '@pritzlaff/nano-core'
 import { KeyFormatter, KeyGenerator, Log, Signer, Tester, Vault } from './interfaces.ts'
 
 const toBase64 = (b: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(b)))

@@ -3,7 +3,7 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { Application, assemble, createRegistry, iface, implementation, op, Pod, port, provide, provider, success, defineSchema, type AppDeployment, type NanoResult } from '@pritzlaff/nano'
+import { Application, assemble, createRegistry, iface, implementation, op, Pod, port, provide, provider, success, defineSchema, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider, { Debounce, debounce, defineViews, input, Input, Log, log, map, MapIface } from '../src/index.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }

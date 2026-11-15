@@ -1,5 +1,5 @@
 import { Type } from 'typebox'
-import { defineSchema, implementation, provide, success } from '@pritzlaff/nano'
+import { defineSchema, implementation, provide, success } from '@pritzlaff/nano-core'
 import { MapIface } from '../interfaces.ts'
 
 /** `code` is a function body over `x`. A body that does not parse makes `make` throw, so each call fails with `threw`. */

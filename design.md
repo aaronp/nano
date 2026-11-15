@@ -1,5 +1,7 @@
 # Design: the nano model
 
+Published as `@pritzlaff/nano-core` (0.4.0, replacing the 0.3 model); the folder is `packages/nano`.
+
 Spec: `docs/superpowers/specs/2026-11-14-pods-runtimes-application-design.md`, and
 `docs/superpowers/specs/2026-11-14-values-and-application-design.md` for what it does not revise. Decisions:
 `docs/decisions.md` (cited as D<n>; D70 on are this model, D90 on are pods, runtimes and an application). Worked

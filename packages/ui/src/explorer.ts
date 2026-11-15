@@ -3,7 +3,7 @@
  * there. Choosing a pod, or a "built on" row, fires `nano-open` with `{ runtime, pod }`.
  */
 import { LitElement, html } from 'lit'
-import type { Application, Registry } from '@pritzlaff/nano'
+import type { Application, Registry } from '@pritzlaff/nano-core'
 import { base, type TreeNode } from '@pritzlaff/nano-elements'
 import '@pritzlaff/nano-elements'
 

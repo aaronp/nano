@@ -6,7 +6,7 @@
  *   v2:  migrate → db-v2 (rows a, b)      v3:  migrate → db-v3 (empty)
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, assemble, createRegistry, Pod, success, type AppEvent, type Implementation } from '@pritzlaff/nano'
+import { Application, assemble, createRegistry, Pod, success, type AppEvent, type Implementation } from '@pritzlaff/nano-core'
 import { careless, db, migrate, migrationProvider } from './providers.ts'
 
 /** v2 with rows a, b; v3 empty; `impl` placed in both as `migrate` and wired to each db. */

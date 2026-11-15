@@ -1,5 +1,5 @@
 // The Circuit, as a pure function of an application's deployment and the registry that knows its implementations.
-import type { AppDeployment, Op, Registry } from '@pritzlaff/nano'
+import type { AppDeployment, Op, Registry } from '@pritzlaff/nano-core'
 import { padTypeOf, type Box, type Cable, type Circuit, type Pad } from './types'
 
 const padsOf = (scope: string, pod: string, deployment: AppDeployment, registry: Registry): Pad[] => {

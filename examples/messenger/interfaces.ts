@@ -5,7 +5,7 @@
  *   if (ctx.all(Messaging).length === 0) …          // nothing wired: the composer is disabled
  */
 import { Type } from 'typebox'
-import { defineSchema, iface, op } from '@pritzlaff/nano'
+import { defineSchema, iface, op } from '@pritzlaff/nano-core'
 
 export const Key = defineSchema('Key', Type.String())
 export const MaybeValue = defineSchema('MaybeValue', Type.Union([Type.String(), Type.Null()]))

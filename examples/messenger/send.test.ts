@@ -6,7 +6,7 @@
  *   messaging:  send → db        chat:  send        support:  send
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, assemble, createRegistry, Pod, success, type AppEvent } from '@pritzlaff/nano'
+import { Application, assemble, createRegistry, Pod, success, type AppEvent } from '@pritzlaff/nano-core'
 import { messengerProvider, send } from './providers.ts'
 
 const sent = (events: AppEvent[], runtime: string) => events.flatMap(e => (e.type === 'sent' && e.runtime === runtime ? [`${e.from}->${e.to}`] : []))

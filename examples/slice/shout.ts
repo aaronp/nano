@@ -1,4 +1,4 @@
-import { implementation, provide, provider, success } from '@pritzlaff/nano'
+import { implementation, provide, provider, success } from '@pritzlaff/nano-core'
 import { MapIface } from '@pritzlaff/nano-ui'
 
 const shout = implementation('example.slice/shout', {

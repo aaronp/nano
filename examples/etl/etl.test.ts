@@ -6,7 +6,7 @@
  *   foo:  etl → source      bar:  etl → sink
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, assemble, createRegistry, Pod, success, type AppEvent, type AppDeployment } from '@pritzlaff/nano'
+import { Application, assemble, createRegistry, Pod, success, type AppEvent, type AppDeployment } from '@pritzlaff/nano-core'
 import { etl, etlProvider, sink, source, written } from './providers.ts'
 
 async function live(d: AppDeployment) {

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@pritzlaff/nano": "workspace:*",
+    "@pritzlaff/nano-core": "workspace:*",
     "@pritzlaff/nano-ui": "workspace:*",
     "typebox": "^1.4.0"
   }

@@ -1,4 +1,4 @@
-.PHONY: test test-ui install ui dev serve-template serve-inbox link-templates packages smoke publish template-check template-export
+.PHONY: test test-ui install ui dev serve-template link-templates packages smoke publish template-check template-export
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
@@ -8,8 +8,7 @@ endif
 test:
 	@for p in packages/*/; do echo "== $$p"; (cd $$p && bun test --isolate) || exit 1; done
 
-# Browser tests (e2e/*.e2e.ts) in your Chrome; starts `make ui`, `make serve-template` and `make serve-inbox` unless they're running.
-# templates/inbox needs `bun install` there and `make link-templates` once.
+# Browser tests (e2e/*.e2e.ts) in your Chrome; starts `make ui` and `make serve-template` unless they're running.
 test-ui:
 	bunx playwright test
 
@@ -33,16 +32,11 @@ TEMPLATE_PORT ?= 5174
 serve-template:
 	$(MAKE) -C templates/nano-template serve PORT=$(TEMPLATE_PORT)
 
-# Build the inbox package and serve it on another origin (http://localhost:5175/manifest.json; INBOX_PORT=5175 by default).
-INBOX_PORT ?= 5175
-serve-inbox:
-	$(MAKE) -C templates/inbox serve PORT=$(INBOX_PORT)
-
 # Point the templates' @pritzlaff/nano-* at this repo's packages (after a `bun install` in each).
 link-templates:
-	bun scripts/link-local.ts templates/nano-template templates/inbox
+	bun scripts/link-local.ts templates/nano-template
 
-# Build the published packages (@pritzlaff/nano-core, -runes, -elements) into packages/*/dist, ready for npm.
+# Build the published packages (@pritzlaff/nano-core, -elements, -ui) into packages/*/dist, ready for npm.
 packages:
 	bun scripts/build-packages.ts
 
@@ -55,7 +49,7 @@ smoke: packages
 # already on npm is skipped. CI publishes the same way on a v* tag (publish.yml), with provenance.
 publish: smoke
 	@npm whoami >/dev/null 2>&1 || { echo "Not logged in to npm: run 'npm login' first."; exit 1; }
-	@for p in core runes elements; do \
+	@for p in nano elements ui; do \
 	  name=$$(node -p "require('./packages/$$p/dist/package.json').name"); \
 	  version=$$(node -p "require('./packages/$$p/dist/package.json').version"); \
 	  if npm view "$$name@$$version" version >/dev/null 2>&1; then echo "$$name@$$version is already published"; continue; fi; \

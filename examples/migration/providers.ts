@@ -4,7 +4,7 @@
  *
  *   Pod.lazy(migrate, { config: { from: 'v2', to: 'v3' } })   // placed in both, wired to each db
  */
-import { implementation, provide, provider, sel, success } from '@pritzlaff/nano'
+import { implementation, provide, provider, sel, success } from '@pritzlaff/nano-core'
 import { DB, Migrate } from './interfaces.ts'
 
 export const db = implementation('example.migration/db', { provides: [DB], make: (_ctx, seed: string[] = []) => {

@@ -2,7 +2,7 @@
  * The nano.ui slice, headless: input → debounce → map → log, through assemble and Application.create.
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, assemble, createRegistry, Pod, port, success, type AppDeployment, type NanoResult } from '@pritzlaff/nano'
+import { Application, assemble, createRegistry, Pod, port, success, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider, { Debounce, debounce, input, Input, Log, log, map, MapIface } from '../src/index.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }

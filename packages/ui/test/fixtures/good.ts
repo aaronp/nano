@@ -1,4 +1,4 @@
-import { implementation, provide, provider, success } from '@pritzlaff/nano'
+import { implementation, provide, provider, success } from '@pritzlaff/nano-core'
 import { MapIface } from '../../src/index.ts'
 
 export default provider('example.fx', [implementation('example.fx/echo', { provides: [MapIface], make: () => [provide(MapIface, { map: async x => success(x) })] })])

@@ -1,4 +1,4 @@
-// The host on @pritzlaff/nano: the built-ins, importing the slice (explorer, Save round-trip), a failed import, HostUI.approve.
+// The host on @pritzlaff/nano-core: the built-ins, importing the slice (explorer, Save round-trip), a failed import, HostUI.approve.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 // The page is served from the repo, as file: (bun can import file: modules, not http:), so the host and the slice agree on /bundle/nano-ui.js.
 const page = new URL('../../../', import.meta.url).href
@@ -6,7 +6,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: page })
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { plugin } from 'bun'
 import { Type } from 'typebox'
-import { defineSchema, iface, implementation, op, Pod, provide, provider, type AppDeployment } from '@pritzlaff/nano'
+import { defineSchema, iface, implementation, op, Pod, provide, provider, type AppDeployment } from '@pritzlaff/nano-core'
 import type { Host } from '../src/host.ts'
 // After happy-dom is registered (static imports would run first): elements define themselves on import.
 await import('../src/boot-theme.ts')   // as main.ts does first

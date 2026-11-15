@@ -3,14 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "The host: one @pritzlaff/nano Application, the nano.ui built-ins, import and save of nano.json, and the nano-ui views.",
+  "description": "The host: one @pritzlaff/nano-core Application, the nano.ui built-ins, import and save of nano.json, and the nano-ui views.",
   "scripts": {
     "build": "bun scripts/build.ts",
     "dev": "bun scripts/build.ts --watch",
     "test": "bun test --isolate"
   },
   "dependencies": {
-    "@pritzlaff/nano": "workspace:*",
+    "@pritzlaff/nano-core": "workspace:*",
     "@pritzlaff/nano-elements": "workspace:*",
     "@pritzlaff/nano-ui": "workspace:*",
     "lit": "^3.3.3",

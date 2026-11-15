@@ -6,7 +6,7 @@
  *   const s = ctx.one(Signer)         // s.call.sign({ publicKey, purpose: 'login', payload }) gives { status: 'signed', signature }
  */
 import { Type } from 'typebox'
-import { defineSchema, iface, op } from '@pritzlaff/nano'
+import { defineSchema, iface, op } from '@pritzlaff/nano-core'
 
 const Base64 = Type.String({ contentEncoding: 'base64' })
 

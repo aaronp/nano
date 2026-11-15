@@ -1,4 +1,4 @@
-# Publishes @pritzlaff/nano-core, nano-runes and nano-elements to npm when a version tag is pushed.
+# Publishes @pritzlaff/nano-core, nano-elements and nano-ui to npm when a version tag is pushed.
 #   bun scripts/version.ts 0.2.0 && git commit -am "release 0.2.0" && git tag v0.2.0 && git push --follow-tags
 # Authentication: npm trusted publishing (OIDC). On npmjs.com, each package → Settings → Trusted publishing →
 # GitHub Actions, repository aaronp/nano, workflow publish.yml. Until then (a package must exist before it can trust
@@ -37,23 +37,21 @@ jobs:
       - name: Type check
         run: node_modules/.bin/tsc -p .
       - name: Test
-        run: for p in core runes elements; do (cd packages/$p && bun test); done
+        run: for p in nano elements ui; do (cd packages/$p && bun test --isolate) || exit 1; done
       - name: Build
         run: bun scripts/build-packages.ts
-      - name: The tag matches the packages' version
+      - name: The tag matches nano-core's version
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          for p in core runes elements; do
-            v=$(node -p "require('./packages/$p/dist/package.json').version")
-            [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "packages/$p is $v but the tag is $GITHUB_REF_NAME"; exit 1; }
-          done
+          v=$(node -p "require('./packages/nano/dist/package.json').version")
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "packages/nano is $v but the tag is $GITHUB_REF_NAME"; exit 1; }
       - name: Installs and runs as a stranger would
         run: bun scripts/smoke-packages.ts
       - name: Publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          for p in core runes elements; do
+          for p in nano elements ui; do
             name=$(node -p "require('./packages/$p/dist/package.json').name")
             version=$(node -p "require('./packages/$p/dist/package.json').version")
             if npm view "$name@$version" version >/dev/null 2>&1; then echo "$name@$version is already published"; continue; fi
