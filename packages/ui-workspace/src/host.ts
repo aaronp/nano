@@ -76,8 +76,11 @@ export async function start(): Promise<NanoResult<Host>> {
 
   const data = (): AppDeployment => ({ ...app.deployment(), providers: { ...loaded.deployment.providers }, views: { ...loaded.deployment.views } })
   async function apply(next: AppDeployment, views = loaded.views): Promise<NanoResult<void>> {
+    // The providers and views are kept before the apply, so listeners of its `applied` event already read them from data().
+    const before = loaded
+    loaded = { deployment: { ...next, providers: next.providers, views: next.views }, registry, views }
     const applied = shown(await app.apply(next))
-    if (applied.ok) loaded = { deployment: { ...app.deployment(), providers: next.providers, views: next.views }, registry, views }
+    loaded = applied.ok ? { ...loaded, deployment: { ...app.deployment(), providers: next.providers, views: next.views } } : before
     return applied
   }
 

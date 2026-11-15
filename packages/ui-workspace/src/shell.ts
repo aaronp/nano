@@ -87,8 +87,10 @@ class WorkspaceShell extends LitElement {
   /** The opened pod's view element, made again only when its tag or pod changes. */
   private view(h: Host, at: { runtime: string; pod: string }) {
     const tag = viewFor(at.pod, h.data(), h.defaults()), key = `${tag} ${at.runtime} ${at.pod}`
-    if (this.shown?.key !== key) this.shown = { key, el: document.createElement(tag) }
-    this.shown.el.target = { app: h.app, registry: h.registry, runtime: at.runtime, pod: at.pod }
+    if (this.shown?.key !== key) {   // the target is set once: a new object on every render would restart the view's listening, and its calls would re-render the shell
+      this.shown = { key, el: document.createElement(tag) }
+      this.shown.el.target = { app: h.app, registry: h.registry, runtime: at.runtime, pod: at.pod }
+    }
     return this.shown.el
   }
 
