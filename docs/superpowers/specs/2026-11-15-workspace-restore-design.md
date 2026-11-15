@@ -37,7 +37,7 @@ schema, whose handlers cross a `MessagePort` into the frame. Everything else (ca
 the event stream, close) treats it like any other pod, so the frame boundary is policed and recorded like every
 other message.
 
-**Recommended:** one new `Application.create` option, `isolate(name, pod) => Implementation`, synchronous (the
+**Decided:** one new `Application.create` option, `isolate(name, pod) => Implementation`, synchronous (the
 stand-in is built from the probed description; its `make` opens the frame, asynchronously). When it is absent, a
 non-host pod fails to build with `invalid-input` ("no host for isolation sandbox"). This is a new public option,
 so it is the user's call.
@@ -137,14 +137,11 @@ setAppBar), nano-ui's explorer, wiring and views, and the themes are kept. The n
 The KV store example (next); the todo app; editable wiring; `on` across frames; Web Worker runtimes;
 policies beyond `allow-all`.
 
-## Decisions needed from the user
+## Decisions (user, 2026-11-15)
 
-- **The `isolate` option on `Application.create`** (above), versus some other way for the host to substitute a
-  stand-in for one pod. (Putting a stand-in in the registry instead works per implementation, not per pod, so the
-  same provider couldn't run in `host` for one pod and in a frame for another.)
-- **Where import lives.** Probing instead of importing, the confirm prompt and the cross-origin rules are host
-  policy, but `importApp` is a published `nano-ui` export. Recommended: move import into `ui-workspace` and drop
-  `importApp`, `merge` and `Loaded` from nano-ui's exports. The alternative is widening `importApp`'s options.
+- **`Application.create` gains `isolate(name, pod) => Implementation`** (synchronous). A non-host pod with no
+  `isolate` fails to build with `invalid-input`.
+- **Import moves into `ui-workspace`.** nano-ui drops `importApp`, `merge` and `Loaded` from its exports.
 
 ## Left to the builder
 
