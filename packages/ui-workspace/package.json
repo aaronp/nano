@@ -6,7 +6,7 @@
   "description": "The host: one @pritzlaff/nano Application, the nano.ui built-ins, import and save of nano.json, and the nano-ui views.",
   "scripts": {
     "build": "bun scripts/build.ts",
-    "dev": "bun scripts/build.ts && bun build src/main.ts --outdir public --format esm --external @pritzlaff/nano --external @pritzlaff/nano-ui --external lit --external 'lit/*' --external typebox --external 'typebox/*' --watch",
+    "dev": "bun scripts/build.ts --watch",
     "test": "bun test --isolate"
   },
   "dependencies": {

@@ -17,7 +17,7 @@ const starts: Record<string, unknown> = { map: { code: 'return x' } }
 type Pick = { from?: string; source?: string; to?: string; target?: string }
 const value = (e: Event) => (e.target as HTMLElement & { value: string }).value
 
-export class WorkspaceShell extends LitElement {
+class WorkspaceShell extends LitElement {
   static properties = { host: { attribute: false }, heading: {}, opened: { state: true }, events: { state: true }, pick: { state: true } }
   static styles = [base, kit, css`
     :host { display: flex; flex-direction: column; height: 100vh; background: ${t('bg')} }
@@ -39,6 +39,7 @@ export class WorkspaceShell extends LitElement {
   private shown?: { key: string; el: HTMLElement & { target?: ViewTarget } }
 
   constructor() { super(); this.heading = 'Nano'; this.events = []; this.pick = {}; provideBus(this, createBus()) }
+  connectedCallback() { super.connectedCallback(); this.requestUpdate() }   // listens again (willUpdate) after a re-attach
   disconnectedCallback() { super.disconnectedCallback(); this.off?.(); this.listening = undefined }
   willUpdate() {
     if (!this.host || this.listening === this.host) return
@@ -80,7 +81,7 @@ export class WorkspaceShell extends LitElement {
     a.href = URL.createObjectURL(new Blob([JSON.stringify(h.saved(), null, 2) + '\n'], { type: 'application/json' }))
     a.download = 'nano.json'
     a.click()
-    URL.revokeObjectURL(a.href)
+    setTimeout(() => URL.revokeObjectURL(a.href))   // after the download has started
   }
 
   /** The opened pod's view element, made again only when its tag or pod changes. */

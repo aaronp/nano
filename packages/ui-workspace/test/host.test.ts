@@ -1,6 +1,8 @@
 // The host on @pritzlaff/nano: the built-ins, importing the slice (explorer, Save round-trip), a failed import, HostUI.approve.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
-if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
+// The page is served from the repo, as file: (bun can import file: modules, not http:), so the host and the slice agree on /bundle/nano-ui.js.
+const page = new URL('../../../', import.meta.url).href
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: page })
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { plugin } from 'bun'
 import { Type } from 'typebox'
@@ -67,16 +69,27 @@ test('given the slice imported, then the explorer lists in, wait, up, out and Sa
   expect(await host.apply({ ...host.data(), views: { up: 'nano-pod-view' } })).toMatchObject({ ok: true })
   const saved = host.saved()
   const file: AppDeployment = await Bun.file(new URL(slice)).json()
-  expect(saved.providers).toEqual(file.providers!)
+  // stored resolved, so a saved nano.json loads from anywhere on the origin
+  expect(saved.providers).toEqual({ 'nano.ui': new URL('/bundle/nano-ui.js', page).href, 'example.slice': new URL('./shout.js', slice).href })
   expect(saved.views).toEqual({ up: 'nano-pod-view' })
   expect(saved.pods).toEqual(file.pods)
   expect(saved.runtimes).toEqual(file.runtimes)
 
-  const again = new URL('./saved.json', slice).href
+  const again = new URL('./saves/nano.json', import.meta.url).href   // another directory than the slice's
   json.set(again, saved)
   const fresh = (await mount()).host
   expect(await fresh.importUrl(again)).toMatchObject({ ok: true })
   expect(fresh.saved()).toEqual(saved)
+})
+
+test('given an app with a pod named ui, then the import is refused and the registry and deployment are unchanged', async () => {
+  const { host } = await mount()
+  const before = { manifest: host.registry.manifest(), data: host.data() }
+  const clash = new URL('./clash/nano.json', import.meta.url).href
+  json.set(clash, { pods: { ui: { implementation: 'example.slice/shout', eager: false } }, runtimes: {}, providers: { 'example.slice': new URL('./shout.js', slice).href } })
+  expect(await host.importUrl(clash)).toMatchObject({ ok: false, fail: { reason: 'clash: pod ui is already loaded' } })
+  expect(host.registry.manifest()).toEqual(before.manifest)
+  expect(host.data()).toEqual(before.data)
 })
 
 test('given an import whose provider 404s, then a toast names it and the deployment is unchanged', async () => {

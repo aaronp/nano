@@ -7,10 +7,8 @@
  *   await host.importUrl('/examples/slice/nano.json')   // importApp, then apply
  *   host.saved()                                         // { ...app.deployment(), providers, views }, without ui
  */
-import { Application, assemble, createRegistry, failure, Pod, success, type AppDeployment, type NanoResult, type Registry } from '@pritzlaff/nano'
-import uiProvider, { views as uiViews, type ViewMap } from '@pritzlaff/nano-ui'
-// ponytail: @pritzlaff/nano-ui does not export importApp/Loaded yet; read from its source until it does (bundled into main.js).
-import { importApp, type Loaded } from '../../ui/src/import.ts'
+import { Application, assemble, createRegistry, Pod, success, type AppDeployment, type NanoResult, type Registry } from '@pritzlaff/nano'
+import uiProvider, { importApp, views as uiViews, type Loaded, type ViewMap } from '@pritzlaff/nano-ui'
 import { toast } from '@pritzlaff/nano-elements'
 import { hostProvider, hostUi } from './host-ui.ts'
 
@@ -29,13 +27,9 @@ export type Host = {
 
 const HOST = 'ui', MAIN = 'main'
 
-/** `d` without the host's own pod. Pure. */
-function withoutHost(d: AppDeployment): AppDeployment {
-  const out = structuredClone(d)
-  delete out.pods[HOST]
-  delete out.tags?.[HOST]
-  delete out.views?.[HOST]
-  const main = out.runtimes[MAIN]
+/** `d` with the host pod taken out of `main` (and `main` dropped once nothing else is in it), still among the pods. Pure. */
+function unplaced(d: AppDeployment): AppDeployment {
+  const out = structuredClone(d), main = out.runtimes[MAIN]
   if (main) {
     main.pods = main.pods.filter(p => p !== HOST)
     main.subscriptions = main.subscriptions.filter(s => s.from !== HOST && s.to !== HOST)
@@ -44,12 +38,24 @@ function withoutHost(d: AppDeployment): AppDeployment {
   return out
 }
 
-/** `d` with the host pod placed first in `main`; a pod of `d` named `ui` is a clash. Pure. */
-function withHost(d: AppDeployment): NanoResult<AppDeployment> {
-  if (HOST in d.pods) return failure('invalid-input', `clash: pod ${HOST} is already loaded`)
-  const main = d.runtimes[MAIN] ?? { pods: [], subscriptions: [] }
-  return success({ ...d, pods: { [HOST]: Pod.eager(hostUi), ...d.pods }, runtimes: { ...d.runtimes, [MAIN]: { ...main, pods: [HOST, ...main.pods] } } })
+/** `d` without the host's own pod. Pure. */
+function withoutHost(d: AppDeployment): AppDeployment {
+  const out = unplaced(d)
+  delete out.pods[HOST]
+  delete out.tags?.[HOST]
+  delete out.views?.[HOST]
+  return out
 }
+
+/** `d` with the host pod, first in `main`. Pure. */
+function placed(d: AppDeployment): AppDeployment {
+  const main = d.runtimes[MAIN] ?? { pods: [], subscriptions: [] }
+  return { ...d, pods: { [HOST]: Pod.eager(hostUi), ...d.pods }, runtimes: { ...d.runtimes, [MAIN]: { ...main, pods: [HOST, ...main.pods] } } }
+}
+
+/** nano.ui's URL as importApp stores a provider: its path on http(s), else whole (a file: page, in tests). */
+const at = URL.parse('/bundle/nano-ui.js', globalThis.location?.href)
+const nanoUi = at && !/^https?:$/.test(at.protocol) ? at.href : '/bundle/nano-ui.js'
 
 const shown = <T>(r: NanoResult<T>): NanoResult<T> => {
   if (!r.ok) toast(r.fail.reason, { variant: 'bad' })
@@ -60,14 +66,13 @@ export async function start(): Promise<NanoResult<Host>> {
   // nano.ui is /bundle/nano-ui.js: through the import map, the module this file imports.
   const registry = createRegistry()
   for (const p of [uiProvider, hostProvider]) { const added = registry.add(p); if (!added.ok) return added }
-  const first = withHost({ pods: {}, runtimes: {}, providers: { 'nano.ui': '/bundle/nano-ui.js' }, views: {} })
-  if (!first.ok) return first
-  const runtimes = assemble(first.value, registry)
+  const first = placed({ pods: {}, runtimes: {}, providers: { 'nano.ui': nanoUi }, views: {} })
+  const runtimes = assemble(first, registry)
   if (!runtimes.ok) return runtimes
   const created = await Application.create(runtimes.value, {})
   if (!created.ok) return created
   const app = created.value
-  let loaded: Loaded = { deployment: first.value, registry, views: { ...uiViews } }
+  let loaded: Loaded = { deployment: first, registry, views: { ...uiViews } }
 
   const data = (): AppDeployment => ({ ...app.deployment(), providers: { ...loaded.deployment.providers }, views: { ...loaded.deployment.views } })
   async function apply(next: AppDeployment, views = loaded.views): Promise<NanoResult<void>> {
@@ -81,10 +86,11 @@ export async function start(): Promise<NanoResult<Host>> {
     defaults: () => ({ ...loaded.views }),
     saved: () => withoutHost(data()),
     async importUrl(url) {
-      const imported = shown(await importApp(url, { ...loaded, deployment: withoutHost(data()) }))
+      // With the pod ui still in it, so merge refuses an app naming a pod ui before any provider is registered.
+      const imported = shown(await importApp(url, { ...loaded, deployment: unplaced(data()) }))
       if (!imported.ok) return imported
-      const next = shown(withHost(imported.value.deployment))
-      return next.ok ? apply(next.value, imported.value.views) : next
+      // ponytail: an apply that fails now leaves the new providers registered (a Registry has no remove); harmless, unused.
+      return apply(placed(imported.value.deployment), imported.value.views)
     },
   })
 }

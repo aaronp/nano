@@ -29,6 +29,9 @@ export function merge(current: AppDeployment, incoming: AppDeployment): NanoResu
   })
 }
 
+/** A resolved provider URL as stored: its path for http(s), so the same tree served elsewhere still loads; else whole. */
+const stored = (u: URL) => (u.protocol === 'http:' || u.protocol === 'https:' ? u.pathname + u.search : u.href)
+
 const isProvider = (p: unknown, coord: string): p is Provider =>
   typeof p === 'object' && p !== null && (p as Provider).coord === coord && (p as Provider).implementations instanceof Map
 
@@ -37,10 +40,16 @@ export async function importApp(url: string, loaded: Loaded): Promise<NanoResult
     const res = await fetch(url)
     if (!res.ok) return failure('invalid-input', `cannot load ${url}: ${res.status}`)
     const incoming = (await res.json()) as AppDeployment
+    const base = new URL(url, globalThis.location?.href)
+    // Each provider is resolved against the nano.json and must share its origin; it is stored resolved (see stored).
+    const refs = Object.entries(incoming.providers ?? {}).map(([coord, ref]) => [coord, new URL(ref, base)] as const)
+    const away = refs.find(([, at]) => at.origin !== base.origin)
+    if (away) return failure('invalid-input', `${away[1].href} is not on the origin of ${base.href}`)
+    incoming.providers = Object.fromEntries(refs.map(([coord, at]) => [coord, stored(at)]))
     const fresh: Provider[] = []
     const views: ViewMap = { ...loaded.views }
-    for (const [coord, ref] of Object.entries(incoming.providers ?? {})) {
-      const at = new URL(ref, new URL(url, globalThis.location?.href)).href
+    for (const [coord, u] of refs) {
+      const at = u.href
       let mod: { default?: unknown; views?: ViewMap }
       try { mod = await import(at) } catch (e) { return failure('invalid-input', `cannot load ${at}: ${e instanceof Error ? e.message : String(e)}`) }
       if (!isProvider(mod.default, coord)) return failure('invalid-input', `${at} has no default Provider ${coord}`)

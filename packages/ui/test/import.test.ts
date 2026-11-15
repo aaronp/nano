@@ -10,6 +10,7 @@ const dep = (over: Partial<AppDeployment>): AppDeployment => ({ pods: {}, runtim
 const domFetch = globalThis.fetch
 beforeAll(() => {
   globalThis.fetch = (async (u: string) => {
+    if (u === 'http://a.test/app/nano.json') return { ok: true, status: 200, json: async () => ({ pods: {}, runtimes: {}, providers: { 'example.fx': 'http://b.test/x.js' } }) }
     const f = Bun.file(new URL(u))
     const ok = await f.exists()
     return { ok, status: ok ? 200 : 404, json: () => f.json() }
@@ -45,6 +46,24 @@ describe('importApp', () => {
     if (!first.ok) throw new Error(first.fail.reason)
     const second = await importApp(fx('app.json'), first.value)
     expect(second).toMatchObject({ ok: false, fail: { reason: 'clash: pod in is already loaded' } })
+  })
+})
+
+describe('provider URLs', () => {
+  test('given a provider on another origin than its nano.json, then it is refused naming the URL, before anything loads', async () => {
+    const loaded = empty()
+    const r = await importApp('http://a.test/app/nano.json', loaded)
+    expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(!r.ok && r.fail.reason).toBe('http://b.test/x.js is not on the origin of http://a.test/app/nano.json')
+    expect(loaded.registry.manifest().providers).toEqual([])
+  })
+
+  test('given a relative provider, then it is stored resolved, and another nano.json naming the same module is no clash', async () => {
+    const first = await importApp(fx('app.json'), empty())
+    if (!first.ok) throw new Error(first.fail.reason)
+    expect(first.value.deployment.providers).toEqual({ 'example.fx': fx('good.ts') })
+    const second = await importApp(fx('sub/again.json'), first.value)
+    expect(second).toMatchObject({ ok: true, value: { deployment: { providers: { 'example.fx': fx('good.ts') } } } })
   })
 })
 
