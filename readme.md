@@ -17,14 +17,14 @@ on npm. Everything else here is private.
 - `templates/nano-template` is a stand-alone starter for component packages, mirrored to
   [aaronp/nano-template](https://github.com/aaronp/nano-template) (`make template-export`, or on push to master).
   `make template-check` tests it against the libraries in this commit.
-- To release from CI: `bun scripts/version.ts 0.2.0`, commit, `git tag v0.2.0`, push the tag. `.github/workflows/publish.yml`
+- To release from CI: `bun scripts/version.ts 0.5.0`, commit, `git tag v0.5.0`, push the tag. `.github/workflows/publish.yml`
   tests, builds, smoke-tests and publishes (npm trusted publishing; see the workflow's header).
 
 ## Publishing
 
 The three packages are released from one tag, which names `nano-core`'s version (`nano-ui` has its own, starting at 0.1.0). From your machine:
 
-1. **Set the version** (if it isn't already): `bun scripts/version.ts 0.5.0` sets all three to one version, or edit a package's `package.json`; commit it.
+1. **Set the version** (if it isn't already): `bun scripts/version.ts 0.5.0` sets nano and elements (`bun scripts/version.ts 0.2.0 ui` sets ui); commit it.
 2. **Log in to npm** once per machine: `npm login` (as `pritzlaff`); `npm whoami` checks.
 3. **Publish:** `make publish OTP=123456`. It builds the packages, smoke-tests them as a stranger would, then
    publishes each version not already on npm (so a re-run after a failure is safe).

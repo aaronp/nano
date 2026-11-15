@@ -1,5 +1,5 @@
 # Publishes @pritzlaff/nano-core, nano-elements and nano-ui to npm when a version tag is pushed.
-#   bun scripts/version.ts 0.2.0 && git commit -am "release 0.2.0" && git tag v0.2.0 && git push --follow-tags
+#   bun scripts/version.ts 0.5.0 && git commit -am "release 0.5.0" && git tag v0.5.0 (tag = nano-core's version) && git push --follow-tags
 # Authentication: npm trusted publishing (OIDC). On npmjs.com, each package → Settings → Trusted publishing →
 # GitHub Actions, repository aaronp/nano, workflow publish.yml. Until then (a package must exist before it can trust
 # a workflow), an NPM_TOKEN repository secret is used if present.
