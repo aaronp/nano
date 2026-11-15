@@ -119,20 +119,25 @@ test('given a frame that never sends ready, then the call fails threw within 200
   await app.close()
 })
 
-test('given junk from the frame, then each is dropped with a warning and calls still work', async () => {
-  console.warn = (m: string) => { warns.push(m) }
-  const { app, frame } = await harness()
-  await app.call('r', 's').echo!('x')
+test('given junk from the frame, then it fails the frame as failed does: a pending call settles threw with the reason', async () => {
   const bad = describeProvider(acme, {})
   expect(typeof checkMsg({ type: 'described', providers: [bad] })).toBe('object')
   ;(bad.implementations[0]!.provides[0]!.ops[0]!.input!.schema as Record<string, unknown>).pattern = '(a+)+$'
-  for (const m of [{ type: 'result', id: 999 }, { type: 'nope' }, { type: 'publish', op: 'tick', data: 'x'.repeat(2 * 1024 * 1024) },
-    { type: 'described', providers: [bad] }]) frame().postMessage(m)
-  await tick(20)
-  expect(warns.length).toBe(4)
-  expect(warns.join('\n')).toContain('pattern')
-  expect(await app.call('r', 's').echo!('y')).toEqual(success('y'))
-  await app.close()
+  const junk: [unknown, string][] = [[{ type: 'result', id: 999 }, 'bad result'], [{ type: 'nope' }, 'unknown type nope'],
+    [{ type: 'publish', op: 'tick', data: 'x'.repeat(2 * 1024 * 1024) }, 'over 1 MiB'], [{ type: 'described', providers: [bad] }, 'pattern']]
+  for (const [m, why] of junk) {
+    const { app, frame } = await harness({ silent: true })
+    const pending = app.call('r', 's').echo!('x')
+    await tick(10)
+    frame().postMessage({ type: 'ready' })
+    await tick(10)   // built; the call is posted and the silent frame never answers
+    frame().postMessage(m)
+    const r = await pending
+    expect(r).toMatchObject({ ok: false, fail: { type: 'threw' } })
+    expect(r.ok ? '' : r.fail.reason).toContain(why)
+    expect(await app.call('r', 's').echo!('y')).toMatchObject({ ok: false, fail: { type: 'threw' } })
+    await app.close()
+  }
 })
 
 test('given apply removes s → h, then the frame sees no H and an outcall sent anyway is not-found', async () => {

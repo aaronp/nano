@@ -69,7 +69,7 @@ export function standIn(real: Implementation, deps: Deps): Implementation {
 
       frame.port.onmessage = ({ data }) => {
         const m = checkMsg(data)
-        if (typeof m === 'string') return drop(m)
+        if (typeof m === 'string') return fail(`a malformed message: ${m}`)   // untrusted: fails the frame as `failed` does
         switch (m.type) {
           case 'ready': return ready()
           case 'failed': return fail(m.error)

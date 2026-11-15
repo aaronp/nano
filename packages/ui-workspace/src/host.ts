@@ -77,12 +77,14 @@ export async function start(): Promise<NanoResult<Host>> {
   let loaded: Loaded = { deployment: first, registry, views: { ...uiViews } }
   // A non-host pod runs in a frame, from its provider's URL as kept in `providers`; its open frame is in `frames`.
   const frames = new Map<string, Frame>()
+  let made: Application | undefined   // set once created; isolate runs only after (the first deployment has no non-host pod)
+  const live = () => { if (!made) throw new Error('the host is not started'); return made }
   function isolate(name: string, pod: PodData) {
     const real = registry.implementation(pod.implementation), at = real && loaded.deployment.providers?.[real.provider]
     if (!real || !at) throw new Error(`${name}: no provider URL for ${pod.implementation}`)
     return standIn(real, {
-      url: new URL(at, document.baseURI).href, edges: p => edgesFor(app.deployment(), registry, p), app: () => app,
-      onApplied: fn => app.listen(e => { if (e.type === 'applied') fn() }), warn: reason => void toast(reason, { variant: 'warn' }),
+      url: new URL(at, document.baseURI).href, edges: p => edgesFor(live().deployment(), registry, p), app: live,
+      onApplied: fn => live().listen(e => { if (e.type === 'applied') fn() }), warn: reason => void toast(reason, { variant: 'warn' }),
       open(p) {
         const f = openFrame(pod.isolation === 'sandbox' ? 'sandbox' : 'isolated-sandbox')
         frames.set(p, f)
@@ -92,7 +94,7 @@ export async function start(): Promise<NanoResult<Host>> {
   }
   const created = await Application.create(runtimes.value, { isolate })
   if (!created.ok) return created
-  const app = created.value
+  const app = made = created.value
   framesOf.set(app, frames)
 
   const data = (): AppDeployment => ({ ...app.deployment(), providers: { ...loaded.deployment.providers }, views: { ...loaded.deployment.views } })
