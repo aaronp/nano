@@ -67,6 +67,46 @@ describe('provider URLs', () => {
   })
 })
 
+describe('the host origin', () => {
+  const real = Object.getOwnPropertyDescriptor(globalThis, 'location')!
+  const at = (href: string) => Object.defineProperty(globalThis, 'location', { value: new URL(href), configurable: true })
+  afterAll(() => Object.defineProperty(globalThis, 'location', real))
+
+  test('given a page on http, when the nano.json is on another origin, then it is refused naming the URL', async () => {
+    at('http://host.test/')
+    const r = await importApp('http://a.test/app/nano.json', empty())
+    Object.defineProperty(globalThis, 'location', real)
+    expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(!r.ok && r.fail.reason).toContain('http://a.test/app/nano.json')
+  })
+
+  test('given a page on http, when a provider resolves to another origin, then it is refused', async () => {
+    at('http://a.test/')
+    const r = await importApp('http://a.test/app/nano.json', empty())
+    Object.defineProperty(globalThis, 'location', real)
+    expect(!r.ok && r.fail.reason).toContain('http://b.test/x.js')
+  })
+})
+
+describe('a coord the registry has', () => {
+  test('given the provider is already registered, then its module is not imported again', async () => {
+    const first = await importApp(fx('app.json'), empty())
+    if (!first.ok) throw new Error(first.fail.reason)
+    // The stored URL matches but names no module: an import() would fail.
+    const url = fx('missing.ts')
+    const loaded = { ...first.value, deployment: { ...first.value.deployment, providers: { 'example.fx': url } } }
+    const r = await importApp(fx('skip.json'), loaded)
+    expect(r.ok).toBe(true)
+  })
+})
+
+describe('own names', () => {
+  test('given a pod named constructor, then it imports without a clash', async () => {
+    const r = merge(dep({}), dep({ pods: { constructor: { implementation: 'x/y', eager: false } } }))
+    expect(r.ok).toBe(true)
+  })
+})
+
 describe('merge', () => {
   test('tags, providers and views are unioned; a provider under another URL is a clash', () => {
     const a = dep({ tags: { x: ['a'] }, providers: { p: '/p.js' }, views: { v: 'el-a' } })

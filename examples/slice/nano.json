@@ -57,7 +57,7 @@
     }
   },
   "providers": {
-    "nano.ui": "/bundle/nano-ui.js",
+    "nano.ui": "../../bundle/nano-ui.js",
     "example.slice": "./shout.js"
   }
 }

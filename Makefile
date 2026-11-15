@@ -26,8 +26,8 @@ dev:
 	@cd packages/ui-workspace && bun ../../scripts/quiet.ts bun run --silent build
 	@(cd packages/ui-workspace && bun ../../scripts/quiet.ts bun run --silent dev) & trap 'kill $$!' EXIT; bun scripts/serve.ts packages/ui-workspace/public $(PORT) --live
 
-# Build the template package and serve it on another origin, to import into `make ui` (Import URL)
-# (http://localhost:5174/nano.json; TEMPLATE_PORT=5174 by default).
+# Build the template package and serve dist/ at http://localhost:5174 (TEMPLATE_PORT) to look at it. `make ui` imports it
+# from its own origin: /examples/template/nano.json (the host build copies the template there).
 TEMPLATE_PORT ?= 5174
 serve-template:
 	$(MAKE) -C templates/nano-template serve PORT=$(TEMPLATE_PORT)

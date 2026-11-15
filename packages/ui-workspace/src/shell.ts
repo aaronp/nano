@@ -96,7 +96,10 @@ class WorkspaceShell extends LitElement {
 
   private viewPanel(h: Host) {
     const at = this.opened, d = h.data(), p = at && d.pods[at.pod]
-    if (!at || !p || !d.runtimes[at.runtime]?.pods.includes(at.pod)) return html`<p class="muted">Choose a pod in the explorer.</p>`
+    if (!at || !p || !d.runtimes[at.runtime]?.pods.includes(at.pod)) {
+      this.shown = undefined   // a pod removed and added again gets a fresh view
+      return html`<p class="muted">Choose a pod in the explorer.</p>`
+    }
     const tags = [...new Set([h.defaults()[p.implementation], 'nano-pod-view'].filter((x): x is string => !!x))]
     const same = (a: readonly string[]) => [...a].sort().join()
     const mine = same(h.registry.implementation(p.implementation)?.provides.map(i => i.coord) ?? [])

@@ -11,5 +11,7 @@ if (!host.ok) toast(host.fail.reason, { variant: 'bad', duration: 0 })
 else {
   ;(document.querySelector('workspace-shell') as HTMLElement & { host?: Host }).host = host.value
   const src = new URLSearchParams(location.search).get('src')
-  if (src) await host.value.importUrl(src)   // a failure is shown as a toast
+  // Only a URL on this page's origin (importApp refuses the rest too, but says why here).
+  if (src && new URL(src, location.href).origin !== location.origin) toast(`${src} is not on this origin`, { variant: 'bad' })
+  else if (src) await host.value.importUrl(new URL(src, location.href).href)   // a failure is shown as a toast
 }

@@ -20,3 +20,8 @@ src/host-ui.ts   workspace.host/ui: alert (toast), approve (<dialog>), setAppBar
 src/shell.ts     <workspace-shell>: the panels
 src/lib, src/components/{split-pane,theme-picker}.ts, src/boot-theme.ts   themes and split panes
 ```
+
+## Trust
+
+A `nano.json` is code: it names modules the host loads and runs. Import only what you trust. `nano.ui/map` compiles its
+config with `new Function`, so a host needs a CSP that allows `'unsafe-eval'`.

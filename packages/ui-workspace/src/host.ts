@@ -53,9 +53,10 @@ function placed(d: AppDeployment): AppDeployment {
   return { ...d, pods: { [HOST]: Pod.eager(hostUi), ...d.pods }, runtimes: { ...d.runtimes, [MAIN]: { ...main, pods: [HOST, ...main.pods] } } }
 }
 
-/** nano.ui's URL as importApp stores a provider: its path on http(s), else whole (a file: page, in tests). */
-const at = URL.parse('/bundle/nano-ui.js', globalThis.location?.href)
-const nanoUi = at && !/^https?:$/.test(at.protocol) ? at.href : '/bundle/nano-ui.js'
+/** nano.ui's URL as importApp stores a provider: its path on http(s), else whole (a file: page, in tests). Relative to
+ * the page, so a host under a subpath (GitHub Pages at /nano/) finds it. */
+const at = URL.parse('./bundle/nano-ui.js', globalThis.location?.href)
+const nanoUi = at ? (/^https?:$/.test(at.protocol) ? at.pathname : at.href) : '/bundle/nano-ui.js'
 
 const shown = <T>(r: NanoResult<T>): NanoResult<T> => {
   if (!r.ok) toast(r.fail.reason, { variant: 'bad' })
@@ -63,7 +64,7 @@ const shown = <T>(r: NanoResult<T>): NanoResult<T> => {
 }
 
 export async function start(): Promise<NanoResult<Host>> {
-  // nano.ui is /bundle/nano-ui.js: through the import map, the module this file imports.
+  // nano.ui is bundle/nano-ui.js under the page: through the import map, the module this file imports.
   const registry = createRegistry()
   for (const p of [uiProvider, hostProvider]) { const added = registry.add(p); if (!added.ok) return added }
   const first = placed({ pods: {}, runtimes: {}, providers: { 'nano.ui': nanoUi }, views: {} })
@@ -78,7 +79,7 @@ export async function start(): Promise<NanoResult<Host>> {
   async function apply(next: AppDeployment, views = loaded.views): Promise<NanoResult<void>> {
     // The providers and views are kept before the apply, so listeners of its `applied` event already read them from data().
     const before = loaded
-    loaded = { deployment: { ...next, providers: next.providers, views: next.views }, registry, views }
+    loaded = { deployment: next, registry, views }
     const applied = shown(await app.apply(next))
     loaded = applied.ok ? { ...loaded, deployment: { ...app.deployment(), providers: next.providers, views: next.views } } : before
     return applied

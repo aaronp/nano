@@ -1,0 +1,1 @@
+{ "pods": { "again": { "implementation": "example.fx/echo", "eager": false } }, "runtimes": {}, "providers": { "example.fx": "./missing.ts" } }

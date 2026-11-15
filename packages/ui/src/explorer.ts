@@ -34,7 +34,7 @@ export class NanoExplorer extends LitElement {
       if (e.type === 'built' || e.type === 'closed') this.states = { ...this.states, [e.pod]: e.type }
       else if (e.type === 'applied') {
         const live = t.app.deployment().pods   // built/closed events already keep changed and removed pods right
-        this.states = Object.fromEntries(Object.entries(this.states).filter(([pod]) => pod in live))
+        this.states = Object.fromEntries(Object.entries(this.states).filter(([pod]) => Object.hasOwn(live, pod)))
       }
     })
   }

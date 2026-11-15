@@ -13,11 +13,11 @@ const clash = (what: string, name: string) => failure('invalid-input', `clash: $
 
 /** `current` and `incoming` unioned; a name already present is a clash. Pure. */
 export function merge(current: AppDeployment, incoming: AppDeployment): NanoResult<AppDeployment> {
-  for (const k of Object.keys(incoming.pods)) if (k in current.pods) return clash('pod', k)
-  for (const k of Object.keys(incoming.runtimes)) if (k in current.runtimes) return clash('runtime', k)
-  const providers = { ...current.providers }
+  for (const k of Object.keys(incoming.pods)) if (Object.hasOwn(current.pods, k)) return clash('pod', k)
+  for (const k of Object.keys(incoming.runtimes)) if (Object.hasOwn(current.runtimes, k)) return clash('runtime', k)
+  const providers: Record<string, string> = { ...current.providers }
   for (const [k, url] of Object.entries(incoming.providers ?? {})) {
-    if (providers[k] !== undefined && providers[k] !== url) return clash('provider', k)
+    if (Object.hasOwn(providers, k) && providers[k] !== url) return clash('provider', k)
     providers[k] = url
   }
   return success({
@@ -41,19 +41,23 @@ export async function importApp(url: string, loaded: Loaded): Promise<NanoResult
     if (!res.ok) return failure('invalid-input', `cannot load ${url}: ${res.status}`)
     const incoming = (await res.json()) as AppDeployment
     const base = new URL(url, globalThis.location?.href)
+    // Providers load from the host's own origin (cross-origin comes later); with no http(s) page, from the nano.json's.
+    const here = globalThis.location, page = here && /^https?:$/.test(here.protocol) ? here.origin : undefined
+    if (page && base.origin !== page) return failure('invalid-input', `${base.href} is not on the origin of this page (${page})`)
     // Each provider is resolved against the nano.json and must share its origin; it is stored resolved (see stored).
     const refs = Object.entries(incoming.providers ?? {}).map(([coord, ref]) => [coord, new URL(ref, base)] as const)
-    const away = refs.find(([, at]) => at.origin !== base.origin)
+    const away = refs.find(([, at]) => at.origin !== (page ?? base.origin))
     if (away) return failure('invalid-input', `${away[1].href} is not on the origin of ${base.href}`)
     incoming.providers = Object.fromEntries(refs.map(([coord, at]) => [coord, stored(at)]))
     const fresh: Provider[] = []
     const views: ViewMap = { ...loaded.views }
     for (const [coord, u] of refs) {
       const at = u.href
+      if (loaded.registry.provider(coord)) continue   // already loaded; merge still checks the stored URL matches
       let mod: { default?: unknown; views?: ViewMap }
       try { mod = await import(at) } catch (e) { return failure('invalid-input', `cannot load ${at}: ${e instanceof Error ? e.message : String(e)}`) }
       if (!isProvider(mod.default, coord)) return failure('invalid-input', `${at} has no default Provider ${coord}`)
-      if (!loaded.registry.provider(coord)) fresh.push(mod.default)
+      fresh.push(mod.default)
       Object.assign(views, mod.views)
     }
     const deployment = merge(loaded.deployment, incoming)

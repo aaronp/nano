@@ -1,6 +1,6 @@
 // The host on @pritzlaff/nano-core: the built-ins, importing the slice (explorer, Save round-trip), a failed import, HostUI.approve.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
-// The page is served from the repo, as file: (bun can import file: modules, not http:), so the host and the slice agree on /bundle/nano-ui.js.
+// The page is served from the repo, as file: (bun can import file: modules, not http:), so the host and the slice agree on bundle/nano-ui.js.
 const page = new URL('../../../', import.meta.url).href
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: page })
 import { afterAll, beforeAll, expect, test } from 'bun:test'
@@ -70,7 +70,7 @@ test('given the slice imported, then the explorer lists in, wait, up, out and Sa
   const saved = host.saved()
   const file: AppDeployment = await Bun.file(new URL(slice)).json()
   // stored resolved, so a saved nano.json loads from anywhere on the origin
-  expect(saved.providers).toEqual({ 'nano.ui': new URL('/bundle/nano-ui.js', page).href, 'example.slice': new URL('./shout.js', slice).href })
+  expect(saved.providers).toEqual({ 'nano.ui': new URL('./bundle/nano-ui.js', page).href, 'example.slice': new URL('./shout.js', slice).href })
   expect(saved.views).toEqual({ up: 'nano-pod-view' })
   expect(saved.pods).toEqual(file.pods)
   expect(saved.runtimes).toEqual(file.runtimes)

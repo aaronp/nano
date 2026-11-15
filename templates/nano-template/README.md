@@ -34,11 +34,14 @@ Use this repository as a template (GitHub's "Use this template"), then rename:
 bun install
 bun test           # the pods through assemble + Application, the views, the build
 bun run build      # dist/: index.js, nano.json
-bun run serve      # build, then serve dist/ with CORS at http://localhost:4000
+bun run serve      # build, then serve dist/ at http://localhost:4000
 ```
 
-Import `http://localhost:4000/nano.json` into a host (the nano workspace's "Import URL"): it fetches the `nano.json`,
-loads each `providers` entry (relative to the `nano.json`, on the same origin) and shows the pods.
+A host imports an app from its own origin only (cross-origin comes later): put the build in the host's public dir (the
+nano workspace's build already copies it to `/examples/template/`, so import `/examples/template/nano.json`), or serve
+the host and `dist/` from one origin. The host fetches the `nano.json`, loads each `providers` entry (relative to the
+`nano.json`) and shows the pods. Importing alongside another app whose runtime is also `main` is refused: the names
+clash (namespacing comes later).
 
 ## What a host gets
 
@@ -59,4 +62,4 @@ host's theme; start from `base` and `kit` (`.btn`, `.badge`, `.input-group`…) 
 ## Publishing
 
 CI (`.github/workflows/ci.yml`) tests and builds on every push. `pages.yml` publishes `dist/` to GitHub Pages, so
-`https://<owner>.github.io/<repo>/nano.json` is the URL to import.
+`https://<owner>.github.io/<repo>/nano.json` is the app's URL (a host on that origin can import it).
