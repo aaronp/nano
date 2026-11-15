@@ -1,0 +1,14 @@
+{
+  "name": "@pritzlaff/nano-ui",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The nano.ui provider: input, debounce, map and log pods, and the HostUI interface.",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@pritzlaff/nano": "workspace:*",
+    "@pritzlaff/nano-elements": "workspace:*",
+    "lit": "^3.3.3",
+    "typebox": "1.4.4"
+  },
+  "devDependencies": { "@happy-dom/global-registrator": "^21.0.4" }
+}
