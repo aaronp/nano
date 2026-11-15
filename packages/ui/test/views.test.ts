@@ -74,6 +74,38 @@ describe('pod views', () => {
     expect(text(el)).toContain('main')
   })
 
+  test('given nano-map on up, when map is called with "hi", then it shows its code and the output HI', async () => {
+    const { app, registry } = await open()
+    const el = await mount('nano-map', { app, registry, runtime: 'main', pod: 'up' })
+    await app.call('main', 'up').map('hi')
+    await el.updateComplete
+    expect(text(el)).toContain('toUpperCase')
+    expect(text(el)).toContain('"HI"')
+  })
+
+  test('given nano-debounce on wait, when pushed, then pending; after flushed, it flashes, then idle', async () => {
+    const { app, registry } = await open()
+    const el = await mount('nano-debounce', { app, registry, runtime: 'main', pod: 'wait' })
+    expect(text(el)).toContain('idle')
+    await app.call('main', 'wait').push('x')
+    await el.updateComplete
+    expect(text(el)).toContain('pending')
+    await sleep(30)
+    await el.updateComplete
+    expect(text(el)).toContain('flushed')
+    await sleep(320)
+    await el.updateComplete
+    expect(text(el)).toContain('idle')
+  })
+
+  test('given nano-pod-view on up, when apply changes its config, then it shows the new config', async () => {
+    const { app, registry } = await open()
+    const el = await mount('nano-pod-view', { app, registry, runtime: 'main', pod: 'up' })
+    must(await app.apply({ ...slice, pods: { ...slice.pods, up: Pod.lazy(map, { config: { code: 'return 7' } }) } }))
+    await el.updateComplete
+    expect(text(el)).toContain('return 7')
+  })
+
   test('given a mounted view, when apply removes its pod, then it renders removed and its listener is gone', async () => {
     const { app, registry } = await open()
     let listening = 0

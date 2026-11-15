@@ -43,6 +43,7 @@ export class ViewElement extends LitElement {
     this.watching = t
     this.off = t.app.listen(e => {
       if (e.type === 'applied' && e.removed.includes(t.pod)) { this.removed = true; this.stop(); return }
+      if (e.type === 'applied') this.requestUpdate()   // config and placement are read from the deployment at render
       this.hear(e, t)
     })
     this.started(t)

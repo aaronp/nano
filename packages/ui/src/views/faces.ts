@@ -1,6 +1,6 @@
 /**
  * The nano.ui pods' own views: `nano-input` (a field; Enter submits), `nano-debounce` (pending, a flash on flushed),
- * `nano-map` (its code, the last input and output) and `nano-log` (its entries).
+ * `nano-map` (its code and last output) and `nano-log` (its entries).
  */
 import { css, html } from 'lit'
 import { port, type AppEvent, type NanoResult } from '@pritzlaff/nano'
@@ -47,27 +47,17 @@ export class NanoDebounce extends ViewElement {
 const MAP = port(MapIface, MapIface.ops.map)
 
 export class NanoMap extends ViewElement {
-  // ponytail: an input is known only when it is an earlier delivered result (its `cause`); a published event's data is not on the stream.
-  private results = new Map<string, NanoResult<unknown>>()
   private mine = new Set<string>()
-  private input?: NanoResult<unknown>
   private output?: NanoResult<unknown>
 
   protected hear(e: AppEvent, tg: ViewTarget) {
-    if (e.type === 'delivered') {
-      if (this.results.size > 200) this.results.clear()
-      this.results.set(e.id, e.result)
-      if (!this.mine.delete(e.id)) return
-      this.output = e.result
-    } else if (e.type === 'sent' && e.to === tg.pod && e.port === MAP) {
-      this.mine.add(e.id)
-      this.input = e.cause === undefined ? undefined : this.results.get(e.cause)
-    } else return
-    this.requestUpdate()
+    if (e.type === 'sent' && e.to === tg.pod && e.port === MAP) this.mine.add(e.id)
+    else if (e.type === 'denied') this.mine.delete(e.id)
+    else if (e.type === 'delivered' && this.mine.delete(e.id)) { this.output = e.result; this.requestUpdate() }
   }
   protected face(tg: ViewTarget) {
     const code = (tg.app.deployment().pods[tg.pod]?.config as { code?: string } | undefined)?.code ?? ''
-    return html`<pre class="code">${code}</pre><div>in ${shown(this.input)}</div><div>out ${shown(this.output)}</div>`
+    return html`<pre class="code">${code}</pre><div>out ${shown(this.output)}</div>`
   }
 }
 
@@ -84,6 +74,7 @@ export class NanoLog extends ViewElement {
   }
   protected hear(e: AppEvent, tg: ViewTarget) {
     if (e.type === 'sent' && e.to === tg.pod && e.port === LOG) this.logs.add(e.id)
+    else if (e.type === 'denied') this.logs.delete(e.id)
     else if (e.type === 'delivered' && this.logs.delete(e.id)) void this.read(tg)
   }
   protected face() {
