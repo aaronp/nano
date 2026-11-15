@@ -492,3 +492,36 @@ describe('nothing throws', () => {
     expect(seen).toMatchObject([{ ok: false, fail: { type: 'not-found' } }, []])
   })
 })
+
+describe('policed emissions', () => {
+  /** db piped to log and watched by w, in runtime r, whose policy refuses anything from db to `refused`. */
+  const policed = async (refused: string) => {
+    logged = []; heard = []
+    const d: AppDeployment = { pods: { w: Pod.eager(watcher), db: Pod.lazy(store, { config: 'db' }), log: Pod.lazy(logger) },
+      runtimes: { r: { pods: ['w', 'db', 'log'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' },
+        { kind: 'pipe', from: 'db', source: 'acme.Store/save', to: 'log', target: 'acme.Log/record' }] } } }
+    const policies = { r: { isAllowed: (from: string, to: string) => from === 'db' && to === refused ? { approved: false as const, reason: 'no' } : { approved: true as const } } }
+    const app = ok(await Application.create(ok(assemble(d, registry())), { policies }))
+    const events: AppEvent[] = []
+    app.listen(e => events.push(e))
+    return { app, events }
+  }
+  test('given a policy refusing db→log, when the host saves, then the pipe delivery is denied and the caller still gets its result', async () => {
+    const { app, events } = await policed('log')
+    expect(await app.call('r', 'db').save('x')).toEqual(success('db:x'))
+    await tick()
+    expect(logged).toEqual([])
+    const pipe = events.filter(isSent).find(e => e.kind === 'pipe')!
+    expect(events).toContainEqual({ type: 'denied', id: pipe.id, reason: 'no' })
+    expect(heard).toEqual(['db:x'])
+  })
+  test('given a policy refusing db→w, when the host saves, then the on delivery is denied and the caller still gets its result', async () => {
+    const { app, events } = await policed('w')
+    expect(await app.call('r', 'db').save('x')).toEqual(success('db:x'))
+    await tick()
+    expect(heard).toEqual([])
+    const on = events.filter(isSent).find(e => e.kind === 'on')!
+    expect(events).toContainEqual({ type: 'denied', id: on.id, reason: 'no' })
+    expect(logged).toEqual(['db:x'])
+  })
+})
