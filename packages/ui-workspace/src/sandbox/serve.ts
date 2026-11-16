@@ -33,6 +33,7 @@ export function serve(port: MessagePort, load: (url: string, coord: string) => P
   /** What a view in the frame sees: its own pod's client, its pod's events, and a deployment of just its pod. */
   function viewApp(m: Extract<Msg, { type: 'build' }>): Application {
     const no = async () => failure('invalid-input', `${m.pod}: a sandboxed view reaches only its own pod`)
+    const refused = { type: 'invalid-input' as const, reason: `${m.pod}: a sandboxed view reaches only its own pod` }
     const client = (pod: string) => new Proxy({}, { get: (_, op) => typeof op !== 'string' || op === 'then' ? undefined
       : pod === m.pod ? (input: unknown) => ask(id => ({ type: 'view-call', id, op, input })) : no })
     const deployment: AppDeployment = { pods: { [m.pod]: { implementation: m.coord, eager: true, config: m.config } },
@@ -40,9 +41,9 @@ export function serve(port: MessagePort, load: (url: string, coord: string) => P
     return {
       call: (_, pod) => client(pod) as ReturnType<Application['call']>, deployment: () => structuredClone(deployment),
       listen(fn) { heard.add(fn); return () => { heard.delete(fn) } }, apply: no, restart: no, close: no,
-      // ponytail: a view uses call; get's every method rejects with the Fail, as app.get's would on a missing pod.
-      get: () => new Proxy({}, { get: (_, op) => op === 'then' ? undefined
-        : async () => { const r = await no(); if (!r.ok) throw Object.assign(new Error(r.fail.reason), { fail: r.fail }) } }) as never,
+      // A view uses call: resolve finds nothing, and get throws its Fail, as app.get's would on a missing pod.
+      resolve: () => ({ ok: false, fail: refused, getOrThrow: () => { throw Object.assign(new Error(refused.reason), { fail: refused }) } }),
+      get: () => { throw Object.assign(new Error(refused.reason), { fail: refused }) },
     }
   }
 

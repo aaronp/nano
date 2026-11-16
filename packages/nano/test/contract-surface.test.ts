@@ -87,15 +87,18 @@ test('a Fail through deps or app.get throws an Error carrying it; a plain throw 
   expect(bad.fail.type).toBe('invalid-input')
 })
 
+const thrownBy = (f: () => unknown) => { try { f() } catch (e) { return e as Error & { fail: { type: string } } } }
+
 test('app.get is not-found or ambiguous as a thrown Fail, narrowed by runtime or pod, and follows apply', async () => {
   const app = await open()
-  const none = await app.get(Interface.define('acme.None', { x: Op.action(Str, Str) })).x('a').catch(x => x)
-  expect(none.fail.type).toBe('not-found')
+  const none = thrownBy(() => app.get(Interface.define('acme.None', { x: Op.action(Str, Str) })))
+  expect(none).toBeInstanceOf(Error)
+  expect(none?.fail.type).toBe('not-found')
   const two = deployment('acme/mem')
   two.pods.spare = { implementation: 'acme/other', eager: false }
   two.runtimes.main!.pods.push('spare')
   must(await app.apply(two))
-  expect((await app.get(KV).size().catch(x => x)).fail.type).toBe('ambiguous')
+  expect(thrownBy(() => app.get(KV))?.fail.type).toBe('ambiguous')
   await app.get(KV, { pod: 'spare' }).put({ k: 'a', v: 'b' })
   expect(await app.get(KV, { pod: 'spare', runtime: 'main' }).size()).toBe(1)
   expect(await app.get(KV, { pod: 'store' }).size()).toBe(0)
@@ -125,8 +128,21 @@ test('app.get: a pod placed in two runtimes is ambiguous unless where.runtime na
   const d = deployment('acme/mem')
   d.runtimes.side = { pods: ['store'], subscriptions: [] }
   const app = must(await Application.create(must(AppDeployment.assemble(d, registry))))
-  expect((await app.get(KV).size().catch(x => x)).fail.type).toBe('ambiguous')
+  expect(thrownBy(() => app.get(KV))?.fail.type).toBe('ambiguous')
   expect(await app.get(KV, { runtime: 'side' }).size()).toBe(0)
+})
+
+test('app.resolve says what it found (pod, runtime, implementation) or why not; app.get is its getOrThrow', async () => {
+  const app = await open()
+  const r = app.resolve(KV)
+  expect(r).toMatchObject({ ok: true, pod: 'store', runtime: 'main', implementation: 'acme/mem' })
+  await r.getOrThrow().put({ k: 'a', v: 'b' })
+  expect(await r.value!.size()).toBe(1)
+  expect(await app.get(KV).size()).toBe(1)
+  const none = app.resolve(KV, { pod: 'notes' })
+  expect(none).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+  expect(none.pod).toBeUndefined()
+  expect(thrownBy(() => none.getOrThrow())?.fail).toEqual(none.fail!)
 })
 
 test('the plain proxy: an unknown method throws an Error carrying unknown-op, not a TypeError', async () => {

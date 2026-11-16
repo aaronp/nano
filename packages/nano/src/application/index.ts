@@ -5,6 +5,7 @@
  *   const app = (await Application.create(AppDeployment.assemble(appDeployment, registry).value, {})).value
  *   await app.call('app', 'counter').inc(null)   // from 'host', through runtime 'app'
  *   await app.get(Counter).inc()                 // the one pod providing Counter, as a plain object; a Fail throws
+ *   app.resolve(Counter).pod                     // what was found (pod, runtime, implementation), or why not
  *   app.listen(e => …)                           // built, sent, delivered, denied, failure, …
  *   await app.close()                            // every instance closed, deliveries under way settled; later calls not-found
  */
@@ -12,7 +13,6 @@ import { Value } from 'typebox/value'
 import { AppDeployment } from '../deployment.ts'
 import type { Implementation } from '../implementation.ts'
 import type { Interface } from '../iface.ts'
-import { plain } from '../plain.ts'
 import type { Pod } from '../pod.ts'
 import type { Policy } from '../policy.ts'
 import { Registry } from '../registry.ts'
@@ -22,14 +22,17 @@ import { diff } from './apply.ts'
 import { compose } from './compose.ts'
 import { instances } from './instances.ts'
 import { client } from './emit.ts'
-import { impl, refusal, type Live } from './messages.ts'
+import { refusal, type Live } from './messages.ts'
+import { resolution, type Resolution } from './resolve.ts'
 import { stream, type AppEvent } from './stream.ts'
 
 export type { AppEvent } from './stream.ts'
+export type { Resolution } from './resolve.ts'
 
 export type Application = {
   call(runtime: string, pod: string): Record<string, (input: unknown) => Promise<NanoResult<unknown>>>
   get<I extends Interface>(api: I, where?: { runtime?: string; pod?: string }): Interface.Type<I>
+  resolve<I extends Interface>(api: I, where?: { runtime?: string; pod?: string }): Resolution<Interface.Type<I>>
   apply(next: AppDeployment): Promise<NanoResult<void>>
   restart(pod: string): Promise<NanoResult<void>>
   deployment(): AppDeployment
@@ -101,21 +104,9 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     return success(undefined)
   }
 
-  /** The one placement (runtime, pod) providing `api`, narrowed by `where`: a pod in several runtimes needs `where.runtime`. */
-  function provider(api: Interface, where: { runtime?: string; pod?: string }): NanoResult<{ call: object }> {
-    const found: [string, string][] = []
-    for (const [runtime, r] of Object.entries(current.runtimes))
-      for (const pod of r.pods)
-        if ((where.runtime ?? runtime) === runtime && (where.pod ?? pod) === pod
-          && impl(live, pod)?.provides.some(i => i.coord === api.coord)) found.push([pod, runtime])
-    const what = `${api.coord}${where.runtime ? ` in ${where.runtime}` : ''}${where.pod ? ` at ${where.pod}` : ''}`
-    if (found.length !== 1) return failure(found.length ? 'ambiguous' : 'not-found', `${found.length} placements provide ${what}`)
-    const [[pod, runtime]] = found
-    return success({ call: app.call(runtime, pod) })
-  }
-
   const app: Application = {
-    get: (api, where = {}) => plain(() => provider(api, where)),
+    resolve: (api, where = {}) => resolution(live, api, where, app.call),
+    get: (api, where) => app.resolve(api, where).getOrThrow(),
     call: (runtime, pod) => client(live, runtime, 'host', pod, () => closing ? failure('not-found', 'application is closed')
       : current.runtimes[runtime]?.pods.includes(pod) ? undefined : failure('not-found', `${pod} is not placed in ${runtime}`)),
     apply: next => closing ? Promise.resolve(shut()) : queued(() => reconcile(next)),
