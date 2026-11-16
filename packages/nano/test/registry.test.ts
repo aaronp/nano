@@ -26,7 +26,7 @@ const mem = Provider.define('acme/mem', [memDb, memLog], { author: 'acme' })
 
 describe('implementations', () => {
   test('make keys handlers by port: interface coord and op name', async () => {
-    const handlers = await memDb.make(ctx, undefined)
+    const { handlers } = await memDb.make(ctx, undefined)
     expect([...handlers.keys()].sort()).toEqual(['acme/db/get', 'acme/db/put'].sort())
     expect(await handlers.get(port(db, db.ops.get))!('abc')).toEqual(success(3))
   })
@@ -49,7 +49,7 @@ describe('implementations', () => {
         provide(audit, { write: async s => (seen.push(`audit ${s}`), success(null)) }),
       ],
     })
-    const handlers = await both.make(ctx, undefined)
+    const { handlers } = await both.make(ctx, undefined)
     await handlers.get(port(log, log.ops.write))!('a')
     await handlers.get(port(audit, audit.ops.write))!('b')
     expect(seen).toEqual(['log a', 'audit b'])

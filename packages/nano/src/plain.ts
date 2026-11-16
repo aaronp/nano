@@ -5,8 +5,8 @@
  *   provide(KV, handlers(KV, inMemory()))                 // a value is success (nothing is null), a throw is threw
  *   const store = plain<KV>(KV, () => ctx.one(KV))        // await store.get('a'): a Fail throws an Error carrying it
  */
-import type { Handlers } from './implementation.ts'
-import type { Interface } from './iface.ts'
+import { provide, type Handlers, type Provided, type Source } from './implementation.ts'
+import { port, type Interface } from './iface.ts'
 import type { Op } from './op.ts'
 import { failure, success, type Fail, type NanoResult } from './result.ts'
 
@@ -30,14 +30,14 @@ export function handlers<I extends Interface>(i: I, obj: object): Handlers<I> {
 }
 
 /** What `plain` reads at each use: the client's calls, and its emissions of an op (`on`, or the host's `subscribe`). */
-type Source = { call: object; on(op: Op): AsyncIterable<{ output: unknown }> }
+type Reached = { call: object; on(op: Op): AsyncIterable<{ output: unknown }> }
 
 /** An `Error` carrying `fail` (`err.fail`): how nano throws a `Fail` wherever it throws one. */
 export const thrown = (fail: Fail) => Object.assign(new Error(`${fail.type}: ${fail.reason}`), { fail })
 
 /** A plain object over a client, resolved on every call (so a rewired edge is followed): a `Fail` throws an Error carrying
  *  it. An event of `i` is a method giving the `output`s emitted from the call on (it connects at the call; see iterate.ts). */
-export function plain<T>(i: Interface | undefined, client: () => NanoResult<Source>): T {
+export function plain<T>(i: Interface | undefined, client: () => NanoResult<Reached>): T {
   return new Proxy({}, {
     get: (_, name) => {
       if (typeof name !== 'string' || name === 'then') return undefined
@@ -57,4 +57,14 @@ export function plain<T>(i: Interface | undefined, client: () => NanoResult<Sour
       }
     },
   }) as T
+}
+
+/** A plain object for `i` as a part: its actions' methods as handlers, its events' methods as sources. */
+export function lift(i: Interface, obj: object): Provided {
+  const methods = obj as Record<string, unknown>, sources = new Map<string, Source>()
+  for (const o of Object.values(i.ops)) {
+    const m = methods[o.name]
+    if (o.kind === 'event' && typeof m === 'function') sources.set(port(i, o), { op: o, run: () => m.call(obj) as AsyncIterable<unknown> })
+  }
+  return { ...provide(i, handlers(i, obj)), sources }
 }

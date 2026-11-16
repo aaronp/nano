@@ -128,7 +128,7 @@ export function standIn(real: Implementation, deps: Deps): Implementation {
       })
       const handlers = new Map<string, Handler>()
       for (const i of real.provides) for (const o of Object.values(i.ops)) if (o.kind === 'action') handlers.set(port(i, o), input => call(port(i, o), input))
-      return handlers
+      return { handlers, sources: new Map() }
     },
   }
 }

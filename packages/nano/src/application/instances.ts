@@ -15,6 +15,7 @@ import type { Implementation } from '../implementation.ts'
 import type { Pod } from '../pod.ts'
 import { failure, success, type NanoResult } from '../result.ts'
 import { contextFor } from './context.ts'
+import { start } from './sources.ts'
 import { attempt, within, type Live } from './messages.ts'
 
 type Made = ReturnType<Live['instance']>
@@ -63,12 +64,15 @@ export function instances(live: Live) {
     if (!pod || !found) return failure('not-found', `no pod ${name}`)
     if (!found.ok) { live.trace.emit({ type: 'failure', pod: name, reason: found.fail.reason }); await c.close('closed'); return found }
     const impl = found.value
-    const r = await within(() => impl.make(contextFor(live, name, c.add), pod.config), live.timeoutMs, `building ${name}`)
+    const ctx = contextFor(live, name, c.add)
+    const r = await within(() => impl.make(ctx, pod.config), live.timeoutMs, `building ${name}`)
     // Closed while `make` ran: its listeners have run as added; nothing is built after `closed`.
     if (closed) return failure('not-found', 'application is closed')
     live.trace.emit(r.ok ? { type: 'built', pod: name } : { type: 'failure', pod: name, reason: r.fail.reason })
     if (!r.ok) await c.close('closed')
-    return r.ok ? success({ implementation: impl, handlers: r.value }) : r
+    if (!r.ok) return r
+    start(live, name, ctx, r.value.sources, c.add)   // sources run as handlers do: from here until the build closes
+    return success({ implementation: impl, handlers: r.value.handlers })
   }
 
   async function forget(name: string, why: Reason) {

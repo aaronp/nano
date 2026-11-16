@@ -14,21 +14,22 @@ import { COORD, port, type Client, type Interface } from './iface.ts'
 const isInterface = (s: Selector) => ('ops' in s ? s as Interface : undefined)
 import type { NanoContext } from './context.ts'
 import type { ImplCoord } from './coord.ts'
+import type { Op } from './op.ts'
 import type { NanoResult } from './result.ts'
 import type { SchemaDef } from './schema.ts'
-import { handlers, plain } from './plain.ts'
+import { lift, plain } from './plain.ts'
 import { selectorData, type Selector, type SelectorData } from './selector.ts'
-
-/** Internal: where a context's plain sources report a throw (`contextFor` registers it; not on the public ctx). */
-export const sourceFailed = new WeakMap<object, (reason: string) => void>()
 
 export type Handler = (input: unknown) => Promise<NanoResult<unknown>>
 
 /** One handler per action, typed as the Client's call. Events have none: they are published. */
 export type Handlers<I extends Interface> = Client<I>
 
-/** One interface's handlers, keyed by port. Opaque: only `implementation` reads it. */
-export type Provided = { readonly iface: Interface; readonly handlers: ReadonlyMap<string, Handler> }
+/** A source: an event's method on a plain object, which the application runs once per build (`application/sources.ts`). */
+export type Source = { readonly op: Op; run(): AsyncIterable<unknown> }
+
+/** One interface's handlers and sources, keyed by port. Opaque: only `implementation` reads it. */
+export type Provided = { readonly iface: Interface; readonly handlers: ReadonlyMap<string, Handler>; readonly sources?: ReadonlyMap<string, Source> }
 
 export function provide<I extends Interface>(i: I, handlers: Handlers<I>): Provided {
   const byName = handlers as Record<string, Handler | undefined>
@@ -47,8 +48,9 @@ export type Implementation = {
   readonly dependencies: Readonly<Record<string, SelectorData>>
   readonly config?: SchemaDef
   readonly description?: string
-  /** `ctx` without `deps`: they are made here from `dependencies`. */
-  make(ctx: Omit<NanoContext, 'deps'>, config: unknown): Promise<ReadonlyMap<string, Handler>>
+  /** `ctx` without `deps`: they are made here from `dependencies`. It gives the build's handlers (by port) and its
+   *  sources (by port), which the application starts, publishes, stops at close, and traces when they throw. */
+  make(ctx: Omit<NanoContext, 'deps'>, config: unknown): Promise<{ handlers: ReadonlyMap<string, Handler>; sources: ReadonlyMap<string, Source> }>
 }
 
 /** A plain object for `I`: its event (source) methods are optional, as an event may be published through `ctx`. */
@@ -84,43 +86,23 @@ function define<const P extends readonly Interface[], D extends Record<string, S
       const ctx = Object.assign(Object.create(base), { deps }) as NanoContext<D>
       const made = await spec.make(ctx, config)
       if (!Array.isArray(made) && spec.provides.length !== 1) throw new Error(`${coord}: a plain object provides exactly one interface`)
-      if (!Array.isArray(made)) publishSources(base, spec.provides[0]!, made as object)
-      const parts = Array.isArray(made) ? made : [provide(spec.provides[0]!, handlers(spec.provides[0]!, made as object))]
+      const parts = Array.isArray(made) ? made : [lift(spec.provides[0]!, made as object)]
       const declared = new Set(spec.provides.map(i => i.coord))
       const given = new Set<string>()
-      const out = new Map<string, Handler>()
+      const out = new Map<string, Handler>(), sources = new Map<string, Source>()
       for (const part of parts) {
         const ic = part.iface.coord
         if (!declared.has(ic)) throw new Error(`${coord}: ${ic} is not provided`)
         if (given.has(ic)) throw new Error(`${coord}: ${ic} is provided twice`)
         given.add(ic)
         for (const [p, h] of part.handlers) out.set(p, h)
+        for (const [p, src] of part.sources ?? []) sources.set(p, src)
       }
       for (const i of spec.provides)
         for (const o of Object.values(i.ops))
           if (o.kind !== 'event' && !out.has(port(i, o))) throw new Error(`${coord}: missing ${port(i, o)}`)
-      return out
+      return { handlers: out, sources }
     },
-  }
-}
-
-/** Each event of `i` with a method on `obj` runs once, now: its values are published, it is stopped when the build
- *  closes, and a throw goes to `failed`. */
-export function publishSources(ctx: Omit<NanoContext, 'deps'>, i: Interface, obj: object) {
-  let base: object | null = ctx   // the failure reporter is registered on the base ctx; a derived ctx inherits from it
-  while (base && !sourceFailed.has(base)) base = Object.getPrototypeOf(base)
-  const failed = (reason: string) => { if (base) sourceFailed.get(base)?.(reason) }
-  for (const o of Object.values(i.ops)) {
-    const source = (obj as Record<string, unknown>)[o.name]
-    if (o.kind !== 'event' || typeof source !== 'function') continue
-    const it = (source.call(obj) as AsyncIterable<unknown>)[Symbol.asyncIterator]()
-    // A close listener added after close runs at once. `return()` queues behind a pending `next()`; that ends because
-    // the build's `on` iterations end at close.
-    ctx.addOnCloseListener(() => { void it.return?.() })
-    void (async () => {
-      try { for (let r = await it.next(); !r.done; r = await it.next()) await ctx.publish(o, r.value as never) }
-      catch (e) { failed(`${o.name} threw ${e instanceof Error ? e.message : String(e)}`) }
-    })()
   }
 }
 

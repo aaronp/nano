@@ -58,7 +58,8 @@ export function serve(port: MessagePort, load: (url: string, coord: string) => P
       if (impl.coord !== m.coord) throw new Error(`${m.url} gave ${impl.coord} for ${m.coord}`)
       const made = frameContext(m.pod, m.runtimes, () => edges, post, out)
       close = made.close
-      handlers = await impl.make(made.ctx, m.config)
+      // ponytail: a sandboxed pod's sources are not run inside its frame yet; run them here when one needs a source
+      handlers = (await impl.make(made.ctx, m.config)).handlers
       post({ type: 'ready' })
     } catch (e) { return post({ type: 'failed', error: message(e) }) }
     try { opts.render?.(m.coord, { app: viewApp(m), runtime: m.runtimes[0]!, pod: m.pod }) }

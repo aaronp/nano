@@ -31,7 +31,7 @@ test('given the hash #/themes, then only the themes route shows; an unknown hash
 test('given setAppBar was last called with a text, then the app bar shows it; File > Save fires nano-command save', async () => {
   const bar = document.body.appendChild(document.createElement('workspace-app-bar')) as HTMLElement & { updateComplete: Promise<unknown> }
   await bar.updateComplete
-  const handlers = await hostUi.make({} as never, undefined)
+  const { handlers } = await hostUi.make({} as never, undefined)
   await (handlers.get([...handlers.keys()].find(k => k.endsWith('setAppBar'))!) as (a: unknown) => Promise<unknown>)('My app')
   await bar.updateComplete
   expect(bar.shadowRoot!.querySelector('.title')!.textContent).toBe('My app')

@@ -12,7 +12,6 @@ import type { NanoContext, Selection } from '../context.ts'
 import type { Client, Interface } from '../iface.ts'
 import { port } from '../iface.ts'
 import type { Op } from '../op.ts'
-import { sourceFailed } from '../implementation.ts'
 import { failure, success, type Fail, type NanoResult } from '../result.ts'
 import { matches, selectorData, type Selector, type SelectorData } from '../selector.ts'
 import { client, emit } from './emit.ts'
@@ -95,6 +94,5 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
     },
     addOnCloseListener: onClose,
   }
-  sourceFailed.set(ctx, reason => live.trace.emit({ type: 'failure', pod: name, reason }))
   return ctx
 }

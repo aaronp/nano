@@ -14,9 +14,9 @@
 import type { Static, TSchema } from 'typebox'
 import type { NanoContext } from './context.ts'
 import type { ImplCoord, InterfaceCoord } from './coord.ts'
-import { Implementation, provide, publishSources } from './implementation.ts'
+import { Implementation } from './implementation.ts'
+import { lift } from './plain.ts'
 import type { Op } from './op.ts'
-import { handlers } from './plain.ts'
 import { canonical, hashOf, Schema, type SchemaDef } from './schema.ts'
 import type { NanoResult } from './result.ts'
 import type { Selector } from './selector.ts'
@@ -58,10 +58,8 @@ function builder(api: Interface, at: string | ImplCoord, steps: Steps = { deps: 
     async make(ctx, cfg) {
       const c = Object.assign(Object.create(ctx), { config: cfg })
       const parts = []
-      for (const [i, lift] of lifts) {
-        const made = await lift(c)
-        publishSources(c, i, made)
-        parts.push(provide(i, handlers(i, made)))
+      for (const [i, f] of lifts) {
+        parts.push(lift(i, await f(c)))
       }
       return parts
     },
