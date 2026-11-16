@@ -15,6 +15,7 @@ function approve({ title, detail }: { title: string; detail?: string }): Promise
     const text = Object.assign(document.createElement('p'), { textContent: detail ?? '' })
     const button = (label: string, answer: boolean) => {
       const b = Object.assign(document.createElement('button'), { type: 'button', textContent: label })
+      b.autofocus = !answer   // Deny: Enter on an unexpected prompt must not approve
       b.addEventListener('click', () => done(answer))
       return b
     }

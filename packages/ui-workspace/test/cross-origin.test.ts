@@ -8,7 +8,7 @@ import {
   Application, assemble, createRegistry, defineSchema, failure, iface, implementation, op, provide, provider, success,
   type AppDeployment, type Implementation, type Pod,
 } from '@pritzlaff/nano-core'
-import { importApp, isolated, foreignOrigin, type Foreign, type Loaded } from '../src/import.ts'
+import { importApp, isolated, foreignOrigin, remembered, type Foreign, type Loaded } from '../src/import.ts'
 import { described, probe } from '../src/described.ts'
 import { serve } from '../src/sandbox/serve.ts'
 import { confirmImports } from '../src/import-confirm.ts'
@@ -37,14 +37,15 @@ beforeAll(() => { globalThis.fetch = (async (u: string) => ({ ok: true, status: 
 afterAll(() => { globalThis.fetch = domFetch })
 
 const empty = (): Loaded => ({ deployment: { pods: {}, runtimes: {} }, registry: createRegistry(), views: {} })
-function fakes(o: { confirm?: boolean; approve?: boolean } = {}) {
+function fakes(o: { confirm?: boolean; approve?: boolean; remember?: boolean } = {}) {
   const seen = { load: [] as string[], probe: [] as string[], confirm: [] as Foreign[][], approve: [] as string[] }
   const deps = {
     load: async (u: string) => { seen.load.push(u); return { default: realProvider } },
     probe: async (u: string) => { seen.probe.push(u); return described(describeProvider(realProvider, { 'other.fx/x': 'x-view' })) },
     confirm: async (list: Foreign[]) => { seen.confirm.push(list); return o.confirm ?? true },
-    approve: async (t: string) => { seen.approve.push(t); return o.approve ?? true },
+    approve: async (t: string) => { seen.approve.push(t); await Promise.resolve(); return o.approve ?? true },
   }
+  if (o.remember) deps.approve = remembered(deps.approve)
   return { seen, deps }
 }
 
@@ -86,8 +87,8 @@ test('given confirm says yes, then it is probed, not loaded, kept whole, and its
 })
 
 /** The imported app running, its non-host pods through `isolated` around a stand-in that runs the probed shape in place. */
-async function running(o: { approve: boolean }) {
-  const { seen, deps } = fakes({ approve: o.approve })
+async function running(o: { approve: boolean; remember?: boolean }) {
+  const { seen, deps } = fakes(o)
   const r = await importApp('https://other.test/app/nano.json', empty(), deps)
   if (!r.ok) throw new Error(r.fail.reason)
   const runtimes = assemble(r.value.deployment, r.value.registry)
@@ -96,7 +97,7 @@ async function running(o: { approve: boolean }) {
   const isolate = (_: string, pod: Pod) => isolated(standIn, pod.isolation, foreignOrigin(r.value.deployment.providers!['other.fx']), deps.approve)
   const made = await Application.create(runtimes.value, { isolate })
   if (!made.ok) throw new Error(made.fail.reason)
-  return { seen, call: (pod: string) => (made.value.call('main', pod) as unknown as { x(s: string): Promise<unknown> }).x('hi') }
+  return { seen, app: made.value, call: (pod: string) => (made.value.call('main', pod) as unknown as { x(s: string): Promise<unknown> }).x('hi') }
 }
 
 test('given a host-mode pod of it and approve says no, then the call fails and nothing is loaded', async () => {
@@ -164,4 +165,34 @@ test('given probe over a port to a serving frame, then it resolves with the prov
   expect(disposed).toBe(1)
   const silent = await probe('https://other.test/app/x.js', () => ({ ...open(), port: new MessageChannel().port2 }), 20)
   expect(silent).toMatchObject({ ok: false, fail: { reason: 'https://other.test/app/x.js: no description within 20ms' } })
+})
+
+test('given approve remembered, then a yes holds across parallel makes and a restart, and after a no the next make asks', async () => {
+  const yes = await running({ approve: true, remember: true })
+  expect(await Promise.all([yes.call('h'), yes.call('s')])).toEqual([success('real hi'), success('real hi')])
+  expect(await yes.app.restart('h')).toMatchObject({ ok: true })
+  expect(await yes.call('h')).toEqual(success('real hi'))
+  expect(yes.seen.approve).toEqual(['Run other.fx from https://other.test in this page?'])
+  const no = await running({ approve: false, remember: true })
+  expect(await no.call('h')).toMatchObject({ ok: false })
+  expect(await no.call('h')).toMatchObject({ ok: false })
+  expect(no.seen.approve.length).toBe(2)
+})
+
+test('given a same-origin ref whose path reads as protocol-relative, then it is stored whole, on this origin, not foreign', async () => {
+  docs['http://host.test/trick/nano.json'] = { pods: {}, runtimes: {}, providers: { 'other.fx': '/.//evil.test/x.js' } }
+  const { seen, deps } = fakes()
+  const r = await importApp('http://host.test/trick/nano.json', empty(), deps)
+  if (!r.ok) throw new Error(r.fail.reason)
+  expect(seen).toMatchObject({ confirm: [], probe: [] })   // import decided: same origin
+  const stored = r.value.deployment.providers!['other.fx']!
+  expect(new URL(stored, location.href).origin).toBe('http://host.test')
+  expect(foreignOrigin(stored)).toBeUndefined()
+})
+
+test('given an import that clashes, then it is refused before confirm is asked', async () => {
+  const { seen, deps } = fakes(), loaded = empty()
+  loaded.deployment.pods.h = { implementation: 'some.p/q', eager: false }
+  expect(await importApp('https://other.test/app/nano.json', loaded, deps)).toMatchObject({ ok: false, fail: { reason: 'clash: pod h is already loaded' } })
+  expect(seen.confirm).toEqual([])
 })

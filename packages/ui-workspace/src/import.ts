@@ -61,6 +61,17 @@ function asking(impl: Implementation, origin: string, approve: Deps['approve']):
   } }
 }
 
+/** `approve` asked at most once at a time per title: a yes is kept for good (the code is in the page by then), a no
+ * forgotten, so the next make asks again. A make that waits shares the open dialog. */
+export function remembered(approve: Deps['approve']): Deps['approve'] {
+  const asked = new Map<string, Promise<boolean>>()
+  return title => {
+    let p = asked.get(title)
+    if (!p) asked.set(title, p = approve(title).then(yes => { if (!yes) asked.delete(title); return yes }, e => { asked.delete(title); throw e }))
+    return p
+  }
+}
+
 /** What the host's `isolate` gives for a pod: `standIn`, asking first when its frame shares the page's origin
  * (`sandbox`) and its provider is foreign (`origin`). An `isolated-sandbox` frame never asks. */
 export const isolated = (standIn: Implementation, isolation: Pod['isolation'], origin: string | undefined, approve: Deps['approve']) =>
@@ -97,16 +108,19 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
     const incoming = (await res.json()) as AppDeployment
     const base = new URL(url, globalThis.location?.href), home = page() ?? base.origin
     // Each provider is resolved against the nano.json. Stored: its path when it is on this page's origin (so the same
-    // tree served elsewhere still loads), else whole.
+    // tree served elsewhere still loads), else whole; also whole when the path would read as protocol-relative
+    // (`/.//evil.test/x.js` has the path `//evil.test/x.js`, another origin once resolved again).
     const refs = Object.entries(incoming.providers ?? {}).map(([coord, ref]) => [coord, new URL(ref, base)] as const)
     const away = (u: URL) => u.origin !== home
-    incoming.providers = Object.fromEntries(refs.map(([coord, u]) => [coord, !away(u) && /^https?:$/.test(u.protocol) ? u.pathname + u.search : u.href]))
+    incoming.providers = Object.fromEntries(refs.map(([coord, u]) => [coord, !away(u) && /^https?:$/.test(u.protocol) && !u.pathname.startsWith('//') ? u.pathname + u.search : u.href]))
     const todo = refs.filter(([coord]) => !loaded.registry.provider(coord))   // already loaded; merge still checks the stored URL matches
     const foreign: Foreign[] = todo.filter(([, u]) => away(u)).map(([coord, u]) => ({ coord, url: u.href, origin: u.origin,
       pods: Object.entries(incoming.pods).filter(([, p]) => providerOf(p.implementation) === coord).map(([name, p]) => {
         const isolation = p.isolation ?? 'host'
         return { name, isolation, fullAccess: isolation !== 'isolated-sandbox' }
       }) }))
+    const deployment = merge(loaded.deployment, incoming)   // a clash is refused before anyone is asked
+    if (!deployment.ok) return deployment
     if (foreign.length && !await deps.confirm(foreign)) return failure('invalid-input', 'import cancelled')
     const fresh: Provider[] = []
     const views: ViewMap = { ...loaded.views }
@@ -126,8 +140,6 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
       fresh.push(mod.default)
       Object.assign(views, mod.views)
     }
-    const deployment = merge(loaded.deployment, incoming)
-    if (!deployment.ok) return deployment
     // The registry cannot be copied, so it is added to only here, after everything else succeeded.
     for (const p of fresh) { const added = loaded.registry.add(p); if (!added.ok) return added }
     return success({ deployment: deployment.value, registry: loaded.registry, views })

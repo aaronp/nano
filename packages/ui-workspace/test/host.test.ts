@@ -118,6 +118,7 @@ test('given HostUI.approve called from a pod, then a dialog opens and choosing A
   for (let i = 0; i < 50 && !document.querySelector('dialog'); i++) await tick(5)
   const dialog = document.querySelector('dialog')!
   expect(dialog.textContent).toContain('Send it?')
+  expect([...dialog.querySelectorAll('button')].filter(b => b.autofocus).map(b => b.textContent)).toEqual(['Deny'])
   ;[...dialog.querySelectorAll('button')].find(b => b.textContent === 'Approve')!.click()
   expect(await answer).toEqual({ ok: true, value: true })
   expect(document.querySelector('dialog')).toBeNull()

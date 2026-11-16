@@ -10,7 +10,7 @@
 import { Application, assemble, createRegistry, Pod, success, type AppDeployment, type NanoResult, type Pod as PodData, type Registry } from '@pritzlaff/nano-core'
 import uiProvider, { views as uiViews, type ViewMap } from '@pritzlaff/nano-ui'
 import { toast } from '@pritzlaff/nano-elements'
-import { foreignOrigin, importApp, isolated, type Loaded } from './import.ts'
+import { foreignOrigin, importApp, isolated, remembered, type Loaded } from './import.ts'
 import { confirmImports } from './import-confirm.ts'
 import { probe } from './described.ts'
 import { hostProvider, hostUi } from './host-ui.ts'
@@ -97,11 +97,12 @@ export async function start(): Promise<NanoResult<Host>> {
       },
     }), pod.isolation, foreignOrigin(at), approve)
   }
-  // HostUI.approve through the app, so it is on the stream like any call; anything but a yes is a no.
-  async function approve(title: string) {
+  // HostUI.approve through the app, so it is on the stream like any call; anything but a yes is a no (a late yes too,
+  // after the call's timeout). Remembered per title (provider and origin): one dialog at a time, a yes for good.
+  const approve = remembered(async title => {
     const r = await (live().call(MAIN, HOST) as { approve(a: { title: string }): Promise<NanoResult<unknown>> }).approve({ title })
     return r.ok && r.value === true
-  }
+  })
   const created = await Application.create(runtimes.value, { isolate })
   if (!created.ok) return created
   const app = made = created.value
