@@ -1,0 +1,35 @@
+/**
+ * Pod changes: after an apply, each pod listening (`ctx.addOnPodChangeListener`) hears the other pods added to or
+ * removed from the runtimes it is placed in, if that runtime's policy allows `'lifecycle'`.
+ *
+ *   await notifyPodChanges(live, before)   // `before`: the deployment the apply replaced; `live.now()` is the new one
+ */
+import type { NanoContext } from '../context.ts'
+import type { AppDeployment } from '../deployment.ts'
+import { attempt, refusal, type Live } from './messages.ts'
+
+const listening = new WeakMap<Live, Set<{ pod: string; fn: Parameters<NanoContext['addOnPodChangeListener']>[0] }>>()
+/** The live pod-change listeners (`ctx.addOnPodChangeListener`) of this application: a pod's `fn`, in the order added. */
+export const podChanges = (live: Live) => { let s = listening.get(live); if (!s) listening.set(live, s = new Set()); return s }
+
+export async function notifyPodChanges(live: Live, before: AppDeployment): Promise<void> {
+  const after = live.now(), told = new Set<unknown>()
+  for (const id of new Set([...Object.keys(before.runtimes), ...Object.keys(after.runtimes)])) {
+    const was = before.runtimes[id]?.pods ?? [], is = after.runtimes[id]?.pods ?? []
+    const changes = [...is.filter(p => !was.includes(p)).map(p => ({ type: 'added' as const, p, d: after })),
+      ...was.filter(p => !is.includes(p)).map(p => ({ type: 'removed' as const, p, d: before }))]
+    for (const l of [...podChanges(live)]) {
+      if (!is.includes(l.pod)) continue
+      for (const c of changes) {
+        if (c.p === l.pod) continue
+        const why = refusal(live, id, l.pod, c.p, 'lifecycle')
+        if (why !== undefined) {
+          if (!told.has(l)) { told.add(l); live.trace.emit({ type: 'denied', id: live.trace.id(), reason: why }) }   // once per listener per apply
+          continue
+        }
+        const implementation = live.registry.implementation(c.d.pods[c.p]?.implementation ?? '')?.coord ?? ''
+        await attempt(live, l.pod, `${l.pod} hearing ${c.type} ${c.p}`, () => l.fn({ type: c.type, runtime: id, pod: c.p, implementation }))
+      }
+    }
+  }
+}

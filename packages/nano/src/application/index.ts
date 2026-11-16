@@ -23,6 +23,7 @@ import { diff } from './apply.ts'
 import { loaded } from './load.ts'
 import { compose } from './compose.ts'
 import { instances } from './instances.ts'
+import { notifyPodChanges, podChanges } from './pod-changes.ts'
 import { refusal, type Live } from './messages.ts'
 import { runtimeView, type RuntimeView } from './resolve.ts'
 import { stream, type AppEvent } from './stream.ts'
@@ -100,7 +101,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     if (!checked.ok) return checked
     const why = refused(checked.value)
     if (why !== undefined) return failure('denied', why)
-    const changes = diff(current, checked.value)
+    const changes = diff(current, checked.value), before = current
     current = checked.value
     for (const o of [...live.ons]) {
       if (o.gone()) { live.ons.delete(o); o.end?.(); continue }   // an edge removed now stays gone if re-added
@@ -109,6 +110,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     }
     await Promise.all([...changes.removed.map(n => pods.forget(n, 'removed')), ...changes.changed.map(n => pods.forget(n, 'changed'))])
     await buildEager([...changes.added, ...changes.changed])
+    await notifyPodChanges(live, before)
     trace.emit({ type: 'applied', ...changes })
     return success(undefined)
   }
@@ -131,7 +133,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     deployment: () => structuredClone(current),
     listen: trace.listen,
     // Deliveries under way settle; nothing new is delivered once `closing` is set.
-    close: () => closing ??= queued(async () => { await Promise.all([pods.close(), ...live.flying]); for (const o of live.ons) o.end?.(); live.ons.clear(); return success(undefined) }),
+    close: () => closing ??= queued(async () => { await Promise.all([pods.close(), ...live.flying]); for (const o of live.ons) o.end?.(); live.ons.clear(); podChanges(live).clear(); return success(undefined) }),
   }
   return success(app)
 }

@@ -40,5 +40,7 @@ export type NanoContext<D extends Record<string, Selector> = Record<string, Sele
   one<I extends Interface>(s: I | SelectorData): NanoResult<Selection<I>>
   all<I extends Interface>(s: I | SelectorData): Selection<I>[]
   publish<O extends Op>(o: O, data: DataOf<O>): Promise<void>
+  /** `fn` hears each other pod added to or removed from a runtime this pod is placed in, from now on, until this build closes. Needs the policy's `'lifecycle'`. */
+  addOnPodChangeListener(fn: (e: { type: 'added' | 'removed'; runtime: string; pod: string; implementation: string }) => void | Promise<void>): void
   addOnCloseListener(fn: (e: { reason: 'restarted' | 'removed' | 'changed' | 'closed' }) => void | Promise<void>): void
 }

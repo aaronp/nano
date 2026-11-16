@@ -52,6 +52,7 @@ export function frameContext(self: string, runtimes: string[], edges: () => Edge
     },
     all,
     async publish(o, data) { send({ type: 'publish', op: o.name, data }) },
+    addOnPodChangeListener() {},   // ponytail: pod changes do not cross a sandbox yet
     addOnCloseListener(fn) { listeners.push(fn) },
   }
   async function close(reason: Reason) {

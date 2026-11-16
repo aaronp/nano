@@ -17,6 +17,7 @@ import { failure, success, type NanoResult } from '../result.ts'
 import { matches, selectorData, type Selector, type SelectorData } from '../selector.ts'
 import { client, emit } from './emit.ts'
 import { iterate } from './iterate.ts'
+import { podChanges } from './pod-changes.ts'
 import { impl, placedIn, refusal, type Live, type On } from './messages.ts'
 
 /** The port of `o` on `pod`'s implementation, if it has `o`. */
@@ -34,7 +35,8 @@ const fitsData = (o: Op, data: unknown) => { try { return !o.output || o.output.
 export function contextFor(live: Live, name: string, onClose: NanoContext['addOnCloseListener']): Omit<NanoContext, 'deps'> {
   /** This build's `on` subscriptions; undefined once it has closed. */
   let mine: Set<On> | undefined = new Set()
-  onClose(() => { for (const o of mine!) { live.ons.delete(o); o.end?.() } mine = undefined })
+  const heard = new Set<{ pod: string; fn: Parameters<NanoContext['addOnPodChangeListener']>[0] }>()
+  onClose(() => { for (const o of mine!) { live.ons.delete(o); o.end?.() } mine = undefined; for (const h of heard) podChanges(live).delete(h) })
 
   /** The call edge from `name` to `to` in `runtime`, read live: a call or delivery through it after `apply` removed it is not-found. */
   const selection = <I extends Interface>(runtime: string, to: string): Selection<I> => {
@@ -83,6 +85,10 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
       if (!p || o.kind !== 'event') return live.trace.emit({ type: 'warning', reason: `${name}: ${o?.name} is not one of its events` })
       if (!fitsData(o, data)) return live.trace.emit({ type: 'failure', pod: name, reason: `${name}: ${o.name} data does not fit ${o.output?.label ?? 'its schema'}` })
       await emit(live, name, p, { output: data })
+    },
+    addOnPodChangeListener(fn) {
+      if (!mine) return   // closed build
+      const h = { pod: name, fn }; heard.add(h); podChanges(live).add(h)
     },
     addOnCloseListener: onClose,
   }
