@@ -7,7 +7,11 @@ this file is what to do, and what not to.
 
 - **An interface** (`src/interfaces.ts`): `Interface.define(coord, { op… })` with `Op.action(Input, Output)` and
   `Op.event(Data)`, each op named by its key; schemas come from `Schema.define(Type…, label?)` and nest directly.
-- **An implementation** (`src/<thing>.ts`): `Implementation.define('acme.template/<thing>', { provides: [Iface], make })`.
+- **An implementation** (`src/<thing>.ts`): start from the contract it provides,
+  `Iface.impl('acme.template/<thing>').needs({ … }).config(Type…).make(({ deps, config, ...ctx }) => plainObject)` (or
+  `.create({ needs, config, make })`, `.satisfies(Other, make)`); `Implementation.define(coord, { provides, make })` is the explicit form.
+- **A host** loads it all with `await Application.load(new URL('./nano.json', import.meta.url))`, then `app.get(Iface)`
+  (`app.resolve(Iface)` says which pod it found, or why not).
   `make(ctx, config)` runs once per build, closes over its state and returns `[provide(Iface, { action: async input => success(…) })]`.
   Events are published with `ctx.publish(Iface.ops.event, data)`; clean up in `ctx.addOnCloseListener`. Nothing throws:
   return `failure(...)` or `success(...)`.

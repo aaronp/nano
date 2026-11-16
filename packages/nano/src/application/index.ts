@@ -6,6 +6,7 @@
  *   await app.call('app', 'counter').inc(null)   // from 'host', through runtime 'app'
  *   await app.get(Counter).inc()                 // the one pod providing Counter, as a plain object; a Fail throws
  *   app.resolve(Counter).pod                     // what was found (pod, runtime, implementation), or why not
+ *   const loaded = await Application.load(new URL('./nano.json', import.meta.url))   // modules loaded, assembled, created
  *   app.listen(e => …)                           // built, sent, delivered, denied, failure, …
  *   await app.close()                            // every instance closed, deliveries under way settled; later calls not-found
  */
@@ -19,6 +20,7 @@ import { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
 import type { Runtime } from '../runtime.ts'
 import { diff } from './apply.ts'
+import { loaded } from './load.ts'
 import { compose } from './compose.ts'
 import { instances } from './instances.ts'
 import { client } from './emit.ts'
@@ -125,4 +127,13 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
   return success(app)
 }
 
-export const Application = { create }
+/** `create` from a nano.json: its `modules` loaded, assembled and created; the first failure throws an Error carrying it. */
+async function load(url: string | URL, opts: Opts = {}): Promise<Application> {
+  const l = await loaded(url)
+  const r = l.ok ? AppDeployment.assemble(l.value.deployment, l.value.registry) : l
+  const app = r.ok ? await create(r.value, opts) : r
+  if (!app.ok) throw Object.assign(new Error(`${app.fail.type}: ${app.fail.reason}`), { fail: app.fail })
+  return app.value
+}
+
+export const Application = { create, load }
