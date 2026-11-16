@@ -23,7 +23,7 @@ import { diff } from './apply.ts'
 import { loaded } from './load.ts'
 import { compose } from './compose.ts'
 import { instances } from './instances.ts'
-import { notifyPodChanges, podChanges } from './pod-changes.ts'
+import { notifyPodChanges } from './pod-changes.ts'
 import { refusal, type Live } from './messages.ts'
 import { runtimeView, type RuntimeView } from './resolve.ts'
 import { stream, type AppEvent } from './stream.ts'
@@ -64,7 +64,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
   const trace = stream()
   const live: Live = {
     now: () => current, registry, policies: opts.policies ?? {}, timeoutMs: opts.timeoutMs ?? 30_000, trace,
-    instance: name => pods.get(name), ons: new Set(), flying: new Set(), closed: () => closing !== undefined, isolate: opts.isolate,
+    instance: name => pods.get(name), listeners: { ons: new Set(), podChanges: new Set() }, flying: new Set(), closed: () => closing !== undefined, isolate: opts.isolate,
   }
   const pods = instances(live)
   const buildEager = (names: string[]) => Promise.all(names.filter(n => current.pods[n]!.eager).map(n => pods.get(n)))
@@ -103,10 +103,10 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     if (why !== undefined) return failure('denied', why)
     const changes = diff(current, checked.value), before = current
     current = checked.value
-    for (const o of [...live.ons]) {
-      if (o.gone()) { live.ons.delete(o); o.end?.(); continue }   // an edge removed now stays gone if re-added
+    for (const o of [...live.listeners.ons]) {
+      if (o.gone()) { live.listeners.ons.delete(o); o.end?.(); continue }   // an edge removed now stays gone if re-added
       const why = refusal(live, o.runtime, o.to, o.from, 'subscribe')   // asked again on apply; a refused one is dropped
-      if (why !== undefined) { live.ons.delete(o); o.end?.(); trace.emit({ type: 'denied', id: trace.id(), reason: why }) }
+      if (why !== undefined) { live.listeners.ons.delete(o); o.end?.(); trace.emit({ type: 'denied', id: trace.id(), reason: why }) }
     }
     await Promise.all([...changes.removed.map(n => pods.forget(n, 'removed')), ...changes.changed.map(n => pods.forget(n, 'changed'))])
     await buildEager([...changes.added, ...changes.changed])
@@ -133,7 +133,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     deployment: () => structuredClone(current),
     listen: trace.listen,
     // Deliveries under way settle; nothing new is delivered once `closing` is set.
-    close: () => closing ??= queued(async () => { await Promise.all([pods.close(), ...live.flying]); for (const o of live.ons) o.end?.(); live.ons.clear(); podChanges(live).clear(); return success(undefined) }),
+    close: () => closing ??= queued(async () => { await Promise.all([pods.close(), ...live.flying]); for (const o of live.listeners.ons) o.end?.(); live.listeners.ons.clear(); live.listeners.podChanges.clear(); return success(undefined) }),
   }
   return success(app)
 }

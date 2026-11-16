@@ -11,6 +11,7 @@ import type { Handler, Implementation } from '../implementation.ts'
 import type { Pod } from '../pod.ts'
 import { Policies, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
+import type { NanoContext } from '../context.ts'
 import { opAt } from '../runtime.ts'
 import { failure, isNanoResult, success, type NanoResult } from '../result.ts'
 import type { stream } from './stream.ts'
@@ -24,8 +25,8 @@ export type Live = {
   readonly trace: ReturnType<typeof stream>
   /** A build: the handlers by port, and the implementation they were made from. */
   instance(pod: string): Promise<NanoResult<{ implementation: Implementation; handlers: ReadonlyMap<string, Handler> }>>
-  /** The live `on` subscriptions (a pod's, or the host's), in the order made. */
-  readonly ons: Set<On>
+  /** The live listeners, in the order made: `on` subscriptions (a pod's, or the host's) and pod-change listeners (`ctx.addOnPodChangeListener`). */
+  readonly listeners: { ons: Set<On>; podChanges: Set<{ pod: string; fn: Parameters<NanoContext['addOnPodChangeListener']>[0] }> }
   /** Deliveries under way, so `close()` can let them settle. */
   readonly flying: Set<Promise<unknown>>
   /** Whether `close()` has been called: nothing new is delivered. */

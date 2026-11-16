@@ -41,7 +41,7 @@ export function emit(live: Live, from: string, port: string, e: Parameters<On['f
   const pipes = placedIn(live, from).flatMap(([runtime, r]) =>
     r.subscriptions.flatMap(s => s.kind === 'pipe' && s.from === from && s.source === port
       ? [fly(live, act(live, runtime, from, s.to, s.target, e.output, 'pipe', link()))] : []))
-  for (const o of [...live.ons]) {
+  for (const o of [...live.listeners.ons]) {
     if (o.from !== from || o.port !== port || (travelled !== undefined && o.runtime !== travelled)) continue
     const work = async () => { const r = await attempt(live, o.to, `${o.to} hearing ${port}`, () => o.fn(e)); return r.ok ? success(undefined) : r }
     fly(live, send(live, o.runtime, from, o.to, port, e.output, { kind: 'on', ...link(), work }))

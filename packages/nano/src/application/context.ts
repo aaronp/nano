@@ -17,7 +17,6 @@ import { failure, success, type NanoResult } from '../result.ts'
 import { matches, selectorData, type Selector, type SelectorData } from '../selector.ts'
 import { client, emit } from './emit.ts'
 import { iterate } from './iterate.ts'
-import { podChanges } from './pod-changes.ts'
 import { impl, placedIn, refusal, type Live, type On } from './messages.ts'
 
 /** The port of `o` on `pod`'s implementation, if it has `o`. */
@@ -36,7 +35,7 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
   /** This build's `on` subscriptions; undefined once it has closed. */
   let mine: Set<On> | undefined = new Set()
   const heard = new Set<{ pod: string; fn: Parameters<NanoContext['addOnPodChangeListener']>[0] }>()
-  onClose(() => { for (const o of mine!) { live.ons.delete(o); o.end?.() } mine = undefined; for (const h of heard) podChanges(live).delete(h) })
+  onClose(() => { for (const o of mine!) { live.listeners.ons.delete(o); o.end?.() } mine = undefined; for (const h of heard) live.listeners.podChanges.delete(h) })
 
   /** The call edge from `name` to `to` in `runtime`, read live: a call or delivery through it after `apply` removed it is not-found. */
   const selection = <I extends Interface>(runtime: string, to: string): Selection<I> => {
@@ -50,8 +49,8 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
         const why = refusal(live, runtime, name, to, 'subscribe')
         if (why !== undefined) { live.trace.emit({ type: 'denied', id: live.trace.id(), reason: why }); stop?.(); return () => {} }
         const sub: On = { runtime, from: to, port: p, to: name, gone, fn, end: () => stop?.() }
-        live.ons.add(sub); mine.add(sub)
-        return () => { live.ons.delete(sub); mine?.delete(sub) }
+        live.listeners.ons.add(sub); mine.add(sub)
+        return () => { live.listeners.ons.delete(sub); mine?.delete(sub) }
       }
       return fn ? connect(fn as On['fn']) : iterate(connect, s => { stop = s })
     } } as Selection<I>
@@ -88,7 +87,7 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
     },
     addOnPodChangeListener(fn) {
       if (!mine) return   // closed build
-      const h = { pod: name, fn }; heard.add(h); podChanges(live).add(h)
+      const h = { pod: name, fn }; heard.add(h); live.listeners.podChanges.add(h)
     },
     addOnCloseListener: onClose,
   }

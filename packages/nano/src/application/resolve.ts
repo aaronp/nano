@@ -104,8 +104,8 @@ export function runtimeView(live: Live, id?: string): RuntimeView {
       if (why !== undefined) { live.trace.emit({ type: 'denied', id: live.trace.id(), reason: why }); stop?.(); return () => {} }
       const gone = () => !live.now().runtimes[runtime]?.pods.includes(from)
       const h: On = { runtime, from, port: port(api, op), to: 'host', gone, fn, end: () => stop?.() }
-      live.ons.add(h)
-      return () => { live.ons.delete(h) }
+      live.listeners.ons.add(h)
+      return () => { live.listeners.ons.delete(h) }
     }
     return fn ? connect(fn) : iterate(connect, s => { stop = s })
   }) as RuntimeView['subscribe']
