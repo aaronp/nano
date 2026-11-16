@@ -62,3 +62,25 @@ test('app.listen still sees everything', async () => {
   await app.runtime('frontend').get(Todos).add('milk')
   expect(all.filter(e => e.type === 'sent').length).toBe(1)
 })
+
+test("an apply adding a pod to backend is not in frontend's view", async () => {
+  const app = await open()
+  const front: AppEvent[] = [], back: AppEvent[] = []
+  app.runtime('frontend').listen(e => front.push(e))
+  app.runtime('backend').listen(e => back.push(e))
+  must(await app.apply({ ...d, pods: { ...d.pods, extra: { implementation: 'acme/store', eager: true } },
+    runtimes: { ...d.runtimes, backend: { ...d.runtimes.backend!, pods: [...d.runtimes.backend!.pods, 'extra'] } } }))
+  expect(front.some(e => e.type === 'applied')).toBe(false)
+  expect(back.find(e => e.type === 'applied')).toMatchObject({ added: ['extra'] })
+})
+
+test("a pod removed by apply still shows its closing in the runtime it left", async () => {
+  const app = await open()
+  const back: AppEvent[] = [], front: AppEvent[] = []
+  app.runtime('backend').listen(e => back.push(e))
+  app.runtime('frontend').listen(e => front.push(e))
+  const { store: _, ...pods } = d.pods
+  must(await app.apply({ pods, runtimes: { ...d.runtimes, backend: { pods: ['btodos', 'shared'], subscriptions: [] } } }))
+  expect(back.some(e => e.type === 'closed' && e.pod === 'store')).toBe(true)
+  expect(front.some(e => 'pod' in e && e.pod === 'store')).toBe(false)
+})
