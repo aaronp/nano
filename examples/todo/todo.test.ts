@@ -5,8 +5,8 @@
 import { expect, test } from 'bun:test'
 import { Application, assemble, createRegistry, type AppDeployment, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
 import kv, { inMemory, KeyValueStore } from './kv.ts'
-import todo, { type TodoList } from './todo.ts'
-import { handlers, plain } from './plain.ts'
+import todo, { TodoList, type Todo } from './todo.ts'
+import { handlers, plain, type Matches } from './plain.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
@@ -66,3 +66,16 @@ test('a throwing plain method is a threw result', async () => {
   const h = handlers(KeyValueStore, { get: async () => { throw new Error('disk on fire') } })
   expect(await h.get(['a'])).toEqual({ ok: false, fail: { type: 'threw', reason: 'disk on fire' } })
 })
+
+// The build fails if a plain interface drifts from its nano interface; each case below must stay a type error.
+interface WrongOutput extends Omit<TodoList, 'remove'> { remove(id: string): Promise<string> }
+interface WrongInput extends Omit<TodoList, 'add'> { add(title: number): Promise<Todo> }
+interface Extra extends TodoList { archive(id: string): Promise<void> }
+// @ts-expect-error a different output
+true satisfies Matches<WrongOutput, typeof TodoList>
+// @ts-expect-error a different input
+true satisfies Matches<WrongInput, typeof TodoList>
+// @ts-expect-error an action the nano interface doesn't have
+true satisfies Matches<Extra, typeof TodoList>
+// @ts-expect-error an action missing
+true satisfies Matches<Omit<TodoList, 'list'>, typeof TodoList>

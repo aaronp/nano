@@ -7,7 +7,7 @@
 import { Type, type Static } from 'typebox'
 import { defineSchema, iface, implementation, op, provide, provider } from '@pritzlaff/nano-core'
 import { KeyValueStore } from './kv.ts'
-import { handlers, plain } from './plain.ts'
+import { handlers, plain, type Matches } from './plain.ts'
 
 // Each schema once; its TypeScript type is derived from it, under the same name.
 export const Todo = defineSchema('Todo', Type.Object({ id: Type.String(), title: Type.String(), done: Type.Boolean() }))
@@ -60,3 +60,5 @@ const kvTodos = implementation('example.todo/kv', {
 })
 
 export default provider('example.todo', [kvTodos])
+
+true satisfies Matches<TodoList, typeof TodoList>

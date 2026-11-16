@@ -7,7 +7,7 @@
  */
 import { Type, type Static } from 'typebox'
 import { defineSchema, iface, implementation, op, provide, provider } from '@pritzlaff/nano-core'
-import { handlers } from './plain.ts'
+import { handlers, type Matches } from './plain.ts'
 
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json }
 
@@ -61,3 +61,5 @@ const memory = implementation('example.kv/memory', {
 })
 
 export default provider('example.kv', [memory])
+
+true satisfies Matches<KeyValueStore, typeof KeyValueStore>
