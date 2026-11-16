@@ -31,5 +31,4 @@ export namespace KeyValueStoreDef {
     changed: Op.event(Type.Object({ key: Path })),
   })
   export type KeyValueStore = Interface.Type<typeof api>
-  export const impls = { memory: ns.implementation('memory'), backup: ns.implementation('backup') }
 }

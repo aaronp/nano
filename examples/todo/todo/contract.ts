@@ -24,5 +24,4 @@ export namespace TodoListDef {
     remove: Op.action(Type.String(), Type.Boolean()),
   })
   export type TodoList = Interface.Type<typeof api>
-  export const impls = { kv: ns.implementation('kv') }
 }

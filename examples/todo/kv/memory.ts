@@ -29,10 +29,11 @@ export function inMemory(changed: (key: Path) => unknown = () => {}): KeyValueSt
   }
 }
 
-const { api, impls } = KeyValueStoreDef
+const { api, ns } = KeyValueStoreDef
+export const impls = { memory: ns.implementation('memory'), backup: ns.implementation('backup') }
 /** Keeps entries in memory; a restart empties it. */
 const memory = api.impl(impls.memory).make(ctx => inMemory(key => ctx.publish(api.ops.changed, { key })))
 /** A second in-memory store, to swap to. */
 const backup = api.impl(impls.backup).make(ctx => inMemory(key => ctx.publish(api.ops.changed, { key })))
 
-export default Provider.define(String(KeyValueStoreDef.ns), [memory, backup])
+export default Provider.define(ns, [memory, backup])

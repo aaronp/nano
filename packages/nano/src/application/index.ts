@@ -6,7 +6,7 @@
  *   await app.call('app', 'counter').inc(null)   // from 'host', through runtime 'app'
  *   await app.get(Counter).inc()                 // the one pod providing Counter, as a plain object; a Fail throws
  *   app.resolve(Counter).pod                     // what was found (pod, runtime, implementation), or why not
- *   const loaded = await Application.load(new URL('./nano.json', import.meta.url))   // modules loaded, assembled, created
+ *   const app = await Application.load(new URL('./nano.json', import.meta.url))   // modules loaded, assembled, created
  *   app.listen(e => …)                           // built, sent, delivered, denied, failure, …
  *   await app.close()                            // every instance closed, deliveries under way settled; later calls not-found
  */

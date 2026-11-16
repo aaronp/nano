@@ -5,7 +5,7 @@
 import { expect, test } from 'bun:test'
 import { Application, AppDeployment, Implementation, Provider, Registry, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
 import { KeyValueStoreDef } from './kv/contract.ts'
-import kv, { inMemory } from './kv/memory.ts'
+import kv, { impls, inMemory } from './kv/memory.ts'
 import { TodoListDef } from './todo/contract.ts'
 import todo from './todo/kv.ts'
 
@@ -62,7 +62,7 @@ test('2. the runtime: apply swaps the store for another implementation and the n
   const todos = app.get(TodoListDef.api)
   await todos.add('milk')
   const next = app.deployment()
-  next.pods.store = { implementation: String(KeyValueStoreDef.impls.backup), eager: false }
+  next.pods.store = { implementation: String(impls.backup), eager: false }
   must(await app.apply(next))
   expect(await todos.list()).toEqual([])   // the same plain object, now over the backup store
   await todos.add('eggs')
