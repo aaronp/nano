@@ -35,7 +35,7 @@ export type Entry = {
   call(pod: string): Client
   /** Each successful call of action `op` travelling in this runtime, after it returns; gives an unsubscribe. */
   subscribe<O extends Op>(op: O, fn: (call: { input: In<O>; output: Out<O> }) => unknown): () => void
-  /** The same calls as an AsyncIterable: it ends when the listener is removed (not by its consumer). */
+  /** The same calls as an AsyncIterable, connected at the first iteration (calls from then on; iterate once; not-found throws there): it ends when the listener is removed (not by its consumer). */
   subscribe<O extends Op>(op: O): AsyncIterable<{ input: In<O>; output: Out<O> }>
 }
 type DataOf<S> = S extends TSchema ? Static<S> : unknown

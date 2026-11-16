@@ -28,7 +28,7 @@ export type Selection<I extends Interface> = {
   readonly runtime: string
   readonly call: Client<I>
   on<O extends I['ops'][keyof I['ops']]>(op: O, fn: (e: Emission<O>) => void | Promise<void>): () => void
-  /** The same emissions as an AsyncIterable: it ends when the listener is removed (the build closes, the edge goes, denied), not by its consumer. */
+  /** The same emissions as an AsyncIterable, connected at the first iteration (emissions from then on; iterate once): it ends when the listener is removed (the build closes, the edge goes, denied), not by its consumer. */
   on<O extends I['ops'][keyof I['ops']]>(op: O): AsyncIterable<Emission<O>>
 }
 

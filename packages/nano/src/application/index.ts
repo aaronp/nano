@@ -131,7 +131,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     deployment: () => structuredClone(current),
     listen: trace.listen,
     // Deliveries under way settle; nothing new is delivered once `closing` is set.
-    close: () => closing ??= queued(async () => { await Promise.all([pods.close(), ...live.flying]); return success(undefined) }),
+    close: () => closing ??= queued(async () => { await Promise.all([pods.close(), ...live.flying]); for (const o of live.ons) o.end?.(); live.ons.clear(); return success(undefined) }),
   }
   return success(app)
 }
