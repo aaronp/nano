@@ -175,3 +175,31 @@ test("a throwing source traces failure; the pod's actions still work", async () 
   expect(events).toContainEqual({ type: 'failure', pod: 'todos', reason: 'items threw boom' })
   await expect(app.runtime('main').get(Todos).add('y')).resolves.toBeNull()
 })
+
+const Built = Interface.define('acme.Built', { add: Op.action(Type.String(), Type.Null()), items: Op.event(Todo) })
+const built = Registry.create()
+must(built.add(Provider.define('acme', [
+  Built.impl('acme/ok').make(ctx => ({ async add(t) { await ctx.publish(Built.ops.items, { title: t }) }, async *items() {} })),
+  Built.impl('acme/bad').make(() => ({ async add() {}, async *items() { throw new Error('boom') } })),
+])))
+const builtApp = (impl: string) => Application.create(must(AppDeployment.assemble({
+  pods: { b: { implementation: impl, eager: false } }, runtimes: { main: { pods: ['b'], subscriptions: [] } } }, built)), {})
+
+test('a builder-made impl: its async * source is run and traced like a plain make', async () => {
+  const app = must(await builtApp('acme/bad')), events: unknown[] = []
+  app.listen(e => events.push(e))
+  await Bun.sleep(0)
+  await app.runtime('main').get(Built).add('x')
+  await Bun.sleep(0)
+  expect(events).toContainEqual({ type: 'failure', pod: 'b', reason: 'items threw boom' })
+})
+
+test('a builder-made impl: its source publishes hot', async () => {
+  const app = must(await builtApp('acme/ok'))
+  const it = app.runtime('main').get(Built).items()[Symbol.asyncIterator]()
+  const first = it.next()
+  await Bun.sleep(0)
+  await app.runtime('main').get(Built).add('a')
+  expect((await first).value).toEqual({ title: 'a' })
+  await it.return!()
+})

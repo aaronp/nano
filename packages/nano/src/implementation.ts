@@ -84,7 +84,7 @@ function define<const P extends readonly Interface[], D extends Record<string, S
       const ctx = Object.assign(Object.create(base), { deps }) as NanoContext<D>
       const made = await spec.make(ctx, config)
       if (!Array.isArray(made) && spec.provides.length !== 1) throw new Error(`${coord}: a plain object provides exactly one interface`)
-      if (!Array.isArray(made)) publishSources(base, spec.provides[0]!, made as object, reason => sourceFailed.get(base)?.(reason))
+      if (!Array.isArray(made)) publishSources(base, spec.provides[0]!, made as object)
       const parts = Array.isArray(made) ? made : [provide(spec.provides[0]!, handlers(spec.provides[0]!, made as object))]
       const declared = new Set(spec.provides.map(i => i.coord))
       const given = new Set<string>()
@@ -106,7 +106,10 @@ function define<const P extends readonly Interface[], D extends Record<string, S
 
 /** Each event of `i` with a method on `obj` runs once, now: its values are published, it is stopped when the build
  *  closes, and a throw goes to `failed`. */
-function publishSources(ctx: Omit<NanoContext, 'deps'>, i: Interface, obj: object, failed: (reason: string) => void) {
+export function publishSources(ctx: Omit<NanoContext, 'deps'>, i: Interface, obj: object) {
+  let base: object | null = ctx   // the failure reporter is registered on the base ctx; a derived ctx inherits from it
+  while (base && !sourceFailed.has(base)) base = Object.getPrototypeOf(base)
+  const failed = (reason: string) => { if (base) sourceFailed.get(base)?.(reason) }
   for (const o of Object.values(i.ops)) {
     const source = (obj as Record<string, unknown>)[o.name]
     if (o.kind !== 'event' || typeof source !== 'function') continue

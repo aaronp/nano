@@ -14,7 +14,7 @@
 import type { Static, TSchema } from 'typebox'
 import type { NanoContext } from './context.ts'
 import type { ImplCoord, InterfaceCoord } from './coord.ts'
-import { Implementation, provide } from './implementation.ts'
+import { Implementation, provide, publishSources } from './implementation.ts'
 import type { Op } from './op.ts'
 import { handlers } from './plain.ts'
 import { canonical, hashOf, Schema, type SchemaDef } from './schema.ts'
@@ -58,7 +58,11 @@ function builder(api: Interface, at: string | ImplCoord, steps: Steps = { deps: 
     async make(ctx, cfg) {
       const c = Object.assign(Object.create(ctx), { config: cfg })
       const parts = []
-      for (const [i, lift] of lifts) parts.push(provide(i, handlers(i, await lift(c))))
+      for (const [i, lift] of lifts) {
+        const made = await lift(c)
+        publishSources(c, i, made)
+        parts.push(provide(i, handlers(i, made)))
+      }
       return parts
     },
   }), { satisfies: (j: Interface, f: AnyLift) => build([...lifts, [j, f]]) })

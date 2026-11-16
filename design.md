@@ -64,6 +64,8 @@ onClose)` is a pod's `NanoContext`, `onClose` adding a listener to that build; `
 `loaded(url)` is a nano.json and the registry of its `modules` (what `Application.load` assembles); `placement(live, runtime, api, where)` is the one pod in a runtime providing an exported interface now, and `runtimeView(live, id?)` a `RuntimeView` (a runtime as the host sees it: `resolve`, `get`, `call`, `subscribe`) for runtime `id`, looked up at each use (`not-found` if missing), or, without `id`, the application's one runtime (else `not-unique`); `compose(runtimes)` is the application's deployment from its runtimes (the pods they place, in their `Pods`' order,
 and those pods' tags) and their registry.
 
+Inside `implementation.ts` (not exported from the package): `publishSources(ctx, i, obj)` runs each event method of a plain object once per build and publishes its values (used by `make` and by the `api.impl(...)` builder alike; a throw is traced `failure` through the reporter registered on the base context).
+
 Inside `plain.ts` (not exported from the package): `handlers(i, obj)` lifts a plain object's methods into an interface's handlers, and `plain(resolve)` is a plain object over a client resolved at each call, a `Fail` thrown as an `Error` carrying it (what `ctx.deps` and `app.get` are made of).
 
 Inside `pods.ts` (not exported from the package): `Id` is the id rule for pod names and runtime ids, `shapeError` the
