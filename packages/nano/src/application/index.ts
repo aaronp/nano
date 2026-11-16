@@ -54,7 +54,7 @@ type Opts = { policies?: Record<string, Policy>; timeoutMs?: number; isolate?: (
  * maps have no prototype, so a pod or runtime named `constructor` or `toString` is only ever a name.
  */
 async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promise<NanoResult<Application>> {
-  const composed = compose(runtimes)
+  const composed = compose(runtimes, opts.policies)
   if (!composed.ok) return composed
   // No runtimes, no Pods and so no registry: such an application can only apply deployments naming no implementation.
   const registry = composed.value.registry ?? Registry.create()
@@ -84,7 +84,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
   function adopt(d: AppDeployment): NanoResult<AppDeployment> {
     const assembled = AppDeployment.assemble(d, registry)
     if (!assembled.ok) return assembled
-    const next = compose(assembled.value)
+    const next = compose(assembled.value, live.policies)
     return next.ok ? success(next.value.deployment) : next
   }
 

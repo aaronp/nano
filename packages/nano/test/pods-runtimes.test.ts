@@ -25,6 +25,7 @@ import {
   type AppEvent,
   type Ask,
   type NanoResult,
+  type RuntimeDeployment,
   type Selection,
 } from '../src/index.ts'
 
@@ -541,5 +542,40 @@ describe('policed emissions', () => {
     const on = events.filter(isSent).find(e => e.kind === 'on')!
     expect(events).toContainEqual({ type: 'denied', id: on.id, reason: 'no' })
     expect(logged).toEqual(['db:x'])
+  })
+})
+
+describe('a runtime policy as data', () => {
+  const d = (policy?: RuntimeDeployment['policy']): AppDeployment => ({ pods: { c: Pod.lazy(counter) }, runtimes: { r: { pods: ['c'], subscriptions: [], ...(policy !== undefined && { policy }) } } })
+  const denyCalls: RuntimeDeployment['policy'] = { kind: 'rules', rules: [{ deny: 'call', to: 'acme.Counter' }, { allow: '*' }] }
+
+  test('given rules in a deployment, when the host calls, then they govern it and the deployment round-trips', async () => {
+    const { app } = await create(d(denyCalls))
+    expect(await app.call('c').inc(null)).toMatchObject({ ok: false, fail: { type: 'denied', reason: 'rules[0]' } })
+    expect(app.deployment().runtimes.r!.policy).toEqual(denyCalls)
+  })
+
+  test('given no policy or allow-all, when the host calls, then it is allowed', async () => {
+    for (const p of [undefined, { kind: 'allow-all' } as const]) expect(await (await create(d(p))).app.call('c').inc(null)).toMatchObject({ ok: true })
+  })
+
+  test('given a live app, when apply changes the rules, then the next call and live subscriptions are decided by them', async () => {
+    const { app } = await create(d({ kind: 'allow-all' }))
+    const seen: unknown[] = []
+    app.subscribe(Counter.ops.inc, e => { seen.push(e.output) })
+    expect(ok(await app.call('c').inc(null))).toBe(1)
+    expect(seen).toEqual([1])
+    ok(await app.apply(d({ kind: 'rules', rules: [{ allow: 'call' }] })))
+    expect(ok(await app.call('c').inc(null))).toBe(2)
+    expect(seen).toEqual([1])   // the subscribe was asked again and refused
+    ok(await app.apply(d(denyCalls)))
+    expect(await app.call('c').inc(null)).toMatchObject({ ok: false, fail: { type: 'denied' } })
+  })
+
+  test('given a code policy and a data policy for one runtime, when create or apply, then invalid-input', async () => {
+    const policies = { r: { isAllowed: () => ({ approved: true as const }) } }
+    expect(await Application.create(ok(AppDeployment.assemble(d(denyCalls), registry())), { policies })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    const app = ok(await Application.create(ok(AppDeployment.assemble(d(), registry())), { policies }))
+    expect(await app.apply(d(denyCalls))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   })
 })

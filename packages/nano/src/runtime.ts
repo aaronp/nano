@@ -11,6 +11,7 @@ import { port } from './iface.ts'
 import type { Implementation } from './implementation.ts'
 import type { Op } from './op.ts'
 import { fits } from './op.ts'
+import { Rule } from './policy.ts'
 import { originOf, shapeError, type Pods } from './pods.ts'
 import { failure, success, type NanoResult } from './result.ts'
 
@@ -19,7 +20,7 @@ export type Subscription =
   | { kind: 'pipe'; from: string; source: string; to: string; target: string }
 
 /** `exports`: the interface coordinates the runtime offers the host; absent, everything placed there is offered. */
-export type RuntimeDeployment = { pods: string[]; subscriptions: Subscription[]; policy?: 'allow-all'; exports?: string[] }
+export type RuntimeDeployment = { pods: string[]; subscriptions: Subscription[]; policy?: { kind: 'allow-all' } | { kind: 'rules'; rules: Rule[] }; exports?: string[] }
 
 export type Runtime = { readonly id: string; readonly pods: Pods; deployment(): RuntimeDeployment }
 
@@ -30,7 +31,10 @@ const Shape = Type.Object({
     Type.Object({ kind: Type.Literal('call'), from: Type.String(), to: Type.String() }, strict),
     Type.Object({ kind: Type.Literal('pipe'), from: Type.String(), source: Type.String(), to: Type.String(), target: Type.String() }, strict),
   ]), { maxItems: 2000 }),
-  policy: Type.Optional(Type.Literal('allow-all')),
+  policy: Type.Optional(Type.Union([
+    Type.Object({ kind: Type.Literal('allow-all') }, strict),
+    Type.Object({ kind: Type.Literal('rules'), rules: Type.Array(Rule, { maxItems: 2000 }) }, strict),
+  ])),
   exports: Type.Optional(Type.Array(Type.String(), { maxItems: 2000 })),
 }, strict)
 

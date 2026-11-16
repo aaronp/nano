@@ -9,7 +9,7 @@
 import type { AppDeployment } from '../deployment.ts'
 import type { Handler, Implementation } from '../implementation.ts'
 import type { Pod } from '../pod.ts'
-import { Policies, type Ask, type Policy } from '../policy.ts'
+import { Policies, PolicyRules, type Ask, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import type { NanoContext } from '../context.ts'
 import { opAt } from '../runtime.ts'
@@ -72,7 +72,8 @@ const action = (i: Implementation | undefined, p: string) => { const o = i && op
 
 /** Why the policy of `ask.runtime` refuses `ask`, or undefined. A throw, a Promise or no verdict refuses. */
 export function refusal(live: Live, ask: Omit<Ask, 'outside'>): string | undefined {
-  const policy = Object.hasOwn(live.policies, ask.runtime) ? live.policies[ask.runtime]! : Policies.allowAll()
+  const data = live.now().runtimes[ask.runtime]?.policy   // as it is now, so `apply` changes it
+  const policy = Object.hasOwn(live.policies, ask.runtime) ? live.policies[ask.runtime]! : data?.kind === 'rules' ? PolicyRules(data.rules) : Policies.allowAll()
   try {
     const outside = ask.from === 'host' || !live.now().runtimes[ask.runtime]?.pods.includes(ask.from)
     const v = policy.isAllowed({ ...ask, outside }) as { approved?: unknown; reason?: unknown; then?: unknown } | undefined
