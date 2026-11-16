@@ -8,8 +8,9 @@
  *   host.saved()                                         // { ...app.deployment(), providers, views }, without ui
  */
 import { Application, assemble, createRegistry, Pod, success, type AppDeployment, type NanoResult, type Pod as PodData, type Registry } from '@pritzlaff/nano-core'
-import uiProvider, { importApp, views as uiViews, type Loaded, type ViewMap } from '@pritzlaff/nano-ui'
+import uiProvider, { views as uiViews, type ViewMap } from '@pritzlaff/nano-ui'
 import { toast } from '@pritzlaff/nano-elements'
+import { importApp, type Loaded } from './import.ts'
 import { hostProvider, hostUi } from './host-ui.ts'
 import { edgesFor } from './sandbox/edges.ts'
 import { openFrame } from './sandbox/frames.ts'

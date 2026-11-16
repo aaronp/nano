@@ -5,7 +5,7 @@
  *   const r = await importApp('/apps/slice/nano.json', loaded)   // NanoResult<Loaded>
  */
 import { failure, success, type AppDeployment, type NanoResult, type Provider, type Registry } from '@pritzlaff/nano-core'
-import type { ViewMap } from './views/view.ts'
+import type { ViewMap } from '@pritzlaff/nano-ui'
 
 export type Loaded = { deployment: AppDeployment; registry: Registry; views: ViewMap }
 

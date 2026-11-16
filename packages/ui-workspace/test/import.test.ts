@@ -1,8 +1,10 @@
+import { GlobalRegistrator } from '@happy-dom/global-registrator'
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createRegistry, type AppDeployment } from '@pritzlaff/nano-core'
 import { importApp, merge, type Loaded } from '../src/import.ts'
 
-const fx = (name: string) => new URL(`./fixtures/${name}`, import.meta.url).href
+const fx = (name: string) => new URL(`./fixtures/import/${name}`, import.meta.url).href
 const empty = (): Loaded => ({ deployment: { pods: {}, runtimes: {} }, registry: createRegistry(), views: {} })
 const dep = (over: Partial<AppDeployment>): AppDeployment => ({ pods: {}, runtimes: {}, ...over })
 
