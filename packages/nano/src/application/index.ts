@@ -70,12 +70,12 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
   const buildEager = (names: string[]) => Promise.all(names.filter(n => current.pods[n]!.eager).map(n => pods.get(n)))
   await buildEager(Object.keys(current.pods))
 
-  /** The first refusal of a subscription `next` adds, by the policy of the runtime it is added in. */
+  /** The first refusal of a subscription `next` adds, by the policy `next` gives the runtime it is added in. */
   function refused(next: AppDeployment): string | undefined {
     for (const [id, r] of Object.entries(next.runtimes))
       for (const s of r.subscriptions) {
         if (current.runtimes[id]?.subscriptions.some(x => Value.Equal(x, s))) continue
-        const why = refusal(live, { runtime: id, kind: s.kind, from: s.from, to: s.to })
+        const why = refusal(live, { runtime: id, kind: s.kind, from: s.from, to: s.to }, next)
         if (why !== undefined) return why
       }
   }

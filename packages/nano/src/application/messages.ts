@@ -70,12 +70,12 @@ export const impl = (live: Live, pod: string) => live.registry.implementation(li
 export const placedIn = (live: Live, pod: string) => Object.entries(live.now().runtimes).filter(([, r]) => r.pods.includes(pod))
 const action = (i: Implementation | undefined, p: string) => { const o = i && opAt(i, p); return o?.kind === 'action' ? o : undefined }
 
-/** Why the policy of `ask.runtime` refuses `ask`, or undefined. A throw, a Promise or no verdict refuses. */
-export function refusal(live: Live, ask: Omit<Ask, 'outside'>): string | undefined {
-  const data = live.now().runtimes[ask.runtime]?.policy   // as it is now, so `apply` changes it
+/** Why the policy of `ask.runtime` in `d` (the deployment now, or the one `apply` brings) refuses `ask`, or undefined. A throw, a Promise or no verdict refuses. */
+export function refusal(live: Live, ask: Omit<Ask, 'outside'>, d = live.now()): string | undefined {
+  const data = d.runtimes[ask.runtime]?.policy   // as it is in `d`, so `apply` changes it
   const policy = Object.hasOwn(live.policies, ask.runtime) ? live.policies[ask.runtime]! : data?.kind === 'rules' ? PolicyRules(data.rules) : Policies.allowAll()
   try {
-    const outside = ask.from === 'host' || !live.now().runtimes[ask.runtime]?.pods.includes(ask.from)
+    const outside = ask.from === 'host' || !d.runtimes[ask.runtime]?.pods.includes(ask.from)
     const v = policy.isAllowed({ ...ask, outside }) as { approved?: unknown; reason?: unknown; then?: unknown } | undefined
     if (typeof v?.then === 'function') { Promise.resolve(v).catch(() => {}); return 'policy gave no verdict' }
     if (v?.approved === true) return undefined

@@ -579,3 +579,17 @@ describe('a runtime policy as data', () => {
     expect(await app.apply(d(denyCalls))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   })
 })
+
+describe('one apply bringing an edge and its rules', () => {
+  const d = (policy: RuntimeDeployment['policy'], edge: boolean): AppDeployment => ({
+    pods: { app: Pod.lazy(appImpl), db: Pod.lazy(store, { config: 'one' }) },
+    runtimes: { r: { pods: ['app', 'db'], subscriptions: edge ? [{ kind: 'call', from: 'app', to: 'db' }] : [], policy } },
+  })
+  test('given an apply adding an edge and rules, when it is checked, then the new rules decide it', async () => {
+    const start = d({ kind: 'rules', rules: [{ deny: 'call', from: 'app' }, { allow: '*' }] }, false)
+    const { app } = await create(start)
+    ok(await app.apply(d({ kind: 'rules', rules: [{ allow: '*' }] }, true)))
+    const { app: other } = await create(d({ kind: 'allow-all' }, false))
+    expect(await other.apply(d({ kind: 'rules', rules: [{ deny: 'call', from: 'app' }, { allow: '*' }] }, true))).toMatchObject({ ok: false, fail: { type: 'denied', reason: 'rules[0]' } })
+  })
+})
