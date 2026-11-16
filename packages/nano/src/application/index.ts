@@ -24,7 +24,7 @@ import { loaded } from './load.ts'
 import { compose } from './compose.ts'
 import { instances } from './instances.ts'
 import { refusal, type Live } from './messages.ts'
-import { entry, only, type Entry } from './resolve.ts'
+import { entry, type Entry } from './resolve.ts'
 import { stream, type AppEvent } from './stream.ts'
 
 export type { AppEvent } from './stream.ts'
@@ -109,9 +109,9 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     return success(undefined)
   }
 
-  const one = entry(live, () => only(live))
+  const one = entry(live)
   const app: Application = {
-    runtime: id => entry(live, () => success(id)),
+    runtime: id => entry(live, id),
     resolve: (api, where) => one.resolve(api, where),
     get: (api, where) => one.get(api, where),
     subscribe: (op, fn) => one.subscribe(op, fn),

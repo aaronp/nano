@@ -198,3 +198,21 @@ test('app.subscribe hears each successful call of an action as { input, output }
     expect(heard).toEqual(want ? [{ input: { k: '1', v: 'milk' }, output: null }] : [])
   }
 })
+
+test('app.runtime of a runtime that does not exist is not-found at each use, and works once apply adds it', async () => {
+  const app = await open()
+  const side = app.runtime('side')
+  expect(side.resolve(KV)).toMatchObject({ ok: false, reason: 'not-found', fail: { type: 'not-found' } })
+  expect(thrownBy(() => side.get(KV))?.fail.type).toBe('not-found')
+  expect(await side.call('store').size(null)).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+  expect(thrownBy(() => side.subscribe(KV.ops.put, () => {}))?.fail.type).toBe('not-found')
+  const d = deployment('acme/mem')
+  d.runtimes.side = { pods: ['store'], subscriptions: [] }
+  must(await app.apply(d))
+  const heard: unknown[] = []
+  side.subscribe(KV.ops.put, call => { heard.push(call.input) })
+  await side.get(KV).put({ k: 'a', v: 'b' })
+  expect(await side.call('store').size(null)).toMatchObject({ ok: true, value: 1 })
+  await Bun.sleep(0)
+  expect(heard).toEqual([{ k: 'a', v: 'b' }])
+})
