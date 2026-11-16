@@ -119,9 +119,14 @@ configuration-as-data are added as further top-level tests, the same way.
 ## New public names (for the user's approval)
 
 `Op.action(input, output)` / `Op.event(data)` without a name (the named forms go); `Schema.define(schema, label?)`;
-`api.impl(coord)`, a builder with `needs`, `config`, `make`, `create` and `satisfies`;
+`api.impl(coord)`, a builder with `needs`, `config`, `description`, `make`, `create` and `satisfies`;
 `app.resolve` and `Resolution` (with `getOrThrow`); `Application.load`.
 
 ## Not in this step
+
+**Deferred, important: a load policy.** `Application.load` imports code from whatever `modules` a document names, so an
+untrusted document is a back door (XSS). It gets a policy in the shape runtimes already have (`Policy.isAllowed(src,
+dest, data)` answering a `Verdict`), asked before each module is imported, such as `isAllowed(document, moduleUrl)`.
+Until then `load` is for trusted documents only. Deferred by the user until the surface works end to end.
 
 Events on the plain side as streams; payloads on the stream; host-side `on`; compiled validators; a compiler.

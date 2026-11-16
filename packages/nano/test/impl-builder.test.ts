@@ -61,3 +61,13 @@ test('make must give the interface: a wrong plain object does not type', () => {
   // @ts-expect-error inc must return a number
   void Counter.impl(ns.implementationId('wrong')).make(() => ({ async inc() { return 'x' } }))
 })
+
+test('description, as a step or in create, reaches the registry\'s implementation', () => {
+  const described = Counter.impl(ns.implementationId('described')).description('counts').needs({}).make(() => ({ async inc() { return 1 } }))
+  const inCreate = Counter.impl(ns.implementationId('in-create')).create({ description: 'also counts', make: () => ({ async inc() { return 1 } }) })
+  const registry = Registry.create()
+  must(registry.add(ns.provider([described, inCreate])))
+  expect(registry.implementation('acme/described')?.description).toBe('counts')
+  expect(registry.implementation('acme/in-create')?.description).toBe('also counts')
+  expect(counter.description).toBeUndefined()
+})

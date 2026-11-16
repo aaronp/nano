@@ -6,7 +6,7 @@
  *   port(db, db.ops.get)   // 'acme/db/get'
  *
  * An implementation starts from the contract it provides: `api.impl(coord)` is a builder (`needs`, `config`, each
- * optional, each typing the next step; `make` at every step; `create` all at once; `satisfies` for another interface
+ * optional, each typing the next step; `description(text)` too; `make` at every step; `create` all at once; `satisfies` for another interface
  * from the same build), ending in `Implementation.define`.
  *
  *   db.impl(acme.implementationId('mem')).needs({ log: Log }).make(({ deps }) => memDb(deps.log))
@@ -38,18 +38,23 @@ type Cfg<S> = S extends TSchema ? Static<S> : undefined
 type Builder<I extends Interface, D extends Deps, C> = {
   needs<E extends Deps>(deps: E): Builder<I, E, C>
   config<S extends TSchema>(schema: S): Builder<I, D, Static<S>>
+  description(text: string): Builder<I, D, C>
   make(fn: Lift<I, D, C>): Built<D, C>
-  create<E extends Deps = {}, S extends TSchema | undefined = undefined>(spec: { needs?: E; config?: S; make: Lift<I, E, Cfg<S>> }): Built<E, Cfg<S>>
+  create<E extends Deps = {}, S extends TSchema | undefined = undefined>(spec: { needs?: E; config?: S; description?: string; make: Lift<I, E, Cfg<S>> }): Built<E, Cfg<S>>
 }
 
 const asDef = (s: TSchema): SchemaDef => ('hash' in s && 'check' in s ? s as SchemaDef : Schema.define(s))
 type AnyLift = (ctx: any) => object | Promise<object>
 
-function builder(api: Interface, at: string | ImplCoord, deps: Deps = {}, config?: SchemaDef): Builder<Interface, Deps, unknown> {
+type Steps = { deps: Deps; config?: SchemaDef; description?: string }
+
+function builder(api: Interface, at: string | ImplCoord, steps: Steps = { deps: {} }): Builder<Interface, Deps, unknown> {
+  const { deps, config, description } = steps
   const build = (lifts: [Interface, AnyLift][]): Built<Deps, unknown> => Object.assign(Implementation.define(at, {
     provides: lifts.map(([i]) => i),
     dependencies: deps,
     ...(config && { config }),
+    ...(description !== undefined && { description }),
     async make(ctx, cfg) {
       const c = Object.assign(Object.create(ctx), { config: cfg })
       const parts = []
@@ -58,10 +63,13 @@ function builder(api: Interface, at: string | ImplCoord, deps: Deps = {}, config
     },
   }), { satisfies: (j: Interface, f: AnyLift) => build([...lifts, [j, f]]) })
   return {
-    needs: d => builder(api, at, d, config),
-    config: s => builder(api, at, deps, asDef(s)),
+    needs: d => builder(api, at, { ...steps, deps: d }),
+    config: s => builder(api, at, { ...steps, config: asDef(s) }),
+    description: text => builder(api, at, { ...steps, description: text }),
     make: f => build([[api, f]]),
-    create: spec => builder(api, at, spec.needs ?? {}, spec.config && asDef(spec.config)).make(spec.make as never),
+    create: spec => builder(api, at, {
+      deps: spec.needs ?? {}, ...(spec.config && { config: asDef(spec.config) }), ...(spec.description !== undefined && { description: spec.description }),
+    }).make(spec.make as never),
   } as Builder<Interface, Deps, unknown>
 }
 

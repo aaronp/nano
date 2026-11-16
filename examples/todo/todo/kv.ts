@@ -30,8 +30,8 @@ export function todoList(store: KeyValueStoreDef.KeyValueStore, newId: () => str
   }
 }
 
-/** Todos kept in whichever KeyValueStore its call edge reaches. */
 const todos = TodoListDef.api.impl(TodoListDef.ns.implementationId('kv'))
+  .description('Todos kept in whichever KeyValueStore its call edge reaches.')
   .needs({ store: KeyValueStoreDef.api })
   .make(({ deps }) => todoList(deps.store))
 
