@@ -27,13 +27,13 @@ import {
   type Selection,
 } from '../src/index.ts'
 
-const Str = Schema.define('Str', Type.String())
-const Num = Schema.define('Num', Type.Integer())
-const Nothing = Schema.define('Nothing', Type.Null())
-const Counter = Interface.define('acme.Counter', { inc: Op.action('inc', Nothing, Num) })
-const Store = Interface.define('acme.Store', { save: Op.action('save', Str, Str), saved: Op.event('saved', Str) })
-const Log = Interface.define('acme.Log', { record: Op.action('record', Str, Nothing) })
-const App = Interface.define('acme.App', { save: Op.action('save', Str, Str) })
+const Str = Schema.define(Type.String(), 'Str')
+const Num = Schema.define(Type.Integer(), 'Num')
+const Nothing = Schema.define(Type.Null(), 'Nothing')
+const Counter = Interface.define('acme.Counter', { inc: Op.action(Nothing, Num) })
+const Store = Interface.define('acme.Store', { save: Op.action(Str, Str), saved: Op.event(Str) })
+const Log = Interface.define('acme.Log', { record: Op.action(Str, Nothing) })
+const App = Interface.define('acme.App', { save: Op.action(Str, Str) })
 
 let n = 0
 const counter = Implementation.define('acme/counter', { provides: [Counter], make: () => { let c = 0; n++; return [provide(Counter, { inc: async () => success(++c) })] } })
@@ -59,7 +59,7 @@ const watcher = Implementation.define('acme/watcher', { provides: [Log], depende
   return [provide(Log, { record: async () => success(null) })]
 } })
 
-const Check = Interface.define('acme.Check', { check: Op.action('check', Str, Str) })
+const Check = Interface.define('acme.Check', { check: Op.action(Str, Str) })
 let checks = 0
 /** Passes its input on, failing from the third call: the loop ends there. */
 const checker = Implementation.define('acme/check', { provides: [Check], make: () => [provide(Check, { check: async s => (++checks >= 3 ? failure('invalid-input', 'enough') : success(s)) })] })
@@ -484,8 +484,8 @@ describe('the application deployment', () => {
 
 describe('nothing throws', () => {
   test('given a host call whose input has a throwing getter, when it is sent, then it resolves to a Fail', async () => {
-    const Rec = Schema.define('Rec', Type.Object({ x: Type.String() }))
-    const Take = Interface.define('acme.Take', { take: Op.action('take', Rec, Nothing) })
+    const Rec = Schema.define(Type.Object({ x: Type.String() }), 'Rec')
+    const Take = Interface.define('acme.Take', { take: Op.action(Rec, Nothing) })
     const taker = Implementation.define('acme2/taker', { provides: [Take], make: () => [provide(Take, { take: async () => success(null) })] })
     const reg = registry(); reg.add(Provider.define('acme2', [taker]))
     const { app } = await create({ pods: { t: Pod.lazy(taker) }, runtimes: { r: { pods: ['t'], subscriptions: [] } } }, reg)

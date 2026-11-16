@@ -17,8 +17,8 @@ import {
   type AppEvent,
 } from '../src/index.ts'
 
-const Nothing = Schema.define('Nothing', Type.Null())
-const Counter = Interface.define('acme.Counter', { inc: Op.action('inc', Nothing, Nothing) })
+const Nothing = Schema.define(Type.Null(), 'Nothing')
+const Counter = Interface.define('acme.Counter', { inc: Op.action(Nothing, Nothing) })
 const counter = Implementation.define('acme/counter', { provides: [Counter], make: () => [provide(Counter, { inc: async () => success(null) })] })
 const registry = () => { const r = Registry.create(); r.add(Provider.define('acme', [counter])); return r }
 const runtimes = { r: { pods: ['a'], subscriptions: [] } }

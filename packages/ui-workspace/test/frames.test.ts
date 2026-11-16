@@ -24,8 +24,8 @@ import { openFrame, srcdoc } from '../src/sandbox/frames.ts'
 import { serve } from '../src/sandbox/serve.ts'
 import { standIn } from '../src/sandbox/stand-in.ts'
 
-const Text = Schema.define('Text', Type.String())
-const Echo = Interface.define('t.Echo', { echo: Op.action('echo', Text, Text) })
+const Text = Schema.define(Type.String(), 'Text')
+const Echo = Interface.define('t.Echo', { echo: Op.action(Text, Text) })
 const sImpl = Implementation.define('acme/s', { provides: [Echo], make: () => [provide(Echo, { echo: async x => success(x) })] })
 const registry = Registry.create()
 registry.add(Provider.define('acme', [sImpl]))

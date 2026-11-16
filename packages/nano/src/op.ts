@@ -1,14 +1,16 @@
 /**
- * Ops: an action (input → output) or an event (data out, its `output`); the coordinate hashes its name and schemas.
+ * Ops: an action (input → output) or an event (data out, its `output`). An op is a signature, unnamed: the interface
+ * names it by key, and its coordinate (hash of name and schemas) is computed there.
  *
- *   const get = Op.action('get', Key, Value)   // get.coord: same name + schemas, same coord
- *   fits(Op.event('tick', Num), Op.action('record', Num, Nothing))   // true
+ *   const api = Interface.define('acme/db', { get: Op.action(Key, Value) })   // api.ops.get.name: 'get'
+ *   fits(Op.event(Num), Op.action(Num, Nothing))   // true
  */
 import type { TSchema } from 'typebox'
-import { canonical, hashOf, canonicalSchema, Schema, type SchemaDef } from './schema.ts'
+import { canonicalSchema, Schema, type SchemaDef } from './schema.ts'
 
 export type OpKind = 'action' | 'event'
 
+/** An op as an interface holds it: named by its key, with its coordinate. */
 export type Op<I extends TSchema | undefined = TSchema | undefined, O extends TSchema | undefined = TSchema | undefined, K extends OpKind = OpKind> = {
   readonly name: string
   readonly kind: K
@@ -19,25 +21,24 @@ export type Op<I extends TSchema | undefined = TSchema | undefined, O extends TS
 }
 
 type Opts = { description?: string }
-/** A `SchemaDef`, or a bare TypeBox schema (defined under `<op>.in` / `<op>.out`). */
+/** A `SchemaDef`, or a bare TypeBox schema (defined here, unlabelled). */
 type Given = SchemaDef | TSchema
-type Of<G> = G extends SchemaDef<infer S> ? S : G extends TSchema ? G : never
-const def = (g: Given, name: string): SchemaDef => ('hash' in g && 'check' in g ? g as SchemaDef : Schema.define(name, g as TSchema))
+type Of<G> = G extends { readonly schema: infer S extends TSchema; readonly hash: string } ? S : G extends TSchema ? G : never
+const def = (g: Given): SchemaDef => ('hash' in g && 'check' in g ? g as SchemaDef : Schema.define(g))
+type Unnamed<I extends TSchema | undefined, O extends TSchema | undefined, K extends OpKind> = Omit<Op<I, O, K>, 'name' | 'coord'>
 
-function make<K extends OpKind>(name: string, kind: K, given: Given | undefined, out: Given, o?: Opts): Op<any, any, K> {
-  const input = given && def(given, `${name}.in`), output = def(out, `${name}.out`)
-  const coord = hashOf(canonical({ name, input: input?.hash ?? null, output: output.hash }))
-  return { name, kind, ...(input && { input }), output, coord, ...(o?.description !== undefined && { description: o.description }) }
+function make<K extends OpKind>(kind: K, given: Given | undefined, out: Given, o?: Opts): Unnamed<any, any, K> {
+  const input = given && def(given)
+  return { kind, ...(input && { input }), output: def(out), ...(o?.description !== undefined && { description: o.description }) }
 }
 
 export const Op = {
-  action: <I extends Given, O extends Given>(name: string, input: I, output: O, o?: Opts): Op<Of<I>, Of<O>, 'action'> =>
-    make(name, 'action', input, output, o),
-  event: <O extends Given>(name: string, data: O, o?: Opts): Op<undefined, Of<O>, 'event'> => make(name, 'event', undefined, data, o),
+  action: <I extends Given, O extends Given>(input: I, output: O, o?: Opts): Unnamed<Of<I>, Of<O>, 'action'> => make('action', input, output, o),
+  event: <O extends Given>(data: O, o?: Opts): Unnamed<undefined, Of<O>, 'event'> => make('event', undefined, data, o),
 }
 
 /** The source's data (an event's, or an action's result) is the target action's input, or the action takes anything. */
-export function fits(source: Op, action: Op): boolean {
+export function fits(source: Pick<Op, 'output'>, action: Pick<Op, 'input'>): boolean {
   if (!source.output || !action.input) return false
   return source.output.hash === action.input.hash || canonicalSchema(action.input.schema) === '{}'
 }

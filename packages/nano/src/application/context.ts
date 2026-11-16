@@ -73,7 +73,7 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
     async publish(o, data) {
       const p = portOf(live, name, o)
       if (!p || o.kind !== 'event') return live.trace.emit({ type: 'warning', reason: `${name}: ${o?.name} is not one of its events` })
-      if (!fitsData(o, data)) return live.trace.emit({ type: 'failure', pod: name, reason: `${name}: ${o.name} data does not fit ${o.output?.type}` })
+      if (!fitsData(o, data)) return live.trace.emit({ type: 'failure', pod: name, reason: `${name}: ${o.name} data does not fit ${o.output?.label ?? 'its schema'}` })
       await emit(live, name, p, data)
     },
     addOnCloseListener: onClose,

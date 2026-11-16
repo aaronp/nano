@@ -7,7 +7,7 @@ export const OPTIONS = ['red', 'green', 'blue']
 /** One choice from a list. `pick` publishes `changed` as `{ key: 'choice', value }`; a value not in the options fails. Config: `{ options }`. */
 export const picker = Implementation.define('acme.template/picker', {
   provides: [Picker],
-  config: Schema.define('PickerConfig', Type.Union([Type.Object({ options: Type.Array(Type.String()) }), Type.Undefined()])),
+  config: Schema.define(Type.Union([Type.Object({ options: Type.Array(Type.String()) }), Type.Undefined()]), 'PickerConfig'),
   make: (ctx, config?: { options: string[] }) => {
     let options = config?.options ?? OPTIONS
     return [provide(Picker, {

@@ -23,12 +23,12 @@ import { edgesFor } from '../src/sandbox/edges.ts'
 import { serve } from '../src/sandbox/serve.ts'
 import { standIn, type Frame } from '../src/sandbox/stand-in.ts'
 
-const Text = Schema.define('Text', Type.String())
-const Num = Schema.define('Num', Type.Number())
-const Nothing = Schema.define('Nothing', Type.Null())
-const Echo = Interface.define('t.Echo', { echo: Op.action('echo', Text, Text) })
-const Ticks = Interface.define('t.Ticks', { tick: Op.event('tick', Num) })
-const H = Interface.define('t.H', { record: Op.action('record', Num, Nothing) })
+const Text = Schema.define(Type.String(), 'Text')
+const Num = Schema.define(Type.Number(), 'Num')
+const Nothing = Schema.define(Type.Null(), 'Nothing')
+const Echo = Interface.define('t.Echo', { echo: Op.action(Text, Text) })
+const Ticks = Interface.define('t.Ticks', { tick: Op.event(Num) })
+const H = Interface.define('t.H', { record: Op.action(Num, Nothing) })
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 

@@ -24,19 +24,19 @@ import {
   type Policy,
 } from '../src/index.ts'
 
-const Str = Schema.define('Str', Type.String())
-const Num = Schema.define('Num', Type.Integer())
-const Nothing = Schema.define('Nothing', Type.Null())
-const Rows = Schema.define('Rows', Type.Array(Type.String()))
+const Str = Schema.define(Type.String(), 'Str')
+const Num = Schema.define(Type.Integer(), 'Num')
+const Nothing = Schema.define(Type.Null(), 'Nothing')
+const Rows = Schema.define(Type.Array(Type.String()), 'Rows')
 
-const Counter = Interface.define('acme.Counter', { inc: Op.action('inc', Nothing, Num) })
-const KV = Interface.define('acme.KV', { get: Op.action('get', Str, Str), put: Op.action('put', Str, Nothing) })
-const Send = Interface.define('acme.Send', { send: Op.action('send', Str, Nothing) })
-const Ticks = Interface.define('acme.Ticks', { tick: Op.event('tick', Num) })
-const Log = Interface.define('acme.Log', { record: Op.action('record', Num, Nothing) })
-const DB = Interface.define('acme.DB', { all: Op.action('all', Nothing, Rows), insert: Op.action('insert', Rows, Nothing) })
-const Run = Interface.define('acme.Run', { run: Op.action('run', Nothing, Num) })
-const Bad = Interface.define('acme.Bad', { go: Op.action('go', Str, Num) })
+const Counter = Interface.define('acme.Counter', { inc: Op.action(Nothing, Num) })
+const KV = Interface.define('acme.KV', { get: Op.action(Str, Str), put: Op.action(Str, Nothing) })
+const Send = Interface.define('acme.Send', { send: Op.action(Str, Nothing) })
+const Ticks = Interface.define('acme.Ticks', { tick: Op.event(Num) })
+const Log = Interface.define('acme.Log', { record: Op.action(Num, Nothing) })
+const DB = Interface.define('acme.DB', { all: Op.action(Nothing, Rows), insert: Op.action(Rows, Nothing) })
+const Run = Interface.define('acme.Run', { run: Op.action(Nothing, Num) })
+const Bad = Interface.define('acme.Bad', { go: Op.action(Str, Num) })
 
 let builds: string[] = []
 /** A counter whose state is a closure: 1, 2, 3 … per instance. Records each build. */

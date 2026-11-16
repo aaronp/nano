@@ -15,9 +15,9 @@ import {
   success,
 } from '../src/index.ts'
 
-const Nothing = Schema.define('Nothing', Type.Null())
-const Who = Schema.define('Who', Type.String())
-const Counter = Interface.define('acme.Counter', { inc: Op.action('inc', Nothing, Who) })
+const Nothing = Schema.define(Type.Null(), 'Nothing')
+const Who = Schema.define(Type.String(), 'Who')
+const Counter = Interface.define('acme.Counter', { inc: Op.action(Nothing, Who) })
 const counter = Implementation.define('acme/counter', { provides: [Counter], make: () => [provide(Counter, { inc: async () => success('host') })] })
 let closedStandIn = 0
 const standIn = Implementation.define('acme/counter', { provides: [Counter], make: ctx => {

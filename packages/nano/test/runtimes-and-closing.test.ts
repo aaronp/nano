@@ -21,9 +21,9 @@ import {
   type NanoResult,
 } from '../src/index.ts'
 
-const Num = Schema.define('Num', Type.Integer())
-const Nothing = Schema.define('Nothing', Type.Null())
-const Counter = Interface.define('acme.Counter', { inc: Op.action('inc', Nothing, Num) })
+const Num = Schema.define(Type.Integer(), 'Num')
+const Nothing = Schema.define(Type.Null(), 'Nothing')
+const Counter = Interface.define('acme.Counter', { inc: Op.action(Nothing, Num) })
 
 /** What happened, in order, across every instance: 'build <pod>', 'close <pod> <reason>', 'tick <pod>'. */
 let log: string[] = []

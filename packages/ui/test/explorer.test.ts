@@ -7,9 +7,9 @@ import { Application, AppDeployment, Registry, Interface, Implementation, Op, Po
 import uiProvider, { Debounce, debounce, defineViews, input, Input, Log, log, map, MapIface } from '../src/index.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
-const Str = Schema.define('Str', Type.String())
-const Store = Interface.define('acme.Store', { save: Op.action('save', Str, Str) })
-const App = Interface.define('acme.App', { save: Op.action('save', Str, Str) })
+const Str = Schema.define(Type.String(), 'Str')
+const Store = Interface.define('acme.Store', { save: Op.action(Str, Str) })
+const App = Interface.define('acme.App', { save: Op.action(Str, Str) })
 const db = Implementation.define('acme/db', { provides: [Store], make: () => [provide(Store, { save: async s => success(s) })] })
 const api = Implementation.define('acme/api', { provides: [App], dependencies: { store: Store }, make: ctx => [provide(App, { save: async s => { const st = ctx.one(Store); return st.ok ? st.value.call.save(s) : st } })] })
 

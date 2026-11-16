@@ -6,10 +6,10 @@
 import { Type } from 'typebox'
 import { Schema, Interface, Op } from '@pritzlaff/nano-core'
 
-export const Rows = Schema.define('Rows', Type.Array(Type.String()))
-export const Nothing = Schema.define('Nothing', Type.Object({}))
-export const Count = Schema.define('Count', Type.Integer())
-export const Done = Schema.define('Done', Type.Null())
+export const Rows = Schema.define(Type.Array(Type.String()), 'Rows')
+export const Nothing = Schema.define(Type.Object({}), 'Nothing')
+export const Count = Schema.define(Type.Integer(), 'Count')
+export const Done = Schema.define(Type.Null(), 'Done')
 
-export const DB = Interface.define('example.migration.DB', { all: Op.action('all', Nothing, Rows), insert: Op.action('insert', Rows, Done) })
-export const Migrate = Interface.define('example.migration.Migrate', { run: Op.action('run', Nothing, Count) })
+export const DB = Interface.define('example.migration.DB', { all: Op.action(Nothing, Rows), insert: Op.action(Rows, Done) })
+export const Migrate = Interface.define('example.migration.Migrate', { run: Op.action(Nothing, Count) })

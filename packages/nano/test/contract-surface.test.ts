@@ -6,15 +6,15 @@ import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import { AppDeployment, Application, Implementation, Interface, Op, Provider, Registry, Schema, Selector, type NanoContext, type NanoResult } from '../src/index.ts'
 
-const Str = Schema.define('Str', Type.String())
+const Str = Schema.define(Type.String(), 'Str')
 const KV = Interface.define('acme.KV', {
-  get: Op.action('get', Str, Type.Union([Type.String(), Type.Null()])),
-  put: Op.action('put', Type.Object({ k: Type.String(), v: Type.String() }), Type.Null()),
-  size: Op.action('size', Type.Null(), Type.Integer()),
-  changed: Op.event('changed', Str),
+  get: Op.action(Str, Type.Union([Type.String(), Type.Null()])),
+  put: Op.action(Type.Object({ k: Type.String(), v: Type.String() }), Type.Null()),
+  size: Op.action(Type.Null(), Type.Integer()),
+  changed: Op.event(Str),
 })
 type KV = Interface.Type<typeof KV>
-const Notes = Interface.define('acme.Notes', { note: Op.action('note', Str, Type.Integer()) })
+const Notes = Interface.define('acme.Notes', { note: Op.action(Str, Type.Integer()) })
 type Notes = Interface.Type<typeof Notes>
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
@@ -57,13 +57,12 @@ test('Interface.Type is the plain interface: null input is no argument, null out
   void (() => t.changed)
 })
 
-test('a bare schema is defined under <op>.in / <op>.out, hashing as the same named schema', () => {
-  expect(KV.ops.put.input!.type).toBe('put.in')
-  expect(KV.ops.get.output!.type).toBe('get.out')
-  expect(Op.event('e', Type.Null()).output!.type).toBe('e.out')
+test('a bare schema is defined unlabelled, hashing as the same labelled schema', () => {
+  expect(KV.ops.put.input!.label).toBeUndefined()
   expect(KV.ops.get.input).toBe(Str)
-  expect(Op.action('size', Type.Null(), Type.Integer()).coord)
-    .toBe(Op.action('size', Schema.define('Nothing', Type.Null()), Schema.define('N', Type.Integer())).coord)
+  const a = Interface.define('acme.A', { n: Op.action(Type.Null(), Type.Integer()) })
+  const b = Interface.define('acme.A', { n: Op.action(Schema.define(Type.Null(), 'Nothing'), Schema.define(Type.Integer(), 'N')) })
+  expect(a.ops.n.coord).toBe(b.ops.n.coord)
 })
 
 test('app.get gives the plain object; ctx.deps reaches the store through the runtime; make may return a plain object', async () => {
@@ -90,7 +89,7 @@ test('a Fail through deps or app.get throws an Error carrying it; a plain throw 
 
 test('app.get is not-found or ambiguous as a thrown Fail, narrowed by runtime or pod, and follows apply', async () => {
   const app = await open()
-  const none = await app.get(Interface.define('acme.None', { x: Op.action('x', Str, Str) })).x('a').catch(x => x)
+  const none = await app.get(Interface.define('acme.None', { x: Op.action(Str, Str) })).x('a').catch(x => x)
   expect(none.fail.type).toBe('not-found')
   const two = deployment('acme/mem')
   two.pods.spare = { implementation: 'acme/other', eager: false }

@@ -9,11 +9,11 @@ import { Implementation, provide } from '../src/implementation.ts'
 import { Provider } from '../src/provider.ts'
 import { Registry } from '../src/registry.ts'
 
-const Str = Schema.define('Str', Type.String())
-const Nothing = Schema.define('Nothing', Type.Null())
-const Num = Schema.define('Num', Type.Number())
-const db = Interface.define('acme/db', { get: Op.action('get', Str, Num), put: Op.action('put', Str, Nothing), changed: Op.event('changed', Str) })
-const log = Interface.define('acme/log', { write: Op.action('write', Str, Nothing) })
+const Str = Schema.define(Type.String(), 'Str')
+const Nothing = Schema.define(Type.Null(), 'Nothing')
+const Num = Schema.define(Type.Number(), 'Num')
+const db = Interface.define('acme/db', { get: Op.action(Str, Num), put: Op.action(Str, Nothing), changed: Op.event(Str) })
+const log = Interface.define('acme/log', { write: Op.action(Str, Nothing) })
 const ctx = { self: 'db', runtimes: [] } as unknown as NanoContext // makes here never call out
 
 const memDb = Implementation.define('acme/mem/db', {
@@ -39,7 +39,7 @@ describe('implementations', () => {
     await expect(half.make(ctx, undefined)).rejects.toThrow('acme/mem/half: missing acme/db/put')
   })
   test('two interfaces sharing an identical op get distinct handlers, one per port', async () => {
-    const audit = Interface.define('acme/audit', { write: Op.action('write', Str, Nothing) })
+    const audit = Interface.define('acme/audit', { write: Op.action(Str, Nothing) })
     expect(audit.ops.write.coord).toBe(log.ops.write.coord)
     const seen: string[] = []
     const both = Implementation.define('acme/mem/both', {
@@ -55,7 +55,7 @@ describe('implementations', () => {
     expect(seen).toEqual(['log a', 'audit b'])
   })
   test("one interface's handler does not satisfy another's", async () => {
-    const audit = Interface.define('acme/audit', { write: Op.action('write', Str, Nothing) })
+    const audit = Interface.define('acme/audit', { write: Op.action(Str, Nothing) })
     const one = Implementation.define('acme/mem/one', { provides: [log, audit], make: () => [provide(log, { write: async () => success(null) })] })
     await expect(one.make(ctx, undefined)).rejects.toThrow('acme/mem/one: missing acme/audit/write')
   })
@@ -112,7 +112,7 @@ describe('registry', () => {
     r.add(mem)
     expect(r.add(mem)).toEqual({ ok: false, fail: { type: 'invalid-input', reason: 'provider acme/mem is already registered' } })
 
-    const other = Interface.define('acme/other', { write: Op.action('write', Str, Nothing) })
+    const other = Interface.define('acme/other', { write: Op.action(Str, Nothing) })
     const dup = Provider.define('acme/mem2', [
       Implementation.define('acme/mem2/other', { provides: [other], make: () => [] }),
       Implementation.define('acme/mem2/db', { provides: [Interface.define('acme/db', { get: db.ops.get })], make: () => [] }),

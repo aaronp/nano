@@ -41,7 +41,7 @@ type DescribedImpl = {
 /** A provider as data, with the view tag of each implementation that has one. */
 export type Described = { coord: string; meta: Record<string, string>; implementations: DescribedImpl[]; views: Record<string, string> }
 
-const json = (s: SchemaDef): SchemaJson => ({ type: s.type, schema: JSON.parse(JSON.stringify(s.schema)) })
+const json = (s: SchemaDef): SchemaJson => ({ type: s.label ?? '', schema: JSON.parse(JSON.stringify(s.schema)) })
 
 export const describeProvider = (p: Provider, views: Record<string, string>): Described => ({
   coord: p.coord, meta: { ...p.meta }, views: { ...views },

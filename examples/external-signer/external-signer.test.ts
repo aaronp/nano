@@ -58,13 +58,13 @@ const SIGNER: AppDeployment = {
 }
 
 /** What a host does when a person presses a button: call the tester's op from outside. */
-const runTest = (app: App, input: Static<typeof TestRequest.schema>) =>
-  app.call('signer-client', 'tester').test(input) as Promise<NanoResult<Static<typeof TestResult.schema>>>
+const runTest = (app: App, input: Static<typeof TestRequest>) =>
+  app.call('signer-client', 'tester').test(input) as Promise<NanoResult<Static<typeof TestResult>>>
 
 /** An action that takes anything: subscribe an event to it to see what is published. */
 function probe() {
   const seen: unknown[] = []
-  const Probe = Interface.define('example.probe.Probe', { see: Op.action('see', Schema.define('Anything', Type.Unknown()), Schema.define('Done', Type.Null())) })
+  const Probe = Interface.define('example.probe.Probe', { see: Op.action(Schema.define(Type.Unknown(), 'Anything'), Schema.define(Type.Null(), 'Done')) })
   const impl = Implementation.define('example.probe/probe', { provides: [Probe], make: () => [provide(Probe, { see: async v => { seen.push(v); return success(null) } })] })
   return { impl, provider: Provider.define('example.probe', [impl]), seen, port: port(Probe, Probe.ops.see) }
 }

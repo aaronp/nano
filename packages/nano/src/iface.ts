@@ -1,13 +1,14 @@
 /**
- * Interfaces: a coordinate plus a set of ops, indexed by name and by op coord. A port is one op as offered by one
- * interface, written readably.
+ * Interfaces: a coordinate plus a set of ops, each named by its key (its coordinate the hash of that name and its
+ * schemas), indexed by name and by op coord. A port is one op as offered by one interface, written readably.
  *
- *   const db = Interface.define('acme/db', { get: Op.action('get', Key, Value) })
+ *   const db = Interface.define('acme/db', { get: Op.action(Key, Value) })
  *   port(db, db.ops.get)   // 'acme/db/get'
  */
 import type { Static, TSchema } from 'typebox'
 import type { InterfaceCoord } from './coord.ts'
 import type { Op } from './op.ts'
+import { canonical, hashOf } from './schema.ts'
 import type { NanoResult } from './result.ts'
 
 export type Interface<Ops extends Record<string, Op> = Record<string, Op>> = {
@@ -21,10 +22,14 @@ export const COORD = /^[a-zA-Z][a-zA-Z0-9-]*([./][a-zA-Z0-9-]+)+$/
 /** A port: `<interface>/<op name>`. Handlers are keyed by it; op hashes only check that two ports fit. */
 export const port = (i: Interface, o: Op): string => `${i.coord}/${o.name}`
 
-function define<Ops extends Record<string, Op>>(at: string | InterfaceCoord, ops: Ops): Interface<Ops> {
+type Unnamed = Omit<Op, 'name' | 'coord'>
+type Named<U extends Record<string, Unnamed>> = { [K in keyof U]: U[K] & { readonly name: K & string; readonly coord: string } }
+
+function define<U extends Record<string, Unnamed>>(at: string | InterfaceCoord, unnamed: U): Interface<Named<U>> {
   const coord = String(at)
   if (!COORD.test(coord)) throw new Error(`bad interface coordinate ${coord}`)
-  for (const [key, o] of Object.entries(ops)) if (o.name !== key) throw new Error(`${coord}: op ${key} is named ${o.name}`)
+  const ops = Object.fromEntries(Object.entries(unnamed).map(([name, o]) =>
+    [name, { ...o, name, coord: hashOf(canonical({ name, input: o.input?.hash ?? null, output: o.output!.hash })) }])) as Named<U>
   return { coord, ops, byCoord: new Map(Object.values(ops).map(o => [o.coord, o])) }
 }
 

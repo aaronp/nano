@@ -13,22 +13,22 @@ export type Json = null | boolean | number | string | Json[] | { [k: string]: Js
 export namespace KeyValueStoreDef {
   export const ns = Coord.namespace('example.kv')
 
-  export const Path = Schema.define('Path', Type.Array(Type.String()))
-  export type Path = Static<typeof Path.schema>
+  export const Path = Schema.define(Type.Array(Type.String()), 'Path')
+  export type Path = Static<typeof Path>
   /** Any value to nano's check; `Json` to TypeScript. */
-  export const Value = Schema.define('Value', Type.Unsafe<Json>(Type.Unknown()))
-  export const Entry = Schema.define('Entry', Type.Object({ key: Path.schema, value: Value.schema }))
-  export type Entry = Static<typeof Entry.schema>
+  export const Value = Schema.define(Type.Unsafe<Json>(Type.Unknown()), 'Value')
+  export const Entry = Schema.define(Type.Object({ key: Path, value: Value }), 'Entry')
+  export type Entry = Static<typeof Entry>
 
   export const api = Interface.define(ns.interface('KeyValueStore'), {
     /** `null` when the key is missing. */
-    get: Op.action('get', Path, Value),
-    put: Op.action('put', Entry, Type.Null()),
-    delete: Op.action('delete', Path, Type.Null()),
+    get: Op.action(Path, Value),
+    put: Op.action(Entry, Type.Null()),
+    delete: Op.action(Path, Type.Null()),
     /** Every entry under `prefix`, ordered by path. */
-    list: Op.action('list', Type.Object({ prefix: Path.schema }), Type.Array(Entry.schema)),
+    list: Op.action(Type.Object({ prefix: Path }), Type.Array(Entry)),
     /** A key was put or deleted. */
-    changed: Op.event('changed', Type.Object({ key: Path.schema })),
+    changed: Op.event(Type.Object({ key: Path })),
   })
   export type KeyValueStore = Interface.Type<typeof api>
   export const impls = { memory: ns.implementation('memory'), backup: ns.implementation('backup') }

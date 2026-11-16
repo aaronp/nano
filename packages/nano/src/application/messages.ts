@@ -85,18 +85,18 @@ export function refusal(live: Live, runtime: string, from: string, to: string, d
 async function deliver(live: Live, to: string, p: string, input: unknown): Promise<NanoResult<unknown>> {
   const asked = action(impl(live, to), p)
   if (!asked) return failure('unknown-op', `${to} has no action ${p}`)
-  if (asked.input && !asked.input.check(input)) return failure('invalid-input', `${p}: input does not fit ${asked.input.type}`)
+  if (asked.input && !asked.input.check(input)) return failure('invalid-input', `${p}: input does not fit ${asked.input.label ?? 'its schema'}`)
   const made = await live.instance(to)
   if (!made.ok) return made
   // The op as the build knows it: an apply may have changed the pod while this build was under way.
   const o = action(made.value.implementation, p), h = made.value.handlers.get(p)
   if (!o || !h) return failure('unknown-op', `${to} has no action ${p}`)
-  if (o.input && !o.input.check(input)) return failure('invalid-input', `${p}: input does not fit ${o.input.type}`)
+  if (o.input && !o.input.check(input)) return failure('invalid-input', `${p}: input does not fit ${o.input.label ?? 'its schema'}`)
   const ran = await attempt(live, to, `${to} ${p}`, () => h(input))
   if (!ran.ok) return ran
   const r = ran.value
   if (!isNanoResult(r)) return failure('invalid-output', `${p}: returned something other than a NanoResult`)
-  if (r.ok && o.output && !o.output.check(r.value)) return failure('invalid-output', `${p}: output does not fit ${o.output.type}`)
+  if (r.ok && o.output && !o.output.check(r.value)) return failure('invalid-output', `${p}: output does not fit ${o.output.label ?? 'its schema'}`)
   return r
 }
 

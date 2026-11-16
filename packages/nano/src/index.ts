@@ -2,8 +2,8 @@
  * The nano model, headless: schemas, ops, interfaces, results, implementations, providers, the registry, selectors,
  * pods, runtimes and deployments (checked values), the context a pod's factory gets, and the one live `Application`.
  *
- *   const Key = Schema.define('Key', Type.String())
- *   const db = Interface.define('acme/db', { get: Op.action('get', Key, Key) })
+ *   const Key = Schema.define(Type.String(), 'Key')
+ *   const db = Interface.define('acme/db', { get: Op.action(Key, Key) })
  *   AppDeployment.assemble({ pods: {}, runtimes: {} }, Registry.create())   // success({})
  */
 export * from './coord.ts'

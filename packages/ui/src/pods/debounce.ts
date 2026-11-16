@@ -5,7 +5,7 @@ import { Debounce } from '../interfaces.ts'
 /** `push` returns at once; after `quietMs` without a push, the last value is published as `flushed`. */
 export const debounce = Implementation.define('nano.ui/debounce', {
   provides: [Debounce],
-  config: Schema.define('DebounceConfig', Type.Union([Type.Object({ quietMs: Type.Integer({ minimum: 0, maximum: 60000 }) }), Type.Undefined()])),
+  config: Schema.define(Type.Union([Type.Object({ quietMs: Type.Integer({ minimum: 0, maximum: 60000 }) }), Type.Undefined()]), 'DebounceConfig'),
   make: (ctx, config?: { quietMs: number }) => {
     const quietMs = config?.quietMs ?? 300
     let timer: ReturnType<typeof setTimeout> | undefined

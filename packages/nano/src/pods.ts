@@ -75,7 +75,7 @@ function create(d: unknown, opts: { registry: Registry; tags?: Tags }): NanoResu
     for (const [name, p] of Object.entries(copy as PodDeployment)) {
       const impl = opts.registry.implementation(p.implementation)
       if (!impl) return failure('not-found', `pod ${name}: no implementation ${p.implementation}`)
-      if (impl.config && !impl.config.check(p.config)) return failure('invalid-input', `pod ${name}: config does not fit ${impl.config.type}`)
+      if (impl.config && !impl.config.check(p.config)) return failure('invalid-input', `pod ${name}: config does not fit ${impl.config.label ?? 'its schema'}`)
     }
     return success(view(new Map(Object.entries(copy as PodDeployment)), opts.registry, undefined, tags))
   } catch (e) {

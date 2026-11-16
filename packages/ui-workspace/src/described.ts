@@ -26,7 +26,7 @@ export type Probed = { provider: Provider; views: ViewMap }
 
 const TAG = /^[a-z][a-z0-9._]*-[a-z0-9._-]*$/
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
-const schema = (s: SchemaJson) => Schema.define(s.type, s.schema as never) as SchemaDef
+const schema = (s: SchemaJson) => Schema.define(s.schema as never, s.type || undefined) as SchemaDef
 /** Only the selector fields, so an extra key (a `byCoord`) cannot pass for an interface. */
 const selector = ({ implements: i, tags, implementation: m, provider: p, runtime: r }: SelectorData): SelectorData =>
   ({ ...(i !== undefined && { implements: i }), ...(tags && { tags }), ...(m !== undefined && { implementation: m }),
@@ -38,7 +38,7 @@ export function described(d: Described): NanoResult<Probed> {
     const impls = d.implementations.map(i => Implementation.define(i.coord, {
       provides: i.provides.map(f => Interface.define(f.coord, Object.fromEntries(f.ops.map(o => {
         const opts = o.description !== undefined ? { description: o.description } : undefined
-        const made: Op = o.kind === 'event' ? Op.event(o.name, schema(o.output!), opts) : Op.action(o.name, schema(o.input!), schema(o.output!), opts)
+        const made = o.kind === 'event' ? Op.event(schema(o.output!), opts) : Op.action(schema(o.input!), schema(o.output!), opts)
         return [o.name, made]
       })))),
       dependencies: Object.fromEntries(Object.entries(i.dependencies).map(([role, s]) => [role, selector(s)])),

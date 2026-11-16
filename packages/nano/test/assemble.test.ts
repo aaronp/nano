@@ -15,13 +15,13 @@ import { Pods } from '../src/pods.ts'
 import { Runtime } from '../src/runtime.ts'
 import { AppDeployment } from '../src/deployment.ts'
 
-const Str = Schema.define('Str', Type.String())
-const Num = Schema.define('Num', Type.Integer())
-const Nothing = Schema.define('Nothing', Type.Null())
-const Counter = Interface.define('acme.Counter', { inc: Op.action('inc', Nothing, Num) })
-const KV = Interface.define('acme.KV', { put: Op.action('put', Str, Nothing) })
-const Ticks = Interface.define('acme.Ticks', { tick: Op.event('tick', Num), said: Op.event('said', Str) })
-const Log = Interface.define('acme.Log', { record: Op.action('record', Num, Nothing) })
+const Str = Schema.define(Type.String(), 'Str')
+const Num = Schema.define(Type.Integer(), 'Num')
+const Nothing = Schema.define(Type.Null(), 'Nothing')
+const Counter = Interface.define('acme.Counter', { inc: Op.action(Nothing, Num) })
+const KV = Interface.define('acme.KV', { put: Op.action(Str, Nothing) })
+const Ticks = Interface.define('acme.Ticks', { tick: Op.event(Num), said: Op.event(Str) })
+const Log = Interface.define('acme.Log', { record: Op.action(Num, Nothing) })
 
 const counter = Implementation.define('acme/counter', { provides: [Counter], make: () => [provide(Counter, { inc: async () => success(1) })] })
 const kv = Implementation.define('acme/kv', { provides: [KV], make: () => [provide(KV, { put: async () => success(null) })] })

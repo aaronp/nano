@@ -10,60 +10,60 @@ import { Schema, Interface, Op } from '@pritzlaff/nano-core'
 
 const Base64 = Type.String({ contentEncoding: 'base64' })
 
-export const KeysRequest = Schema.define('KeysRequest', Type.Object({ count: Type.Integer({ minimum: 1, maximum: 10 }), purpose: Type.String() }))
-export const NewKeys = Schema.define('NewKeys', Type.Object({ keys: Type.Array(Base64) }))
+export const KeysRequest = Schema.define(Type.Object({ count: Type.Integer({ minimum: 1, maximum: 10 }), purpose: Type.String() }), 'KeysRequest')
+export const NewKeys = Schema.define(Type.Object({ keys: Type.Array(Base64) }), 'NewKeys')
 
-export const SignRequest = Schema.define('SignRequest', Type.Object({ publicKey: Base64, purpose: Type.String(), payload: Base64 }))
+export const SignRequest = Schema.define(Type.Object({ publicKey: Base64, purpose: Type.String(), payload: Base64 }), 'SignRequest')
 /** Domain outcomes are values: nano only carries them. */
-export const SignResult = Schema.define('SignResult', Type.Union([
+export const SignResult = Schema.define(Type.Union([
   Type.Object({ status: Type.Literal('signed'), signature: Base64 }),
   Type.Object({ status: Type.Literal('denied'), reason: Type.String() }),
   Type.Object({ status: Type.Literal('unknown-key') }),
-]))
+]), 'SignResult')
 
-export const KeyList = Schema.define('KeyList', Type.Array(Type.Object({ publicKey: Base64, purpose: Type.String() })))
+export const KeyList = Schema.define(Type.Array(Type.Object({ publicKey: Base64, purpose: Type.String() })), 'KeyList')
 
-export const LogLine = Schema.define('LogLine', Type.String())
-export const Done = Schema.define('Done', Type.Null())
-export const LogEntries = Schema.define('LogEntries', Type.Array(Type.String()))
+export const LogLine = Schema.define(Type.String(), 'LogLine')
+export const Done = Schema.define(Type.Null(), 'Done')
+export const LogEntries = Schema.define(Type.Array(Type.String()), 'LogEntries')
 
-export const TestRequest = Schema.define('TestRequest', Type.Object({
+export const TestRequest = Schema.define(Type.Object({
   purpose: Type.String(),
   payload: Base64,
   /** Sign as another purpose than the key was made for (expect `denied`). */
   signAs: Type.Optional(Type.String()),
-}))
-export const TestResult = Schema.define('TestResult', Type.Object({ publicKey: Base64, result: SignResult.schema }))
+}), 'TestRequest')
+export const TestResult = Schema.define(Type.Object({ publicKey: Base64, result: SignResult }), 'TestResult')
 
 export const KeyGenerator = Interface.define('example.signer.KeyGenerator', {
-  'create-keys': Op.action('create-keys', KeysRequest, NewKeys),
+  'create-keys': Op.action(KeysRequest, NewKeys),
 })
 
 export const Signer = Interface.define('example.signer.Signer', {
-  sign: Op.action('sign', SignRequest, SignResult),
+  sign: Op.action(SignRequest, SignResult),
 })
 
 export const Vault = Interface.define('example.signer.Vault', {
   /** Makes key pairs inside the vault; only the public keys come out. */
-  create: Op.action('create', KeysRequest, NewKeys),
-  'sign-with': Op.action('sign-with', SignRequest, SignResult),
+  create: Op.action(KeysRequest, NewKeys),
+  'sign-with': Op.action(SignRequest, SignResult),
   /** Published after each `create`: the keys just made. */
-  keys: Op.event('keys', KeyList),
+  keys: Op.event(KeyList),
 })
 
 export const Log = Interface.define('example.signer.Log', {
-  append: Op.action('append', LogLine, Done),
+  append: Op.action(LogLine, Done),
   /** Published after each `append`: every entry so far. */
-  entries: Op.event('entries', LogEntries),
+  entries: Op.event(LogEntries),
 })
 
 /** Turns the vault's `keys` into log lines. */
 export const KeyFormatter = Interface.define('example.signer.KeyFormatter', {
-  format: Op.action('format', KeyList, Done),
-  line: Op.event('line', LogLine),
+  format: Op.action(KeyList, Done),
+  line: Op.event(LogLine),
 })
 
 /** The tester widget's button: make a key for a purpose, sign a payload with it. */
 export const Tester = Interface.define('example.signer.Tester', {
-  test: Op.action('test', TestRequest, TestResult),
+  test: Op.action(TestRequest, TestResult),
 })

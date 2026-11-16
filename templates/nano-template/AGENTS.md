@@ -5,8 +5,8 @@ this file is what to do, and what not to.
 
 ## The shape
 
-- **An interface** (`src/interfaces.ts`): `Interface.define(coord, { op… })` with `Op.action(name, Input, Output)` and
-  `Op.event(name, Data)`; schemas come from `Schema.define(name, Type…)`.
+- **An interface** (`src/interfaces.ts`): `Interface.define(coord, { op… })` with `Op.action(Input, Output)` and
+  `Op.event(Data)`, each op named by its key; schemas come from `Schema.define(Type…, label?)` and nest directly.
 - **An implementation** (`src/<thing>.ts`): `Implementation.define('acme.template/<thing>', { provides: [Iface], make })`.
   `make(ctx, config)` runs once per build, closes over its state and returns `[provide(Iface, { action: async input => success(…) })]`.
   Events are published with `ctx.publish(Iface.ops.event, data)`; clean up in `ctx.addOnCloseListener`. Nothing throws:

@@ -17,9 +17,9 @@ import {
   success,
 } from '../src/index.ts'
 
-const Num = Schema.define('Num', Type.Integer())
-const Nothing = Schema.define('Nothing', Type.Null())
-const Counter = Interface.define('acme.Counter', { inc: Op.action('inc', Nothing, Num) })
+const Num = Schema.define(Type.Integer(), 'Num')
+const Nothing = Schema.define(Type.Null(), 'Nothing')
+const Counter = Interface.define('acme.Counter', { inc: Op.action(Nothing, Num) })
 const counter = Implementation.define('acme/counter', { provides: [Counter], make: () => {
   let n = 0
   return [provide(Counter, { inc: async () => success(++n) })]

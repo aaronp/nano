@@ -1,8 +1,10 @@
 /**
- * Schema definitions: a TypeBox schema paired with its canonical hash and JSON codec.
+ * Schema definitions: a TypeBox schema paired with its canonical hash, an optional label and a JSON codec. A definition
+ * is itself the schema, so it nests in another directly.
  *
- *   const Rec = Schema.define('Record', Type.Object({ id: Type.String() }))
- *   Rec.hash                       // 64-char blake3 hex of the canonical schema
+ *   const Rec = Schema.define(Type.Object({ id: Type.String() }), 'Record')
+ *   Type.Array(Rec)                // nests as it is; Static<typeof Rec> is its type
+ *   Rec.hash                       // 64-char blake3 hex of the canonical schema (the label does not count)
  *   Rec.decode(Rec.encode(value))  // the value, or undefined if it doesn't fit
  */
 import { blake3 } from '@noble/hashes/blake3'
@@ -11,8 +13,8 @@ import { canonicalize } from 'json-canonicalize'
 import { Value } from 'typebox/value'
 import type { Static, TSchema } from 'typebox'
 
-export type SchemaDef<S extends TSchema = TSchema> = {
-  readonly type: string
+export type SchemaDef<S extends TSchema = TSchema> = S & {
+  readonly label?: string
   readonly schema: S
   readonly hash: string
   check(v: unknown): v is Static<S>
@@ -60,23 +62,26 @@ export function isJson(v: unknown, seen = new Set<unknown>()): boolean {
 export const canonicalSchema = (schema: TSchema): string => canonical(strip(schema))
 
 // A function anywhere (own keys, enumerable or not) means the schema can't be JSON: a Refine keeps its check in a hidden `~refine`.
+// A definition nested in another was checked when it was defined; its own methods don't count.
+const defs = new WeakSet<object>()
 function hasFunction(node: unknown, seen = new Set<unknown>()): boolean {
   if (typeof node === 'function') return true
-  if (node === null || typeof node !== 'object' || seen.has(node)) return false
+  if (node === null || typeof node !== 'object' || seen.has(node) || defs.has(node)) return false
   seen.add(node)
   return Reflect.ownKeys(node).some(k => hasFunction((node as Record<PropertyKey, unknown>)[k], seen))
 }
 
-function define<S extends TSchema>(type: string, schema: S): SchemaDef<S> {
-  if (hasFunction(schema)) throw new Error(`${type}: schema is not JSON`)
+/** A copy of `schema` (non-enumerable keys kept), with the definition's members added out of sight of hashing. */
+function define<S extends TSchema>(schema: S, label?: string): SchemaDef<S> {
+  if (hasFunction(schema)) throw new Error(`${label ?? 'schema'}: schema is not JSON`)
   const check = (v: unknown): v is Static<S> => Value.Check(schema, v)
-  return {
-    type,
+  const members = {
+    ...(label !== undefined && { label }),
     schema,
     hash: hashOf(canonicalSchema(schema)),
     check,
-    encode: v => JSON.stringify(v),
-    decode(json) {
+    encode: (v: Static<S>) => JSON.stringify(v),
+    decode(json: string) {
       try {
         const v: unknown = JSON.parse(json)
         return check(v) ? v : undefined
@@ -85,7 +90,11 @@ function define<S extends TSchema>(type: string, schema: S): SchemaDef<S> {
       }
     },
   }
+  const def = Object.defineProperties({}, Object.getOwnPropertyDescriptors(schema))
+  for (const [k, value] of Object.entries(members)) Object.defineProperty(def, k, { value })
+  defs.add(def)
+  return def as SchemaDef<S>
 }
 
-/** `Schema.define(name, typeboxSchema)`. */
+/** `Schema.define(typeboxSchema, label?)`. */
 export const Schema = { define }

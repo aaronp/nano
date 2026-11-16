@@ -24,8 +24,8 @@ import { serve } from '../src/sandbox/serve.ts'
 import { confirmImports } from '../src/import-confirm.ts'
 import { describeProvider } from '../src/sandbox/protocol.ts'
 
-const Text = Schema.define('Text', Type.String())
-const X = Interface.define('other.X', { x: Op.action('x', Text, Text) })
+const Text = Schema.define(Type.String(), 'Text')
+const X = Interface.define('other.X', { x: Op.action(Text, Text) })
 const real = Implementation.define('other.fx/x', { provides: [X], make: () => [provide(X, { x: async s => success(`real ${s}`) })] })
 const realProvider = Provider.define('other.fx', [real])
 
