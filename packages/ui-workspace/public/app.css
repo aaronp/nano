@@ -1,36 +1,95 @@
-/* The page around <workspace-shell>; every colour comes from the theme tokens. */
+/* Page-level styles for content you put inside <app-route>. Every colour and font comes from the theme tokens. */
 html, body { margin: 0; height: 100%; }
-body { background: var(--nano-bg, var(--bg)); color: var(--nano-fg, var(--fg)); font-family: var(--nano-font, var(--font)); }
-dialog { border: 1px solid var(--nano-border-strong); border-radius: var(--nano-radius); background: var(--nano-surface, var(--nano-bg)); color: var(--nano-fg); font-family: var(--nano-font); }
-dialog button { font: inherit; margin-right: 6px; padding: 5px 10px; }
-.page-head h1 { font: 600 24px/1.2 var(--display); margin: 0 0 4px }
-.page-head p { color: var(--muted); margin: 0 0 16px }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); background-image: var(--page-bg, none); background-size: 28px 28px; }
+a { color: var(--accent); }
+code { font-family: var(--mono); font-size: .92em; }
 
-/* <workspace-dock> (golden-layout, light DOM; its base styles are shared/golden-layout.css). Tabs are plain text, the
-   active one underlined; a tab's close shows on hover. */
-workspace-dock { display: block; position: relative; overflow: hidden; background: var(--bg); color: var(--fg); font: 14px var(--font); }
-.dock-panel { box-sizing: border-box; height: 100%; overflow: auto; padding: 10px; background: var(--surface); color: var(--fg); }
-.dock-stream { font: 11px var(--nano-font-mono, monospace); margin: 0; white-space: pre-wrap; }
-.lm_goldenlayout { background: var(--bg); }
-.lm_content { background: var(--surface); border: 1px solid var(--line); box-sizing: border-box; }
-.lm_splitter { background: var(--line); opacity: .6; transition: opacity .15s; }
-.lm_splitter:hover, .lm_splitter.lm_dragging { background: var(--accent); opacity: 1; }
-.lm_header { height: 30px; }
-.lm_header .lm_tabs { gap: 4px; padding-left: 4px; }
-.lm_header .lm_tab { display: flex; align-items: center; height: 28px; line-height: 28px; padding: 0 22px 0 8px; font: 12px var(--font); color: var(--muted); background: none; border: 0; box-shadow: none; }
-.lm_header .lm_tab:hover { color: var(--fg); }
-.lm_header .lm_tab.lm_active { color: var(--fg); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
-.lm_header.lm_focused .lm_tab.lm_active { color: var(--accent); }
-.lm_header .lm_tab .lm_close_tab, .lm_controls > li { width: 11px; height: 11px; opacity: .55; background-repeat: no-repeat; background-position: center; background-size: 11px; cursor: pointer; }
-.lm_header .lm_tab .lm_close_tab { position: absolute; top: 9px; right: 6px; opacity: 0; }
-.lm_header .lm_tab:hover .lm_close_tab { opacity: .55; }
-.lm_controls { display: flex; gap: 8px; top: 9px; right: 8px; }
-.lm_controls > li:hover, .lm_header .lm_tab .lm_close_tab:hover { opacity: 1; }
-.lm_maximise { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%237a808c' stroke-width='1.6'%3E%3Crect x='1.5' y='1.5' width='9' height='9'/%3E%3C/svg%3E"); }
-.lm_maximised .lm_maximise { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%237a808c' stroke-width='1.6'%3E%3Cpath d='M2 9.5h8'/%3E%3C/svg%3E"); }
-.lm_close, .lm_close_tab { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%237a808c' stroke-width='1.6'%3E%3Cpath d='M2 2l8 8M10 2l-8 8'/%3E%3C/svg%3E"); }
-.lm_dragProxy .lm_content { box-shadow: 0 10px 30px rgb(0 0 0 / .25); }
-.lm_dropTargetIndicator { outline: 2px dashed var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
-.lm_dropTargetIndicator .lm_inner { background: transparent; }
-.lm_maximised { z-index: 40; }
-.lm_dragging, .lm_dragging * { cursor: grabbing !important; user-select: none; }
+a[slot='nav'] svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.drawer-foot { padding: 10px 14px 4px; color: var(--muted); font-size: 12px; }
+
+/* The Workspaces nav row: its link, and a + to make a new workspace. */
+.nav-row a { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; color: inherit; text-decoration: none; }
+.nav-row a svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.nav-row button { flex: none; width: 26px; height: 26px; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); font: inherit; font-size: 16px; line-height: 1; cursor: pointer; }
+.nav-row button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+a[slot='nav'][data-sub] svg { width: 16px; height: 16px; }
+/* The components drawer's toggle beside +: pressed while the drawers show. */
+.nav-row [data-toggle-drawer] { display: grid; place-items: center; padding: 0; }
+.nav-row [data-toggle-drawer] svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.nav-row [data-toggle-drawer][aria-pressed='true'] { background: var(--accent-soft); }
+/* The drawer as an icon rail: only the row's link icon shows. */
+app-shell[collapsed]:not([narrow]) .nav-row button { display: none; }
+html[data-drawers-hidden] component-drawer { display: none; }
+
+/* A workspace page: the components drawer beside the dock. */
+.ws-page { display: flex; height: 100%; min-height: 0; }
+.ws-page > c-wires { flex: 1; min-width: 0; }
+component-drawer { box-sizing: border-box; width: 240px; flex: none; display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow-y: auto;
+  background: var(--surface); border-right: 1px solid var(--line); font-size: 14px; }
+component-drawer .cd-bar { display: flex; align-items: center; gap: 6px; }
+component-drawer .cd-title { flex: 1; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+component-drawer button { font: inherit; font-size: 12px; padding: 4px 8px; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); cursor: pointer; }
+component-drawer button:disabled { opacity: .5; cursor: not-allowed; }
+component-drawer .cd-filter { box-sizing: border-box; width: 100%; font: inherit; padding: 6px 8px; border-radius: 6px; border: var(--card-border); background: var(--bg); color: var(--fg); }
+component-drawer h3 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+component-drawer .cd-section { display: flex; flex-direction: column; gap: 2px; }
+component-drawer .cd-section a { padding: 7px 10px; border-radius: var(--radius); color: var(--fg); text-decoration: none; cursor: grab; }
+component-drawer .cd-section a:hover { background: var(--surface-2); }
+component-drawer h4 { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 0; padding: 0 2px 0 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
+component-drawer h4 button { padding: 1px 6px; font-size: 11px; }
+component-drawer .cd-failed { margin: 4px 0 0; padding: 6px 10px; border-radius: var(--radius); background: var(--surface-2); color: var(--danger, #c33); font-size: 12px; overflow-wrap: anywhere; }
+
+.page-head { margin-bottom: 20px; }
+.page-head h1 { margin: 0 0 4px; font: 600 28px/1.15 var(--display); text-wrap: balance; }
+.page-head p { margin: 0; color: var(--muted); max-width: 70ch; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 18px; }
+
+.panel { box-sizing: border-box; background: var(--surface); border: var(--card-border); border-radius: var(--radius); box-shadow: var(--card-shadow);
+  padding: 16px 18px; margin-bottom: 18px; min-width: 0; }
+.panel h2, .console h2 { margin: 0 0 10px; font: 600 16px/1.3 var(--display); }
+split-pane .panel { margin: 0; height: 100%; }
+split-pane.tall { height: 420px; }
+
+.console { box-sizing: border-box; height: 100%; padding: 10px 16px; background: var(--surface); border-top: 1px solid var(--line); }
+.console h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+
+.btn { font: inherit; padding: 8px 14px; border-radius: var(--radius); border: var(--card-border); background: var(--surface-2); color: var(--fg); cursor: pointer; }
+.btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Sketch: dotted paper. Retro: the desktop shows through behind the content. */
+html[data-theme='sketch'] body { background-image: radial-gradient(#d9d6cc 1px, transparent 1px); background-size: 22px 22px; }
+html[data-theme='retro'] .page-head h1 { color: #FFFFFF; }
+html[data-theme='retro'] .page-head p { color: #E3F2F2; }
+html[data-theme='retro'] .page-head a { color: #FFFF9E; }
+
+/* @composable components read --c-* tokens (with their own fallbacks); map them onto this starter's theme. */
+:root {
+  --c-bg: var(--surface); --c-surface: var(--surface-2); --c-fg: var(--fg); --c-muted: var(--muted); --c-line: var(--line);
+  --c-accent: var(--accent); --c-accent-fg: var(--on-accent); --c-radius: var(--radius); --c-font: var(--font); --c-mono: var(--mono);
+}
+.composable { margin-bottom: 16px; }
+.composable-row { margin-top: 16px; }
+
+/* The Import dialog. */
+.import-dialog { box-sizing: border-box; width: min(560px, 92vw); max-height: 86vh; overflow: auto; padding: 20px; border: var(--card-border); border-radius: var(--radius);
+  background: var(--surface); color: var(--fg); font: 14px var(--font); }
+.import-dialog h2 { margin: 0 0 12px; font: 600 16px var(--display); }
+.import-dialog h3 { margin: 12px 0 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.import-dialog .row { display: flex; gap: 8px; }
+.import-dialog input { flex: 1; min-width: 0; font: inherit; padding: 6px 8px; border: var(--card-border); border-radius: var(--radius); background: var(--surface-2); color: var(--fg); }
+.import-dialog button { font: inherit; padding: 6px 12px; border: var(--card-border); border-radius: var(--radius); background: var(--surface-2); color: var(--fg); cursor: pointer; }
+.import-dialog button:disabled { opacity: .5; cursor: not-allowed; }
+.import-dialog ul { margin: 0; padding-left: 18px; } .import-dialog li { margin: 4px 0; }
+.import-dialog .ops { margin-top: 2px; display: flex; flex-wrap: wrap; gap: 4px; font-size: 12px; color: var(--muted); }
+.import-dialog [role='alert'] { min-height: 1em; color: var(--danger, #c33); }
+.import-dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Dragging a saved workspace: a line where it will land. */
+a[slot='nav'][data-drop='before'] { box-shadow: 0 -2px 0 var(--nano-accent, var(--focus, #36c)); }
+a[slot='nav'][data-drop='after'] { box-shadow: 0 2px 0 var(--nano-accent, var(--focus, #36c)); }
+.wiring-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.wiring-page > c-circuit { flex: 1; min-height: 0; }
+.wiring-views { display: flex; gap: 4px; padding: 8px 12px; }
+.wiring-views a { padding: 4px 12px; border-radius: 999px; color: inherit; text-decoration: none; }
+.wiring-views a[aria-current="page"] { background: var(--accent, #3b82f6); color: #fff; }

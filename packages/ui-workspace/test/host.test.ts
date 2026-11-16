@@ -1,133 +1,192 @@
-// The host on @pritzlaff/nano-core: the built-ins, importing the slice (explorer, Save round-trip), a failed import, HostUI.approve.
+// The workspace page on core: its markup and composable.ts, the platform with the worked example, and a flow through it.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
-// The page is served from the repo, as file: (bun can import file: modules, not http:), so the host and the slice agree on bundle/nano-ui.js.
-const page = new URL('../../../', import.meta.url).href
-if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: page })
-import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { plugin } from 'bun'
-import { Type } from 'typebox'
-import { Coord, Schema, Interface, Implementation, Op, Pod, provide, type AppDeployment } from '@pritzlaff/nano-core'
-import type { Host } from '../src/host.ts'
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()   // another test file may have already (file order differs by OS)
+import { expect, test } from 'bun:test'
 
-const ns = Coord.namespace('test.ask')
-// After happy-dom is registered (static imports would run first): elements define themselves on import.
-await import('../src/boot-theme.ts')   // as main.ts does first
-const { Any, defineViews, HostUI } = await import('@pritzlaff/nano-ui')
-const { start } = await import('../src/host.ts')
-await import('../src/shell.ts')
-
-// What the served site maps: /bundle/nano-ui.js is packages/ui, the slice's ./shout.js its shout.ts (one module each).
-const at = (rel: string) => new URL(rel, import.meta.url).pathname
-const served: Record<string, string> = { 'nano-ui': at('../../ui/src/index.ts'), shout: at('../../../examples/slice/shout.ts') }
-plugin({ name: 'served', setup(b) {
-  b.onResolve({ filter: /(bundle\/nano-ui|examples\/slice\/shout)\.js$/ }, a => ({ path: a.path.includes('shout') ? 'shout' : 'nano-ui', namespace: 'served' }))
-  b.onLoad({ filter: /.*/, namespace: 'served' }, a => ({ contents: `export * from '${served[a.path]}'; export { default } from '${served[a.path]}'`, loader: 'ts' }))
-} })
-
-await import('../src/dock/dock.ts')
-
-// happy-dom's fetch refuses file: URLs: read them with Bun.file, or from `json`.
-const json = new Map<string, unknown>()
-const domFetch = globalThis.fetch
-beforeAll(() => {
-  globalThis.fetch = (async (u: string) => {
-    if (json.has(u)) return { ok: true, status: 200, json: async () => structuredClone(json.get(u)) }
-    const f = Bun.file(new URL(u)), ok = await f.exists()
-    return { ok, status: ok ? 200 : 404, json: () => f.json() }
-  }) as never
-})
-afterAll(() => { globalThis.fetch = domFetch })
-
-defineViews()
-const slice = new URL('../../../examples/slice/nano.json', import.meta.url).href
-type Shell = HTMLElement & { host: Host; updateComplete: Promise<unknown> }
+const { Ops } = await import('@pritzlaff/nano-core')
+const { Debounce, Log, Range } = await import('@composable/bundle')
+const { ApplicationOps: P, runtimeOf } = await import('@pritzlaff/nano-app')
+const { Profile } = await import('@composable/shell')
+await import('../src/boot-theme.ts')   // as main.ts does first: the theme is on <html> before any element upgrades
+const page = await Bun.file(new URL('../public/index.html', import.meta.url)).text()
+// the page first, as in a browser (module scripts run after parsing): composable.ts adds the dock's entries to it
+document.body.innerHTML = page.slice(page.indexOf('<body>') + 6, page.indexOf('</body>'))
+const { host } = await import('../src/composable.ts')
 const tick = (ms = 0) => new Promise(r => setTimeout(r, ms))
-async function mount() {
-  const r = await start()
-  if (!r.ok) throw new Error(r.fail.reason)
-  const el = document.createElement('workspace-shell') as Shell
-  el.host = r.value
-  const dock = el.appendChild(document.createElement('workspace-dock')) as HTMLElement & { host: Host }
-  document.body.replaceChildren(el)
-  dock.host = r.value
+const me = { registry: 'host', instance: 'test' }
+const call = (id: string, op: any, arg: unknown = null) => host.call(me, id, Ops.key(op), arg) as Promise<any>
+
+test('the platform lists the host system with the worked example, wired', async () => {
+  await tick()
+  const [hostSystem] = (await call('application', P.systems)).value
+  expect(hostSystem.id).toBe('host')
+  const ids = hostSystem.instances.map((i: any) => i.id)
+  expect(ids).toEqual(expect.arrayContaining(['application', 'ex-range', 'ex-debounce', 'ex-log', 'ex-input', 'ex-map']))
+  expect(hostSystem.subscriptions.filter((s: any) => !s.listener.includes('~view'))).toHaveLength(4)   // views subscribe too
+})
+
+test('the app gateway is in host and in every system the platform makes', async () => {
+  expect(host.registry.get('app')).toBeDefined()
+  await call('application', P.createSystem, 'g1')
+  expect(runtimeOf(host.registry, 'g1')!.registry.get('app')).toBeDefined()
+})
+
+test('moving the example range flows through the debounce into the log', async () => {
+  await call('ex-debounce', Debounce.ops.setQuiet, 10)
+  await call('ex-range', Range.ops.set, 7); await call('ex-range', Range.ops.set, 8)
+  await tick(40)
+  const entries = (await call('ex-log', Log.ops.entries)).value
+  expect(entries.at(-1).value).toEqual([7, 8])
+})
+
+test('the page elements attach to the example instead of making their own', async () => {
+  await tick()
+  const el = document.querySelector('c-range[name="ex-range"]')
+  expect(el).not.toBeNull()
+  expect(host.registry.snapshot().instances.filter(i => i.id === 'ex-range')).toHaveLength(1)
+})
+
+test('the puzzle prototype and port are gone: no page, nav item, dock widget or served files (they can be imported packages)', async () => {
+  for (const id of ['puzzle-prototype', 'puzzle-port']) {
+    for (const sel of [`a[href="#/${id}"]`, `app-route[path="/${id}"]`, `template[data-widget="${id}"]`])
+      expect(document.querySelector(sel) !== null, sel).toBe(false)   // (a boolean: a failure prints the selector, not the DOM)
+  }
+  expect(await Bun.file(new URL('../public/puzzle-prototype/PuzzlePrototype.dc.html', import.meta.url)).exists()).toBe(false)
+})
+
+test('the dock can add every catalog type that has an element (marked for the drawer), and + Add can make every type', async () => {
+  const { catalog } = await import('../src/composable.ts')
+  const tagged = Object.entries(catalog).filter(([, e]) => e.tag)
+  expect(tagged.length).toBeGreaterThanOrEqual(6)
+  for (const [kind, e] of tagged) {
+    const t = document.querySelector(`template[data-widget="${kind}"]`)!
+    expect(t.innerHTML).toBe(`<${e.tag} keep=""></${e.tag}>`)   // closing sends it to the rack
+    expect(t.hasAttribute('data-catalog')).toBe(true)
+  }
+  const kinds = (await call('application', P.catalog)).value
+  expect(kinds).toEqual(expect.arrayContaining(['range', 'log', 'component-list', 'connection-board']))
+})
+
+test('wires:open-panel reopens a rack component as a dock panel showing that instance', async () => {
+  const dock = document.querySelector('workspace-dock') as HTMLElement & { addWidget?: (id: string, name?: string) => void }
+  const opened: unknown[] = []
+  dock.addWidget = (id, name) => { opened.push([id, name]) }
+  dock.dispatchEvent(new CustomEvent('wires:open-panel', { bubbles: true, composed: true, detail: { kind: 'range', name: 'ex-range' } }))
+  expect(opened).toEqual([['range', 'ex-range']])
+})
+
+test('the Workspace dock sits inside <c-wires>, which has the host runtime and the merged catalog', async () => {
+  const { catalog } = await import('../src/composable.ts')
+  const wires = document.querySelector('app-route[path="/workspace"] c-wires') as HTMLElement & { runtime?: unknown; catalog?: unknown; flipped?: boolean; updateComplete?: Promise<boolean> }
+  expect(wires).not.toBeNull()
+  expect(wires.querySelector(':scope > workspace-dock')).not.toBeNull()
+  expect(wires.runtime).toBe(host)
+  expect(wires.catalog).toBe(catalog)
+  wires.querySelector('workspace-dock')!.dispatchEvent(new CustomEvent('dock:connections', { bubbles: true, composed: true }))
+  await wires.updateComplete
+  expect(wires.flipped).toBe(true)
+})
+
+test('the nav has a Workspaces group with +, no Overview/Main/Components/Settings links; the workspace is a drawer beside an empty dock', () => {
+  const group = document.querySelector('app-shell > [data-workspaces]')!
+  expect(group.querySelector('a')!.getAttribute('href')).toBe('#/workspace')
+  expect(group.querySelector('button[data-new-workspace]')).not.toBeNull()
+  expect([...document.querySelectorAll('a[slot="nav"]')].map(a => a.getAttribute('href')).filter(h => ['#/', '#/components', '#/settings'].includes(h!))).toEqual([])
+  expect(document.querySelector('[data-main]')).toBeNull()
+  expect(document.querySelector('workspace-dock#workspace')!.getAttribute('open')).toBe('')
+  expect([...document.querySelectorAll('a[slot="nav"]')].filter(a => a.textContent!.trim().startsWith('+'))).toEqual([])
+  expect(document.querySelector('app-route[path="/workspace"] .ws-page > component-drawer')!.getAttribute('for')).toBe('workspace')
+})
+
+test('a package\'s catalog joins the running host: the platform can make it, Main\'s dock can add it, its names are taken', async () => {
+  const { addCatalog, loadedNames } = await import('../src/composable.ts')
+  const { component, state } = await import('@pritzlaff/nano-runes')
+  const Timer = component('nano.template/timer', () => { const s = state({ count: 0 }); return { get count() { return s.count } } }, { count: (await import('typebox')).Type.Number({ description: 'The count' }) })
+  let changed = 0
+  document.addEventListener('catalog:changed', () => { changed++ })
+  addCatalog({ timer: { component: Timer, title: 'Timer', tag: 'nano-timer' } }, { name: 'nano-template', url: 'https://x/manifest.json' })
+  expect(changed).toBe(1)
+  expect(await call('application', P.createComponent, { kind: 'timer', name: 't1', system: 'host' })).not.toHaveProperty('error')
+  expect(host.registry.get('t1')!.component).toBe(Timer)
+  const t = document.querySelector('workspace-dock#workspace > template[data-widget="timer"]') as HTMLTemplateElement
+  expect([t.dataset.title, t.dataset.package, t.dataset.packageUrl, t.hasAttribute('data-catalog')]).toEqual(['Timer', 'nano-template', 'https://x/manifest.json', true])
+  const names = loadedNames()
+  expect(names.kinds).toContain('timer'); expect(names.ids).toContain('nano.template/timer'); expect(names.tags).toContain('nano-timer')
+  expect(names.kinds).toContain('range')
+})
+
+test('the names an import must not take include the page\'s own widgets', async () => {
+  const { loadedNames } = await import('../src/composable.ts')
+  expect(loadedNames().kinds).toEqual(expect.arrayContaining(['notes', 'chart', 'activity', 'range']))
+})
+
+test('importing a package republishes the platform\'s kinds', async () => {
+  const { addCatalog } = await import('../src/composable.ts')
+  const { Components: C, Ops: O } = await import('@pritzlaff/nano-core')
+  const heard: { kind: string }[][] = []
+  const spy = C.create({ ns: 't', name: 'kinds-spy' }, () => heard)
+  spy.action(O.sink('t', 'take', P.kinds.output!), (h, x) => { h.push(x as { kind: string }[]) })
+  host.registry.add('kinds-spy', C.instantiate(spy))
+  host.registry.subscribe({ source: 'application', op: O.key(P.kinds), listener: 'kinds-spy', target: 't/take' })
+  addCatalog({ clock: { component: C.create({ ns: 't', name: 'clock' }, () => ({})), title: 'Clock' } }, { name: 'clocks', url: 'https://x/clocks.json' })
+  await new Promise(r => setTimeout(r, 0))
+  expect(heard.at(-1)?.map(k => k.kind)).toContain('clock')
+})
+
+test('the example wiring still connects, with every op typed and described', () => {
+  const wired = host.registry.snapshot().subscriptions.filter(s => !s.listener.includes('~view') && s.listener !== 'kinds-spy')
+  expect(wired.map(s => `${s.source}→${s.listener}`).sort()).toEqual(['ex-debounce→ex-log', 'ex-input→ex-map', 'ex-map→ex-log', 'ex-range→ex-debounce'])
+})
+
+test('the host defines <c-sandboxed>, which dock panels of sandboxed kinds use', () => {
+  expect(!!customElements.get('c-sandboxed')).toBe(true)
+})
+
+const route = (path: string) => document.querySelector(`app-route[path="${path}"]`)!
+
+test('the app bar holds <nano-profile> showing Components, Settings, Systems, Themes and Wiring, and no theme picker', async () => {
+  const el = document.querySelector('[slot="actions"]') as any
+  expect(el.localName).toBe('nano-profile')
+  expect(!!document.querySelector('[slot="actions"] theme-picker, theme-picker[slot="actions"]')).toBe(false)
   await el.updateComplete
-  return { host: r.value, el }
-}
-
-test('given a fresh host, then the built-ins input, debounce, map and log are listed and main holds only ui', async () => {
-  const { host, el } = await mount()
-  const builtins = [...el.shadowRoot!.querySelectorAll<HTMLButtonElement>('[data-builtin]')]
-  expect(builtins.map(b => b.textContent!.trim())).toEqual(['input', 'debounce', 'map', 'log'])
-  expect(host.app.deployment().runtimes).toEqual({ main: { pods: ['ui'], subscriptions: [] } })
-  builtins[2]!.click()
-  await tick(10)
-  expect(host.app.deployment().runtimes.main!.pods).toEqual(['ui', 'map1'])
+  el.shadowRoot.querySelector('button').click(); await el.updateComplete
+  const links = [...el.shadowRoot.querySelectorAll('nav a')].map((a: any) => [a.textContent, a.getAttribute('href')])
+  expect(links).toEqual([['Components', '#/components'], ['Settings', '#/settings'], ['Systems', '#/systems'], ['Themes', '#/themes'], ['Wiring', '#/wiring']])
 })
 
-test('given the slice imported, then the explorer lists in, wait, up, out and Save round-trips modules and views', async () => {
-  const { host, el } = await mount()
-  expect(await host.importUrl(slice)).toMatchObject({ ok: true })
-  await el.updateComplete
-  const tree = el.querySelector('workspace-dock nano-explorer')!.shadowRoot!.querySelector('nano-tree') as HTMLElement & { updateComplete: Promise<unknown> }
-  await tree.updateComplete
-  for (const pod of ['in', 'wait', 'up', 'out']) expect(tree.shadowRoot!.textContent).toContain(pod)
-
-  const layout = { dock: { root: { type: 'component', componentType: 'panel', componentState: { id: 'pod:up' } } } }
-  expect(await host.apply({ ...host.data(), views: { up: 'nano-pod-view' }, layout })).toMatchObject({ ok: true })
-  const saved = host.saved()
-  expect(saved.layout).toEqual(layout)   // kept by the host, so it round-trips below
-  const file: AppDeployment = await Bun.file(new URL(slice)).json()
-  // stored resolved, so a saved nano.json loads from anywhere on the origin
-  expect(saved.modules).toEqual({ 'nano.ui': new URL('./bundle/nano-ui.js', page).href, 'example.slice': new URL('./shout.js', slice).href })
-  expect(saved.views).toEqual({ up: 'nano-pod-view' })
-  expect(saved.pods).toEqual(file.pods)
-  expect(saved.runtimes).toEqual(file.runtimes)
-
-  const again = new URL('./saves/nano.json', import.meta.url).href   // another directory than the slice's
-  json.set(again, saved)
-  const fresh = (await mount()).host
-  expect(await fresh.importUrl(again)).toMatchObject({ ok: true })
-  expect(fresh.saved()).toEqual(saved)
+test('the sidebar has no Systems link; #/systems still exists', () => {
+  expect(!!document.querySelector('a[slot="nav"][href="#/systems"]')).toBe(false)
+  expect(!!route('/systems')).toBe(true)
 })
 
-test('given an app with a pod named ui, then the import is refused and the registry and deployment are unchanged', async () => {
-  const { host } = await mount()
-  const before = { manifest: host.registry.manifest(), data: host.data() }
-  const clash = new URL('./clash/nano.json', import.meta.url).href
-  json.set(clash, { pods: { ui: { implementation: 'example.slice/shout', eager: false } }, runtimes: {}, modules: { 'example.slice': new URL('./shout.js', slice).href } })
-  expect(await host.importUrl(clash)).toMatchObject({ ok: false, fail: { reason: 'clash: pod ui is already loaded' } })
-  expect(host.registry.manifest()).toEqual(before.manifest)
-  expect(host.data()).toEqual(before.data)
+test('#/themes has the theme cards; Settings keeps Layout and no theme picker', () => {
+  expect(!!route('/themes').querySelector('theme-picker[layout="cards"]')).toBe(true)
+  expect(!!route('/settings').querySelector('theme-picker')).toBe(false)
+  expect(!!route('/settings').querySelector('#reset-splits')).toBe(true)
 })
 
-test('given an import whose provider 404s, then a toast names it and the deployment is unchanged', async () => {
-  const { host } = await mount()
-  const before = host.data()
-  const r = await host.importUrl(new URL('./fixtures/missing.json', import.meta.url).href)
-  expect(r.ok).toBe(false)
-  const toaster = document.querySelector('nano-toaster') as HTMLElement & { toasts: { title: string }[] }
-  expect(toaster.toasts.map(t => t.title).join()).toContain('missing.js')
-  expect(host.data()).toEqual(before)
+test('the profile instance is in the host system, owned by the platform, labelled nano/deploy host', async () => {
+  const [hostSystem] = (await call('application', P.systems)).value
+  const p = hostSystem.instances.find((i: any) => i.id === 'profile')
+  expect(p.owner).toEqual({ kind: 'platform', name: 'application' })   // as the ex-* examples: made through the app's application
+  expect(p.labels['nano/deploy']).toBe('host')
+  expect(host.registry.snapshot().instances.filter(i => i.id === 'profile')).toHaveLength(1)
+  expect((await call('profile', Profile.ops.user)).value).toEqual({ name: 'You' })
 })
 
-test('given HostUI.approve called from a pod, then a dialog opens and choosing Approve resolves true', async () => {
-  const { host } = await mount()
-  const Ask = Interface.define('test.Ask', { ask: Op.action(Schema.define(Type.Null(), 'None'), Any) })
-  const asker = Implementation.define(ns.implementationId('asker'), {
-    provides: [Ask], dependencies: { ui: HostUI },
-    make: ctx => [provide(Ask, { ask: async () => { const h = ctx.one(HostUI); return h.ok ? h.value.call.approve({ title: 'Send it?' }) : h } })],
-  })
-  expect(host.registry.add(ns.provider([asker]))).toMatchObject({ ok: true })
-  const d = host.data()
-  expect(await host.apply({ ...d, pods: { ...d.pods, asker: Pod.lazy(asker) },
-    runtimes: { main: { pods: ['ui', 'asker'], subscriptions: [{ kind: 'call', from: 'asker', to: 'ui' }] } } })).toMatchObject({ ok: true })
+test('the host has no Inbox: no #/inbox route, nav link, mail widgets or Messages dock widget', async () => {
+  expect(!!document.querySelector('app-route[path="/inbox"]')).toBe(false)
+  expect(!!document.querySelector('a[href="#/inbox"]')).toBe(false)
+  expect(!!document.querySelector('template[data-widget="messages"]')).toBe(false)
+  const widgets = await Bun.file(new URL('../src/widgets/widgets.ts', import.meta.url)).text()
+  expect(/mail-|Mail(Folders|List|Reader)|mail:/.test(widgets)).toBe(false)
+})
 
-  const answer = host.app.call('main', 'asker').ask(null)
-  for (let i = 0; i < 50 && !document.querySelector('dialog'); i++) await tick(5)
-  const dialog = document.querySelector('dialog')!
-  expect(dialog.textContent).toContain('Send it?')
-  expect([...dialog.querySelectorAll('button')].filter(b => b.autofocus).map(b => b.textContent)).toEqual(['Deny'])
-  ;[...dialog.querySelectorAll('button')].find(b => b.textContent === 'Approve')!.click()
-  expect(await answer).toEqual({ ok: true, value: true })
-  expect(document.querySelector('dialog')).toBeNull()
+test('a saved layout naming "messages" is ignored: the dock keeps only layouts whose widgets it still has, so the default workspace opens', async () => {
+  // (golden-layout needs a browser, so this checks what <workspace-dock>.readSaved checks: panelIds against the page's templates)
+  const { panelIds } = await import('../src/lib/dock-layout.ts')
+  const has = new Set([...document.querySelectorAll('#workspace > template')].map(t => (t as HTMLElement).dataset.widget))
+  const saved = { type: 'stack', content: [{ type: 'component', componentState: { widget: 'notes' } }, { type: 'component', componentState: { widget: 'messages' } }] }
+  expect(panelIds(saved as never).filter(id => !has.has(id))).toEqual(['messages'])
+  expect(has.has('notes') && has.has('activity')).toBe(true)
 })

@@ -1,26 +1,23 @@
-/** The host page: theme first, then the views, the host and its shell; `?src=<url>` imports that nano.json on load. */
-import './boot-theme.ts'
-import { defineViews } from '@pritzlaff/nano-ui'
-import { toast } from '@pritzlaff/nano-elements'
-import { start, type Host } from './host.ts'
-import './shell.ts'
-import './dock/dock.ts'
-import './shell/app-shell.ts'
-import './shell/app-bar.ts'
-import './components/theme-picker.ts'
-import { forgetLayout } from './shell/settings.ts'
-import type { WorkspaceDock } from './dock/dock.ts'
-
-defineViews()
-const host = await start()
-if (!host.ok) toast(host.fail.reason, { variant: 'bad', duration: 0 })
-else {
-  for (const tag of ['workspace-shell', 'workspace-app-bar', 'workspace-dock']) (document.querySelector(tag) as HTMLElement & { host?: Host }).host = host.value
-  const dock = document.querySelector('workspace-dock') as WorkspaceDock
-  document.addEventListener('nano-command', e => dock.command((e as CustomEvent<string>).detail))   // the View menu; File's are not yet
-  document.getElementById('reset-layout')!.addEventListener('click', () => void forgetLayout(localStorage, host.value))
-  const src = new URLSearchParams(location.search).get('src')
-  // Only a URL on this page's origin: a crafted link must not open the import prompt on load.
-  if (src && new URL(src, location.href).origin !== location.origin) toast(`${src} is not on this origin`, { variant: 'bad' })
-  else if (src) await host.value.importUrl(new URL(src, location.href).href)   // a failure is shown as a toast
-}
+/**
+ * Entry point. The theme is applied first (boot-theme), then components register and upgrade the page.
+ * The workspace registers last so the drawer's "add widget" links exist when it wires them up.
+ */
+import './boot-theme.ts';
+import './composable.ts';
+import './boot-app.ts';   // the title and the working copy, before saved workspaces mount
+import './boot-saved-workspaces.ts';   // saved workspaces' routes exist before <app-shell> reads them
+import './boot-file.ts';   // the File menu's commands and ?src=
+import './components/app-shell.ts';
+import './components/split-pane.ts';
+import './components/component-drawer.ts';
+import './components/import-dialog.ts';
+import './components/gallery.ts';
+import './components/theme-picker.ts';
+import './widgets/widgets.ts';
+import './widgets/notes-panel.ts';
+import './components/workspace-dock.ts';
+import './boot-app-bar.ts';   // after the shell (its bus) and the dock: the app bar follows the page and panel focus
+import { bootWiring } from './boot-wiring.ts';   // after the shell (its bus)
+import { host } from './composable.ts';
+import { screensOf } from './lib/screens.ts';
+bootWiring(document, () => screensOf(host));
