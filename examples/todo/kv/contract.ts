@@ -13,11 +13,11 @@ export type Json = null | boolean | number | string | Json[] | { [k: string]: Js
 export namespace KeyValueStoreDef {
   export const ns = Coord.namespace('example.kv')
 
-  export const Path = Schema.define(Type.Array(Type.String()), 'Path')
+  export const Path = Schema.define(Type.Array(Type.String()))
   export type Path = Static<typeof Path>
   /** Any value to nano's check; `Json` to TypeScript. */
-  export const Value = Schema.define(Type.Unsafe<Json>(Type.Unknown()), 'Value')
-  export const Entry = Schema.define(Type.Object({ key: Path, value: Value }), 'Entry')
+  export const Value = Schema.define(Type.Unsafe<Json>(Type.Unknown()))
+  export const Entry = Schema.define(Type.Object({ key: Path, value: Value }))
   export type Entry = Static<typeof Entry>
 
   export const api = Interface.define(ns.interface('KeyValueStore'), {

@@ -4,7 +4,7 @@
  *
  *   const s = inMemory(); await s.put({ key: ['a'], value: 1 }); await s.get(['a'])   // 1
  */
-import { Implementation, Provider } from '@pritzlaff/nano-core'
+import { Provider } from '@pritzlaff/nano-core'
 import { KeyValueStoreDef } from './contract.ts'
 
 type Path = KeyValueStoreDef.Path
@@ -30,15 +30,9 @@ export function inMemory(changed: (key: Path) => unknown = () => {}): KeyValueSt
 }
 
 const { api, impls } = KeyValueStoreDef
-const memory = Implementation.define(impls.memory, {
-  provides: [api],
-  description: 'Keeps entries in memory; a restart empties it.',
-  make: ctx => inMemory(key => ctx.publish(api.ops.changed, { key })),
-})
-const backup = Implementation.define(impls.backup, {
-  provides: [api],
-  description: 'A second in-memory store, to swap to.',
-  make: ctx => inMemory(key => ctx.publish(api.ops.changed, { key })),
-})
+/** Keeps entries in memory; a restart empties it. */
+const memory = api.impl(impls.memory).make(ctx => inMemory(key => ctx.publish(api.ops.changed, { key })))
+/** A second in-memory store, to swap to. */
+const backup = api.impl(impls.backup).make(ctx => inMemory(key => ctx.publish(api.ops.changed, { key })))
 
 export default Provider.define(String(KeyValueStoreDef.ns), [memory, backup])

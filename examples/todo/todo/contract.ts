@@ -10,9 +10,9 @@ import { Coord, Interface, Op, Schema } from '@pritzlaff/nano-core'
 export namespace TodoListDef {
   export const ns = Coord.namespace('example.todo')
 
-  export const Todo = Schema.define(Type.Object({ id: Type.String(), title: Type.String(), done: Type.Boolean() }), 'Todo')
+  export const Todo = Schema.define(Type.Object({ id: Type.String(), title: Type.String(), done: Type.Boolean() }))
   export type Todo = Static<typeof Todo>
-  export const Change = Schema.define(Type.Object({ id: Type.String(), title: Type.Optional(Type.String()), done: Type.Optional(Type.Boolean()) }), 'Change')
+  export const Change = Schema.define(Type.Object({ id: Type.String(), title: Type.Optional(Type.String()), done: Type.Optional(Type.Boolean()) }))
   export type Change = Static<typeof Change>
 
   export const api = Interface.define(ns.interface('TodoList'), {
