@@ -590,6 +590,6 @@ describe('one apply bringing an edge and its rules', () => {
     const { app } = await create(start)
     ok(await app.apply(d({ kind: 'rules', rules: [{ allow: '*' }] }, true)))
     const { app: other } = await create(d({ kind: 'allow-all' }, false))
-    expect(await other.apply(d({ kind: 'rules', rules: [{ deny: 'call', from: 'app' }, { allow: '*' }] }, true))).toMatchObject({ ok: false, fail: { type: 'denied', reason: 'rules[0]' } })
+    ok(await other.apply(d({ kind: 'rules', rules: [{ deny: 'call', from: 'app' }, { allow: '*' }] }, true)))   // the edge is accepted; each call along it is policed
   })
 })

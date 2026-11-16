@@ -45,3 +45,9 @@ test('first match wins; a deny names its rule', () => {
   expect(p.isAllowed(ask({ kind: 'pipe', from: 'b' }))).toEqual(yes)
   expect(PolicyRules([]).isAllowed(ask())).toEqual(no)
 })
+
+test('a pod named like an interface or port coordinate matches the same rule as that coordinate', () => {
+  const p = PolicyRules([{ allow: '*', to: 'acme.Db' }])
+  expect(p.isAllowed(ask({ to: 'acme.Db', port: undefined }))).toEqual(yes)
+  expect(p.isAllowed(ask({ to: 'acme.Db', port: 'other.X/y' }))).toEqual(yes)
+})

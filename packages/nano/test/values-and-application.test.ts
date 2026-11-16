@@ -7,6 +7,7 @@
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import {
+  PolicyRules,
   Application,
   Pod,
   AppDeployment,
@@ -296,13 +297,23 @@ describe('changing', () => {
     expect(app.deployment()).toEqual(next)
     expect(events).toContainEqual(expect.objectContaining({ type: 'applied' }))
   })
-  test('given a policy that refuses a new subscription, when apply adds it, then apply is denied and nothing changes', async () => {
+  test('given a policy that refuses calls, when apply adds a call edge, then apply is accepted and each call along it is denied', async () => {
     const policies: Record<string, Policy> = { r: { isAllowed: ask => (ask.kind === 'call' ? { approved: false, reason: 'frozen' } : { approved: true }) } }
     const d = one({ send: Pod.lazy(sender), db: Pod.lazy(kv) })
     const { app } = await live(d, { policies })
     const next: AppDeployment = { ...d, runtimes: { r: { ...d.runtimes.r!, subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] } } }
-    expect(await app.apply(next)).toMatchObject({ ok: false, fail: { type: 'denied', reason: 'frozen' } })
-    expect(app.deployment()).toEqual(d)
+    expect(await app.apply(next)).toEqual(success(undefined))
+    expect(app.deployment()).toEqual(next)
+    expect(await app.call('r', 'send').send('k')).toMatchObject({ ok: false, fail: { type: 'denied' } })
+  })
+  test('given interface rules, when apply adds a call edge, then it is accepted and each call along it is allowed or denied per message', async () => {
+    const policies = { r: PolicyRules([{ allow: 'call', from: 'host', to: 'acme.Send' }, { allow: 'call', from: 'send', to: 'acme.KV/put' }, { deny: '*' }]) }
+    const d = one({ send: Pod.lazy(sender), db: Pod.lazy(kv) })
+    const { app } = await live(d, { policies })
+    const next: AppDeployment = { ...d, runtimes: { r: { ...d.runtimes.r!, subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] } } }
+    expect(await app.apply(next)).toEqual(success(undefined))
+    expect(await app.call('r', 'send').send('k')).toEqual(success(null))
+    expect(await app.call('r', 'db').get('k')).toMatchObject({ ok: false, fail: { type: 'denied' } })
   })
   // Behaviour 13.
   test('given a saved deployment, when an application is created from its JSON, then it answers the same calls the same way', async () => {
@@ -380,13 +391,6 @@ describe('changing, at the edges', () => {
     expect(await app.apply({ pods: {}, runtimes: { r: { pods: ['x'], subscriptions: [] } } })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
     expect(app.deployment()).toEqual(d)
   })
-  test('given a policy that throws on subscribe, when apply adds a subscription, then it is denied', async () => {
-    const policies: Record<string, Policy> = { r: { isAllowed: () => { throw new Error('nope') } } }
-    const d = one({ send: Pod.lazy(sender), db: Pod.lazy(kv) })
-    const { app } = await live(d, { policies })
-    expect(await app.apply(one(d.pods, [{ kind: 'call', from: 'send', to: 'db' }]))).toMatchObject({ ok: false, fail: { type: 'denied' } })
-    expect(app.deployment()).toEqual(d)
-  })
 })
 
 describe('edges of the live application', () => {
@@ -445,13 +449,13 @@ describe('final review', () => {
   const sub = { kind: 'call', from: 'send', to: 'db' } as const
 
   // I1: the application keeps its own copy.
-  test('given deployment() mutated in place, when applied under a policy refusing subscribe, then it is denied', async () => {
+  test('given deployment() mutated in place, when applied, then the change takes effect', async () => {
     const policies: Record<string, Policy> = { r: { isAllowed: ask => (ask.kind === 'call' ? { approved: false, reason: 'frozen' } : { approved: true }) } }
     const { app } = await live(wired(), { policies })
     const d = app.deployment()
     d.runtimes.r!.subscriptions.push(sub)
-    expect(await app.apply(d)).toMatchObject({ ok: false, fail: { type: 'denied', reason: 'frozen' } })
-    expect(app.deployment()).toEqual(wired())
+    expect(await app.apply(d)).toEqual(success(undefined))
+    expect(app.deployment()).toEqual(d)
   })
   test('given the object passed to create, when it is mutated, then nothing changes', async () => {
     const d = wired()
@@ -499,23 +503,21 @@ describe('final review', () => {
   })
 
   // M1: one verdict check.
-  test('given a policy returning a rejected Promise, when called and applied, then both are denied and nothing is unhandled', async () => {
+  test('given a policy returning a rejected Promise, when called, then it is denied and nothing is unhandled', async () => {
     const unhandled: unknown[] = [], note = (e: unknown) => unhandled.push(e)
     process.on('unhandledRejection', note)
     try {
       const policies = { r: { isAllowed: () => Promise.reject(new Error('later')) } } as unknown as Record<string, Policy>
       const { app } = await live(wired(), { policies })
       expect(await app.call('r', 'db').get('k')).toMatchObject({ ok: false, fail: { type: 'denied', reason: 'policy gave no verdict' } })
-      expect(await app.apply(one(wired().pods, [sub]))).toMatchObject({ ok: false, fail: { type: 'denied', reason: 'policy gave no verdict' } })
       await tick(); await tick()
       expect(unhandled).toEqual([])
     } finally { process.off('unhandledRejection', note) }
   })
-  test('given a verdict whose approved getter throws, when called and applied, then both are denied', async () => {
+  test('given a verdict whose approved getter throws, when called, then it is denied', async () => {
     const policies = { r: { isAllowed: () => ({ get approved(): boolean { throw new Error('boom') } }) } } as unknown as Record<string, Policy>
     const { app } = await live(wired(), { policies })
     expect(await app.call('r', 'db').get('k')).toMatchObject({ ok: false, fail: { type: 'denied', reason: 'policy threw: boom' } })
-    expect(await app.apply(one(wired().pods, [sub]))).toMatchObject({ ok: false, fail: { type: 'denied', reason: 'policy threw: boom' } })
   })
 
   // M2: a call waiting on a build uses that build's implementation.
@@ -541,16 +543,5 @@ describe('final review', () => {
     expect(await app.call('r', 'c').inc(null)).toEqual(success(1))
     expect(await app.apply({ ...d, runtimes: { r: { pods: ['send', 'db', 'c'], subscriptions: [sub] } } })).toEqual(success(undefined))
     expect(await app.call('r', 'c').inc(null)).toEqual(success(2))
-  })
-  test('given a denied apply, then no applied event, and a following allowed apply succeeds', async () => {
-    let frozen = true
-    const policies: Record<string, Policy> = { r: { isAllowed: () => (frozen ? { approved: false, reason: 'frozen' } : { approved: true }) } }
-    const { app, events } = await live(wired(), { policies })
-    expect(await app.apply(one(wired().pods, [sub]))).toMatchObject({ ok: false, fail: { type: 'denied' } })
-    expect(events.filter(e => e.type === 'applied')).toEqual([])
-    frozen = false
-    expect(await app.apply(one(wired().pods, [sub]))).toEqual(success(undefined))
-    expect(await app.call('r', 'send').send('k')).toEqual(success(null))
-    expect(events.filter(e => e.type === 'applied')).toHaveLength(1)
   })
 })

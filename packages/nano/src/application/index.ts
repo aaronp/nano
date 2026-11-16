@@ -11,7 +11,6 @@
  *   app.listen(e => …)                           // built, sent, delivered, denied, failure, …
  *   await app.close()                            // every instance closed, deliveries under way settled; later calls not-found
  */
-import { Value } from 'typebox/value'
 import { AppDeployment } from '../deployment.ts'
 import type { Implementation } from '../implementation.ts'
 import type { Pod } from '../pod.ts'
@@ -70,16 +69,6 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
   const buildEager = (names: string[]) => Promise.all(names.filter(n => current.pods[n]!.eager).map(n => pods.get(n)))
   await buildEager(Object.keys(current.pods))
 
-  /** The first refusal of a subscription `next` adds, by the policy `next` gives the runtime it is added in. */
-  function refused(next: AppDeployment): string | undefined {
-    for (const [id, r] of Object.entries(next.runtimes))
-      for (const s of r.subscriptions) {
-        if (current.runtimes[id]?.subscriptions.some(x => Value.Equal(x, s))) continue
-        const why = refusal(live, { runtime: id, kind: s.kind, from: s.from, to: s.to }, next)
-        if (why !== undefined) return why
-      }
-  }
-
   /** `d` assembled with the application's registry, then composed. */
   function adopt(d: AppDeployment): NanoResult<AppDeployment> {
     const assembled = AppDeployment.assemble(d, registry)
@@ -99,8 +88,6 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
   async function reconcile(d: AppDeployment): Promise<NanoResult<void>> {
     const checked = adopt(d)
     if (!checked.ok) return checked
-    const why = refused(checked.value)
-    if (why !== undefined) return failure('denied', why)
     const changes = diff(current, checked.value), before = current
     current = checked.value
     for (const o of [...live.listeners.ons]) {

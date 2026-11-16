@@ -73,6 +73,7 @@ function create(d: unknown, opts: { registry: Registry; tags?: Tags }): NanoResu
     const stray = Object.keys(tags ?? {}).find(n => !Object.hasOwn(copy as object, n))
     if (stray !== undefined) return failure('invalid-input', `tags: no pod ${stray}`)
     for (const [name, p] of Object.entries(copy as PodDeployment)) {
+      if (name === 'host') return failure('invalid-input', "pod name 'host' is reserved for the host")
       const impl = opts.registry.implementation(p.implementation)
       if (!impl) return failure('not-found', `pod ${name}: no implementation ${p.implementation}`)
       if (impl.config && !impl.config.check(p.config)) return failure('invalid-input', `pod ${name}: config does not fit ${impl.config.label ?? 'its schema'}`)

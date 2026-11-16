@@ -21,7 +21,8 @@ export const Policies = {
 const Kind = Type.Union([Type.Literal('call'), Type.Literal('pipe'), Type.Literal('on'), Type.Literal('subscribe'), Type.Literal('unsubscribe'), Type.Literal('lifecycle'), Type.Literal('*')])
 const Kinds = Type.Union([Kind, Type.Array(Kind)])
 const Match = { from: Type.Optional(Type.String()), to: Type.Optional(Type.String()), outside: Type.Optional(Type.Boolean()) }
-/** A rule: `allow` or `deny` these kinds; `from` a pod or 'host', `to` a pod, interface or port coordinate; absent or '*' matches anything. */
+/** A rule: `allow` or `deny` these kinds; `from` a pod or 'host', `to` a pod, interface or port coordinate; absent or '*' matches anything.
+ * `to` is not told apart by kind: a pod named like an interface or port coordinate matches the same rule (name pods without dots), and `host` is not a pod name. */
 export const Rule = Type.Union([
   Type.Object({ allow: Kinds, ...Match }, { additionalProperties: false }),
   Type.Object({ deny: Kinds, ...Match }, { additionalProperties: false }),

@@ -43,13 +43,13 @@ async function open() {
   for (const p of [kv, ns.provider([host, reminder, broken])]) must(registry.add(p))
   const d: AppDeployment = {
     pods: {
-      host: { implementation: 'example.platform/headless', eager: true },
+      platform: { implementation: 'example.platform/headless', eager: true },
       reminder: { implementation: 'example.platform/reminder', eager: false },
       todos: { implementation: 'example.platform/broken-todos', eager: false },
       store: { implementation: 'example.kv/memory', eager: false },
     },
     runtimes: {
-      frontend: { pods: ['host', 'reminder', 'todos'], subscriptions: [{ kind: 'call', from: 'reminder', to: 'host' }] },
+      frontend: { pods: ['platform', 'reminder', 'todos'], subscriptions: [{ kind: 'call', from: 'reminder', to: 'platform' }] },
       backend: { pods: ['store', 'todos'], subscriptions: [{ kind: 'call', from: 'todos', to: 'store' }] },
     },
   }
@@ -66,7 +66,7 @@ test('a pod notifies through the host component, a dependency like any other: a 
   app.runtime('frontend').listen(e => { if (e.type === 'sent' && e.kind === 'call') calls.push(`${e.from}→${e.to} ${e.port.split('/').pop()}`) })
   await app.runtime('frontend').get(Reminder).remind('buy milk')
   expect(shown.notices).toEqual(['reminder: buy milk'])
-  expect(calls).toEqual(['host→reminder remind', 'reminder→host notify'])
+  expect(calls).toEqual(['host→reminder remind', 'reminder→platform notify'])
 })
 
 test('a source that throws is a failure on the stream, which the platform raises through the host component', async () => {

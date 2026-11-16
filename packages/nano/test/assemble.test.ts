@@ -45,6 +45,9 @@ const pipe = (from: string, source: string, to: string, target: string) => ({ ki
 const ev = (source: string, target: string) => pipe('t', source, 'l', target)
 
 describe('Pods.create', () => {
+  test("a pod named 'host' is invalid-input", () => {
+    expect(pods({ host: Pod.lazy(sized, { config: 3 }) })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+  })
   test('a valid pod deployment is itself, in order, and nothing it hands out changes it', () => {
     const d = { t: Pod.eager(ticker), z: Pod.lazy(sized, { config: 3 }) }
     const p = ok(pods(d))
