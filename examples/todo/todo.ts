@@ -56,7 +56,7 @@ const kvTodos = Implementation.define('example.todo/kv', {
   provides: [TodoList],
   dependencies: { store: KeyValueStore },
   description: 'Todos kept in whichever KeyValueStore its call edge reaches.',
-  make: ctx => [provide(TodoList, handlers(TodoList, todoList(plain<KeyValueStore>(() => ctx.one(KeyValueStore).call))))],
+  make: ctx => [provide(TodoList, handlers(TodoList, todoList(ctx.deps.store)))],
 })
 
 export default Provider.define('example.todo', [kvTodos])

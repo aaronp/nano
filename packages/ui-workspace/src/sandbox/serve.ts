@@ -40,6 +40,9 @@ export function serve(port: MessagePort, load: (url: string, coord: string) => P
     return {
       call: (_, pod) => client(pod) as ReturnType<Application['call']>, deployment: () => structuredClone(deployment),
       listen(fn) { heard.add(fn); return () => { heard.delete(fn) } }, apply: no, restart: no, close: no,
+      // ponytail: a view uses call; get's every method rejects with the Fail, as app.get's would on a missing pod.
+      get: () => new Proxy({}, { get: (_, op) => op === 'then' ? undefined
+        : async () => { const r = await no(); if (!r.ok) throw Object.assign(new Error(r.fail.reason), { fail: r.fail }) } }) as never,
     }
   }
 

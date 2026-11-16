@@ -31,7 +31,7 @@ export type NanoContext<D extends Record<string, Selector> = Record<string, Sele
   readonly self: string
   readonly runtimes: readonly string[]
   /** One plain object per declared dependency role, typed from its interface. */
-  readonly deps: { readonly [K in keyof D]: D[K] extends Interface ? Interface.Type<D[K]> : Record<string, (input?: unknown) => Promise<unknown>> }
+  readonly deps: { readonly [K in keyof D]: D[K] extends Interface ? Interface.Type<D[K]> : Record<string, (input?: any) => Promise<any>> }
   one<I extends Interface>(s: I | SelectorData): NanoResult<Selection<I>>
   all<I extends Interface>(s: I | SelectorData): Selection<I>[]
   publish<O extends Op>(o: O, data: DataOf<O>): Promise<void>

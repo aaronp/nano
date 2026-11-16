@@ -16,6 +16,7 @@ import {
   success,
   type AppEvent,
   type NanoContext,
+  type NanoResult,
 } from '@pritzlaff/nano-core'
 import { checkMsg, describeProvider } from '../src/sandbox/protocol.ts'
 import { edgesFor } from '../src/sandbox/edges.ts'
@@ -28,6 +29,8 @@ const Nothing = Schema.define('Nothing', Type.Null())
 const Echo = Interface.define('t.Echo', { echo: Op.action('echo', Text, Text) })
 const Ticks = Interface.define('t.Ticks', { tick: Op.event('tick', Num) })
 const H = Interface.define('t.H', { record: Op.action('record', Num, Nothing) })
+
+const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
 let inFrame: NanoContext | undefined, frameClosed = 0, seen: number[] = []
 const sImpl = Implementation.define('acme/s', { provides: [Echo, Ticks], dependencies: { h: H }, make: ctx => {
@@ -90,7 +93,7 @@ test('given a sandboxed pod, then a call crosses the port and is on the stream',
 test('given the frame calls out through its edge, then h hears it', async () => {
   const { app } = await harness()
   await app.call('r', 's').echo!('x')
-  expect(await inFrame!.one(H).call.record(1)).toEqual(success(null))
+  expect(await must(inFrame!.one(H)).call.record(1)).toEqual(success(null))
   expect(seen).toEqual([1])
   await app.close()
 })
@@ -107,7 +110,7 @@ test('given the frame publishes tick, then the pipe delivers it to h.record', as
 test('given on in the frame, then a no-op and a warning to the host', async () => {
   const { app, toasts } = await harness()
   await app.call('r', 's').echo!('x')
-  inFrame!.one(H).on(H.ops.record, () => {})()
+  must(inFrame!.one(H)).on(H.ops.record, () => {})()
   await tick(10)
   expect(toasts).toEqual(['s: on does not cross a sandbox'])
   await app.close()
@@ -154,8 +157,7 @@ test('given junk from the frame, then it fails the frame as failed does: a pendi
 test('given apply removes s → h, then the frame sees no H and an outcall sent anyway is not-found', async () => {
   const { app } = await harness()
   await app.call('r', 's').echo!('x')
-  const stale = inFrame!.one(H)
-  expect(stale.ok).toBe(true)
+  const stale = must(inFrame!.one(H))
   expect(await app.apply(dep(false))).toEqual(success(undefined))
   await tick(10)
   expect(inFrame!.one(H).ok).toBe(false)

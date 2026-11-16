@@ -1,7 +1,7 @@
 /**
  * The messenger's contracts: a key-value store, a messaging channel, and the inbox and composer widgets that use them.
  *
- *   const kv = ctx.one(KeyValueStore)               // Selection: kv.call.put({ key: 'inbox', value: '[]' })
+ *   const kv = ctx.one(KeyValueStore)               // success(Selection): kv.value.call.put({ key: 'inbox', value: '[]' })
  *   if (ctx.all(Messaging).length === 0) …          // nothing wired: the composer is disabled
  */
 import { Type } from 'typebox'

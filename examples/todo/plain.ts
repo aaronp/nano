@@ -3,7 +3,7 @@
  * becomes a plain object again. Neither side imports nano's result type.
  *
  *   provide(KeyValueStore, handlers(KeyValueStore, inMemory()))
- *   const store = plain<KeyValueStore>(() => ctx.one(KeyValueStore).call)   // await store.get(['a'])
+ *   const store = plain<KeyValueStore>(() => app.call('main', 'store'))   // await store.get(['a'])
  */
 import type { Static, TSchema } from 'typebox'
 import { failure, success, type Fail, type Handlers, type Interface, type NanoResult } from '@pritzlaff/nano-core'

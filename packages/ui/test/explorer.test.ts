@@ -11,7 +11,7 @@ const Str = Schema.define('Str', Type.String())
 const Store = Interface.define('acme.Store', { save: Op.action('save', Str, Str) })
 const App = Interface.define('acme.App', { save: Op.action('save', Str, Str) })
 const db = Implementation.define('acme/db', { provides: [Store], make: () => [provide(Store, { save: async s => success(s) })] })
-const api = Implementation.define('acme/api', { provides: [App], dependencies: { store: Store }, make: ctx => [provide(App, { save: async s => ctx.one(Store).call.save(s) })] })
+const api = Implementation.define('acme/api', { provides: [App], dependencies: { store: Store }, make: ctx => [provide(App, { save: async s => { const st = ctx.one(Store); return st.ok ? st.value.call.save(s) : st } })] })
 
 const slice: AppDeployment = {
   pods: {

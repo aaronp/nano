@@ -6,10 +6,11 @@
  *   await close('closed')   // the close listeners, in the order added; a throwing one is skipped
  */
 import {
+  failure,
   matches,
+  success,
   selectorData,
   type Client,
-  type Fail,
   type Interface,
   type NanoContext,
   type NanoResult,
@@ -31,10 +32,8 @@ export function frameContext(self: string, runtimes: string[], edges: () => Edge
   const listeners: OnClose[] = []
   const send = (m: Msg) => { try { post(m) } catch (e) { console.warn(`sandbox ${self}: not sent: ${e instanceof Error ? e.message : e}`) } }
 
-  const failed = <I extends Interface>(fail: Fail): Selection<I> =>
-    ({ ok: false, fail, call: client<I>(async () => ({ ok: false, fail })), on: () => () => {} })
   const selection = <I extends Interface>(e: Edge): Selection<I> => ({
-    ok: true, pod: e.pod, runtime: e.runtime, call: client<I>((op, input) => out(e.pod, e.runtime, op, input)),
+    pod: e.pod, runtime: e.runtime, call: client<I>((op, input) => out(e.pod, e.runtime, op, input)),
     on() { send({ type: 'warn', reason: `${self}: on does not cross a sandbox` }); return () => {} },
   })
   const all = <I extends Interface>(s: I | SelectorData): Selection<I>[] => {
@@ -43,13 +42,13 @@ export function frameContext(self: string, runtimes: string[], edges: () => Edge
       provides: new Set(e.provides), tags: new Set(e.tags) })).map(e => selection<I>(e))
   }
 
-  const ctx: NanoContext = {
+  const ctx: Omit<NanoContext, 'deps'> = {
     self, runtimes,
     one<I extends Interface>(s: I | SelectorData) {
       const found = all<I>(s), what = JSON.stringify(selectorData(s))
-      if (found.length === 1) return found[0]!
-      return failed<I>(found.length ? { type: 'ambiguous', reason: `${self}: ${found.length} wired match ${what}` }
-        : { type: 'not-found', reason: `${self}: nothing wired matches ${what}` })
+      if (found.length === 1) return success(found[0]!)
+      return found.length ? failure('ambiguous', `${self}: ${found.length} wired match ${what}`)
+        : failure('not-found', `${self}: nothing wired matches ${what}`)
     },
     all,
     async publish(o, data) { send({ type: 'publish', op: o.name, data }) },

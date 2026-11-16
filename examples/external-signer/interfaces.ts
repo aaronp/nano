@@ -2,8 +2,8 @@
  * The external signer's contracts: make keys, sign with them, keep them in a vault, and log what happened.
  * Binary values (keys, payloads, signatures) are base64 strings (decision 2).
  *
- *   const g = ctx.one(KeyGenerator)   // Selection: g.call['create-keys']({ count: 1, purpose: 'login' }) gives { keys: ['<base64 public key>'] }
- *   const s = ctx.one(Signer)         // s.call.sign({ publicKey, purpose: 'login', payload }) gives { status: 'signed', signature }
+ *   const g = ctx.one(KeyGenerator)   // success(Selection): g.value.call['create-keys']({ count: 1, purpose: 'login' }) gives { keys: ['<base64 public key>'] }
+ *   const s = ctx.one(Signer)         // s.value.call.sign({ publicKey, purpose: 'login', payload }) gives { status: 'signed', signature }
  */
 import { Type } from 'typebox'
 import { Schema, Interface, Op } from '@pritzlaff/nano-core'

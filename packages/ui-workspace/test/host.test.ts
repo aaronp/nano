@@ -113,7 +113,7 @@ test('given HostUI.approve called from a pod, then a dialog opens and choosing A
   const Ask = Interface.define('test.Ask', { ask: Op.action('ask', Schema.define('None', Type.Null()), Any) })
   const asker = Implementation.define('test.ask/asker', {
     provides: [Ask], dependencies: { ui: HostUI },
-    make: ctx => [provide(Ask, { ask: async () => ctx.one(HostUI).call.approve({ title: 'Send it?' }) })],
+    make: ctx => [provide(Ask, { ask: async () => { const h = ctx.one(HostUI); return h.ok ? h.value.call.approve({ title: 'Send it?' }) : h } })],
   })
   expect(host.registry.add(Provider.define('test.ask', [asker]))).toMatchObject({ ok: true })
   const d = host.data()
