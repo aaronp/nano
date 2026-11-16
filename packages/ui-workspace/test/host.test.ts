@@ -22,6 +22,8 @@ plugin({ name: 'served', setup(b) {
   b.onLoad({ filter: /.*/, namespace: 'served' }, a => ({ contents: `export * from '${served[a.path]}'; export { default } from '${served[a.path]}'`, loader: 'ts' }))
 } })
 
+await import('../src/dock/dock.ts')
+
 // happy-dom's fetch refuses file: URLs: read them with Bun.file, or from `json`.
 const json = new Map<string, unknown>()
 const domFetch = globalThis.fetch
@@ -43,7 +45,9 @@ async function mount() {
   if (!r.ok) throw new Error(r.fail.reason)
   const el = document.createElement('workspace-shell') as Shell
   el.host = r.value
+  const dock = el.appendChild(document.createElement('workspace-dock')) as HTMLElement & { host: Host }
   document.body.replaceChildren(el)
+  dock.host = r.value
   await el.updateComplete
   return { host: r.value, el }
 }
@@ -62,12 +66,14 @@ test('given the slice imported, then the explorer lists in, wait, up, out and Sa
   const { host, el } = await mount()
   expect(await host.importUrl(slice)).toMatchObject({ ok: true })
   await el.updateComplete
-  const tree = el.shadowRoot!.querySelector('nano-explorer')!.shadowRoot!.querySelector('nano-tree') as HTMLElement & { updateComplete: Promise<unknown> }
+  const tree = el.querySelector('workspace-dock nano-explorer')!.shadowRoot!.querySelector('nano-tree') as HTMLElement & { updateComplete: Promise<unknown> }
   await tree.updateComplete
   for (const pod of ['in', 'wait', 'up', 'out']) expect(tree.shadowRoot!.textContent).toContain(pod)
 
-  expect(await host.apply({ ...host.data(), views: { up: 'nano-pod-view' } })).toMatchObject({ ok: true })
+  const layout = { dock: { root: { type: 'component', componentType: 'panel', componentState: { id: 'pod:up' } } } }
+  expect(await host.apply({ ...host.data(), views: { up: 'nano-pod-view' }, layout })).toMatchObject({ ok: true })
   const saved = host.saved()
+  expect(saved.layout).toEqual(layout)   // kept by the host, so it round-trips below
   const file: AppDeployment = await Bun.file(new URL(slice)).json()
   // stored resolved, so a saved nano.json loads from anywhere on the origin
   expect(saved.providers).toEqual({ 'nano.ui': new URL('./bundle/nano-ui.js', page).href, 'example.slice': new URL('./shout.js', slice).href })

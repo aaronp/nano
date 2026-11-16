@@ -5,7 +5,7 @@
  *
  *   const host = (await start()).value
  *   await host.importUrl('/examples/slice/nano.json')   // importApp, then apply
- *   host.saved()                                         // { ...app.deployment(), providers, views }, without ui
+ *   host.saved()                                         // { ...app.deployment(), providers, views, layout }, without ui
  */
 import { Application, assemble, createRegistry, Pod, success, type AppDeployment, type NanoResult, type Pod as PodData, type Registry } from '@pritzlaff/nano-core'
 import uiProvider, { views as uiViews, type ViewMap } from '@pritzlaff/nano-ui'
@@ -22,7 +22,7 @@ import { standIn, type Frame } from './sandbox/stand-in.ts'
 export type Host = {
   readonly app: Application
   readonly registry: Registry
-  /** The live deployment with the providers and view selectors the host keeps. */
+  /** The live deployment with the providers, view selectors and dock layout the host keeps. */
   data(): AppDeployment
   /** Implementation → its default view tag, from nano.ui and every loaded module. */
   defaults(): ViewMap
@@ -108,13 +108,14 @@ export async function start(): Promise<NanoResult<Host>> {
   const app = made = created.value
   framesOf.set(app, frames)
 
-  const data = (): AppDeployment => ({ ...app.deployment(), providers: { ...loaded.deployment.providers }, views: { ...loaded.deployment.views } })
+  const kept = (d: AppDeployment) => ({ providers: { ...d.providers }, views: { ...d.views }, ...(d.layout && { layout: structuredClone(d.layout) }) })
+  const data = (): AppDeployment => ({ ...app.deployment(), ...kept(loaded.deployment) })
   async function apply(next: AppDeployment, views = loaded.views): Promise<NanoResult<void>> {
-    // The providers and views are kept before the apply, so listeners of its `applied` event already read them from data().
+    // The providers, views and layout are kept before the apply, so listeners of its `applied` event already read them from data().
     const before = loaded
     loaded = { deployment: next, registry, views }
     const applied = shown(await app.apply(next))
-    loaded = applied.ok ? { ...loaded, deployment: { ...app.deployment(), providers: next.providers, views: next.views } } : before
+    loaded = applied.ok ? { ...loaded, deployment: { ...app.deployment(), ...kept(next) } } : before
     return applied
   }
 

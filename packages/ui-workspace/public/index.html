@@ -7,6 +7,7 @@
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;600&family=Bricolage+Grotesque:wght@500;600;700&family=Fraunces:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&family=JetBrains+Mono:wght@400;600&family=Architects+Daughter&family=Caveat:wght@600;700&family=Pixelify+Sans:wght@500;700&display=swap">
+  <link rel="stylesheet" href="./shared/golden-layout.css">
   <link rel="stylesheet" href="./app.css">
   <!-- The shared libraries (scripts/build.ts): one copy, the host's, for main.js and every module it imports. -->
   <script type="importmap">
@@ -33,7 +34,7 @@
   <a slot="nav" href="#/themes">Themes</a>
   <a slot="nav" href="#/settings">Settings</a>
 
-  <app-route path="/workspace" bleed><workspace-shell heading="Nano"></workspace-shell></app-route>
+  <app-route path="/workspace" bleed><workspace-shell heading="Nano"><workspace-dock></workspace-dock></workspace-shell></app-route>
   <app-route path="/themes">
     <header class="page-head"><h1>Themes</h1><p>Your choice is remembered in this browser.</p></header>
     <theme-picker layout="cards"></theme-picker>

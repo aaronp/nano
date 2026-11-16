@@ -1,55 +1,50 @@
 /**
- * `<workspace-shell>`: the host's page. File (Import URL, Save) above panels on split panes: the nano.ui built-ins,
- * Connect, `<nano-explorer>`, the opened pod's view (with its view and implementation pickers), `<nano-wiring>` and
- * the stream. Every change is an `apply` through `host`.
+ * `<workspace-shell>`: the host's page. File (Import URL, Save), the nano.ui built-ins, Connect, and the view and
+ * implementation pickers of the pod last opened in the explorer, above its children (the dock). Every change is an
+ * `apply` through `host`.
  */
 import { LitElement, css, html, nothing } from 'lit'
-import { port, type AppEvent } from '@pritzlaff/nano-core'
-import { viewFor, type ViewTarget } from '@pritzlaff/nano-ui'
+import { port } from '@pritzlaff/nano-core'
 import { base, kit, t, toast } from '@pritzlaff/nano-elements'
 import type { Host } from './host.ts'
 import { createBus, provideBus } from './lib/bus.ts'
-import './components/split-pane.ts'
+import { chosen, viewTags } from './dock/panels.ts'
 import './components/theme-picker.ts'
-import './sandbox/sandboxed-view.ts'
 
 /** The config a built-in starts with, where it needs one. */
 const starts: Record<string, unknown> = { map: { code: 'return x' } }
 type Pick = { from?: string; source?: string; to?: string; target?: string }
 const value = (e: Event) => (e.target as HTMLElement & { value: string }).value
-const away = (h: Host, pod: string) => (h.data().pods[pod]?.isolation ?? 'host') !== 'host'
-/** A pod's view tag: its selector, else `nano-sandboxed` for a non-host pod, else its implementation's default. */
-const chosen = (h: Host, pod: string) => (away(h, pod) && !customElements.get(h.data().views?.[pod] ?? '') ? 'nano-sandboxed' : viewFor(pod, h.data(), h.defaults()))
 
 class WorkspaceShell extends LitElement {
-  static properties = { host: { attribute: false }, heading: {}, opened: { state: true }, events: { state: true }, pick: { state: true } }
+  static properties = { host: { attribute: false }, heading: {}, opened: { state: true }, pick: { state: true } }
   static styles = [base, kit, css`
     :host { display: flex; flex-direction: column; height: 100%; background: ${t('bg')} }
     header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid ${t('border')} }
     h1 { font-size: 15px; margin: 0 12px 0 0 } header input { flex: 0 1 320px } theme-picker { margin-left: auto }
-    split-pane { flex: 1; min-height: 0 } section { overflow: auto; padding: 10px; min-height: 0 }
-    h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: ${t('muted')}; margin: 12px 0 6px }
+    section { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 6px 12px; border-bottom: 1px solid ${t('border')} }
+    ::slotted(*) { flex: 1; min-height: 0 }
     .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center }
-    input { font: inherit; padding: 5px 8px; border: 1px solid ${t('border-strong')}; border-radius: ${t('radius-s')}; background: ${t('bg')}; color: ${t('fg')} }
-    pre { font-family: ${t('font-mono')}; font-size: 11px; margin: 0; white-space: pre-wrap }`]
+    input { font: inherit; padding: 5px 8px; border: 1px solid ${t('border-strong')}; border-radius: ${t('radius-s')}; background: ${t('bg')}; color: ${t('fg')} }`]
   declare host?: Host
   declare heading: string
   declare opened?: { runtime: string; pod: string }
-  declare events: AppEvent[]
   declare pick: Pick
   private off?: () => void
   private listening?: Host
   private url = ''
-  private shown?: { key: string; el: HTMLElement & { target?: ViewTarget } }
 
-  constructor() { super(); this.heading = 'Nano'; this.events = []; this.pick = {}; provideBus(this, createBus()) }
+  constructor() {
+    super(); this.heading = 'Nano'; this.pick = {}; provideBus(this, createBus())
+    this.addEventListener('nano-open', e => { this.opened = (e as CustomEvent<{ runtime: string; pod: string }>).detail })
+  }
   connectedCallback() { super.connectedCallback(); this.requestUpdate() }   // listens again (willUpdate) after a re-attach
   disconnectedCallback() { super.disconnectedCallback(); this.off?.(); this.listening = undefined }
   willUpdate() {
     if (!this.host || this.listening === this.host) return
     this.off?.()
     this.listening = this.host
-    this.off = this.host.app.listen(e => { this.events = [...this.events, e].slice(-200) })   // the last 200
+    this.off = this.host.app.listen(e => { if (e.type === 'applied') this.requestUpdate() })   // the pickers follow
   }
 
   private async add(h: Host, kind: string) {
@@ -88,23 +83,10 @@ class WorkspaceShell extends LitElement {
     setTimeout(() => URL.revokeObjectURL(a.href))   // after the download has started
   }
 
-  /** The opened pod's view element, made again only when its tag or pod changes. */
-  private view(h: Host, at: { runtime: string; pod: string }) {
-    const tag = chosen(h, at.pod), key = `${tag} ${at.runtime} ${at.pod}`
-    if (this.shown?.key !== key) {   // the target is set once: a new object on every render would restart the view's listening, and its calls would re-render the shell
-      this.shown = { key, el: document.createElement(tag) }
-      this.shown.el.target = { app: h.app, registry: h.registry, runtime: at.runtime, pod: at.pod }
-    }
-    return this.shown.el
-  }
-
   private viewPanel(h: Host) {
     const at = this.opened, d = h.data(), p = at && d.pods[at.pod]
-    if (!at || !p || !d.runtimes[at.runtime]?.pods.includes(at.pod)) {
-      this.shown = undefined   // a pod removed and added again gets a fresh view
-      return html`<p class="muted">Choose a pod in the explorer.</p>`
-    }
-    const tags = [...new Set([away(h, at.pod) && 'nano-sandboxed', h.defaults()[p.implementation], 'nano-pod-view'].filter((x): x is string => !!x))]
+    if (!at || !p || !d.runtimes[at.runtime]?.pods.includes(at.pod)) return nothing
+    const tags = viewTags(h, at.pod, p.implementation)
     const same = (a: readonly string[]) => [...a].sort().join()
     const mine = same(h.registry.implementation(p.implementation)?.provides.map(i => i.coord) ?? [])
     const impls = h.registry.manifest().implementations.filter(i => same(i.provides) === mine).map(i => i.coord)
@@ -112,8 +94,7 @@ class WorkspaceShell extends LitElement {
         <nano-select label="View" .options=${tags} .value=${chosen(h, at.pod)}
           @change=${(e: Event) => h.apply({ ...d, views: { ...d.views, [at.pod]: value(e) } })}></nano-select>
         <nano-select label="Change implementation" .options=${impls} .value=${p.implementation}
-          @change=${(e: Event) => this.swap(h, at.pod, value(e))}></nano-select></div>
-      ${this.view(h, at)}`
+          @change=${(e: Event) => this.swap(h, at.pod, value(e))}></nano-select></div>`
   }
 
   private connectPanel(h: Host) {
@@ -130,18 +111,12 @@ class WorkspaceShell extends LitElement {
     const h = this.host
     if (!h) return nothing
     const kinds = [...(h.registry.provider('nano.ui')?.implementations.keys() ?? [])].map(c => c.slice(c.indexOf('/') + 1))
-    const target = { app: h.app, registry: h.registry }
     return html`<header><h1>${this.heading}</h1>
         <input aria-label="nano.json URL" placeholder="nano.json URL" @input=${(e: Event) => { this.url = value(e) }}>
         <button @click=${() => this.url && h.importUrl(this.url)}>Import URL</button><button @click=${() => this.save(h)}>Save</button>
         <theme-picker></theme-picker></header>
-      <split-pane sizes="1,2,1" storage-key="workspace">
-        <section><h2>Built-ins</h2><div class="row">${kinds.map(k => html`<button data-builtin @click=${() => this.add(h, k)}>${k}</button>`)}</div>
-          <h2>Connect</h2>${this.connectPanel(h)}
-          <h2>Explorer</h2><nano-explorer .target=${target} @nano-open=${(e: CustomEvent<{ runtime: string; pod: string }>) => { this.opened = e.detail }}></nano-explorer></section>
-        <section><h2>View</h2>${this.viewPanel(h)}<h2>Wiring</h2><nano-wiring .target=${target}></nano-wiring></section>
-        <section><h2>Stream</h2><pre>${this.events.map(e => JSON.stringify(e)).join('\n')}</pre></section>
-      </split-pane>`
+      <section><div class="row">${kinds.map(k => html`<button data-builtin @click=${() => this.add(h, k)}>${k}</button>`)}</div>
+        ${this.connectPanel(h)}${this.viewPanel(h)}</section><slot></slot>`
   }
 }
 

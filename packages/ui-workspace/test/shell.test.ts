@@ -48,3 +48,10 @@ test('given pane sizes saved, then forgetting the layout clears the split keys a
   expect(localStorage.getItem('split:workspace')).toBeNull()
   expect(localStorage.getItem('other')).toBe('x')
 })
+
+test('given the host keeps a layout, then forgetting the layout applies the deployment without it', async () => {
+  let applied: unknown
+  const host = { data: () => ({ pods: {}, runtimes: {}, layout: { dock: {} } }), apply: async (d: unknown) => { applied = d; return { ok: true } } }
+  await forgetLayout(localStorage, host as never)
+  expect(applied).toEqual({ pods: {}, runtimes: {} })
+})

@@ -38,6 +38,7 @@ export function merge(current: AppDeployment, incoming: AppDeployment): NanoResu
     tags: { ...current.tags, ...incoming.tags },
     providers,
     views: { ...current.views, ...incoming.views },
+    ...((incoming.layout ?? current.layout) && { layout: incoming.layout ?? current.layout }),   // the newest arrangement
   })
 }
 
