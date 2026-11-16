@@ -1,6 +1,6 @@
 /**
  * Migration (spec behaviour 9). `v2` and `v3` each have a db with the same interface. A `migrate` pod is placed in
- * both and wired to each db, so a plain `one(DB)` is ambiguous; it names the runtimes through its config
+ * both and wired to each db, so a plain `one(DB)` is not-unique; it names the runtimes through its config
  * (`{ from: 'v2', to: 'v3' }`) and a selector's `runtime`, never in code.
  *
  *   v2:  migrate → db-v2 (rows a, b)      v3:  migrate → db-v3 (empty)
@@ -38,8 +38,8 @@ describe('migration', () => {
     expect(sent(events, 'v2')).toEqual(['host->migrate', 'migrate->db-v2'])
     expect(sent(events, 'v3')).toEqual(['migrate->db-v3', 'host->db-v3'])
   })
-  test('given a pod wired to a db in both runtimes, when it calls one(DB) without a runtime, then the call is ambiguous', async () => {
+  test('given a pod wired to a db in both runtimes, when it calls one(DB) without a runtime, then the call is not-unique', async () => {
     const { app } = await setup(careless)
-    expect(await app.call('v2', 'migrate').run({})).toMatchObject({ ok: false, fail: { type: 'ambiguous' } })
+    expect(await app.call('v2', 'migrate').run({})).toMatchObject({ ok: false, fail: { type: 'not-unique' } })
   })
 })

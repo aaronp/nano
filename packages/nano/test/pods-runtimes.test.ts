@@ -374,13 +374,13 @@ describe('selections and chains', () => {
     expect(e).toMatchObject({ kind: 'call', from: 'host', to: 'c', correlation: e.id })
     expect('cause' in e).toBe(false)
   })
-  test('given a pod wired to two stores, when its code selects one, then it is ambiguous, and all gives both in deployment order', async () => {
+  test('given a pod wired to two stores, when its code selects one, then it is not-unique, and all gives both in deployment order', async () => {
     let one: NanoResult<Selection<typeof Store>> | undefined, all: Selection<typeof Store>[] = []
     const picker = Implementation.define('acme2/picker', { provides: [Log], make: ctx => { one = ctx.one(Store); all = ctx.all(Store); return [provide(Log, { record: async () => success(null) })] } })
     const reg = registry(); reg.add(Provider.define('acme2', [picker]))
     await create({ pods: { p: Pod.eager(picker), a: Pod.lazy(store, { config: 'a' }), b: Pod.lazy(store, { config: 'b' }) },
       runtimes: { r: { pods: ['p', 'a', 'b'], subscriptions: [{ kind: 'call', from: 'p', to: 'b' }, { kind: 'call', from: 'p', to: 'a' }] } } }, reg)
-    expect(one).toMatchObject({ ok: false, fail: { type: 'ambiguous' } })
+    expect(one).toMatchObject({ ok: false, fail: { type: 'not-unique' } })
     expect(all.map(s => [s.pod, s.runtime])).toEqual([['b', 'r'], ['a', 'r']])
     expect(await all[1]!.call.save('x')).toEqual(success('a:x'))
   })

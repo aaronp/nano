@@ -2,7 +2,7 @@
  * The context a pod's factory gets. It belongs to the pod, not to a call: `one` and `all` read the deployment as it is
  * now, over the call subscriptions from `self` in every runtime the pod is placed in, each a `Selection`.
  *
- *   const kv = ctx.one(KeyValueStore)            // NanoResult<Selection>: a Fail (not-found, ambiguous) unless exactly one is wired
+ *   const kv = ctx.one(KeyValueStore)            // NanoResult<Selection>: a Fail (not-found, not-unique) unless exactly one is wired
  *   if (kv.ok) await kv.value.call.put('k')      // through that edge
  *   if (kv.ok) kv.value.on(KeyValueStore.ops.changed, d => …)   // hear that pod's event (typed by the op) while this build lives
  *   await ctx.deps.store.put('k')                // a declared role as a plain object: through ctx.one(role) at each call; a Fail throws

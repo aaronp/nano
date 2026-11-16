@@ -4,7 +4,7 @@
  * build this context belongs to; the `on` subscriptions this build made are dropped through it.
  *
  *   const ctx = contextFor(live, 'send', fn => …)
- *   ctx.one(KV)                    // success(the one KV wired from send, in whichever runtime), or not-found / ambiguous
+ *   ctx.one(KV)                    // success(the one KV wired from send, in whichever runtime), or not-found / not-unique
  *   kv.call.put('k'); kv.on(KV.ops.put, fn)   // sent in that runtime; hear its put results there until this build closes
  *   await ctx.publish(tick, 1)     // emitted: one message per pipe from send with that source, and to `on` subscribers
  */
@@ -66,7 +66,7 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
     one<I extends Interface>(s: I | SelectorData): NanoResult<Selection<I>> {
       const all = selections<I>(s), what = JSON.stringify(dataOf(s))
       if (all.length === 0) return failure('not-found', `${name}: nothing wired matches ${what}`)
-      if (all.length > 1) return failure('ambiguous', `${name}: ${all.length} wired match ${what}`)
+      if (all.length > 1) return failure('not-unique', `${name}: ${all.length} wired match ${what}`)
       return success(all[0]!)
     },
     all: selections,

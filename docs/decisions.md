@@ -406,7 +406,7 @@ Superseded in part by 53: removal and adds are `instance` state events (`stopped
 ## 50. Connect: end selectors resolved once (pods revision, task 3)
 
 **Decision:**
-- `resolveEnd` (`runtime/connect.ts`) is pure over the runtime's pods (own and placed) and `tagsOf`, and never throws: a non-object `target`/`instance`, an unknown target kind or `by`, or non-string tags are `invalid-input`. None matching is `not-found`, several `ambiguous` (`<n> match`, listing the coords). Hits are counted across all matching pods: `first` yields the lowest running instance of each pod, `index` the coord index, `tags` every tagged instance. A guest runtime's `implements`/`implementation` targets consider placed pods as well as its own.
+- `resolveEnd` (`runtime/connect.ts`) is pure over the runtime's pods (own and placed) and `tagsOf`, and never throws: a non-object `target`/`instance`, an unknown target kind or `by`, or non-string tags are `invalid-input`. None matching is `not-found`, several `not-unique` (`<n> match`, listing the coords). Hits are counted across all matching pods: `first` yields the lowest running instance of each pod, `index` the coord index, `tags` every tagged instance. A guest runtime's `implements`/`implementation` targets consider placed pods as well as its own.
 - `subscribe` with a concrete end fails `not-found` when the end's pod is in this runtime, its index is below the pod's `next` and the instance is missing (definitely deleted: indices are never reused). A coord whose pod is absent, or whose index is at or above `next`, is still accepted and waits (loading and later creation rely on that), as do unavailable instances.
 
 **Why:** A selector means "pick one now"; a coord is a promise about the future.
@@ -462,7 +462,7 @@ Superseded in part by 53: `pod-swapped { pod, from, to }`, told to every runtime
 **Decision:**
 - The application holds at most `MAX_DOC_INSTANCES` = 5000 instances across its runtimes: every runtime's own pods (root and children, adopted ones too) plus the pods of runtimes only defined. `create`, `addInstance` and `scale` in any runtime it made refuse beyond with `invalid-input` (`<pod>: the application would hold more than 5000 instances`), through `RuntimeOpts.full`; `define` refuses a definition that would pass it (`<runtime>: the application would hold more than 5000 instances`). The constant now lives in `application.ts`, beside `RuntimeDefSchema`. One `MAX_INSTANCES` (500, `runtime/pods.ts`) bounds a runtime's own instances, `create`/`scale` counts, `badIndices` and the schema's `instances`, `pods` and `members` lists.
 - A swap whose new make fails is a `failure { coord, reason }` on the stream of every runtime holding the pod, one per failed instance, as well as the swap's `threw`/`timeout` fail. (A failed make on create or restart stays the `instance` event `failed`, decision 53: there the instance changes state; a failed swap changes nothing.)
-- `rt.listen` documents what is deliberately not on the stream: calls during a `make` (they fail at once), a message whose subscription vanished during a pass wait (never `sent`), and the verb results `missing-component`/`ambiguous` (no message). A listener that acts on the runtime re-enters it, so later listeners see the events of that action before the event being handled.
+- `rt.listen` documents what is deliberately not on the stream: calls during a `make` (they fail at once), a message whose subscription vanished during a pass wait (never `sent`), and the verb results `missing-component`/`not-unique` (no message). A listener that acts on the runtime re-enters it, so later listeners see the events of that action before the event being handled.
 
 Pinned by "the application holds at most 5000 instances …" (`application.test.ts`) and "a swap whose make throws changes nothing, and the failure is on the stream" (`runtime.test.ts`).
 **Why:** Anything the application can save must load: `checkDoc` refuses more than 5000 instances (decision 53). A swap that failed silently left only the caller knowing.
@@ -536,15 +536,15 @@ Pinned by "the document limits hold for what is built live" (`document.test.ts`)
 **Why:** One pod object in two runtimes is the whole of sharing, so a document is one entry referred to twice (spec: Saved form).
 **Cost if wrong:** None to the model; a document with the same pod twice under two keys loads as two pods.
 
-## 64. An op name offered by two interfaces is `ambiguous`
+## 64. An op name offered by two interfaces is `not-unique`
 
-**Decision:** `rt.call(coord).<op>` and `pod.call.<op>` fail `ambiguous` when two of the pod's interfaces offer the op name; the caller invokes the port. Approved by the user.
+**Decision:** `rt.call(coord).<op>` and `pod.call.<op>` fail `not-unique` when two of the pod's interfaces offer the op name; the caller invokes the port. Approved by the user.
 **Why:** `call` is sugar by name; guessing which interface would be a silent choice.
 **Cost if wrong:** A pod with two interfaces sharing an op name is reached only by port key from a test.
 
 ## 65. Failure rulings (controller ruling, surfaced to the user)
 
-**Decision:** A call to a failed or disposed pod is `missing-component` (there is no `missing` `FailType`). A config that does not fit the implementation's schema leaves the pod `failed`, and calls to it are `missing-component` with that cause in the reason (D69); a swap to one fails `invalid-input` and changes nothing. A swap whose make fails leaves a running pod on its old instance (a failed pod stays failed, with the new reason). A match in two runtimes is `ambiguous` for `one`; a selector's `runtime` narrows it.
+**Decision:** A call to a failed or disposed pod is `missing-component` (there is no `missing` `FailType`). A config that does not fit the implementation's schema leaves the pod `failed`, and calls to it are `missing-component` with that cause in the reason (D69); a swap to one fails `invalid-input` and changes nothing. A swap whose make fails leaves a running pod on its old instance (a failed pod stays failed, with the new reason). A match in two runtimes is `not-unique` for `one`; a selector's `runtime` narrows it.
 **Why:** No new failure types; a swap must never make a working pod worse.
 **Cost if wrong:** A caller cannot tell "never made" from "disposed" except by the reason text.
 

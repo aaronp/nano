@@ -107,7 +107,7 @@ isolation <mode>`), a stand-in with another coord fails `invalid-input`, and a t
 | Context member | What |
 |---|---|
 | `self`, `runtimes` | the pod's name; the runtimes it is placed in (read live) |
-| `one(selector)` | `Selection`: the single matching call edge from `self` across its runtimes; none → a failed selection (`not-found`), several → a failed selection (`ambiguous`) |
+| `one(selector)` | `Selection`: the single matching call edge from `self` across its runtimes; none → a failed selection (`not-found`), several → a failed selection (`not-unique`) |
 | `all(selector)` | `Selection[]`: every matching call edge, in deployment order (each one ok) |
 | `publish(op, data)` | emits an event of `self` |
 | `addOnCloseListener(fn)` | runs `fn({ reason })` when this instance closes |

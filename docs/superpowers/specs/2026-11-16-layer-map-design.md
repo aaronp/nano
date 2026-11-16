@@ -88,7 +88,7 @@ const todos: TodoList = app.get(TodoListDef.api)       // = app.resolve(TodoList
 ```
 
 - **`app.resolve(api, where?)`** returns a `Resolution`: what was found (pod, runtime, implementation coordinate) and
-  the plain object, or why not (`not-found`, `ambiguous`). `getOrThrow()` gives the plain object or throws an `Error`
+  the plain object, or why not (`not-found`, `not-unique`). `getOrThrow()` gives the plain object or throws an `Error`
   carrying the `Fail`. `app.get` becomes exactly that.
 - **`Application.load(url, opts?)`** reads a `nano.json`, imports each `modules` entry, adds the providers to a
   registry, assembles and creates. It fails with the first reason, nothing half-running.

@@ -1,6 +1,6 @@
 /**
  * What `app.resolve(api, where?)` answers: the one placement (runtime, pod) providing `api`, narrowed by `where`, with
- * the implementation found there and the plain object over it; or why not (`not-found`, `ambiguous`).
+ * the implementation found there and the plain object over it; or why not (`not-found`, `not-unique`).
  *
  *   const r = app.resolve(TodoList)      // r.ok: r.pod, r.runtime, r.implementation, r.value
  *   const todos = r.getOrThrow()         // the plain object, or an Error carrying r.fail
@@ -34,7 +34,7 @@ export function placement(live: Live, api: Interface, where: Where): NanoResult<
     }
   const what = `${api.coord}${where.runtime ? ` in ${where.runtime}` : ''}${where.pod ? ` at ${where.pod}` : ''}`
   return found.length === 1 ? success(found[0]!)
-    : failure(found.length ? 'ambiguous' : 'not-found', `${found.length} placements provide ${what}`)
+    : failure(found.length ? 'not-unique' : 'not-found', `${found.length} placements provide ${what}`)
 }
 
 /** `api` resolved now; its plain object is resolved again at each call (so a rewired placement is followed). */

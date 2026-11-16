@@ -59,7 +59,7 @@ export function client(live: Live, runtime: string, from: string, to: string, go
     const provides = impl(live, to)?.provides ?? []
     const ports = provides.flatMap(i => Object.values(i.ops).filter(o => o.kind === 'action' && o.name === name).map(o => port(i, o)))
     if (ports.length === 0) return failure('unknown-op', `${to} has no action ${name}`)
-    if (ports.length > 1) return failure('ambiguous', `${to}: ${name} is an action of more than one interface`)
+    if (ports.length > 1) return failure('not-unique', `${to}: ${name} is an action of more than one interface`)
     return act(live, runtime, from, to, ports[0]!, input, 'call')
   }
   // ponytail: any name reads as an op (a Proxy) except `then`, so awaiting a client is harmless; an op named `then` is unreachable.

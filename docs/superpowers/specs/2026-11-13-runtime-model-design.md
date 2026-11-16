@@ -82,7 +82,7 @@ what to do with however many there are (selectors are defined below):
 
 | Verb | Order | Calls | Gives back | With no connections |
 |---|---|---|---|---|
-| `ctx.one(S, fn)` | — | the single connection | its result | `Fail: missing-component`; `Fail: ambiguous` if several |
+| `ctx.one(S, fn)` | — | the single connection | its result | `Fail: missing-component`; `Fail: not-unique` if several |
 | `ctx.optional(S, fn)` | — | the single connection, if any | the result, or `none` | `none` (a value) |
 | `ctx.any(S, fn)` | — | all at once | the first success, and which instance (like `Promise.any`) | `Fail: missing-component` |
 | `ctx.all(S, fn)` | — | all at once | `{coord, result}[]` (like `Promise.allSettled`) | `[]` |
@@ -178,7 +178,7 @@ bad publish; *warning*: what the application notes as it happens). Tests assert 
 - **A runtime passes its own context** when it invokes a pod. A handler's onward calls (`ctx.one(DB, …)` and the
   other verbs) search the pod's subscriptions in **every runtime the pod is in**; each call is policed and recorded by
   the runtime whose subscription carries it, and the callee runs with that runtime's context. A match in two runtimes
-  is `ambiguous`, as with any `one`; a selector's `runtime` narrows the search to one runtime. Implementation code
+  is `not-unique`, as with any `one`; a selector's `runtime` narrows the search to one runtime. Implementation code
   should not hard-code a runtime's name: the wiring decides where a dependency comes from, and where code must choose
   (a migration), the name comes from its config. Likewise `ctx.publish` delivers into every runtime the pod is in, each policing and recording its own
   deliveries.
@@ -210,7 +210,7 @@ bad publish; *warning*: what the application notes as it happens). Tests assert 
 4. A pod cannot be invoked without a context: there is no call path that bypasses a runtime's policy and stream.
 5. A handler's onward calls search the subscriptions in every runtime its pod is in: a signer pod in `R` and
    `other`, with its vault subscription only in `R`, reaches the vault when called through either, and the vault call
-   is recorded on `R`'s stream only. A match in both runtimes is `ambiguous`.
+   is recorded on `R`'s stream only. A match in both runtimes is `not-unique`.
 6. Sharing (`examples/messenger`): the `send` pod, wired to `db` in `messaging`, is registered in `chat` and
    `support`. A call from `chat` is recorded on `chat`'s stream, its database call on `messaging`'s; `db` is not in
    `chat` (`rt.call` there is `not-found`), and `send.runtimes` is `['messaging', 'chat', 'support']`.
@@ -222,7 +222,7 @@ bad publish; *warning*: what the application notes as it happens). Tests assert 
 10. A pipeline (`examples/etl`): the `etl` pod is in `foo` (wired to `source`) and `bar` (wired to `sink`). `run`
     reads in `foo` and writes in `bar`; the read is on `foo`'s stream only and the write on `bar`'s only.
 11. A migration (`examples/migration`): `v2` and `v3` each have a `db` (same interface), and a `migrate` pod in both
-    is wired to each. A plain `one(DB)` is `ambiguous`; with `runtime: config.from` / `config.to` it copies `v2`'s
+    is wired to each. A plain `one(DB)` is `not-unique`; with `runtime: config.from` / `config.to` it copies `v2`'s
     rows into `v3`, each call on its own runtime's stream.
 12. Saving an application whose pod is in two runtimes writes one `pods` entry referred to from both; loading it
     gives one pod object in both (a swap through one is seen through the other).

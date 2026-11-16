@@ -206,7 +206,7 @@ came through.
 |---|---|
 | `self` | the pod's name |
 | `runtimes` | the runtimes the pod is placed in now (read live) |
-| `one(selector)` | `NanoResult<Client>`: the single matching call subscription from `self`, across every runtime the pod is in; none → `not-found`, several → `ambiguous` (a selector's `runtime` narrows) |
+| `one(selector)` | `NanoResult<Client>`: the single matching call subscription from `self`, across every runtime the pod is in; none → `not-found`, several → `not-unique` (a selector's `runtime` narrows) |
 | `all(selector)` | `Client[]`: every matching call subscription, in deployment order (runtimes in order, then subscriptions in order); `[]` when none |
 | `publish(op, data)` | delivers to every event subscription from `self` with that source, in every runtime the pod is in |
 | `addOnCloseListener(fn)` | runs `fn({ reason })` when this instance is closed (see "Closing an instance"); each build has its own context |
@@ -246,7 +246,7 @@ A handler never throws across this boundary: a throw, a timeout, bad input or ba
 7. Sharing: `send` placed in `messaging`, `chat` and `support`, wired to `db` only in `messaging`. A send from `chat`
    reaches `db`; its database call is recorded in `messaging`; `app.call('chat', 'db')` is `not-found`.
 8. ETL: `etl` reads through `foo` and writes through `bar`, each call recorded in its own runtime.
-9. Migration: with a `db` wired in `v2` and in `v3`, `one(DB)` is `ambiguous`; `one(Selector.of(DB, { runtime }))` picks one.
+9. Migration: with a `db` wired in `v2` and in `v3`, `one(DB)` is `not-unique`; `one(Selector.of(DB, { runtime }))` picks one.
 10. `publish` delivers once per event subscription, in every runtime the publisher is in.
 11. A denying policy: the call fails `denied` and the stream shows `sent` then `denied`.
 12. `apply`: an added subscription is usable at once; a removed pod's calls are `not-found`; a pod whose config changed

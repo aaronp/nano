@@ -229,12 +229,12 @@ describe('placing', () => {
     expect(await app.call('bar', 'dst').all(null)).toEqual(success(['a', 'b']))
   })
   // Behaviour 9.
-  test('given a db wired in v2 and in v3, when a pod asks one(DB) without a runtime, then it is ambiguous', async () => {
+  test('given a db wired in v2 and in v3, when a pod asks one(DB) without a runtime, then it is not-unique', async () => {
     const { app } = await live({ pods: { m: Pod.lazy(careless), d2: Pod.lazy(db), d3: Pod.lazy(db) }, runtimes: {
       v2: { pods: ['m', 'd2'], subscriptions: [{ kind: 'call', from: 'm', to: 'd2' }] },
       v3: { pods: ['m', 'd3'], subscriptions: [{ kind: 'call', from: 'm', to: 'd3' }] },
     } })
-    expect(await app.call('v2', 'm').run(null)).toMatchObject({ ok: false, fail: { type: 'ambiguous' } })
+    expect(await app.call('v2', 'm').run(null)).toMatchObject({ ok: false, fail: { type: 'not-unique' } })
   })
 })
 

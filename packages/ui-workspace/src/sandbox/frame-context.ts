@@ -47,7 +47,7 @@ export function frameContext(self: string, runtimes: string[], edges: () => Edge
     one<I extends Interface>(s: I | SelectorData) {
       const found = all<I>(s), what = JSON.stringify(selectorData(s))
       if (found.length === 1) return success(found[0]!)
-      return found.length ? failure('ambiguous', `${self}: ${found.length} wired match ${what}`)
+      return found.length ? failure('not-unique', `${self}: ${found.length} wired match ${what}`)
         : failure('not-found', `${self}: nothing wired matches ${what}`)
     },
     all,
