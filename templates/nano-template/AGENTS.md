@@ -5,15 +5,15 @@ this file is what to do, and what not to.
 
 ## The shape
 
-- **An interface** (`src/interfaces.ts`): `iface(coord, { op… })` with `op.action(name, Input, Output)` and
-  `op.event(name, Data)`; schemas come from `defineSchema(name, Type…)`.
-- **An implementation** (`src/<thing>.ts`): `implementation('acme.template/<thing>', { provides: [Iface], make })`.
+- **An interface** (`src/interfaces.ts`): `Interface.define(coord, { op… })` with `Op.action(name, Input, Output)` and
+  `Op.event(name, Data)`; schemas come from `Schema.define(name, Type…)`.
+- **An implementation** (`src/<thing>.ts`): `Implementation.define('acme.template/<thing>', { provides: [Iface], make })`.
   `make(ctx, config)` runs once per build, closes over its state and returns `[provide(Iface, { action: async input => success(…) })]`.
   Events are published with `ctx.publish(Iface.ops.event, data)`; clean up in `ctx.addOnCloseListener`. Nothing throws:
   return `failure(...)` or `success(...)`.
 - **A view** (`src/<thing>-view.ts`): a custom element extending `View` (`src/view.ts`) with `target`. It reaches its pod only by
   `this.pod(t).action(input)` and `listen` (`hear`); no logic the pod could hold.
-- **The provider** (`src/index.ts`): `export default provider('acme.template', [...])`, `export const views = { '<impl coord>': '<tag>' }`,
+- **The provider** (`src/index.ts`): `export default Provider.define('acme.template', [...])`, `export const views = { '<impl coord>': '<tag>' }`,
   and `customElements.define` for each tag.
 - **`nano.json`**: pods, runtimes, pipes (`source`/`target` are `<iface coord>/<op>`), and `providers`.
 
@@ -30,7 +30,7 @@ bun run serve     # build and serve dist/ at http://localhost:4000, to import in
 
 ## Adding a pod
 
-1. The interface in `src/interfaces.ts`. To pipe an event into an action, give them one schema (the same `defineSchema`
+1. The interface in `src/interfaces.ts`. To pipe an event into an action, give them one schema (the same `Schema.define`
    value) or make the action's input `Type.Unknown()`.
 2. `src/<thing>.ts` and its test in `test/pods.test.ts`: assemble `nano.json` with `test/app.ts`'s `open()`, call the pod
    (`app.call('main', '<pod>')`), and check results. Give a config schema if the pod takes one (hosts pass untrusted values).

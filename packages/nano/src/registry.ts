@@ -1,7 +1,7 @@
 /**
  * The registry: a pool of providers, answering lookups by coord in O(1) and describing itself as a plain-data manifest.
  *
- *   const r = createRegistry()
+ *   const r = Registry.create()
  *   r.add(mem)                        // NanoResult<void>; fails `invalid-input` on a clash
  *   r.implementationsOf('acme/db')    // [memDb]
  */
@@ -31,7 +31,7 @@ export type Registry = {
 const opSet = (i: Interface) => [...i.byCoord.keys()].sort().join()
 const byCoord = (a: { coord: string }, b: { coord: string }) => (a.coord < b.coord ? -1 : a.coord > b.coord ? 1 : 0)
 
-export function createRegistry(): Registry {
+function create(): Registry {
   const providers = new Map<string, Provider>()
   const impls = new Map<string, Implementation>()
   const ifaces = new Map<string, Interface>()
@@ -85,3 +85,6 @@ export function createRegistry(): Registry {
     op: c => ops.get(c),
   }
 }
+
+/** `Registry.create()`. */
+export const Registry = { create }

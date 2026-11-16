@@ -6,35 +6,46 @@
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import {
-  Application, Pod, assemble, createRegistry, defineSchema, iface, implementation, op, provide, provider, success,
-  type AppDeployment, type AppEvent, type NanoResult,
+  Application,
+  Pod,
+  AppDeployment,
+  Registry,
+  Schema,
+  Interface,
+  Implementation,
+  Op,
+  provide,
+  Provider,
+  success,
+  type AppEvent,
+  type NanoResult,
 } from '../src/index.ts'
 
-const Num = defineSchema('Num', Type.Integer())
-const Nothing = defineSchema('Nothing', Type.Null())
-const Counter = iface('acme.Counter', { inc: op.action('inc', Nothing, Num) })
+const Num = Schema.define('Num', Type.Integer())
+const Nothing = Schema.define('Nothing', Type.Null())
+const Counter = Interface.define('acme.Counter', { inc: Op.action('inc', Nothing, Num) })
 
 /** What happened, in order, across every instance: 'build <pod>', 'close <pod> <reason>', 'tick <pod>'. */
 let log: string[] = []
 /** A counter that logs its build and its close. */
-const counter = implementation('acme/counter', { provides: [Counter], make: ctx => {
+const counter = Implementation.define('acme/counter', { provides: [Counter], make: ctx => {
   log.push(`build ${ctx.self}`); let n = 0
   ctx.addOnCloseListener(({ reason }) => { log.push(`close ${ctx.self} ${reason}`) })
   return [provide(Counter, { inc: async () => success(++n) })]
 } })
 /** Ticks every 5ms until closed. */
-const ticker = implementation('acme/ticker', { provides: [Counter], make: ctx => {
+const ticker = Implementation.define('acme/ticker', { provides: [Counter], make: ctx => {
   const t = setInterval(() => log.push(`tick ${ctx.self}`), 5)
   ctx.addOnCloseListener(() => clearInterval(t))
   return [provide(Counter, { inc: async () => success(0) })]
 } })
 /** Adds a close listener, then throws. */
-const halfBuilt = implementation('acme/half', { provides: [Counter], make: ctx => {
+const halfBuilt = Implementation.define('acme/half', { provides: [Counter], make: ctx => {
   ctx.addOnCloseListener(({ reason }) => { log.push(`close ${ctx.self} ${reason}`) })
   throw new Error('half built')
 } })
 /** Three close listeners: one throws, one hangs, one logs. */
-const messy = implementation('acme/messy', { provides: [Counter], make: ctx => {
+const messy = Implementation.define('acme/messy', { provides: [Counter], make: ctx => {
   ctx.addOnCloseListener(() => { throw new Error('bad close') })
   ctx.addOnCloseListener(() => new Promise(() => {}))
   ctx.addOnCloseListener(({ reason }) => { log.push(`close ${ctx.self} ${reason}`) })
@@ -42,23 +53,23 @@ const messy = implementation('acme/messy', { provides: [Counter], make: ctx => {
 } })
 
 /** Logs its build; its close listener takes 20ms, then logs. */
-const slowClose = implementation('acme/slowclose', { provides: [Counter], make: ctx => {
+const slowClose = Implementation.define('acme/slowclose', { provides: [Counter], make: ctx => {
   log.push(`build ${ctx.self}`)
   ctx.addOnCloseListener(async ({ reason }) => { await wait(20); log.push(`close ${ctx.self} ${reason}`) })
   return [provide(Counter, { inc: async () => success(1) })]
 } })
 
 /** Takes 30ms to build, then logs; its inc logs too. */
-const slowMake = implementation('acme/slowmake', { provides: [Counter], make: async ctx => {
+const slowMake = Implementation.define('acme/slowmake', { provides: [Counter], make: async ctx => {
   await wait(30); log.push(`made ${ctx.self}`)
   return [provide(Counter, { inc: async () => { log.push('handler ran'); return success(1) } })]
 } })
 
-const registry = () => { const r = createRegistry(); r.add(provider('acme', [counter, ticker, halfBuilt, messy, slowClose, slowMake])); return r }
+const registry = () => { const r = Registry.create(); r.add(Provider.define('acme', [counter, ticker, halfBuilt, messy, slowClose, slowMake])); return r }
 const ok = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const live = async (deployment: AppDeployment, opts: { timeoutMs?: number } = {}) => {
   log = []
-  const app = ok(await Application.create(ok(assemble(deployment, registry())), opts))
+  const app = ok(await Application.create(ok(AppDeployment.assemble(deployment, registry())), opts))
   const events: AppEvent[] = []
   app.listen(e => events.push(e))
   return { app, events }

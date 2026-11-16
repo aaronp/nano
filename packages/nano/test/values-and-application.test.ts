@@ -7,95 +7,108 @@
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import {
-  Application, Pod, assemble, createRegistry, defineSchema, iface, implementation, op, provide, provider, sel, success,
-  type AppEvent, type AppDeployment, type NanoContext, type Policy,
+  Application,
+  Pod,
+  AppDeployment,
+  Registry,
+  Schema,
+  Interface,
+  Implementation,
+  Op,
+  provide,
+  Provider,
+  Selector,
+  success,
+  type AppEvent,
+  type NanoContext,
+  type Policy,
 } from '../src/index.ts'
 
-const Str = defineSchema('Str', Type.String())
-const Num = defineSchema('Num', Type.Integer())
-const Nothing = defineSchema('Nothing', Type.Null())
-const Rows = defineSchema('Rows', Type.Array(Type.String()))
+const Str = Schema.define('Str', Type.String())
+const Num = Schema.define('Num', Type.Integer())
+const Nothing = Schema.define('Nothing', Type.Null())
+const Rows = Schema.define('Rows', Type.Array(Type.String()))
 
-const Counter = iface('acme.Counter', { inc: op.action('inc', Nothing, Num) })
-const KV = iface('acme.KV', { get: op.action('get', Str, Str), put: op.action('put', Str, Nothing) })
-const Send = iface('acme.Send', { send: op.action('send', Str, Nothing) })
-const Ticks = iface('acme.Ticks', { tick: op.event('tick', Num) })
-const Log = iface('acme.Log', { record: op.action('record', Num, Nothing) })
-const DB = iface('acme.DB', { all: op.action('all', Nothing, Rows), insert: op.action('insert', Rows, Nothing) })
-const Run = iface('acme.Run', { run: op.action('run', Nothing, Num) })
-const Bad = iface('acme.Bad', { go: op.action('go', Str, Num) })
+const Counter = Interface.define('acme.Counter', { inc: Op.action('inc', Nothing, Num) })
+const KV = Interface.define('acme.KV', { get: Op.action('get', Str, Str), put: Op.action('put', Str, Nothing) })
+const Send = Interface.define('acme.Send', { send: Op.action('send', Str, Nothing) })
+const Ticks = Interface.define('acme.Ticks', { tick: Op.event('tick', Num) })
+const Log = Interface.define('acme.Log', { record: Op.action('record', Num, Nothing) })
+const DB = Interface.define('acme.DB', { all: Op.action('all', Nothing, Rows), insert: Op.action('insert', Rows, Nothing) })
+const Run = Interface.define('acme.Run', { run: Op.action('run', Nothing, Num) })
+const Bad = Interface.define('acme.Bad', { go: Op.action('go', Str, Num) })
 
 let builds: string[] = []
 /** A counter whose state is a closure: 1, 2, 3 … per instance. Records each build. */
-const counter = implementation('acme/counter', { provides: [Counter], make: (ctx) => {
+const counter = Implementation.define('acme/counter', { provides: [Counter], make: (ctx) => {
   builds.push(ctx.self); let n = 0
   return [provide(Counter, { inc: async () => success(++n) })]
 } })
 let failNext = 0
-const flaky = implementation('acme/flaky', { provides: [Counter], make: () => {
+const flaky = Implementation.define('acme/flaky', { provides: [Counter], make: () => {
   if (failNext > 0) { failNext--; throw new Error('not yet') }
   return [provide(Counter, { inc: async () => success(1) })]
 } })
-const kv = implementation('acme/kv', { provides: [KV], make: () => {
+const kv = Implementation.define('acme/kv', { provides: [KV], make: () => {
   const m = new Map<string, string>()
   return [provide(KV, { get: async k => success(m.get(k) ?? ''), put: async k => { m.set(k, 'v'); return success(null) } })]
 } })
 /** Sends by putting into whichever KV it is wired to; never names a runtime. */
-const sender = implementation('acme/sender', { provides: [Send], dependencies: { store: KV }, make: ctx => [provide(Send, {
+const sender = Implementation.define('acme/sender', { provides: [Send], dependencies: { store: KV }, make: ctx => [provide(Send, {
   send: async msg => ctx.one(KV).call.put(msg),
 })] })
 /** Falls back to a local note when no KV is wired. */
-const adaptive = implementation('acme/adaptive', { provides: [Send], dependencies: { store: KV }, make: ctx => {
+const adaptive = Implementation.define('acme/adaptive', { provides: [Send], dependencies: { store: KV }, make: ctx => {
   const local: string[] = []
   return [provide(Send, { send: async msg => {
     if (ctx.all(KV).length === 0) { local.push(msg); return success(null) }
     return ctx.one(KV).call.put(msg)
   } })]
 } })
-const ticker = implementation('acme/ticker', { provides: [Ticks], make: () => [] })
+const ticker = Implementation.define('acme/ticker', { provides: [Ticks], make: () => [] })
 let logged: number[] = []
-const log = implementation('acme/log', { provides: [Log], make: () => [provide(Log, { record: async n => { logged.push(n); return success(null) } })] })
-const db = implementation('acme/db', { provides: [DB], make: (_ctx, seed: string[] = []) => {
+const log = Implementation.define('acme/log', { provides: [Log], make: () => [provide(Log, { record: async n => { logged.push(n); return success(null) } })] })
+const db = Implementation.define('acme/db', { provides: [DB], make: (_ctx, seed: string[] = []) => {
   const rows = [...seed]
   return [provide(DB, { all: async () => success([...rows]), insert: async more => { rows.push(...more); return success(null) } })]
 } })
 /** Copies rows from config.from to config.to, naming runtimes only through config. */
-const migrate = implementation('acme/migrate', { provides: [Run], dependencies: { db: DB }, make: (ctx, cfg) => [provide(Run, { run: async () => {
-  const from = ctx.one(sel(DB, { runtime: cfg.from })), to = ctx.one(sel(DB, { runtime: cfg.to }))
+const migrate = Implementation.define('acme/migrate', { provides: [Run], dependencies: { db: DB }, make: (ctx, cfg) => [provide(Run, { run: async () => {
+  const from = ctx.one(Selector.of(DB, { runtime: cfg.from })), to = ctx.one(Selector.of(DB, { runtime: cfg.to }))
   if (!to.ok) return { ok: false, fail: to.fail! }
   const rows = await from.call.all(null)
   if (!rows.ok) return rows
   const put = await to.call.insert(rows.value)
   return put.ok ? success(rows.value.length) : put
 } })] })
-const careless = implementation('acme/careless', { provides: [Run], dependencies: { db: DB }, make: ctx => [provide(Run, { run: async () => {
+const careless = Implementation.define('acme/careless', { provides: [Run], dependencies: { db: DB }, make: ctx => [provide(Run, { run: async () => {
   const d = ctx.one(DB); return d.ok ? success(0) : { ok: false, fail: d.fail! }
 } })] })
 /** Each instance's first call waits until the test opens every gate. */
 let gates: (() => void)[] = []
 const openAll = () => { for (const g of gates.splice(0)) g() }
-const gated = implementation('acme/gated', { provides: [Counter], make: () => {
+const gated = Implementation.define('acme/gated', { provides: [Counter], make: () => {
   let n = 0
   return [provide(Counter, { inc: async () => { const mine = ++n; if (mine === 1) await new Promise<void>(r => gates.push(r)); return success(mine) } })]
 } })
-const bad = implementation('acme/bad', { provides: [Bad], make: () => [provide(Bad, { go: async (x: string) => {
+const bad = Implementation.define('acme/bad', { provides: [Bad], make: () => [provide(Bad, { go: async (x: string) => {
   if (x === 'out') return success('not a number' as unknown as number)
   if (x === 'slow') return new Promise(() => {})
   if (x === 'throw') throw new Error('bang')
   return success(1)
 } })] })
 let seen: string[] = []
-const where = implementation('acme/where', { provides: [Counter], make: ctx => [provide(Counter, { inc: async () => { seen = [...ctx.runtimes]; return success(1) } })] })
+const where = Implementation.define('acme/where', { provides: [Counter], make: ctx => [provide(Counter, { inc: async () => { seen = [...ctx.runtimes]; return success(1) } })] })
 
 const registry = () => {
-  const r = createRegistry()
-  r.add(provider('acme', [counter, flaky, kv, sender, adaptive, ticker, log, db, migrate, careless, gated, bad, where]))
+  const r = Registry.create()
+  r.add(Provider.define('acme', [counter, flaky, kv, sender, adaptive, ticker, log, db, migrate, careless, gated, bad, where]))
   return r
 }
 const ok = <T>(r: { ok: boolean; value?: T; fail?: { reason: string } }): T => { if (!r.ok) throw new Error(r.fail!.reason); return r.value as T }
 /** `d` assembled with `reg`, then made live: the first failure of either. */
 const create = async (d: unknown, opts: { policies?: Record<string, Policy>; timeoutMs?: number } = {}, reg = registry()) => {
-  const runtimes = assemble(d, reg)
+  const runtimes = AppDeployment.assemble(d, reg)
   return runtimes.ok ? Application.create(runtimes.value, opts) : runtimes
 }
 /** A live application and everything on its stream. */
@@ -169,10 +182,10 @@ describe('building', () => {
 
 describe('placing', () => {
   test('given two KVs, one tagged primary, when a pod selects the primary KV, then it reaches that one, straight after assemble and create', async () => {
-    const picker = implementation('acme5/picker', { provides: [Send], dependencies: { store: KV }, make: ctx => [provide(Send, {
-      send: async msg => { return ctx.one(sel(KV, { tags: ['primary'] })).call.put(msg) },
+    const picker = Implementation.define('acme5/picker', { provides: [Send], dependencies: { store: KV }, make: ctx => [provide(Send, {
+      send: async msg => { return ctx.one(Selector.of(KV, { tags: ['primary'] })).call.put(msg) },
     })] })
-    const reg = registry(); reg.add(provider('acme5', [picker]))
+    const reg = registry(); reg.add(Provider.define('acme5', [picker]))
     const calls = [{ kind: 'call', from: 'p', to: 'k1' }, { kind: 'call', from: 'p', to: 'k2' }] as const
     const app = ok(await create({ pods: { p: Pod.lazy(picker), k1: Pod.lazy(kv), k2: Pod.lazy(kv) },
       runtimes: { r: { pods: ['p', 'k1', 'k2'], subscriptions: [...calls] } }, tags: { k2: ['primary'] } }, {}, reg))
@@ -228,8 +241,8 @@ describe('messages', () => {
   test('given a ticker in two runtimes with a log subscribed in each, when it publishes, then each subscription gets it, recorded in its runtime', async () => {
     logged = []
     let ctxOut: NanoContext | undefined
-    const tick = implementation('acme2/tick', { provides: [Ticks], make: ctx => { ctxOut = ctx; return [] } })
-    const reg = registry(); reg.add(provider('acme2', [tick]))
+    const tick = Implementation.define('acme2/tick', { provides: [Ticks], make: ctx => { ctxOut = ctx; return [] } })
+    const reg = registry(); reg.add(Provider.define('acme2', [tick]))
     const ev = { kind: 'pipe', from: 't', source: 'acme.Ticks/tick', to: 'l', target: 'acme.Log/record' } as const
     const app = ok(await create({ pods: { t: Pod.eager(tick), l: Pod.lazy(log) }, runtimes: {
       a: { pods: ['t', 'l'], subscriptions: [ev] }, b: { pods: ['t', 'l'], subscriptions: [ev] } } }, {}, reg))
@@ -308,13 +321,13 @@ describe('changing, at the edges', () => {
     const d: AppDeployment = { pods: { send: Pod.lazy(sender), db: Pod.lazy(kv) },
       runtimes: { r: { pods: ['send', 'db'], subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] } } }
     let kept: Record<string, (i: unknown) => Promise<unknown>> | undefined
-    const holder = implementation('acme3/holder', { provides: [Send], dependencies: { store: KV }, make: ctx => {
+    const holder = Implementation.define('acme3/holder', { provides: [Send], dependencies: { store: KV }, make: ctx => {
       return [provide(Send, { send: async msg => {
         if (!kept) { const s = ctx.one(KV); if (!s.ok) return { ok: false, fail: s.fail! }; kept = s.call as never }
         return kept!.put(msg) as never
       } })]
     } })
-    const reg = registry(); reg.add(provider('acme3', [holder]))
+    const reg = registry(); reg.add(Provider.define('acme3', [holder]))
     const app = ok(await create({ ...d, pods: { ...d.pods, send: Pod.lazy(holder) } }, {}, reg))
     expect(await app.call('r', 'send').send('k')).toEqual(success(null))
     expect(await app.apply({ ...app.deployment(), runtimes: { r: { pods: ['send', 'db'], subscriptions: [] } } })).toEqual(success(undefined))
@@ -344,11 +357,11 @@ describe('changing, at the edges', () => {
   })
   test('given apply adding an eager pod whose factory waits, when it is called meanwhile, then both resolve and the factory ran once', async () => {
     let made = 0, open = () => {}
-    const slow = implementation('acme3/slow', { provides: [Counter], make: async () => {
+    const slow = Implementation.define('acme3/slow', { provides: [Counter], make: async () => {
       made++; await new Promise<void>(r => { open = r })
       return [provide(Counter, { inc: async () => success(7) })]
     } })
-    const reg = registry(); reg.add(provider('acme3', [slow]))
+    const reg = registry(); reg.add(Provider.define('acme3', [slow]))
     const app = ok(await create(one({}), {}, reg))
     const applying = app.apply(one({ s: Pod.eager(slow) }))
     await tick()
@@ -388,8 +401,8 @@ describe('edges of the live application', () => {
       expect(await app.call('r', 'c').inc(null)).toMatchObject({ ok: false, fail: { type: 'denied', reason: 'policy gave no verdict' } })
     })
   test('given a build that hangs, when called, then it is timeout and a failure event', async () => {
-    const hang = implementation('acme3/hang', { provides: [Counter], make: () => new Promise<never>(() => {}) })
-    const reg = registry(); reg.add(provider('acme3', [hang]))
+    const hang = Implementation.define('acme3/hang', { provides: [Counter], make: () => new Promise<never>(() => {}) })
+    const reg = registry(); reg.add(Provider.define('acme3', [hang]))
     const app = ok(await create(one({ h: Pod.lazy(hang) }), { timeoutMs: 20 }, reg))
     const events: AppEvent[] = []; app.listen(e => events.push(e))
     expect(await app.call('r', 'h').inc(null)).toMatchObject({ ok: false, fail: { type: 'timeout' } })
@@ -506,10 +519,10 @@ describe('final review', () => {
   // M2: a call waiting on a build uses that build's implementation.
   test('given a call waiting on a build, when apply changes the pod, then the call finishes on the old build and the next uses the new', async () => {
     let open = () => {}
-    const slow = implementation('acme4/slow', { provides: [Counter], make: async () => {
+    const slow = Implementation.define('acme4/slow', { provides: [Counter], make: async () => {
       await new Promise<void>(r => { open = r }); return [provide(Counter, { inc: async () => success(7) })]
     } })
-    const reg = registry(); reg.add(provider('acme4', [slow]))
+    const reg = registry(); reg.add(Provider.define('acme4', [slow]))
     const app = ok(await create(one({ x: Pod.lazy(slow) }), {}, reg))
     const calling = app.call('r', 'x').inc(null)
     await tick()

@@ -3,34 +3,34 @@
 // limit; `assemble` owns the application's shape (runtime count, runtime ids, tags).
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { defineSchema } from '../src/schema.ts'
-import { op } from '../src/op.ts'
-import { iface } from '../src/iface.ts'
+import { Schema } from '../src/schema.ts'
+import { Op } from '../src/op.ts'
+import { Interface } from '../src/iface.ts'
 import { success, type NanoResult } from '../src/result.ts'
-import { implementation, provide } from '../src/implementation.ts'
-import { provider } from '../src/provider.ts'
-import { createRegistry } from '../src/registry.ts'
+import { Implementation, provide } from '../src/implementation.ts'
+import { Provider } from '../src/provider.ts'
+import { Registry } from '../src/registry.ts'
 import { Pod } from '../src/pod.ts'
 import { Pods } from '../src/pods.ts'
 import { Runtime } from '../src/runtime.ts'
-import { assemble } from '../src/deployment.ts'
+import { AppDeployment } from '../src/deployment.ts'
 
-const Str = defineSchema('Str', Type.String())
-const Num = defineSchema('Num', Type.Integer())
-const Nothing = defineSchema('Nothing', Type.Null())
-const Counter = iface('acme.Counter', { inc: op.action('inc', Nothing, Num) })
-const KV = iface('acme.KV', { put: op.action('put', Str, Nothing) })
-const Ticks = iface('acme.Ticks', { tick: op.event('tick', Num), said: op.event('said', Str) })
-const Log = iface('acme.Log', { record: op.action('record', Num, Nothing) })
+const Str = Schema.define('Str', Type.String())
+const Num = Schema.define('Num', Type.Integer())
+const Nothing = Schema.define('Nothing', Type.Null())
+const Counter = Interface.define('acme.Counter', { inc: Op.action('inc', Nothing, Num) })
+const KV = Interface.define('acme.KV', { put: Op.action('put', Str, Nothing) })
+const Ticks = Interface.define('acme.Ticks', { tick: Op.event('tick', Num), said: Op.event('said', Str) })
+const Log = Interface.define('acme.Log', { record: Op.action('record', Num, Nothing) })
 
-const counter = implementation('acme/counter', { provides: [Counter], make: () => [provide(Counter, { inc: async () => success(1) })] })
-const kv = implementation('acme/kv', { provides: [KV], make: () => [provide(KV, { put: async () => success(null) })] })
-const sender = implementation('acme/sender', { provides: [], dependencies: { store: KV }, make: () => [] })
-const ticker = implementation('acme/ticker', { provides: [Ticks], make: () => [] })
-const log = implementation('acme/log', { provides: [Log], make: () => [provide(Log, { record: async () => success(null) })] })
-const sized = implementation('acme/sized', { provides: [], config: Num, make: () => [] })
-const registry = createRegistry()
-registry.add(provider('acme', [counter, kv, sender, ticker, log, sized]))
+const counter = Implementation.define('acme/counter', { provides: [Counter], make: () => [provide(Counter, { inc: async () => success(1) })] })
+const kv = Implementation.define('acme/kv', { provides: [KV], make: () => [provide(KV, { put: async () => success(null) })] })
+const sender = Implementation.define('acme/sender', { provides: [], dependencies: { store: KV }, make: () => [] })
+const ticker = Implementation.define('acme/ticker', { provides: [Ticks], make: () => [] })
+const log = Implementation.define('acme/log', { provides: [Log], make: () => [provide(Log, { record: async () => success(null) })] })
+const sized = Implementation.define('acme/sized', { provides: [], config: Num, make: () => [] })
+const registry = Registry.create()
+registry.add(Provider.define('acme', [counter, kv, sender, ticker, log, sized]))
 
 const ok = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const fails = (r: NanoResult<unknown>, type: string, offender: string) => {
@@ -144,28 +144,28 @@ describe('assemble', () => {
   test('a valid app deployment is its runtimes', () => {
     const d = { pods: { c: Pod.lazy(counter), k: Pod.lazy(kv), x: Pod.lazy(kv) },
       runtimes: { a: { pods: ['c', 'k'], subscriptions: [{ kind: 'call', from: 'c', to: 'k' }] }, b: { pods: ['k'], subscriptions: [] } }, tags: { k: ['primary'] } }
-    const rs = ok(assemble(d, registry))
+    const rs = ok(AppDeployment.assemble(d, registry))
     expect(Object.keys(rs)).toEqual(['a', 'b'])
     expect<unknown>([rs.a!.id, rs.a!.pods.names(), rs.a!.deployment(), rs.b!.pods.names()]).toEqual(['a', ['c', 'k'], d.runtimes.a, ['k']])
   })
   test('something that is not an app deployment is invalid-input', () => {
     for (const d of [null, 3, {}, { pods: {}, runtimes: [] }, { pods: {}, runtimes: {}, x: 1 }])
-      expect(assemble(d, registry)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+      expect(AppDeployment.assemble(d, registry)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   })
   test('the first failure of a level is the result', () => {
-    fails(assemble({ pods: { x: { implementation: 'acme/nope', eager: false } }, runtimes: {} }, registry), 'not-found', 'acme/nope')
-    fails(assemble({ pods: {}, runtimes: { r: { pods: ['ghost'], subscriptions: [] } } }, registry), 'invalid-input', 'ghost')
+    fails(AppDeployment.assemble({ pods: { x: { implementation: 'acme/nope', eager: false } }, runtimes: {} }, registry), 'not-found', 'acme/nope')
+    fails(AppDeployment.assemble({ pods: {}, runtimes: { r: { pods: ['ghost'], subscriptions: [] } } }, registry), 'invalid-input', 'ghost')
   })
   test("a runtime's shape and placement are reported in Runtime.create's words, not select's", () => {
-    fails(assemble({ pods: {}, runtimes: { r: { pods: 'x', subscriptions: [] } } }, registry), 'invalid-input', 'runtime r /pods')
-    fails(assemble({ pods: { c: Pod.lazy(counter) }, runtimes: { r: { pods: ['c', 'c'], subscriptions: [] } } }, registry), 'invalid-input', 'c is placed twice')
+    fails(AppDeployment.assemble({ pods: {}, runtimes: { r: { pods: 'x', subscriptions: [] } } }, registry), 'invalid-input', 'runtime r /pods')
+    fails(AppDeployment.assemble({ pods: { c: Pod.lazy(counter) }, runtimes: { r: { pods: ['c', 'c'], subscriptions: [] } } }, registry), 'invalid-input', 'c is placed twice')
   })
   test('more than 50 runtimes', () => {
     const runtimes = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`r${i}`, { pods: [], subscriptions: [] }]))
-    fails(assemble({ pods: {}, runtimes }, registry), 'invalid-input', '/runtimes')
+    fails(AppDeployment.assemble({ pods: {}, runtimes }, registry), 'invalid-input', '/runtimes')
   })
   test('runtime ids follow the id rule', () => {
     for (const bad of ['', 'a/b', 'x'.repeat(65)])
-      fails(assemble({ pods: {}, runtimes: { [bad]: { pods: [], subscriptions: [] } } }, registry), 'invalid-input', '/runtimes')
+      fails(AppDeployment.assemble({ pods: {}, runtimes: { [bad]: { pods: [], subscriptions: [] } } }, registry), 'invalid-input', '/runtimes')
   })
 })

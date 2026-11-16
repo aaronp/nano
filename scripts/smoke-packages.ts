@@ -23,18 +23,18 @@ await $`npm install --no-audit --no-fund --silent`.cwd(at)
 // a stranger's app: the slice example (nano.json over nano.ui plus a provider of its own), assembled, swapped and run headlessly
 const nanoJson = await Bun.file(join(root, 'examples/slice/nano.json')).text()
 await Bun.write(join(at, 'consumer.ts'), `
-import { Application, assemble, createRegistry, implementation, Pod, provide, provider, success, type AppDeployment } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, Registry, Implementation, Pod, provide, Provider, success } from '@pritzlaff/nano-core'
 import uiProvider, { MapIface } from '@pritzlaff/nano-ui'
 import '@pritzlaff/nano-elements'
 
-const shout = implementation('smoke/shout', { provides: [MapIface], make: () => [provide(MapIface, { map: async (x: unknown) => success(\`\${x}!\`) })] })
-const mine = provider('smoke', [shout])
+const shout = Implementation.define('smoke/shout', { provides: [MapIface], make: () => [provide(MapIface, { map: async (x: unknown) => success(\`\${x}!\`) })] })
+const mine = Provider.define('smoke', [shout])
 const must = <T>(r: { ok: true; value: T } | { ok: false; fail: { reason: string } }): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
-const registry = createRegistry()
+const registry = Registry.create()
 must(registry.add(uiProvider)); must(registry.add(mine))
 const deployment: AppDeployment = ${nanoJson}
-const app = must(await Application.create(must(assemble(deployment, registry)), {}))
+const app = must(await Application.create(must(AppDeployment.assemble(deployment, registry)), {}))
 must(await app.apply({ ...deployment, pods: { ...deployment.pods, up: Pod.lazy(mine.implementations.get('smoke/shout')!) } }))
 await app.call('main', 'in').submit('hi')
 await new Promise(r => setTimeout(r, 100))

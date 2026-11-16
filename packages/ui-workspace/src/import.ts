@@ -7,7 +7,14 @@
  *   const r = await importApp('/apps/slice/nano.json', loaded, { load: u => import(u), probe, confirm, approve })
  */
 import {
-  failure, provider, success, type AppDeployment, type Implementation, type NanoResult, type Pod, type Provider, type Registry,
+  failure,
+  Provider,
+  success,
+  type AppDeployment,
+  type Implementation,
+  type NanoResult,
+  type Pod,
+  type Registry,
 } from '@pritzlaff/nano-core'
 import type { ViewMap } from '@pritzlaff/nano-ui'
 
@@ -89,7 +96,7 @@ function gated(probed: Provider, url: string, origin: string, deps: Deps): Provi
     if (!isProvider(p, probed.coord)) throw new Error(`${url} has no default Provider ${probed.coord}`)
     return p
   }).catch(e => { real = undefined; throw e })
-  return provider(probed.coord, [...probed.implementations.values()].map(i => asking({ ...i, async make(ctx, config) {
+  return Provider.define(probed.coord, [...probed.implementations.values()].map(i => asking({ ...i, async make(ctx, config) {
     const r = (await load()).implementations.get(i.coord)
     if (!r || shape(r) !== shape(i)) throw new Error(`${i.coord} is not what ${url} described`)
     return r.make(ctx, config)

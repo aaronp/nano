@@ -3,15 +3,15 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { Application, assemble, createRegistry, iface, implementation, op, Pod, port, provide, provider, success, defineSchema, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, Registry, Interface, Implementation, Op, Pod, port, provide, Provider, success, Schema, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider, { Debounce, debounce, defineViews, input, Input, Log, log, map, MapIface } from '../src/index.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
-const Str = defineSchema('Str', Type.String())
-const Store = iface('acme.Store', { save: op.action('save', Str, Str) })
-const App = iface('acme.App', { save: op.action('save', Str, Str) })
-const db = implementation('acme/db', { provides: [Store], make: () => [provide(Store, { save: async s => success(s) })] })
-const api = implementation('acme/api', { provides: [App], dependencies: { store: Store }, make: ctx => [provide(App, { save: async s => ctx.one(Store).call.save(s) })] })
+const Str = Schema.define('Str', Type.String())
+const Store = Interface.define('acme.Store', { save: Op.action('save', Str, Str) })
+const App = Interface.define('acme.App', { save: Op.action('save', Str, Str) })
+const db = Implementation.define('acme/db', { provides: [Store], make: () => [provide(Store, { save: async s => success(s) })] })
+const api = Implementation.define('acme/api', { provides: [App], dependencies: { store: Store }, make: ctx => [provide(App, { save: async s => ctx.one(Store).call.save(s) })] })
 
 const slice: AppDeployment = {
   pods: {
@@ -25,10 +25,10 @@ const slice: AppDeployment = {
   ] } },
 }
 const open = async (d: AppDeployment) => {
-  const registry = createRegistry()
+  const registry = Registry.create()
   registry.add(uiProvider)
-  registry.add(provider('acme', [db, api]))
-  return { app: must(await Application.create(must(assemble(d, registry)), {})), registry }
+  registry.add(Provider.define('acme', [db, api]))
+  return { app: must(await Application.create(must(AppDeployment.assemble(d, registry)), {})), registry }
 }
 type El = HTMLElement & { target: unknown; updateComplete: Promise<unknown> }
 const mount = async (target: unknown) => {

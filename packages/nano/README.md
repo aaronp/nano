@@ -7,6 +7,6 @@ deployments (checked values) and the one live `Application`. The map is [design.
 [model spec](../../docs/superpowers/specs/2026-11-14-pods-runtimes-application-design.md).
 
 ```ts
-import { assemble, createRegistry } from '@pritzlaff/nano-core'
-assemble({ pods: {}, runtimes: {} }, createRegistry())   // success({})
+import { AppDeployment, Registry } from '@pritzlaff/nano-core'
+AppDeployment.assemble({ pods: {}, runtimes: {} }, Registry.create())   // success({})
 ```

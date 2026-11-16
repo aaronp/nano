@@ -1,4 +1,4 @@
-import { implementation, provide, success } from '@pritzlaff/nano-core'
+import { Implementation, provide, success } from '@pritzlaff/nano-core'
 import { Store } from './interfaces.ts'
 
 const PREFIX = 'acme.template:'
@@ -6,7 +6,7 @@ const PREFIX = 'acme.template:'
 const local = (): Storage | undefined => { try { return globalThis.localStorage } catch { return undefined } }
 
 /** Key/value text in `localStorage`, or in memory when there is none. Publishes `changed` with the key. */
-export const store = implementation('acme.template/store', {
+export const store = Implementation.define('acme.template/store', {
   provides: [Store],
   make: ctx => {
     const ls = local(), mem = new Map<string, string>()

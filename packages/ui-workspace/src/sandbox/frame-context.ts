@@ -6,7 +6,15 @@
  *   await close('closed')   // the close listeners, in the order added; a throwing one is skipped
  */
 import {
-  matches, selectorData, type Client, type Fail, type Interface, type NanoContext, type NanoResult, type Selection, type SelectorData,
+  matches,
+  selectorData,
+  type Client,
+  type Fail,
+  type Interface,
+  type NanoContext,
+  type NanoResult,
+  type Selection,
+  type SelectorData,
 } from '@pritzlaff/nano-core'
 import type { Edge } from './edges.ts'
 import type { Msg } from './protocol.ts'

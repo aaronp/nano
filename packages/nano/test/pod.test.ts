@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { implementation } from '../src/implementation.ts'
+import { Implementation } from '../src/implementation.ts'
 import { Pod } from '../src/pod.ts'
 
-const counter = implementation('acme/counter', { provides: [], make: () => [] })
-const ticker = implementation('acme/ticker', { provides: [], make: () => [] })
+const counter = Implementation.define('acme/counter', { provides: [], make: () => [] })
+const ticker = Implementation.define('acme/ticker', { provides: [], make: () => [] })
 
 describe('pod', () => {
   test('lazy and eager pods are plain data that survive a JSON round trip', () => {

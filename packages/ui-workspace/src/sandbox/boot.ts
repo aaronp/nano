@@ -3,7 +3,7 @@
  * port the host hands over on load, then serves its pod and renders the pod's view (the module's `views` default for
  * the implementation, else `nano-pod-view`), or answers a `probe` with the module described.
  */
-import { createRegistry, type Provider } from '@pritzlaff/nano-core'
+import { Registry, type Provider } from '@pritzlaff/nano-core'
 import { defineViews, viewFor, type ViewMap } from '@pritzlaff/nano-ui'
 import { describeProvider } from './protocol.ts'
 import { serve } from './serve.ts'
@@ -32,7 +32,7 @@ addEventListener('message', function once(e: MessageEvent) {
   }, {
     probe: async u => { const m = await mod(u); return [describeProvider(m.default, m.views)] },
     render(coord, target) {
-      const m = built!, registry = createRegistry()
+      const m = built!, registry = Registry.create()
       registry.add(m.default)
       defineViews()
       const tag = viewFor(target.pod, { pods: { [target.pod]: { implementation: coord, eager: true } }, runtimes: {} }, m.views)

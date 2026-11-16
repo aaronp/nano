@@ -1,7 +1,7 @@
 /**
  * Providers: a namespace of implementations, plus free-form metadata.
  *
- *   const mem = provider('acme/mem', [memDb, memLog], { author: 'acme' })
+ *   const mem = Provider.define('acme/mem', [memDb, memLog], { author: 'acme' })
  *   mem.implementations.get('acme/mem/db')   // memDb
  */
 import type { Implementation } from './implementation.ts'
@@ -12,7 +12,7 @@ export type Provider = {
   readonly meta: Readonly<Record<string, string>>
 }
 
-export function provider(coord: string, implementations: Implementation[], meta: Record<string, string> = {}): Provider {
+function define(coord: string, implementations: Implementation[], meta: Record<string, string> = {}): Provider {
   const byCoord = new Map<string, Implementation>()
   for (const i of implementations) {
     if (i.provider !== coord) throw new Error(`${i.coord} is not under ${coord}`)
@@ -21,3 +21,6 @@ export function provider(coord: string, implementations: Implementation[], meta:
   }
   return { coord, implementations: byCoord, meta }
 }
+
+/** `Provider.define(ns, implementations, meta?)`. */
+export const Provider = { define }

@@ -2,7 +2,7 @@
  * The wiring view: the circuit of a deployment, and the mounted <nano-wiring> lighting a cable per message.
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, assemble, createRegistry, Pod, port, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, Registry, Pod, port, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider, { circuitOf, Debounce, debounce, defineViews, input, Input, Log, log, map, MapIface } from '../src/index.ts'
 import './dom.ts'
 
@@ -15,7 +15,7 @@ const slice: AppDeployment = {
     { kind: 'pipe', from: 'up', source: port(MapIface, MapIface.ops.map), to: 'out', target: port(Log, Log.ops.log) },
   ] } },
 }
-const registry = () => { const r = createRegistry(); r.add(uiProvider); return r }
+const registry = () => { const r = Registry.create(); r.add(uiProvider); return r }
 const join = (c: ReturnType<typeof circuitOf>, i: number) => {
   const cable = c.cables[i]!, pad = (key: string) => c.layers.flatMap(l => l.footprints).flatMap(f => f.pads).find(p => p.key === key)!
   return `${pad(cable.from.pad).instance}.${pad(cable.from.pad).label}→${pad(cable.to.pad).instance}.${pad(cable.to.pad).label}`
@@ -46,7 +46,7 @@ describe('circuitOf', () => {
 describe('<nano-wiring>', () => {
   test('given a mounted nano-wiring, when in.submit is called, then the in→wait cable is lit, and dims after 600ms', async () => {
     defineViews()
-    const reg = registry(), app = must(await Application.create(must(assemble(slice, reg)), {}))
+    const reg = registry(), app = must(await Application.create(must(AppDeployment.assemble(slice, reg)), {}))
     const el = document.createElement('nano-wiring') as HTMLElement & { target: unknown; updateComplete: Promise<unknown> }
     el.target = { app, registry: reg }
     document.body.append(el)

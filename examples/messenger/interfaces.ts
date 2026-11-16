@@ -5,42 +5,42 @@
  *   if (ctx.all(Messaging).length === 0) …          // nothing wired: the composer is disabled
  */
 import { Type } from 'typebox'
-import { defineSchema, iface, op } from '@pritzlaff/nano-core'
+import { Schema, Interface, Op } from '@pritzlaff/nano-core'
 
-export const Key = defineSchema('Key', Type.String())
-export const MaybeValue = defineSchema('MaybeValue', Type.Union([Type.String(), Type.Null()]))
-export const Entry = defineSchema('Entry', Type.Object({ key: Type.String(), value: Type.String() }))
-export const Done = defineSchema('Done', Type.Null())
+export const Key = Schema.define('Key', Type.String())
+export const MaybeValue = Schema.define('MaybeValue', Type.Union([Type.String(), Type.Null()]))
+export const Entry = Schema.define('Entry', Type.Object({ key: Type.String(), value: Type.String() }))
+export const Done = Schema.define('Done', Type.Null())
 
-export const Message = defineSchema('Message', Type.Object({ id: Type.String(), text: Type.String() }))
-export const Messages = defineSchema('Messages', Type.Array(Message.schema))
-export const Nothing = defineSchema('Nothing', Type.Object({}))
-export const Draft = defineSchema('Draft', Type.Object({ text: Type.String() }))
+export const Message = Schema.define('Message', Type.Object({ id: Type.String(), text: Type.String() }))
+export const Messages = Schema.define('Messages', Type.Array(Message.schema))
+export const Nothing = Schema.define('Nothing', Type.Object({}))
+export const Draft = Schema.define('Draft', Type.Object({ text: Type.String() }))
 /** Disabled is a value: the composer has no messaging to send through. */
-export const Sent = defineSchema('Sent', Type.Union([
+export const Sent = Schema.define('Sent', Type.Union([
   Type.Object({ status: Type.Literal('sent'), id: Type.String() }),
   Type.Object({ status: Type.Literal('disabled') }),
 ]))
 
-export const KeyValueStore = iface('example.messenger.KeyValueStore', {
-  get: op.action('get', Key, MaybeValue),
-  put: op.action('put', Entry, Done),
+export const KeyValueStore = Interface.define('example.messenger.KeyValueStore', {
+  get: Op.action('get', Key, MaybeValue),
+  put: Op.action('put', Entry, Done),
 })
 
-export const Messaging = iface('example.messenger.Messaging', {
-  post: op.action('post', Message, Done),
-  messages: op.event('messages', Message),
+export const Messaging = Interface.define('example.messenger.Messaging', {
+  post: Op.action('post', Message, Done),
+  messages: Op.event('messages', Message),
 })
 
-export const Inbox = iface('example.messenger.Inbox', {
-  receive: op.action('receive', Message, Done),
-  list: op.action('list', Nothing, Messages),
+export const Inbox = Interface.define('example.messenger.Inbox', {
+  receive: Op.action('receive', Message, Done),
+  list: Op.action('list', Nothing, Messages),
 })
 
-export const Composer = iface('example.messenger.Composer', {
-  send: op.action('send', Draft, Sent),
+export const Composer = Interface.define('example.messenger.Composer', {
+  send: Op.action('send', Draft, Sent),
 })
 
-export const Outgoing = defineSchema('Outgoing', Type.Object({ contact: Type.String(), message: Type.String() }))
+export const Outgoing = Schema.define('Outgoing', Type.Object({ contact: Type.String(), message: Type.String() }))
 /** `send(contact, message)`: one pod, shared by every runtime it is placed in. */
-export const Send = iface('example.messenger.Send', { send: op.action('send', Outgoing, Done) })
+export const Send = Interface.define('example.messenger.Send', { send: Op.action('send', Outgoing, Done) })

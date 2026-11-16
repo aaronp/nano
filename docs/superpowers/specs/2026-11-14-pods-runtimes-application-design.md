@@ -23,7 +23,7 @@ const chat = ok(Runtime.create('chat', chatDeployment, ok(pods.select(['a', 'b',
 const support = ok(Runtime.create('support', supportDeployment, ok(pods.select(['c', 'd', 'e']))))
 const app = ok(await Application.create({ chat, support }, { timeoutMs: 5000 }))   // mounts; 'c' is one instance
 // from data in one step (loading a nano.json):
-const app2 = ok(await Application.create(ok(assemble(appDeployment, registry)), {}))
+const app2 = ok(await Application.create(ok(AppDeployment.assemble(appDeployment, registry)), {}))
 ```
 
 ## Data
@@ -61,7 +61,7 @@ type Subscription =
   interface `from` declares as a dependency, when it declares any; at most 2000 subscriptions.
 - `Application.create`: at most 50 runtimes; runtime ids follow the id rule; every runtime's pods come from one
   `Pods` (the same name means the same pod everywhere, `invalid-input` otherwise).
-- `assemble(appDeployment, registry)`: `Pods.create` of `pods` with `tags`, then for each runtime `Runtime.create(id, def,
+- `AppDeployment.assemble(appDeployment, registry)`: `Pods.create` of `pods` with `tags`, then for each runtime `Runtime.create(id, def,
   pods.select(def.pods))`. Pure; the first failure is returned.
 
 ## Assembled values
@@ -186,7 +186,7 @@ removed, changed, rewired }`, `sent { id, runtime, kind, from, to, port, correla
    `on` message in that runtime.
 10. An `on` subscription stops when its instance restarts, and when the function it returned is called.
 11. The caller of an action doesn't wait for slow pipe targets.
-12. `assemble(appDeployment, registry)` + `Application.create` behaves as before for every earlier behaviour that
+12. `AppDeployment.assemble(appDeployment, registry)` + `Application.create` behaves as before for every earlier behaviour that
     still applies (the earlier suite, ported).
 13. `deployment()` is the `AppDeployment` (pods, runtimes, tags); saving and re-assembling it gives an equivalent app.
 14. A failed selection: `ctx.one(Missing).call.op(x)` resolves to the `not-found` Fail and `.on` does nothing.

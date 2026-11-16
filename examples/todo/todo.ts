@@ -5,14 +5,14 @@
  *   const todos = todoList(inMemory()); const t = await todos.add('milk'); await todos.update({ id: t.id, done: true })
  */
 import { Type, type Static } from 'typebox'
-import { defineSchema, iface, implementation, op, provide, provider } from '@pritzlaff/nano-core'
+import { Schema, Interface, Implementation, Op, provide, Provider } from '@pritzlaff/nano-core'
 import { KeyValueStore } from './kv.ts'
 import { handlers, plain, type Matches } from './plain.ts'
 
 // Each schema once; its TypeScript type is derived from it, under the same name.
-export const Todo = defineSchema('Todo', Type.Object({ id: Type.String(), title: Type.String(), done: Type.Boolean() }))
+export const Todo = Schema.define('Todo', Type.Object({ id: Type.String(), title: Type.String(), done: Type.Boolean() }))
 export type Todo = Static<typeof Todo.schema>
-export const Change = defineSchema('Change', Type.Object({ id: Type.String(), title: Type.Optional(Type.String()), done: Type.Optional(Type.Boolean()) }))
+export const Change = Schema.define('Change', Type.Object({ id: Type.String(), title: Type.Optional(Type.String()), done: Type.Optional(Type.Boolean()) }))
 export type Change = Static<typeof Change.schema>
 
 export interface TodoList {
@@ -24,11 +24,11 @@ export interface TodoList {
   remove(id: string): Promise<boolean>
 }
 
-export const TodoList = iface('example.todo.TodoList', {
-  add: op.action('add', defineSchema('Title', Type.String()), Todo),
-  list: op.action('list', defineSchema('Nothing', Type.Null()), defineSchema('Todos', Type.Array(Todo.schema))),
-  update: op.action('update', Change, defineSchema('MaybeTodo', Type.Union([Todo.schema, Type.Null()]))),
-  remove: op.action('remove', defineSchema('Id', Type.String()), defineSchema('Removed', Type.Boolean())),
+export const TodoList = Interface.define('example.todo.TodoList', {
+  add: Op.action('add', Schema.define('Title', Type.String()), Todo),
+  list: Op.action('list', Schema.define('Nothing', Type.Null()), Schema.define('Todos', Type.Array(Todo.schema))),
+  update: Op.action('update', Change, Schema.define('MaybeTodo', Type.Union([Todo.schema, Type.Null()]))),
+  remove: Op.action('remove', Schema.define('Id', Type.String()), Schema.define('Removed', Type.Boolean())),
 })
 
 const at = (id: string) => ['todos', id]
@@ -52,13 +52,13 @@ export function todoList(store: KeyValueStore, newId: () => string = () => crypt
   }
 }
 
-const kvTodos = implementation('example.todo/kv', {
+const kvTodos = Implementation.define('example.todo/kv', {
   provides: [TodoList],
   dependencies: { store: KeyValueStore },
   description: 'Todos kept in whichever KeyValueStore its call edge reaches.',
   make: ctx => [provide(TodoList, handlers(TodoList, todoList(plain<KeyValueStore>(() => ctx.one(KeyValueStore).call))))],
 })
 
-export default provider('example.todo', [kvTodos])
+export default Provider.define('example.todo', [kvTodos])
 
 true satisfies Matches<TodoList, typeof TodoList>

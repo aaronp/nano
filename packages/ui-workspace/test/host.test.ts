@@ -6,7 +6,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: page })
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { plugin } from 'bun'
 import { Type } from 'typebox'
-import { defineSchema, iface, implementation, op, Pod, provide, provider, type AppDeployment } from '@pritzlaff/nano-core'
+import { Schema, Interface, Implementation, Op, Pod, provide, Provider, type AppDeployment } from '@pritzlaff/nano-core'
 import type { Host } from '../src/host.ts'
 // After happy-dom is registered (static imports would run first): elements define themselves on import.
 await import('../src/boot-theme.ts')   // as main.ts does first
@@ -110,12 +110,12 @@ test('given an import whose provider 404s, then a toast names it and the deploym
 
 test('given HostUI.approve called from a pod, then a dialog opens and choosing Approve resolves true', async () => {
   const { host } = await mount()
-  const Ask = iface('test.Ask', { ask: op.action('ask', defineSchema('None', Type.Null()), Any) })
-  const asker = implementation('test.ask/asker', {
+  const Ask = Interface.define('test.Ask', { ask: Op.action('ask', Schema.define('None', Type.Null()), Any) })
+  const asker = Implementation.define('test.ask/asker', {
     provides: [Ask], dependencies: { ui: HostUI },
     make: ctx => [provide(Ask, { ask: async () => ctx.one(HostUI).call.approve({ title: 'Send it?' }) })],
   })
-  expect(host.registry.add(provider('test.ask', [asker]))).toMatchObject({ ok: true })
+  expect(host.registry.add(Provider.define('test.ask', [asker]))).toMatchObject({ ok: true })
   const d = host.data()
   expect(await host.apply({ ...d, pods: { ...d.pods, asker: Pod.lazy(asker) },
     runtimes: { main: { pods: ['ui', 'asker'], subscriptions: [{ kind: 'call', from: 'asker', to: 'ui' }] } } })).toMatchObject({ ok: true })

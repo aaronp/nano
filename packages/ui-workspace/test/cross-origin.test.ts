@@ -5,8 +5,18 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: 'http://h
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import {
-  Application, assemble, createRegistry, defineSchema, failure, iface, implementation, op, provide, provider, success,
-  type AppDeployment, type Implementation, type Pod,
+  Application,
+  AppDeployment,
+  Registry,
+  Schema,
+  failure,
+  Interface,
+  Implementation,
+  Op,
+  provide,
+  Provider,
+  success,
+  type Pod,
 } from '@pritzlaff/nano-core'
 import { importApp, isolated, foreignOrigin, remembered, type Foreign, type Loaded } from '../src/import.ts'
 import { described, probe } from '../src/described.ts'
@@ -14,10 +24,10 @@ import { serve } from '../src/sandbox/serve.ts'
 import { confirmImports } from '../src/import-confirm.ts'
 import { describeProvider } from '../src/sandbox/protocol.ts'
 
-const Text = defineSchema('Text', Type.String())
-const X = iface('other.X', { x: op.action('x', Text, Text) })
-const real = implementation('other.fx/x', { provides: [X], make: () => [provide(X, { x: async s => success(`real ${s}`) })] })
-const realProvider = provider('other.fx', [real])
+const Text = Schema.define('Text', Type.String())
+const X = Interface.define('other.X', { x: Op.action('x', Text, Text) })
+const real = Implementation.define('other.fx/x', { provides: [X], make: () => [provide(X, { x: async s => success(`real ${s}`) })] })
+const realProvider = Provider.define('other.fx', [real])
 
 const app: AppDeployment = {
   pods: {
@@ -36,7 +46,7 @@ const domFetch = globalThis.fetch
 beforeAll(() => { globalThis.fetch = (async (u: string) => ({ ok: true, status: 200, json: async () => structuredClone(docs[u]) })) as never })
 afterAll(() => { globalThis.fetch = domFetch })
 
-const empty = (): Loaded => ({ deployment: { pods: {}, runtimes: {} }, registry: createRegistry(), views: {} })
+const empty = (): Loaded => ({ deployment: { pods: {}, runtimes: {} }, registry: Registry.create(), views: {} })
 function fakes(o: { confirm?: boolean; approve?: boolean; remember?: boolean } = {}) {
   const seen = { load: [] as string[], probe: [] as string[], confirm: [] as Foreign[][], approve: [] as string[] }
   const deps = {
@@ -91,7 +101,7 @@ async function running(o: { approve: boolean; remember?: boolean }) {
   const { seen, deps } = fakes(o)
   const r = await importApp('https://other.test/app/nano.json', empty(), deps)
   if (!r.ok) throw new Error(r.fail.reason)
-  const runtimes = assemble(r.value.deployment, r.value.registry)
+  const runtimes = AppDeployment.assemble(r.value.deployment, r.value.registry)
   if (!runtimes.ok) throw new Error(runtimes.fail.reason)
   const standIn: Implementation = { ...real, make: real.make }
   const isolate = (_: string, pod: Pod) => isolated(standIn, pod.isolation, foreignOrigin(r.value.deployment.providers!['other.fx']), deps.approve)

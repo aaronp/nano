@@ -5,7 +5,18 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: 'http://l
 import { afterEach, expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import {
-  Application, Pod, assemble, createRegistry, defineSchema, iface, implementation, op, provide, provider, success, type AppEvent,
+  Application,
+  Pod,
+  AppDeployment,
+  Registry,
+  Schema,
+  Interface,
+  Implementation,
+  Op,
+  provide,
+  Provider,
+  success,
+  type AppEvent,
 } from '@pritzlaff/nano-core'
 import type { ViewTarget } from '@pritzlaff/nano-ui'
 import { edgesFor } from '../src/sandbox/edges.ts'
@@ -13,11 +24,11 @@ import { openFrame, srcdoc } from '../src/sandbox/frames.ts'
 import { serve } from '../src/sandbox/serve.ts'
 import { standIn } from '../src/sandbox/stand-in.ts'
 
-const Text = defineSchema('Text', Type.String())
-const Echo = iface('t.Echo', { echo: op.action('echo', Text, Text) })
-const sImpl = implementation('acme/s', { provides: [Echo], make: () => [provide(Echo, { echo: async x => success(x) })] })
-const registry = createRegistry()
-registry.add(provider('acme', [sImpl]))
+const Text = Schema.define('Text', Type.String())
+const Echo = Interface.define('t.Echo', { echo: Op.action('echo', Text, Text) })
+const sImpl = Implementation.define('acme/s', { provides: [Echo], make: () => [provide(Echo, { echo: async x => success(x) })] })
+const registry = Registry.create()
+registry.add(Provider.define('acme', [sImpl]))
 
 const layer = () => document.getElementById('nano-sandbox-layer')
 const iframes = () => layer()?.querySelectorAll('iframe').length ?? 0
@@ -32,7 +43,7 @@ globalThis.MessageChannel = class extends Real {
 afterEach(() => { layer()?.remove(); rendered = [] })
 
 async function app() {
-  const rts = assemble({ pods: { s: Pod.lazy(sImpl, { isolation: 'isolated-sandbox' }) }, runtimes: { r: { pods: ['s'], subscriptions: [] } } }, registry)
+  const rts = AppDeployment.assemble({ pods: { s: Pod.lazy(sImpl, { isolation: 'isolated-sandbox' }) }, runtimes: { r: { pods: ['s'], subscriptions: [] } } }, registry)
   if (!rts.ok) throw new Error(rts.fail.reason)
   let a: Application | undefined
   const made = await Application.create(rts.value, { isolate: (_, pod) => standIn(registry.implementation(pod.implementation)!, {

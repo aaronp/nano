@@ -2,7 +2,7 @@
  * Implementations: code that provides whole interfaces. Its factory `make(ctx, config)` runs once per build and returns
  * the handlers by port; state is whatever the factory closes over, and handlers take only their input.
  *
- *   const memDb = implementation('acme/mem/db', {
+ *   const memDb = Implementation.define('acme/mem/db', {
  *     provides: [DB],
  *     make: (ctx, config) => { const m = new Map(); return [provide(DB, { get: async key => success(m.get(key)) })] },
  *   })
@@ -49,7 +49,7 @@ type Spec = {
   make(ctx: NanoContext, config: any): Provided[] | Promise<Provided[]>
 }
 
-export function implementation(coord: string, spec: Spec): Implementation {
+function define(coord: string, spec: Spec): Implementation {
   const slash = coord.lastIndexOf('/')
   if (!COORD.test(coord) || slash < 0) throw new Error(`bad implementation coordinate ${coord}`)
   return {
@@ -77,3 +77,6 @@ export function implementation(coord: string, spec: Spec): Implementation {
     },
   }
 }
+
+/** `Implementation.define(coord, spec)`. */
+export const Implementation = { define }

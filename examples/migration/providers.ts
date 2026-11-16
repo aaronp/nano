@@ -4,19 +4,19 @@
  *
  *   Pod.lazy(migrate, { config: { from: 'v2', to: 'v3' } })   // placed in both, wired to each db
  */
-import { implementation, provide, provider, sel, success } from '@pritzlaff/nano-core'
+import { Implementation, provide, Provider, Selector, success } from '@pritzlaff/nano-core'
 import { DB, Migrate } from './interfaces.ts'
 
-export const db = implementation('example.migration/db', { provides: [DB], make: (_ctx, seed: string[] = []) => {
+export const db = Implementation.define('example.migration/db', { provides: [DB], make: (_ctx, seed: string[] = []) => {
   const rows = [...seed]
   return [provide(DB, { all: async () => success([...rows]), insert: async more => { rows.push(...more); return success(null) } })]
 } })
 /** Copies every row from `config.from` to `config.to`: the runtimes are named by config, chosen by the selector. */
-export const migrate = implementation('example.migration/migrate', {
+export const migrate = Implementation.define('example.migration/migrate', {
   provides: [Migrate],
   dependencies: { db: DB },
   make: (ctx, config: { from: string; to: string }) => [provide(Migrate, { run: async () => {
-    const from = ctx.one(sel(DB, { runtime: config.from })), to = ctx.one(sel(DB, { runtime: config.to }))
+    const from = ctx.one(Selector.of(DB, { runtime: config.from })), to = ctx.one(Selector.of(DB, { runtime: config.to }))
     if (!to.ok) return { ok: false, fail: to.fail! }
     const rows = await from.call.all({})
     if (!rows.ok) return rows
@@ -25,7 +25,7 @@ export const migrate = implementation('example.migration/migrate', {
   } })],
 })
 /** The same, but asks for `one(DB)` without saying which runtime. */
-export const careless = implementation('example.migration/careless', {
+export const careless = Implementation.define('example.migration/careless', {
   provides: [Migrate],
   dependencies: { db: DB },
   make: ctx => [provide(Migrate, { run: async () => {
@@ -34,4 +34,4 @@ export const careless = implementation('example.migration/careless', {
   } })],
 })
 
-export const migrationProvider = provider('example.migration', [db, migrate, careless])
+export const migrationProvider = Provider.define('example.migration', [db, migrate, careless])

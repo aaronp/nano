@@ -54,7 +54,7 @@ interface KeyValueStore {
   Two implementations use it:
   - `example.kv/indexeddb`: config `{ database: string }`, required.
   - `example.kv/memory`: no config.
-- `provider.ts` (no DOM) default-exports `provider('example.kv', [indexeddb, memory])` and exports `views`, which
+- `provider.ts` (no DOM) default-exports `Provider.define('example.kv', [indexeddb, memory])` and exports `views`, which
   maps both implementations to `kv-table`, so headless tests can import it. `index.ts` is the bundle entry: it
   re-exports both and defines the element. The host takes default views from `views`, so `nano.json` needs no
   `views` entry.

@@ -7,7 +7,16 @@
  *   await probe(url, () => openFrame('isolated-sandbox'))   // the module at `url` described from inside a frame
  */
 import {
-  defineSchema, failure, iface, implementation, op, provider, success, type NanoResult, type Op, type Provider, type SchemaDef, type SelectorData,
+  Schema,
+  failure,
+  Interface,
+  Implementation,
+  Op,
+  Provider,
+  success,
+  type NanoResult,
+  type SchemaDef,
+  type SelectorData,
 } from '@pritzlaff/nano-core'
 import type { ViewMap } from '@pritzlaff/nano-ui'
 import { checkMsg, type Described, type SchemaJson } from './sandbox/protocol.ts'
@@ -17,7 +26,7 @@ export type Probed = { provider: Provider; views: ViewMap }
 
 const TAG = /^[a-z][a-z0-9._]*-[a-z0-9._-]*$/
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
-const schema = (s: SchemaJson) => defineSchema(s.type, s.schema as never) as SchemaDef
+const schema = (s: SchemaJson) => Schema.define(s.type, s.schema as never) as SchemaDef
 /** Only the selector fields, so an extra key (a `byCoord`) cannot pass for an interface. */
 const selector = ({ implements: i, tags, implementation: m, provider: p, runtime: r }: SelectorData): SelectorData =>
   ({ ...(i !== undefined && { implements: i }), ...(tags && { tags }), ...(m !== undefined && { implementation: m }),
@@ -26,10 +35,10 @@ const selector = ({ implements: i, tags, implementation: m, provider: p, runtime
 /** `d` as a Provider, and the view tags of its own implementations. Never throws. */
 export function described(d: Described): NanoResult<Probed> {
   try {
-    const impls = d.implementations.map(i => implementation(i.coord, {
-      provides: i.provides.map(f => iface(f.coord, Object.fromEntries(f.ops.map(o => {
+    const impls = d.implementations.map(i => Implementation.define(i.coord, {
+      provides: i.provides.map(f => Interface.define(f.coord, Object.fromEntries(f.ops.map(o => {
         const opts = o.description !== undefined ? { description: o.description } : undefined
-        const made: Op = o.kind === 'event' ? op.event(o.name, schema(o.output!), opts) : op.action(o.name, schema(o.input!), schema(o.output!), opts)
+        const made: Op = o.kind === 'event' ? Op.event(o.name, schema(o.output!), opts) : Op.action(o.name, schema(o.input!), schema(o.output!), opts)
         return [o.name, made]
       })))),
       dependencies: Object.fromEntries(Object.entries(i.dependencies).map(([role, s]) => [role, selector(s)])),
@@ -38,7 +47,7 @@ export function described(d: Described): NanoResult<Probed> {
     }))
     // Only its own implementations' views, and only custom element names (an invalid one would throw where it is made).
     const own = new Set(impls.map(i => i.coord)), ok = ([c, tag]: [string, string]) => own.has(c) && TAG.test(tag)
-    return success({ provider: provider(d.coord, impls, { ...d.meta }), views: Object.fromEntries(Object.entries(d.views).filter(ok)) })
+    return success({ provider: Provider.define(d.coord, impls, { ...d.meta }), views: Object.fromEntries(Object.entries(d.views).filter(ok)) })
   } catch (e) {
     return failure('invalid-input', `${d.coord}: a bad description: ${message(e)}`)
   }

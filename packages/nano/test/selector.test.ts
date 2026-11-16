@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { defineSchema } from '../src/schema.ts'
-import { op } from '../src/op.ts'
-import { iface } from '../src/iface.ts'
+import { Schema } from '../src/schema.ts'
+import { Op } from '../src/op.ts'
+import { Interface } from '../src/iface.ts'
 import { matches, selectorData, type Target } from '../src/selector.ts'
 
-const Str = defineSchema('Str', Type.String())
-const db = iface('acme/db', { get: op.action('get', Str, Str) })
+const Str = Schema.define('Str', Type.String())
+const db = Interface.define('acme/db', { get: Op.action('get', Str, Str) })
 const target: Target = {
   name: 'db', runtime: 'v3', implementation: 'acme/mem/db', provider: 'acme/mem',
   provides: new Set(['acme/db']), tags: new Set(['primary', 'fast']),

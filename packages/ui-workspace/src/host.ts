@@ -7,7 +7,7 @@
  *   await host.importUrl('/examples/slice/nano.json')   // importApp, then apply
  *   host.saved()                                         // { ...app.deployment(), providers, views, layout }, without ui
  */
-import { Application, assemble, createRegistry, Pod, success, type AppDeployment, type NanoResult, type Pod as PodData, type Registry } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, Registry, Pod, success, type NanoResult, type Pod as PodData } from '@pritzlaff/nano-core'
 import uiProvider, { views as uiViews, type ViewMap } from '@pritzlaff/nano-ui'
 import { toast } from '@pritzlaff/nano-elements'
 import { foreignOrigin, importApp, isolated, remembered, type Loaded } from './import.ts'
@@ -74,10 +74,10 @@ const shown = <T>(r: NanoResult<T>): NanoResult<T> => {
 
 export async function start(): Promise<NanoResult<Host>> {
   // nano.ui is bundle/nano-ui.js under the page: through the import map, the module this file imports.
-  const registry = createRegistry()
+  const registry = Registry.create()
   for (const p of [uiProvider, hostProvider]) { const added = registry.add(p); if (!added.ok) return added }
   const first = placed({ pods: {}, runtimes: {}, providers: { 'nano.ui': nanoUi }, views: {} })
-  const runtimes = assemble(first, registry)
+  const runtimes = AppDeployment.assemble(first, registry)
   if (!runtimes.ok) return runtimes
   let loaded: Loaded = { deployment: first, registry, views: { ...uiViews } }
   // A non-host pod runs in a frame, from its provider's URL as kept in `providers`; its open frame is in `frames`.

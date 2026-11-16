@@ -53,7 +53,7 @@ so it is the user's call.
   the description as data. That is the old `probe`. Everything received is untrusted: shapes are checked, and the
   old regex guard against `pattern`/`format` schemas is kept.
 - **Protocol (both ways):** `call`/`result` (the host calls a handler); `publish` (the frame's `ctx.publish`);
-  `outcall`/`outresult` (the frame's `ctx.one(sel).call.op(x)`, made by the stand-in through the pod's real
+  `outcall`/`outresult` (the frame's `ctx.one(selector).call.op(x)`, made by the stand-in through the pod's real
   context, so it uses the pod's own call edges); `close` (the host closes the instance, and the frame runs its close
   listeners); `ready`/`failed`.
   - **Calling out is new.** The old sandbox couldn't, so a sandboxed pod with dependencies was refused.

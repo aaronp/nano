@@ -6,14 +6,14 @@
  *   { pods: { vault: Pod.lazy(vault), signer: Pod.lazy(signer) },
  *     runtimes: { signer: { pods: ['vault', 'signer'], subscriptions: [{ kind: 'call', from: 'signer', to: 'vault' }] } } }
  */
-import { implementation, provide, provider, success } from '@pritzlaff/nano-core'
+import { Implementation, provide, Provider, success } from '@pritzlaff/nano-core'
 import { KeyFormatter, KeyGenerator, Log, Signer, Tester, Vault } from './interfaces.ts'
 
 const toBase64 = (b: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(b)))
 const fromBase64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0))
 
 /** Makes and keeps Ed25519 keys in memory; private keys never leave it. A purpose other than the key's is `denied`. */
-const vault = implementation('example.signer/vault', {
+const vault = Implementation.define('example.signer/vault', {
   provides: [Vault],
   make: ctx => {
     const keys = new Map<string, { purpose: string; key: CryptoKey }>()
@@ -40,7 +40,7 @@ const vault = implementation('example.signer/vault', {
 })
 
 /** What others are given to make keys: it asks the vault, which keeps the private halves. */
-const generator = implementation('example.signer/generator', {
+const generator = Implementation.define('example.signer/generator', {
   provides: [KeyGenerator],
   dependencies: { vault: Vault },
   make: ctx => [provide(KeyGenerator, {
@@ -49,7 +49,7 @@ const generator = implementation('example.signer/generator', {
 })
 
 /** The signer others are given: it asks the vault, which never leaves the `signer` runtime. */
-const signer = implementation('example.signer/signer', {
+const signer = Implementation.define('example.signer/signer', {
   provides: [Signer],
   dependencies: { vault: Vault },
   make: ctx => [provide(Signer, {
@@ -57,7 +57,7 @@ const signer = implementation('example.signer/signer', {
   })],
 })
 
-const tester = implementation('example.signer/tester', {
+const tester = Implementation.define('example.signer/tester', {
   provides: [Tester],
   dependencies: { signer: Signer, generator: KeyGenerator },
   make: ctx => [provide(Tester, {
@@ -73,7 +73,7 @@ const tester = implementation('example.signer/tester', {
   })],
 })
 
-const log = implementation('example.signer/log', {
+const log = Implementation.define('example.signer/log', {
   provides: [Log],
   make: ctx => {
     const entries: string[] = []
@@ -87,7 +87,7 @@ const log = implementation('example.signer/log', {
   },
 })
 
-const map = implementation('example.signer/map', {
+const map = Implementation.define('example.signer/map', {
   provides: [KeyFormatter],
   make: ctx => [provide(KeyFormatter, {
     async format(keys) {
@@ -97,4 +97,4 @@ const map = implementation('example.signer/map', {
   })],
 })
 
-export const signerProvider = provider('example.signer', [vault, generator, signer, tester, log, map])
+export const signerProvider = Provider.define('example.signer', [vault, generator, signer, tester, log, map])

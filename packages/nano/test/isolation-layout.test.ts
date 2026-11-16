@@ -2,14 +2,25 @@
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import {
-  Application, Pod, Pods, assemble, createRegistry, defineSchema, iface, implementation, op, provide, provider, success,
-  type AppDeployment, type AppEvent,
+  Application,
+  Pod,
+  Pods,
+  AppDeployment,
+  Registry,
+  Schema,
+  Interface,
+  Implementation,
+  Op,
+  provide,
+  Provider,
+  success,
+  type AppEvent,
 } from '../src/index.ts'
 
-const Nothing = defineSchema('Nothing', Type.Null())
-const Counter = iface('acme.Counter', { inc: op.action('inc', Nothing, Nothing) })
-const counter = implementation('acme/counter', { provides: [Counter], make: () => [provide(Counter, { inc: async () => success(null) })] })
-const registry = () => { const r = createRegistry(); r.add(provider('acme', [counter])); return r }
+const Nothing = Schema.define('Nothing', Type.Null())
+const Counter = Interface.define('acme.Counter', { inc: Op.action('inc', Nothing, Nothing) })
+const counter = Implementation.define('acme/counter', { provides: [Counter], make: () => [provide(Counter, { inc: async () => success(null) })] })
+const registry = () => { const r = Registry.create(); r.add(Provider.define('acme', [counter])); return r }
 const runtimes = { r: { pods: ['a'], subscriptions: [] } }
 
 describe('Pod.isolation', () => {
@@ -29,13 +40,13 @@ describe('Pod.isolation', () => {
 describe('AppDeployment.layout', () => {
   const d = (layout: unknown) => ({ pods: { a: Pod.lazy(counter) }, runtimes, layout })
   test('given a plain object, then assemble is ok; a string or an array is invalid-input', () => {
-    expect(assemble(d({ dock: { root: null } }), registry()).ok).toBe(true)
-    expect(assemble(d('x'), registry())).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
-    expect(assemble(d([1]), registry())).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(AppDeployment.assemble(d({ dock: { root: null } }), registry()).ok).toBe(true)
+    expect(AppDeployment.assemble(d('x'), registry())).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(AppDeployment.assemble(d([1]), registry())).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   })
   test('given a layout and an isolation, then deployment() drops the layout and keeps the isolation; changing it is reported by apply', async () => {
     const dep: AppDeployment = { pods: { a: Pod.lazy(counter, { isolation: 'sandbox' }) }, runtimes, layout: { x: 1 } }
-    const rts = assemble(dep, registry())
+    const rts = AppDeployment.assemble(dep, registry())
     if (!rts.ok) throw new Error(rts.fail.reason)
     const app = await Application.create(rts.value)
     if (!app.ok) throw new Error(app.fail.reason)

@@ -8,7 +8,7 @@
  *               (store also in `persistence`, messaging also in `messaging`)
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, assemble, createRegistry, Pod, port, success, type AppEvent, type Application as App, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, Registry, Pod, port, success, type AppEvent, type Application as App, type NanoResult } from '@pritzlaff/nano-core'
 import { Inbox, Messaging } from './interfaces.ts'
 import { messengerProvider } from './providers.ts'
 
@@ -49,14 +49,14 @@ const stored = async (app: App) => {
 }
 
 function registry() {
-  const r = createRegistry()
+  const r = Registry.create()
   r.add(messengerProvider)
   return r
 }
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
 /** `d` assembled with a fresh registry and made live. */
-const open = async (d: unknown) => must(await Application.create(must(assemble(d, registry())), {}))
+const open = async (d: unknown) => must(await Application.create(must(AppDeployment.assemble(d, registry())), {}))
 const openAlone = () => open(ALONE)
 /** Opened alone, then plugged in: the store and messaging are added and wired by one `apply`. */
 async function stitched() {

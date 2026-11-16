@@ -56,7 +56,7 @@ A **port** is an op as offered by an interface and is written readably, `<interf
 ### Implementation and its factory
 
 ```ts
-const counter = implementation('acme/counter', {
+const counter = Implementation.define('acme/counter', {
   provides: [Counter],
   dependencies: { store: KeyValueStore },          // data: for display and checking wiring
   config: CounterConfig,                           // optional schema; a pod's config must fit it
@@ -246,7 +246,7 @@ A handler never throws across this boundary: a throw, a timeout, bad input or ba
 7. Sharing: `send` placed in `messaging`, `chat` and `support`, wired to `db` only in `messaging`. A send from `chat`
    reaches `db`; its database call is recorded in `messaging`; `app.call('chat', 'db')` is `not-found`.
 8. ETL: `etl` reads through `foo` and writes through `bar`, each call recorded in its own runtime.
-9. Migration: with a `db` wired in `v2` and in `v3`, `one(DB)` is `ambiguous`; `one(sel(DB, { runtime }))` picks one.
+9. Migration: with a `db` wired in `v2` and in `v3`, `one(DB)` is `ambiguous`; `one(Selector.of(DB, { runtime }))` picks one.
 10. `publish` delivers once per event subscription, in every runtime the publisher is in.
 11. A denying policy: the call fails `denied` and the stream shows `sent` then `denied`.
 12. `apply`: an added subscription is usable at once; a removed pod's calls are `not-found`; a pod whose config changed

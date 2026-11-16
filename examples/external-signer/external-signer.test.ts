@@ -10,8 +10,21 @@
 import { describe, expect, test } from 'bun:test'
 import { Type, type Static } from 'typebox'
 import {
-  Application, assemble, createRegistry, defineSchema, iface, implementation, op, Pod, port, provide, provider, success,
-  type AppEvent, type Application as App, type AppDeployment, type NanoResult,
+  Application,
+  AppDeployment,
+  Registry,
+  Schema,
+  Interface,
+  Implementation,
+  Op,
+  Pod,
+  port,
+  provide,
+  Provider,
+  success,
+  type AppEvent,
+  type Application as App,
+  type NanoResult,
 } from '@pritzlaff/nano-core'
 import { KeyFormatter, Log, TestRequest, TestResult, Vault } from './interfaces.ts'
 import { signerProvider } from './providers.ts'
@@ -51,15 +64,15 @@ const runTest = (app: App, input: Static<typeof TestRequest.schema>) =>
 /** An action that takes anything: subscribe an event to it to see what is published. */
 function probe() {
   const seen: unknown[] = []
-  const Probe = iface('example.probe.Probe', { see: op.action('see', defineSchema('Anything', Type.Unknown()), defineSchema('Done', Type.Null())) })
-  const impl = implementation('example.probe/probe', { provides: [Probe], make: () => [provide(Probe, { see: async v => { seen.push(v); return success(null) } })] })
-  return { impl, provider: provider('example.probe', [impl]), seen, port: port(Probe, Probe.ops.see) }
+  const Probe = Interface.define('example.probe.Probe', { see: Op.action('see', Schema.define('Anything', Type.Unknown()), Schema.define('Done', Type.Null())) })
+  const impl = Implementation.define('example.probe/probe', { provides: [Probe], make: () => [provide(Probe, { see: async v => { seen.push(v); return success(null) } })] })
+  return { impl, provider: Provider.define('example.probe', [impl]), seen, port: port(Probe, Probe.ops.see) }
 }
 
-const registry = () => { const r = createRegistry(); r.add(signerProvider); return r }
+const registry = () => { const r = Registry.create(); r.add(signerProvider); return r }
 
 /** `d` assembled with `r` and made live. */
-const open = async (d: unknown, r = registry()) => must(await Application.create(must(assemble(d, r)), {}))
+const open = async (d: unknown, r = registry()) => must(await Application.create(must(AppDeployment.assemble(d, r)), {}))
 const build = (r = registry()) => open(SIGNER, r)
 
 /** Applies a probe in `signer-client` subscribed to the log's `entries`; `seen` holds every list it publishes. */

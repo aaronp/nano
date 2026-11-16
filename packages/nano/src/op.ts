@@ -1,8 +1,8 @@
 /**
  * Ops: an action (input → output) or an event (data out, its `output`); the coordinate hashes its name and schemas.
  *
- *   const get = op.action('get', Key, Value)   // get.coord: same name + schemas, same coord
- *   fits(op.event('tick', Num), op.action('record', Num, Nothing))   // true
+ *   const get = Op.action('get', Key, Value)   // get.coord: same name + schemas, same coord
+ *   fits(Op.event('tick', Num), Op.action('record', Num, Nothing))   // true
  */
 import type { TSchema } from 'typebox'
 import { canonical, hashOf, canonicalSchema, type SchemaDef } from './schema.ts'
@@ -25,7 +25,7 @@ function make<K extends OpKind>(name: string, kind: K, input: SchemaDef | undefi
   return { name, kind, ...(input && { input }), output, coord, ...(o?.description !== undefined && { description: o.description }) }
 }
 
-export const op = {
+export const Op = {
   action: <I extends TSchema, O extends TSchema>(name: string, input: SchemaDef<I>, output: SchemaDef<O>, o?: Opts): Op<I, O, 'action'> =>
     make(name, 'action', input, output, o),
   event: <O extends TSchema>(name: string, data: SchemaDef<O>, o?: Opts): Op<undefined, O, 'event'> => make(name, 'event', undefined, data, o),

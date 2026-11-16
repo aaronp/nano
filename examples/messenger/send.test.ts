@@ -6,16 +6,16 @@
  *   messaging:  send → db        chat:  send        support:  send
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, assemble, createRegistry, Pod, success, type AppEvent } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, Registry, Pod, success, type AppEvent } from '@pritzlaff/nano-core'
 import { messengerProvider, send } from './providers.ts'
 
 const sent = (events: AppEvent[], runtime: string) => events.flatMap(e => (e.type === 'sent' && e.runtime === runtime ? [`${e.from}->${e.to}`] : []))
 
 describe('send, shared', () => {
   test('given send wired to db in messaging and placed in chat and support, when chat sends, then chat records the send, messaging records the db call, and chat cannot reach db', async () => {
-    const registry = createRegistry()
+    const registry = Registry.create()
     registry.add(messengerProvider)
-    const runtimes = assemble({
+    const runtimes = AppDeployment.assemble({
       pods: { send: Pod.lazy(send), db: Pod.lazy(messengerProvider.implementations.get('example.messenger/memory-store')!) },
       runtimes: {
         messaging: { pods: ['send', 'db'], subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] },

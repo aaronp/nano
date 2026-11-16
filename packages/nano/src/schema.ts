@@ -1,7 +1,7 @@
 /**
  * Schema definitions: a TypeBox schema paired with its canonical hash and JSON codec.
  *
- *   const Rec = defineSchema('Record', Type.Object({ id: Type.String() }))
+ *   const Rec = Schema.define('Record', Type.Object({ id: Type.String() }))
  *   Rec.hash                       // 64-char blake3 hex of the canonical schema
  *   Rec.decode(Rec.encode(value))  // the value, or undefined if it doesn't fit
  */
@@ -67,7 +67,7 @@ function hasFunction(node: unknown, seen = new Set<unknown>()): boolean {
   return Reflect.ownKeys(node).some(k => hasFunction((node as Record<PropertyKey, unknown>)[k], seen))
 }
 
-export function defineSchema<S extends TSchema>(type: string, schema: S): SchemaDef<S> {
+function define<S extends TSchema>(type: string, schema: S): SchemaDef<S> {
   if (hasFunction(schema)) throw new Error(`${type}: schema is not JSON`)
   const check = (v: unknown): v is Static<S> => Value.Check(schema, v)
   return {
@@ -86,3 +86,6 @@ export function defineSchema<S extends TSchema>(type: string, schema: S): Schema
     },
   }
 }
+
+/** `Schema.define(name, typeboxSchema)`. */
+export const Schema = { define }

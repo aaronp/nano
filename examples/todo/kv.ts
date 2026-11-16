@@ -6,19 +6,19 @@
  *   await s.list({ prefix: ['todos'] })   // [{ key: ['todos', '1'], value: { title: 'milk' } }]
  */
 import { Type, type Static } from 'typebox'
-import { defineSchema, iface, implementation, op, provide, provider } from '@pritzlaff/nano-core'
+import { Schema, Interface, Implementation, Op, provide, Provider } from '@pritzlaff/nano-core'
 import { handlers, type Matches } from './plain.ts'
 
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json }
 
 // Each schema once; its TypeScript type is derived from it, under the same name.
-export const Path = defineSchema('Path', Type.Array(Type.String()))
+export const Path = Schema.define('Path', Type.Array(Type.String()))
 export type Path = Static<typeof Path.schema>
 /** Any value to nano's check; `Json` to TypeScript. */
-export const Value = defineSchema('Value', Type.Unsafe<Json>(Type.Unknown()))
-export const Entry = defineSchema('Entry', Type.Object({ key: Path.schema, value: Value.schema }))
+export const Value = Schema.define('Value', Type.Unsafe<Json>(Type.Unknown()))
+export const Entry = Schema.define('Entry', Type.Object({ key: Path.schema, value: Value.schema }))
 export type Entry = Static<typeof Entry.schema>
-const Done = defineSchema('Done', Type.Null())
+const Done = Schema.define('Done', Type.Null())
 
 export interface KeyValueStore {
   /** `null` when the key is missing. */
@@ -29,11 +29,11 @@ export interface KeyValueStore {
   list(q: { prefix: Path }): Promise<Entry[]>
 }
 
-export const KeyValueStore = iface('example.kv.KeyValueStore', {
-  get: op.action('get', Path, Value),
-  put: op.action('put', Entry, Done),
-  delete: op.action('delete', Path, Done),
-  list: op.action('list', defineSchema('Prefix', Type.Object({ prefix: Path.schema })), defineSchema('Entries', Type.Array(Entry.schema))),
+export const KeyValueStore = Interface.define('example.kv.KeyValueStore', {
+  get: Op.action('get', Path, Value),
+  put: Op.action('put', Entry, Done),
+  delete: Op.action('delete', Path, Done),
+  list: Op.action('list', Schema.define('Prefix', Type.Object({ prefix: Path.schema })), Schema.define('Entries', Type.Array(Entry.schema))),
 })
 
 /** Shorter paths first, then segment by segment. */
@@ -54,12 +54,12 @@ export function inMemory(): KeyValueStore {
   }
 }
 
-const memory = implementation('example.kv/memory', {
+const memory = Implementation.define('example.kv/memory', {
   provides: [KeyValueStore],
   description: 'Keeps entries in memory; a restart empties it.',
   make: () => [provide(KeyValueStore, handlers(KeyValueStore, inMemory()))],
 })
 
-export default provider('example.kv', [memory])
+export default Provider.define('example.kv', [memory])
 
 true satisfies Matches<KeyValueStore, typeof KeyValueStore>

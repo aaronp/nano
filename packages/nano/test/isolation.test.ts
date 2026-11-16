@@ -2,26 +2,35 @@
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import {
-  Application, Pod, assemble, createRegistry, defineSchema, iface, implementation, op, provide, provider, success,
-  type AppDeployment, type Implementation,
+  Application,
+  Pod,
+  AppDeployment,
+  Registry,
+  Schema,
+  Interface,
+  Implementation,
+  Op,
+  provide,
+  Provider,
+  success,
 } from '../src/index.ts'
 
-const Nothing = defineSchema('Nothing', Type.Null())
-const Who = defineSchema('Who', Type.String())
-const Counter = iface('acme.Counter', { inc: op.action('inc', Nothing, Who) })
-const counter = implementation('acme/counter', { provides: [Counter], make: () => [provide(Counter, { inc: async () => success('host') })] })
+const Nothing = Schema.define('Nothing', Type.Null())
+const Who = Schema.define('Who', Type.String())
+const Counter = Interface.define('acme.Counter', { inc: Op.action('inc', Nothing, Who) })
+const counter = Implementation.define('acme/counter', { provides: [Counter], make: () => [provide(Counter, { inc: async () => success('host') })] })
 let closedStandIn = 0
-const standIn = implementation('acme/counter', { provides: [Counter], make: ctx => {
+const standIn = Implementation.define('acme/counter', { provides: [Counter], make: ctx => {
   ctx.addOnCloseListener(() => { closedStandIn++ })
   return [provide(Counter, { inc: async () => success('stand-in') })]
 } })
-const other = implementation('acme/other', { provides: [Counter], make: () => [provide(Counter, { inc: async () => success('other') })] })
-const registry = createRegistry()
-registry.add(provider('acme', [counter]))
+const other = Implementation.define('acme/other', { provides: [Counter], make: () => [provide(Counter, { inc: async () => success('other') })] })
+const registry = Registry.create()
+registry.add(Provider.define('acme', [counter]))
 
 const dep = (c: AppDeployment['pods'][string]): AppDeployment => ({ pods: { c, h: Pod.lazy(counter) }, runtimes: { r: { pods: ['c', 'h'], subscriptions: [] } } })
 async function app(d: AppDeployment, isolate?: (name: string, pod: Pod) => Implementation) {
-  const rts = assemble(d, registry)
+  const rts = AppDeployment.assemble(d, registry)
   if (!rts.ok) throw new Error(rts.fail.reason)
   const a = await Application.create(rts.value, isolate ? { isolate } : {})
   if (!a.ok) throw new Error(a.fail.reason)

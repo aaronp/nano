@@ -7,64 +7,80 @@
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import {
-  Application, Pod, Pods, Runtime, assemble, createRegistry, defineSchema, failure, iface, implementation, op, provide, provider, sel, success,
-  type AppDeployment, type AppEvent, type NanoResult, type Selection,
+  Application,
+  Pod,
+  Pods,
+  Runtime,
+  AppDeployment,
+  Registry,
+  Schema,
+  failure,
+  Interface,
+  Implementation,
+  Op,
+  provide,
+  Provider,
+  Selector,
+  success,
+  type AppEvent,
+  type NanoResult,
+  type Selection,
 } from '../src/index.ts'
 
-const Str = defineSchema('Str', Type.String())
-const Num = defineSchema('Num', Type.Integer())
-const Nothing = defineSchema('Nothing', Type.Null())
-const Counter = iface('acme.Counter', { inc: op.action('inc', Nothing, Num) })
-const Store = iface('acme.Store', { save: op.action('save', Str, Str), saved: op.event('saved', Str) })
-const Log = iface('acme.Log', { record: op.action('record', Str, Nothing) })
-const App = iface('acme.App', { save: op.action('save', Str, Str) })
+const Str = Schema.define('Str', Type.String())
+const Num = Schema.define('Num', Type.Integer())
+const Nothing = Schema.define('Nothing', Type.Null())
+const Counter = Interface.define('acme.Counter', { inc: Op.action('inc', Nothing, Num) })
+const Store = Interface.define('acme.Store', { save: Op.action('save', Str, Str), saved: Op.event('saved', Str) })
+const Log = Interface.define('acme.Log', { record: Op.action('record', Str, Nothing) })
+const App = Interface.define('acme.App', { save: Op.action('save', Str, Str) })
 
 let n = 0
-const counter = implementation('acme/counter', { provides: [Counter], make: () => { let c = 0; n++; return [provide(Counter, { inc: async () => success(++c) })] } })
+const counter = Implementation.define('acme/counter', { provides: [Counter], make: () => { let c = 0; n++; return [provide(Counter, { inc: async () => success(++c) })] } })
 /** A store whose name is its config; `save('bad')` fails; every save publishes `saved`. */
-const store = implementation('acme/store', { provides: [Store], make: (ctx, name: string) => [provide(Store, { save: async s => {
+const store = Implementation.define('acme/store', { provides: [Store], make: (ctx, name: string) => [provide(Store, { save: async s => {
   if (s === 'bad') return failure('invalid-input', 'bad')
   await ctx.publish(Store.ops.saved, `${name}:${s}`)
   return success(`${name}:${s}`)
 } })] })
 let logged: string[] = []
-const logger = implementation('acme/log', { provides: [Log], make: () => [provide(Log, { record: async s => { logged.push(s); return success(null) } })] })
+const logger = Implementation.define('acme/log', { provides: [Log], make: () => [provide(Log, { record: async s => { logged.push(s); return success(null) } })] })
 let slowOpen: (v?: unknown) => void = () => {}
-const slowLogger = implementation('acme/slowlog', { provides: [Log], make: () => [provide(Log, { record: async s => { await new Promise(r => { slowOpen = r }); logged.push(s); return success(null) } })] })
+const slowLogger = Implementation.define('acme/slowlog', { provides: [Log], make: () => [provide(Log, { record: async s => { await new Promise(r => { slowOpen = r }); logged.push(s); return success(null) } })] })
 /** Domain-level app: its code saves through whichever Store its call edge points at. */
-const appImpl = implementation('acme/app', { provides: [App], dependencies: { store: Store }, make: ctx => [provide(App, {
+const appImpl = Implementation.define('acme/app', { provides: [App], dependencies: { store: Store }, make: ctx => [provide(App, {
   save: async s => ctx.one(Store).call.save(s),     // fluent: a failed selection's call resolves to its Fail
 })] })
 /** Subscribes in code to its store's `saved` events. */
 let heard: string[] = []
-const watcher = implementation('acme/watcher', { provides: [Log], dependencies: { store: Store }, make: ctx => {
+const watcher = Implementation.define('acme/watcher', { provides: [Log], dependencies: { store: Store }, make: ctx => {
   ctx.one(Store).on(Store.ops.saved, d => { heard.push(d as string) })
   return [provide(Log, { record: async () => success(null) })]
 } })
 
-const Check = iface('acme.Check', { check: op.action('check', Str, Str) })
+const Check = Interface.define('acme.Check', { check: Op.action('check', Str, Str) })
 let checks = 0
 /** Passes its input on, failing from the third call: the loop ends there. */
-const checker = implementation('acme/check', { provides: [Check], make: () => [provide(Check, { check: async s => (++checks >= 3 ? failure('invalid-input', 'enough') : success(s)) })] })
+const checker = Implementation.define('acme/check', { provides: [Check], make: () => [provide(Check, { check: async s => (++checks >= 3 ? failure('invalid-input', 'enough') : success(s)) })] })
 /** Its code asks for a store it isn't wired to. */
-const lonely = implementation('acme/lonely', { provides: [App], dependencies: { store: Store }, make: ctx => {
+const lonely = Implementation.define('acme/lonely', { provides: [App], dependencies: { store: Store }, make: ctx => {
   ctx.one(Store).on(Store.ops.saved, () => { heard.push('never') })
   return [provide(App, { save: async s => ctx.one(Store).call.save(s) })]
 } })
 
 /** Counts the stores wired to it that are tagged primary. */
-const primaries = implementation('acme/primaries', { provides: [Counter], dependencies: { store: Store }, make: ctx => [provide(Counter, {
-  inc: async () => success(ctx.all(sel(Store, { tags: ['primary'] })).length),
+const primaries = Implementation.define('acme/primaries', { provides: [Counter], dependencies: { store: Store }, make: ctx => [provide(Counter, {
+  inc: async () => success(ctx.all(Selector.of(Store, { tags: ['primary'] })).length),
 })] })
 
-const registry = () => { const r = createRegistry(); r.add(provider('acme', [counter, store, logger, slowLogger, appImpl, watcher, checker, lonely, primaries])); return r }
+const registry = () => { const r = Registry.create(); r.add(Provider.define('acme', [counter, store, logger, slowLogger, appImpl, watcher, checker, lonely, primaries])); return r }
 const ok = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 type Sent = Extract<AppEvent, { type: 'sent' }>
 const isSent = (e: AppEvent): e is Sent => e.type === 'sent'
 /** `d` assembled and made live, with everything on its stream. */
 const create = async (d: unknown, reg = registry()) => {
   logged = []; heard = []
-  const app = ok(await Application.create(ok(assemble(d, reg)), {}))
+  const app = ok(await Application.create(ok(AppDeployment.assemble(d, reg)), {}))
   const events: AppEvent[] = []
   app.listen(e => events.push(e))
   return { app, events }
@@ -109,7 +125,7 @@ describe('assembling', () => {
     const pods = ok(Pods.create({ a: Pod.lazy(counter), b: Pod.lazy(counter) }, { registry: registry(), tags: { a: ['x'], b: ['y'] } }))
     const app = ok(await Application.create({ r: ok(Runtime.create('r', { pods: ['a'], subscriptions: [] }, pods)) }, {}))
     expect(app.deployment().tags).toEqual({ a: ['x'] })
-    expect(assemble(app.deployment(), registry()).ok).toBe(true)
+    expect(AppDeployment.assemble(app.deployment(), registry()).ok).toBe(true)
   })
   test('given tags that are not by pod name, or name a pod not in the deployment, when Pods.create runs, then it is invalid-input', () => {
     for (const tags of [{ a: 'x' }, { 'a/b': ['x'] }, { zz: ['x'] }, { constructor: ['x'] }])
@@ -271,11 +287,11 @@ describe('subscriptions in code', () => {
   })
   test('given a watcher subscribed in code, when the function on returned is called, then it stops hearing', async () => {
     let off = () => {}
-    const quitter = implementation('acme2/quitter', { provides: [Log], make: ctx => {
+    const quitter = Implementation.define('acme2/quitter', { provides: [Log], make: ctx => {
       off = ctx.one(Store).on(Store.ops.saved, d => { heard.push(d as string) })
       return [provide(Log, { record: async () => success(null) })]
     } })
-    const reg = registry(); reg.add(provider('acme2', [quitter]))
+    const reg = registry(); reg.add(Provider.define('acme2', [quitter]))
     const { app } = await create({ pods: { w: Pod.eager(quitter), db: Pod.lazy(store, { config: 'db' }) },
       runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }, reg)
     await app.call('r', 'db').save('x'); await tick()
@@ -305,8 +321,8 @@ describe('subscriptions in code', () => {
   })
   test('given a selection kept past the removal of its edge, when on is called and the edge is then restored, then it hears nothing', async () => {
     let kept: Selection<typeof Store> | undefined
-    const keeper = implementation('acme2/keeper', { provides: [Log], make: ctx => { kept = ctx.one(Store); return [provide(Log, { record: async () => success(null) })] } })
-    const reg = registry(); reg.add(provider('acme2', [keeper]))
+    const keeper = Implementation.define('acme2/keeper', { provides: [Log], make: ctx => { kept = ctx.one(Store); return [provide(Log, { record: async () => success(null) })] } })
+    const reg = registry(); reg.add(Provider.define('acme2', [keeper]))
     const d: AppDeployment = { pods: { w: Pod.eager(keeper), db: Pod.lazy(store, { config: 'db' }) },
       runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }
     const { app, events } = await create(d, reg)
@@ -319,11 +335,11 @@ describe('subscriptions in code', () => {
     expect(sent(events, 'on')).toEqual([])
   })
   test('given a watcher whose on callback throws, when the store saves, then it is a failure on the stream and the caller still gets its result', async () => {
-    const thrower = implementation('acme2/thrower', { provides: [Log], make: ctx => {
+    const thrower = Implementation.define('acme2/thrower', { provides: [Log], make: ctx => {
       ctx.one(Store).on(Store.ops.save, () => { throw new Error('boom') })
       return [provide(Log, { record: async () => success(null) })]
     } })
-    const reg = registry(); reg.add(provider('acme2', [thrower]))
+    const reg = registry(); reg.add(Provider.define('acme2', [thrower]))
     const { app, events } = await create({ pods: { w: Pod.eager(thrower), db: Pod.lazy(store, { config: 'db' }) },
       runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }, reg)
     expect(await app.call('r', 'db').save('x')).toEqual(success('db:x'))
@@ -332,11 +348,11 @@ describe('subscriptions in code', () => {
     expect(events).toContainEqual(expect.objectContaining({ type: 'failure', pod: 'w' }))
   })
   test("given a store publishing data that breaks its event's schema, when it saves, then it is a failure on the stream and no pipe or on delivers it", async () => {
-    const liar = implementation('acme2/liar', { provides: [Store], make: ctx => [provide(Store, { save: async s => {
+    const liar = Implementation.define('acme2/liar', { provides: [Store], make: ctx => [provide(Store, { save: async s => {
       await ctx.publish(Store.ops.saved, 42)
       return success(s)
     } })] })
-    const reg = registry(); reg.add(provider('acme2', [liar]))
+    const reg = registry(); reg.add(Provider.define('acme2', [liar]))
     const { app, events } = await create({ pods: { w: Pod.eager(watcher), db: Pod.lazy(liar), log: Pod.lazy(logger) },
       runtimes: { r: { pods: ['w', 'db', 'log'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' },
         { kind: 'pipe', from: 'db', source: 'acme.Store/saved', to: 'log', target: 'acme.Log/record' }] } } }, reg)
@@ -358,8 +374,8 @@ describe('selections and chains', () => {
   })
   test('given a pod wired to two stores, when its code selects one, then it is ambiguous, and all gives both in deployment order', async () => {
     let one: Selection<typeof Store> | undefined, all: Selection<typeof Store>[] = []
-    const picker = implementation('acme2/picker', { provides: [Log], make: ctx => { one = ctx.one(Store); all = ctx.all(Store); return [provide(Log, { record: async () => success(null) })] } })
-    const reg = registry(); reg.add(provider('acme2', [picker]))
+    const picker = Implementation.define('acme2/picker', { provides: [Log], make: ctx => { one = ctx.one(Store); all = ctx.all(Store); return [provide(Log, { record: async () => success(null) })] } })
+    const reg = registry(); reg.add(Provider.define('acme2', [picker]))
     await create({ pods: { p: Pod.eager(picker), a: Pod.lazy(store, { config: 'a' }), b: Pod.lazy(store, { config: 'b' }) },
       runtimes: { r: { pods: ['p', 'a', 'b'], subscriptions: [{ kind: 'call', from: 'p', to: 'b' }, { kind: 'call', from: 'p', to: 'a' }] } } }, reg)
     expect(one).toMatchObject({ ok: false, fail: { type: 'ambiguous' } })
@@ -378,11 +394,11 @@ describe('selections and chains', () => {
     expect(saved.every(e => e.correlation === saved[0]!.id && !('cause' in e))).toBe(true)
   })
   test("given an on subscription to an action's results, when the host calls it, then the on delivery is caused by that call, in its chain", async () => {
-    const results = implementation('acme2/results', { provides: [Log], make: ctx => {
+    const results = Implementation.define('acme2/results', { provides: [Log], make: ctx => {
       ctx.one(Store).on(Store.ops.save, d => { heard.push(d as string) })
       return [provide(Log, { record: async () => success(null) })]
     } })
-    const reg = registry(); reg.add(provider('acme2', [results]))
+    const reg = registry(); reg.add(Provider.define('acme2', [results]))
     const { app, events } = await create({ pods: { w: Pod.eager(results), db: Pod.lazy(store, { config: 'db' }) },
       runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }, reg)
     await app.call('r', 'db').save('x')
@@ -392,11 +408,11 @@ describe('selections and chains', () => {
     expect(on).toMatchObject({ from: 'db', to: 'w', port: 'acme.Store/save', correlation: call.id, cause: call.id })
   })
   test('given on with an op the selected pod lacks, when it subscribes, then there is one warning and fn is never called', async () => {
-    const wrong = implementation('acme2/wrong', { provides: [Log], make: ctx => {
+    const wrong = Implementation.define('acme2/wrong', { provides: [Log], make: ctx => {
       ctx.one(Store).on(Log.ops.record, () => { heard.push('never') })
       return [provide(Log, { record: async () => success(null) })]
     } })
-    const reg = registry(); reg.add(provider('acme2', [wrong]))
+    const reg = registry(); reg.add(Provider.define('acme2', [wrong]))
     const { app, events } = await create({ pods: { w: Pod.lazy(wrong), db: Pod.lazy(store, { config: 'db' }) },
       runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }, reg)
     expect(await app.call('r', 'w').record('a')).toEqual(success(null))   // builds w, which subscribes
@@ -407,8 +423,8 @@ describe('selections and chains', () => {
   })
   test('given a selection kept past its build, when on is called after that build closed, then it is a no-op', async () => {
     let kept: Selection<typeof Store> | undefined
-    const keeper = implementation('acme2/keeper', { provides: [Log], make: ctx => { kept ??= ctx.one(Store); return [provide(Log, { record: async () => success(null) })] } })
-    const reg = registry(); reg.add(provider('acme2', [keeper]))
+    const keeper = Implementation.define('acme2/keeper', { provides: [Log], make: ctx => { kept ??= ctx.one(Store); return [provide(Log, { record: async () => success(null) })] } })
+    const reg = registry(); reg.add(Provider.define('acme2', [keeper]))
     const { app, events } = await create({ pods: { w: Pod.eager(keeper), db: Pod.lazy(store, { config: 'db' }) },
       runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }, reg)
     await app.restart('w')
@@ -467,24 +483,24 @@ describe('the application deployment', () => {
 
 describe('nothing throws', () => {
   test('given a host call whose input has a throwing getter, when it is sent, then it resolves to a Fail', async () => {
-    const Rec = defineSchema('Rec', Type.Object({ x: Type.String() }))
-    const Take = iface('acme.Take', { take: op.action('take', Rec, Nothing) })
-    const taker = implementation('acme2/taker', { provides: [Take], make: () => [provide(Take, { take: async () => success(null) })] })
-    const reg = registry(); reg.add(provider('acme2', [taker]))
+    const Rec = Schema.define('Rec', Type.Object({ x: Type.String() }))
+    const Take = Interface.define('acme.Take', { take: Op.action('take', Rec, Nothing) })
+    const taker = Implementation.define('acme2/taker', { provides: [Take], make: () => [provide(Take, { take: async () => success(null) })] })
+    const reg = registry(); reg.add(Provider.define('acme2', [taker]))
     const { app } = await create({ pods: { t: Pod.lazy(taker) }, runtimes: { r: { pods: ['t'], subscriptions: [] } } }, reg)
     const input = { get x(): string { throw new Error('getter') } }
     expect(await app.call('r', 't').take(input)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   })
   test('given undefined for an op or a selector (a typo in plain JS), when a pod uses it, then on and publish warn, one fails and all is empty', async () => {
     const seen: unknown[] = []
-    const sloppy = implementation('acme2/sloppy', { provides: [Log], make: async ctx => {
+    const sloppy = Implementation.define('acme2/sloppy', { provides: [Log], make: async ctx => {
       const none = undefined as never
       ctx.one(Store).on(none, () => { heard.push('never') })
       await ctx.publish(none, 1)
       seen.push(ctx.one(none), ctx.all(none))
       return [provide(Log, { record: async () => success(null) })]
     } })
-    const reg = registry(); reg.add(provider('acme2', [sloppy]))
+    const reg = registry(); reg.add(Provider.define('acme2', [sloppy]))
     const { app, events } = await create({ pods: { w: Pod.lazy(sloppy), db: Pod.lazy(store, { config: 'db' }) },
       runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }, reg)
     expect(await app.call('r', 'w').record('a')).toEqual(success(null))
@@ -501,7 +517,7 @@ describe('policed emissions', () => {
       runtimes: { r: { pods: ['w', 'db', 'log'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' },
         { kind: 'pipe', from: 'db', source: 'acme.Store/save', to: 'log', target: 'acme.Log/record' }] } } }
     const policies = { r: { isAllowed: (from: string, to: string) => from === 'db' && to === refused ? { approved: false as const, reason: 'no' } : { approved: true as const } } }
-    const app = ok(await Application.create(ok(assemble(d, registry())), { policies }))
+    const app = ok(await Application.create(ok(AppDeployment.assemble(d, registry())), { policies }))
     const events: AppEvent[] = []
     app.listen(e => events.push(e))
     return { app, events }

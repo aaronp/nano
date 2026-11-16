@@ -5,12 +5,12 @@
  *   registry.add(messengerProvider)
  *   { pods: { inbox: Pod.lazy(inbox) }, runtimes: { messenger: { pods: ['inbox'], subscriptions: [] } } }   // works alone, on its fallback
  */
-import { implementation, provide, provider, success } from '@pritzlaff/nano-core'
+import { Implementation, provide, Provider, success } from '@pritzlaff/nano-core'
 import { Composer, Inbox, KeyValueStore, Messaging, Send } from './interfaces.ts'
 
 type Message = { id: string; text: string }
 
-const memoryStore = implementation('example.messenger/memory-store', {
+const memoryStore = Implementation.define('example.messenger/memory-store', {
   provides: [KeyValueStore],
   make: () => {
     const data = new Map<string, string>()
@@ -22,7 +22,7 @@ const memoryStore = implementation('example.messenger/memory-store', {
 })
 
 /** Whatever is posted is passed on to every subscriber of `messages`. */
-const messaging = implementation('example.messenger/messaging', {
+const messaging = Implementation.define('example.messenger/messaging', {
   provides: [Messaging],
   make: ctx => [provide(Messaging, {
     async post(message) {
@@ -33,7 +33,7 @@ const messaging = implementation('example.messenger/messaging', {
 })
 
 /** Messages go to the store when one is plugged in, else to a local map: the documented fallback. */
-const inbox = implementation('example.messenger/inbox', {
+const inbox = Implementation.define('example.messenger/inbox', {
   provides: [Inbox],
   dependencies: { store: KeyValueStore },
   make: ctx => {
@@ -55,7 +55,7 @@ const inbox = implementation('example.messenger/inbox', {
   },
 })
 
-const composer = implementation('example.messenger/composer', {
+const composer = Implementation.define('example.messenger/composer', {
   provides: [Composer],
   dependencies: { messaging: Messaging },
   make: ctx => [provide(Composer, {
@@ -69,7 +69,7 @@ const composer = implementation('example.messenger/composer', {
 })
 
 /** Stores each message under its contact. Never names a runtime: the wiring decides which store. */
-export const send = implementation('example.messenger/send', {
+export const send = Implementation.define('example.messenger/send', {
   provides: [Send],
   dependencies: { db: KeyValueStore },
   make: ctx => [provide(Send, { send: async ({ contact, message }) => {
@@ -77,4 +77,4 @@ export const send = implementation('example.messenger/send', {
   } })],
 })
 
-export const messengerProvider = provider('example.messenger', [memoryStore, messaging, inbox, composer, send])
+export const messengerProvider = Provider.define('example.messenger', [memoryStore, messaging, inbox, composer, send])

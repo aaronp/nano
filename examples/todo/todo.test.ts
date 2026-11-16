@@ -3,7 +3,7 @@
  * `store` only through the runtime. The store itself is plain TypeScript too, tested here without nano.
  */
 import { expect, test } from 'bun:test'
-import { Application, assemble, createRegistry, type AppDeployment, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, Registry, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
 import kv, { inMemory, KeyValueStore } from './kv.ts'
 import todo, { TodoList, type Todo } from './todo.ts'
 import { handlers, plain, type Matches } from './plain.ts'
@@ -11,11 +11,11 @@ import { handlers, plain, type Matches } from './plain.ts'
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
 async function open() {
-  const registry = createRegistry()
+  const registry = Registry.create()
   must(registry.add(kv))
   must(registry.add(todo))
   const deployment: AppDeployment = await Bun.file(new URL('./nano.json', import.meta.url)).json()
-  const app = must(await Application.create(must(assemble(deployment, registry)), {}))
+  const app = must(await Application.create(must(AppDeployment.assemble(deployment, registry)), {}))
   return { app, todos: plain<TodoList>(() => app.call('main', 'todos')) }
 }
 

@@ -2,7 +2,7 @@
  * Pod views over the nano.ui slice: chosen by selector, default or generic; reaching the pod only by call and listen.
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, assemble, createRegistry, Pod, port, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, Registry, Pod, port, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider, { Debounce, debounce, defineViews, input, Input, Log, log, map, MapIface, views, viewFor, type ViewTarget } from '../src/index.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
@@ -19,9 +19,9 @@ const slice: AppDeployment = {
   ] } },
 }
 const open = async () => {
-  const registry = createRegistry()
+  const registry = Registry.create()
   registry.add(uiProvider)
-  return { app: must(await Application.create(must(assemble(slice, registry)), {})), registry }
+  return { app: must(await Application.create(must(AppDeployment.assemble(slice, registry)), {})), registry }
 }
 const mount = async (tag: string, target: ViewTarget) => {
   const el = document.createElement(tag) as HTMLElement & { target: ViewTarget; updateComplete: Promise<unknown> }

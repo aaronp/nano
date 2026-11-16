@@ -3,7 +3,7 @@
  * `assemble` checks it level by level: `Pods.create` of its pods, then `Runtime.create` of each runtime over its scope.
  *
  *   const d = { pods: { db: Pod.lazy(kv) }, runtimes: { app: { pods: ['db'], subscriptions: [] } } }
- *   assemble(d, registry)   // success({ app: Runtime }), or the first failure naming the offender; never throws
+ *   AppDeployment.assemble(d, registry)   // success({ app: Runtime }), or the first failure naming the offender; never throws
  */
 import { Type } from 'typebox'
 import { Id, Pods, shapeError, type PodDeployment } from './pods.ts'
@@ -32,7 +32,7 @@ const Shape = Type.Object({
 }, strict)
 
 /** `d`'s runtimes, if every level of it checks out; the first failure otherwise. Pure; never throws. */
-export function assemble(d: unknown, registry: Registry): NanoResult<Record<string, Runtime>> {
+function assemble(d: unknown, registry: Registry): NanoResult<Record<string, Runtime>> {
   try {
     const copy = structuredClone(d)
     const why = shapeError(Shape, copy, 'deployment')
@@ -54,3 +54,6 @@ export function assemble(d: unknown, registry: Registry): NanoResult<Record<stri
     return failure('invalid-input', `unreadable deployment: ${e instanceof Error ? e.message : String(e)}`)
   }
 }
+
+/** A whole deployment checked level by level into its runtimes: `AppDeployment.assemble(d, registry)`. */
+export const AppDeployment = { assemble }

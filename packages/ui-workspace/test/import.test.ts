@@ -1,14 +1,14 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { createRegistry, type AppDeployment } from '@pritzlaff/nano-core'
+import { Registry, type AppDeployment } from '@pritzlaff/nano-core'
 import { importApp, merge, type Loaded } from '../src/import.ts'
 
 const fx = (name: string) => new URL(`./fixtures/import/${name}`, import.meta.url).href
 // Same-origin only (the page is not http, so the nano.json's origin is home): cross-origin is test/cross-origin.test.ts.
 const no = (what: string) => async () => { throw new Error(`${what} on a same-origin import`) }
 const deps = { load: (u: string) => import(u), probe: no('probe'), confirm: no('confirm'), approve: no('approve') }
-const empty = (): Loaded => ({ deployment: { pods: {}, runtimes: {} }, registry: createRegistry(), views: {} })
+const empty = (): Loaded => ({ deployment: { pods: {}, runtimes: {} }, registry: Registry.create(), views: {} })
 const dep = (over: Partial<AppDeployment>): AppDeployment => ({ pods: {}, runtimes: {}, ...over })
 
 // The happy-dom preload swaps `fetch` for one that refuses file: URLs, so these tests read fixtures with Bun.file.

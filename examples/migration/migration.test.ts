@@ -6,14 +6,14 @@
  *   v2:  migrate → db-v2 (rows a, b)      v3:  migrate → db-v3 (empty)
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, assemble, createRegistry, Pod, success, type AppEvent, type Implementation } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, Registry, Pod, success, type AppEvent, type Implementation } from '@pritzlaff/nano-core'
 import { careless, db, migrate, migrationProvider } from './providers.ts'
 
 /** v2 with rows a, b; v3 empty; `impl` placed in both as `migrate` and wired to each db. */
 async function setup(impl: Implementation, config?: unknown) {
-  const registry = createRegistry()
+  const registry = Registry.create()
   registry.add(migrationProvider)
-  const runtimes = assemble({
+  const runtimes = AppDeployment.assemble({
     pods: { migrate: Pod.lazy(impl, { config }), 'db-v2': Pod.lazy(db, { config: ['a', 'b'] }), 'db-v3': Pod.lazy(db) },
     runtimes: {
       v2: { pods: ['migrate', 'db-v2'], subscriptions: [{ kind: 'call', from: 'migrate', to: 'db-v2' }] },

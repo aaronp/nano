@@ -19,29 +19,35 @@ synchronous value except the `Application`, which alone runs effects (D70).
 | Runtime | `RuntimeDeployment` | `Runtime.create(id, d, pods)` | which pods are placed together and how they are wired; where messages are policed and recorded |
 | Application | `AppDeployment` | `Application.create(runtimes, opts)` | the live system: instances, mounting, routing, change, closing |
 
-`assemble(appDeployment, registry)` goes from the whole data to the `Runtime`s in one step. `Pods` and `Runtime` are
+`AppDeployment.assemble(appDeployment, registry)` goes from the whole data to the `Runtime`s in one step. `Pods` and `Runtime` are
 inert: assembling builds nothing and sends nothing; `Application.create` is the one step that makes it live (D90).
 
 ## Values and the live Application
+
+Every builder is `Noun.verb`, the value sharing its type's name: `define` for what you declare in source (`Schema.define`,
+`Op.action`/`Op.event`, `Interface.define`, `Implementation.define`, `Provider.define`, `Selector.of`), `create` for what
+is built at run time (`Registry.create`, `Pods.create`, `Runtime.create`, `Application.create`), plus
+`AppDeployment.assemble` and `Pod.lazy`/`Pod.eager`. Helpers (`success`, `failure`, `port`, `fits`, `matches`, `hashOf`) stay
+functions.
 
 Each has one responsibility and one file in `packages/nano/src`; each file opens with a comment and an example.
 
 | What | Responsibility | File |
 |---|---|---|
-| Schema | a TypeBox schema (`SchemaDef`, from `defineSchema`) with its blake3 `hashOf` (annotations stripped, `canonical`, `canonicalSchema`) and JSON codec; `isJson` refuses non-JSON schemas | `schema.ts` |
-| Op | an action (in, out) or an event (data out) (`Op`, `OpKind`, built with `op`); coord = hash of name + schema hashes; `fits` checks an event against an action | `op.ts` |
-| `Interface` | a coord (`ns/name`; the `COORD` rule) plus its ops (`iface`); `port(i, op)` = `<interface>/<op name>`; `Client` is a typed client for one (actions only) | `iface.ts` |
+| `Schema` | a TypeBox schema (`SchemaDef`, from `Schema.define`) with its blake3 `hashOf` (annotations stripped, `canonical`, `canonicalSchema`) and JSON codec; `isJson` refuses non-JSON schemas | `schema.ts` |
+| Op | an action (in, out) or an event (data out) (`Op`, `OpKind`, built with `Op.action` / `Op.event`); coord = hash of name + schema hashes; `fits` checks an event against an action | `op.ts` |
+| `Interface` | a coord (`ns/name`; the `COORD` rule) plus its ops (`Interface.define`); `port(i, op)` = `<interface>/<op name>`; `Client` is a typed client for one (actions only) | `iface.ts` |
 | Result | `NanoResult` = `success` or a platform `Fail` (`failure`, `FailType`); never thrown; `isNanoResult` | `result.ts` |
-| `Implementation` | code providing whole interfaces (`implementation`), with dependencies (selectors by role) and an optional config schema; its factory `make(ctx, config)` returns `Provided` (`provide(iface, handlers)`), each `Handler` taking only its input (`Handlers`) | `implementation.ts` |
-| `Provider` | a namespace of implementations (`provider`) plus metadata | `provider.ts` |
-| `Registry` | a pool of providers (`createRegistry`); O(1) lookups (`implementationsOf`); a plain-data `Manifest` | `registry.ts` |
-| `Selector` | which call subscriptions a call may use: an interface, or `SelectorData` narrowed by tags, implementation, provider, `runtime` (`sel`, `selectorData`, `matches` over a `Target`) | `selector.ts` |
+| `Implementation` | code providing whole interfaces (`Implementation.define`), with dependencies (selectors by role) and an optional config schema; its factory `make(ctx, config)` returns `Provided` (`provide(iface, handlers)`), each `Handler` taking only its input (`Handlers`) | `implementation.ts` |
+| `Provider` | a namespace of implementations (`Provider.define`) plus metadata | `provider.ts` |
+| `Registry` | a pool of providers (`Registry.create`); O(1) lookups (`implementationsOf`); a plain-data `Manifest` | `registry.ts` |
+| `Selector` | which call subscriptions a call may use: an interface, or `SelectorData` narrowed by tags, implementation, provider, `runtime` (`Selector.of`, `selectorData`, `matches` over a `Target`) | `selector.ts` |
 | Context | what a pod's factory gets (`NanoContext`): `self`, `runtimes`, `one`, `all` (each a `Selection`: `ok`, `fail`, `pod`, `runtime`, `call` through that edge, `on` to hear the pod), `publish`, `addOnCloseListener` (each build has its own; runs on `restarted`, `removed`, `changed` or `closed`) | `context.ts` |
 | `Pod` | a value `{ implementation, config?, eager, isolation? }` from `Pod.lazy(impl, { config, isolation })` / `Pod.eager(impl)` (`isolation`: `'host'` (absent) | `'sandbox'` | `'isolated-sandbox'`, host-owned, nano only shape-checks it); no state, methods or instance | `pod.ts` |
 | `Policy` | `isAllowed(src, dest, data)` per runtime, answering a `Verdict`; `Policies.allowAll()` | `policy.ts` |
 | `Pods` | which components exist: `Pods.create(podDeployment, { registry, tags? })` checks a `PodDeployment` (names, implementations, configs, at most 5000) and its tags by pod name into an immutable lookup, `names`, `get`, `select` (a scope over the same descriptions, keeping their tags), `deployment` | `pods.ts` |
 | `Runtime` | pods placed together and wired: `Runtime.create(id, runtimeDeployment, pods)` checks a `RuntimeDeployment` (pods placed, `Subscription`s, policy) over a `Pods` scope into an immutable `{ id, pods, deployment }` | `runtime.ts` |
-| `AppDeployment` | the whole system as data: pods, runtimes by id, tags, and the host's `providers`, `views` and the deployer's `layout` (a plain object; shape-checked, otherwise ignored, not in `deployment()`); `assemble(d, registry)` checks it level by level into its `Runtime`s, strictly (D83) | `deployment.ts` |
+| `AppDeployment` | the whole system as data: pods, runtimes by id, tags, and the host's `providers`, `views` and the deployer's `layout` (a plain object; shape-checked, otherwise ignored, not in `deployment()`); `AppDeployment.assemble(d, registry)` checks it level by level into its `Runtime`s, strictly (D83) | `deployment.ts` |
 | `Application` | the one live thing: `Application.create(runtimes, { policies?, timeoutMs?, isolate? })` (`isolate(name, pod)` gives the host's stand-in, same coord, for a pod whose isolation isn't `host`; without it such a pod fails `invalid-input`) (at most 50, ids by the id rule, every runtime's pods from one `Pods`) gives six members, `call`, `apply`, `restart`, `deployment`, `listen` (an `AppEvent` stream), `close` (every instance closed; then calls are `not-found`, `apply`/`restart` refused) | `application/` |
 
 Inside `application/` (not exported from the package, one line each): `stream()` is the one stream and its ids;
@@ -75,10 +81,10 @@ most 50). Inside `runtime.ts`: `isRuntime(r)` is whether `Runtime.create` made `
    its own part: `Pods.create` names, implementations (in the registry), configs, tags (by its pod names) and 5000
    pods; `Runtime.create` that every pod it places is in its `Pods` scope, every subscription's ends are placed in it,
    ports exist and fit, and 2000 subscriptions; `Application.create` 50 runtimes, their ids and one `Pods` (D75, D78).
-3. **Assemble.** `pods.select(names)` is a scope over the same descriptions; `assemble(d, registry)` does
+3. **Assemble.** `pods.select(names)` is a scope over the same descriptions; `AppDeployment.assemble(d, registry)` does
    `Pods.create`, then `Runtime.create` per runtime over `pods.select(def.pods)`, strictly: the first failure is the
    result (D83, D100).
-4. **Create.** `Application.create(runtimes, opts)` (from data: `assemble(d, registry).value`) validates (an invalid
+4. **Create.** `Application.create(runtimes, opts)` (from data: `AppDeployment.assemble(d, registry).value`) validates (an invalid
    input is a `Fail` and nothing runs), builds every eager pod, and resolves once those settle. A failed eager build
    is a `failure` on the stream, not a failed `create`.
 5. **Mount.** One instance per pod name, made by the factory when first needed, once: concurrent first calls share
@@ -112,7 +118,7 @@ most 50). Inside `runtime.ts`: `isRuntime(r)` is whether `Runtime.create` made `
     `closed`, `restarted`, `applied`, `sent`, `delivered`, `denied`, `failure`, `warning`. A throwing listener is
     swallowed (D79).
 11. **Save.** `app.deployment()` is the current value (the pods placed in some runtime, the runtimes, and the tags
-    `assemble` carried in); saving is its JSON, and `assemble` + `Application.create` on it gives an equivalent
+    `AppDeployment.assemble` carried in); saving is its JSON, and `AppDeployment.assemble` + `Application.create` on it gives an equivalent
     application (D74).
 
 ## FAQ
@@ -138,7 +144,7 @@ in `messaging` and placed in `chat` and `support`: a send from `chat` reaches `d
 **Cross-runtime calls and the `runtime` selector?** `ctx.one`/`ctx.all` search the pod's call subscriptions in every
 runtime it is in. ETL: `etl` is wired to `source` in `foo` and to `sink` in `bar`, reads and writes with no runtime
 named in code, each call recorded in its own runtime (`examples/etl`). Migration: with a `db` wired in `v2` and `v3`,
-`one(DB)` is `ambiguous`, and `sel(DB, { runtime: 'v2' })` picks one (`examples/migration`, D86).
+`one(DB)` is `ambiguous`, and `Selector.of(DB, { runtime: 'v2' })` picks one (`examples/migration`, D86).
 
 **What does saving write?** The `AppDeployment`: pods (implementation coordinate, config, eager), runtimes (pods placed,
 subscriptions in order, policy), tags. Not instances, not state, not custom policies (they come in `opts.policies`,

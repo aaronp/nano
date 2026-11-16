@@ -2,17 +2,17 @@
  * The Application: the one live thing. It is created from runtimes (values), builds eager pods at once and lazy ones
  * on first need, carries every message through the runtime it travels in, and reports all of it on one stream.
  *
- *   const app = (await Application.create(assemble(appDeployment, registry).value, {})).value
+ *   const app = (await Application.create(AppDeployment.assemble(appDeployment, registry).value, {})).value
  *   await app.call('app', 'counter').inc(null)   // from 'host', through runtime 'app'
  *   app.listen(e => …)                           // built, sent, delivered, denied, failure, …
  *   await app.close()                            // every instance closed, deliveries under way settled; later calls not-found
  */
 import { Value } from 'typebox/value'
-import { assemble, type AppDeployment } from '../deployment.ts'
+import { AppDeployment } from '../deployment.ts'
 import type { Implementation } from '../implementation.ts'
 import type { Pod } from '../pod.ts'
 import type { Policy } from '../policy.ts'
-import { createRegistry } from '../registry.ts'
+import { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
 import type { Runtime } from '../runtime.ts'
 import { diff } from './apply.ts'
@@ -44,7 +44,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
   const composed = compose(runtimes)
   if (!composed.ok) return composed
   // No runtimes, no Pods and so no registry: such an application can only apply deployments naming no implementation.
-  const registry = composed.value.registry ?? createRegistry()
+  const registry = composed.value.registry ?? Registry.create()
   let current = composed.value.deployment, queue: Promise<unknown> = Promise.resolve()
   /** Set when `close()` is called: from then on `apply` and `restart` are refused; work queued before still runs. */
   let closing: Promise<NanoResult<void>> | undefined
@@ -69,7 +69,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
 
   /** `d` assembled with the application's registry, then composed. */
   function adopt(d: AppDeployment): NanoResult<AppDeployment> {
-    const assembled = assemble(d, registry)
+    const assembled = AppDeployment.assemble(d, registry)
     if (!assembled.ok) return assembled
     const next = compose(assembled.value)
     return next.ok ? success(next.value.deployment) : next

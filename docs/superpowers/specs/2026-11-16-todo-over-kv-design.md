@@ -20,7 +20,7 @@ todo implementation reaches its store only through the runtime.
   interface `example.todo.TodoList`; `todoList(store)`, plain domain code over any `KeyValueStore`, each todo at
   `['todos', id]`; the provider `example.todo` with `example.todo/kv`, which depends on a `KeyValueStore`.
 - `plain.ts`: two small adapters, the best of the old runes idea carried forward:
-  - `handlers(iface, obj)`: a plain object's methods as nano handlers (a value is `success`, a throw is `threw`).
+  - `handlers(interface, obj)`: a plain object's methods as nano handlers (a value is `success`, a throw is `threw`).
   - `plain(() => client)`: a nano `Client` as a plain object (a `Fail` throws an `Error` carrying it). It resolves
     the client on every call, so a rewired call edge is followed.
   They stay in the example **(my call)**; whether they move into nano is the user's call.

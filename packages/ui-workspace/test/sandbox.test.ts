@@ -3,30 +3,41 @@
 import { afterEach, expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import {
-  Application, Pod, assemble, createRegistry, defineSchema, iface, implementation, op, provide, provider, success,
-  type AppDeployment, type AppEvent, type NanoContext,
+  Application,
+  Pod,
+  AppDeployment,
+  Registry,
+  Schema,
+  Interface,
+  Implementation,
+  Op,
+  provide,
+  Provider,
+  success,
+  type AppEvent,
+  type NanoContext,
 } from '@pritzlaff/nano-core'
 import { checkMsg, describeProvider } from '../src/sandbox/protocol.ts'
 import { edgesFor } from '../src/sandbox/edges.ts'
 import { serve } from '../src/sandbox/serve.ts'
 import { standIn, type Frame } from '../src/sandbox/stand-in.ts'
 
-const Text = defineSchema('Text', Type.String())
-const Num = defineSchema('Num', Type.Number())
-const Nothing = defineSchema('Nothing', Type.Null())
-const Echo = iface('t.Echo', { echo: op.action('echo', Text, Text) })
-const Ticks = iface('t.Ticks', { tick: op.event('tick', Num) })
-const H = iface('t.H', { record: op.action('record', Num, Nothing) })
+const Text = Schema.define('Text', Type.String())
+const Num = Schema.define('Num', Type.Number())
+const Nothing = Schema.define('Nothing', Type.Null())
+const Echo = Interface.define('t.Echo', { echo: Op.action('echo', Text, Text) })
+const Ticks = Interface.define('t.Ticks', { tick: Op.event('tick', Num) })
+const H = Interface.define('t.H', { record: Op.action('record', Num, Nothing) })
 
 let inFrame: NanoContext | undefined, frameClosed = 0, seen: number[] = []
-const sImpl = implementation('acme/s', { provides: [Echo, Ticks], dependencies: { h: H }, make: ctx => {
+const sImpl = Implementation.define('acme/s', { provides: [Echo, Ticks], dependencies: { h: H }, make: ctx => {
   inFrame = ctx
   ctx.addOnCloseListener(() => { frameClosed++ })
   return [provide(Echo, { echo: async x => success(x) }), provide(Ticks, {})]
 } })
-const hImpl = implementation('acme/h', { provides: [H], make: () => [provide(H, { record: async n => { seen.push(n); return success(null) } })] })
-const acme = provider('acme', [sImpl, hImpl])
-const registry = createRegistry()
+const hImpl = Implementation.define('acme/h', { provides: [H], make: () => [provide(H, { record: async n => { seen.push(n); return success(null) } })] })
+const acme = Provider.define('acme', [sImpl, hImpl])
+const registry = Registry.create()
 registry.add(acme)
 
 const dep = (wired = true): AppDeployment => ({
@@ -58,7 +69,7 @@ async function harness(o: { readyMs?: number; silent?: boolean } = {}) {
     warn: (r: string) => { toasts.push(r) },
     app: () => app,
   }
-  const rts = assemble(dep(), registry)
+  const rts = AppDeployment.assemble(dep(), registry)
   if (!rts.ok) throw new Error(rts.fail.reason)
   const made = await Application.create(rts.value, { isolate: (_, pod) => standIn(registry.implementation(pod.implementation)!, deps) })
   if (!made.ok) throw new Error(made.fail.reason)

@@ -2,14 +2,14 @@
  * The nano.ui slice, headless: input → debounce → map → log, through assemble and Application.create.
  */
 import { describe, expect, test } from 'bun:test'
-import { Application, assemble, createRegistry, Pod, port, success, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, Registry, Pod, port, success, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider, { Debounce, debounce, input, Input, Log, log, map, MapIface } from '../src/index.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const open = async (d: AppDeployment) => {
-  const r = createRegistry()
+  const r = Registry.create()
   r.add(uiProvider)
-  return must(await Application.create(must(assemble(d, r)), {}))
+  return must(await Application.create(must(AppDeployment.assemble(d, r)), {}))
 }
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 

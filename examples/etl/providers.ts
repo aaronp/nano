@@ -4,16 +4,16 @@
  *   registry.add(etlProvider)
  *   Pod.lazy(etl)   // reads from whichever source a runtime wires it to, writes to whichever sink
  */
-import { implementation, provide, provider, success } from '@pritzlaff/nano-core'
+import { Implementation, provide, Provider, success } from '@pritzlaff/nano-core'
 import { Pipeline, Sink, Source } from './interfaces.ts'
 
 /** The rows last written to any sink, for a test to read. */
 export const written = { rows: [] as string[] }
 
-export const source = implementation('example.etl/source', { provides: [Source], make: (_ctx, rows: string[] = []) => [provide(Source, { read: async () => success(rows) })] })
-export const sink = implementation('example.etl/sink', { provides: [Sink], make: () => [provide(Sink, { write: async rows => { written.rows = rows; return success(rows.length) } })] })
+export const source = Implementation.define('example.etl/source', { provides: [Source], make: (_ctx, rows: string[] = []) => [provide(Source, { read: async () => success(rows) })] })
+export const sink = Implementation.define('example.etl/sink', { provides: [Sink], make: () => [provide(Sink, { write: async rows => { written.rows = rows; return success(rows.length) } })] })
 /** Reads, transforms (upper-cases), writes. Never names a runtime. */
-export const etl = implementation('example.etl/etl', {
+export const etl = Implementation.define('example.etl/etl', {
   provides: [Pipeline],
   dependencies: { from: Source, to: Sink },
   make: ctx => [provide(Pipeline, { run: async () => {
@@ -24,4 +24,4 @@ export const etl = implementation('example.etl/etl', {
   } })],
 })
 
-export const etlProvider = provider('example.etl', [source, sink, etl])
+export const etlProvider = Provider.define('example.etl', [source, sink, etl])
