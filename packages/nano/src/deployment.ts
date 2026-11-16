@@ -43,7 +43,9 @@ function assemble(d: unknown, registry: Registry): NanoResult<Record<string, Run
     const out: Record<string, Runtime> = Object.create(null)
     for (const [id, r] of Object.entries(runtimes)) {
       // Over its distinct pod names only, so Runtime.create reports a bad shape or a pod placed twice in its own words.
-      const scope = pods.value.select(Array.isArray(r?.pods) ? [...new Set(r.pods.filter(n => typeof n === 'string'))] : [])
+      // ...and the callers of its call edges, which may be placed elsewhere.
+      const froms = Array.isArray(r?.subscriptions) ? r.subscriptions.flatMap(s => (s?.kind === 'call' && pods.value.names().includes(s.from) ? [s.from] : [])) : []
+      const scope = pods.value.select(Array.isArray(r?.pods) ? [...new Set([...r.pods.filter(n => typeof n === 'string'), ...froms])] : [])
       if (!scope.ok) return failure('invalid-input', `runtime ${id}: ${scope.fail.reason}`)
       const runtime = Runtime.create(id, r, scope.value)
       if (!runtime.ok) return runtime

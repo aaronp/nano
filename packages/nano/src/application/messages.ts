@@ -68,6 +68,8 @@ export async function attempt<T>(live: Live, pod: string, what: string, work: ()
 export const impl = (live: Live, pod: string) => live.registry.implementation(live.now().pods[pod]?.implementation ?? '')
 /** Every runtime `pod` is placed in, as [id, runtime deployment], in order. */
 export const placedIn = (live: Live, pod: string) => Object.entries(live.now().runtimes).filter(([, r]) => r.pods.includes(pod))
+/** Every runtime holding a call edge from `pod`, placed there or not, as [id, runtime deployment], in order. */
+export const wiredFrom = (live: Live, pod: string) => Object.entries(live.now().runtimes).filter(([, r]) => r.subscriptions.some(s => s.kind === 'call' && s.from === pod))
 const action = (i: Implementation | undefined, p: string) => { const o = i && opAt(i, p); return o?.kind === 'action' ? o : undefined }
 
 /** Why the policy of `ask.runtime` in `d` (the deployment now, or the one `apply` brings) refuses `ask`, or undefined. A throw, a Promise or no verdict refuses. */

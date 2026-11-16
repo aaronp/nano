@@ -1,6 +1,6 @@
 /**
  * The context a pod's factory gets, for pod `name`: it reads the deployment as it is at each call, over the call
- * subscriptions from `name` in every runtime the pod is placed in, each a `Selection`. `onClose` adds a listener to the
+ * subscriptions from `name` in every runtime that lists one (placed there or not), each a `Selection`. `onClose` adds a listener to the
  * build this context belongs to; the `on` subscriptions this build made are dropped through it.
  *
  *   const ctx = contextFor(live, 'send', fn => …)
@@ -18,7 +18,7 @@ import { client, emit } from './emit.ts'
 import { connect as connectOn } from './connection.ts'
 import { iterate } from './iterate.ts'
 import { thrown } from '../plain.ts'
-import { impl, placedIn, type Live, type On } from './messages.ts'
+import { impl, placedIn, wiredFrom, type Live, type On } from './messages.ts'
 
 /** The port of `o` on `pod`'s implementation, if it has `o`. */
 const portOf = (live: Live, pod: string, o: Op) => {
@@ -63,7 +63,7 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
   const selections = <I extends Interface>(s: I | SelectorData): Selection<I>[] => {
     const want = dataOf(s), d = live.now()
     if (!want) return []
-    return placedIn(live, name).flatMap(([runtime, r]) => r.subscriptions.flatMap(sub => {
+    return wiredFrom(live, name).flatMap(([runtime, r]) => r.subscriptions.flatMap(sub => {
       if (sub.kind !== 'call' || sub.from !== name) return []
       const i = impl(live, sub.to)!
       const target = { name: sub.to, runtime, implementation: i.coord, provider: i.provider,

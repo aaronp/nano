@@ -1,6 +1,6 @@
 /**
  * Runtime: which pods are placed together and how they are wired, checked over a `Pods` scope, as an immutable value.
- * A call edge says which pod a pod's code may reach; a pipe carries an event, or an action's results, of `from` into
+ * A call edge says which pod a pod's code may reach (`from` may be placed in another runtime; its calls travel here); a pipe carries an event, or an action's results, of `from` into
  * an action of `to`. Pipes may form cycles.
  *
  *   Runtime.create('chat', { pods: ['a', 'b'], subscriptions: [{ kind: 'call', from: 'a', to: 'b' }] }, scope)
@@ -65,7 +65,8 @@ function check(id: string, r: RuntimeDeployment, pods: Pods): string | undefined
     if (placed.size === placed.add(name).size) return `runtime ${id}: ${name} is placed twice`
   }
   for (const s of r.subscriptions) {
-    const end = [s.from, s.to].find(n => !placed.has(n))
+    if (!origin.pods.has(s.from)) return `runtime ${id}: ${label(s)}: no pod ${s.from}`
+    const end = (s.kind === 'call' ? [s.to] : [s.from, s.to]).find(n => !placed.has(n))   // a call may come from outside
     if (end !== undefined) return `runtime ${id}: ${label(s)}: ${end} is not placed here`
     const key = JSON.stringify(s.kind === 'call' ? [s.from, s.to] : [s.from, s.to, s.source, s.target])
     if (seen.has(key)) return `runtime ${id}: ${label(s)} is there twice`

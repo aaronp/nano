@@ -32,6 +32,8 @@ export function compose(runtimes: unknown, policies: Record<string, Policy> = {}
       for (const n of out[id].pods) if (origin.tags && Object.hasOwn(origin.tags, n)) tags[n] = structuredClone(origin.tags[n]!)
       for (const name of out[id].pods) placed.set(name, origin.pods.get(name)!)
     }
+    for (const [id, r] of Object.entries(out))
+      for (const s of r.subscriptions) if (!placed.has(s.from)) return failure('invalid-input', `runtime ${id}: ${s.from}->${s.to}: ${s.from} is placed in no runtime`)
     const pods: AppDeployment['pods'] = Object.create(null)
     for (const name of root?.names() ?? []) if (placed.has(name)) pods[name] = structuredClone(placed.get(name)!)
     const from = root && originOf(root)!
