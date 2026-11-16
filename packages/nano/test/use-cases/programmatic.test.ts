@@ -154,12 +154,17 @@ test('Interface.Type gives items(): AsyncIterable<Todo>', () => {
 test("a source method built from a listener is published as the pod's event (hot)", async () => {
   const app = must(await todoApp('acme/todos')), frontend = app.runtime('main')
   const todos = frontend.get(Todos)
-  await todos.add('a')
-  const seen: unknown[] = []
-  const loop = (async () => { for await (const t of todos.items()) { seen.push(t); break } })()
+  const items = todos.items()[Symbol.asyncIterator]()   // called, not yet iterated: connects at the first next()
+  await todos.add('a')                                  // before the first iteration: unseen
+  const first = items.next()
   await Bun.sleep(0)
-  await todos.add('b'); await loop
-  expect(seen).toEqual([{ title: 'b' }])
+  await todos.add('b')
+  expect(await first).toEqual({ done: false, value: { title: 'b' } })
+  const late = todos.items()[Symbol.asyncIterator](), next = late.next()   // a second consumer after b
+  await Bun.sleep(0)
+  await todos.add('c')
+  expect(await next).toEqual({ done: false, value: { title: 'c' } })
+  await items.return!(); await late.return!()
 })
 
 test("a throwing source traces failure; the pod's actions still work", async () => {
@@ -167,6 +172,6 @@ test("a throwing source traces failure; the pod's actions still work", async () 
   app.listen(e => events.push(e))
   await app.runtime('main').get(Todos).add('x')   // builds todos (lazy here), whose items() throws
   await Bun.sleep(0)
-  expect(events).toContainEqual({ type: 'failure', pod: 'todos', reason: 'acme/broken: items threw boom' })
-  await app.runtime('main').get(Todos).add('y')
+  expect(events).toContainEqual({ type: 'failure', pod: 'todos', reason: 'items threw boom' })
+  await expect(app.runtime('main').get(Todos).add('y')).resolves.toBeNull()
 })

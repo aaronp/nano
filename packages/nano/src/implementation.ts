@@ -19,6 +19,9 @@ import type { SchemaDef } from './schema.ts'
 import { handlers, plain } from './plain.ts'
 import { selectorData, type Selector, type SelectorData } from './selector.ts'
 
+/** Internal: where a context's plain sources report a throw (`contextFor` registers it; not on the public ctx). */
+export const sourceFailed = new WeakMap<object, (reason: string) => void>()
+
 export type Handler = (input: unknown) => Promise<NanoResult<unknown>>
 
 /** One handler per action, typed as the Client's call. Events have none: they are published. */
@@ -44,8 +47,8 @@ export type Implementation = {
   readonly dependencies: Readonly<Record<string, SelectorData>>
   readonly config?: SchemaDef
   readonly description?: string
-  /** `ctx` without `deps`: they are made here from `dependencies`. `failed` hears a plain source's throw. */
-  make(ctx: Omit<NanoContext, 'deps'>, config: unknown, failed?: (reason: string) => void): Promise<ReadonlyMap<string, Handler>>
+  /** `ctx` without `deps`: they are made here from `dependencies`. */
+  make(ctx: Omit<NanoContext, 'deps'>, config: unknown): Promise<ReadonlyMap<string, Handler>>
 }
 
 /** A plain object for `I`: its event (source) methods are optional, as an event may be published through `ctx`. */
@@ -75,13 +78,13 @@ function define<const P extends readonly Interface[], D extends Record<string, S
     dependencies: Object.fromEntries(Object.entries(spec.dependencies ?? {}).map(([role, s]) => [role, selectorData(s)])),
     ...(spec.config && { config: spec.config }),
     ...(spec.description !== undefined && { description: spec.description }),
-    async make(base, config, failed) {
+    async make(base, config) {
       const deps = Object.fromEntries(Object.keys(spec.dependencies ?? {}).map(role =>
         [role, plain(isInterface(spec.dependencies![role]), () => base.one(selectorData(spec.dependencies![role]!)))]))
       const ctx = Object.assign(Object.create(base), { deps }) as NanoContext<D>
       const made = await spec.make(ctx, config)
       if (!Array.isArray(made) && spec.provides.length !== 1) throw new Error(`${coord}: a plain object provides exactly one interface`)
-      if (!Array.isArray(made)) publishSources(base, spec.provides[0]!, made as object, reason => failed?.(`${coord}: ${reason}`))
+      if (!Array.isArray(made)) publishSources(base, spec.provides[0]!, made as object, reason => sourceFailed.get(base)?.(reason))
       const parts = Array.isArray(made) ? made : [provide(spec.provides[0]!, handlers(spec.provides[0]!, made as object))]
       const declared = new Set(spec.provides.map(i => i.coord))
       const given = new Set<string>()
@@ -108,6 +111,8 @@ function publishSources(ctx: Omit<NanoContext, 'deps'>, i: Interface, obj: objec
     const source = (obj as Record<string, unknown>)[o.name]
     if (o.kind !== 'event' || typeof source !== 'function') continue
     const it = (source.call(obj) as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+    // A close listener added after close runs at once. `return()` queues behind a pending `next()`; that ends because
+    // the build's `on` iterations end at close.
     ctx.addOnCloseListener(() => { void it.return?.() })
     void (async () => {
       try { for (let r = await it.next(); !r.done; r = await it.next()) await ctx.publish(o, r.value as never) }
