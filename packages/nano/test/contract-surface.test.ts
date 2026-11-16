@@ -36,7 +36,7 @@ const notes = Implementation.define('acme/notes', {
   dependencies: { store: KV },
   make: ({ deps, one }) => {
     const s = one(KV)
-    if (s.ok) s.value.on(KV.ops.changed, k => { heard.push(k satisfies string) })
+    if (s.ok) s.value.on(KV.ops.changed, ({ output: k }) => { heard.push(k satisfies string) })
     let n = 0
     return { async note(text) { await deps.store.put({ k: String(++n), v: text }); return deps.store.size() } } satisfies Notes
   },
@@ -186,12 +186,13 @@ test('a deps role narrowed by Selector.of keeps its interface type', () => {
   void (() => deps.store.size() satisfies Promise<number>)
 })
 
-test('app.subscribe hears each successful call of an action as { input, output }, asked of the policy; an unexported one is not heard', async () => {
+test('app.subscribe hears each successful call of an action as { input, output }, asked of the policy; an unexported one throws not-exported', async () => {
   const d = deployment('acme/mem')
   const deny = { isAllowed: (from: string, _to: string, data: unknown) => from === 'host' && data === 'subscribe' ? { approved: false, reason: 'no' } : { approved: true } }
   for (const [policies, exports, want] of [[{}, undefined, 1], [{ main: deny }, undefined, 0], [{}, ['acme.Notes'], 0]] as const) {
     const app = must(await Application.create(must(AppDeployment.assemble({ ...d, runtimes: { main: { ...d.runtimes.main!, ...(exports && { exports: [...exports] }) } } }, registry)), { policies: policies as never }))
     const heard: unknown[] = []
+    if (exports) { expect(thrownBy(() => app.subscribe(KV.ops.put, () => {}))?.fail.type).toBe('not-exported'); continue }
     app.subscribe(KV.ops.put, call => { heard.push(call) })
     await app.get(Notes).note('milk')
     await Bun.sleep(0)

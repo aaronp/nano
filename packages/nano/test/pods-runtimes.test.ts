@@ -55,7 +55,7 @@ const appImpl = Implementation.define('acme/app', { provides: [App], dependencie
 let heard: string[] = []
 const watcher = Implementation.define('acme/watcher', { provides: [Log], dependencies: { store: Store }, make: ctx => {
   const st = ctx.one(Store)
-  if (st.ok) st.value.on(Store.ops.saved, d => { heard.push(d) })
+  if (st.ok) st.value.on(Store.ops.saved, ({ output }) => { heard.push(output) })
   return [provide(Log, { record: async () => success(null) })]
 } })
 
@@ -290,7 +290,7 @@ describe('subscriptions in code', () => {
   test('given a watcher subscribed in code, when the function on returned is called, then it stops hearing', async () => {
     let off = () => {}
     const quitter = Implementation.define('acme2/quitter', { provides: [Log], make: ctx => {
-      off = ok(ctx.one(Store)).on(Store.ops.saved, d => { heard.push(d) })
+      off = ok(ctx.one(Store)).on(Store.ops.saved, ({ output }) => { heard.push(output) })
       return [provide(Log, { record: async () => success(null) })]
     } })
     const reg = registry(); reg.add(Provider.define('acme2', [quitter]))
@@ -396,7 +396,7 @@ describe('selections and chains', () => {
   })
   test("given an on subscription to an action's results, when the host calls it, then the on delivery is caused by that call, in its chain", async () => {
     const results = Implementation.define('acme2/results', { provides: [Log], make: ctx => {
-      ok(ctx.one(Store)).on(Store.ops.save, d => { heard.push(d) })
+      ok(ctx.one(Store)).on(Store.ops.save, ({ output }) => { heard.push(output) })
       return [provide(Log, { record: async () => success(null) })]
     } })
     const reg = registry(); reg.add(Provider.define('acme2', [results]))

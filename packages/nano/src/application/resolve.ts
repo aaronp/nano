@@ -7,12 +7,12 @@
  *   const todos = r.getOrThrow()                          // the plain object, or an Error carrying r.fail
  */
 import type { Static, TSchema } from 'typebox'
-import type { Interface } from '../iface.ts'
+import { port, type Interface } from '../iface.ts'
 import type { Op } from '../op.ts'
 import { plain } from '../plain.ts'
 import { failure, success, type Fail, type NanoResult } from '../result.ts'
 import { client } from './emit.ts'
-import { impl, type Hear, type Live } from './messages.ts'
+import { impl, refusal, type Live, type On } from './messages.ts'
 
 type Reason = 'not-found' | 'not-exported' | 'not-unique'
 export type Resolution<T> =
@@ -81,10 +81,18 @@ export function entry(live: Live, id?: string): Entry {
     })
     return { ok: true, ...now.value, value, getOrThrow: () => value }
   }
+  /** The host's `On` to the one pod providing `op` in this runtime; asked 'subscribe' once, now. */
   const subscribe: Entry['subscribe'] = (op, fn) => {
-    const r = at()
+    const r = at(), runtime = r.ok ? r.value : ''
     if (!r.ok) thrown(r.fail)()
-    const h = { runtime: r.ok ? r.value : '', op: op.coord, fn: fn as Hear['fn'] }
+    const api = (live.now().runtimes[runtime]?.pods ?? []).flatMap(p => impl(live, p)?.provides ?? []).find(i => i.byCoord.has(op.coord))
+    const p = api ? placement(live, runtime, api, {}) : miss('not-found', `no pod provides ${op.coord} in ${runtime}`)
+    if (!p.ok) thrown(p.fail)()
+    const from = p.ok ? p.value.pod : ''
+    const why = refusal(live, runtime, 'host', from, 'subscribe')
+    if (why !== undefined) { live.trace.emit({ type: 'denied', id: live.trace.id(), reason: why }); return () => {} }
+    const gone = () => !live.now().runtimes[runtime]?.pods.includes(from)
+    const h: On = { runtime, from, port: port(api!, op), to: 'host', gone, fn: fn as On['fn'] }
     live.ons.add(h)
     return () => { live.ons.delete(h) }
   }

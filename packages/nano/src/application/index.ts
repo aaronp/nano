@@ -102,7 +102,11 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     if (why !== undefined) return failure('denied', why)
     const changes = diff(current, checked.value)
     current = checked.value
-    for (const o of [...live.ons]) if ('gone' in o && o.gone()) live.ons.delete(o)   // an edge removed now stays gone if re-added
+    for (const o of [...live.ons]) {
+      if (o.gone()) { live.ons.delete(o); continue }   // an edge removed now stays gone if re-added
+      const why = refusal(live, o.runtime, o.to, o.from, 'subscribe')   // asked again on apply; a refused one is dropped
+      if (why !== undefined) { live.ons.delete(o); trace.emit({ type: 'denied', id: trace.id(), reason: why }) }
+    }
     await Promise.all([...changes.removed.map(n => pods.forget(n, 'removed')), ...changes.changed.map(n => pods.forget(n, 'changed'))])
     await buildEager([...changes.added, ...changes.changed])
     trace.emit({ type: 'applied', ...changes })

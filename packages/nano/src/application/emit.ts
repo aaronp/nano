@@ -6,11 +6,11 @@
  * of an action does not wait for its emission. And a client by op name over such messages.
  *
  *   await client(live, 'r', 'host', 'db', () => undefined).get('k')   // a call starting a chain; its result emitted
- *   await emit(live, 'db', 'acme.Store/saved', 'x')                  // a published event: one new chain
+ *   await emit(live, 'db', 'acme.Store/saved', { output: 'x' })                 // a published event: one new chain
  */
 import { port } from '../iface.ts'
 import { failure, success, type NanoResult } from '../result.ts'
-import { attempt, impl, placedIn, refusal, send, type Live } from './messages.ts'
+import { attempt, impl, placedIn, send, type Live, type On } from './messages.ts'
 
 type Chain = { id?: string; correlation?: string; cause?: string }
 
@@ -25,39 +25,25 @@ const fly = <T>(live: Live, p: Promise<T>): Promise<T> => {
 async function act(live: Live, runtime: string, from: string, to: string, p: string, input: unknown, kind: 'call' | 'pipe', chain: Chain = {}) {
   const id = chain.id ?? live.trace.id(), correlation = chain.correlation ?? id
   const r = await send(live, runtime, from, to, p, input, { ...chain, kind, id, correlation })
-  if (r.ok) { hear(live, runtime, to, p, input, r.value); void emit(live, to, p, r.value, { correlation, cause: id }) }
+  if (r.ok) void emit(live, to, p, { input, output: r.value }, { correlation, cause: id })
   return r
-}
-
-/** The host's subscribers to the action at `to`'s port `p` in `runtime` get `{ input, output }`, if its policy allows. */
-function hear(live: Live, runtime: string, to: string, p: string, input: unknown, output: unknown) {
-  const i = impl(live, to)?.provides.find(i => Object.values(i.ops).some(o => port(i, o) === p))
-  const op = i && Object.values(i.ops).find(o => port(i, o) === p)!.coord
-  const exports = live.now().runtimes[runtime]?.exports
-  if (!i || (exports && !exports.includes(i.coord))) return   // what the runtime doesn't export, the host doesn't hear
-  for (const h of [...live.ons]) {
-    if (!('op' in h) || h.runtime !== runtime || h.op !== op) continue
-    const why = refusal(live, runtime, 'host', to, 'subscribe')
-    if (why !== undefined) { live.trace.emit({ type: 'warning', reason: `host hearing ${p} of ${to} in ${runtime}: ${why}` }); continue }
-    fly(live, attempt(live, to, `host hearing ${p}`, () => h.fn({ input, output })))
-  }
 }
 
 /**
  * `from`'s emission at port `port`. With no `chain` (a published event) it starts one: the first delivery's id is the
  * correlation of every delivery, none with a cause. Resolves once the pipe deliveries settle, not the `on` ones.
  */
-export function emit(live: Live, from: string, port: string, data: unknown, chain?: Chain): Promise<unknown> {
+export function emit(live: Live, from: string, port: string, e: Parameters<On['fn']>[0], chain?: Chain): Promise<unknown> {
   if (live.closed()) return Promise.resolve()
   let first: string | undefined
   const link = (): Chain => chain ?? (first ? { correlation: first } : { id: (first = live.trace.id()), correlation: first })
   const pipes = placedIn(live, from).flatMap(([runtime, r]) =>
     r.subscriptions.flatMap(s => s.kind === 'pipe' && s.from === from && s.source === port
-      ? [fly(live, act(live, runtime, from, s.to, s.target, data, 'pipe', link()))] : []))
+      ? [fly(live, act(live, runtime, from, s.to, s.target, e.output, 'pipe', link()))] : []))
   for (const o of [...live.ons]) {
-    if ('op' in o || o.from !== from || o.port !== port) continue
-    const work = async () => { const r = await attempt(live, o.to, `${o.to} hearing ${port}`, () => o.fn(data)); return r.ok ? success(undefined) : r }
-    fly(live, send(live, o.runtime, from, o.to, port, data, { kind: 'on', ...link(), work }))
+    if (o.from !== from || o.port !== port) continue
+    const work = async () => { const r = await attempt(live, o.to, `${o.to} hearing ${port}`, () => o.fn(e)); return r.ok ? success(undefined) : r }
+    fly(live, send(live, o.runtime, from, o.to, port, e.output, { kind: 'on', ...link(), work }))
   }
   return Promise.all(pipes)
 }

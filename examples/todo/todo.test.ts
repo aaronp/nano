@@ -57,11 +57,11 @@ test('2. the runtime: apply swaps the store for another implementation and the n
   expect((await todos.list()).map(t => t.title)).toEqual(['eggs'])
 })
 
-test('2. the runtime: a host subscriber to the store\'s put in backend gets { input, output }; one in frontend gets nothing', async () => {
+test('2. the runtime: a host subscriber to the store\'s put in backend gets { input, output }; frontend has no store to subscribe to', async () => {
   const app = await open()
   const back: unknown[] = [], front: unknown[] = []
   app.runtime('backend').subscribe(KeyValueStoreDef.api.ops.put, call => { back.push(call) })
-  app.runtime('frontend').subscribe(KeyValueStoreDef.api.ops.put, call => { front.push(call) })
+  expect(() => app.runtime('frontend').subscribe(KeyValueStoreDef.api.ops.put, call => { front.push(call) })).toThrow('not-found')
   const t = await app.runtime('frontend').get(TodoListDef.api).add('milk')
   await Bun.sleep(0)
   expect(back).toEqual([{ input: { key: ['todos', t.id], value: t }, output: null }])

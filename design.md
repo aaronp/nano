@@ -54,9 +54,9 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 Inside `application/` (not exported from the package, one line each): `stream()` is the one stream and its ids;
 `instances(live)` holds at most one build per pod name and closes builds (each with its own close listeners, run in
 order within the timeout, then `closed` on the stream); `send` carries exactly one message in one runtime (a `call`,
-`pipe` or `on`, with its chain), reading a `Live` (the application as a message needs it, with its `On` subscriptions and the host's `Hear` subscriptions to actions
-and deliveries under way); `emit` is what follows a message: each `Hear` in its runtime given `{ input, output }` of a successful call (if the runtime exports its interface and its policy allows the host to subscribe), an emission delivered along pipes and to `On`
-subscriptions, and `client`, which calls by op name and emits each successful result; `refusal` is a runtime policy's
+`pipe` or `on`, with its chain), reading a `Live` (the application as a message needs it, with its `On` subscriptions, a pod's or the host's,
+and deliveries under way); `emit` is what follows a message: an emission (`{ input, output }` of a successful call, `{ output }` of an event) delivered along pipes (its `output`) and to `On`
+subscriptions (whole; the 'subscribe' question is asked once, when one connects, and again on `apply`), and `client`, which calls by op name and emits each successful result; `refusal` is a runtime policy's
 answer to a message or a new subscription (a throw, a Promise or no verdict refuses); `within` bounds a build or
 handler by the timeout, and `attempt` also records its throw or timeout as a `failure`; `impl(live, pod)` is a pod's
 implementation now and `placedIn(live, pod)` the runtimes it is placed in; `contextFor(live, name,
