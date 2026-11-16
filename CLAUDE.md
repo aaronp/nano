@@ -3,6 +3,11 @@
 - **No concept drift.** A new domain concept, exported name, public method or option is a question for the user, not
   a ruling. Never redefine what an existing concept is while implementing. Reviewers report any new export as a
   finding.
+- **Build on what exists; never restate it.** Before designing or building anything, read `design.md` and the
+  spec, and name the existing concepts that carry the need (Implementation, Interface, Op, Pod, Runtime,
+  Subscription: call edge or pipe, `on`, coordinates, the `AppEvent` stream). A new type, field or mechanism that
+  restates one of them (stringified coordinates, an event type beside pipes, a second way to deliver data) is concept
+  drift. If the model can't express the need, say exactly what is missing and ask the user. Don't work around it.
 - **Keep it small.** `packages/nano/test/structure.test.ts` fails the build when a source file passes 150 lines, an
   exported interface or object type passes 10 members, or an export is missing from `design.md`. Its baseline
   (`packages/nano/structure-baseline.json`) may only shrink; regenerate it only with the user's agreement.

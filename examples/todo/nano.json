@@ -1,0 +1,31 @@
+{
+  "pods": {
+    "store": {
+      "implementation": "example.kv/memory",
+      "eager": false
+    },
+    "todos": {
+      "implementation": "example.todo/kv",
+      "eager": false
+    }
+  },
+  "runtimes": {
+    "main": {
+      "pods": [
+        "store",
+        "todos"
+      ],
+      "subscriptions": [
+        {
+          "kind": "call",
+          "from": "todos",
+          "to": "store"
+        }
+      ]
+    }
+  },
+  "providers": {
+    "example.kv": "./kv.js",
+    "example.todo": "./todo.js"
+  }
+}
