@@ -51,7 +51,30 @@ export namespace KeyValueStoreDef {
   })
   export type KeyValueStore = Interface.Type<typeof api>
 }
-const memory = Implementation.define(ns.implementation('memory'), { provides: [api], make: () => inMemory() })
+```
+
+**Implementations start from the contract they provide.** The implementation's coordinate is always given: it is in
+the *provider's* namespace (`aws.kv/dynamo` implements `example.kv.KeyValueStore`). Two forms, both ending in the same
+layer-1 `Implementation.define(coord, { provides, dependencies, config, make })`, which stays as the explicit form:
+
+```ts
+// The builder: each step is optional, each narrows the types for the next, and every step offers make().
+const memory = KeyValueStoreDef.api.impl(ns.implementation('memory')).make(() => inMemory())
+const todos = TodoListDef.api.impl(acme.implementation('todos'))
+  .needs({ store: KeyValueStoreDef.api })                  // deps typed from here on
+  .config(Type.Object({ prefix: Type.String() }))          // config typed from here on
+  .make(({ deps, config }) => todoList(deps.store, config.prefix))
+
+// create: everything at once, for when a chain reads worse.
+const todos2 = TodoListDef.api.impl(acme.implementation('todos')).create({
+  needs: { store: KeyValueStoreDef.api }, config: Type.Object({ prefix: Type.String() }),
+  make: ({ deps, config }) => todoList(deps.store, config.prefix),
+})
+
+// Several interfaces: each extra one gets its own plain object from the same build (no method-name clashes).
+const adminStore = KeyValueStoreDef.api.impl(acme.implementation('admin-store'))
+  .make(() => store)
+  .satisfies(AdminDef.api, () => admin)
 ```
 
 ## Layer 3: sugar
@@ -86,12 +109,14 @@ configuration-as-data are added as further top-level tests, the same way.
 ## Order
 
 1. Layer 1 fixes (ops named by key, optional schema labels, direct nesting), migrating every caller.
-2. `app.resolve` + `Resolution`; `app.get` on top.
-3. `Application.load` (nano loads `modules`).
+2. The `api.impl` builder and `create` (layer 2).
+3. `app.resolve` + `Resolution`; `app.get` on top.
+4. `Application.load` (nano loads `modules`).
 
 ## New public names (for the user's approval)
 
 `Op.action(input, output)` / `Op.event(data)` without a name (the named forms go); `Schema.define(schema, label?)`;
+`api.impl(coord)`, a builder with `needs`, `config`, `make`, `create` and `satisfies`;
 `app.resolve` and `Resolution` (with `getOrThrow`); `Application.load`.
 
 ## Not in this step
