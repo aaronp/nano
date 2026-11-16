@@ -9,6 +9,7 @@
  */
 import { COORD, port, type Client, type Interface } from './iface.ts'
 import type { NanoContext } from './context.ts'
+import type { ImplCoord } from './coord.ts'
 import type { NanoResult } from './result.ts'
 import type { SchemaDef } from './schema.ts'
 import { selectorData, type Selector, type SelectorData } from './selector.ts'
@@ -49,7 +50,8 @@ type Spec = {
   make(ctx: NanoContext, config: any): Provided[] | Promise<Provided[]>
 }
 
-function define(coord: string, spec: Spec): Implementation {
+function define(at: string | ImplCoord, spec: Spec): Implementation {
+  const coord = String(at)
   const slash = coord.lastIndexOf('/')
   if (!COORD.test(coord) || slash < 0) throw new Error(`bad implementation coordinate ${coord}`)
   return {

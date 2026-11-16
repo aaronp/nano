@@ -15,7 +15,7 @@ this file is what to do, and what not to.
   `this.pod(t).action(input)` and `listen` (`hear`); no logic the pod could hold.
 - **The provider** (`src/index.ts`): `export default Provider.define('acme.template', [...])`, `export const views = { '<impl coord>': '<tag>' }`,
   and `customElements.define` for each tag.
-- **`nano.json`**: pods, runtimes, pipes (`source`/`target` are `<iface coord>/<op>`), and `providers`.
+- **`nano.json`**: pods, runtimes, pipes (`source`/`target` are `<iface coord>/<op>`), and `modules`.
 
 `src/timer.ts`, `picker.ts` and `store.ts` with their views are the worked examples. Copy their shape.
 

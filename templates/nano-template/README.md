@@ -23,7 +23,7 @@ view could not see it; the pipe makes each tick visible to `<nano-timer>`, and s
 Use this repository as a template (GitHub's "Use this template"), then rename:
 
 1. `package.json`: `name`, `description`, `version`.
-2. The provider `acme.template` (`src/index.ts`, `nano.json`'s `providers` and pod `implementation`s), the
+2. The provider `acme.template` (`src/index.ts`, `nano.json`'s `modules` and pod `implementation`s), the
    implementation coordinates `acme.template/…` and the interfaces `acme.template.Timer`… (`src/interfaces.ts`, and the
    pipes' `source` and `target`): use your own namespace. A host refuses an import that clashes with a name it has.
 3. The tags (`nano-timer`…) in `src/index.ts`: custom element names need a dash.
@@ -39,7 +39,7 @@ bun run serve      # build, then serve dist/ at http://localhost:4000
 
 A host imports an app from its own origin only (cross-origin comes later): put the build in the host's public dir (the
 nano workspace's build already copies it to `/examples/template/`, so import `/examples/template/nano.json`), or serve
-the host and `dist/` from one origin. The host fetches the `nano.json`, loads each `providers` entry (relative to the
+the host and `dist/` from one origin. The host fetches the `nano.json`, loads each `modules` entry (relative to the
 `nano.json`) and shows the pods. Importing alongside another app whose runtime is also `main` is refused: the names
 clash (namespacing comes later).
 

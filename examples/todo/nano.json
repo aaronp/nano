@@ -24,7 +24,7 @@
       ]
     }
   },
-  "providers": {
+  "modules": {
     "example.kv": "./kv.js",
     "example.todo": "./todo.js"
   }

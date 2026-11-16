@@ -1,1 +1,1 @@
-{ "pods": {}, "runtimes": {}, "providers": { "example.fx": "./missing.ts" } }
+{ "pods": {}, "runtimes": {}, "modules": { "example.fx": "./missing.ts" } }

@@ -13,5 +13,5 @@
       ]
     }
   },
-  "providers": { "acme.template": "./index.js" }
+  "modules": { "acme.template": "./index.js" }
 }

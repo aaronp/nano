@@ -10,5 +10,5 @@ test('dist/index.js leaves the shared packages bare; dist/nano.json names ./inde
   const js = await Bun.file(join(root, 'dist/index.js')).text()
   for (const p of ['@pritzlaff/nano-core', '@pritzlaff/nano-elements', 'lit', 'typebox']) expect(js).toMatch(new RegExp(`from"${p}"`))
   expect(js).not.toContain('ReactiveElement')   // lit's base class
-  expect((await Bun.file(join(root, 'dist/nano.json')).json()).providers).toEqual({ 'acme.template': './index.js' })
+  expect((await Bun.file(join(root, 'dist/nano.json')).json()).modules).toEqual({ 'acme.template': './index.js' })
 }, 30000)

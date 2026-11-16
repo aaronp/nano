@@ -34,12 +34,13 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 
 | What | Responsibility | File |
 |---|---|---|
+| `Coord` | typed, layered coordinates, each a frozen value whose `toString()` is the saved string: `Namespace` (an author's), `InterfaceCoord` and `ImplCoord` (namespace + name), `PortCoord` (interface + op), `PodCoord` (implementation + runtime + pod, the instance); `Coord.namespace`, `Coord.port`, `Coord.pod`, `Coord.parse(kind, s)`; `Interface.define` and `Implementation.define` take one or its string | `coord.ts` |
 | `Schema` | a TypeBox schema (`SchemaDef`, from `Schema.define`) with its blake3 `hashOf` (annotations stripped, `canonical`, `canonicalSchema`) and JSON codec; `isJson` refuses non-JSON schemas | `schema.ts` |
 | Op | an action (in, out) or an event (data out) (`Op`, `OpKind`, built with `Op.action` / `Op.event`); coord = hash of name + schema hashes; `fits` checks an event against an action | `op.ts` |
 | `Interface` | a coord (`ns/name`; the `COORD` rule) plus its ops (`Interface.define`); `port(i, op)` = `<interface>/<op name>`; `Client` is a typed client for one (actions only) | `iface.ts` |
 | Result | `NanoResult` = `success` or a platform `Fail` (`failure`, `FailType`); never thrown; `isNanoResult` | `result.ts` |
 | `Implementation` | code providing whole interfaces (`Implementation.define`), with dependencies (selectors by role) and an optional config schema; its factory `make(ctx, config)` returns `Provided` (`provide(iface, handlers)`), each `Handler` taking only its input (`Handlers`) | `implementation.ts` |
-| `Provider` | a namespace of implementations (`Provider.define`) plus metadata | `provider.ts` |
+| `Provider` | an author (GCP, AWS, a consultancy) supplying implementations, possibly of another's contract: its namespace, its implementations (`Provider.define`), metadata; each implementation's namespace is its provider's | `provider.ts` |
 | `Registry` | a pool of providers (`Registry.create`); O(1) lookups (`implementationsOf`); a plain-data `Manifest` | `registry.ts` |
 | `Selector` | which call subscriptions a call may use: an interface, or `SelectorData` narrowed by tags, implementation, provider, `runtime` (`Selector.of`, `selectorData`, `matches` over a `Target`) | `selector.ts` |
 | Context | what a pod's factory gets (`NanoContext`): `self`, `runtimes`, `one`, `all` (each a `Selection`: `ok`, `fail`, `pod`, `runtime`, `call` through that edge, `on` to hear the pod), `publish`, `addOnCloseListener` (each build has its own; runs on `restarted`, `removed`, `changed` or `closed`) | `context.ts` |
@@ -47,7 +48,7 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 | `Policy` | `isAllowed(src, dest, data)` per runtime, answering a `Verdict`; `Policies.allowAll()` | `policy.ts` |
 | `Pods` | which components exist: `Pods.create(podDeployment, { registry, tags? })` checks a `PodDeployment` (names, implementations, configs, at most 5000) and its tags by pod name into an immutable lookup, `names`, `get`, `select` (a scope over the same descriptions, keeping their tags), `deployment` | `pods.ts` |
 | `Runtime` | pods placed together and wired: `Runtime.create(id, runtimeDeployment, pods)` checks a `RuntimeDeployment` (pods placed, `Subscription`s, policy) over a `Pods` scope into an immutable `{ id, pods, deployment }` | `runtime.ts` |
-| `AppDeployment` | the whole system as data: pods, runtimes by id, tags, and the host's `providers`, `views` and the deployer's `layout` (a plain object; shape-checked, otherwise ignored, not in `deployment()`); `AppDeployment.assemble(d, registry)` checks it level by level into its `Runtime`s, strictly (D83) | `deployment.ts` |
+| `AppDeployment` | the whole system as data: pods, runtimes by id, tags, and the host's `modules` (where each provider's code is loaded from), `views` and the deployer's `layout` (a plain object; shape-checked, otherwise ignored, not in `deployment()`); `AppDeployment.assemble(d, registry)` checks it level by level into its `Runtime`s, strictly (D83) | `deployment.ts` |
 | `Application` | the one live thing: `Application.create(runtimes, { policies?, timeoutMs?, isolate? })` (`isolate(name, pod)` gives the host's stand-in, same coord, for a pod whose isolation isn't `host`; without it such a pod fails `invalid-input`) (at most 50, ids by the id rule, every runtime's pods from one `Pods`) gives six members, `call`, `apply`, `restart`, `deployment`, `listen` (an `AppEvent` stream), `close` (every instance closed; then calls are `not-found`, `apply`/`restart` refused) | `application/` |
 
 Inside `application/` (not exported from the package, one line each): `stream()` is the one stream and its ids;

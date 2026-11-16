@@ -1,7 +1,7 @@
 /**
  * Builds dist/: `bun scripts/build.ts`.
  * - index.js: the provider module, with the nano packages, lit and typebox left as bare imports for the host's import map;
- * - nano.json: copied as it is (its `providers` name ./index.js).
+ * - nano.json: copied as it is (its `modules` name ./index.js).
  */
 import { copyFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'

@@ -57,9 +57,9 @@ describe('provider URLs', () => {
   test('given a relative provider, then it is stored resolved, and another nano.json naming the same module is no clash', async () => {
     const first = await importApp(fx('app.json'), empty(), deps)
     if (!first.ok) throw new Error(first.fail.reason)
-    expect(first.value.deployment.providers).toEqual({ 'example.fx': fx('good.ts') })
+    expect(first.value.deployment.modules).toEqual({ 'example.fx': fx('good.ts') })
     const second = await importApp(fx('sub/again.json'), first.value, deps)
-    expect(second).toMatchObject({ ok: true, value: { deployment: { providers: { 'example.fx': fx('good.ts') } } } })
+    expect(second).toMatchObject({ ok: true, value: { deployment: { modules: { 'example.fx': fx('good.ts') } } } })
   })
 })
 
@@ -69,7 +69,7 @@ describe('a coord the registry has', () => {
     if (!first.ok) throw new Error(first.fail.reason)
     // The stored URL matches but names no module: an import() would fail.
     const url = fx('missing.ts')
-    const loaded = { ...first.value, deployment: { ...first.value.deployment, providers: { 'example.fx': url } } }
+    const loaded = { ...first.value, deployment: { ...first.value.deployment, modules: { 'example.fx': url } } }
     const r = await importApp(fx('skip.json'), loaded, deps)
     expect(r.ok).toBe(true)
   })
@@ -83,10 +83,10 @@ describe('own names', () => {
 })
 
 describe('merge', () => {
-  test('tags, providers and views are unioned; a provider under another URL is a clash', () => {
-    const a = dep({ tags: { x: ['a'] }, providers: { p: '/p.js' }, views: { v: 'el-a' } })
-    const b = dep({ tags: { y: ['b'] }, providers: { p: '/p.js', q: '/q.js' }, views: { w: 'el-b' } })
-    expect(merge(a, b)).toMatchObject({ ok: true, value: { tags: { x: ['a'], y: ['b'] }, providers: { p: '/p.js', q: '/q.js' }, views: { v: 'el-a', w: 'el-b' } } })
-    expect(merge(a, dep({ providers: { p: '/other.js' } }))).toMatchObject({ ok: false, fail: { reason: 'clash: provider p is already loaded' } })
+  test('tags, modules and views are unioned; a provider under another URL is a clash', () => {
+    const a = dep({ tags: { x: ['a'] }, modules: { p: '/p.js' }, views: { v: 'el-a' } })
+    const b = dep({ tags: { y: ['b'] }, modules: { p: '/p.js', q: '/q.js' }, views: { w: 'el-b' } })
+    expect(merge(a, b)).toMatchObject({ ok: true, value: { tags: { x: ['a'], y: ['b'] }, modules: { p: '/p.js', q: '/q.js' }, views: { v: 'el-a', w: 'el-b' } } })
+    expect(merge(a, dep({ modules: { p: '/other.js' } }))).toMatchObject({ ok: false, fail: { reason: 'clash: provider p is already loaded' } })
   })
 })

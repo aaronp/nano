@@ -36,11 +36,11 @@ const app: AppDeployment = {
     i: { implementation: 'other.fx/x', eager: false, isolation: 'isolated-sandbox' },
   },
   runtimes: { main: { pods: ['h', 's', 'i'], subscriptions: [] } },
-  providers: { 'other.fx': './x.js' },
+  modules: { 'other.fx': './x.js' },
 }
 const docs: Record<string, AppDeployment> = {
   'https://other.test/app/nano.json': app,
-  'http://host.test/app/nano.json': { pods: { h: { implementation: 'other.fx/x', eager: false } }, runtimes: {}, providers: { 'other.fx': './x.js' } },
+  'http://host.test/app/nano.json': { pods: { h: { implementation: 'other.fx/x', eager: false } }, runtimes: {}, modules: { 'other.fx': './x.js' } },
 }
 const domFetch = globalThis.fetch
 beforeAll(() => { globalThis.fetch = (async (u: string) => ({ ok: true, status: 200, json: async () => structuredClone(docs[u]) })) as never })
@@ -64,7 +64,7 @@ test('given a same-origin import, then confirm and probe are never called', asyn
   const r = await importApp('http://host.test/app/nano.json', empty(), deps)
   expect(r.ok).toBe(true)
   expect(seen).toMatchObject({ confirm: [], probe: [], load: ['http://host.test/app/x.js'] })
-  expect(r.ok && r.value.deployment.providers).toEqual({ 'other.fx': '/app/x.js' })
+  expect(r.ok && r.value.deployment.modules).toEqual({ 'other.fx': '/app/x.js' })
 })
 
 test('given a foreign provider, then confirm gets one entry: host and sandbox pods have full access, isolated-sandbox not', async () => {
@@ -90,8 +90,8 @@ test('given confirm says yes, then it is probed, not loaded, kept whole, and its
   const r = await importApp('https://other.test/app/nano.json', empty(), deps)
   if (!r.ok) throw new Error(r.fail.reason)
   expect(seen).toMatchObject({ probe: ['https://other.test/app/x.js'], load: [] })
-  expect(r.value.deployment.providers).toEqual({ 'other.fx': 'https://other.test/app/x.js' })
-  expect(foreignOrigin(r.value.deployment.providers!['other.fx'])).toBe('https://other.test')
+  expect(r.value.deployment.modules).toEqual({ 'other.fx': 'https://other.test/app/x.js' })
+  expect(foreignOrigin(r.value.deployment.modules!['other.fx'])).toBe('https://other.test')
   expect(r.value.views).toEqual({ 'other.fx/x': 'x-view' })
   expect(r.value.registry.implementation('other.fx/x')!.provides[0]!.ops.x!.coord).toBe(real.provides[0]!.ops.x!.coord)
 })
@@ -104,7 +104,7 @@ async function running(o: { approve: boolean; remember?: boolean }) {
   const runtimes = AppDeployment.assemble(r.value.deployment, r.value.registry)
   if (!runtimes.ok) throw new Error(runtimes.fail.reason)
   const standIn: Implementation = { ...real, make: real.make }
-  const isolate = (_: string, pod: Pod) => isolated(standIn, pod.isolation, foreignOrigin(r.value.deployment.providers!['other.fx']), deps.approve)
+  const isolate = (_: string, pod: Pod) => isolated(standIn, pod.isolation, foreignOrigin(r.value.deployment.modules!['other.fx']), deps.approve)
   const made = await Application.create(runtimes.value, { isolate })
   if (!made.ok) throw new Error(made.fail.reason)
   return { seen, app: made.value, call: (pod: string) => (made.value.call('main', pod) as unknown as { x(s: string): Promise<unknown> }).x('hi') }
@@ -190,12 +190,12 @@ test('given approve remembered, then a yes holds across parallel makes and a res
 })
 
 test('given a same-origin ref whose path reads as protocol-relative, then it is stored whole, on this origin, not foreign', async () => {
-  docs['http://host.test/trick/nano.json'] = { pods: {}, runtimes: {}, providers: { 'other.fx': '/.//evil.test/x.js' } }
+  docs['http://host.test/trick/nano.json'] = { pods: {}, runtimes: {}, modules: { 'other.fx': '/.//evil.test/x.js' } }
   const { seen, deps } = fakes()
   const r = await importApp('http://host.test/trick/nano.json', empty(), deps)
   if (!r.ok) throw new Error(r.fail.reason)
   expect(seen).toMatchObject({ confirm: [], probe: [] })   // import decided: same origin
-  const stored = r.value.deployment.providers!['other.fx']!
+  const stored = r.value.deployment.modules!['other.fx']!
   expect(new URL(stored, location.href).origin).toBe('http://host.test')
   expect(foreignOrigin(stored)).toBeUndefined()
 })

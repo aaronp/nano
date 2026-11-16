@@ -62,7 +62,7 @@ test('given a fresh host, then the built-ins input, debounce, map and log are li
   expect(host.app.deployment().runtimes.main!.pods).toEqual(['ui', 'map1'])
 })
 
-test('given the slice imported, then the explorer lists in, wait, up, out and Save round-trips providers and views', async () => {
+test('given the slice imported, then the explorer lists in, wait, up, out and Save round-trips modules and views', async () => {
   const { host, el } = await mount()
   expect(await host.importUrl(slice)).toMatchObject({ ok: true })
   await el.updateComplete
@@ -76,7 +76,7 @@ test('given the slice imported, then the explorer lists in, wait, up, out and Sa
   expect(saved.layout).toEqual(layout)   // kept by the host, so it round-trips below
   const file: AppDeployment = await Bun.file(new URL(slice)).json()
   // stored resolved, so a saved nano.json loads from anywhere on the origin
-  expect(saved.providers).toEqual({ 'nano.ui': new URL('./bundle/nano-ui.js', page).href, 'example.slice': new URL('./shout.js', slice).href })
+  expect(saved.modules).toEqual({ 'nano.ui': new URL('./bundle/nano-ui.js', page).href, 'example.slice': new URL('./shout.js', slice).href })
   expect(saved.views).toEqual({ up: 'nano-pod-view' })
   expect(saved.pods).toEqual(file.pods)
   expect(saved.runtimes).toEqual(file.runtimes)
@@ -92,7 +92,7 @@ test('given an app with a pod named ui, then the import is refused and the regis
   const { host } = await mount()
   const before = { manifest: host.registry.manifest(), data: host.data() }
   const clash = new URL('./clash/nano.json', import.meta.url).href
-  json.set(clash, { pods: { ui: { implementation: 'example.slice/shout', eager: false } }, runtimes: {}, providers: { 'example.slice': new URL('./shout.js', slice).href } })
+  json.set(clash, { pods: { ui: { implementation: 'example.slice/shout', eager: false } }, runtimes: {}, modules: { 'example.slice': new URL('./shout.js', slice).href } })
   expect(await host.importUrl(clash)).toMatchObject({ ok: false, fail: { reason: 'clash: pod ui is already loaded' } })
   expect(host.registry.manifest()).toEqual(before.manifest)
   expect(host.data()).toEqual(before.data)

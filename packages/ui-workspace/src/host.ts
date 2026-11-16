@@ -1,11 +1,11 @@
 /**
- * The host: the one `Application`, what is loaded (`Loaded`: the deployment with its providers and view selectors, the
+ * The host: the one `Application`, what is loaded (`Loaded`: the deployment with its modules and view selectors, the
  * registry, the default views), and import, apply and save over them. Its own pod is `ui` (HostUI) in runtime `main`,
  * and it is never saved. A failure is shown with `toast()` and changes nothing.
  *
  *   const host = (await start()).value
  *   await host.importUrl('/examples/slice/nano.json')   // importApp, then apply
- *   host.saved()                                         // { ...app.deployment(), providers, views, layout }, without ui
+ *   host.saved()                                         // { ...app.deployment(), modules, views, layout }, without ui
  */
 import { Application, AppDeployment, Registry, Pod, success, type NanoResult, type Pod as PodData } from '@pritzlaff/nano-core'
 import uiProvider, { views as uiViews, type ViewMap } from '@pritzlaff/nano-ui'
@@ -22,7 +22,7 @@ import { standIn, type Frame } from './sandbox/stand-in.ts'
 export type Host = {
   readonly app: Application
   readonly registry: Registry
-  /** The live deployment with the providers, view selectors and dock layout the host keeps. */
+  /** The live deployment with the modules, view selectors and dock layout the host keeps. */
   data(): AppDeployment
   /** Implementation → its default view tag, from nano.ui and every loaded module. */
   defaults(): ViewMap
@@ -76,16 +76,16 @@ export async function start(): Promise<NanoResult<Host>> {
   // nano.ui is bundle/nano-ui.js under the page: through the import map, the module this file imports.
   const registry = Registry.create()
   for (const p of [uiProvider, hostProvider]) { const added = registry.add(p); if (!added.ok) return added }
-  const first = placed({ pods: {}, runtimes: {}, providers: { 'nano.ui': nanoUi }, views: {} })
+  const first = placed({ pods: {}, runtimes: {}, modules: { "nano.ui": nanoUi }, views: {} })
   const runtimes = AppDeployment.assemble(first, registry)
   if (!runtimes.ok) return runtimes
   let loaded: Loaded = { deployment: first, registry, views: { ...uiViews } }
-  // A non-host pod runs in a frame, from its provider's URL as kept in `providers`; its open frame is in `frames`.
+  // A non-host pod runs in a frame, from its provider's URL as kept in `modules`; its open frame is in `frames`.
   const frames = new Map<string, Frame>()
   let made: Application | undefined   // set once created; isolate runs only after (the first deployment has no non-host pod)
   const live = () => { if (!made) throw new Error('the host is not started'); return made }
   function isolate(name: string, pod: PodData) {
-    const real = registry.implementation(pod.implementation), at = real && loaded.deployment.providers?.[real.provider]
+    const real = registry.implementation(pod.implementation), at = real && loaded.deployment.modules?.[real.provider]
     if (!real || !at) throw new Error(`${name}: no provider URL for ${pod.implementation}`)
     return isolated(standIn(real, {
       url: new URL(at, document.baseURI).href, edges: p => edgesFor(live().deployment(), registry, p), app: live,
@@ -108,10 +108,10 @@ export async function start(): Promise<NanoResult<Host>> {
   const app = made = created.value
   framesOf.set(app, frames)
 
-  const kept = (d: AppDeployment) => ({ providers: { ...d.providers }, views: { ...d.views }, ...(d.layout && { layout: structuredClone(d.layout) }) })
+  const kept = (d: AppDeployment) => ({ modules: { ...d.modules }, views: { ...d.views }, ...(d.layout && { layout: structuredClone(d.layout) }) })
   const data = (): AppDeployment => ({ ...app.deployment(), ...kept(loaded.deployment) })
   async function apply(next: AppDeployment, views = loaded.views): Promise<NanoResult<void>> {
-    // The providers, views and layout are kept before the apply, so listeners of its `applied` event already read them from data().
+    // The modules, views and layout are kept before the apply, so listeners of its `applied` event already read them from data().
     const before = loaded
     loaded = { deployment: next, registry, views }
     const applied = shown(await app.apply(next))
@@ -122,7 +122,7 @@ export async function start(): Promise<NanoResult<Host>> {
   return success({
     app, registry, data, apply: next => apply(next),
     defaults: () => ({ ...loaded.views }),
-    foreign: coord => !!foreignOrigin(loaded.deployment.providers?.[coord]),
+    foreign: coord => !!foreignOrigin(loaded.deployment.modules?.[coord]),
     saved: () => withoutHost(data()),
     async importUrl(url) {
       // With the pod ui still in it, so merge refuses an app naming a pod ui before any provider is registered.

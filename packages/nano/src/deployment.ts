@@ -14,7 +14,7 @@ import { Runtime, type RuntimeDeployment } from './runtime.ts'
 export type AppDeployment = {
   pods: PodDeployment; runtimes: Record<string, RuntimeDeployment>; tags?: Record<string, string[]>
   /** Host-owned: nano shape-checks these and otherwise ignores them. */
-  providers?: Record<string, string>; views?: Record<string, string>
+  modules?: Record<string, string>; views?: Record<string, string>
   /** The deployer's choice, a plain object: nano shape-checks it and otherwise ignores it; `deployment()` omits it. */
   layout?: Record<string, unknown>
 }
@@ -26,7 +26,7 @@ const Shape = Type.Object({
   pods: Type.Unknown(),
   runtimes: RuntimeIds,
   tags: Type.Optional(Type.Record(Id, Type.Array(Type.String()), strict)),
-  providers: Type.Optional(Type.Record(Id, Type.String({ minLength: 1 }), strict)),
+  modules: Type.Optional(Type.Record(Id, Type.String({ minLength: 1 }), strict)),
   views: Type.Optional(Type.Record(Id, Type.String({ minLength: 1 }), strict)),
   layout: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
 }, strict)

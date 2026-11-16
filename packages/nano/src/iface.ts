@@ -6,6 +6,7 @@
  *   port(db, db.ops.get)   // 'acme/db/get'
  */
 import type { Static, TSchema } from 'typebox'
+import type { InterfaceCoord } from './coord.ts'
 import type { Op } from './op.ts'
 import type { NanoResult } from './result.ts'
 
@@ -20,7 +21,8 @@ export const COORD = /^[a-zA-Z][a-zA-Z0-9-]*([./][a-zA-Z0-9-]+)+$/
 /** A port: `<interface>/<op name>`. Handlers are keyed by it; op hashes only check that two ports fit. */
 export const port = (i: Interface, o: Op): string => `${i.coord}/${o.name}`
 
-function define<Ops extends Record<string, Op>>(coord: string, ops: Ops): Interface<Ops> {
+function define<Ops extends Record<string, Op>>(at: string | InterfaceCoord, ops: Ops): Interface<Ops> {
+  const coord = String(at)
   if (!COORD.test(coord)) throw new Error(`bad interface coordinate ${coord}`)
   for (const [key, o] of Object.entries(ops)) if (o.name !== key) throw new Error(`${coord}: op ${key} is named ${o.name}`)
   return { coord, ops, byCoord: new Map(Object.values(ops).map(o => [o.coord, o])) }

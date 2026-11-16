@@ -1,1 +1,1 @@
-{ "pods": {}, "runtimes": {}, "providers": { "example.missing": "./missing.js" } }
+{ "pods": {}, "runtimes": {}, "modules": { "example.missing": "./missing.js" } }

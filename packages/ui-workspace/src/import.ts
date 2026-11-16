@@ -34,16 +34,16 @@ const clash = (what: string, name: string) => failure('invalid-input', `clash: $
 export function merge(current: AppDeployment, incoming: AppDeployment): NanoResult<AppDeployment> {
   for (const k of Object.keys(incoming.pods)) if (Object.hasOwn(current.pods, k)) return clash('pod', k)
   for (const k of Object.keys(incoming.runtimes)) if (Object.hasOwn(current.runtimes, k)) return clash('runtime', k)
-  const providers: Record<string, string> = { ...current.providers }
-  for (const [k, url] of Object.entries(incoming.providers ?? {})) {
-    if (Object.hasOwn(providers, k) && providers[k] !== url) return clash('provider', k)
-    providers[k] = url
+  const modules: Record<string, string> = { ...current.modules }
+  for (const [k, url] of Object.entries(incoming.modules ?? {})) {
+    if (Object.hasOwn(modules, k) && modules[k] !== url) return clash('provider', k)
+    modules[k] = url
   }
   return success({
     pods: { ...current.pods, ...incoming.pods },
     runtimes: { ...current.runtimes, ...incoming.runtimes },
     tags: { ...current.tags, ...incoming.tags },
-    providers,
+    modules,
     views: { ...current.views, ...incoming.views },
     ...((incoming.layout ?? current.layout) && { layout: incoming.layout ?? current.layout }),   // the newest arrangement
   })
@@ -118,9 +118,9 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
     // Each provider is resolved against the nano.json. Stored: its path when it is on this page's origin (so the same
     // tree served elsewhere still loads), else whole; also whole when the path would read as protocol-relative
     // (`/.//evil.test/x.js` has the path `//evil.test/x.js`, another origin once resolved again).
-    const refs = Object.entries(incoming.providers ?? {}).map(([coord, ref]) => [coord, new URL(ref, base)] as const)
+    const refs = Object.entries(incoming.modules ?? {}).map(([coord, ref]) => [coord, new URL(ref, base)] as const)
     const away = (u: URL) => u.origin !== home
-    incoming.providers = Object.fromEntries(refs.map(([coord, u]) => [coord, !away(u) && /^https?:$/.test(u.protocol) && !u.pathname.startsWith('//') ? u.pathname + u.search : u.href]))
+    incoming.modules = Object.fromEntries(refs.map(([coord, u]) => [coord, !away(u) && /^https?:$/.test(u.protocol) && !u.pathname.startsWith('//') ? u.pathname + u.search : u.href]))
     const todo = refs.filter(([coord]) => !loaded.registry.provider(coord))   // already loaded; merge still checks the stored URL matches
     const foreign: Foreign[] = todo.filter(([, u]) => away(u)).map(([coord, u]) => ({ coord, url: u.href, origin: u.origin,
       pods: Object.entries(incoming.pods).filter(([, p]) => providerOf(p.implementation) === coord).map(([name, p]) => {
