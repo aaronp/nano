@@ -18,7 +18,7 @@ import { matches, selectorData, type Selector, type SelectorData } from '../sele
 import { client, emit } from './emit.ts'
 import { connect as connectOn } from './connection.ts'
 import { iterate } from './iterate.ts'
-import { impl, placedIn, refusal, type Live, type On } from './messages.ts'
+import { impl, placedIn, type Live, type On } from './messages.ts'
 
 /** The port of `o` on `pod`'s implementation, if it has `o`. */
 const portOf = (live: Live, pod: string, o: Op) => {

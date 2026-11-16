@@ -16,7 +16,7 @@ import { connect as connectOn } from './connection.ts'
 import { iterate } from './iterate.ts'
 import { listen } from './listen.ts'
 import type { AppEvent } from './stream.ts'
-import { impl, refusal, type Live, type On } from './messages.ts'
+import { impl, type Live, type On } from './messages.ts'
 
 type Reason = 'not-found' | 'not-exported' | 'not-unique'
 export type Resolution<T> =
