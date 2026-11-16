@@ -45,9 +45,12 @@ read from the deployment, so no new Connection type is needed in this step.
    `items: Op.event(Todo)`, so `Interface.Type` gives `items(): AsyncIterable<Todo>`. The implementation builds it
    from `ctx.one(KeyValueStoreDef.api)` and listens to `put`, getting `{ input, output }`. Nano runs the yielded values
    as the pod's events (hot). A consumer's `for await` sees items added after it starts, and `break` ends the listener.
-3. **`lifecycle.test.ts`: lifecycle in a runtime.** These already exist as `AppEvent`s. Placement is `applied`
-   (`added`/`removed`), and instances are `built`/`closed`/`restarted`. No `mounted`/`unmounted` names and no new
-   event type: the test shows them on the runtime's stream (4), and a pod hearing them uses that same stream.
+3. **`lifecycle.test.ts`: a pod reacts to other pods added to or removed from its runtimes.**
+   `ctx.addOnPodChangeListener(fn)` is given `{ type: 'added' | 'removed', runtime, pod, implementation }`. It is
+   driven by `apply`'s placement changes (the same changes `applied` reports), not by a new stream event. A pod's own
+   lifecycle stays `make` plus `ctx.addOnCloseListener`. Asking the policy `isAllowed(pod, other, 'lifecycle')` is a
+   separate question from `'subscribe'`. The listener ends when the build closes. An implementation sees these only
+   if its `make` passes them on.
 4. **`observability.test.ts`: the runtime's own stream.** `app.runtime(id).listen(fn)` is a **filter over the one
    existing stream** (`trace`), not a second stream. It keeps events whose pod is placed in `id`, `sent` with that
    `runtime`, and `delivered`/`denied` whose `id` was sent there. It sees nothing from another runtime. `app.listen`
@@ -68,10 +71,9 @@ stay as the end-to-end proof.
 - `RuntimeView` (renaming `Entry`) and `RuntimeView.listen`.
 - `Interface.Type` maps an event op to `() => AsyncIterable<T>`; a plain `make` source method that nano publishes.
 - `selection.on(op)` with no callback returns an `AsyncIterable` (the programmatic listener as an iterable).
-- **A pod's view of its runtime's stream (use case 3):** today a pod can only hear its own close
-  (`ctx.addOnCloseListener`). Rather than a new `onLifecycle`, I propose `ctx.listen(fn)`: the same filter as
-  `RuntimeView.listen`, for the runtimes the pod is placed in. Whether pods should see traffic, or lifecycle only, is
-  yours to decide.
+- `ctx.addOnPodChangeListener(fn)` (approved), with the policy question `'lifecycle'`.
+- **Three boundaries, each with its own policy:** lifecycle (`addOnPodChangeListener`), a pod's own traffic
+  (`on` over its wired deps) and runtime observability (`RuntimeView.listen`, for the operator only, never on `ctx`).
 - Emission subscribers get `{ input, output }` (a change: today `on` gets the output alone).
 
 ## Not in this step
