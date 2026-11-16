@@ -96,12 +96,13 @@ export function runtimeView(live: Live, id?: string): RuntimeView {
     if (!now.ok) return { ok: false, reason: now.fail.type, fail: now.fail, getOrThrow: throws(now.fail) }
     const value = plain<Interface.Type<I>>(api, () => {
       const p = found(api, where)
-      return p.ok ? success({ call: call(p.value.pod), on: (op: Op) => subscribe(op) }) : p
+      return p.ok ? success({ call: call(p.value.pod), on: (op: Op) => hear(op, undefined, { pod: p.value.pod }) as AsyncIterable<{ output: unknown }> }) : p   // the resolved pod's, not any
     })
     return { ok: true, ...now.value, value, getOrThrow: () => value }
   }
   /** The host's `On` to the one pod providing `op` in this runtime; asked 'subscribe' once, now. */
-  const subscribe = ((op: Op, fn?: On['fn']) => {
+  /** `subscribe`, narrowed by `where.pod` (a plain object's source methods hear the pod it resolved). */
+  const hear = (op: Op, fn: On['fn'] | undefined, where: Where) => {
     let stop: ((fail?: Fail) => void) | undefined
     const connect = (fn: On['fn']) => {
       const r = at()
@@ -109,7 +110,7 @@ export function runtimeView(live: Live, id?: string): RuntimeView {
       const runtime = r.value
       const api = (live.now().runtimes[runtime]?.pods ?? []).flatMap(p => impl(live, p)?.provides ?? []).find(i => i.byCoord.has(op.coord))
       if (!api) return throws(miss('not-found', `no pod provides ${op.coord} in ${runtime}`).fail)()
-      const p = placement(live, runtime, api, {})
+      const p = placement(live, runtime, api, where)
       if (!p.ok) return throws(p.fail)()
       const from = p.value.pod
       const gone = () => !live.now().runtimes[runtime]?.pods.includes(from)
@@ -118,7 +119,8 @@ export function runtimeView(live: Live, id?: string): RuntimeView {
       return () => c.value.end()
     }
     return fn ? connect(fn) : iterate(connect, s => { stop = s })
-  }) as RuntimeView['subscribe']
+  }
+  const subscribe = ((op: Op, fn?: On['fn']) => hear(op, fn, {})) as RuntimeView['subscribe']
   const watch = (fn: (e: AppEvent) => void) => { const r = at(); return r.ok ? listen(live, r.value, fn) : throws(r.fail)() }
   return { resolve, get: (api, where) => resolve(api, where).getOrThrow(), call, subscribe, listen: watch }
 }
