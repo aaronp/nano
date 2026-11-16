@@ -4,7 +4,6 @@
  *
  *   const todos = todoList(inMemory()); const t = await todos.add('milk')
  */
-import { Provider } from '@pritzlaff/nano-core'
 import { KeyValueStoreDef } from '../kv/contract.ts'
 import { TodoListDef } from './contract.ts'
 
@@ -32,8 +31,8 @@ export function todoList(store: KeyValueStoreDef.KeyValueStore, newId: () => str
 }
 
 /** Todos kept in whichever KeyValueStore its call edge reaches. */
-const todos = TodoListDef.api.impl(TodoListDef.ns.implementation('kv'))
+const todos = TodoListDef.api.impl(TodoListDef.ns.implementationId('kv'))
   .needs({ store: KeyValueStoreDef.api })
   .make(({ deps }) => todoList(deps.store))
 
-export default Provider.define(TodoListDef.ns, [todos])
+export default TodoListDef.ns.provider([todos])

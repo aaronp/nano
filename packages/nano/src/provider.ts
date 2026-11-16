@@ -3,8 +3,14 @@
  *
  *   const mem = Provider.define('acme/mem', [memDb, memLog], { author: 'acme' })
  *   mem.implementations.get('acme/mem/db')   // memDb
+ *
+ * The package's `Coord` is layer 1's with a namespace that also builds (layer 2): `ns.interface(name, ops)` is
+ * `Interface.define(ns.interfaceId(name), ops)` and `ns.provider(impls, meta?)` is `Provider.define(ns, impls, meta)`.
+ *
+ *   const acme = Coord.namespace('acme'); const DB = acme.interface('DB', { get: Op.action(Key, Value) })
  */
-import type { Namespace } from './coord.ts'
+import { Coord as Pure, type Namespace } from './coord.ts'
+import { Interface } from './iface.ts'
 import type { Implementation } from './implementation.ts'
 
 export type Provider = {
@@ -26,3 +32,20 @@ function define(at: string | Namespace, implementations: Implementation[], meta:
 
 /** `Provider.define(ns, implementations, meta?)`: `ns` a `Namespace` or its string. */
 export const Provider = { define }
+
+type Ops = Parameters<typeof Interface.define>[1]
+function namespace(name: string) {
+  const pure = Pure.namespace(name)
+  // Its coordinates point back at this namespace, not layer 1's.
+  const ns = Object.freeze({
+    ...pure,
+    interfaceId: (n: string) => Object.freeze({ ...pure.interfaceId(n), ns }),
+    implementationId: (n: string) => Object.freeze({ ...pure.implementationId(n), ns }),
+    interface: <U extends Ops>(n: string, ops: U) => Interface.define<U>(ns.interfaceId(n), ops),
+    provider: (implementations: Implementation[], meta?: Record<string, string>) => define(ns, implementations, meta),
+  })
+  return ns
+}
+
+/** Layer 1's `Coord`, its `namespace` also building interfaces and providers. */
+export const Coord = { ...Pure, namespace }

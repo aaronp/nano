@@ -3,8 +3,8 @@ import { Coord, Implementation, Interface } from '../src/index.ts'
 
 describe('Coord', () => {
   const kv = Coord.namespace('example.kv')
-  const store = kv.interface('KeyValueStore')
-  const memory = Coord.namespace('aws.kv').implementation('dynamo')
+  const store = kv.interfaceId('KeyValueStore')
+  const memory = Coord.namespace('aws.kv').implementationId('dynamo')
 
   test('each kind layers on the one before and formats as today\'s string', () => {
     expect(String(kv)).toBe('example.kv')
@@ -29,7 +29,7 @@ describe('Coord', () => {
 
   test('bad parts throw', () => {
     expect(() => Coord.namespace('9kv')).toThrow('bad namespace')
-    expect(() => kv.interface('Key Value')).toThrow('bad name')
+    expect(() => kv.interfaceId('Key Value')).toThrow('bad name')
     expect(() => Coord.pod(memory, 'main', '')).toThrow('bad pod')
     expect(() => Coord.parse('pod', 'aws.kv/dynamo')).toThrow('bad pod coordinate')
   })
@@ -39,4 +39,13 @@ describe('Coord', () => {
     expect(i.coord).toBe('example.kv.KeyValueStore')
     expect(Implementation.define(memory, { provides: [], make: () => [] }).coord).toBe('aws.kv/dynamo')
   })
+})
+
+test('a namespace builds: ns.interface is Interface.define at interfaceId, ns.provider is Provider.define at ns', () => {
+  const acme = Coord.namespace('acme')
+  const api = acme.interface('Echo', {})
+  expect(api.coord).toBe('acme.Echo')
+  const impl = api.impl(acme.implementationId('echo')).make(() => ({}))
+  const p = acme.provider([impl], { by: 'acme' })
+  expect([p.coord, [...p.implementations.keys()], p.meta]).toEqual(['acme', ['acme/echo'], { by: 'acme' }])
 })

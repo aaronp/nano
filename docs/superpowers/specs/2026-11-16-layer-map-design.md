@@ -44,7 +44,7 @@ export namespace KeyValueStoreDef {
   export const ns = Coord.namespace('example.kv')
   export const Path = Schema.define(Type.Array(Type.String()))
   export type Path = Static<typeof Path>                          // TypeScript's line; the only repeat left
-  export const api = Interface.define(ns.interface('KeyValueStore'), {
+  export const api = ns.interface('KeyValueStore', {
     get: Op.action(Path, Value),
     put: Op.action(Type.Object({ key: Path, value: Value }), Type.Null()),
     changed: Op.event(Type.Object({ key: Path })),
@@ -53,26 +53,29 @@ export namespace KeyValueStoreDef {
 }
 ```
 
+**A namespace builds** (layer 2 over layer 1's pure coordinates): `ns.interface(name, ops)` is
+`Interface.define(ns.interfaceId(name), ops)`; `ns.provider(impls, meta?)` is `Provider.define(ns, impls, meta)`.
+
 **Implementations start from the contract they provide.** The implementation's coordinate is always given: it is in
 the *provider's* namespace (`aws.kv/dynamo` implements `example.kv.KeyValueStore`). Two forms, both ending in the same
 layer-1 `Implementation.define(coord, { provides, dependencies, config, make })`, which stays as the explicit form:
 
 ```ts
 // The builder: each step is optional, each narrows the types for the next, and every step offers make().
-const memory = KeyValueStoreDef.api.impl(ns.implementation('memory')).make(() => inMemory())
-const todos = TodoListDef.api.impl(acme.implementation('todos'))
+const memory = KeyValueStoreDef.api.impl(ns.implementationId('memory')).make(() => inMemory())
+const todos = TodoListDef.api.impl(acme.implementationId('todos'))
   .needs({ store: KeyValueStoreDef.api })                  // deps typed from here on
   .config(Type.Object({ prefix: Type.String() }))          // config typed from here on
   .make(({ deps, config }) => todoList(deps.store, config.prefix))
 
 // create: everything at once, for when a chain reads worse.
-const todos2 = TodoListDef.api.impl(acme.implementation('todos')).create({
+const todos2 = TodoListDef.api.impl(acme.implementationId('todos')).create({
   needs: { store: KeyValueStoreDef.api }, config: Type.Object({ prefix: Type.String() }),
   make: ({ deps, config }) => todoList(deps.store, config.prefix),
 })
 
 // Several interfaces: each extra one gets its own plain object from the same build (no method-name clashes).
-const adminStore = KeyValueStoreDef.api.impl(acme.implementation('admin-store'))
+const adminStore = KeyValueStoreDef.api.impl(acme.implementationId('admin-store'))
   .make(() => store)
   .satisfies(AdminDef.api, () => admin)
 ```

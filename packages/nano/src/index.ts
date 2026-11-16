@@ -6,7 +6,7 @@
  *   const db = Interface.define('acme/db', { get: Op.action(Key, Key) })
  *   AppDeployment.assemble({ pods: {}, runtimes: {} }, Registry.create())   // success({})
  */
-export * from './coord.ts'
+export type { Namespace, InterfaceCoord, ImplCoord, PortCoord, PodCoord } from './coord.ts'
 export * from './schema.ts'
 export * from './op.ts'
 export * from './iface.ts'

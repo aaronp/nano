@@ -22,8 +22,9 @@ consultancy), possibly of someone else's contract.
 | `PortCoord` | interface + op name | `example.kv.KeyValueStore/get` |
 | `PodCoord` | implementation + runtime + pod (the instance) | `aws.kv/dynamo@main/store` **(my call)** |
 
-- Built by layering: `const kv = Coord.namespace('example.kv')`, `kv.interface('KeyValueStore')`,
-  `kv.implementation('memory')`, `Coord.port(i, 'get')`, `Coord.pod(impl, 'main', 'store')`.
+- Built by layering: `const kv = Coord.namespace('example.kv')`, `kv.interfaceId('KeyValueStore')`,
+  `kv.implementationId('memory')`, `Coord.port(i, 'get')`, `Coord.pod(impl, 'main', 'store')`. A namespace also builds (layer 2): `kv.interface(name, ops)` is
+  `Interface.define(kv.interfaceId(name), ops)` and `kv.provider(impls, meta?)` is `Provider.define(kv, impls, meta)`.
 - Each is a frozen value with a `kind` and `toString()` giving its string form. A bad part throws, as the builders do today.
 - `Coord.parse(kind, s)` reads a string back. The kind is required: a port string reads as an implementation
   coordinate otherwise.

@@ -15,7 +15,7 @@ export namespace TodoListDef {
   export const Change = Schema.define(Type.Object({ id: Type.String(), title: Type.Optional(Type.String()), done: Type.Optional(Type.Boolean()) }))
   export type Change = Static<typeof Change>
 
-  export const api = Interface.define(ns.interface('TodoList'), {
+  export const api = ns.interface('TodoList', {
     add: Op.action(Type.String(), Todo),
     list: Op.action(Type.Null(), Type.Array(Todo)),
     /** The changed todo, or `null` if there is none with that id. */

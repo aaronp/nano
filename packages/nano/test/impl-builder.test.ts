@@ -8,19 +8,19 @@ import { AppDeployment, Application, Coord, Interface, Op, Provider, Registry, t
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const ns = Coord.namespace('acme')
-const Counter = Interface.define(ns.interface('Counter'), { inc: Op.action(Type.Null(), Type.Integer()) })
-const Label = Interface.define(ns.interface('Label'), { label: Op.action(Type.Null(), Type.String()) })
+const Counter = ns.interface('Counter', { inc: Op.action(Type.Null(), Type.Integer()) })
+const Label = ns.interface('Label', { label: Op.action(Type.Null(), Type.String()) })
 
-const counter = Counter.impl(ns.implementation('counter')).make(() => { let n = 0; return { async inc() { return ++n } } })
-const labelled = Label.impl(ns.implementation('labelled'))
+const counter = Counter.impl(ns.implementationId('counter')).make(() => { let n = 0; return { async inc() { return ++n } } })
+const labelled = Label.impl(ns.implementationId('labelled'))
   .needs({ counter: Counter })
   .config(Type.Object({ prefix: Type.String() }))
   .make(({ deps, config }) => ({ async label() { return `${config.prefix satisfies string}${await deps.counter.inc()}` } }))
-const created = Label.impl(ns.implementation('created')).create({
+const created = Label.impl(ns.implementationId('created')).create({
   needs: { counter: Counter }, config: Type.Object({ prefix: Type.String() }),
   make: ({ deps, config }) => ({ async label() { return `${config.prefix}:${await deps.counter.inc()}` } }),
 })
-const both = Counter.impl(ns.implementation('both'))
+const both = Counter.impl(ns.implementationId('both'))
   .make(() => ({ async inc() { return 7 } }))
   .satisfies(Label, () => ({ async label() { return 'both' } }))
 
@@ -59,5 +59,5 @@ test('satisfies: each interface gets its own plain object from the same build', 
 
 test('make must give the interface: a wrong plain object does not type', () => {
   // @ts-expect-error inc must return a number
-  void Counter.impl(ns.implementation('wrong')).make(() => ({ async inc() { return 'x' } }))
+  void Counter.impl(ns.implementationId('wrong')).make(() => ({ async inc() { return 'x' } }))
 })

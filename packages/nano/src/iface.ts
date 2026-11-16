@@ -9,7 +9,7 @@
  * optional, each typing the next step; `make` at every step; `create` all at once; `satisfies` for another interface
  * from the same build), ending in `Implementation.define`.
  *
- *   db.impl(acme.implementation('mem')).needs({ log: Log }).make(({ deps }) => memDb(deps.log))
+ *   db.impl(acme.implementationId('mem')).needs({ log: Log }).make(({ deps }) => memDb(deps.log))
  */
 import type { Static, TSchema } from 'typebox'
 import type { NanoContext } from './context.ts'

@@ -3,16 +3,16 @@
  * frozen value whose `toString()` is the string form saved in deployments; `Coord.parse(kind, s)` reads one back.
  *
  *   const kv = Coord.namespace('example.kv')          // an author's namespace
- *   const store = kv.interface('KeyValueStore')        // example.kv.KeyValueStore
- *   const mem = kv.implementation('memory')            // example.kv/memory
+ *   const store = kv.interfaceId('KeyValueStore')      // example.kv.KeyValueStore
+ *   const mem = kv.implementationId('memory')          // example.kv/memory
  *   Coord.port(store, 'get')                           // example.kv.KeyValueStore/get
  *   Coord.pod(mem, 'main', 'store')                    // example.kv/memory@main/store
  */
 export type Namespace = {
   readonly kind: 'namespace'
   readonly name: string
-  interface(name: string): InterfaceCoord
-  implementation(name: string): ImplCoord
+  interfaceId(name: string): InterfaceCoord
+  implementationId(name: string): ImplCoord
 }
 export type InterfaceCoord = { readonly kind: 'interface'; readonly ns: Namespace; readonly name: string }
 export type ImplCoord = { readonly kind: 'implementation'; readonly ns: Namespace; readonly name: string }
@@ -31,8 +31,8 @@ function namespace(name: string): Namespace {
   check(NS.test(name), 'namespace', name)
   const ns: Namespace = value({
     kind: 'namespace' as const, name,
-    interface: (n: string) => { check(NAME.test(n), 'name', n); return value({ kind: 'interface' as const, ns, name: n }, `${name}.${n}`) },
-    implementation: (n: string) => { check(NAME.test(n), 'name', n); return value({ kind: 'implementation' as const, ns, name: n }, `${name}/${n}`) },
+    interfaceId: (n: string) => { check(NAME.test(n), 'name', n); return value({ kind: 'interface' as const, ns, name: n }, `${name}.${n}`) },
+    implementationId: (n: string) => { check(NAME.test(n), 'name', n); return value({ kind: 'implementation' as const, ns, name: n }, `${name}/${n}`) },
   }, name)
   return ns
 }
@@ -59,8 +59,8 @@ function read<K extends keyof Kinds>(kind: K, s: string): Kinds[K] {
   const attempt = (f: () => Kinds[keyof Kinds]) => { try { return f() } catch { return bad() } }
   switch (kind) {
     case 'namespace': return attempt(() => namespace(s)) as Kinds[K]
-    case 'interface': { const [ns, n] = cut(s, '.') ?? bad(); return attempt(() => namespace(ns).interface(n)) as Kinds[K] }
-    case 'implementation': { const [ns, n] = cut(s, '/') ?? bad(); return attempt(() => namespace(ns).implementation(n)) as Kinds[K] }
+    case 'interface': { const [ns, n] = cut(s, '.') ?? bad(); return attempt(() => namespace(ns).interfaceId(n)) as Kinds[K] }
+    case 'implementation': { const [ns, n] = cut(s, '/') ?? bad(); return attempt(() => namespace(ns).implementationId(n)) as Kinds[K] }
     case 'port': { const [i, op] = cut(s, '/') ?? bad(); return attempt(() => port(read('interface', i), op)) as Kinds[K] }
     default: {
       const at = s.indexOf('@'), slash = s.indexOf('/', at)
@@ -70,5 +70,5 @@ function read<K extends keyof Kinds>(kind: K, s: string): Kinds[K] {
   }
 }
 
-/** `Coord.namespace(ns)`, `Coord.port(interface, op)`, `Coord.pod(implementation, runtime, pod)`, `Coord.parse(kind, s)`. */
+/** Layer 1's coordinates (the package's `Coord` adds a namespace's building methods, in provider.ts): `Coord.namespace(ns)`, `Coord.port(interface, op)`, `Coord.pod(implementation, runtime, pod)`, `Coord.parse(kind, s)`. */
 export const Coord = { namespace, port, pod, parse: read }

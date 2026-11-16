@@ -20,7 +20,7 @@ export namespace KeyValueStoreDef {
   export const Entry = Schema.define(Type.Object({ key: Path, value: Value }))
   export type Entry = Static<typeof Entry>
 
-  export const api = Interface.define(ns.interface('KeyValueStore'), {
+  export const api = ns.interface('KeyValueStore', {
     /** `null` when the key is missing. */
     get: Op.action(Path, Value),
     put: Op.action(Entry, Type.Null()),
