@@ -1,0 +1,96 @@
+{
+  "pods": {
+    "store": {
+      "implementation": "example.kv/memory",
+      "eager": false
+    },
+    "messaging": {
+      "implementation": "example.messaging/kv",
+      "eager": false
+    },
+    "alice": {
+      "implementation": "example.chat/participant",
+      "eager": false
+    },
+    "bob": {
+      "implementation": "example.chat/participant",
+      "eager": false
+    }
+  },
+  "runtimes": {
+    "backend": {
+      "pods": [
+        "store",
+        "messaging"
+      ],
+      "subscriptions": [
+        {
+          "kind": "call",
+          "from": "messaging",
+          "to": "store"
+        },
+        {
+          "kind": "call",
+          "from": "alice",
+          "to": "messaging"
+        },
+        {
+          "kind": "call",
+          "from": "bob",
+          "to": "messaging"
+        }
+      ],
+      "policy": {
+        "kind": "rules",
+        "rules": [
+          {
+            "allow": [
+              "call",
+              "subscribe"
+            ],
+            "from": "bob",
+            "outside": true,
+            "toInterface": "example.messaging.Messaging"
+          },
+          {
+            "allow": [
+              "call",
+              "subscribe"
+            ],
+            "from": "alice",
+            "outside": true,
+            "toInterface": "example.messaging.Messaging"
+          },
+          {
+            "allow": [
+              "call",
+              "subscribe"
+            ],
+            "from": "messaging",
+            "outside": false,
+            "toInterface": "example.kv.KeyValueStore"
+          },
+          {
+            "allow": "*",
+            "outside": false
+          },
+          {
+            "deny": "*"
+          }
+        ]
+      }
+    },
+    "chat": {
+      "pods": [
+        "alice",
+        "bob"
+      ],
+      "subscriptions": []
+    }
+  },
+  "modules": {
+    "example.kv": "../kv/memory.js",
+    "example.messaging": "./messaging/kv.js",
+    "example.chat": "./room/messaging.js"
+  }
+}
