@@ -1,41 +1,37 @@
 /**
- * The todo example: a plain `TodoList` whose every call goes through a nano application, where `todos` reaches its
- * `store` only through the runtime. The store itself is plain TypeScript too, tested here without nano.
+ * The todo template, in the order of its benefits: it just works as plain TypeScript; the runtime shows, swaps and
+ * lets others hear what happens; and the whole configuration is data (`nano.json`).
  */
 import { expect, test } from 'bun:test'
-import { Application, AppDeployment, Registry, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
-import kv, { inMemory, KeyValueStore } from './kv.ts'
-import todo, { TodoList, type Todo } from './todo.ts'
-import { handlers, plain, type Matches } from './plain.ts'
+import { Application, AppDeployment, Implementation, Provider, Registry, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
+import { KeyValueStoreDef } from './kv/contract.ts'
+import kv, { inMemory } from './kv/memory.ts'
+import { TodoListDef } from './todo/contract.ts'
+import todo from './todo/kv.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
+const saved = async (): Promise<AppDeployment> => Bun.file(new URL('./nano.json', import.meta.url)).json()
+
+let heard: KeyValueStoreDef.Path[] = []
+/** Only for these tests: a pod that hears its store's `changed`. */
+const watcher = Implementation.define('example.test/watcher', {
+  provides: [],
+  dependencies: { store: KeyValueStoreDef.api },
+  make: ctx => {
+    const s = ctx.one(KeyValueStoreDef.api)
+    if (s.ok) s.value.on(KeyValueStoreDef.api.ops.changed, ({ key }) => { heard.push(key) })
+    return []
+  },
+})
 
 async function open() {
   const registry = Registry.create()
-  must(registry.add(kv))
-  must(registry.add(todo))
-  const deployment: AppDeployment = await Bun.file(new URL('./nano.json', import.meta.url)).json()
-  const app = must(await Application.create(must(AppDeployment.assemble(deployment, registry)), {}))
-  return { app, todos: plain<TodoList>(() => app.call('main', 'todos')) }
+  for (const p of [kv, todo, Provider.define('example.test', [watcher])]) must(registry.add(p))
+  return must(await Application.create(must(AppDeployment.assemble(await saved(), registry))))
 }
 
-test('inMemory, with no nano: put, get, list by prefix in path order, delete, values copied', async () => {
-  const s = inMemory()
-  const v = { n: 1 }
-  await s.put({ key: ['a', 'b'], value: v })
-  await s.put({ key: ['a'], value: 'top' })
-  await s.put({ key: ['b'], value: true })
-  v.n = 2
-  expect(await s.get(['a', 'b'])).toEqual({ n: 1 })
-  expect(await s.get(['nope'])).toBeNull()
-  expect((await s.list({ prefix: ['a'] })).map(e => e.key)).toEqual([['a'], ['a', 'b']])
-  expect((await s.list({ prefix: [] })).map(e => e.key)).toEqual([['a'], ['a', 'b'], ['b']])
-  await s.delete(['a'])
-  expect(await s.get(['a'])).toBeNull()
-})
-
-test('a TodoList is plain TypeScript, and every call goes through the application', async () => {
-  const { todos } = await open()
+test('1. it just works: app.get gives a plain TodoList, CRUD over the store', async () => {
+  const todos = (await open()).get(TodoListDef.api)
   const milk = await todos.add('milk')
   const eggs = await todos.add('eggs')
   expect(milk).toEqual({ id: milk.id, title: 'milk', done: false })
@@ -45,37 +41,69 @@ test('a TodoList is plain TypeScript, and every call goes through the applicatio
   expect(await todos.remove(eggs.id)).toBe(true)
   expect(await todos.remove(eggs.id)).toBe(false)
   expect(await todos.list()).toEqual([{ ...milk, done: true }])
-})
-
-test('todos reaches store only through the runtime: the stream records the call edge', async () => {
-  const { app, todos } = await open()
-  const seen: AppEvent[] = []
-  app.listen(e => seen.push(e))
-  await todos.add('milk')
-  expect(seen.some(e => e.type === 'sent' && e.from === 'todos' && e.to === 'store' && e.kind === 'call')).toBe(true)
-})
-
-test('a Fail reaches a plain caller as a thrown Error carrying it', async () => {
-  const { todos } = await open()
   const e = await todos.add(42 as unknown as string).catch(x => x)
-  expect(e).toBeInstanceOf(Error)
-  expect(e.fail.type).toBe('invalid-input')
+  expect(e.fail.type).toBe('invalid-input')   // a Fail reaches a plain caller as a thrown Error carrying it
 })
 
-test('a throwing plain method is a threw result', async () => {
-  const h = handlers(KeyValueStore, { get: async () => { throw new Error('disk on fire') } })
-  expect(await h.get(['a'])).toEqual({ ok: false, fail: { type: 'threw', reason: 'disk on fire' } })
+test('2. the runtime: the stream shows every todos → store call with its timing', async () => {
+  const app = await open()
+  const events: AppEvent[] = []
+  app.listen(e => events.push(e))
+  await app.get(TodoListDef.api).add('milk')
+  const call = events.find(e => e.type === 'sent' && e.from === 'todos' && e.to === 'store')
+  expect(call).toMatchObject({ kind: 'call', port: 'example.kv.KeyValueStore/put' })
+  const done = events.find(e => e.type === 'delivered' && call?.type === 'sent' && e.id === call.id)
+  expect(done).toMatchObject({ result: { ok: true } })
+  expect(typeof (done as { ms: number }).ms).toBe('number')
 })
 
-// The build fails if a plain interface drifts from its nano interface; each case below must stay a type error.
-interface WrongOutput extends Omit<TodoList, 'remove'> { remove(id: string): Promise<string> }
-interface WrongInput extends Omit<TodoList, 'add'> { add(title: number): Promise<Todo> }
-interface Extra extends TodoList { archive(id: string): Promise<void> }
-// @ts-expect-error a different output
-true satisfies Matches<WrongOutput, typeof TodoList>
-// @ts-expect-error a different input
-true satisfies Matches<WrongInput, typeof TodoList>
-// @ts-expect-error an action the nano interface doesn't have
-true satisfies Matches<Extra, typeof TodoList>
-// @ts-expect-error an action missing
-true satisfies Matches<Omit<TodoList, 'list'>, typeof TodoList>
+test('2. the runtime: apply swaps the store for another implementation and the next call reaches it', async () => {
+  const app = await open()
+  const todos = app.get(TodoListDef.api)
+  await todos.add('milk')
+  const next = app.deployment()
+  next.pods.store = { implementation: String(KeyValueStoreDef.impls.backup), eager: false }
+  must(await app.apply(next))
+  expect(await todos.list()).toEqual([])   // the same plain object, now over the backup store
+  await todos.add('eggs')
+  expect((await todos.list()).map(t => t.title)).toEqual(['eggs'])
+})
+
+test('2. the runtime: a subscriber hears the store\'s changed', async () => {
+  heard = []
+  const app = await open()
+  const next = app.deployment()
+  next.pods.watch = { implementation: 'example.test/watcher', eager: true }
+  next.runtimes.main!.pods.push('watch')
+  next.runtimes.main!.subscriptions.push({ kind: 'call', from: 'watch', to: 'store' })
+  must(await app.apply(next))
+  const t = await app.get(TodoListDef.api).add('milk')
+  await Bun.sleep(0)
+  expect(heard).toEqual([['todos', t.id]])
+})
+
+test('3. configuration as data: the running app\'s deployment() round-trips through nano.json', async () => {
+  const json = await saved()
+  const app = await open()
+  const { modules, ...rest } = json
+  expect(app.deployment()).toEqual(rest)
+  const again = JSON.parse(JSON.stringify(app.deployment()))
+  const registry = Registry.create()
+  for (const p of [kv, todo]) must(registry.add(p))
+  const copy = must(await Application.create(must(AppDeployment.assemble(again, registry))))
+  expect(copy.deployment()).toEqual(app.deployment())
+  expect(modules).toEqual({ 'example.kv': './kv/memory.js', 'example.todo': './todo/kv.js' })
+})
+
+test('the store is plain TypeScript too: no nano, values copied, list in path order', async () => {
+  const s = inMemory()
+  const v = { n: 1 }
+  await s.put({ key: ['a', 'b'], value: v })
+  await s.put({ key: ['a'], value: 'top' })
+  v.n = 2
+  expect(await s.get(['a', 'b'])).toEqual({ n: 1 })
+  expect(await s.get(['nope'])).toBeNull()
+  expect((await s.list({ prefix: ['a'] })).map(e => e.key)).toEqual([['a'], ['a', 'b']])
+  await s.delete(['a'])
+  expect(await s.get(['a'])).toBeNull()
+})
