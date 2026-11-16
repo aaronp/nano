@@ -20,16 +20,17 @@ test('from: a pod or host', () => {
   expect(PolicyRules([{ allow: '*', from: '*' }]).isAllowed(ask({ from: 'z' }))).toEqual(yes)
 })
 
-test('to: a pod, an interface (all its ports) or a port (only that op)', () => {
-  expect(PolicyRules([{ allow: '*', to: 'db' }]).isAllowed(ask())).toEqual(yes)
-  const iface = PolicyRules([{ allow: '*', to: 'acme.Db' }])
+test('targets by resource type: toPod, toInterface (all its ports), toPort (only that op)', () => {
+  expect(PolicyRules([{ allow: '*', toPod: 'db' }]).isAllowed(ask())).toEqual(yes)
+  const iface = PolicyRules([{ allow: '*', toInterface: 'acme.Db' }])
   expect(iface.isAllowed(ask())).toEqual(yes)
   expect(iface.isAllowed(ask({ port: 'acme.Db/load' }))).toEqual(yes)
   expect(iface.isAllowed(ask({ port: 'acme.Dbx/save' }))).toEqual(no)
-  const op = PolicyRules([{ allow: '*', to: 'acme.Db/save' }])
+  const op = PolicyRules([{ allow: '*', toPort: 'acme.Db/save' }])
   expect(op.isAllowed(ask())).toEqual(yes)
   expect(op.isAllowed(ask({ port: 'acme.Db/load' }))).toEqual(no)
-  expect(PolicyRules([{ allow: '*', to: 'other' }]).isAllowed(ask())).toEqual(no)
+  expect(PolicyRules([{ allow: '*', toPod: 'other' }]).isAllowed(ask())).toEqual(no)
+  expect(PolicyRules([{ allow: '*', toPod: 'db', toInterface: 'acme.Other' }]).isAllowed(ask())).toEqual(no)   // all given fields must match
 })
 
 test('outside', () => {
@@ -39,15 +40,14 @@ test('outside', () => {
 })
 
 test('first match wins; a deny names its rule', () => {
-  const p = PolicyRules([{ allow: 'call', to: 'db' }, { deny: '*', from: 'a' }, { allow: '*' }])
+  const p = PolicyRules([{ allow: 'call', toPod: 'db' }, { deny: '*', from: 'a' }, { allow: '*' }])
   expect(p.isAllowed(ask())).toEqual(yes)
   expect(p.isAllowed(ask({ kind: 'pipe' }))).toEqual({ approved: false, reason: 'rules[1]' })
   expect(p.isAllowed(ask({ kind: 'pipe', from: 'b' }))).toEqual(yes)
   expect(PolicyRules([]).isAllowed(ask())).toEqual(no)
 })
 
-test('a pod named like an interface or port coordinate matches the same rule as that coordinate', () => {
-  const p = PolicyRules([{ allow: '*', to: 'acme.Db' }])
-  expect(p.isAllowed(ask({ to: 'acme.Db', port: undefined }))).toEqual(yes)
-  expect(p.isAllowed(ask({ to: 'acme.Db', port: 'other.X/y' }))).toEqual(yes)
+test('a pod name never reads as an interface: toInterface does not match a pod, nor toPod an interface', () => {
+  expect(PolicyRules([{ allow: '*', toInterface: 'db' }]).isAllowed(ask())).toEqual(no)
+  expect(PolicyRules([{ allow: '*', toPod: 'acme.Db' }]).isAllowed(ask())).toEqual(no)
 })

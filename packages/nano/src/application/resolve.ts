@@ -16,9 +16,9 @@ import { connect as connectOn } from './connection.ts'
 import { iterate } from './iterate.ts'
 import { listen } from './listen.ts'
 import type { AppEvent } from './stream.ts'
-import { impl, type Live, type On } from './messages.ts'
+import { impl, refusal, type Live, type On } from './messages.ts'
 
-type Reason = 'not-found' | 'not-unique'
+type Reason = 'not-found' | 'not-unique' | 'denied'
 export type Resolution<T> =
   | { readonly ok: true; readonly runtime: string; readonly pod: string; readonly implementation: string; readonly value: T; getOrThrow(): T }
   | { readonly ok: false; readonly reason: Reason; readonly fail: Fail; getOrThrow(): never }
@@ -80,7 +80,17 @@ export function runtimeView(live: Live, id?: string): RuntimeView {
       : live.closed() ? failure('not-found', 'application is closed')
       : live.now().runtimes[id]?.pods.includes(pod) ? undefined : failure('not-found', `${pod} is not placed in ${id}`) })
   }
-  const found = (api: Interface, where: Where): Found<Placed> => { const r = at(); return r.ok ? placement(live, r.value, api, where) : r }
+  /** Placed, and reachable: the runtime's policy lets the host reach at least one op of `api` there (an action by
+   *  `call`, an event by `subscribe`); else `denied`, so nothing is learned of a runtime the host may not use. */
+  const found = (api: Interface, where: Where): Found<Placed> => {
+    const r = at()
+    if (!r.ok) return r
+    const p = placement(live, r.value, api, where)
+    if (!p.ok) return p
+    const reachable = Object.values(api.ops).some(o =>
+      refusal(live, { runtime: r.value, kind: o.kind === 'event' ? 'subscribe' : 'call', from: 'host', to: p.value.pod, port: port(api, o) }) === undefined)
+    return reachable ? p : miss('denied', `${r.value}'s policy lets the host reach no op of ${api.coord}`)
+  }
   const resolve = <I extends Interface>(api: I, where: Where = {}): Resolution<Interface.Type<I>> => {
     const now = found(api, where)
     if (!now.ok) return { ok: false, reason: now.fail.type, fail: now.fail, getOrThrow: throws(now.fail) }

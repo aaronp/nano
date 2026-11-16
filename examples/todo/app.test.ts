@@ -22,9 +22,10 @@ test('the frontend cannot reach the store; with two runtimes, app.get must be to
   expect(app.resolve(TodoListDef.api)).toMatchObject({ ok: false, reason: 'not-unique' })
   expect(() => app.get(TodoListDef.api)).toThrow('not-unique')
   const next = app.deployment()
-  next.runtimes.frontend = { pods: ['todos', 'store'], subscriptions: [], policy: { kind: 'rules', rules: [{ allow: ['call', 'subscribe'], outside: true, to: String(TodoListDef.api.coord) }, { allow: '*', outside: false }, { deny: '*' }] } }
+  next.runtimes.frontend = { pods: ['todos', 'store'], subscriptions: [], policy: { kind: 'rules', rules: [{ allow: ['call', 'subscribe'], outside: true, toInterface: String(TodoListDef.api.coord) }, { allow: '*', outside: false }, { deny: '*' }] } }
   if (!(await app.apply(next)).ok) throw new Error('apply')
-  await expect(app.runtime('frontend').get(KeyValueStoreDef.api).list({ prefix: [] })).rejects.toMatchObject({ fail: { type: 'denied' } })
+  expect(app.runtime('frontend').resolve(KeyValueStoreDef.api)).toMatchObject({ ok: false, reason: 'denied' })   // placed there, but the rules keep it from the host
+  expect(() => app.runtime('frontend').get(KeyValueStoreDef.api)).toThrow('denied')
 })
 
 test('resolve says why not, and getOrThrow throws an Error carrying the Fail', async () => {

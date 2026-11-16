@@ -547,7 +547,7 @@ describe('policed emissions', () => {
 
 describe('a runtime policy as data', () => {
   const d = (policy?: RuntimeDeployment['policy']): AppDeployment => ({ pods: { c: Pod.lazy(counter) }, runtimes: { r: { pods: ['c'], subscriptions: [], ...(policy !== undefined && { policy }) } } })
-  const denyCalls: RuntimeDeployment['policy'] = { kind: 'rules', rules: [{ deny: 'call', to: 'acme.Counter' }, { allow: '*' }] }
+  const denyCalls: RuntimeDeployment['policy'] = { kind: 'rules', rules: [{ deny: 'call', toInterface: 'acme.Counter' }, { allow: '*' }] }
 
   test('given rules in a deployment, when the host calls, then they govern it and the deployment round-trips', async () => {
     const { app } = await create(d(denyCalls))

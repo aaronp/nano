@@ -20,9 +20,13 @@ export const Policies = {
 
 const Kind = Type.Union([Type.Literal('call'), Type.Literal('pipe'), Type.Literal('on'), Type.Literal('subscribe'), Type.Literal('unsubscribe'), Type.Literal('lifecycle'), Type.Literal('*')])
 const Kinds = Type.Union([Kind, Type.Array(Kind)])
-const Match = { from: Type.Optional(Type.String()), to: Type.Optional(Type.String()), outside: Type.Optional(Type.Boolean()) }
-/** A rule: `allow` or `deny` these kinds; `from` a pod or 'host', `to` a pod, interface or port coordinate; absent or '*' matches anything.
- * `to` is not told apart by kind: a pod named like an interface or port coordinate matches the same rule (name pods without dots), and `host` is not a pod name. */
+const Match = { from: Type.Optional(Type.String()), toPod: Type.Optional(Type.String()), toInterface: Type.Optional(Type.String()),
+  toPort: Type.Optional(Type.String()), outside: Type.Optional(Type.Boolean()) }
+/**
+ * A rule: `allow` or `deny` these kinds of message, from a pod or 'host' (`from`), to a target named by its resource
+ * type: `toPod` (a pod name), `toInterface` (an interface coordinate: any of its ops), `toPort` (a port coordinate,
+ * `iface/op`: that op only). Each field absent or '*' matches anything; all given fields must match.
+ */
 export const Rule = Type.Union([
   Type.Object({ allow: Kinds, ...Match }, { additionalProperties: false }),
   Type.Object({ deny: Kinds, ...Match }, { additionalProperties: false }),
@@ -33,7 +37,8 @@ const any = (v: string | undefined, ...xs: (string | undefined)[]) => v === unde
 const matches = (r: Rule, a: Ask) => {
   const kinds = [('allow' in r ? r.allow : r.deny)].flat()
   const iface = a.port?.slice(0, a.port.lastIndexOf('/'))
-  return (kinds.includes('*') || kinds.includes(a.kind)) && any(r.from, a.from) && any(r.to, a.to, a.port, iface)
+  return (kinds.includes('*') || kinds.includes(a.kind)) && any(r.from, a.from) && any(r.toPod, a.to)
+    && any(r.toInterface, iface) && any(r.toPort, a.port)
     && (r.outside === undefined || r.outside === a.outside)
 }
 

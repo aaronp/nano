@@ -22,7 +22,8 @@ type Kinds = { namespace: Namespace; interface: InterfaceCoord; implementation: 
 
 const NS = /^[a-zA-Z][a-zA-Z0-9-]*([./][a-zA-Z0-9-]+)*$/
 const NAME = /^[a-zA-Z0-9-]+$/
-const ID = /^[^/@\s#\x00-\x1f\x7f]{1,64}$/   // a runtime id or pod name (the id rule, and no `@`)
+const ID = /^[^/@\s#\x00-\x1f\x7f]{1,64}$/   // a runtime id (the id rule, and no `@`)
+const POD = /^[^/@.\s#\x00-\x1f\x7f]{1,64}$/   // a pod name: also no `.`
 
 const check = (ok: boolean, what: string, v: string) => { if (!ok) throw new Error(`bad ${what} ${JSON.stringify(v)}`) }
 const value = <T extends object>(v: T, text: string): T => Object.freeze(Object.assign(v, { toString: () => text }))
@@ -44,7 +45,7 @@ function port(i: InterfaceCoord, op: string): PortCoord {
 
 function pod(implementation: ImplCoord, runtime: string, name: string): PodCoord {
   check(ID.test(runtime), 'runtime', runtime)
-  check(ID.test(name), 'pod', name)
+  check(POD.test(name), 'pod', name)
   return value({ kind: 'pod' as const, implementation, runtime, pod: name }, `${implementation}@${runtime}/${name}`)
 }
 

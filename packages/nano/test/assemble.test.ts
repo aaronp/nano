@@ -172,3 +172,8 @@ describe('assemble', () => {
       fails(AppDeployment.assemble({ pods: {}, runtimes: { [bad]: { pods: [], subscriptions: [] } } }, registry), 'invalid-input', '/runtimes')
   })
 })
+
+test('a pod name has no dots, so a rule never reads it as an interface or port coordinate', () => {
+  const r = AppDeployment.assemble({ pods: { 'acme.Db': { implementation: 'acme/mem', eager: false } }, runtimes: { r: { pods: ['acme.Db'], subscriptions: [] } } }, registry)
+  expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+})

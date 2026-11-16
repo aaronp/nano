@@ -20,7 +20,7 @@ must(registry.add(Provider.define('acme', [
 const d: AppDeployment = {
   pods: { todos: { implementation: 'acme/todos', eager: true }, btodos: { implementation: 'acme/todos-b', eager: true }, store: { implementation: 'acme/store', eager: true }, shared: { implementation: 'acme/hostside', eager: true } },
   runtimes: {
-    frontend: { pods: ['todos', 'shared'], subscriptions: [], policy: { kind: 'rules', rules: [{ allow: ['call', 'subscribe'], outside: true, to: 'acme.Todos' }, { allow: '*', outside: false }, { deny: '*' }] } },
+    frontend: { pods: ['todos', 'shared'], subscriptions: [], policy: { kind: 'rules', rules: [{ allow: ['call', 'subscribe'], outside: true, toInterface: 'acme.Todos' }, { allow: '*', outside: false }, { deny: '*' }] } },
     backend: { pods: ['btodos', 'store', 'shared'], subscriptions: [{ kind: 'call', from: 'btodos', to: 'store' }] },
   },
 }

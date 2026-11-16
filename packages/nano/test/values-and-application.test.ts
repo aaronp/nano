@@ -307,7 +307,7 @@ describe('changing', () => {
     expect(await app.call('r', 'send').send('k')).toMatchObject({ ok: false, fail: { type: 'denied' } })
   })
   test('given interface rules, when apply adds a call edge, then it is accepted and each call along it is allowed or denied per message', async () => {
-    const policies = { r: PolicyRules([{ allow: 'call', from: 'host', to: 'acme.Send' }, { allow: 'call', from: 'send', to: 'acme.KV/put' }, { deny: '*' }]) }
+    const policies = { r: PolicyRules([{ allow: 'call', from: 'host', toInterface: 'acme.Send' }, { allow: 'call', from: 'send', toPort: 'acme.KV/put' }, { deny: '*' }]) }
     const d = one({ send: Pod.lazy(sender), db: Pod.lazy(kv) })
     const { app } = await live(d, { policies })
     const next: AppDeployment = { ...d, runtimes: { r: { ...d.runtimes.r!, subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] } } }

@@ -136,13 +136,13 @@ test('app.get with several runtimes is not-unique ("name a runtime"); app.runtim
   expect(await app.runtime('main').call('notes').note('x')).toMatchObject({ ok: true, value: 1 })
 })
 
-test('rules in place of exports: what the host may not call is denied at the call, yet its pods still reach it', async () => {
+test('rules in place of exports: what the host may not reach is denied at resolve and at the call, yet its pods still reach it', async () => {
   const d = deployment('acme/mem')
-  const only = (to: string): RuntimeDeployment['policy'] => ({ kind: 'rules', rules: [{ allow: ['call', 'subscribe'], outside: true, to }, { allow: '*', outside: false }, { deny: '*' }] })
+  const only = (to: string): RuntimeDeployment['policy'] => ({ kind: 'rules', rules: [{ allow: ['call', 'subscribe'], outside: true, toInterface: to }, { allow: '*', outside: false }, { deny: '*' }] })
   d.runtimes.main!.policy = only('acme.Notes')
   const app = must(await Application.create(must(AppDeployment.assemble(d, registry))))
-  expect(app.resolve(KV)).toMatchObject({ ok: true })
-  await expect(app.get(KV).size()).rejects.toMatchObject({ fail: { type: 'denied', reason: 'rules[2]' } })
+  expect(app.resolve(KV)).toMatchObject({ ok: false, reason: 'denied' })   // nothing learned of where KV is placed
+  expect(() => app.get(KV)).toThrow('denied')
   expect(await app.call('store').size(null)).toMatchObject({ ok: false, fail: { type: 'denied' } })
   expect(await app.get(Notes).note('milk')).toBe(1)   // notes -> store, inside the runtime
   d.runtimes.main!.policy = only('acme.Nothing')
@@ -189,7 +189,7 @@ test('a deps role narrowed by Selector.of keeps its interface type', () => {
 test('app.subscribe hears each successful call of an action as { input, output }; refused, it throws denied at the call', async () => {
   const d = deployment('acme/mem')
   const deny = { isAllowed: (ask: Ask) => ask.from === 'host' && ask.kind === 'subscribe' ? { approved: false, reason: 'no' } : { approved: true } }
-  const notes: RuntimeDeployment['policy'] = { kind: 'rules', rules: [{ allow: ['call', 'subscribe'], outside: true, to: 'acme.Notes' }, { allow: '*', outside: false }, { deny: '*' }] }
+  const notes: RuntimeDeployment['policy'] = { kind: 'rules', rules: [{ allow: ['call', 'subscribe'], outside: true, toInterface: 'acme.Notes' }, { allow: '*', outside: false }, { deny: '*' }] }
   for (const [policies, policy, want] of [[{}, undefined, 1], [{ main: deny }, undefined, 0], [{}, notes, 0]] as const) {
     const app = must(await Application.create(must(AppDeployment.assemble({ ...d, runtimes: { main: { ...d.runtimes.main!, ...(policy && { policy }) } } }, registry)), { policies: policies as never }))
     const heard: unknown[] = []
