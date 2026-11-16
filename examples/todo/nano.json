@@ -18,8 +18,7 @@
     },
     "backend": {
       "pods": [
-        "store",
-        "todos"
+        "store"
       ],
       "subscriptions": [
         {
@@ -27,7 +26,34 @@
           "from": "todos",
           "to": "store"
         }
-      ]
+      ],
+      "policy": {
+        "kind": "rules",
+        "rules": [
+          {
+            "allow": [
+              "call",
+              "subscribe"
+            ],
+            "from": "todos",
+            "outside": true,
+            "to": "example.kv.KeyValueStore"
+          },
+          {
+            "allow": "subscribe",
+            "from": "host",
+            "outside": true,
+            "to": "example.kv.KeyValueStore"
+          },
+          {
+            "allow": "*",
+            "outside": false
+          },
+          {
+            "deny": "*"
+          }
+        ]
+      }
     }
   },
   "modules": {

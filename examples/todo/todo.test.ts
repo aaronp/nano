@@ -126,3 +126,20 @@ test('the store is plain TypeScript too: no nano, values copied, list in path or
   await s.delete(['a'])
   expect(await s.get(['a'])).toBeNull()
 })
+
+test('2. the runtime: todos lives in frontend; its store calls travel in backend, allowed by backend\'s rules', async () => {
+  const app = await open()
+  const events: AppEvent[] = []
+  app.runtime('backend').listen(e => events.push(e))
+  const todos = app.runtime('frontend').get(TodoListDef.api)
+  await todos.add('milk')
+  const sent = events.filter(e => e.type === 'sent' && e.from === 'todos' && e.to === 'store')
+  expect(sent.length).toBeGreaterThan(0)
+  expect(sent.every(e => e.type === 'sent' && e.runtime === 'backend')).toBe(true)
+  const next = app.deployment()
+  next.runtimes.backend!.policy = { kind: 'rules', rules: [{ deny: '*', from: 'todos' }, { allow: '*' }] }
+  must(await app.apply(next))
+  const e = await todos.add('eggs').catch(x => x)
+  expect(e.fail.type).toBe('denied')
+  expect(events.some(x => x.type === 'denied')).toBe(true)
+})
