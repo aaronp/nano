@@ -59,3 +59,9 @@ test('the listener ends when its build closes', async () => {
   must(await app.apply(withPods(['y'], [])))
   expect(log).toEqual([])
 })
+
+test('a pod-change listener may itself restart without hanging', async () => {
+  const app = await open()
+  ctxs.w!.addOnPodChangeListener(async () => { await app.restart('w') })
+  must(await app.apply(withPods(['y'], [])))
+})

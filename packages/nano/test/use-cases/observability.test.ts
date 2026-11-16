@@ -84,3 +84,15 @@ test("a pod removed by apply still shows its closing in the runtime it left", as
   expect(back.some(e => e.type === 'closed' && e.pod === 'store')).toBe(true)
   expect(front.some(e => 'pod' in e && e.pod === 'store')).toBe(false)
 })
+
+test("a pod moved out of a runtime is no longer heard from the one it left", async () => {
+  const app = await open()
+  const front: AppEvent[] = [], back: AppEvent[] = []
+  app.runtime('frontend').listen(e => front.push(e))
+  app.runtime('backend').listen(e => back.push(e))
+  must(await app.apply({ ...d, runtimes: { ...d.runtimes, frontend: { ...d.runtimes.frontend!, pods: ['todos'] } } }))
+  front.length = 0; back.length = 0
+  must(await app.restart('shared'))
+  expect(front.some(e => 'pod' in e && e.pod === 'shared')).toBe(false)
+  expect(back.some(e => 'pod' in e && e.pod === 'shared')).toBe(true)
+})

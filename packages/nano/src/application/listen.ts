@@ -10,7 +10,7 @@ import type { AppEvent } from './stream.ts'
 
 export function listen(live: Live, runtime: string, fn: (e: AppEvent) => void): () => void {
   const mine = new Set<string>()   // ids sent here, not yet answered
-  const seen = new Set<string>()   // ponytail: pods ever placed here, never pruned
+  const seen = new Set<string>()   // placed here, until an apply has moved them out and been heard
   const refresh = () => { for (const p of live.now().runtimes[runtime]?.pods ?? []) seen.add(p) }
   refresh()
   return live.trace.listen(e => {
@@ -21,6 +21,8 @@ export function listen(live: Live, runtime: string, fn: (e: AppEvent) => void): 
       const keep = (l: string[]) => l.filter(p => seen.has(p))
       const n = { added: keep(e.added), removed: keep(e.removed), changed: keep(e.changed), rewired: keep(e.rewired) }
       if (Object.values(n).some(l => l.length)) fn({ type: 'applied', ...n })
+      const here = live.now().runtimes[runtime]?.pods ?? []
+      for (const p of seen) if (!here.includes(p)) seen.delete(p)   // its removal and closing are delivered
     }
     else if (e.type !== 'warning' && e.pod !== undefined && seen.has(e.pod)) fn(e)
   })

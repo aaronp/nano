@@ -23,7 +23,9 @@ export async function notifyPodChanges(live: Live, before: AppDeployment): Promi
           continue
         }
         const implementation = live.registry.implementation(c.d.pods[c.p]?.implementation ?? '')?.coord ?? ''
-        await attempt(live, l.pod, `${l.pod} hearing ${c.type} ${c.p}`, () => l.fn({ type: c.type, runtime: id, pod: c.p, implementation }))
+        const p = attempt(live, l.pod, `${l.pod} hearing ${c.type} ${c.p}`, () => l.fn({ type: c.type, runtime: id, pod: c.p, implementation }))
+        const done = () => { live.flying.delete(p) }   // in flight, not awaited: a callback may itself apply or restart
+        live.flying.add(p); p.then(done, done)
       }
     }
   }
