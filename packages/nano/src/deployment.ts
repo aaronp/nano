@@ -10,6 +10,7 @@ import { Id, Pods, shapeError, type PodDeployment } from './pods.ts'
 import type { Registry } from './registry.ts'
 import { failure, success, type NanoResult } from './result.ts'
 import { Runtime, type RuntimeDeployment } from './runtime.ts'
+import { edit } from './deployment-edit.ts'
 
 export type AppDeployment = {
   pods: PodDeployment; runtimes: Record<string, RuntimeDeployment>; tags?: Record<string, string[]>
@@ -57,5 +58,6 @@ function assemble(d: unknown, registry: Registry): NanoResult<Record<string, Run
   }
 }
 
-/** A whole deployment checked level by level into its runtimes: `AppDeployment.assemble(d, registry)`. */
-export const AppDeployment = { assemble }
+/** A whole deployment checked level by level into its runtimes: `AppDeployment.assemble(d, registry)`; and written at
+ *  the call site as data: `AppDeployment.edit(base, registry)` (deployment-edit.ts). */
+export const AppDeployment = { assemble, edit }
