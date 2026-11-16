@@ -18,7 +18,8 @@ export type Subscription =
   | { kind: 'call'; from: string; to: string }
   | { kind: 'pipe'; from: string; source: string; to: string; target: string }
 
-export type RuntimeDeployment = { pods: string[]; subscriptions: Subscription[]; policy?: 'allow-all' }
+/** `exports`: the interface coordinates the runtime offers the host; absent, everything placed there is offered. */
+export type RuntimeDeployment = { pods: string[]; subscriptions: Subscription[]; policy?: 'allow-all'; exports?: string[] }
 
 export type Runtime = { readonly id: string; readonly pods: Pods; deployment(): RuntimeDeployment }
 
@@ -30,6 +31,7 @@ const Shape = Type.Object({
     Type.Object({ kind: Type.Literal('pipe'), from: Type.String(), source: Type.String(), to: Type.String(), target: Type.String() }, strict),
   ]), { maxItems: 2000 }),
   policy: Type.Optional(Type.Literal('allow-all')),
+  exports: Type.Optional(Type.Array(Type.String(), { maxItems: 2000 })),
 }, strict)
 
 const label = (s: Subscription) => (s.kind === 'call' ? `${s.from}->${s.to}` : `${s.from}->${s.to} (${s.source} to ${s.target})`)
@@ -68,6 +70,9 @@ function check(id: string, r: RuntimeDeployment, pods: Pods): string | undefined
     const why = unfit(s, impl(s.from), impl(s.to))
     if (why) return `runtime ${id}: ${label(s)}: ${why}`
   }
+  const provided = new Set([...placed].flatMap(n => origin.registry.implementation(origin.pods.get(n)!.implementation)!.provides.map(i => i.coord)))
+  const stray = r.exports?.find(c => !provided.has(c))
+  if (stray !== undefined) return `runtime ${id}: exports ${stray}, which no pod placed here provides`
 }
 
 /** Every value `Runtime.create` made: carried, not a member, so `Application.create` can tell a Runtime from a look-alike. */

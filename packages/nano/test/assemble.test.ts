@@ -106,6 +106,13 @@ describe('Runtime.create', () => {
     const p = ok(pods({ s: Pod.lazy(sender), k: Pod.lazy(kv) }))
     fails(Runtime.create('r', { pods: ['s'], subscriptions: [{ kind: 'call', from: 's', to: 'k' }] }, p), 'invalid-input', 'k is not placed')
   })
+  test('exports: each coordinate provided by a pod placed there; kept in the deployment; [] exports nothing', () => {
+    const p = ok(pods({ a: Pod.lazy(counter), k: Pod.lazy(kv) }))
+    const d = { pods: ['a'], subscriptions: [], exports: ['acme.Counter'] }
+    expect(ok(Runtime.create('r', d, p)).deployment()).toEqual(d)
+    expect(ok(Runtime.create('r', { ...d, exports: [] }, p)).deployment().exports).toEqual([])
+    fails(Runtime.create('r', { ...d, exports: ['acme.KV'] }, p), 'invalid-input', 'acme.KV')
+  })
   test('a duplicate subscription in a runtime', () => {
     const s = { kind: 'call', from: 's', to: 'k' }
     fails(runtime({ s: Pod.lazy(sender), k: Pod.lazy(kv) }, [s, { ...s }]), 'invalid-input', 's->k')
