@@ -4,8 +4,8 @@
  */
 import { expect, test } from 'bun:test'
 import { Application, AppDeployment, Registry, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
-import { KeyValueStoreDef } from './kv/contract.ts'
-import kv, { impls, inMemory } from './kv/memory.ts'
+import { KeyValueStoreDef } from '../kv/contract.ts'
+import kv, { impls, inMemory } from '../kv/memory.ts'
 import { TodoListDef } from './todo/contract.ts'
 import todo from './todo/kv.ts'
 
@@ -102,7 +102,7 @@ test('3. configuration as data: the running app\'s deployment() round-trips thro
   for (const p of [kv, todo]) must(registry.add(p))
   const copy = must(await Application.create(must(AppDeployment.assemble(again, registry))))
   expect(copy.deployment()).toEqual(app.deployment())
-  expect(modules).toEqual({ 'example.kv': './kv/memory.js', 'example.todo': './todo/kv.js' })
+  expect(modules).toEqual({ 'example.kv': '../kv/memory.js', 'example.todo': './todo/kv.js' })
 })
 
 test('a store Fail reaches the todo caller as itself: with no store wired, add is not-found, not threw', async () => {

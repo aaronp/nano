@@ -4,7 +4,7 @@
  *
  *   const todos = todoList(inMemory()); const t = await todos.add('milk')
  */
-import { KeyValueStoreDef } from '../kv/contract.ts'
+import { KeyValueStoreDef } from '../../kv/contract.ts'
 import { TodoListDef } from './contract.ts'
 
 type Todo = TodoListDef.Todo

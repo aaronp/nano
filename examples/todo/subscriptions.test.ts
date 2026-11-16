@@ -7,7 +7,7 @@
  */
 import { expect, test } from 'bun:test'
 import { Application, AppDeployment, Registry, type AppEvent, type NanoResult, type Policy } from '@pritzlaff/nano-core'
-import kv from './kv/memory.ts'
+import kv from '../kv/memory.ts'
 import { TodoListDef } from './todo/contract.ts'
 import todo from './todo/kv.ts'
 

@@ -57,7 +57,7 @@
     }
   },
   "modules": {
-    "example.kv": "./kv/memory.js",
+    "example.kv": "../kv/memory.js",
     "example.todo": "./todo/kv.js"
   }
 }

@@ -5,8 +5,8 @@
  */
 import { expect, test } from 'bun:test'
 import { Application, AppDeployment, Registry, type AppEvent, type NanoResult, type RuntimeDeployment } from '@pritzlaff/nano-core'
-import { KeyValueStoreDef } from './kv/contract.ts'
-import kv, { impls } from './kv/memory.ts'
+import { KeyValueStoreDef } from '../kv/contract.ts'
+import kv, { impls } from '../kv/memory.ts'
 import { TodoListDef } from './todo/contract.ts'
 import todo from './todo/kv.ts'
 
@@ -30,7 +30,7 @@ function build(base: AppDeployment) {
   return d.deployment()
 }
 const empty = (): AppDeployment => ({ pods: {}, runtimes: { frontend: { pods: [], subscriptions: [] }, backend: { pods: [], subscriptions: [], policy: backendPolicy() } },
-  modules: { 'example.kv': './kv/memory.js', 'example.todo': './todo/kv.js' } })
+  modules: { 'example.kv': '../kv/memory.js', 'example.todo': './todo/kv.js' } })
 
 test('1. code gives the checked-in nano.json: the pods, the edge todos→store in backend, and the rule letting it in', async () => {
   expect(build(empty())).toEqual(await saved())

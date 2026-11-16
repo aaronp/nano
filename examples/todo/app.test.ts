@@ -4,7 +4,7 @@
  */
 import { expect, test } from 'bun:test'
 import { Application } from '@pritzlaff/nano-core'
-import { KeyValueStoreDef } from './kv/contract.ts'
+import { KeyValueStoreDef } from '../kv/contract.ts'
 import { TodoListDef } from './todo/contract.ts'
 
 test('load nano.json, enter the frontend, get the TodoList, it just works', async () => {

@@ -10,8 +10,8 @@
 import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import { Application, AppDeployment, Coord, Op, Registry, type NanoResult } from '@pritzlaff/nano-core'
-import kv from './kv/memory.ts'
-import { KeyValueStoreDef } from './kv/contract.ts'
+import kv from '../kv/memory.ts'
+import { KeyValueStoreDef } from '../kv/contract.ts'
 import { TodoListDef } from './todo/contract.ts'
 import { todoList } from './todo/kv.ts'
 
