@@ -90,6 +90,8 @@ const create = async (d: unknown, reg = registry()) => {
 const sent = (events: AppEvent[], kind?: Sent['kind']) => events.filter(isSent).filter(e => !kind || e.kind === kind).map(e => `${e.runtime}:${e.from}->${e.to}`)
 const tick = () => new Promise(r => setTimeout(r, 0))
 
+const thrownBy = (f: () => unknown) => { try { f() } catch (e) { return e as Error & { fail: { type: string } } } }
+
 describe('assembling', () => {
   // Behaviour 1.
   test('given a pod deployment, when Pods.create runs, then it only checks data: unknown implementation not-found, bad config invalid-input, nothing built', () => {
@@ -321,7 +323,7 @@ describe('subscriptions in code', () => {
     expect(heard).toEqual([])
     expect(sent(events, 'on')).toEqual([])
   })
-  test('given a selection kept past the removal of its edge, when on is called and the edge is then restored, then it hears nothing', async () => {
+  test('given a selection kept past the removal of its edge, when on is called it throws not-found, and restoring the edge brings nothing back', async () => {
     let kept: Selection<typeof Store> | undefined
     const keeper = Implementation.define('acme2/keeper', { provides: [Log], make: ctx => { kept = ok(ctx.one(Store)); return [provide(Log, { record: async () => success(null) })] } })
     const reg = registry(); reg.add(Provider.define('acme2', [keeper]))
@@ -329,7 +331,7 @@ describe('subscriptions in code', () => {
       runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }
     const { app, events } = await create(d, reg)
     ok(await app.apply({ ...d, runtimes: { r: { ...d.runtimes.r!, subscriptions: [] } } }))
-    kept!.on(Store.ops.save, () => { heard.push('late') })
+    expect(thrownBy(() => kept!.on(Store.ops.save, () => { heard.push('late') }))?.fail.type).toBe('not-found')
     ok(await app.apply(d))
     await app.call('r', 'db').save('x')
     await tick()
@@ -408,9 +410,9 @@ describe('selections and chains', () => {
     const [call, on] = [events.filter(isSent).find(e => e.kind === 'call')!, events.filter(isSent).find(e => e.kind === 'on')!]
     expect(on).toMatchObject({ from: 'db', to: 'w', port: 'acme.Store/save', correlation: call.id, cause: call.id })
   })
-  test('given on with an op the selected pod lacks, when it subscribes, then there is one warning and fn is never called', async () => {
+  test('given on with an op the selected pod lacks, when it subscribes, then it throws unknown-op and fn is never called', async () => {
     const wrong = Implementation.define('acme2/wrong', { provides: [Log], make: ctx => {
-      ok(ctx.one(Store)).on(Log.ops.record as never, () => { heard.push('never') })   // not an op of Store
+      heard.push(thrownBy(() => ok(ctx.one(Store)).on(Log.ops.record as never, () => { heard.push('never') }))?.fail.type ?? 'no throw')   // not an op of Store
       return [provide(Log, { record: async () => success(null) })]
     } })
     const reg = registry(); reg.add(Provider.define('acme2', [wrong]))
@@ -419,22 +421,20 @@ describe('selections and chains', () => {
     expect(await app.call('r', 'w').record('a')).toEqual(success(null))   // builds w, which subscribes
     await app.call('r', 'db').save('x')
     await tick()
-    expect(events.filter(e => e.type === 'warning')).toHaveLength(1)
-    expect(heard).toEqual([])
+    expect(heard).toEqual(['unknown-op'])
   })
-  test('given a selection kept past its build, when on is called after that build closed, then it is a no-op', async () => {
+  test('given a selection kept past its build, when on is called after that build closed, then it throws not-found', async () => {
     let kept: Selection<typeof Store> | undefined
     const keeper = Implementation.define('acme2/keeper', { provides: [Log], make: ctx => { kept ??= ok(ctx.one(Store)); return [provide(Log, { record: async () => success(null) })] } })
     const reg = registry(); reg.add(Provider.define('acme2', [keeper]))
     const { app, events } = await create({ pods: { w: Pod.eager(keeper), db: Pod.lazy(store, { config: 'db' }) },
       runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }, reg)
     await app.restart('w')
-    const off = kept!.on(Store.ops.save, () => { heard.push('late') })
+    expect(thrownBy(() => kept!.on(Store.ops.save, () => { heard.push('late') }))?.fail.type).toBe('not-found')
     await app.call('r', 'db').save('x')
     await tick()
     expect(heard).toEqual([])
     expect(sent(events, 'on')).toEqual([])
-    off()
   })
   // Behaviour 14.
   test('given a pod not wired to any store, when its code selects one, then one is not-found: its call is not made and on is not reached', async () => {
@@ -492,11 +492,11 @@ describe('nothing throws', () => {
     const input = { get x(): string { throw new Error('getter') } }
     expect(await app.call('r', 't').take(input)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   })
-  test('given undefined for an op or a selector (a typo in plain JS), when a pod uses it, then on and publish warn, one fails and all is empty', async () => {
+  test('given undefined for an op or a selector (a typo in plain JS), when a pod uses it, then on throws unknown-op, publish warns, one fails and all is empty', async () => {
     const seen: unknown[] = []
     const sloppy = Implementation.define('acme2/sloppy', { provides: [Log], make: async ctx => {
       const none = undefined as never
-      ok(ctx.one(Store)).on(none, () => { heard.push('never') })
+      seen.push(thrownBy(() => ok(ctx.one(Store)).on(none, () => { heard.push('never') }))?.fail.type)
       await ctx.publish(none, 1 as never)
       seen.push(ctx.one(none), ctx.all(none))
       return [provide(Log, { record: async () => success(null) })]
@@ -505,8 +505,8 @@ describe('nothing throws', () => {
     const { app, events } = await create({ pods: { w: Pod.lazy(sloppy), db: Pod.lazy(store, { config: 'db' }) },
       runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }, reg)
     expect(await app.call('r', 'w').record('a')).toEqual(success(null))
-    expect(events.filter(e => e.type === 'warning')).toHaveLength(2)
-    expect(seen).toMatchObject([{ ok: false, fail: { type: 'not-found' } }, []])
+    expect(events.filter(e => e.type === 'warning')).toHaveLength(1)
+    expect(seen).toMatchObject(['unknown-op', { ok: false, fail: { type: 'not-found' } }, []])
   })
 })
 

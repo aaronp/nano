@@ -9,7 +9,7 @@
 import type { Static, TSchema } from 'typebox'
 import { port, type Interface } from '../iface.ts'
 import type { Op } from '../op.ts'
-import { plain } from '../plain.ts'
+import { plain, thrown } from '../plain.ts'
 import { failure, success, type Fail, type NanoResult } from '../result.ts'
 import { client } from './emit.ts'
 import { connect as connectOn } from './connection.ts'
@@ -36,9 +36,14 @@ export type RuntimeView = {
   resolve<I extends Interface>(api: I, where?: Where): Resolution<Interface.Type<I>>
   get<I extends Interface>(api: I, where?: Where): Interface.Type<I>
   call(pod: string): Client
-  /** Each successful call of action `op` travelling in this runtime, after it returns; gives an unsubscribe. */
+  /**
+   * Each successful call of action `op` travelling in this runtime, as `{ input, output }`, after it returns; gives an
+   * unsubscribe. Like a pod's `on`: it connects at the call, and throws there an `Error` carrying the `Fail` when it
+   * can't (`not-found`, `not-exported`, `not-unique`, `denied`).
+   */
   subscribe<O extends Op>(op: O, fn: (call: { input: In<O>; output: Out<O> }) => unknown): () => void
-  /** The same calls as an AsyncIterable, connected at the first iteration (calls from then on; iterate once; not-found throws there): it ends when the listener is removed (not by its consumer). */
+  /** The same calls as an AsyncIterable, connected and checked at the call, iterated once: `break` unsubscribes; `done`
+   *  when the source or the application goes; the `Fail` thrown when a later `apply`'s policy refuses it. */
   subscribe<O extends Op>(op: O): AsyncIterable<{ input: In<O>; output: Out<O> }>
   /** The application's one stream, filtered to this runtime: its messages and their outcomes, `applied`, and the lifecycle of its pods; gives an unsubscribe. */
   listen(fn: (e: AppEvent) => void): () => void
@@ -63,7 +68,7 @@ export function placement(live: Live, runtime: string, api: Interface, where: Wh
   return found.length === 1 ? { ok: true, value: found[0]! } : miss('not-unique', `${found.length} pods provide ${what}`)
 }
 
-const thrown = (fail: Fail) => () => { throw Object.assign(new Error(`${fail.type}: ${fail.reason}`), { fail }) }
+const throws = (fail: Fail) => (): never => { throw thrown(fail) }
 
 /**
  * Runtime `id` (or, absent, the application's one runtime) as the host sees it, looked up again at each use, so one
@@ -82,7 +87,7 @@ export function runtimeView(live: Live, id?: string): RuntimeView {
   const found = (api: Interface, where: Where): Found<Placed> => { const r = at(); return r.ok ? placement(live, r.value, api, where) : r }
   const resolve = <I extends Interface>(api: I, where: Where = {}): Resolution<Interface.Type<I>> => {
     const now = found(api, where)
-    if (!now.ok) return { ok: false, reason: now.fail.type, fail: now.fail, getOrThrow: thrown(now.fail) }
+    if (!now.ok) return { ok: false, reason: now.fail.type, fail: now.fail, getOrThrow: throws(now.fail) }
     const value = plain<Interface.Type<I>>(api, () => {
       const p = found(api, where)
       return p.ok ? success({ call: call(p.value.pod), on: (op: Op) => subscribe(op) }) : p
@@ -94,21 +99,21 @@ export function runtimeView(live: Live, id?: string): RuntimeView {
     let stop: ((fail?: Fail) => void) | undefined
     const connect = (fn: On['fn']) => {
       const r = at()
-      if (!r.ok) return thrown(r.fail)()
+      if (!r.ok) return throws(r.fail)()
       const runtime = r.value
       const api = (live.now().runtimes[runtime]?.pods ?? []).flatMap(p => impl(live, p)?.provides ?? []).find(i => i.byCoord.has(op.coord))
-      if (!api) return thrown(miss('not-found', `no pod provides ${op.coord} in ${runtime}`).fail)()
+      if (!api) return throws(miss('not-found', `no pod provides ${op.coord} in ${runtime}`).fail)()
       const p = placement(live, runtime, api, {})
-      if (!p.ok) return thrown(p.fail)()
+      if (!p.ok) return throws(p.fail)()
       const from = p.value.pod
       const gone = () => !live.now().runtimes[runtime]?.pods.includes(from)
       const c = connectOn(live, { runtime, from, port: port(api, op), to: 'host', gone, fn }, f => stop?.(f))
-      if (!c.ok) { stop?.(c.fail); return () => {} }
+      if (!c.ok) throw thrown(c.fail)
       return () => c.value.end()
     }
     return fn ? connect(fn) : iterate(connect, s => { stop = s })
   }) as RuntimeView['subscribe']
-  const watch = (fn: (e: AppEvent) => void) => { const r = at(); return r.ok ? listen(live, r.value, fn) : thrown(r.fail)() }
+  const watch = (fn: (e: AppEvent) => void) => { const r = at(); return r.ok ? listen(live, r.value, fn) : throws(r.fail)() }
   return { resolve, get: (api, where) => resolve(api, where).getOrThrow(), call, subscribe, listen: watch }
 }
 

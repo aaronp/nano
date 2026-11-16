@@ -32,18 +32,21 @@ export function handlers<I extends Interface>(i: I, obj: object): Handlers<I> {
 /** What `plain` reads at each use: the client's calls, and its emissions of an op (`on`, or the host's `subscribe`). */
 type Source = { call: object; on(op: Op): AsyncIterable<{ output: unknown }> }
 
+/** An `Error` carrying `fail` (`err.fail`): how nano throws a `Fail` wherever it throws one. */
+export const thrown = (fail: Fail) => Object.assign(new Error(`${fail.type}: ${fail.reason}`), { fail })
+
 /** A plain object over a client, resolved on every call (so a rewired edge is followed): a `Fail` throws an Error carrying
- *  it. An event of `i` is a method giving the `output`s emitted from its first iteration. */
+ *  it. An event of `i` is a method giving the `output`s emitted from the call on (it connects at the call; see iterate.ts). */
 export function plain<T>(i: Interface | undefined, client: () => NanoResult<Source>): T {
-  const thrown = (fail: Fail) => Object.assign(new Error(`${fail.type}: ${fail.reason}`), { fail })
   return new Proxy({}, {
     get: (_, name) => {
       if (typeof name !== 'string' || name === 'then') return undefined
       const ev = i?.ops[name]?.kind === 'event' ? i.ops[name] : undefined
-      if (ev) return async function* () {
+      if (ev) return () => {   // connected now, at the call: see iterate.ts
         const c = client()
         if (!c.ok) throw thrown(c.fail)
-        for await (const e of c.value.on(ev)) yield e.output
+        const emissions = c.value.on(ev)
+        return { async *[Symbol.asyncIterator]() { for await (const e of emissions) yield e.output } }
       }
       return async (input?: unknown) => {
         const c = client()

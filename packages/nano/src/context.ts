@@ -5,6 +5,7 @@
  *   const kv = ctx.one(KeyValueStore)            // NanoResult<Selection>: a Fail (not-found, not-unique) unless exactly one is wired
  *   if (kv.ok) await kv.value.call.put('k')      // through that edge
  *   if (kv.ok) kv.value.on(KeyValueStore.ops.changed, ({ output }) => …)   // hear that pod's event (typed by the op) while this build lives
+ *   for await (const { input } of kv.value.on(KeyValueStore.ops.put)) …   // the same, as an AsyncIterable; both connect (or throw) here
  *   await ctx.deps.store.put('k')                // a declared role as a plain object: through ctx.one(role) at each call; a Fail throws
  *   if (ctx.all(KeyValueStore).length === 0) …   // nothing wired: fall back
  *   await ctx.publish(Ticks.ops.tick, 1)         // along every pipe from self with that source, and to `on` subscribers
@@ -22,13 +23,23 @@ type InOf<O> = O extends Op<infer S, any> ? S extends TSchema ? Static<S> : unkn
 /** What `on` gets: `{ input, output }` of an action's successful call, `{ output }` of an event. */
 type Emission<O> = O extends { kind: 'event' } ? { output: DataOf<O> } : { input: InOf<O>; output: DataOf<O> }
 
-/** One call edge from the pod. Nothing on it throws. */
+/**
+ * One call edge from the pod. `call` never throws: each call gives a `NanoResult`. `on` subscribes, and it behaves the
+ * same in both forms (and as the host's `subscribe` does):
+ * - it connects **at the call**: it hears every emission from that line on;
+ * - it **throws at the call** an `Error` carrying the `Fail` (`err.fail`) when it can't connect: `denied` (the runtime's
+ *   policy refuses `'subscribe'`), `not-found` (the edge is gone, or this build is closed) or `unknown-op`;
+ * - subscribing and its end are messages on the runtime's stream (`sent` kind `subscribe` / `unsubscribe`).
+ */
 export type Selection<I extends Interface> = {
   readonly pod: string
   readonly runtime: string
   readonly call: Client<I>
+  /** `fn` hears each emission until the returned unsubscribe is called, the build closes, `apply` removes the edge, or a
+   *  later `apply`'s policy refuses it (seen on the stream as `unsubscribe` with `denied`). */
   on<O extends I['ops'][keyof I['ops']]>(op: O, fn: (e: Emission<O>) => void | Promise<void>): () => void
-  /** The same emissions as an AsyncIterable, connected at the first iteration (emissions from then on; iterate once): it ends when the listener is removed (the build closes, the edge goes, denied), not by its consumer. */
+  /** The same emissions as an AsyncIterable, iterated once. `break` unsubscribes; it is `done` when the build closes or
+   *  the edge goes, and throws the `Fail` (after what it had received) when a later `apply`'s policy refuses it. */
   on<O extends I['ops'][keyof I['ops']]>(op: O): AsyncIterable<Emission<O>>
 }
 

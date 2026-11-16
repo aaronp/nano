@@ -22,14 +22,14 @@ must(registry.add(Provider.define('acme', [
 const d: AppDeployment = { pods: { store: { implementation: 'acme/kv', eager: false } }, runtimes: { main: { pods: ['store'], subscriptions: [] } } }
 const open = async (policies?: Record<string, Policy>) => must(await Application.create(must(AppDeployment.assemble(d, registry)), { policies }))
 
-test('subscribe(op) iterates emissions made after it starts; break removes the listener', async () => {
+test('subscribe(op) iterates emissions from the call on; break removes the listener', async () => {
   const app = await open(), main = app.runtime('main')
   await main.call('store').put('a'); await main.call('store').put('b')
   const seen: unknown[] = []
   const loop = (async () => { for await (const e of main.subscribe(KV.ops.put)) { seen.push(e.input); break } })()
   await main.call('store').put('c'); await loop
   await main.call('store').put('d')
-  expect(seen).toEqual(['c'])
+  expect(seen).toEqual(['c'])   // a and b came before the call
   let extra = 0
   const off = main.subscribe(KV.ops.put, () => { extra++ })
   await main.call('store').put('e'); await Bun.sleep(0)
@@ -68,14 +68,14 @@ const watched: AppDeployment = {
 }
 const openWatched = async () => must(await Application.create(must(AppDeployment.assemble(watched, registry)), {}))
 
-test('on(op) iterates emissions after it starts; break removes it', async () => {
-  const app = await openWatched()
+test('on(op) iterates emissions from when it is made; break removes it', async () => {
+  const app = await openWatched()   // the watch pod makes `listening` when it is built, before any put
   await app.call('store').put('a')
   const seen: unknown[] = []
   const loop = (async () => { for await (const e of listening!) { seen.push(e.input); break } })()
   await app.call('store').put('c'); await loop
   await app.call('store').put('d')
-  expect(seen).toEqual(['c'])
+  expect(seen).toEqual(['a'])   // connected when made, so 'a' was buffered for the loop
   let extra = 0
   app.subscribe(KV.ops.put, () => { extra++ })
   await app.call('store').put('e'); await Bun.sleep(0)
@@ -155,16 +155,13 @@ test('Interface.Type gives items(): AsyncIterable<Todo>', () => {
 test("a source method built from a listener is published as the pod's event (hot)", async () => {
   const app = must(await todoApp('acme/todos')), frontend = app.runtime('main')
   const todos = frontend.get(Todos)
-  const items = todos.items()[Symbol.asyncIterator]()   // called, not yet iterated: connects at the first next()
-  await todos.add('a')                                  // before the first iteration: unseen
-  const first = items.next()
-  await Bun.sleep(0)
-  await todos.add('b')
-  expect(await first).toEqual({ done: false, value: { title: 'b' } })
-  const late = todos.items()[Symbol.asyncIterator](), next = late.next()   // a second consumer after b
-  await Bun.sleep(0)
+  await todos.add('a')                                  // before items() is called: unseen (hot)
+  const items = todos.items()[Symbol.asyncIterator]()   // connected here, at the call
+  await todos.add('b')                                  // after the call, before the first next(): seen
+  expect(await items.next()).toEqual({ done: false, value: { title: 'b' } })
+  const late = todos.items()[Symbol.asyncIterator]()     // a second consumer, from after b
   await todos.add('c')
-  expect(await next).toEqual({ done: false, value: { title: 'c' } })
+  expect(await late.next()).toEqual({ done: false, value: { title: 'c' } })
   await items.return!(); await late.return!()
 })
 

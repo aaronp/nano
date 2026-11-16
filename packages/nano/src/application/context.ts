@@ -18,6 +18,7 @@ import { matches, selectorData, type Selector, type SelectorData } from '../sele
 import { client, emit } from './emit.ts'
 import { connect as connectOn } from './connection.ts'
 import { iterate } from './iterate.ts'
+import { thrown } from '../plain.ts'
 import { impl, placedIn, type Live, type On } from './messages.ts'
 
 /** The port of `o` on `pod`'s implementation, if it has `o`. */
@@ -46,11 +47,13 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
       let stop: ((fail?: Fail) => void) | undefined
       const connect = (fn: On['fn']) => {
         const p = portOf(live, to, o)
-        if (!p || !mine || gone()) { if (!p) live.trace.emit({ type: 'warning', reason: `${name}: ${o?.name} is not an op of ${to}` }); stop?.(); return () => {} }
+        if (!p) throw thrown({ type: 'unknown-op', reason: `${name}: ${o?.name} is not an op of ${to}` })
+        const why = !mine ? failure('not-found', `${name}: this build is closed`) : gone()
+        if (why && !why.ok) throw thrown(why.fail)
         const c = connectOn(live, { runtime, from: to, port: p, to: name, gone, fn }, f => stop?.(f))
-        if (!c.ok) { stop?.(c.fail); return () => {} }
+        if (!c.ok) throw thrown(c.fail)
         const sub = c.value
-        mine.add(sub)
+        mine!.add(sub)
         return () => { mine?.delete(sub); sub.end() }
       }
       return fn ? connect(fn as On['fn']) : iterate(connect, s => { stop = s })

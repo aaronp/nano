@@ -1,7 +1,9 @@
 /**
  * Subscribing is a message, in the todo case study. A consumer of `items()` (the host in `frontend`) and the `todos`
  * pod hearing its store's puts (in `backend`) each connect by a `subscribe` message and end by an `unsubscribe`, both
- * on the stream of the runtime they travel in. A refusal is `denied` there, and the consumer's loop throws it.
+ * on the stream of the runtime they travel in. Every form behaves the same at the call site: it connects at the call,
+ * and when it can't, it throws there an Error carrying the Fail. A refusal that comes later (on apply) ends it: the
+ * loop throws it, and the stream shows the unsubscribe with the Fail.
  */
 import { expect, test } from 'bun:test'
 import { Application, AppDeployment, Registry, type AppEvent, type NanoResult, type Policy } from '@pritzlaff/nano-core'
@@ -54,12 +56,22 @@ test('the todos pod\'s own subscription to the store\'s puts travels in backend,
   expect(front).toEqual([])
 })
 
-test('a refused subscription is denied on frontend\'s stream, and the consumer\'s loop throws it', async () => {
+test('a refused subscription throws at the call, in every form, and is denied on frontend\'s stream', async () => {
   const app = await open({ frontend: deny(() => true) })
-  const front = subscriptions(app, 'frontend')
-  const loop = async () => { for await (const _ of app.runtime('frontend').get(TodoListDef.api).items()); }
-  await expect(loop()).rejects.toMatchObject({ fail: { type: 'denied', reason: 'not now' } })
-  expect(front).toEqual(['subscribe host→todos: denied not now'])
+  const front = subscriptions(app, 'frontend'), frontend = app.runtime('frontend')
+  const thrown = (f: () => unknown) => { try { f(); return undefined } catch (e) { return (e as { fail?: unknown }).fail } }
+  expect(thrown(() => frontend.get(TodoListDef.api).items())).toMatchObject({ type: 'denied', reason: 'not now' })   // the plain method
+  expect(thrown(() => frontend.subscribe(TodoListDef.api.ops.add))).toMatchObject({ type: 'denied' })               // the iterable
+  expect(thrown(() => frontend.subscribe(TodoListDef.api.ops.add, () => {}))).toMatchObject({ type: 'denied' })     // the callback
+  expect(front).toEqual(['subscribe host→todos: denied not now', 'subscribe host→todos: denied not now', 'subscribe host→todos: denied not now'])
+})
+
+test('items() connects at the call: a todo added between the call and the loop is seen', async () => {
+  const todos = (await open()).runtime('frontend').get(TodoListDef.api)
+  await todos.list()               // build todos, so its source is listening to the store
+  const items = todos.items()      // connected here
+  await todos.add('milk')          // before the loop starts
+  for await (const t of items) { expect(t.title).toBe('milk'); break }
 })
 
 test('a policy that stops allowing it ends a live subscription on the next apply: unsubscribe carries denied, the loop throws', async () => {
