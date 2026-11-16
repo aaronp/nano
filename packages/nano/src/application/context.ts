@@ -18,7 +18,8 @@ import { client, emit } from './emit.ts'
 import { connect as connectOn } from './connection.ts'
 import { iterate } from './iterate.ts'
 import { thrown } from '../plain.ts'
-import { impl, placedIn, wiredFrom, type Live, type On } from './messages.ts'
+import { impl, placedIn, type Live, type On } from './messages.ts'
+import { lookup } from './lookup.ts'
 
 /** The port of `o` on `pod`'s implementation, if it has `o`. */
 const portOf = (live: Live, pod: string, o: Op) => {
@@ -40,7 +41,7 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
 
   /** The call edge from `name` to `to` in `runtime`, read live: a call or delivery through it after `apply` removed it is not-found. */
   const selection = <I extends Interface>(runtime: string, to: string): Selection<I> => {
-    const gone = () => live.now().runtimes[runtime]?.subscriptions.some(x => x.kind === 'call' && x.from === name && x.to === to)
+    const gone = () => lookup(live.now()).calls.has(`${runtime} ${name} ${to}`)
       ? undefined : failure('not-found', `${name}->${to} is no longer in ${runtime}`)
     return { pod: to, runtime, call: client(live, runtime, name, to, gone) as Client<I>, on(o: Op, fn?: (e: never) => void | Promise<void>) {
       let stop: ((fail?: Fail) => void) | undefined
@@ -63,13 +64,13 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
   const selections = <I extends Interface>(s: I | SelectorData): Selection<I>[] => {
     const want = dataOf(s), d = live.now()
     if (!want) return []
-    return wiredFrom(live, name).flatMap(([runtime, r]) => r.subscriptions.flatMap(sub => {
-      if (sub.kind !== 'call' || sub.from !== name) return []
+    return (lookup(d).callsFrom.get(name) ?? []).flatMap(({ runtime, to }) => {
+      const sub = { to }
       const i = impl(live, sub.to)!
       const target = { name: sub.to, runtime, implementation: i.coord, provider: i.provider,
         provides: new Set(i.provides.map(i => i.coord)), tags: new Set(d.tags?.[sub.to] ?? []) }
       return matches(want, target) ? [selection<I>(runtime, sub.to)] : []
-    }))
+    })
   }
 
   const ctx: Omit<NanoContext, 'deps'> = {

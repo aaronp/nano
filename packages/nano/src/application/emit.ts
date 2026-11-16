@@ -10,7 +10,8 @@
  */
 import { port } from '../iface.ts'
 import { failure, success, type NanoResult } from '../result.ts'
-import { attempt, impl, placedIn, send, type Live, type On } from './messages.ts'
+import { attempt, impl, send, type Live, type On } from './messages.ts'
+import { lookup } from './lookup.ts'
 
 type Chain = { id?: string; correlation?: string; cause?: string }
 
@@ -38,10 +39,8 @@ export function emit(live: Live, from: string, port: string, e: Parameters<On['f
   if (live.closed()) return Promise.resolve()
   let first: string | undefined
   const link = (): Chain => chain ?? (first ? { correlation: first } : { id: (first = live.trace.id()), correlation: first })
-  const pipes = placedIn(live, from).flatMap(([runtime, r]) =>
-    r.subscriptions.flatMap(s => s.kind === 'pipe' && s.from === from && s.source === port
-      ? [fly(live, act(live, runtime, from, s.to, s.target, e.output, 'pipe', link()))] : []))
-  for (const o of [...live.listeners.ons]) {
+  const pipes = (lookup(live.now()).pipes.get(`${from} ${port}`) ?? []).map(s => fly(live, act(live, s.runtime, from, s.to, s.target, e.output, 'pipe', link())))
+  for (const o of [...(live.listeners.heard.get(`${from} ${port}`) ?? [])]) {
     if (o.from !== from || o.port !== port || (travelled !== undefined && o.runtime !== travelled)) continue
     const work = async () => { const r = await attempt(live, o.to, `${o.to} hearing ${port}`, () => o.fn(e)); return r.ok ? success(undefined) : r }
     fly(live, send(live, o.runtime, from, o.to, port, e.output, { kind: 'on', ...link(), work }))

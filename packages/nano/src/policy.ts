@@ -33,20 +33,34 @@ export const Rule = Type.Union([
 ])
 export type Rule = Static<typeof Rule>
 
-const any = (v: string | undefined, ...xs: (string | undefined)[]) => v === undefined || v === '*' || xs.includes(v)
-const matches = (r: Rule, a: Ask) => {
-  const kinds = [('allow' in r ? r.allow : r.deny)].flat()
-  const iface = a.port?.slice(0, a.port.lastIndexOf('/'))
-  return (kinds.includes('*') || kinds.includes(a.kind)) && any(r.from, a.from) && any(r.toPod, a.to)
-    && any(r.toInterface, iface) && any(r.toPort, a.port)
-    && (r.outside === undefined || r.outside === a.outside)
-}
+/** A field matches when absent, `*`, or equal. */
+const any = (v: string | undefined, x: string | undefined) => v === undefined || v === '*' || v === x
+type Compiled = { i: number; allow: boolean; kinds: ReadonlySet<string>; r: Rule }
+const fits = (c: Compiled, a: Ask, iface: string | undefined) =>
+  (c.kinds.has('*') || c.kinds.has(a.kind)) && any(c.r.toPod, a.to) && any(c.r.toInterface, iface) && any(c.r.toPort, a.port)
+  && (c.r.outside === undefined || c.r.outside === a.outside)
 
-/** The first rule matching the ask decides; none denies (`no rule allows it`); a deny's reason is `rules[i]`. */
+/**
+ * The first rule matching the ask decides; none denies (`no rule allows it`); a deny's reason is `rules[i]`.
+ * Compiled once: rules are indexed by `from` (a named caller's rules, and those for any caller), so an ask looks only
+ * at rules that could match its caller, still in their order.
+ */
 export function PolicyRules(rules: Rule[]): Policy {
+  const byFrom = new Map<string, Compiled[]>(), anyFrom: Compiled[] = []
+  rules.forEach((r, i) => {
+    const c = { i, allow: 'allow' in r, kinds: new Set([('allow' in r ? r.allow : r.deny)].flat()), r }
+    if (r.from === undefined || r.from === '*') anyFrom.push(c)
+    else { const l = byFrom.get(r.from); if (l) l.push(c); else byFrom.set(r.from, [c]) }
+  })
   return { isAllowed: ask => {
-    const i = rules.findIndex(r => matches(r, ask))
-    if (i < 0) return { approved: false, reason: 'no rule allows it' }
-    return 'allow' in rules[i]! ? { approved: true } : { approved: false, reason: `rules[${i}]` }
+    const iface = ask.port?.slice(0, ask.port.lastIndexOf('/'))
+    const named = byFrom.get(ask.from) ?? []
+    let a = 0, b = 0, hit: Compiled | undefined
+    while (!hit && (a < named.length || b < anyFrom.length)) {   // both lists in rule order: merge them
+      const c = b >= anyFrom.length || (a < named.length && named[a]!.i < anyFrom[b]!.i) ? named[a++]! : anyFrom[b++]!
+      if (fits(c, ask, iface)) hit = c
+    }
+    if (!hit) return { approved: false, reason: 'no rule allows it' }
+    return hit.allow ? { approved: true } : { approved: false, reason: `rules[${hit.i}]` }
   } }
 }

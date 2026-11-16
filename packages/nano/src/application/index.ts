@@ -63,7 +63,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
   const trace = stream()
   const live: Live = {
     now: () => current, registry, policies: opts.policies ?? {}, timeoutMs: opts.timeoutMs ?? 30_000, trace,
-    instance: name => pods.get(name), listeners: { ons: new Set(), podChanges: new Set() }, flying: new Set(), closed: () => closing !== undefined, isolate: opts.isolate,
+    instance: name => pods.get(name), listeners: { ons: new Set(), heard: new Map(), podChanges: new Set() }, flying: new Set(), closed: () => closing !== undefined, isolate: opts.isolate,
   }
   const pods = instances(live)
   const buildEager = (names: string[]) => Promise.all(names.filter(n => current.pods[n]!.eager).map(n => pods.get(n)))

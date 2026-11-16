@@ -38,9 +38,13 @@ const Shape = Type.Object({
 
 const label = (s: Subscription) => (s.kind === 'call' ? `${s.from}->${s.to}` : `${s.from}->${s.to} (${s.source} to ${s.target})`)
 
-/** The op at port `p` among what `impl` provides. */
-export const opAt = (impl: Implementation, p: string): Op | undefined =>
-  impl.provides.flatMap(i => Object.values(i.ops).filter(o => port(i, o) === p))[0]
+/** The op at port `p` among what `impl` provides (its ports mapped once per implementation). */
+const ports = new WeakMap<Implementation, Map<string, Op>>()
+export const opAt = (impl: Implementation, p: string): Op | undefined => {
+  let m = ports.get(impl)
+  if (!m) { m = new Map(); for (const i of impl.provides) for (const o of Object.values(i.ops)) if (!m.has(port(i, o))) m.set(port(i, o), o); ports.set(impl, m) }
+  return m.get(p)
+}
 
 /** Why subscription `s` (both ends known) does not hold, or undefined. */
 function unfit(s: Subscription, from: Implementation, to: Implementation): string | undefined {

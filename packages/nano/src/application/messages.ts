@@ -9,10 +9,11 @@
 import type { AppDeployment } from '../deployment.ts'
 import type { Handler, Implementation } from '../implementation.ts'
 import type { Pod } from '../pod.ts'
-import { Policies, PolicyRules, type Ask, type Policy } from '../policy.ts'
+import type { Ask, Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import type { NanoContext } from '../context.ts'
 import { opAt } from '../runtime.ts'
+import { lookup } from './lookup.ts'
 import { failure, isNanoResult, success, type Fail, type NanoResult } from '../result.ts'
 import type { stream } from './stream.ts'
 
@@ -25,8 +26,8 @@ export type Live = {
   readonly trace: ReturnType<typeof stream>
   /** A build: the handlers by port, and the implementation they were made from. */
   instance(pod: string): Promise<NanoResult<{ implementation: Implementation; handlers: ReadonlyMap<string, Handler> }>>
-  /** The live listeners, in the order made: `on` subscriptions (a pod's, or the host's) and pod-change listeners (`ctx.addOnPodChangeListener`). */
-  readonly listeners: { ons: Set<On>; podChanges: Set<{ pod: string; fn: Parameters<NanoContext['addOnPodChangeListener']>[0] }> }
+  /** The live listeners, in the order made: `on` subscriptions (a pod's, or the host's; `heard` the same by `${from} ${port}`, what `emit` reads) and pod-change listeners (`ctx.addOnPodChangeListener`). */
+  readonly listeners: { ons: Set<On>; heard: Map<string, Set<On>>; podChanges: Set<{ pod: string; fn: Parameters<NanoContext['addOnPodChangeListener']>[0] }> }
   /** Deliveries under way, so `close()` can let them settle. */
   readonly flying: Set<Promise<unknown>>
   /** Whether `close()` has been called: nothing new is delivered. */
@@ -67,17 +68,15 @@ export async function attempt<T>(live: Live, pod: string, what: string, work: ()
 /** The implementation of `pod` in the deployment now, if it has one. */
 export const impl = (live: Live, pod: string) => live.registry.implementation(live.now().pods[pod]?.implementation ?? '')
 /** Every runtime `pod` is placed in, as [id, runtime deployment], in order. */
-export const placedIn = (live: Live, pod: string) => Object.entries(live.now().runtimes).filter(([, r]) => r.pods.includes(pod))
-/** Every runtime holding a call edge from `pod`, placed there or not, as [id, runtime deployment], in order. */
-export const wiredFrom = (live: Live, pod: string) => Object.entries(live.now().runtimes).filter(([, r]) => r.subscriptions.some(s => s.kind === 'call' && s.from === pod))
+export const placedIn = (live: Live, pod: string) => { const d = live.now(); return (lookup(d).placedIn.get(pod) ?? []).map(id => [id, d.runtimes[id]!] as const) }
 const action = (i: Implementation | undefined, p: string) => { const o = i && opAt(i, p); return o?.kind === 'action' ? o : undefined }
 
 /** Why the policy of `ask.runtime` in `d` (the deployment now, or the one `apply` brings) refuses `ask`, or undefined. A throw, a Promise or no verdict refuses. */
 export function refusal(live: Live, ask: Omit<Ask, 'outside'>, d = live.now()): string | undefined {
-  const data = d.runtimes[ask.runtime]?.policy   // as it is in `d`, so `apply` changes it
-  const policy = Object.hasOwn(live.policies, ask.runtime) ? live.policies[ask.runtime]! : data?.kind === 'rules' ? PolicyRules(data.rules) : Policies.allowAll()
+  const l = lookup(d)   // as it is in `d`, so `apply` changes it
+  const policy = Object.hasOwn(live.policies, ask.runtime) ? live.policies[ask.runtime]! : l.policy(ask.runtime)
   try {
-    const outside = ask.from === 'host' || !d.runtimes[ask.runtime]?.pods.includes(ask.from)
+    const outside = ask.from === 'host' || !l.placed.get(ask.runtime)?.has(ask.from)
     const v = policy.isAllowed({ ...ask, outside }) as { approved?: unknown; reason?: unknown; then?: unknown } | undefined
     if (typeof v?.then === 'function') { Promise.resolve(v).catch(() => {}); return 'policy gave no verdict' }
     if (v?.approved === true) return undefined

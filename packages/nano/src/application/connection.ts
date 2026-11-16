@@ -18,15 +18,20 @@ export function connect(live: Live, w: Omit<On, 'end'>, ended: (fail?: Fail) => 
   if (why !== undefined) { trace.emit({ type: 'denied', id, reason: why }); return failure('denied', why) }
   trace.emit({ type: 'delivered', id, result: success(undefined), ms: 0 })
   let open = true
+  const key = `${w.from} ${w.port}`
   const on: On = { ...w, end(fail) {
     if (!open) return
     open = false
     live.listeners.ons.delete(on)
+    const set = live.listeners.heard.get(key)
+    if (set?.delete(on) && set.size === 0) live.listeners.heard.delete(key)
     const u = trace.id()
     say('unsubscribe', u)
     trace.emit({ type: 'delivered', id: u, result: fail ? { ok: false, fail } : success(undefined), ms: 0 })
     ended(fail)
   } }
   live.listeners.ons.add(on)
+  const set = live.listeners.heard.get(key)
+  if (set) set.add(on); else live.listeners.heard.set(key, new Set([on]))
   return success(on)
 }

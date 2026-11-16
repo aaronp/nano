@@ -17,6 +17,7 @@ import { iterate } from './iterate.ts'
 import { listen } from './listen.ts'
 import type { AppEvent } from './stream.ts'
 import { impl, refusal, type Live, type On } from './messages.ts'
+import { lookup } from './lookup.ts'
 
 type Reason = 'not-found' | 'not-unique' | 'denied'
 export type Resolution<T> =
@@ -55,7 +56,8 @@ type Out<O> = O extends Op<any, infer S> ? DataOf<S> : unknown
 /** The one pod placed in `runtime` providing `api` now, narrowed by `where`. */
 export function placement(live: Live, runtime: string, api: Interface, where: Where): Found<Placed> {
   const found: Placed[] = []
-  for (const pod of live.now().runtimes[runtime]?.pods ?? []) {
+  const named = where.pod !== undefined && lookup(live.now()).placed.get(runtime)?.has(where.pod) ? [where.pod] : undefined   // a named pod: no scan
+  for (const pod of named ?? (where.pod !== undefined ? [] : live.now().runtimes[runtime]?.pods ?? [])) {
     const i = impl(live, pod)
     if ((where.pod ?? pod) === pod && i?.provides.some(x => x.coord === api.coord)) found.push({ pod, runtime, implementation: i.coord })
   }
@@ -78,7 +80,7 @@ export function runtimeView(live: Live, id?: string): RuntimeView {
     return client(live, id, 'host', pod, () => { const now = at(); return !now.ok ? now
       : now.value !== id ? failure('not-found', `runtime ${now.value} is not the one this client was made for`)
       : live.closed() ? failure('not-found', 'application is closed')
-      : live.now().runtimes[id]?.pods.includes(pod) ? undefined : failure('not-found', `${pod} is not placed in ${id}`) })
+      : lookup(live.now()).placed.get(id)?.has(pod) ? undefined : failure('not-found', `${pod} is not placed in ${id}`) })
   }
   /** Placed, and reachable: the runtime's policy lets the host reach at least one op of `api` there (an action by
    *  `call`, an event by `subscribe`); else `denied`, so nothing is learned of a runtime the host may not use. */
@@ -113,7 +115,7 @@ export function runtimeView(live: Live, id?: string): RuntimeView {
       const p = placement(live, runtime, api, where)
       if (!p.ok) return throws(p.fail)()
       const from = p.value.pod
-      const gone = () => !live.now().runtimes[runtime]?.pods.includes(from)
+      const gone = () => !lookup(live.now()).placed.get(runtime)?.has(from)
       const c = connectOn(live, { runtime, from, port: port(api, op), to: 'host', gone, fn }, f => stop?.(f))
       if (!c.ok) throw thrown(c.fail)
       return () => c.value.end()

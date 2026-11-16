@@ -10,7 +10,7 @@
 import { blake3 } from '@noble/hashes/blake3'
 import { utf8ToBytes, bytesToHex } from '@noble/hashes/utils'
 import { canonicalize } from 'json-canonicalize'
-import { Value } from 'typebox/value'
+import { Compile } from 'typebox/compile'
 import type { Static, TSchema } from 'typebox'
 
 export type SchemaDef<S extends TSchema = TSchema> = S & {
@@ -74,7 +74,9 @@ function hasFunction(node: unknown, seen = new Set<unknown>()): boolean {
 /** A copy of `schema` (non-enumerable keys kept), with the definition's members added out of sight of hashing. */
 function define<S extends TSchema>(schema: S, label?: string): SchemaDef<S> {
   if (hasFunction(schema)) throw new Error(`${label ?? 'schema'}: schema is not JSON`)
-  const check = (v: unknown): v is Static<S> => Value.Check(schema, v)
+  // Compiled on first use (JIT where the page allows `eval`, else TypeBox interprets): the same answer as Value.Check.
+  let compiled: ReturnType<typeof Compile<S>> | undefined
+  const check = (v: unknown): v is Static<S> => (compiled ??= Compile(schema)).Check(v)
   const members = {
     ...(label !== undefined && { label }),
     schema,
