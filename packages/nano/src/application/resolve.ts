@@ -13,6 +13,8 @@ import { plain } from '../plain.ts'
 import { failure, success, type Fail, type NanoResult } from '../result.ts'
 import { client } from './emit.ts'
 import { iterate } from './iterate.ts'
+import { listen } from './listen.ts'
+import type { AppEvent } from './stream.ts'
 import { impl, refusal, type Live, type On } from './messages.ts'
 
 type Reason = 'not-found' | 'not-exported' | 'not-unique'
@@ -29,7 +31,7 @@ type Placed = { pod: string; runtime: string; implementation: string }
 type Client = Record<string, (input: unknown) => Promise<NanoResult<unknown>>>
 
 /** A runtime as the host sees it. */
-export type Entry = {
+export type RuntimeView = {
   resolve<I extends Interface>(api: I, where?: Where): Resolution<Interface.Type<I>>
   get<I extends Interface>(api: I, where?: Where): Interface.Type<I>
   call(pod: string): Client
@@ -37,6 +39,8 @@ export type Entry = {
   subscribe<O extends Op>(op: O, fn: (call: { input: In<O>; output: Out<O> }) => unknown): () => void
   /** The same calls as an AsyncIterable, connected at the first iteration (calls from then on; iterate once; not-found throws there): it ends when the listener is removed (not by its consumer). */
   subscribe<O extends Op>(op: O): AsyncIterable<{ input: In<O>; output: Out<O> }>
+  /** The application's one stream, filtered to this runtime: its messages and their outcomes, `applied`, and the lifecycle of its pods; gives an unsubscribe. */
+  listen(fn: (e: AppEvent) => void): () => void
 }
 type DataOf<S> = S extends TSchema ? Static<S> : unknown
 type In<O> = O extends Op<infer I, any> ? DataOf<I> : unknown
@@ -65,7 +69,7 @@ const thrown = (fail: Fail) => () => { throw Object.assign(new Error(`${fail.typ
  * added later by `apply` works and a missing one is `not-found`.
  * Its plain objects resolve again at each call, so a rewired placement is followed.
  */
-export function entry(live: Live, id?: string): Entry {
+export function runtimeView(live: Live, id?: string): RuntimeView {
   const at = () => id === undefined ? only(live) : named(live, id)
   const call = (pod: string): Client => {
     const r = at(), id = r.ok ? r.value : ''
@@ -104,8 +108,9 @@ export function entry(live: Live, id?: string): Entry {
       return () => { live.ons.delete(h) }
     }
     return fn ? connect(fn) : iterate(connect, s => { stop = s })
-  }) as Entry['subscribe']
-  return { resolve, get: (api, where) => resolve(api, where).getOrThrow(), call, subscribe }
+  }) as RuntimeView['subscribe']
+  const watch = (fn: (e: AppEvent) => void) => { const r = at(); return r.ok ? listen(live, r.value, fn) : thrown(r.fail)() }
+  return { resolve, get: (api, where) => resolve(api, where).getOrThrow(), call, subscribe, listen: watch }
 }
 
 /** Runtime `id` if the application has it now, else `not-found`. */

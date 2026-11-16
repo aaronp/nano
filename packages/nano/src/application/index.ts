@@ -24,7 +24,7 @@ import { loaded } from './load.ts'
 import { compose } from './compose.ts'
 import { instances } from './instances.ts'
 import { refusal, type Live } from './messages.ts'
-import { entry, type Entry } from './resolve.ts'
+import { runtimeView, type RuntimeView } from './resolve.ts'
 import { stream, type AppEvent } from './stream.ts'
 
 export type { AppEvent } from './stream.ts'
@@ -32,12 +32,12 @@ export type { Resolution } from './resolve.ts'
 
 export type Application = {
   /** The runtime `id` as the host sees it; `resolve`, `get`, `call` and `subscribe` below are those of the one runtime (else `not-unique`). */
-  runtime(id: string): Entry
+  runtime(id: string): RuntimeView
   /** `app.call(pod)`; `app.call(runtime, pod)` is `app.runtime(runtime).call(pod)`. */
-  call(...at: [pod: string] | [runtime: string, pod: string]): ReturnType<Entry['call']>
-  get: Entry['get']
-  resolve: Entry['resolve']
-  subscribe: Entry['subscribe']
+  call(...at: [pod: string] | [runtime: string, pod: string]): ReturnType<RuntimeView['call']>
+  get: RuntimeView['get']
+  resolve: RuntimeView['resolve']
+  subscribe: RuntimeView['subscribe']
   apply(next: AppDeployment): Promise<NanoResult<void>>
   restart(pod: string): Promise<NanoResult<void>>
   deployment(): AppDeployment
@@ -113,9 +113,9 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     return success(undefined)
   }
 
-  const one = entry(live)
+  const one = runtimeView(live)
   const app: Application = {
-    runtime: id => entry(live, id),
+    runtime: id => runtimeView(live, id),
     resolve: (api, where) => one.resolve(api, where),
     get: (api, where) => one.get(api, where),
     subscribe: one.subscribe,
