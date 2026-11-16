@@ -26,6 +26,25 @@
   <script type="module" src="./main.js"></script>
 </head>
 <body>
-<workspace-shell heading="Nano"></workspace-shell>
+<app-shell>
+  <span slot="title">Nano</span>
+  <workspace-app-bar slot="title-actions"></workspace-app-bar>
+  <a slot="nav" href="#/workspace">Workspace</a>
+  <a slot="nav" href="#/themes">Themes</a>
+  <a slot="nav" href="#/settings">Settings</a>
+
+  <app-route path="/workspace" bleed><workspace-shell heading="Nano"></workspace-shell></app-route>
+  <app-route path="/themes">
+    <header class="page-head"><h1>Themes</h1><p>Your choice is remembered in this browser.</p></header>
+    <theme-picker layout="cards"></theme-picker>
+  </app-route>
+  <app-route path="/settings">
+    <header class="page-head"><h1>Settings</h1><p>How the workspace remembers its layout.</p></header>
+    <button type="button" id="reset-layout">Forget pane sizes and the saved layout</button>
+  </app-route>
+  <app-route path="*">
+    <header class="page-head"><h1>Page not found</h1><p>Nothing lives at this address. <a href="#/workspace">Go to the workspace</a>.</p></header>
+  </app-route>
+</app-shell>
 </body>
 </html>

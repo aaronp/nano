@@ -24,7 +24,7 @@ const chosen = (h: Host, pod: string) => (away(h, pod) && !customElements.get(h.
 class WorkspaceShell extends LitElement {
   static properties = { host: { attribute: false }, heading: {}, opened: { state: true }, events: { state: true }, pick: { state: true } }
   static styles = [base, kit, css`
-    :host { display: flex; flex-direction: column; height: 100vh; background: ${t('bg')} }
+    :host { display: flex; flex-direction: column; height: 100%; background: ${t('bg')} }
     header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid ${t('border')} }
     h1 { font-size: 15px; margin: 0 12px 0 0 } header input { flex: 0 1 320px } theme-picker { margin-left: auto }
     split-pane { flex: 1; min-height: 0 } section { overflow: auto; padding: 10px; min-height: 0 }

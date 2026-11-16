@@ -41,7 +41,7 @@ export const hostUi = implementation('workspace.host/ui', {
     approve: async a => success(await approve(a as { title: string; detail?: string })),
     setAppBar: async text => {
       document.title = String(text)
-      document.querySelector('workspace-shell')?.setAttribute('heading', String(text))
+      for (const t of ['workspace-shell', 'workspace-app-bar']) document.querySelector(t)?.setAttribute('heading', String(text))
       return success(null)
     },
   })],
