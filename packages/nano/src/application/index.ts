@@ -103,9 +103,9 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     const changes = diff(current, checked.value)
     current = checked.value
     for (const o of [...live.ons]) {
-      if (o.gone()) { live.ons.delete(o); continue }   // an edge removed now stays gone if re-added
+      if (o.gone()) { live.ons.delete(o); o.end?.(); continue }   // an edge removed now stays gone if re-added
       const why = refusal(live, o.runtime, o.to, o.from, 'subscribe')   // asked again on apply; a refused one is dropped
-      if (why !== undefined) { live.ons.delete(o); trace.emit({ type: 'denied', id: trace.id(), reason: why }) }
+      if (why !== undefined) { live.ons.delete(o); o.end?.(); trace.emit({ type: 'denied', id: trace.id(), reason: why }) }
     }
     await Promise.all([...changes.removed.map(n => pods.forget(n, 'removed')), ...changes.changed.map(n => pods.forget(n, 'changed'))])
     await buildEager([...changes.added, ...changes.changed])
@@ -118,7 +118,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     runtime: id => entry(live, id),
     resolve: (api, where) => one.resolve(api, where),
     get: (api, where) => one.get(api, where),
-    subscribe: (op, fn) => one.subscribe(op, fn),
+    subscribe: one.subscribe,
     call: (...at) => at.length === 1 ? one.call(at[0]) : app.runtime(at[0]).call(at[1]),
     apply: next => closing ? Promise.resolve(shut()) : queued(() => reconcile(next)),
     restart: pod => closing ? Promise.resolve(shut()) : queued(async () => {

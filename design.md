@@ -59,7 +59,7 @@ and deliveries under way); `emit` is what follows a message: an emission (`{ inp
 subscriptions (whole; the 'subscribe' question is asked once, when one connects, and again on `apply`), and `client`, which calls by op name and emits each successful result; `refusal` is a runtime policy's
 answer to a message or a new subscription (a throw, a Promise or no verdict refuses); `within` bounds a build or
 handler by the timeout, and `attempt` also records its throw or timeout as a `failure`; `impl(live, pod)` is a pod's
-implementation now and `placedIn(live, pod)` the runtimes it is placed in; `contextFor(live, name,
+implementation now and `placedIn(live, pod)` the runtimes it is placed in; `iterate(listen, ended)` is the AsyncIterable form of `on` / `subscribe` without a callback (it ends when nano drops the `On`: build close, `apply`, denied); `contextFor(live, name,
 onClose)` is a pod's `NanoContext`, `onClose` adding a listener to that build; `diff(a, b)` is what `apply` changes: pods added, removed, changed, and runtimes rewired;
 `loaded(url)` is a nano.json and the registry of its `modules` (what `Application.load` assembles); `placement(live, runtime, api, where)` is the one pod in a runtime providing an exported interface now, and `entry(live, id?)` an `Entry` (a runtime as the host sees it: `resolve`, `get`, `call`, `subscribe`) for runtime `id`, looked up at each use (`not-found` if missing), or, without `id`, the application's one runtime (else `not-unique`); `compose(runtimes)` is the application's deployment from its runtimes (the pods they place, in their `Pods`' order,
 and those pods' tags) and their registry.

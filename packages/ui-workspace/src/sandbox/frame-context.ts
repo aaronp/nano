@@ -34,7 +34,7 @@ export function frameContext(self: string, runtimes: string[], edges: () => Edge
 
   const selection = <I extends Interface>(e: Edge): Selection<I> => ({
     pod: e.pod, runtime: e.runtime, call: client<I>((op, input) => out(e.pod, e.runtime, op, input)),
-    on() { send({ type: 'warn', reason: `${self}: on does not cross a sandbox` }); return () => {} },
+    on: ((_op: unknown, fn?: unknown) => { send({ type: 'warn', reason: `${self}: on does not cross a sandbox` }); return fn ? () => {} : (async function* () {})() }) as never,
   })
   const all = <I extends Interface>(s: I | SelectorData): Selection<I>[] => {
     const want = selectorData(s)

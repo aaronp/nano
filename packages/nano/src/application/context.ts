@@ -15,6 +15,7 @@ import type { Op } from '../op.ts'
 import { failure, success, type NanoResult } from '../result.ts'
 import { matches, selectorData, type Selector, type SelectorData } from '../selector.ts'
 import { client, emit } from './emit.ts'
+import { iterate } from './iterate.ts'
 import { impl, placedIn, refusal, type Live, type On } from './messages.ts'
 
 /** The port of `o` on `pod`'s implementation, if it has `o`. */
@@ -32,21 +33,25 @@ const fitsData = (o: Op, data: unknown) => { try { return !o.output || o.output.
 export function contextFor(live: Live, name: string, onClose: NanoContext['addOnCloseListener']): Omit<NanoContext, 'deps'> {
   /** This build's `on` subscriptions; undefined once it has closed. */
   let mine: Set<On> | undefined = new Set()
-  onClose(() => { for (const o of mine!) live.ons.delete(o); mine = undefined })
+  onClose(() => { for (const o of mine!) { live.ons.delete(o); o.end?.() } mine = undefined })
 
   /** The call edge from `name` to `to` in `runtime`, read live: a call or delivery through it after `apply` removed it is not-found. */
   const selection = <I extends Interface>(runtime: string, to: string): Selection<I> => {
     const gone = () => live.now().runtimes[runtime]?.subscriptions.some(x => x.kind === 'call' && x.from === name && x.to === to)
       ? undefined : failure('not-found', `${name}->${to} is no longer in ${runtime}`)
-    return { pod: to, runtime, call: client(live, runtime, name, to, gone) as Client<I>, on(o: Op, fn: (e: never) => void | Promise<void>) {
-      const p = portOf(live, to, o)
-      if (!p || !mine || gone()) { if (!p) live.trace.emit({ type: 'warning', reason: `${name}: ${o?.name} is not an op of ${to}` }); return () => {} }
-      const why = refusal(live, runtime, name, to, 'subscribe')
-      if (why !== undefined) { live.trace.emit({ type: 'denied', id: live.trace.id(), reason: why }); return () => {} }
-      const sub: On = { runtime, from: to, port: p, to: name, gone, fn }
-      live.ons.add(sub); mine.add(sub)
-      return () => { live.ons.delete(sub); mine?.delete(sub) }
-    } }
+    return { pod: to, runtime, call: client(live, runtime, name, to, gone) as Client<I>, on(o: Op, fn?: (e: never) => void | Promise<void>) {
+      let stop: (() => void) | undefined
+      const connect = (fn: On['fn']) => {
+        const p = portOf(live, to, o)
+        if (!p || !mine || gone()) { if (!p) live.trace.emit({ type: 'warning', reason: `${name}: ${o?.name} is not an op of ${to}` }); stop?.(); return () => {} }
+        const why = refusal(live, runtime, name, to, 'subscribe')
+        if (why !== undefined) { live.trace.emit({ type: 'denied', id: live.trace.id(), reason: why }); stop?.(); return () => {} }
+        const sub: On = { runtime, from: to, port: p, to: name, gone, fn, end: () => stop?.() }
+        live.ons.add(sub); mine.add(sub)
+        return () => { live.ons.delete(sub); mine?.delete(sub) }
+      }
+      return fn ? connect(fn as On['fn']) : iterate(connect, s => { stop = s })
+    } } as Selection<I>
   }
 
   /** Every call subscription from `name` matching `s`: runtimes in order, then subscriptions in order. */

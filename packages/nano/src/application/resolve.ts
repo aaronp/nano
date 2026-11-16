@@ -12,6 +12,7 @@ import type { Op } from '../op.ts'
 import { plain } from '../plain.ts'
 import { failure, success, type Fail, type NanoResult } from '../result.ts'
 import { client } from './emit.ts'
+import { iterate } from './iterate.ts'
 import { impl, refusal, type Live, type On } from './messages.ts'
 
 type Reason = 'not-found' | 'not-exported' | 'not-unique'
@@ -34,6 +35,8 @@ export type Entry = {
   call(pod: string): Client
   /** Each successful call of action `op` travelling in this runtime, after it returns; gives an unsubscribe. */
   subscribe<O extends Op>(op: O, fn: (call: { input: In<O>; output: Out<O> }) => unknown): () => void
+  /** The same calls as an AsyncIterable: it ends when the listener is removed (not by its consumer). */
+  subscribe<O extends Op>(op: O): AsyncIterable<{ input: In<O>; output: Out<O> }>
 }
 type DataOf<S> = S extends TSchema ? Static<S> : unknown
 type In<O> = O extends Op<infer I, any> ? DataOf<I> : unknown
@@ -82,22 +85,26 @@ export function entry(live: Live, id?: string): Entry {
     return { ok: true, ...now.value, value, getOrThrow: () => value }
   }
   /** The host's `On` to the one pod providing `op` in this runtime; asked 'subscribe' once, now. */
-  const subscribe: Entry['subscribe'] = (op, fn) => {
-    const r = at()
-    if (!r.ok) return thrown(r.fail)()
-    const runtime = r.value
-    const api = (live.now().runtimes[runtime]?.pods ?? []).flatMap(p => impl(live, p)?.provides ?? []).find(i => i.byCoord.has(op.coord))
-    if (!api) return thrown(miss('not-found', `no pod provides ${op.coord} in ${runtime}`).fail)()
-    const p = placement(live, runtime, api, {})
-    if (!p.ok) return thrown(p.fail)()
-    const from = p.value.pod
-    const why = refusal(live, runtime, 'host', from, 'subscribe')
-    if (why !== undefined) { live.trace.emit({ type: 'denied', id: live.trace.id(), reason: why }); return () => {} }
-    const gone = () => !live.now().runtimes[runtime]?.pods.includes(from)
-    const h: On = { runtime, from, port: port(api, op), to: 'host', gone, fn: fn as On['fn'] }
-    live.ons.add(h)
-    return () => { live.ons.delete(h) }
-  }
+  const subscribe = ((op: Op, fn?: On['fn']) => {
+    let stop: (() => void) | undefined
+    const connect = (fn: On['fn']) => {
+      const r = at()
+      if (!r.ok) return thrown(r.fail)()
+      const runtime = r.value
+      const api = (live.now().runtimes[runtime]?.pods ?? []).flatMap(p => impl(live, p)?.provides ?? []).find(i => i.byCoord.has(op.coord))
+      if (!api) return thrown(miss('not-found', `no pod provides ${op.coord} in ${runtime}`).fail)()
+      const p = placement(live, runtime, api, {})
+      if (!p.ok) return thrown(p.fail)()
+      const from = p.value.pod
+      const why = refusal(live, runtime, 'host', from, 'subscribe')
+      if (why !== undefined) { live.trace.emit({ type: 'denied', id: live.trace.id(), reason: why }); stop?.(); return () => {} }
+      const gone = () => !live.now().runtimes[runtime]?.pods.includes(from)
+      const h: On = { runtime, from, port: port(api, op), to: 'host', gone, fn, end: () => stop?.() }
+      live.ons.add(h)
+      return () => { live.ons.delete(h) }
+    }
+    return fn ? connect(fn) : iterate(connect, s => { stop = s })
+  }) as Entry['subscribe']
   return { resolve, get: (api, where) => resolve(api, where).getOrThrow(), call, subscribe }
 }
 

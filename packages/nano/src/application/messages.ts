@@ -34,8 +34,8 @@ export type Live = {
   readonly isolate?: (name: string, pod: Pod) => Implementation
 }
 
-/** A subscription made in code: `to` (a pod, or 'host') hears pod `from`'s port `port` in `runtime`, while `gone()` gives nothing. */
-export type On = { runtime: string; from: string; port: string; to: string; gone(): unknown; fn(e: { input?: unknown; output: unknown }): unknown }
+/** A subscription made in code: `to` (a pod, or 'host') hears pod `from`'s port `port` in `runtime`, while `gone()` gives nothing. `end` ends its iteration when nano drops it (not when its consumer does). */
+export type On = { runtime: string; from: string; port: string; to: string; gone(): unknown; fn(e: { input?: unknown; output: unknown }): unknown; end?(): void }
 
 /** A message's kind, its chain (`correlation`, `cause`), its id if already taken, and its `work` if not an action. */
 type How = { kind: 'call' | 'pipe' | 'on'; id?: string; correlation?: string; cause?: string; work?: () => Promise<NanoResult<unknown>> }
