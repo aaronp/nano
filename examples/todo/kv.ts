@@ -5,13 +5,20 @@
  *   const s = inMemory(); await s.put({ key: ['todos', '1'], value: { title: 'milk' } })
  *   await s.list({ prefix: ['todos'] })   // [{ key: ['todos', '1'], value: { title: 'milk' } }]
  */
-import { Type } from 'typebox'
+import { Type, type Static } from 'typebox'
 import { defineSchema, iface, implementation, op, provide, provider } from '@pritzlaff/nano-core'
 import { handlers } from './plain.ts'
 
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json }
-export type Path = string[]
-export type Entry = { key: Path; value: Json }
+
+// Each schema once; its TypeScript type is derived from it, under the same name.
+export const Path = defineSchema('Path', Type.Array(Type.String()))
+export type Path = Static<typeof Path.schema>
+/** Any value to nano's check; `Json` to TypeScript. */
+export const Value = defineSchema('Value', Type.Unsafe<Json>(Type.Unknown()))
+export const Entry = defineSchema('Entry', Type.Object({ key: Path.schema, value: Value.schema }))
+export type Entry = Static<typeof Entry.schema>
+const Done = defineSchema('Done', Type.Null())
 
 export interface KeyValueStore {
   /** `null` when the key is missing. */
@@ -22,16 +29,11 @@ export interface KeyValueStore {
   list(q: { prefix: Path }): Promise<Entry[]>
 }
 
-const PathS = defineSchema('Path', Type.Array(Type.String()))
-const ValueS = defineSchema('Value', Type.Unknown())
-const EntryS = defineSchema('Entry', Type.Object({ key: PathS.schema, value: ValueS.schema }))
-const Done = defineSchema('Done', Type.Null())
-
 export const KeyValueStore = iface('example.kv.KeyValueStore', {
-  get: op.action('get', PathS, ValueS),
-  put: op.action('put', EntryS, Done),
-  delete: op.action('delete', PathS, Done),
-  list: op.action('list', defineSchema('Prefix', Type.Object({ prefix: PathS.schema })), defineSchema('Entries', Type.Array(EntryS.schema))),
+  get: op.action('get', Path, Value),
+  put: op.action('put', Entry, Done),
+  delete: op.action('delete', Path, Done),
+  list: op.action('list', defineSchema('Prefix', Type.Object({ prefix: Path.schema })), defineSchema('Entries', Type.Array(Entry.schema))),
 })
 
 /** Shorter paths first, then segment by segment. */

@@ -4,13 +4,16 @@
  *
  *   const todos = todoList(inMemory()); const t = await todos.add('milk'); await todos.update({ id: t.id, done: true })
  */
-import { Type } from 'typebox'
+import { Type, type Static } from 'typebox'
 import { defineSchema, iface, implementation, op, provide, provider } from '@pritzlaff/nano-core'
 import { KeyValueStore } from './kv.ts'
 import { handlers, plain } from './plain.ts'
 
-export type Todo = { id: string; title: string; done: boolean }
-export type Change = { id: string; title?: string; done?: boolean }
+// Each schema once; its TypeScript type is derived from it, under the same name.
+export const Todo = defineSchema('Todo', Type.Object({ id: Type.String(), title: Type.String(), done: Type.Boolean() }))
+export type Todo = Static<typeof Todo.schema>
+export const Change = defineSchema('Change', Type.Object({ id: Type.String(), title: Type.Optional(Type.String()), done: Type.Optional(Type.Boolean()) }))
+export type Change = Static<typeof Change.schema>
 
 export interface TodoList {
   add(title: string): Promise<Todo>
@@ -21,15 +24,11 @@ export interface TodoList {
   remove(id: string): Promise<boolean>
 }
 
-const Id = defineSchema('Id', Type.String())
-const TodoS = defineSchema('Todo', Type.Object({ id: Type.String(), title: Type.String(), done: Type.Boolean() }))
-const ChangeS = defineSchema('Change', Type.Object({ id: Type.String(), title: Type.Optional(Type.String()), done: Type.Optional(Type.Boolean()) }))
-
 export const TodoList = iface('example.todo.TodoList', {
-  add: op.action('add', defineSchema('Title', Type.String()), TodoS),
-  list: op.action('list', defineSchema('Nothing', Type.Null()), defineSchema('Todos', Type.Array(TodoS.schema))),
-  update: op.action('update', ChangeS, defineSchema('MaybeTodo', Type.Union([TodoS.schema, Type.Null()]))),
-  remove: op.action('remove', Id, defineSchema('Removed', Type.Boolean())),
+  add: op.action('add', defineSchema('Title', Type.String()), Todo),
+  list: op.action('list', defineSchema('Nothing', Type.Null()), defineSchema('Todos', Type.Array(Todo.schema))),
+  update: op.action('update', Change, defineSchema('MaybeTodo', Type.Union([Todo.schema, Type.Null()]))),
+  remove: op.action('remove', defineSchema('Id', Type.String()), defineSchema('Removed', Type.Boolean())),
 })
 
 const at = (id: string) => ['todos', id]
