@@ -38,7 +38,7 @@ test('2. the runtime: the stream shows every todos → store call with its timin
   const events: AppEvent[] = []
   app.listen(e => events.push(e))
   await app.runtime('frontend').get(TodoListDef.api).add('milk')
-  const call = events.find(e => e.type === 'sent' && e.from === 'todos' && e.to === 'store')
+  const call = events.find(e => e.type === 'sent' && e.kind === 'call' && e.from === 'todos' && e.to === 'store')
   expect(call).toMatchObject({ kind: 'call', port: 'example.kv.KeyValueStore/put' })
   const done = events.find(e => e.type === 'delivered' && call?.type === 'sent' && e.id === call.id)
   expect(done).toMatchObject({ result: { ok: true } })

@@ -1,7 +1,7 @@
 /**
  * `runtimeView.listen`: the one stream (`trace`) filtered to runtime `runtime`: its `sent` messages and their
  * `delivered`/`denied`, `applied` narrowed to the pods placed there (now or before), and the lifecycle of those pods, even as `apply` removes
- * them. Warnings, and a `denied` that was never `sent` (a refused subscribe), are the operator's: `app.listen` only.
+ * them. Warnings are the operator's: `app.listen` only. A subscribe is a message too, so a refused one shows here.
  *
  *   const off = listen(live, 'front', e => …)   // nothing from another runtime
  */

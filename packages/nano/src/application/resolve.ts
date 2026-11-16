@@ -12,6 +12,7 @@ import type { Op } from '../op.ts'
 import { plain } from '../plain.ts'
 import { failure, success, type Fail, type NanoResult } from '../result.ts'
 import { client } from './emit.ts'
+import { connect as connectOn } from './connection.ts'
 import { iterate } from './iterate.ts'
 import { listen } from './listen.ts'
 import type { AppEvent } from './stream.ts'
@@ -90,7 +91,7 @@ export function runtimeView(live: Live, id?: string): RuntimeView {
   }
   /** The host's `On` to the one pod providing `op` in this runtime; asked 'subscribe' once, now. */
   const subscribe = ((op: Op, fn?: On['fn']) => {
-    let stop: (() => void) | undefined
+    let stop: ((fail?: Fail) => void) | undefined
     const connect = (fn: On['fn']) => {
       const r = at()
       if (!r.ok) return thrown(r.fail)()
@@ -100,12 +101,10 @@ export function runtimeView(live: Live, id?: string): RuntimeView {
       const p = placement(live, runtime, api, {})
       if (!p.ok) return thrown(p.fail)()
       const from = p.value.pod
-      const why = refusal(live, runtime, 'host', from, 'subscribe')
-      if (why !== undefined) { live.trace.emit({ type: 'denied', id: live.trace.id(), reason: why }); stop?.(); return () => {} }
       const gone = () => !live.now().runtimes[runtime]?.pods.includes(from)
-      const h: On = { runtime, from, port: port(api, op), to: 'host', gone, fn, end: () => stop?.() }
-      live.listeners.ons.add(h)
-      return () => { live.listeners.ons.delete(h) }
+      const c = connectOn(live, { runtime, from, port: port(api, op), to: 'host', gone, fn }, f => stop?.(f))
+      if (!c.ok) { stop?.(c.fail); return () => {} }
+      return () => c.value.end()
     }
     return fn ? connect(fn) : iterate(connect, s => { stop = s })
   }) as RuntimeView['subscribe']
