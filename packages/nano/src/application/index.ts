@@ -3,9 +3,10 @@
  * on first need, carries every message through the runtime it travels in, and reports all of it on one stream.
  *
  *   const app = (await Application.create(AppDeployment.assemble(appDeployment, registry).value, {})).value
- *   await app.call('app', 'counter').inc(null)   // from 'host', through runtime 'app'
- *   await app.get(Counter).inc()                 // the one pod providing Counter, as a plain object; a Fail throws
- *   app.resolve(Counter).pod                     // what was found (pod, runtime, implementation), or why not
+ *   const front = app.runtime('front')           // the host as a member of runtime 'front': what it places and exports
+ *   await front.call('counter').inc(null)        // from 'host', through runtime 'front' (app.call('front', 'counter') too)
+ *   await front.get(Counter).inc()               // the one pod there providing Counter, as a plain object; a Fail throws
+ *   app.resolve(Counter)                         // app.runtime(the one runtime).resolve(Counter); several: not-unique
  *   const app = await Application.load(new URL('./nano.json', import.meta.url))   // modules loaded, assembled, created
  *   app.listen(e => …)                           // built, sent, delivered, denied, failure, …
  *   await app.close()                            // every instance closed, deliveries under way settled; later calls not-found
@@ -13,7 +14,6 @@
 import { Value } from 'typebox/value'
 import { AppDeployment } from '../deployment.ts'
 import type { Implementation } from '../implementation.ts'
-import type { Interface } from '../iface.ts'
 import type { Pod } from '../pod.ts'
 import type { Policy } from '../policy.ts'
 import { Registry } from '../registry.ts'
@@ -23,18 +23,20 @@ import { diff } from './apply.ts'
 import { loaded } from './load.ts'
 import { compose } from './compose.ts'
 import { instances } from './instances.ts'
-import { client } from './emit.ts'
 import { refusal, type Live } from './messages.ts'
-import { resolution, type Resolution } from './resolve.ts'
+import { entry, only, type Entry } from './resolve.ts'
 import { stream, type AppEvent } from './stream.ts'
 
 export type { AppEvent } from './stream.ts'
 export type { Resolution } from './resolve.ts'
 
 export type Application = {
-  call(runtime: string, pod: string): Record<string, (input: unknown) => Promise<NanoResult<unknown>>>
-  get<I extends Interface>(api: I, where?: { runtime?: string; pod?: string }): Interface.Type<I>
-  resolve<I extends Interface>(api: I, where?: { runtime?: string; pod?: string }): Resolution<Interface.Type<I>>
+  /** The runtime `id` as the host sees it; `resolve`, `get` and `call` below are those of the one runtime (else `not-unique`). */
+  runtime(id: string): Entry
+  /** `app.call(pod)`; `app.call(runtime, pod)` is `app.runtime(runtime).call(pod)`. */
+  call(...at: [pod: string] | [runtime: string, pod: string]): ReturnType<Entry['call']>
+  get: Entry['get']
+  resolve: Entry['resolve']
   apply(next: AppDeployment): Promise<NanoResult<void>>
   restart(pod: string): Promise<NanoResult<void>>
   deployment(): AppDeployment
@@ -106,11 +108,12 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     return success(undefined)
   }
 
+  const one = entry(live, () => only(live))
   const app: Application = {
-    resolve: (api, where = {}) => resolution(live, api, where, app.call),
-    get: (api, where) => app.resolve(api, where).getOrThrow(),
-    call: (runtime, pod) => client(live, runtime, 'host', pod, () => closing ? failure('not-found', 'application is closed')
-      : current.runtimes[runtime]?.pods.includes(pod) ? undefined : failure('not-found', `${pod} is not placed in ${runtime}`)),
+    runtime: id => entry(live, () => success(id)),
+    resolve: (api, where) => one.resolve(api, where),
+    get: (api, where) => one.get(api, where),
+    call: (...at) => at.length === 1 ? one.call(at[0]) : app.runtime(at[0]).call(at[1]),
     apply: next => closing ? Promise.resolve(shut()) : queued(() => reconcile(next)),
     restart: pod => closing ? Promise.resolve(shut()) : queued(async () => {
       if (!current.pods[pod]) return failure('not-found', `no pod ${pod}`)

@@ -50,14 +50,15 @@ export function emit(live: Live, from: string, port: string, data: unknown, chai
 
 /**
  * A client by op name from `from` to `to` in `runtime`. `gone()` is asked at each call, before anything is sent: a
- * Fail it gives is the call's result.
+ * Fail it gives is the call's result. Only actions of interfaces `offered` (by coordinate) are reachable; another is `not-exported`.
  */
-export function client(live: Live, runtime: string, from: string, to: string, gone: () => NanoResult<never> | undefined): Record<string, (input: unknown) => Promise<NanoResult<unknown>>> {
+export function client(live: Live, runtime: string, from: string, to: string, gone: () => NanoResult<never> | undefined, offered = (_: string) => true): Record<string, (input: unknown) => Promise<NanoResult<unknown>>> {
   const call = async (name: string, input: unknown): Promise<NanoResult<unknown>> => {
     const why = gone()
     if (why) return why
-    const provides = impl(live, to)?.provides ?? []
-    const ports = provides.flatMap(i => Object.values(i.ops).filter(o => o.kind === 'action' && o.name === name).map(o => port(i, o)))
+    const provides = (impl(live, to)?.provides ?? []).filter(i => Object.values(i.ops).some(o => o.kind === 'action' && o.name === name))
+    const ports = provides.filter(i => offered(i.coord)).map(i => port(i, i.ops[name]!))
+    if (ports.length === 0 && provides.length) return failure('not-exported', `${runtime} does not export ${name} of ${to}`)
     if (ports.length === 0) return failure('unknown-op', `${to} has no action ${name}`)
     if (ports.length > 1) return failure('not-unique', `${to}: ${name} is an action of more than one interface`)
     return act(live, runtime, from, to, ports[0]!, input, 'call')

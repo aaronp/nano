@@ -11,7 +11,7 @@ test('load nano.json, get the TodoList, it just works', async () => {
   const todos = app.get(TodoListDef.api)
   const milk = await todos.add('milk')
   expect(await todos.list()).toEqual([milk])
-  expect(app.resolve(TodoListDef.api).pod).toBe('todos')
+  expect(app.resolve(TodoListDef.api)).toMatchObject({ ok: true, pod: 'todos' })
 })
 
 test('resolve says why not, and getOrThrow throws an Error carrying the Fail', async () => {

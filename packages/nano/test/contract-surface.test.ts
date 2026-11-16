@@ -100,7 +100,7 @@ test('app.get is not-found or not-unique as a thrown Fail, narrowed by runtime o
   must(await app.apply(two))
   expect(thrownBy(() => app.get(KV))?.fail.type).toBe('not-unique')
   await app.get(KV, { pod: 'spare' }).put({ k: 'a', v: 'b' })
-  expect(await app.get(KV, { pod: 'spare', runtime: 'main' }).size()).toBe(1)
+  expect(await app.runtime('main').get(KV, { pod: 'spare' }).size()).toBe(1)
   expect(await app.get(KV, { pod: 'store' }).size()).toBe(0)
 })
 
@@ -124,12 +124,40 @@ test('ctx.one is a result: not-found is a Fail to look at, and a Selection alway
   expect(got).toMatchObject({ ok: false, fail: { type: 'not-found' } })
 })
 
-test('app.get: a pod placed in two runtimes is not-unique unless where.runtime names one (policies are per runtime)', async () => {
+test('app.get with several runtimes is not-unique ("name a runtime"); app.runtime(id) sees only what is placed there', async () => {
   const d = deployment('acme/mem')
   d.runtimes.side = { pods: ['store'], subscriptions: [] }
   const app = must(await Application.create(must(AppDeployment.assemble(d, registry))))
+  expect(app.resolve(KV)).toMatchObject({ ok: false, reason: 'not-unique', fail: { type: 'not-unique' } })
   expect(thrownBy(() => app.get(KV))?.fail.type).toBe('not-unique')
-  expect(await app.get(KV, { runtime: 'side' }).size()).toBe(0)
+  expect(await app.call('store').size(null)).toMatchObject({ ok: false, fail: { type: 'not-unique' } })
+  expect(await app.runtime('side').get(KV).size()).toBe(0)
+  expect(app.runtime('side').resolve(Notes)).toMatchObject({ ok: false, reason: 'not-found' })
+  expect(await app.runtime('side').call('notes').note('x')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+  expect(await app.runtime('main').call('notes').note('x')).toMatchObject({ ok: true, value: 1 })
+})
+
+test('a runtime exports: what it does not export is not-exported to the host, yet its pods still reach it', async () => {
+  const d = deployment('acme/mem')
+  d.runtimes.main!.exports = ['acme.Notes']
+  const app = must(await Application.create(must(AppDeployment.assemble(d, registry))))
+  expect(app.resolve(KV)).toMatchObject({ ok: false, reason: 'not-exported', fail: { type: 'not-exported' } })
+  expect(thrownBy(() => app.get(KV))?.fail.type).toBe('not-exported')
+  expect(await app.call('store').size(null)).toMatchObject({ ok: false, fail: { type: 'not-exported' } })
+  expect(await app.get(Notes).note('milk')).toBe(1)   // notes -> store, inside the runtime
+  d.runtimes.main!.exports = []
+  must(await app.apply(d))
+  expect(app.resolve(Notes)).toMatchObject({ ok: false, reason: 'not-exported' })
+})
+
+test('two pods providing it in one runtime are not-unique, unless where.pod names one', async () => {
+  const app = await open()
+  const two = deployment('acme/mem')
+  two.pods.spare = { implementation: 'acme/other', eager: false }
+  two.runtimes.main!.pods.push('spare')
+  must(await app.apply(two))
+  expect(app.runtime('main').resolve(KV)).toMatchObject({ ok: false, reason: 'not-unique' })
+  expect(app.runtime('main').resolve(KV, { pod: 'spare' })).toMatchObject({ ok: true, pod: 'spare', runtime: 'main' })
 })
 
 test('app.resolve says what it found (pod, runtime, implementation) or why not; app.get is its getOrThrow', async () => {
@@ -137,12 +165,12 @@ test('app.resolve says what it found (pod, runtime, implementation) or why not; 
   const r = app.resolve(KV)
   expect(r).toMatchObject({ ok: true, pod: 'store', runtime: 'main', implementation: 'acme/mem' })
   await r.getOrThrow().put({ k: 'a', v: 'b' })
-  expect(await r.value!.size()).toBe(1)
+  expect(r.ok && await r.value.size()).toBe(1)
   expect(await app.get(KV).size()).toBe(1)
   const none = app.resolve(KV, { pod: 'notes' })
-  expect(none).toMatchObject({ ok: false, fail: { type: 'not-found' } })
-  expect(none.pod).toBeUndefined()
-  expect(thrownBy(() => none.getOrThrow())?.fail).toEqual(none.fail!)
+  expect(none).toMatchObject({ ok: false, reason: 'not-found', fail: { type: 'not-found' } })
+  expect('pod' in none).toBe(false)
+  if (!none.ok) expect(thrownBy(() => none.getOrThrow())?.fail).toEqual(none.fail)
 })
 
 test('the plain proxy: an unknown method throws an Error carrying unknown-op, not a TypeError', async () => {

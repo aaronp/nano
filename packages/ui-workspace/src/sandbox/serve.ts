@@ -33,17 +33,19 @@ export function serve(port: MessagePort, load: (url: string, coord: string) => P
   /** What a view in the frame sees: its own pod's client, its pod's events, and a deployment of just its pod. */
   function viewApp(m: Extract<Msg, { type: 'build' }>): Application {
     const no = async () => failure('invalid-input', `${m.pod}: a sandboxed view reaches only its own pod`)
-    const refused = { type: 'invalid-input' as const, reason: `${m.pod}: a sandboxed view reaches only its own pod` }
+    const refused = { type: 'not-found' as const, reason: `${m.pod}: a sandboxed view reaches only its own pod` }
     const client = (pod: string) => new Proxy({}, { get: (_, op) => typeof op !== 'string' || op === 'then' ? undefined
-      : pod === m.pod ? (input: unknown) => ask(id => ({ type: 'view-call', id, op, input })) : no })
+      : pod === m.pod ? (input: unknown) => ask(id => ({ type: 'view-call', id, op, input })) : no }) as ReturnType<Application['call']>
     const deployment: AppDeployment = { pods: { [m.pod]: { implementation: m.coord, eager: true, config: m.config } },
       runtimes: Object.fromEntries(m.runtimes.map(r => [r, { pods: [m.pod], subscriptions: [] }])) }
+    const thrown = () => { throw Object.assign(new Error(refused.reason), { fail: refused }) }
+    // A view uses call: resolve finds nothing, and get throws its Fail, as app.get's would on a missing pod.
+    const one: ReturnType<Application['runtime']> = {
+      call: client, get: thrown, resolve: () => ({ ok: false, reason: refused.type, fail: refused, getOrThrow: thrown }),
+    }
     return {
-      call: (_, pod) => client(pod) as ReturnType<Application['call']>, deployment: () => structuredClone(deployment),
+      ...one, runtime: () => one, call: (...at) => client(at[at.length - 1]!), deployment: () => structuredClone(deployment),
       listen(fn) { heard.add(fn); return () => { heard.delete(fn) } }, apply: no, restart: no, close: no,
-      // A view uses call: resolve finds nothing, and get throws its Fail, as app.get's would on a missing pod.
-      resolve: () => ({ ok: false, fail: refused, getOrThrow: () => { throw Object.assign(new Error(refused.reason), { fail: refused }) } }),
-      get: () => { throw Object.assign(new Error(refused.reason), { fail: refused }) },
     }
   }
 
