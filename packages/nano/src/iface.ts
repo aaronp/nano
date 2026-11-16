@@ -105,10 +105,10 @@ type Out<I extends Interface, K extends keyof Ops<I>> = Data<Ops<I>[K]['output']
 export const Interface = { define }
 
 export declare namespace Interface {
-  /** The plain object an interface's actions describe: an input that is only `null` is no argument, an output that is
-   *  only `null` is `void`. Events are not methods. */
+  /** The plain object an interface describes: an input that is only `null` is no argument, an output that is only
+   *  `null` is `void`. An event is a source: a method giving its data as an AsyncIterable. */
   type Type<I extends Interface> = {
-    [K in keyof Ops<I> as Ops<I>[K]['kind'] extends 'event' ? never : K]:
-      (...args: [In<I, K>] extends [null] ? [] : [input: In<I, K>]) => Promise<[Out<I, K>] extends [null] ? void : Out<I, K>>
+    [K in keyof Ops<I>]: Ops<I>[K]['kind'] extends 'event' ? () => AsyncIterable<Out<I, K>>
+      : (...args: [In<I, K>] extends [null] ? [] : [input: In<I, K>]) => Promise<[Out<I, K>] extends [null] ? void : Out<I, K>>
   }
 }

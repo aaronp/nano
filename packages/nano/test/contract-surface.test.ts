@@ -28,7 +28,7 @@ const memory = (tag: string) => Implementation.define(`acme/${tag}`, {
       async get(k) { return m.get(k) ?? null },
       async put({ k, v }) { m.set(k, v); await ctx.publish(KV.ops.changed, k) },
       async size() { if (tag === 'broken') throw new Error('disk on fire'); return m.size },
-    } satisfies KV
+    } satisfies Omit<KV, 'changed'>   // an event published through ctx needs no source method
   },
 })
 const notes = Implementation.define('acme/notes', {
@@ -50,11 +50,10 @@ const deployment = (store: string): AppDeployment => ({
 })
 const open = async (store = 'acme/mem') => must(await Application.create(must(AppDeployment.assemble(deployment(store), registry))))
 
-test('Interface.Type is the plain interface: null input is no argument, null output is void, events are not methods', () => {
+test('Interface.Type is the plain interface: null input is no argument, null output is void, events are source methods', () => {
   const t = {} as KV
   void (() => { t.size() satisfies Promise<number>; t.put({ k: 'a', v: 'b' }) satisfies Promise<void>; t.get('a') satisfies Promise<string | null> })
-  // @ts-expect-error events are not methods
-  void (() => t.changed)
+  void (() => t.changed() satisfies AsyncIterable<string>)
 })
 
 test('a bare schema is defined unlabelled, hashing as the same labelled schema', () => {

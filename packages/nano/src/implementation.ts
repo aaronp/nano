@@ -10,6 +10,8 @@
  *     make: ({ deps }) => ({ get: async key => { await deps.log.record(key); return null } }) })   // one interface: a plain object
  */
 import { COORD, port, type Client, type Interface } from './iface.ts'
+
+const isInterface = (s: Selector) => ('ops' in s ? s as Interface : undefined)
 import type { NanoContext } from './context.ts'
 import type { ImplCoord } from './coord.ts'
 import type { NanoResult } from './result.ts'
@@ -42,12 +44,17 @@ export type Implementation = {
   readonly dependencies: Readonly<Record<string, SelectorData>>
   readonly config?: SchemaDef
   readonly description?: string
-  /** `ctx` without `deps`: they are made here from `dependencies`. */
-  make(ctx: Omit<NanoContext, 'deps'>, config: unknown): Promise<ReadonlyMap<string, Handler>>
+  /** `ctx` without `deps`: they are made here from `dependencies`. `failed` hears a plain source's throw. */
+  make(ctx: Omit<NanoContext, 'deps'>, config: unknown, failed?: (reason: string) => void): Promise<ReadonlyMap<string, Handler>>
 }
 
-/** `provide(...)` parts, or for a single interface its plain object (lifted by `handlers`). */
-type Made<P> = Provided[] | (P extends readonly [infer One extends Interface] ? Interface.Type<One> : never)
+/** A plain object for `I`: its event (source) methods are optional, as an event may be published through `ctx`. */
+type Plain<I extends Interface, T = Interface.Type<I>> =
+  { [K in keyof T as I['ops'][K & string]['kind'] extends 'event' ? never : K]: T[K] } &
+  { [K in keyof T as I['ops'][K & string]['kind'] extends 'event' ? K : never]?: T[K] }
+
+/** `provide(...)` parts, or for a single interface its plain object (lifted by `handlers`; sources published). */
+type Made<P> = Provided[] | (P extends readonly [infer One extends Interface] ? Plain<One> : never)
 
 type Spec<P extends readonly Interface[], D extends Record<string, Selector>> = {
   provides: [...P]
@@ -68,12 +75,13 @@ function define<const P extends readonly Interface[], D extends Record<string, S
     dependencies: Object.fromEntries(Object.entries(spec.dependencies ?? {}).map(([role, s]) => [role, selectorData(s)])),
     ...(spec.config && { config: spec.config }),
     ...(spec.description !== undefined && { description: spec.description }),
-    async make(base, config) {
+    async make(base, config, failed) {
       const deps = Object.fromEntries(Object.keys(spec.dependencies ?? {}).map(role =>
-        [role, plain(() => base.one(selectorData(spec.dependencies![role]!)))]))
+        [role, plain(isInterface(spec.dependencies![role]), () => base.one(selectorData(spec.dependencies![role]!)))]))
       const ctx = Object.assign(Object.create(base), { deps }) as NanoContext<D>
       const made = await spec.make(ctx, config)
       if (!Array.isArray(made) && spec.provides.length !== 1) throw new Error(`${coord}: a plain object provides exactly one interface`)
+      if (!Array.isArray(made)) publishSources(base, spec.provides[0]!, made as object, reason => failed?.(`${coord}: ${reason}`))
       const parts = Array.isArray(made) ? made : [provide(spec.provides[0]!, handlers(spec.provides[0]!, made as object))]
       const declared = new Set(spec.provides.map(i => i.coord))
       const given = new Set<string>()
@@ -90,6 +98,21 @@ function define<const P extends readonly Interface[], D extends Record<string, S
           if (o.kind !== 'event' && !out.has(port(i, o))) throw new Error(`${coord}: missing ${port(i, o)}`)
       return out
     },
+  }
+}
+
+/** Each event of `i` with a method on `obj` runs once, now: its values are published, it is stopped when the build
+ *  closes, and a throw goes to `failed`. */
+function publishSources(ctx: Omit<NanoContext, 'deps'>, i: Interface, obj: object, failed: (reason: string) => void) {
+  for (const o of Object.values(i.ops)) {
+    const source = (obj as Record<string, unknown>)[o.name]
+    if (o.kind !== 'event' || typeof source !== 'function') continue
+    const it = (source.call(obj) as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+    ctx.addOnCloseListener(() => { void it.return?.() })
+    void (async () => {
+      try { for (let r = await it.next(); !r.done; r = await it.next()) await ctx.publish(o, r.value as never) }
+      catch (e) { failed(`${o.name} threw ${e instanceof Error ? e.message : String(e)}`) }
+    })()
   }
 }
 

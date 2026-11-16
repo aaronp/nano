@@ -116,3 +116,57 @@ test('app.close() ends a host iteration', async () => {
   must(await app.close())
   expect(await done).toBe('ended')
 })
+
+// Second part: a source is a method. `items` is an event, so `Interface.Type` gives `items(): AsyncIterable<Todo>`.
+const Todo = Type.Object({ title: Type.String() })
+const Store = Interface.define('acme.Store', { put: Op.action(Type.Object({ key: Type.Array(Type.String()), value: Type.Any() }), Type.Null()) })
+const Todos = Interface.define('acme.Todos', { add: Op.action(Type.String(), Type.Null()), items: Op.event(Todo) })
+const sourced = Registry.create()
+must(sourced.add(Provider.define('acme', [
+  Implementation.define('acme/store', { provides: [Store], make: () => ({ async put() {} }) }),
+  Implementation.define('acme/todos', { provides: [Todos], dependencies: { store: Store }, make: ctx => ({
+    add: title => ctx.deps.store.put({ key: ['todos', title], value: { title } }),
+    async *items() {
+      const s = ctx.one(Store)
+      if (s.ok) for await (const { input } of s.value.on(Store.ops.put)) if (input.key[0] === 'todos') yield input.value
+    },
+  }) }),
+  Implementation.define('acme/broken', { provides: [Todos], make: () => ({
+    async add() {},
+    async *items() { throw new Error('boom') },
+  }) }),
+])))
+const todoApp = (implementation: string) => {
+  const d: AppDeployment = {
+    pods: { store: { implementation: 'acme/store', eager: false }, todos: { implementation, eager: implementation === 'acme/todos' } },
+    runtimes: { main: { pods: ['store', 'todos'], subscriptions: [{ kind: 'call', from: 'todos', to: 'store' }] } },
+  }
+  return Application.create(must(AppDeployment.assemble(d, sourced)), {})
+}
+
+test('Interface.Type gives items(): AsyncIterable<Todo>', () => {
+  type Items = Interface.Type<typeof Todos>['items']
+  const ok: Items extends () => AsyncIterable<{ title: string }> ? true : false = true
+  const back: (() => AsyncIterable<{ title: string }>) extends Items ? true : false = true
+  expect(ok && back).toBe(true)
+})
+
+test("a source method built from a listener is published as the pod's event (hot)", async () => {
+  const app = must(await todoApp('acme/todos')), frontend = app.runtime('main')
+  const todos = frontend.get(Todos)
+  await todos.add('a')
+  const seen: unknown[] = []
+  const loop = (async () => { for await (const t of todos.items()) { seen.push(t); break } })()
+  await Bun.sleep(0)
+  await todos.add('b'); await loop
+  expect(seen).toEqual([{ title: 'b' }])
+})
+
+test("a throwing source traces failure; the pod's actions still work", async () => {
+  const app = must(await todoApp('acme/broken')), events: unknown[] = []
+  app.listen(e => events.push(e))
+  await app.runtime('main').get(Todos).add('x')   // builds todos (lazy here), whose items() throws
+  await Bun.sleep(0)
+  expect(events).toContainEqual({ type: 'failure', pod: 'todos', reason: 'acme/broken: items threw boom' })
+  await app.runtime('main').get(Todos).add('y')
+})

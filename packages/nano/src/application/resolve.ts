@@ -78,9 +78,9 @@ export function entry(live: Live, id?: string): Entry {
   const resolve = <I extends Interface>(api: I, where: Where = {}): Resolution<Interface.Type<I>> => {
     const now = found(api, where)
     if (!now.ok) return { ok: false, reason: now.fail.type, fail: now.fail, getOrThrow: thrown(now.fail) }
-    const value = plain<Interface.Type<I>>(() => {
+    const value = plain<Interface.Type<I>>(api, () => {
       const p = found(api, where)
-      return p.ok ? success({ call: call(p.value.pod) }) : p
+      return p.ok ? success({ call: call(p.value.pod), on: (op: Op) => subscribe(op) }) : p
     })
     return { ok: true, ...now.value, value, getOrThrow: () => value }
   }

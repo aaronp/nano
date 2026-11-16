@@ -3,10 +3,11 @@
  * interface's handlers, and a client becomes a plain object again (`Interface.Type`).
  *
  *   provide(KV, handlers(KV, inMemory()))                 // a value is success (nothing is null), a throw is threw
- *   const store = plain<KV>(() => ctx.one(KV))            // await store.get('a'): a Fail throws an Error carrying it
+ *   const store = plain<KV>(KV, () => ctx.one(KV))        // await store.get('a'): a Fail throws an Error carrying it
  */
 import type { Handlers } from './implementation.ts'
 import type { Interface } from './iface.ts'
+import type { Op } from './op.ts'
 import { failure, success, type Fail, type NanoResult } from './result.ts'
 
 type Call = (input: unknown) => Promise<NanoResult<unknown>>
@@ -28,16 +29,29 @@ export function handlers<I extends Interface>(i: I, obj: object): Handlers<I> {
   return out as Handlers<I>
 }
 
-/** A plain object over a client, resolved on every call (so a rewired edge is followed): a `Fail` throws an Error carrying it. */
-export function plain<T>(client: () => NanoResult<{ call: object }>): T {
+/** What `plain` reads at each use: the client's calls, and its emissions of an op (`on`, or the host's `subscribe`). */
+type Source = { call: object; on(op: Op): AsyncIterable<{ output: unknown }> }
+
+/** A plain object over a client, resolved on every call (so a rewired edge is followed): a `Fail` throws an Error carrying
+ *  it. An event of `i` is a method giving the `output`s emitted from its first iteration. */
+export function plain<T>(i: Interface | undefined, client: () => NanoResult<Source>): T {
   const thrown = (fail: Fail) => Object.assign(new Error(`${fail.type}: ${fail.reason}`), { fail })
   return new Proxy({}, {
-    get: (_, name) => typeof name !== 'string' || name === 'then' ? undefined : async (input?: unknown) => {
-      const c = client()
-      if (!c.ok) throw thrown(c.fail)
-      const r = await (c.value.call as Record<string, Call>)[name]!(input ?? null)
-      if (r.ok) return r.value
-      throw thrown(r.fail)
+    get: (_, name) => {
+      if (typeof name !== 'string' || name === 'then') return undefined
+      const ev = i?.ops[name]?.kind === 'event' ? i.ops[name] : undefined
+      if (ev) return async function* () {
+        const c = client()
+        if (!c.ok) throw thrown(c.fail)
+        for await (const e of c.value.on(ev)) yield e.output
+      }
+      return async (input?: unknown) => {
+        const c = client()
+        if (!c.ok) throw thrown(c.fail)
+        const r = await (c.value.call as Record<string, Call>)[name]!(input ?? null)
+        if (r.ok) return r.value
+        throw thrown(r.fail)
+      }
     },
   }) as T
 }

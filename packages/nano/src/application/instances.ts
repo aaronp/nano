@@ -63,7 +63,7 @@ export function instances(live: Live) {
     if (!pod || !found) return failure('not-found', `no pod ${name}`)
     if (!found.ok) { live.trace.emit({ type: 'failure', pod: name, reason: found.fail.reason }); await c.close('closed'); return found }
     const impl = found.value
-    const r = await within(() => impl.make(contextFor(live, name, c.add), pod.config), live.timeoutMs, `building ${name}`)
+    const r = await within(() => impl.make(contextFor(live, name, c.add), pod.config, reason => live.trace.emit({ type: 'failure', pod: name, reason })), live.timeoutMs, `building ${name}`)
     // Closed while `make` ran: its listeners have run as added; nothing is built after `closed`.
     if (closed) return failure('not-found', 'application is closed')
     live.trace.emit(r.ok ? { type: 'built', pod: name } : { type: 'failure', pod: name, reason: r.fail.reason })
