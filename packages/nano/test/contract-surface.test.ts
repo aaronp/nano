@@ -4,7 +4,7 @@
  */
 import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { AppDeployment, Application, Implementation, Interface, Op, Provider, Registry, Schema, Selector, type Ask, type NanoContext, type NanoResult } from '../src/index.ts'
+import { AppDeployment, Application, Implementation, Interface, Op, Provider, Registry, Schema, Selector, type Ask, type RuntimeDeployment, type NanoContext, type NanoResult } from '../src/index.ts'
 
 const Str = Schema.define(Type.String(), 'Str')
 const KV = Interface.define('acme.KV', {
@@ -136,17 +136,18 @@ test('app.get with several runtimes is not-unique ("name a runtime"); app.runtim
   expect(await app.runtime('main').call('notes').note('x')).toMatchObject({ ok: true, value: 1 })
 })
 
-test('a runtime exports: what it does not export is not-exported to the host, yet its pods still reach it', async () => {
+test('rules in place of exports: what the host may not call is denied at the call, yet its pods still reach it', async () => {
   const d = deployment('acme/mem')
-  d.runtimes.main!.exports = ['acme.Notes']
+  const only = (to: string): RuntimeDeployment['policy'] => ({ kind: 'rules', rules: [{ allow: ['call', 'subscribe'], outside: true, to }, { allow: '*', outside: false }, { deny: '*' }] })
+  d.runtimes.main!.policy = only('acme.Notes')
   const app = must(await Application.create(must(AppDeployment.assemble(d, registry))))
-  expect(app.resolve(KV)).toMatchObject({ ok: false, reason: 'not-exported', fail: { type: 'not-exported' } })
-  expect(thrownBy(() => app.get(KV))?.fail.type).toBe('not-exported')
-  expect(await app.call('store').size(null)).toMatchObject({ ok: false, fail: { type: 'not-exported' } })
+  expect(app.resolve(KV)).toMatchObject({ ok: true })
+  await expect(app.get(KV).size()).rejects.toMatchObject({ fail: { type: 'denied', reason: 'rules[2]' } })
+  expect(await app.call('store').size(null)).toMatchObject({ ok: false, fail: { type: 'denied' } })
   expect(await app.get(Notes).note('milk')).toBe(1)   // notes -> store, inside the runtime
-  d.runtimes.main!.exports = []
+  d.runtimes.main!.policy = only('acme.Nothing')
   must(await app.apply(d))
-  expect(app.resolve(Notes)).toMatchObject({ ok: false, reason: 'not-exported' })
+  expect(await app.call('notes').note('x')).toMatchObject({ ok: false, fail: { type: 'denied' } })
 })
 
 test('two pods providing it in one runtime are not-unique, unless where.pod names one', async () => {
@@ -185,13 +186,13 @@ test('a deps role narrowed by Selector.of keeps its interface type', () => {
   void (() => deps.store.size() satisfies Promise<number>)
 })
 
-test('app.subscribe hears each successful call of an action as { input, output }; refused, it throws denied, unexported not-exported, at the call', async () => {
+test('app.subscribe hears each successful call of an action as { input, output }; refused, it throws denied at the call', async () => {
   const d = deployment('acme/mem')
   const deny = { isAllowed: (ask: Ask) => ask.from === 'host' && ask.kind === 'subscribe' ? { approved: false, reason: 'no' } : { approved: true } }
-  for (const [policies, exports, want] of [[{}, undefined, 1], [{ main: deny }, undefined, 0], [{}, ['acme.Notes'], 0]] as const) {
-    const app = must(await Application.create(must(AppDeployment.assemble({ ...d, runtimes: { main: { ...d.runtimes.main!, ...(exports && { exports: [...exports] }) } } }, registry)), { policies: policies as never }))
+  const notes: RuntimeDeployment['policy'] = { kind: 'rules', rules: [{ allow: ['call', 'subscribe'], outside: true, to: 'acme.Notes' }, { allow: '*', outside: false }, { deny: '*' }] }
+  for (const [policies, policy, want] of [[{}, undefined, 1], [{ main: deny }, undefined, 0], [{}, notes, 0]] as const) {
+    const app = must(await Application.create(must(AppDeployment.assemble({ ...d, runtimes: { main: { ...d.runtimes.main!, ...(policy && { policy }) } } }, registry)), { policies: policies as never }))
     const heard: unknown[] = []
-    if (exports) { expect(thrownBy(() => app.subscribe(KV.ops.put, () => {}))?.fail.type).toBe('not-exported'); continue }
     if (!want) { expect(thrownBy(() => app.subscribe(KV.ops.put, () => {}))?.fail.type).toBe('denied'); continue }   // refused: throws at the call
     app.subscribe(KV.ops.put, call => { heard.push(call) })
     await app.get(Notes).note('milk')

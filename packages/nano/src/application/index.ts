@@ -3,7 +3,7 @@
  * on first need, carries every message through the runtime it travels in, and reports all of it on one stream.
  *
  *   const app = (await Application.create(AppDeployment.assemble(appDeployment, registry).value, {})).value
- *   const front = app.runtime('front')           // the host as a member of runtime 'front': what it places and exports
+ *   const front = app.runtime('front')           // the host as a member of runtime 'front': what it places, policed by its policy
  *   await front.call('counter').inc(null)        // from 'host', through runtime 'front' (app.call('front', 'counter') too)
  *   await front.get(Counter).inc()               // the one pod there providing Counter, as a plain object; a Fail throws
  *   app.resolve(Counter)                         // app.runtime(the one runtime).resolve(Counter); several: not-unique

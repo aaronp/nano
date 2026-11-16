@@ -1,7 +1,7 @@
 /**
- * A runtime as the host sees it (`app.runtime(id)`): only the pods placed there, only what it exports, every message
+ * A runtime as the host sees it (`app.runtime(id)`): only the pods placed there, every message
  * policed by its policy. `resolve(api, where?)` answers the one pod providing `api` there, narrowed by `where.pod`, with
- * the implementation found and the plain object over it; or why not (`not-found`, `not-exported`, `not-unique`).
+ * the implementation found and the plain object over it; or why not (`not-found`, `not-unique`). A call the policy refuses is `denied` at the call.
  *
  *   const r = app.runtime('frontend').resolve(TodoList)   // r.ok: r.pod, r.runtime, r.implementation, r.value; else r.reason
  *   const todos = r.getOrThrow()                          // the plain object, or an Error carrying r.fail
@@ -18,7 +18,7 @@ import { listen } from './listen.ts'
 import type { AppEvent } from './stream.ts'
 import { impl, type Live, type On } from './messages.ts'
 
-type Reason = 'not-found' | 'not-exported' | 'not-unique'
+type Reason = 'not-found' | 'not-unique'
 export type Resolution<T> =
   | { readonly ok: true; readonly runtime: string; readonly pod: string; readonly implementation: string; readonly value: T; getOrThrow(): T }
   | { readonly ok: false; readonly reason: Reason; readonly fail: Fail; getOrThrow(): never }
@@ -39,7 +39,7 @@ export type RuntimeView = {
   /**
    * Each successful call of action `op` travelling in this runtime, as `{ input, output }`, after it returns; gives an
    * unsubscribe. Like a pod's `on`: it connects at the call, and throws there an `Error` carrying the `Fail` when it
-   * can't (`not-found`, `not-exported`, `not-unique`, `denied`).
+   * can't (`not-found`, `not-unique`, `denied`).
    */
   subscribe<O extends Op>(op: O, fn: (call: { input: In<O>; output: Out<O> }) => unknown): () => void
   /** The same calls as an AsyncIterable, connected and checked at the call, iterated once: `break` unsubscribes; `done`
@@ -52,10 +52,7 @@ type DataOf<S> = S extends TSchema ? Static<S> : unknown
 type In<O> = O extends Op<infer I, any> ? DataOf<I> : unknown
 type Out<O> = O extends Op<any, infer S> ? DataOf<S> : unknown
 
-/** Whether runtime `id` offers interface `coord` to the host: absent `exports` offers everything. */
-const offered = (live: Live, id: string, coord: string) => { const x = live.now().runtimes[id]?.exports; return !x || x.includes(coord) }
-
-/** The one pod placed in `runtime` providing `api` now, narrowed by `where`, if the runtime exports it. */
+/** The one pod placed in `runtime` providing `api` now, narrowed by `where`. */
 export function placement(live: Live, runtime: string, api: Interface, where: Where): Found<Placed> {
   const found: Placed[] = []
   for (const pod of live.now().runtimes[runtime]?.pods ?? []) {
@@ -64,7 +61,6 @@ export function placement(live: Live, runtime: string, api: Interface, where: Wh
   }
   const what = `${api.coord} in ${runtime}${where.pod ? ` at ${where.pod}` : ''}`
   if (!found.length) return miss('not-found', `no pod provides ${what}`)
-  if (!offered(live, runtime, api.coord)) return miss('not-exported', `${runtime} does not export ${api.coord}`)
   return found.length === 1 ? { ok: true, value: found[0]! } : miss('not-unique', `${found.length} pods provide ${what}`)
 }
 
@@ -82,7 +78,7 @@ export function runtimeView(live: Live, id?: string): RuntimeView {
     return client(live, id, 'host', pod, () => { const now = at(); return !now.ok ? now
       : now.value !== id ? failure('not-found', `runtime ${now.value} is not the one this client was made for`)
       : live.closed() ? failure('not-found', 'application is closed')
-      : live.now().runtimes[id]?.pods.includes(pod) ? undefined : failure('not-found', `${pod} is not placed in ${id}`) }, c => offered(live, id, c))
+      : live.now().runtimes[id]?.pods.includes(pod) ? undefined : failure('not-found', `${pod} is not placed in ${id}`) })
   }
   const found = (api: Interface, where: Where): Found<Placed> => { const r = at(); return r.ok ? placement(live, r.value, api, where) : r }
   const resolve = <I extends Interface>(api: I, where: Where = {}): Resolution<Interface.Type<I>> => {

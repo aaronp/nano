@@ -5,7 +5,7 @@
  *   if (!r.ok) console.log(r.fail.type)      // 'denied', 'timeout', ...
  */
 export type FailType =
-  | 'threw' | 'timeout' | 'denied' | 'invalid-input' | 'invalid-output' | 'unknown-op' | 'not-unique' | 'not-found' | 'not-exported'
+  | 'threw' | 'timeout' | 'denied' | 'invalid-input' | 'invalid-output' | 'unknown-op' | 'not-unique' | 'not-found'
 
 export type Fail = { type: FailType; reason: string; coord?: string }
 export type NanoResult<T> = { ok: true; value: T } | { ok: false; fail: Fail }
