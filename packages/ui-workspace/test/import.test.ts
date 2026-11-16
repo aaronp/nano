@@ -5,6 +5,9 @@ import { createRegistry, type AppDeployment } from '@pritzlaff/nano-core'
 import { importApp, merge, type Loaded } from '../src/import.ts'
 
 const fx = (name: string) => new URL(`./fixtures/import/${name}`, import.meta.url).href
+// Same-origin only (the page is not http, so the nano.json's origin is home): cross-origin is test/cross-origin.test.ts.
+const no = (what: string) => async () => { throw new Error(`${what} on a same-origin import`) }
+const deps = { load: (u: string) => import(u), probe: no('probe'), confirm: no('confirm'), approve: no('approve') }
 const empty = (): Loaded => ({ deployment: { pods: {}, runtimes: {} }, registry: createRegistry(), views: {} })
 const dep = (over: Partial<AppDeployment>): AppDeployment => ({ pods: {}, runtimes: {}, ...over })
 
@@ -12,7 +15,6 @@ const dep = (over: Partial<AppDeployment>): AppDeployment => ({ pods: {}, runtim
 const domFetch = globalThis.fetch
 beforeAll(() => {
   globalThis.fetch = (async (u: string) => {
-    if (u === 'http://a.test/app/nano.json') return { ok: true, status: 200, json: async () => ({ pods: {}, runtimes: {}, providers: { 'example.fx': 'http://b.test/x.js' } }) }
     const f = Bun.file(new URL(u))
     const ok = await f.exists()
     return { ok, status: ok ? 200 : 404, json: () => f.json() }
@@ -22,7 +24,7 @@ afterAll(() => { globalThis.fetch = domFetch })
 
 describe('importApp', () => {
   test('given the good app, when imported into an empty Loaded, then the deployment, registry and views come back', async () => {
-    const r = await importApp(fx('app.json'), empty())
+    const r = await importApp(fx('app.json'), empty(), deps)
     if (!r.ok) throw new Error(r.fail.reason)
     expect(Object.keys(r.value.deployment.pods)).toEqual(['in'])
     expect(r.value.registry.provider('example.fx')).toBeDefined()
@@ -31,73 +33,44 @@ describe('importApp', () => {
 
   test('given a provider URL that 404s, then it fails naming the URL and loaded is unchanged', async () => {
     const loaded = empty()
-    const r = await importApp(fx('missing.json'), loaded)
+    const r = await importApp(fx('missing.json'), loaded, deps)
     expect(r).toMatchObject({ ok: false })
     expect(!r.ok && r.fail.reason).toContain('missing.ts')
     expect(loaded.registry.manifest().providers).toEqual([])
   })
 
   test('given a module without a default Provider, then it fails naming the URL', async () => {
-    const r = await importApp(fx('nodefault.json'), empty())
+    const r = await importApp(fx('nodefault.json'), empty(), deps)
     expect(r).toMatchObject({ ok: false })
     expect(!r.ok && r.fail.reason).toContain('nodefault.ts')
   })
 
   test('given the same app imported twice, then the second is refused with clash: pod in is already loaded', async () => {
-    const first = await importApp(fx('app.json'), empty())
+    const first = await importApp(fx('app.json'), empty(), deps)
     if (!first.ok) throw new Error(first.fail.reason)
-    const second = await importApp(fx('app.json'), first.value)
+    const second = await importApp(fx('app.json'), first.value, deps)
     expect(second).toMatchObject({ ok: false, fail: { reason: 'clash: pod in is already loaded' } })
   })
 })
 
 describe('provider URLs', () => {
-  test('given a provider on another origin than its nano.json, then it is refused naming the URL, before anything loads', async () => {
-    const loaded = empty()
-    const r = await importApp('http://a.test/app/nano.json', loaded)
-    expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
-    expect(!r.ok && r.fail.reason).toBe('http://b.test/x.js is not on the origin of http://a.test/app/nano.json')
-    expect(loaded.registry.manifest().providers).toEqual([])
-  })
-
   test('given a relative provider, then it is stored resolved, and another nano.json naming the same module is no clash', async () => {
-    const first = await importApp(fx('app.json'), empty())
+    const first = await importApp(fx('app.json'), empty(), deps)
     if (!first.ok) throw new Error(first.fail.reason)
     expect(first.value.deployment.providers).toEqual({ 'example.fx': fx('good.ts') })
-    const second = await importApp(fx('sub/again.json'), first.value)
+    const second = await importApp(fx('sub/again.json'), first.value, deps)
     expect(second).toMatchObject({ ok: true, value: { deployment: { providers: { 'example.fx': fx('good.ts') } } } })
-  })
-})
-
-describe('the host origin', () => {
-  const real = Object.getOwnPropertyDescriptor(globalThis, 'location')!
-  const at = (href: string) => Object.defineProperty(globalThis, 'location', { value: new URL(href), configurable: true })
-  afterAll(() => Object.defineProperty(globalThis, 'location', real))
-
-  test('given a page on http, when the nano.json is on another origin, then it is refused naming the URL', async () => {
-    at('http://host.test/')
-    const r = await importApp('http://a.test/app/nano.json', empty())
-    Object.defineProperty(globalThis, 'location', real)
-    expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
-    expect(!r.ok && r.fail.reason).toContain('http://a.test/app/nano.json')
-  })
-
-  test('given a page on http, when a provider resolves to another origin, then it is refused', async () => {
-    at('http://a.test/')
-    const r = await importApp('http://a.test/app/nano.json', empty())
-    Object.defineProperty(globalThis, 'location', real)
-    expect(!r.ok && r.fail.reason).toContain('http://b.test/x.js')
   })
 })
 
 describe('a coord the registry has', () => {
   test('given the provider is already registered, then its module is not imported again', async () => {
-    const first = await importApp(fx('app.json'), empty())
+    const first = await importApp(fx('app.json'), empty(), deps)
     if (!first.ok) throw new Error(first.fail.reason)
     // The stored URL matches but names no module: an import() would fail.
     const url = fx('missing.ts')
     const loaded = { ...first.value, deployment: { ...first.value.deployment, providers: { 'example.fx': url } } }
-    const r = await importApp(fx('skip.json'), loaded)
+    const r = await importApp(fx('skip.json'), loaded, deps)
     expect(r.ok).toBe(true)
   })
 })

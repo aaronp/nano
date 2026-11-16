@@ -10,7 +10,9 @@
 import { Application, assemble, createRegistry, Pod, success, type AppDeployment, type NanoResult, type Pod as PodData, type Registry } from '@pritzlaff/nano-core'
 import uiProvider, { views as uiViews, type ViewMap } from '@pritzlaff/nano-ui'
 import { toast } from '@pritzlaff/nano-elements'
-import { importApp, type Loaded } from './import.ts'
+import { foreignOrigin, importApp, isolated, type Loaded } from './import.ts'
+import { confirmImports } from './import-confirm.ts'
+import { probe } from './described.ts'
 import { hostProvider, hostUi } from './host-ui.ts'
 import { edgesFor } from './sandbox/edges.ts'
 import { openFrame } from './sandbox/frames.ts'
@@ -26,6 +28,8 @@ export type Host = {
   defaults(): ViewMap
   apply(next: AppDeployment): Promise<NanoResult<void>>
   importUrl(url: string): Promise<NanoResult<void>>
+  /** Whether the provider `coord` is loaded from another origin than this page (so imported only once approved). */
+  foreign(coord: string): boolean
   /** What Save writes: `data()` without the host pod `ui`, and without `main` once nothing else is in it. */
   saved(): AppDeployment
 }
@@ -83,7 +87,7 @@ export async function start(): Promise<NanoResult<Host>> {
   function isolate(name: string, pod: PodData) {
     const real = registry.implementation(pod.implementation), at = real && loaded.deployment.providers?.[real.provider]
     if (!real || !at) throw new Error(`${name}: no provider URL for ${pod.implementation}`)
-    return standIn(real, {
+    return isolated(standIn(real, {
       url: new URL(at, document.baseURI).href, edges: p => edgesFor(live().deployment(), registry, p), app: live,
       onApplied: fn => live().listen(e => { if (e.type === 'applied') fn() }), warn: reason => void toast(reason, { variant: 'warn' }),
       open(p) {
@@ -91,7 +95,12 @@ export async function start(): Promise<NanoResult<Host>> {
         frames.set(p, f)
         return { ...f, dispose() { if (frames.get(p) === f) frames.delete(p); f.dispose() } }
       },
-    })
+    }), pod.isolation, foreignOrigin(at), approve)
+  }
+  // HostUI.approve through the app, so it is on the stream like any call; anything but a yes is a no.
+  async function approve(title: string) {
+    const r = await (live().call(MAIN, HOST) as { approve(a: { title: string }): Promise<NanoResult<unknown>> }).approve({ title })
+    return r.ok && r.value === true
   }
   const created = await Application.create(runtimes.value, { isolate })
   if (!created.ok) return created
@@ -111,10 +120,13 @@ export async function start(): Promise<NanoResult<Host>> {
   return success({
     app, registry, data, apply: next => apply(next),
     defaults: () => ({ ...loaded.views }),
+    foreign: coord => !!foreignOrigin(loaded.deployment.providers?.[coord]),
     saved: () => withoutHost(data()),
     async importUrl(url) {
       // With the pod ui still in it, so merge refuses an app naming a pod ui before any provider is registered.
-      const imported = shown(await importApp(url, { ...loaded, deployment: unplaced(data()) }))
+      const imported = shown(await importApp(url, { ...loaded, deployment: unplaced(data()) }, {
+        load: u => import(u), probe: u => probe(u, () => openFrame('isolated-sandbox')), confirm: confirmImports, approve,
+      }))
       if (!imported.ok) return imported
       // ponytail: an apply that fails now leaves the new providers registered (a Registry has no remove); harmless, unused.
       return apply(placed(imported.value.deployment), imported.value.views)
