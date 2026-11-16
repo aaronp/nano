@@ -9,7 +9,7 @@
 import type { AppDeployment } from '../deployment.ts'
 import type { Handler, Implementation } from '../implementation.ts'
 import type { Pod } from '../pod.ts'
-import { Policies, type Policy } from '../policy.ts'
+import { Policies, type Ask, type Policy } from '../policy.ts'
 import type { Registry } from '../registry.ts'
 import type { NanoContext } from '../context.ts'
 import { opAt } from '../runtime.ts'
@@ -70,11 +70,12 @@ export const impl = (live: Live, pod: string) => live.registry.implementation(li
 export const placedIn = (live: Live, pod: string) => Object.entries(live.now().runtimes).filter(([, r]) => r.pods.includes(pod))
 const action = (i: Implementation | undefined, p: string) => { const o = i && opAt(i, p); return o?.kind === 'action' ? o : undefined }
 
-/** Why `runtime`'s policy refuses `from`->`to` with `data`, or undefined. A throw, a Promise or no verdict refuses. */
-export function refusal(live: Live, runtime: string, from: string, to: string, data: unknown): string | undefined {
-  const policy = Object.hasOwn(live.policies, runtime) ? live.policies[runtime]! : Policies.allowAll()
+/** Why the policy of `ask.runtime` refuses `ask`, or undefined. A throw, a Promise or no verdict refuses. */
+export function refusal(live: Live, ask: Omit<Ask, 'outside'>): string | undefined {
+  const policy = Object.hasOwn(live.policies, ask.runtime) ? live.policies[ask.runtime]! : Policies.allowAll()
   try {
-    const v = policy.isAllowed(from, to, data) as { approved?: unknown; reason?: unknown; then?: unknown } | undefined
+    const outside = ask.from === 'host' || !live.now().runtimes[ask.runtime]?.pods.includes(ask.from)
+    const v = policy.isAllowed({ ...ask, outside }) as { approved?: unknown; reason?: unknown; then?: unknown } | undefined
     if (typeof v?.then === 'function') { Promise.resolve(v).catch(() => {}); return 'policy gave no verdict' }
     if (v?.approved === true) return undefined
     return v?.approved === false && typeof v.reason === 'string' ? v.reason : 'policy gave no verdict'
@@ -109,7 +110,7 @@ async function deliver(live: Live, to: string, p: string, input: unknown): Promi
 export async function send(live: Live, runtime: string, from: string, to: string, p: string, input: unknown, how: How = { kind: 'call' }): Promise<NanoResult<unknown>> {
   const { trace } = live, { kind, id = trace.id(), cause, work } = how, correlation = how.correlation ?? id
   trace.emit({ type: 'sent', id, runtime, kind, from, to, port: p, correlation, ...(cause !== undefined && { cause }) })
-  const reason = refusal(live, runtime, from, to, input)
+  const reason = refusal(live, { runtime, kind, from, to, port: p, data: input })
   if (reason !== undefined) { trace.emit({ type: 'denied', id, reason }); return failure('denied', reason) }
   const t0 = performance.now()
   const r = await (work ? work() : deliver(live, to, p, input)).catch(e => failure('invalid-input', `${p}: unreadable input: ${msg(e)}`))

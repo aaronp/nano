@@ -75,7 +75,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     for (const [id, r] of Object.entries(next.runtimes))
       for (const s of r.subscriptions) {
         if (current.runtimes[id]?.subscriptions.some(x => Value.Equal(x, s))) continue
-        const why = refusal(live, id, s.from, s.to, 'subscribe')
+        const why = refusal(live, { runtime: id, kind: s.kind, from: s.from, to: s.to })
         if (why !== undefined) return why
       }
   }
@@ -105,7 +105,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     current = checked.value
     for (const o of [...live.listeners.ons]) {
       if (o.gone()) { o.end(); continue }   // an edge removed now stays gone if re-added
-      const why = refusal(live, o.runtime, o.to, o.from, 'subscribe')   // asked again on apply; a refused one is dropped
+      const why = refusal(live, { runtime: o.runtime, kind: 'subscribe', from: o.to, to: o.from, port: o.port })   // asked again on apply; a refused one is dropped
       if (why !== undefined) o.end({ type: 'denied', reason: why })
     }
     await Promise.all([...changes.removed.map(n => pods.forget(n, 'removed')), ...changes.changed.map(n => pods.forget(n, 'changed'))])

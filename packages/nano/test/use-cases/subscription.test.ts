@@ -66,7 +66,7 @@ test('on gets { input, output } for an action and { output } for an event', asyn
 test('a denied subscribe is asked once, at connect: no-op unsubscribe, one denied event', async () => {
   seen.length = 0
   let asked = 0
-  const deny: Policy = { isAllowed: (_f, _t, data) => data === 'subscribe' ? (asked++, { approved: false, reason: 'no' }) : { approved: true } }
+  const deny: Policy = { isAllowed: ask => ask.kind === 'subscribe' ? (asked++, { approved: false, reason: 'no' }) : { approved: true } }
   const app = await open({ ...watched, pods: { ...watched.pods, watch: { implementation: 'acme/watch', eager: false } } }, { main: deny })
   const events: AppEvent[] = []
   app.listen(e => { events.push(e) })

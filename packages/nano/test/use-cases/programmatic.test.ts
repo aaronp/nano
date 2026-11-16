@@ -57,7 +57,7 @@ test('a removed pod ends the iteration', async () => {
 })
 
 test('a denied subscribe throws at once, carrying its Fail', async () => {
-  const app = await open({ main: { isAllowed: (_f, _t, data) => data === 'subscribe' ? { approved: false, reason: 'no' } : { approved: true } } })
+  const app = await open({ main: { isAllowed: ask => ask.kind === 'subscribe' ? { approved: false, reason: 'no' } : { approved: true } } })
   const it = async () => { for await (const _ of app.runtime('main').subscribe(KV.ops.put)); }
   await expect(it()).rejects.toMatchObject({ fail: { type: 'denied', reason: 'no' } })
 })

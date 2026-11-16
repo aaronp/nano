@@ -31,7 +31,7 @@ function subscriptions(app: Awaited<ReturnType<typeof open>>, runtime: string) {
   return lines
 }
 
-const deny = (when: () => boolean): Policy => ({ isAllowed: (_f, _t, d) => d === 'subscribe' && when() ? { approved: false, reason: 'not now' } : { approved: true } })
+const deny = (when: () => boolean): Policy => ({ isAllowed: ask => ask.kind === 'subscribe' && when() ? { approved: false, reason: 'not now' } : { approved: true } })
 
 test('iterating items() is a subscribe message on frontend\'s stream; break is the unsubscribe', async () => {
   const app = await open()

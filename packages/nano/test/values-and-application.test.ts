@@ -256,7 +256,7 @@ describe('messages', () => {
   })
   // Behaviour 11.
   test('given a policy that refuses, when the host calls, then the call fails denied and the stream shows sent then denied', async () => {
-    const policies: Record<string, Policy> = { r: { isAllowed: (_f, t) => ({ approved: false, reason: `no ${t}` }) } }
+    const policies: Record<string, Policy> = { r: { isAllowed: ask => ({ approved: false, reason: `no ${ask.to}` }) } }
     const { app, events } = await live(one({ c: Pod.lazy(counter) }), { policies })
     expect(await app.call('r', 'c').inc(null)).toMatchObject({ ok: false, fail: { type: 'denied', reason: 'no c' } })
     const id = events.flatMap(e => (e.type === 'sent' ? [e.id] : []))[0]
@@ -297,7 +297,7 @@ describe('changing', () => {
     expect(events).toContainEqual(expect.objectContaining({ type: 'applied' }))
   })
   test('given a policy that refuses a new subscription, when apply adds it, then apply is denied and nothing changes', async () => {
-    const policies: Record<string, Policy> = { r: { isAllowed: (_f, _t, data) => (data === 'subscribe' ? { approved: false, reason: 'frozen' } : { approved: true }) } }
+    const policies: Record<string, Policy> = { r: { isAllowed: ask => (ask.kind === 'call' ? { approved: false, reason: 'frozen' } : { approved: true }) } }
     const d = one({ send: Pod.lazy(sender), db: Pod.lazy(kv) })
     const { app } = await live(d, { policies })
     const next: AppDeployment = { ...d, runtimes: { r: { ...d.runtimes.r!, subscriptions: [{ kind: 'call', from: 'send', to: 'db' }] } } }
@@ -446,7 +446,7 @@ describe('final review', () => {
 
   // I1: the application keeps its own copy.
   test('given deployment() mutated in place, when applied under a policy refusing subscribe, then it is denied', async () => {
-    const policies: Record<string, Policy> = { r: { isAllowed: (_f, _t, data) => (data === 'subscribe' ? { approved: false, reason: 'frozen' } : { approved: true }) } }
+    const policies: Record<string, Policy> = { r: { isAllowed: ask => (ask.kind === 'call' ? { approved: false, reason: 'frozen' } : { approved: true }) } }
     const { app } = await live(wired(), { policies })
     const d = app.deployment()
     d.runtimes.r!.subscriptions.push(sub)

@@ -23,6 +23,7 @@ import {
   Selector,
   success,
   type AppEvent,
+  type Ask,
   type NanoResult,
   type Selection,
 } from '../src/index.ts'
@@ -517,7 +518,7 @@ describe('policed emissions', () => {
     const d: AppDeployment = { pods: { w: Pod.eager(watcher), db: Pod.lazy(store, { config: 'db' }), log: Pod.lazy(logger) },
       runtimes: { r: { pods: ['w', 'db', 'log'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' },
         { kind: 'pipe', from: 'db', source: 'acme.Store/save', to: 'log', target: 'acme.Log/record' }] } } }
-    const policies = { r: { isAllowed: (from: string, to: string) => from === 'db' && to === refused ? { approved: false as const, reason: 'no' } : { approved: true as const } } }
+    const policies = { r: { isAllowed: (ask: Ask) => ask.from === 'db' && ask.to === refused ? { approved: false as const, reason: 'no' } : { approved: true as const } } }
     const app = ok(await Application.create(ok(AppDeployment.assemble(d, registry())), { policies }))
     const events: AppEvent[] = []
     app.listen(e => events.push(e))

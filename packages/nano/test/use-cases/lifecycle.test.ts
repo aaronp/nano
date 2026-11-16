@@ -1,7 +1,7 @@
 /** Use case 3 (spec: 2026-11-16-runtime-view-streams-design.md): `ctx.addOnPodChangeListener` hears pods added to or removed from its runtimes. */
 import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { AppDeployment, Application, Implementation, Interface, Op, Policies, Provider, Registry, type AppEvent, type NanoContext, type NanoResult } from '../../src/index.ts'
+import { AppDeployment, Application, Implementation, Interface, Op, Policies, Provider, Registry, type AppEvent, type Ask, type NanoContext, type NanoResult } from '../../src/index.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const Ping = Interface.define('acme.Ping', { ping: Op.action(Type.Null(), Type.Null()) })
@@ -46,7 +46,7 @@ test("it hears nothing about pods already there when it registered, nor about ot
 })
 
 test('a policy denying lifecycle stops it', async () => {
-  const app = await open({ r: { isAllowed: (_f: string, _t: string, data: unknown) => data === 'lifecycle' ? { approved: false, reason: 'no' } : { approved: true } } })
+  const app = await open({ r: { isAllowed: (ask: Ask) => ask.kind === 'lifecycle' ? { approved: false, reason: 'no' } : { approved: true } } })
   const ev: AppEvent[] = []; app.listen(e => ev.push(e))
   must(await app.apply(withPods(['y'], [])))
   expect(log).toEqual([])

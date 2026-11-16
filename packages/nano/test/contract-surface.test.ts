@@ -4,7 +4,7 @@
  */
 import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { AppDeployment, Application, Implementation, Interface, Op, Provider, Registry, Schema, Selector, type NanoContext, type NanoResult } from '../src/index.ts'
+import { AppDeployment, Application, Implementation, Interface, Op, Provider, Registry, Schema, Selector, type Ask, type NanoContext, type NanoResult } from '../src/index.ts'
 
 const Str = Schema.define(Type.String(), 'Str')
 const KV = Interface.define('acme.KV', {
@@ -187,7 +187,7 @@ test('a deps role narrowed by Selector.of keeps its interface type', () => {
 
 test('app.subscribe hears each successful call of an action as { input, output }; refused, it throws denied, unexported not-exported, at the call', async () => {
   const d = deployment('acme/mem')
-  const deny = { isAllowed: (from: string, _to: string, data: unknown) => from === 'host' && data === 'subscribe' ? { approved: false, reason: 'no' } : { approved: true } }
+  const deny = { isAllowed: (ask: Ask) => ask.from === 'host' && ask.kind === 'subscribe' ? { approved: false, reason: 'no' } : { approved: true } }
   for (const [policies, exports, want] of [[{}, undefined, 1], [{ main: deny }, undefined, 0], [{}, ['acme.Notes'], 0]] as const) {
     const app = must(await Application.create(must(AppDeployment.assemble({ ...d, runtimes: { main: { ...d.runtimes.main!, ...(exports && { exports: [...exports] }) } } }, registry)), { policies: policies as never }))
     const heard: unknown[] = []

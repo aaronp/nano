@@ -14,7 +14,7 @@ export function connect(live: Live, w: Omit<On, 'end'>, ended: (fail?: Fail) => 
   const say = (kind: 'subscribe' | 'unsubscribe', mid: string) =>
     trace.emit({ type: 'sent', id: mid, runtime: w.runtime, kind, from: w.to, to: w.from, port: w.port, correlation: id, ...(mid !== id && { cause: id }) })
   say('subscribe', id)
-  const why = refusal(live, w.runtime, w.to, w.from, 'subscribe')
+  const why = refusal(live, { runtime: w.runtime, kind: 'subscribe', from: w.to, to: w.from, port: w.port })
   if (why !== undefined) { trace.emit({ type: 'denied', id, reason: why }); return failure('denied', why) }
   trace.emit({ type: 'delivered', id, result: success(undefined), ms: 0 })
   let open = true

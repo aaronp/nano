@@ -17,7 +17,7 @@ export async function notifyPodChanges(live: Live, before: AppDeployment): Promi
       if (!is.includes(l.pod)) continue
       for (const c of changes) {
         if (c.p === l.pod) continue
-        const why = refusal(live, id, l.pod, c.p, 'lifecycle')
+        const why = refusal(live, { runtime: id, kind: 'lifecycle', from: l.pod, to: c.p })
         if (why !== undefined) {
           if (!told.has(l)) { told.add(l); live.trace.emit({ type: 'denied', id: live.trace.id(), reason: why }) }   // once per listener per apply
           continue
