@@ -4,7 +4,7 @@
  */
 import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { AppDeployment, Application, Implementation, Interface, Op, Provider, Registry, Schema, type NanoResult } from '../src/index.ts'
+import { AppDeployment, Application, Implementation, Interface, Op, Provider, Registry, Schema, Selector, type NanoContext, type NanoResult } from '../src/index.ts'
 
 const Str = Schema.define('Str', Type.String())
 const KV = Interface.define('acme.KV', {
@@ -120,4 +120,25 @@ test('ctx.one is a result: not-found is a Fail to look at, and a Selection alway
     runtimes: { main: { pods: ['store', 'l'], subscriptions: [] } } }
   must(await Application.create(must(AppDeployment.assemble(d, r))))
   expect(got).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+})
+
+test('app.get: a pod placed in two runtimes is ambiguous unless where.runtime names one (policies are per runtime)', async () => {
+  const d = deployment('acme/mem')
+  d.runtimes.side = { pods: ['store'], subscriptions: [] }
+  const app = must(await Application.create(must(AppDeployment.assemble(d, registry))))
+  expect((await app.get(KV).size().catch(x => x)).fail.type).toBe('ambiguous')
+  expect(await app.get(KV, { runtime: 'side' }).size()).toBe(0)
+})
+
+test('the plain proxy: an unknown method throws an Error carrying unknown-op, not a TypeError', async () => {
+  const app = await open()
+  const e = await (app.get(KV) as unknown as Record<string, () => Promise<never>>).nope!().catch((x: Error & { fail: { type: string } }) => x)
+  expect(e).toBeInstanceOf(Error)
+  expect(e.fail.type).toBe('unknown-op')
+})
+
+test('a deps role narrowed by Selector.of keeps its interface type', () => {
+  type Ctx = NanoContext<{ store: ReturnType<typeof Selector.of<typeof KV>> }>
+  const deps = {} as Ctx['deps']
+  void (() => deps.store.size() satisfies Promise<number>)
 })

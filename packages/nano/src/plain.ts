@@ -19,7 +19,10 @@ export function handlers<I extends Interface>(i: I, obj: object): Handlers<I> {
     if (o.kind !== 'action' || typeof methods[o.name] !== 'function') continue
     out[o.name] = async input => {
       try { return success((await methods[o.name]!.call(obj, input)) ?? null) }
-      catch (e) { return failure('threw', e instanceof Error ? e.message : String(e)) }
+      catch (e) {   // a Fail thrown by a plain caller below (err.fail) passes through as it is
+        const fail = (e as { fail?: Fail } | null)?.fail
+        return fail ? { ok: false, fail } : failure('threw', e instanceof Error ? e.message : String(e))
+      }
     }
   }
   return out as Handlers<I>

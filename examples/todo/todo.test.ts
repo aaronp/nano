@@ -95,6 +95,15 @@ test('3. configuration as data: the running app\'s deployment() round-trips thro
   expect(modules).toEqual({ 'example.kv': './kv/memory.js', 'example.todo': './todo/kv.js' })
 })
 
+test('a store Fail reaches the todo caller as itself: with no store wired, add is not-found, not threw', async () => {
+  const app = await open()
+  const next = app.deployment()
+  next.runtimes.main!.subscriptions = []
+  must(await app.apply(next))
+  const e = await app.get(TodoListDef.api).add('milk').catch(x => x)
+  expect(e.fail.type).toBe('not-found')
+})
+
 test('the store is plain TypeScript too: no nano, values copied, list in path order', async () => {
   const s = inMemory()
   const v = { n: 1 }

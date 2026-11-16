@@ -14,6 +14,7 @@ const at = (id: string) => ['todos', id]
 export function todoList(store: KeyValueStoreDef.KeyValueStore, newId: () => string = () => crypto.randomUUID()): TodoListDef.TodoList {
   return {
     async add(title) { const t = { id: newId(), title, done: false }; await store.put({ key: at(t.id), value: t }); return t },
+    // A cast: the store holds Json, and only this list writes under ['todos'], always a Todo.
     async list() { return (await store.list({ prefix: ['todos'] })).map(e => e.value as Todo) },
     async update(c) {
       const t = await store.get(at(c.id)) as Todo | null

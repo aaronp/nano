@@ -101,15 +101,15 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     return success(undefined)
   }
 
-  /** The one pod providing `api` (narrowed by `where`), in the first runtime placing it that matches. */
+  /** The one placement (runtime, pod) providing `api`, narrowed by `where`: a pod in several runtimes needs `where.runtime`. */
   function provider(api: Interface, where: { runtime?: string; pod?: string }): NanoResult<{ call: object }> {
-    const found = new Map<string, string>()
+    const found: [string, string][] = []
     for (const [runtime, r] of Object.entries(current.runtimes))
       for (const pod of r.pods)
-        if ((where.runtime ?? runtime) === runtime && (where.pod ?? pod) === pod && !found.has(pod)
-          && impl(live, pod)?.provides.some(i => i.coord === api.coord)) found.set(pod, runtime)
+        if ((where.runtime ?? runtime) === runtime && (where.pod ?? pod) === pod
+          && impl(live, pod)?.provides.some(i => i.coord === api.coord)) found.push([pod, runtime])
     const what = `${api.coord}${where.runtime ? ` in ${where.runtime}` : ''}${where.pod ? ` at ${where.pod}` : ''}`
-    if (found.size !== 1) return failure(found.size ? 'ambiguous' : 'not-found', `${found.size} pods provide ${what}`)
+    if (found.length !== 1) return failure(found.length ? 'ambiguous' : 'not-found', `${found.length} placements provide ${what}`)
     const [[pod, runtime]] = found
     return success({ call: app.call(runtime, pod) })
   }
