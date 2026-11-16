@@ -31,12 +31,13 @@ export type { AppEvent } from './stream.ts'
 export type { Resolution } from './resolve.ts'
 
 export type Application = {
-  /** The runtime `id` as the host sees it; `resolve`, `get` and `call` below are those of the one runtime (else `not-unique`). */
+  /** The runtime `id` as the host sees it; `resolve`, `get`, `call` and `subscribe` below are those of the one runtime (else `not-unique`). */
   runtime(id: string): Entry
   /** `app.call(pod)`; `app.call(runtime, pod)` is `app.runtime(runtime).call(pod)`. */
   call(...at: [pod: string] | [runtime: string, pod: string]): ReturnType<Entry['call']>
   get: Entry['get']
   resolve: Entry['resolve']
+  subscribe: Entry['subscribe']
   apply(next: AppDeployment): Promise<NanoResult<void>>
   restart(pod: string): Promise<NanoResult<void>>
   deployment(): AppDeployment
@@ -101,7 +102,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     if (why !== undefined) return failure('denied', why)
     const changes = diff(current, checked.value)
     current = checked.value
-    for (const o of [...live.ons]) if (o.gone()) live.ons.delete(o)   // an edge removed now stays gone if re-added
+    for (const o of [...live.ons]) if ('gone' in o && o.gone()) live.ons.delete(o)   // an edge removed now stays gone if re-added
     await Promise.all([...changes.removed.map(n => pods.forget(n, 'removed')), ...changes.changed.map(n => pods.forget(n, 'changed'))])
     await buildEager([...changes.added, ...changes.changed])
     trace.emit({ type: 'applied', ...changes })
@@ -113,6 +114,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     runtime: id => entry(live, () => success(id)),
     resolve: (api, where) => one.resolve(api, where),
     get: (api, where) => one.get(api, where),
+    subscribe: (op, fn) => one.subscribe(op, fn),
     call: (...at) => at.length === 1 ? one.call(at[0]) : app.runtime(at[0]).call(at[1]),
     apply: next => closing ? Promise.resolve(shut()) : queued(() => reconcile(next)),
     restart: pod => closing ? Promise.resolve(shut()) : queued(async () => {

@@ -10,7 +10,13 @@
     }
   },
   "runtimes": {
-    "main": {
+    "frontend": {
+      "pods": [
+        "todos"
+      ],
+      "subscriptions": []
+    },
+    "backend": {
       "pods": [
         "store",
         "todos"

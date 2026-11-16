@@ -3,37 +3,23 @@
  * lets others hear what happens; and the whole configuration is data (`nano.json`).
  */
 import { expect, test } from 'bun:test'
-import { Coord, Application, AppDeployment, Implementation, Registry, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, Registry, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
 import { KeyValueStoreDef } from './kv/contract.ts'
 import kv, { impls, inMemory } from './kv/memory.ts'
 import { TodoListDef } from './todo/contract.ts'
 import todo from './todo/kv.ts'
 
-const ns = Coord.namespace('example.test')
-
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const saved = async (): Promise<AppDeployment> => Bun.file(new URL('./nano.json', import.meta.url)).json()
 
-let heard: KeyValueStoreDef.Path[] = []
-/** Only for these tests: a pod that hears its store's `changed`. */
-const watcher = Implementation.define(ns.implementationId('watcher'), {
-  provides: [],
-  dependencies: { store: KeyValueStoreDef.api },
-  make: ctx => {
-    const s = ctx.one(KeyValueStoreDef.api)
-    if (s.ok) s.value.on(KeyValueStoreDef.api.ops.changed, ({ key }) => { heard.push(key) })
-    return []
-  },
-})
-
 async function open() {
   const registry = Registry.create()
-  for (const p of [kv, todo, ns.provider([watcher])]) must(registry.add(p))
+  for (const p of [kv, todo]) must(registry.add(p))
   return must(await Application.create(must(AppDeployment.assemble(await saved(), registry))))
 }
 
-test('1. it just works: app.get gives a plain TodoList, CRUD over the store', async () => {
-  const todos = (await open()).get(TodoListDef.api)
+test('1. it just works: the frontend gives a plain TodoList, CRUD over the store', async () => {
+  const todos = (await open()).runtime('frontend').get(TodoListDef.api)
   const milk = await todos.add('milk')
   const eggs = await todos.add('eggs')
   expect(milk).toEqual({ id: milk.id, title: 'milk', done: false })
@@ -51,7 +37,7 @@ test('2. the runtime: the stream shows every todos → store call with its timin
   const app = await open()
   const events: AppEvent[] = []
   app.listen(e => events.push(e))
-  await app.get(TodoListDef.api).add('milk')
+  await app.runtime('frontend').get(TodoListDef.api).add('milk')
   const call = events.find(e => e.type === 'sent' && e.from === 'todos' && e.to === 'store')
   expect(call).toMatchObject({ kind: 'call', port: 'example.kv.KeyValueStore/put' })
   const done = events.find(e => e.type === 'delivered' && call?.type === 'sent' && e.id === call.id)
@@ -61,7 +47,7 @@ test('2. the runtime: the stream shows every todos → store call with its timin
 
 test('2. the runtime: apply swaps the store for another implementation and the next call reaches it', async () => {
   const app = await open()
-  const todos = app.get(TodoListDef.api)
+  const todos = app.runtime('frontend').get(TodoListDef.api)
   await todos.add('milk')
   const next = app.deployment()
   next.pods.store = { implementation: String(impls.backup), eager: false }
@@ -71,17 +57,30 @@ test('2. the runtime: apply swaps the store for another implementation and the n
   expect((await todos.list()).map(t => t.title)).toEqual(['eggs'])
 })
 
-test('2. the runtime: a subscriber hears the store\'s changed', async () => {
-  heard = []
+test('2. the runtime: a host subscriber to the store\'s put in backend gets { input, output }; one in frontend gets nothing', async () => {
   const app = await open()
-  const next = app.deployment()
-  next.pods.watch = { implementation: 'example.test/watcher', eager: true }
-  next.runtimes.main!.pods.push('watch')
-  next.runtimes.main!.subscriptions.push({ kind: 'call', from: 'watch', to: 'store' })
-  must(await app.apply(next))
-  const t = await app.get(TodoListDef.api).add('milk')
+  const back: unknown[] = [], front: unknown[] = []
+  app.runtime('backend').subscribe(KeyValueStoreDef.api.ops.put, call => { back.push(call) })
+  app.runtime('frontend').subscribe(KeyValueStoreDef.api.ops.put, call => { front.push(call) })
+  const t = await app.runtime('frontend').get(TodoListDef.api).add('milk')
   await Bun.sleep(0)
-  expect(heard).toEqual([['todos', t.id]])
+  expect(back).toEqual([{ input: { key: ['todos', t.id], value: t }, output: null }])
+  expect(front).toEqual([])
+})
+
+test('2. the runtime: after unsubscribing, a later put reaches only the subscriber still in place', async () => {
+  const app = await open()
+  const gone: unknown[] = [], kept: unknown[] = []
+  const backend = app.runtime('backend')
+  const off = backend.subscribe(KeyValueStoreDef.api.ops.put, call => { gone.push(call.input.key) })
+  backend.subscribe(KeyValueStoreDef.api.ops.put, call => { kept.push(call.input.key) })
+  const todos = app.runtime('frontend').get(TodoListDef.api)
+  const milk = await todos.add('milk')
+  off()
+  const eggs = await todos.add('eggs')
+  await Bun.sleep(0)
+  expect(gone).toEqual([['todos', milk.id]])
+  expect(kept).toEqual([['todos', milk.id], ['todos', eggs.id]])
 })
 
 test('3. configuration as data: the running app\'s deployment() round-trips through nano.json', async () => {
@@ -100,9 +99,9 @@ test('3. configuration as data: the running app\'s deployment() round-trips thro
 test('a store Fail reaches the todo caller as itself: with no store wired, add is not-found, not threw', async () => {
   const app = await open()
   const next = app.deployment()
-  next.runtimes.main!.subscriptions = []
+  next.runtimes.backend!.subscriptions = []
   must(await app.apply(next))
-  const e = await app.get(TodoListDef.api).add('milk').catch(x => x)
+  const e = await app.runtime('frontend').get(TodoListDef.api).add('milk').catch(x => x)
   expect(e.fail.type).toBe('not-found')
 })
 

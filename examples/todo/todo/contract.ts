@@ -1,7 +1,7 @@
 /**
  * The todo list contract. `TodoListDef.TodoList` is the plain TypeScript interface, derived from `api`.
  *
- *   const todos: TodoListDef.TodoList = app.get(TodoListDef.api)
+ *   const todos: TodoListDef.TodoList = app.runtime('frontend').get(TodoListDef.api)
  *   const t = await todos.add('milk'); await todos.update({ id: t.id, done: true })
  */
 import { Type, type Static } from 'typebox'

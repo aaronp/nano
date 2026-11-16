@@ -4,19 +4,32 @@
  */
 import { expect, test } from 'bun:test'
 import { Application } from '@pritzlaff/nano-core'
+import { KeyValueStoreDef } from './kv/contract.ts'
 import { TodoListDef } from './todo/contract.ts'
 
-test('load nano.json, get the TodoList, it just works', async () => {
+test('load nano.json, enter the frontend, get the TodoList, it just works', async () => {
   const app = await Application.load(new URL('./nano.json', import.meta.url))
-  const todos = app.get(TodoListDef.api)
+  const frontend = app.runtime('frontend')
+  const todos = frontend.get(TodoListDef.api)
   const milk = await todos.add('milk')
   expect(await todos.list()).toEqual([milk])
-  expect(app.resolve(TodoListDef.api)).toMatchObject({ ok: true, pod: 'todos' })
+  expect(frontend.resolve(TodoListDef.api)).toMatchObject({ ok: true, pod: 'todos', runtime: 'frontend' })
+})
+
+test('the frontend cannot reach the store; with two runtimes, app.get must be told which', async () => {
+  const app = await Application.load(new URL('./nano.json', import.meta.url))
+  expect(app.runtime('frontend').resolve(KeyValueStoreDef.api)).toMatchObject({ ok: false, reason: 'not-found' })
+  expect(app.resolve(TodoListDef.api)).toMatchObject({ ok: false, reason: 'not-unique' })
+  expect(() => app.get(TodoListDef.api)).toThrow('not-unique')
+  const next = app.deployment()
+  next.runtimes.frontend = { pods: ['todos', 'store'], subscriptions: [], exports: [String(TodoListDef.api.coord)] }
+  if (!(await app.apply(next)).ok) throw new Error('apply')
+  expect(app.runtime('frontend').resolve(KeyValueStoreDef.api)).toMatchObject({ ok: false, reason: 'not-exported' })
 })
 
 test('resolve says why not, and getOrThrow throws an Error carrying the Fail', async () => {
   const app = await Application.load(new URL('./nano.json', import.meta.url))
-  const missing = app.resolve(TodoListDef.api, { pod: 'store' })
+  const missing = app.runtime('frontend').resolve(TodoListDef.api, { pod: 'store' })
   expect(missing.ok).toBe(false)
   expect(() => missing.getOrThrow()).toThrow()
   const e = (() => { try { missing.getOrThrow() } catch (x) { return x as { fail: { type: string } } } })()

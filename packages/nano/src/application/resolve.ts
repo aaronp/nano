@@ -6,11 +6,13 @@
  *   const r = app.runtime('frontend').resolve(TodoList)   // r.ok: r.pod, r.runtime, r.implementation, r.value; else r.reason
  *   const todos = r.getOrThrow()                          // the plain object, or an Error carrying r.fail
  */
+import type { Static, TSchema } from 'typebox'
 import type { Interface } from '../iface.ts'
+import type { Op } from '../op.ts'
 import { plain } from '../plain.ts'
 import { failure, success, type Fail, type NanoResult } from '../result.ts'
 import { client } from './emit.ts'
-import { impl, type Live } from './messages.ts'
+import { impl, type Hear, type Live } from './messages.ts'
 
 export type Resolution<T> =
   | { readonly ok: true; readonly runtime: string; readonly pod: string; readonly implementation: string; readonly value: T; getOrThrow(): T }
@@ -25,7 +27,12 @@ export type Entry = {
   resolve<I extends Interface>(api: I, where?: Where): Resolution<Interface.Type<I>>
   get<I extends Interface>(api: I, where?: Where): Interface.Type<I>
   call(pod: string): Client
+  /** Each successful call of action `op` travelling in this runtime, after it returns; gives an unsubscribe. */
+  subscribe<O extends Op>(op: O, fn: (call: { input: In<O>; output: Out<O> }) => unknown): () => void
 }
+type DataOf<S> = S extends TSchema ? Static<S> : unknown
+type In<O> = O extends Op<infer I, any> ? DataOf<I> : unknown
+type Out<O> = O extends Op<any, infer S> ? DataOf<S> : unknown
 
 /** Whether runtime `id` offers interface `coord` to the host: absent `exports` offers everything. */
 const offered = (live: Live, id: string, coord: string) => { const x = live.now().runtimes[id]?.exports; return !x || x.includes(coord) }
@@ -67,7 +74,14 @@ export function entry(live: Live, at: () => NanoResult<string>): Entry {
     })
     return { ok: true, ...now.value, value, getOrThrow: () => value }
   }
-  return { resolve, get: (api, where) => resolve(api, where).getOrThrow(), call }
+  const subscribe: Entry['subscribe'] = (op, fn) => {
+    const r = at()
+    if (!r.ok) thrown(r.fail)()
+    const h = { runtime: r.ok ? r.value : '', op: op.coord, fn: fn as Hear['fn'] }
+    live.ons.add(h)
+    return () => { live.ons.delete(h) }
+  }
+  return { resolve, get: (api, where) => resolve(api, where).getOrThrow(), call, subscribe }
 }
 
 /** The application's one runtime, or `not-unique` ("name a runtime") when it has several. */

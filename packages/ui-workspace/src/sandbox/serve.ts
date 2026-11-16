@@ -41,7 +41,7 @@ export function serve(port: MessagePort, load: (url: string, coord: string) => P
     const thrown = () => { throw Object.assign(new Error(refused.reason), { fail: refused }) }
     // A view uses call: resolve finds nothing, and get throws its Fail, as app.get's would on a missing pod.
     const one: ReturnType<Application['runtime']> = {
-      call: client, get: thrown, resolve: () => ({ ok: false, reason: refused.type, fail: refused, getOrThrow: thrown }),
+      call: client, get: thrown, subscribe: () => () => {}, resolve: () => ({ ok: false, reason: refused.type, fail: refused, getOrThrow: thrown }),
     }
     return {
       ...one, runtime: () => one, call: (...at) => client(at[at.length - 1]!), deployment: () => structuredClone(deployment),

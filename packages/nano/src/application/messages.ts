@@ -24,8 +24,8 @@ export type Live = {
   readonly trace: ReturnType<typeof stream>
   /** A build: the handlers by port, and the implementation they were made from. */
   instance(pod: string): Promise<NanoResult<{ implementation: Implementation; handlers: ReadonlyMap<string, Handler> }>>
-  /** The live `on` subscriptions, in the order made. */
-  readonly ons: Set<On>
+  /** The live `on` subscriptions and the host's subscriptions to actions (`Hear`), in the order made. */
+  readonly ons: Set<On | Hear>
   /** Deliveries under way, so `close()` can let them settle. */
   readonly flying: Set<Promise<unknown>>
   /** Whether `close()` has been called: nothing new is delivered. */
@@ -36,6 +36,9 @@ export type Live = {
 
 /** A subscription made in code: `to` hears `from`'s port `port` in `runtime`, while `gone()` gives nothing. */
 export type On = { runtime: string; from: string; port: string; to: string; gone(): unknown; fn(data: unknown): unknown }
+
+/** The host hearing each successful call of the action with coordinate `op` that travels in `runtime`. */
+export type Hear = { runtime: string; op: string; fn(call: { input: unknown; output: unknown }): unknown }
 
 /** A message's kind, its chain (`correlation`, `cause`), its id if already taken, and its `work` if not an action. */
 type How = { kind: 'call' | 'pipe' | 'on'; id?: string; correlation?: string; cause?: string; work?: () => Promise<NanoResult<unknown>> }

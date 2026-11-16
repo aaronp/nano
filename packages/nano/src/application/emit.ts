@@ -10,7 +10,7 @@
  */
 import { port } from '../iface.ts'
 import { failure, success, type NanoResult } from '../result.ts'
-import { attempt, impl, placedIn, send, type Live } from './messages.ts'
+import { attempt, impl, placedIn, refusal, send, type Live } from './messages.ts'
 
 type Chain = { id?: string; correlation?: string; cause?: string }
 
@@ -25,8 +25,22 @@ const fly = <T>(live: Live, p: Promise<T>): Promise<T> => {
 async function act(live: Live, runtime: string, from: string, to: string, p: string, input: unknown, kind: 'call' | 'pipe', chain: Chain = {}) {
   const id = chain.id ?? live.trace.id(), correlation = chain.correlation ?? id
   const r = await send(live, runtime, from, to, p, input, { ...chain, kind, id, correlation })
-  if (r.ok) void emit(live, to, p, r.value, { correlation, cause: id })
+  if (r.ok) { hear(live, runtime, to, p, input, r.value); void emit(live, to, p, r.value, { correlation, cause: id }) }
   return r
+}
+
+/** The host's subscribers to the action at `to`'s port `p` in `runtime` get `{ input, output }`, if its policy allows. */
+function hear(live: Live, runtime: string, to: string, p: string, input: unknown, output: unknown) {
+  const i = impl(live, to)?.provides.find(i => Object.values(i.ops).some(o => port(i, o) === p))
+  const op = i && Object.values(i.ops).find(o => port(i, o) === p)!.coord
+  const exports = live.now().runtimes[runtime]?.exports
+  if (!i || (exports && !exports.includes(i.coord))) return   // what the runtime doesn't export, the host doesn't hear
+  for (const h of [...live.ons]) {
+    if (!('op' in h) || h.runtime !== runtime || h.op !== op) continue
+    const why = refusal(live, runtime, 'host', to, 'subscribe')
+    if (why !== undefined) { live.trace.emit({ type: 'warning', reason: `host hearing ${p} of ${to} in ${runtime}: ${why}` }); continue }
+    fly(live, attempt(live, to, `host hearing ${p}`, () => h.fn({ input, output })))
+  }
 }
 
 /**
@@ -41,7 +55,7 @@ export function emit(live: Live, from: string, port: string, data: unknown, chai
     r.subscriptions.flatMap(s => s.kind === 'pipe' && s.from === from && s.source === port
       ? [fly(live, act(live, runtime, from, s.to, s.target, data, 'pipe', link()))] : []))
   for (const o of [...live.ons]) {
-    if (o.from !== from || o.port !== port) continue
+    if ('op' in o || o.from !== from || o.port !== port) continue
     const work = async () => { const r = await attempt(live, o.to, `${o.to} hearing ${port}`, () => o.fn(data)); return r.ok ? success(undefined) : r }
     fly(live, send(live, o.runtime, from, o.to, port, data, { kind: 'on', ...link(), work }))
   }
