@@ -4,31 +4,20 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: 'http://localhost:3000/app/', settings: { handleDisabledFileLoadingAsSuccess: true } })
 import { afterEach, expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import {
-  Application,
-  Pod,
-  AppDeployment,
-  Registry,
-  Schema,
-  Interface,
-  Implementation,
-  Op,
-  provide,
-  Provider,
-  success,
-  type AppEvent,
-} from '@pritzlaff/nano-core'
+import { Coord, Application, Pod, AppDeployment, Registry, Schema, Interface, Implementation, Op, provide, success, type AppEvent } from '@pritzlaff/nano-core'
 import type { ViewTarget } from '@pritzlaff/nano-ui'
 import { edgesFor } from '../src/sandbox/edges.ts'
 import { openFrame, srcdoc } from '../src/sandbox/frames.ts'
 import { serve } from '../src/sandbox/serve.ts'
 import { standIn } from '../src/sandbox/stand-in.ts'
 
+const ns = Coord.namespace('acme')
+
 const Text = Schema.define(Type.String(), 'Text')
 const Echo = Interface.define('t.Echo', { echo: Op.action(Text, Text) })
-const sImpl = Implementation.define('acme/s', { provides: [Echo], make: () => [provide(Echo, { echo: async x => success(x) })] })
+const sImpl = Implementation.define(ns.implementationId('s'), { provides: [Echo], make: () => [provide(Echo, { echo: async x => success(x) })] })
 const registry = Registry.create()
-registry.add(Provider.define('acme', [sImpl]))
+registry.add(ns.provider([sImpl]))
 
 const layer = () => document.getElementById('nano-sandbox-layer')
 const iframes = () => layer()?.querySelectorAll('iframe').length ?? 0

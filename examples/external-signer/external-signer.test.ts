@@ -12,15 +12,14 @@ import { Type, type Static } from 'typebox'
 import {
   Application,
   AppDeployment,
+  Coord,
   Registry,
   Schema,
-  Interface,
   Implementation,
   Op,
   Pod,
   port,
   provide,
-  Provider,
   success,
   type AppEvent,
   type Application as App,
@@ -28,6 +27,8 @@ import {
 } from '@pritzlaff/nano-core'
 import { KeyFormatter, Log, TestRequest, TestResult, Vault } from './interfaces.ts'
 import { signerProvider } from './providers.ts'
+
+const ns = Coord.namespace('example.probe')
 
 const DOC = new URL('./nano.json', import.meta.url)
 
@@ -64,9 +65,9 @@ const runTest = (app: App, input: Static<typeof TestRequest>) =>
 /** An action that takes anything: subscribe an event to it to see what is published. */
 function probe() {
   const seen: unknown[] = []
-  const Probe = Interface.define('example.probe.Probe', { see: Op.action(Schema.define(Type.Unknown(), 'Anything'), Schema.define(Type.Null(), 'Done')) })
-  const impl = Implementation.define('example.probe/probe', { provides: [Probe], make: () => [provide(Probe, { see: async v => { seen.push(v); return success(null) } })] })
-  return { impl, provider: Provider.define('example.probe', [impl]), seen, port: port(Probe, Probe.ops.see) }
+  const Probe = ns.interface('Probe', { see: Op.action(Schema.define(Type.Unknown(), 'Anything'), Schema.define(Type.Null(), 'Done')) })
+  const impl = Implementation.define(ns.implementationId('probe'), { provides: [Probe], make: () => [provide(Probe, { see: async v => { seen.push(v); return success(null) } })] })
+  return { impl, provider: ns.provider([impl]), seen, port: port(Probe, Probe.ops.see) }
 }
 
 const registry = () => { const r = Registry.create(); r.add(signerProvider); return r }

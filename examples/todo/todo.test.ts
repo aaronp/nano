@@ -3,18 +3,20 @@
  * lets others hear what happens; and the whole configuration is data (`nano.json`).
  */
 import { expect, test } from 'bun:test'
-import { Application, AppDeployment, Implementation, Provider, Registry, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
+import { Coord, Application, AppDeployment, Implementation, Registry, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
 import { KeyValueStoreDef } from './kv/contract.ts'
 import kv, { impls, inMemory } from './kv/memory.ts'
 import { TodoListDef } from './todo/contract.ts'
 import todo from './todo/kv.ts'
+
+const ns = Coord.namespace('example.test')
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const saved = async (): Promise<AppDeployment> => Bun.file(new URL('./nano.json', import.meta.url)).json()
 
 let heard: KeyValueStoreDef.Path[] = []
 /** Only for these tests: a pod that hears its store's `changed`. */
-const watcher = Implementation.define('example.test/watcher', {
+const watcher = Implementation.define(ns.implementationId('watcher'), {
   provides: [],
   dependencies: { store: KeyValueStoreDef.api },
   make: ctx => {
@@ -26,7 +28,7 @@ const watcher = Implementation.define('example.test/watcher', {
 
 async function open() {
   const registry = Registry.create()
-  for (const p of [kv, todo, Provider.define('example.test', [watcher])]) must(registry.add(p))
+  for (const p of [kv, todo, ns.provider([watcher])]) must(registry.add(p))
   return must(await Application.create(must(AppDeployment.assemble(await saved(), registry))))
 }
 

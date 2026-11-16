@@ -1,11 +1,13 @@
 import { Type } from 'typebox'
-import { Schema, failure, Implementation, provide, success } from '@pritzlaff/nano-core'
+import { Coord, Schema, failure, Implementation, provide, success } from '@pritzlaff/nano-core'
 import { Picker } from './interfaces.ts'
+
+const ns = Coord.namespace('acme.template')
 
 export const OPTIONS = ['red', 'green', 'blue']
 
 /** One choice from a list. `pick` publishes `changed` as `{ key: 'choice', value }`; a value not in the options fails. Config: `{ options }`. */
-export const picker = Implementation.define('acme.template/picker', {
+export const picker = Implementation.define(ns.implementationId('picker'), {
   provides: [Picker],
   config: Schema.define(Type.Union([Type.Object({ options: Type.Array(Type.String()) }), Type.Undefined()]), 'PickerConfig'),
   make: (ctx, config?: { options: string[] }) => {

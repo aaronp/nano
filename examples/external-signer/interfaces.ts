@@ -6,7 +6,9 @@
  *   const s = ctx.one(Signer)         // s.value.call.sign({ publicKey, purpose: 'login', payload }) gives { status: 'signed', signature }
  */
 import { Type } from 'typebox'
-import { Schema, Interface, Op } from '@pritzlaff/nano-core'
+import { Coord, Schema, Op } from '@pritzlaff/nano-core'
+
+const ns = Coord.namespace('example.signer')
 
 const Base64 = Type.String({ contentEncoding: 'base64' })
 
@@ -35,15 +37,15 @@ export const TestRequest = Schema.define(Type.Object({
 }), 'TestRequest')
 export const TestResult = Schema.define(Type.Object({ publicKey: Base64, result: SignResult }), 'TestResult')
 
-export const KeyGenerator = Interface.define('example.signer.KeyGenerator', {
+export const KeyGenerator = ns.interface('KeyGenerator', {
   'create-keys': Op.action(KeysRequest, NewKeys),
 })
 
-export const Signer = Interface.define('example.signer.Signer', {
+export const Signer = ns.interface('Signer', {
   sign: Op.action(SignRequest, SignResult),
 })
 
-export const Vault = Interface.define('example.signer.Vault', {
+export const Vault = ns.interface('Vault', {
   /** Makes key pairs inside the vault; only the public keys come out. */
   create: Op.action(KeysRequest, NewKeys),
   'sign-with': Op.action(SignRequest, SignResult),
@@ -51,19 +53,19 @@ export const Vault = Interface.define('example.signer.Vault', {
   keys: Op.event(KeyList),
 })
 
-export const Log = Interface.define('example.signer.Log', {
+export const Log = ns.interface('Log', {
   append: Op.action(LogLine, Done),
   /** Published after each `append`: every entry so far. */
   entries: Op.event(LogEntries),
 })
 
 /** Turns the vault's `keys` into log lines. */
-export const KeyFormatter = Interface.define('example.signer.KeyFormatter', {
+export const KeyFormatter = ns.interface('KeyFormatter', {
   format: Op.action(KeyList, Done),
   line: Op.event(LogLine),
 })
 
 /** The tester widget's button: make a key for a purpose, sign a payload with it. */
-export const Tester = Interface.define('example.signer.Tester', {
+export const Tester = ns.interface('Tester', {
   test: Op.action(TestRequest, TestResult),
 })

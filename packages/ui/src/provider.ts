@@ -1,7 +1,9 @@
-import { Provider } from '@pritzlaff/nano-core'
+import { Coord } from '@pritzlaff/nano-core'
 import { debounce } from './pods/debounce.ts'
 import { input } from './pods/input.ts'
 import { log } from './pods/log.ts'
 import { map } from './pods/map.ts'
 
-export const uiProvider = Provider.define('nano.ui', [input, debounce, map, log])
+const ns = Coord.namespace('nano.ui')
+
+export const uiProvider = ns.provider([input, debounce, map, log])

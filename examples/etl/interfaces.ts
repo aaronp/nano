@@ -5,12 +5,14 @@
  *   ctx.one(Sink)              // .value.call.write(['A']) gives the count written
  */
 import { Type } from 'typebox'
-import { Schema, Interface, Op } from '@pritzlaff/nano-core'
+import { Coord, Schema, Op } from '@pritzlaff/nano-core'
+
+const ns = Coord.namespace('example.etl')
 
 export const Rows = Schema.define(Type.Array(Type.String()), 'Rows')
 export const Nothing = Schema.define(Type.Object({}), 'Nothing')
 export const Count = Schema.define(Type.Integer(), 'Count')
 
-export const Source = Interface.define('example.etl.Source', { read: Op.action(Nothing, Rows) })
-export const Sink = Interface.define('example.etl.Sink', { write: Op.action(Rows, Count) })
-export const Pipeline = Interface.define('example.etl.Pipeline', { run: Op.action(Nothing, Count) })
+export const Source = ns.interface('Source', { read: Op.action(Nothing, Rows) })
+export const Sink = ns.interface('Sink', { write: Op.action(Rows, Count) })
+export const Pipeline = ns.interface('Pipeline', { run: Op.action(Nothing, Count) })

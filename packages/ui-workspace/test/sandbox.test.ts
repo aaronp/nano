@@ -2,26 +2,13 @@
 // Pods: `s` sandboxed, `h` host-mode; `s → h` by a call edge and `s.tick → h.record` by a pipe.
 import { afterEach, expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import {
-  Application,
-  Pod,
-  AppDeployment,
-  Registry,
-  Schema,
-  Interface,
-  Implementation,
-  Op,
-  provide,
-  Provider,
-  success,
-  type AppEvent,
-  type NanoContext,
-  type NanoResult,
-} from '@pritzlaff/nano-core'
+import { Coord, Application, Pod, AppDeployment, Registry, Schema, Interface, Implementation, Op, provide, success, type AppEvent, type NanoContext, type NanoResult } from '@pritzlaff/nano-core'
 import { checkMsg, describeProvider } from '../src/sandbox/protocol.ts'
 import { edgesFor } from '../src/sandbox/edges.ts'
 import { serve } from '../src/sandbox/serve.ts'
 import { standIn, type Frame } from '../src/sandbox/stand-in.ts'
+
+const ns = Coord.namespace('acme')
 
 const Text = Schema.define(Type.String(), 'Text')
 const Num = Schema.define(Type.Number(), 'Num')
@@ -33,13 +20,13 @@ const H = Interface.define('t.H', { record: Op.action(Num, Nothing) })
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
 let inFrame: NanoContext | undefined, frameClosed = 0, seen: number[] = []
-const sImpl = Implementation.define('acme/s', { provides: [Echo, Ticks], dependencies: { h: H }, make: ctx => {
+const sImpl = Implementation.define(ns.implementationId('s'), { provides: [Echo, Ticks], dependencies: { h: H }, make: ctx => {
   inFrame = ctx
   ctx.addOnCloseListener(() => { frameClosed++ })
   return [provide(Echo, { echo: async x => success(x) }), provide(Ticks, {})]
 } })
-const hImpl = Implementation.define('acme/h', { provides: [H], make: () => [provide(H, { record: async n => { seen.push(n); return success(null) } })] })
-const acme = Provider.define('acme', [sImpl, hImpl])
+const hImpl = Implementation.define(ns.implementationId('h'), { provides: [H], make: () => [provide(H, { record: async n => { seen.push(n); return success(null) } })] })
+const acme = ns.provider([sImpl, hImpl])
 const registry = Registry.create()
 registry.add(acme)
 

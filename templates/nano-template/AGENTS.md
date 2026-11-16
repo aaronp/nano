@@ -5,7 +5,7 @@ this file is what to do, and what not to.
 
 ## The shape
 
-- **An interface** (`src/interfaces.ts`): `Interface.define(coord, { op… })` with `Op.action(Input, Output)` and
+- **An interface** (`src/interfaces.ts`): `ns.interface('<Name>', { op… })` (`const ns = Coord.namespace('acme.template')`) with `Op.action(Input, Output)` and
   `Op.event(Data)`, each op named by its key; schemas come from `Schema.define(Type…, label?)` and nest directly.
 - **An implementation** (`src/<thing>.ts`): start from the contract it provides,
   `Iface.impl('acme.template/<thing>').needs({ … }).config(Type…).make(({ deps, config, ...ctx }) => plainObject)` (or
@@ -17,7 +17,7 @@ this file is what to do, and what not to.
   return `failure(...)` or `success(...)`.
 - **A view** (`src/<thing>-view.ts`): a custom element extending `View` (`src/view.ts`) with `target`. It reaches its pod only by
   `this.pod(t).action(input)` and `listen` (`hear`); no logic the pod could hold.
-- **The provider** (`src/index.ts`): `export default Provider.define('acme.template', [...])`, `export const views = { '<impl coord>': '<tag>' }`,
+- **The provider** (`src/index.ts`): `export default ns.provider([...])`, `export const views = { '<impl coord>': '<tag>' }`,
   and `customElements.define` for each tag.
 - **`nano.json`**: pods, runtimes, pipes (`source`/`target` are `<iface coord>/<op>`), and `modules`.
 

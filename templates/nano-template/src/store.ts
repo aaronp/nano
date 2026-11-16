@@ -1,12 +1,14 @@
-import { Implementation, provide, success } from '@pritzlaff/nano-core'
+import { Coord, Implementation, provide, success } from '@pritzlaff/nano-core'
 import { Store } from './interfaces.ts'
+
+const ns = Coord.namespace('acme.template')
 
 const PREFIX = 'acme.template:'
 /** The origin's localStorage, or undefined where there is none (or it throws, as in a sandboxed frame). */
 const local = (): Storage | undefined => { try { return globalThis.localStorage } catch { return undefined } }
 
 /** Key/value text in `localStorage`, or in memory when there is none. Publishes `changed` with the key. */
-export const store = Implementation.define('acme.template/store', {
+export const store = Implementation.define(ns.implementationId('store'), {
   provides: [Store],
   make: ctx => {
     const ls = local(), mem = new Map<string, string>()

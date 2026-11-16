@@ -1,9 +1,11 @@
 import { Type } from 'typebox'
-import { Schema, Implementation, provide, success } from '@pritzlaff/nano-core'
+import { Coord, Schema, Implementation, provide, success } from '@pritzlaff/nano-core'
 import { Log } from '../interfaces.ts'
 
+const ns = Coord.namespace('nano.ui')
+
 /** Keeps the newest `max` entries (default 100). */
-export const log = Implementation.define('nano.ui/log', {
+export const log = Implementation.define(ns.implementationId('log'), {
   provides: [Log],
   config: Schema.define(Type.Union([Type.Object({ max: Type.Optional(Type.Integer({ minimum: 1, maximum: 1000 })) }), Type.Undefined()]), 'LogConfig'),
   make: (_ctx, config?: { max?: number }) => {

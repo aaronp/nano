@@ -4,9 +4,11 @@
  *
  *   registry.add(hostProvider); Pod.eager(hostUi)   // the pod `ui` in runtime `main`
  */
-import { Implementation, provide, Provider, success } from '@pritzlaff/nano-core'
+import { Coord, Implementation, provide, success } from '@pritzlaff/nano-core'
 import { HostUI } from '@pritzlaff/nano-ui'
 import { toast } from '@pritzlaff/nano-elements'
+
+const ns = Coord.namespace('workspace.host')
 
 function approve({ title, detail }: { title: string; detail?: string }): Promise<boolean> {
   return new Promise(resolve => {
@@ -34,7 +36,7 @@ function approve({ title, detail }: { title: string; detail?: string }): Promise
   })
 }
 
-export const hostUi = Implementation.define('workspace.host/ui', {
+export const hostUi = Implementation.define(ns.implementationId('ui'), {
   provides: [HostUI],
   make: () => [provide(HostUI, {
     alert: async text => { toast(String(text)); return success(null) },
@@ -47,4 +49,4 @@ export const hostUi = Implementation.define('workspace.host/ui', {
   })],
 })
 
-export const hostProvider = Provider.define('workspace.host', [hostUi])
+export const hostProvider = ns.provider([hostUi])

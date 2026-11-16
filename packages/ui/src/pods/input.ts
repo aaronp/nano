@@ -1,7 +1,9 @@
-import { Implementation, provide, success } from '@pritzlaff/nano-core'
+import { Coord, Implementation, provide, success } from '@pritzlaff/nano-core'
 import { Input } from '../interfaces.ts'
 
-export const input = Implementation.define('nano.ui/input', {
+const ns = Coord.namespace('nano.ui')
+
+export const input = Implementation.define(ns.implementationId('input'), {
   provides: [Input],
   make: () => [provide(Input, { submit: async v => success(v) })],
 })

@@ -5,7 +5,9 @@
  *   if (ctx.all(Messaging).length === 0) …          // nothing wired: the composer is disabled
  */
 import { Type } from 'typebox'
-import { Schema, Interface, Op } from '@pritzlaff/nano-core'
+import { Coord, Schema, Op } from '@pritzlaff/nano-core'
+
+const ns = Coord.namespace('example.messenger')
 
 export const Key = Schema.define(Type.String(), 'Key')
 export const MaybeValue = Schema.define(Type.Union([Type.String(), Type.Null()]), 'MaybeValue')
@@ -22,25 +24,25 @@ export const Sent = Schema.define(Type.Union([
   Type.Object({ status: Type.Literal('disabled') }),
 ]), 'Sent')
 
-export const KeyValueStore = Interface.define('example.messenger.KeyValueStore', {
+export const KeyValueStore = ns.interface('KeyValueStore', {
   get: Op.action(Key, MaybeValue),
   put: Op.action(Entry, Done),
 })
 
-export const Messaging = Interface.define('example.messenger.Messaging', {
+export const Messaging = ns.interface('Messaging', {
   post: Op.action(Message, Done),
   messages: Op.event(Message),
 })
 
-export const Inbox = Interface.define('example.messenger.Inbox', {
+export const Inbox = ns.interface('Inbox', {
   receive: Op.action(Message, Done),
   list: Op.action(Nothing, Messages),
 })
 
-export const Composer = Interface.define('example.messenger.Composer', {
+export const Composer = ns.interface('Composer', {
   send: Op.action(Draft, Sent),
 })
 
 export const Outgoing = Schema.define(Type.Object({ contact: Type.String(), message: Type.String() }), 'Outgoing')
 /** `send(contact, message)`: one pod, shared by every runtime it is placed in. */
-export const Send = Interface.define('example.messenger.Send', { send: Op.action(Outgoing, Done) })
+export const Send = ns.interface('Send', { send: Op.action(Outgoing, Done) })

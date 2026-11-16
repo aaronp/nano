@@ -3,15 +3,17 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { Application, AppDeployment, Registry, Interface, Implementation, Op, Pod, port, provide, Provider, success, Schema, type NanoResult } from '@pritzlaff/nano-core'
+import { Coord, Application, AppDeployment, Registry, Implementation, Op, Pod, port, provide, success, Schema, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider, { Debounce, debounce, defineViews, input, Input, Log, log, map, MapIface } from '../src/index.ts'
+
+const ns = Coord.namespace('acme')
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const Str = Schema.define(Type.String(), 'Str')
-const Store = Interface.define('acme.Store', { save: Op.action(Str, Str) })
-const App = Interface.define('acme.App', { save: Op.action(Str, Str) })
-const db = Implementation.define('acme/db', { provides: [Store], make: () => [provide(Store, { save: async s => success(s) })] })
-const api = Implementation.define('acme/api', { provides: [App], dependencies: { store: Store }, make: ctx => [provide(App, { save: async s => { const st = ctx.one(Store); return st.ok ? st.value.call.save(s) : st } })] })
+const Store = ns.interface('Store', { save: Op.action(Str, Str) })
+const App = ns.interface('App', { save: Op.action(Str, Str) })
+const db = Implementation.define(ns.implementationId('db'), { provides: [Store], make: () => [provide(Store, { save: async s => success(s) })] })
+const api = Implementation.define(ns.implementationId('api'), { provides: [App], dependencies: { store: Store }, make: ctx => [provide(App, { save: async s => { const st = ctx.one(Store); return st.ok ? st.value.call.save(s) : st } })] })
 
 const slice: AppDeployment = {
   pods: {
@@ -27,7 +29,7 @@ const slice: AppDeployment = {
 const open = async (d: AppDeployment) => {
   const registry = Registry.create()
   registry.add(uiProvider)
-  registry.add(Provider.define('acme', [db, api]))
+  registry.add(ns.provider([db, api]))
   return { app: must(await Application.create(must(AppDeployment.assemble(d, registry)), {})), registry }
 }
 type El = HTMLElement & { target: unknown; updateComplete: Promise<unknown> }

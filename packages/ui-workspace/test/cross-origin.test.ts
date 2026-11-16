@@ -4,30 +4,19 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: 'http://host.test/' })
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import {
-  Application,
-  AppDeployment,
-  Registry,
-  Schema,
-  failure,
-  Interface,
-  Implementation,
-  Op,
-  provide,
-  Provider,
-  success,
-  type Pod,
-} from '@pritzlaff/nano-core'
+import { Coord, Application, AppDeployment, Registry, Schema, failure, Interface, Implementation, Op, provide, success, type Pod } from '@pritzlaff/nano-core'
 import { importApp, isolated, foreignOrigin, remembered, type Foreign, type Loaded } from '../src/import.ts'
 import { described, probe } from '../src/described.ts'
 import { serve } from '../src/sandbox/serve.ts'
 import { confirmImports } from '../src/import-confirm.ts'
 import { describeProvider } from '../src/sandbox/protocol.ts'
 
+const ns = Coord.namespace('other.fx')
+
 const Text = Schema.define(Type.String(), 'Text')
 const X = Interface.define('other.X', { x: Op.action(Text, Text) })
-const real = Implementation.define('other.fx/x', { provides: [X], make: () => [provide(X, { x: async s => success(`real ${s}`) })] })
-const realProvider = Provider.define('other.fx', [real])
+const real = Implementation.define(ns.implementationId('x'), { provides: [X], make: () => [provide(X, { x: async s => success(`real ${s}`) })] })
+const realProvider = ns.provider([real])
 
 const app: AppDeployment = {
   pods: {
