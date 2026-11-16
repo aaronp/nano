@@ -6,12 +6,15 @@
  *     provides: [DB],
  *     make: (ctx, config) => { const m = new Map(); return [provide(DB, { get: async key => success(m.get(key)) })] },
  *   })
+ *   Implementation.define('acme/mem/db', { provides: [DB], dependencies: { log: Log },
+ *     make: ({ deps }) => ({ get: async key => { await deps.log.record(key); return null } }) })   // one interface: a plain object
  */
 import { COORD, port, type Client, type Interface } from './iface.ts'
 import type { NanoContext } from './context.ts'
 import type { ImplCoord } from './coord.ts'
 import type { NanoResult } from './result.ts'
 import type { SchemaDef } from './schema.ts'
+import { handlers, plain } from './plain.ts'
 import { selectorData, type Selector, type SelectorData } from './selector.ts'
 
 export type Handler = (input: unknown) => Promise<NanoResult<unknown>>
@@ -39,18 +42,22 @@ export type Implementation = {
   readonly dependencies: Readonly<Record<string, SelectorData>>
   readonly config?: SchemaDef
   readonly description?: string
-  make(ctx: NanoContext, config: unknown): Promise<ReadonlyMap<string, Handler>>
+  /** `ctx` without `deps`: they are made here from `dependencies`. */
+  make(ctx: Omit<NanoContext, 'deps'>, config: unknown): Promise<ReadonlyMap<string, Handler>>
 }
 
-type Spec = {
-  provides: Interface[]
-  dependencies?: Record<string, Selector>
+/** `provide(...)` parts, or for a single interface its plain object (lifted by `handlers`). */
+type Made<P> = Provided[] | (P extends readonly [infer One extends Interface] ? Interface.Type<One> : never)
+
+type Spec<P extends readonly Interface[], D extends Record<string, Selector>> = {
+  provides: [...P]
+  dependencies?: D
   config?: SchemaDef
   description?: string
-  make(ctx: NanoContext, config: any): Provided[] | Promise<Provided[]>
+  make(ctx: NanoContext<D>, config: any): Made<P> | Promise<Made<P>>
 }
 
-function define(at: string | ImplCoord, spec: Spec): Implementation {
+function define<const P extends readonly Interface[], D extends Record<string, Selector> = {}>(at: string | ImplCoord, spec: Spec<P, D>): Implementation {
   const coord = String(at)
   const slash = coord.lastIndexOf('/')
   if (!COORD.test(coord) || slash < 0) throw new Error(`bad implementation coordinate ${coord}`)
@@ -61,11 +68,17 @@ function define(at: string | ImplCoord, spec: Spec): Implementation {
     dependencies: Object.fromEntries(Object.entries(spec.dependencies ?? {}).map(([role, s]) => [role, selectorData(s)])),
     ...(spec.config && { config: spec.config }),
     ...(spec.description !== undefined && { description: spec.description }),
-    async make(ctx, config) {
+    async make(base, config) {
+      const deps = Object.fromEntries(Object.keys(spec.dependencies ?? {}).map(role =>
+        [role, plain(() => base.one(selectorData(spec.dependencies![role]!)))]))
+      const ctx = Object.assign(Object.create(base), { deps }) as NanoContext<D>
+      const made = await spec.make(ctx, config)
+      if (!Array.isArray(made) && spec.provides.length !== 1) throw new Error(`${coord}: a plain object provides exactly one interface`)
+      const parts = Array.isArray(made) ? made : [provide(spec.provides[0]!, handlers(spec.provides[0]!, made as object))]
       const declared = new Set(spec.provides.map(i => i.coord))
       const given = new Set<string>()
       const out = new Map<string, Handler>()
-      for (const part of await spec.make(ctx, config)) {
+      for (const part of parts) {
         const ic = part.iface.coord
         if (!declared.has(ic)) throw new Error(`${coord}: ${ic} is not provided`)
         if (given.has(ic)) throw new Error(`${coord}: ${ic} is provided twice`)

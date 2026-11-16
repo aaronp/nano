@@ -36,20 +36,20 @@ Each has one responsibility and one file in `packages/nano/src`; each file opens
 |---|---|---|
 | `Coord` | typed, layered coordinates, each a frozen value whose `toString()` is the saved string: `Namespace` (an author's), `InterfaceCoord` and `ImplCoord` (namespace + name), `PortCoord` (interface + op), `PodCoord` (implementation + runtime + pod, the instance); `Coord.namespace`, `Coord.port`, `Coord.pod`, `Coord.parse(kind, s)`; `Interface.define` and `Implementation.define` take one or its string | `coord.ts` |
 | `Schema` | a TypeBox schema (`SchemaDef`, from `Schema.define`) with its blake3 `hashOf` (annotations stripped, `canonical`, `canonicalSchema`) and JSON codec; `isJson` refuses non-JSON schemas | `schema.ts` |
-| Op | an action (in, out) or an event (data out) (`Op`, `OpKind`, built with `Op.action` / `Op.event`); coord = hash of name + schema hashes; `fits` checks an event against an action | `op.ts` |
-| `Interface` | a coord (`ns/name`; the `COORD` rule) plus its ops (`Interface.define`); `port(i, op)` = `<interface>/<op name>`; `Client` is a typed client for one (actions only) | `iface.ts` |
+| Op | an action (in, out) or an event (data out) (`Op`, `OpKind`, built with `Op.action` / `Op.event`, each taking a `SchemaDef` or a bare TypeBox schema, defined under `<op>.in` / `<op>.out`); coord = hash of name + schema hashes; `fits` checks an event against an action | `op.ts` |
+| `Interface` | a coord (`ns/name`; the `COORD` rule) plus its ops (`Interface.define`); `port(i, op)` = `<interface>/<op name>`; `Client` is a typed client for one (actions only); `Interface.Type<typeof api>` is the plain TypeScript interface (each action `(input) => Promise<output>`, a `null` input no argument, a `null` output `void`; events are not methods) | `iface.ts` |
 | Result | `NanoResult` = `success` or a platform `Fail` (`failure`, `FailType`); never thrown; `isNanoResult` | `result.ts` |
-| `Implementation` | code providing whole interfaces (`Implementation.define`), with dependencies (selectors by role) and an optional config schema; its factory `make(ctx, config)` returns `Provided` (`provide(iface, handlers)`), each `Handler` taking only its input (`Handlers`) | `implementation.ts` |
+| `Implementation` | code providing whole interfaces (`Implementation.define`), with dependencies (selectors by role) and an optional config schema; its factory `make(ctx, config)` returns `Provided` (`provide(iface, handlers)`), each `Handler` taking only its input (`Handlers`), or, when it provides one interface, that interface's plain object (a value is `success`, a throw `threw`) | `implementation.ts` |
 | `Provider` | an author (GCP, AWS, a consultancy) supplying implementations, possibly of another's contract: its namespace, its implementations (`Provider.define`), metadata; each implementation's namespace is its provider's | `provider.ts` |
 | `Registry` | a pool of providers (`Registry.create`); O(1) lookups (`implementationsOf`); a plain-data `Manifest` | `registry.ts` |
 | `Selector` | which call subscriptions a call may use: an interface, or `SelectorData` narrowed by tags, implementation, provider, `runtime` (`Selector.of`, `selectorData`, `matches` over a `Target`) | `selector.ts` |
-| Context | what a pod's factory gets (`NanoContext`): `self`, `runtimes`, `one`, `all` (each a `Selection`: `ok`, `fail`, `pod`, `runtime`, `call` through that edge, `on` to hear the pod), `publish`, `addOnCloseListener` (each build has its own; runs on `restarted`, `removed`, `changed` or `closed`) | `context.ts` |
+| Context | what a pod's factory gets (`NanoContext`): `self`, `runtimes`, `deps` (one plain object per declared dependency role, typed from its interface: each call goes through `one(role)` then, a `Fail` thrown as an `Error` carrying it, `err.fail`), `one` (a `NanoResult` of a `Selection`: `not-found` or `ambiguous` unless exactly one edge matches), `all` (each a `Selection`: `pod`, `runtime`, `call` through that edge, `on` to hear the pod, typed by the op), `publish` (data typed by the op), `addOnCloseListener` (each build has its own; runs on `restarted`, `removed`, `changed` or `closed`) | `context.ts` |
 | `Pod` | a value `{ implementation, config?, eager, isolation? }` from `Pod.lazy(impl, { config, isolation })` / `Pod.eager(impl)` (`isolation`: `'host'` (absent) | `'sandbox'` | `'isolated-sandbox'`, host-owned, nano only shape-checks it); no state, methods or instance | `pod.ts` |
 | `Policy` | `isAllowed(src, dest, data)` per runtime, answering a `Verdict`; `Policies.allowAll()` | `policy.ts` |
 | `Pods` | which components exist: `Pods.create(podDeployment, { registry, tags? })` checks a `PodDeployment` (names, implementations, configs, at most 5000) and its tags by pod name into an immutable lookup, `names`, `get`, `select` (a scope over the same descriptions, keeping their tags), `deployment` | `pods.ts` |
 | `Runtime` | pods placed together and wired: `Runtime.create(id, runtimeDeployment, pods)` checks a `RuntimeDeployment` (pods placed, `Subscription`s, policy) over a `Pods` scope into an immutable `{ id, pods, deployment }` | `runtime.ts` |
 | `AppDeployment` | the whole system as data: pods, runtimes by id, tags, and the host's `modules` (where each provider's code is loaded from), `views` and the deployer's `layout` (a plain object; shape-checked, otherwise ignored, not in `deployment()`); `AppDeployment.assemble(d, registry)` checks it level by level into its `Runtime`s, strictly (D83) | `deployment.ts` |
-| `Application` | the one live thing: `Application.create(runtimes, { policies?, timeoutMs?, isolate? })` (`isolate(name, pod)` gives the host's stand-in, same coord, for a pod whose isolation isn't `host`; without it such a pod fails `invalid-input`) (at most 50, ids by the id rule, every runtime's pods from one `Pods`) gives six members, `call`, `apply`, `restart`, `deployment`, `listen` (an `AppEvent` stream), `close` (every instance closed; then calls are `not-found`, `apply`/`restart` refused) | `application/` |
+| `Application` | the one live thing: `Application.create(runtimes, { policies?, timeoutMs?, isolate? })` (`isolate(name, pod)` gives the host's stand-in, same coord, for a pod whose isolation isn't `host`; without it such a pod fails `invalid-input`) (at most 50, ids by the id rule, every runtime's pods from one `Pods`) gives seven members, `call`, `get` (`app.get(api, { runtime?, pod? })`: the plain object, `Interface.Type`, of the one pod providing `api`, resolved at each call; none or several throw an `Error` carrying the `Fail`), `apply`, `restart`, `deployment`, `listen` (an `AppEvent` stream), `close` (every instance closed; then calls are `not-found`, `apply`/`restart` refused) | `application/` |
 
 Inside `application/` (not exported from the package, one line each): `stream()` is the one stream and its ids;
 `instances(live)` holds at most one build per pod name and closes builds (each with its own close listeners, run in
@@ -63,6 +63,8 @@ implementation now and `placedIn(live, pod)` the runtimes it is placed in; `cont
 onClose)` is a pod's `NanoContext`, `onClose` adding a listener to that build; `diff(a, b)` is what `apply` changes: pods added, removed, changed, and runtimes rewired;
 `compose(runtimes)` is the application's deployment from its runtimes (the pods they place, in their `Pods`' order,
 and those pods' tags) and their registry.
+
+Inside `plain.ts` (not exported from the package): `handlers(i, obj)` lifts a plain object's methods into an interface's handlers, and `plain(resolve)` is a plain object over a client resolved at each call, a `Fail` thrown as an `Error` carrying it (what `ctx.deps` and `app.get` are made of).
 
 Inside `pods.ts` (not exported from the package): `Id` is the id rule for pod names and runtime ids, `shapeError` the
 first way a value breaks a level's shape, `originOf(pods)` where a `Pods` comes from: the registry it was checked
@@ -92,9 +94,8 @@ most 50). Inside `runtime.ts`: `isRuntime(r)` is whether `Runtime.create` made `
    the build. That is when the pod gets its context. A factory that throws, rejects or times out fails the call
    that needed it and caches nothing. State is whatever the factory closes over (D71).
 6. **Calls through edges.** `app.call(runtime, pod).op(input)` is a message from `'host'` in that runtime. A handler
-   reaches others through the `ctx` its factory closed over: `ctx.one(selector)` is a `Selection` of the single
-   matching call edge from the pod (a failed one, `not-found` or `ambiguous`, otherwise: its `call.op(x)` resolves
-   to that `Fail` and `on` does nothing), `ctx.all(selector)` every one, in deployment order (D86); both read the
+   reaches others through the `ctx` its factory closed over: `ctx.one(selector)` is the single matching call edge from the pod as `success(Selection)`, or the `Fail`
+   (`not-found` or `ambiguous`); `ctx.deps.role.op(x)` calls through `one(role)` and throws a `Fail` as an `Error`; `ctx.all(selector)` every one, in deployment order (D86); both read the
    deployment now, across every runtime the pod is placed in, and a selector's `runtime` narrows them. Each message
    travels in exactly one runtime, that of the edge it uses: policed (a throw, or no `Verdict`, denies, D82), input
    checked, run under the timeout, output checked, and recorded: `sent` (its `kind`, `correlation` the id of its
@@ -156,7 +157,7 @@ the reason, in `create` and `apply`; nothing half-runs. A document with a missin
 added to the registry (D83). A call subscription is checked against the caller's declared dependencies only when
 they name an interface (D87).
 
-**Call edges, pipes or `on`?** A call edge says what a pod's code may call (`ctx.one(DB).call.save(x)`), and is the
+**Call edges, pipes or `on`?** A call edge says what a pod's code may call (`ctx.deps.db.save(x)`), and is the
 swap point: `apply` re-points it and the code stays. A pipe is deployment data connecting an event or an action's
 results to an action's input, outside any component's code. `selection.on(op, fn)` is the same hearing made from code,
 for as long as its instance lives; it is in no deployment (D91, D92).

@@ -4,15 +4,15 @@
  * build this context belongs to; the `on` subscriptions this build made are dropped through it.
  *
  *   const ctx = contextFor(live, 'send', fn => …)
- *   ctx.one(KV).call.put('k')      // the one KV wired from send, in whichever runtime; sent in that runtime
- *   ctx.one(KV).on(KV.ops.put, fn) // hear its put results, in that runtime, until this build closes
+ *   ctx.one(KV)                    // success(the one KV wired from send, in whichever runtime), or not-found / ambiguous
+ *   kv.call.put('k'); kv.on(KV.ops.put, fn)   // sent in that runtime; hear its put results there until this build closes
  *   await ctx.publish(tick, 1)     // emitted: one message per pipe from send with that source, and to `on` subscribers
  */
 import type { NanoContext, Selection } from '../context.ts'
 import type { Client, Interface } from '../iface.ts'
 import { port } from '../iface.ts'
 import type { Op } from '../op.ts'
-import { failure, type Fail, type NanoResult } from '../result.ts'
+import { failure, success, type NanoResult } from '../result.ts'
 import { matches, selectorData, type Selector, type SelectorData } from '../selector.ts'
 import { client, emit } from './emit.ts'
 import { impl, placedIn, type Live, type On } from './messages.ts'
@@ -29,19 +29,16 @@ const dataOf = (s: unknown) => (typeof s === 'object' && s ? selectorData(s as S
 /** Whether `data` fits event `o`'s schema; unreadable data does not. */
 const fitsData = (o: Op, data: unknown) => { try { return !o.output || o.output.check(data) } catch { return false } }
 
-export function contextFor(live: Live, name: string, onClose: NanoContext['addOnCloseListener']): NanoContext {
+export function contextFor(live: Live, name: string, onClose: NanoContext['addOnCloseListener']): Omit<NanoContext, 'deps'> {
   /** This build's `on` subscriptions; undefined once it has closed. */
   let mine: Set<On> | undefined = new Set()
   onClose(() => { for (const o of mine!) live.ons.delete(o); mine = undefined })
-
-  const failed = <I extends Interface>(r: NanoResult<never>): Selection<I> =>
-    ({ ok: false, fail: (r as { fail: Fail }).fail, call: client(live, '', name, '', () => r) as Client<I>, on: () => () => {} })
 
   /** The call edge from `name` to `to` in `runtime`, read live: a call or delivery through it after `apply` removed it is not-found. */
   const selection = <I extends Interface>(runtime: string, to: string): Selection<I> => {
     const gone = () => live.now().runtimes[runtime]?.subscriptions.some(x => x.kind === 'call' && x.from === name && x.to === to)
       ? undefined : failure('not-found', `${name}->${to} is no longer in ${runtime}`)
-    return { ok: true, pod: to, runtime, call: client(live, runtime, name, to, gone) as Client<I>, on(o, fn) {
+    return { pod: to, runtime, call: client(live, runtime, name, to, gone) as Client<I>, on(o: Op, fn: (data: never) => void | Promise<void>) {
       const p = portOf(live, to, o)
       if (!p || !mine || gone()) { if (!p) live.trace.emit({ type: 'warning', reason: `${name}: ${o?.name} is not an op of ${to}` }); return () => {} }
       const sub: On = { runtime, from: to, port: p, to: name, gone, fn }
@@ -66,11 +63,11 @@ export function contextFor(live: Live, name: string, onClose: NanoContext['addOn
   return {
     self: name,
     get runtimes() { return placedIn(live, name).map(([id]) => id) },
-    one<I extends Interface>(s: I | SelectorData) {
+    one<I extends Interface>(s: I | SelectorData): NanoResult<Selection<I>> {
       const all = selections<I>(s), what = JSON.stringify(dataOf(s))
-      if (all.length === 0) return failed<I>(failure('not-found', `${name}: nothing wired matches ${what}`))
-      if (all.length > 1) return failed<I>(failure('ambiguous', `${name}: ${all.length} wired match ${what}`))
-      return all[0]!
+      if (all.length === 0) return failure('not-found', `${name}: nothing wired matches ${what}`)
+      if (all.length > 1) return failure('ambiguous', `${name}: ${all.length} wired match ${what}`)
+      return success(all[0]!)
     },
     all: selections,
     async publish(o, data) {

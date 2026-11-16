@@ -49,12 +49,13 @@ let slowOpen: (v?: unknown) => void = () => {}
 const slowLogger = Implementation.define('acme/slowlog', { provides: [Log], make: () => [provide(Log, { record: async s => { await new Promise(r => { slowOpen = r }); logged.push(s); return success(null) } })] })
 /** Domain-level app: its code saves through whichever Store its call edge points at. */
 const appImpl = Implementation.define('acme/app', { provides: [App], dependencies: { store: Store }, make: ctx => [provide(App, {
-  save: async s => ctx.one(Store).call.save(s),     // fluent: a failed selection's call resolves to its Fail
+  save: async s => { const st = ctx.one(Store); return st.ok ? st.value.call.save(s) : st },   // a failed selection is its Fail
 })] })
 /** Subscribes in code to its store's `saved` events. */
 let heard: string[] = []
 const watcher = Implementation.define('acme/watcher', { provides: [Log], dependencies: { store: Store }, make: ctx => {
-  ctx.one(Store).on(Store.ops.saved, d => { heard.push(d as string) })
+  const st = ctx.one(Store)
+  if (st.ok) st.value.on(Store.ops.saved, d => { heard.push(d) })
   return [provide(Log, { record: async () => success(null) })]
 } })
 
@@ -64,8 +65,9 @@ let checks = 0
 const checker = Implementation.define('acme/check', { provides: [Check], make: () => [provide(Check, { check: async s => (++checks >= 3 ? failure('invalid-input', 'enough') : success(s)) })] })
 /** Its code asks for a store it isn't wired to. */
 const lonely = Implementation.define('acme/lonely', { provides: [App], dependencies: { store: Store }, make: ctx => {
-  ctx.one(Store).on(Store.ops.saved, () => { heard.push('never') })
-  return [provide(App, { save: async s => ctx.one(Store).call.save(s) })]
+  const st = ctx.one(Store)
+  if (st.ok) st.value.on(Store.ops.saved, () => { heard.push('never') })
+  return [provide(App, { save: async s => { const st = ctx.one(Store); return st.ok ? st.value.call.save(s) : st } })]
 } })
 
 /** Counts the stores wired to it that are tagged primary. */
@@ -288,7 +290,7 @@ describe('subscriptions in code', () => {
   test('given a watcher subscribed in code, when the function on returned is called, then it stops hearing', async () => {
     let off = () => {}
     const quitter = Implementation.define('acme2/quitter', { provides: [Log], make: ctx => {
-      off = ctx.one(Store).on(Store.ops.saved, d => { heard.push(d as string) })
+      off = ok(ctx.one(Store)).on(Store.ops.saved, d => { heard.push(d) })
       return [provide(Log, { record: async () => success(null) })]
     } })
     const reg = registry(); reg.add(Provider.define('acme2', [quitter]))
@@ -321,7 +323,7 @@ describe('subscriptions in code', () => {
   })
   test('given a selection kept past the removal of its edge, when on is called and the edge is then restored, then it hears nothing', async () => {
     let kept: Selection<typeof Store> | undefined
-    const keeper = Implementation.define('acme2/keeper', { provides: [Log], make: ctx => { kept = ctx.one(Store); return [provide(Log, { record: async () => success(null) })] } })
+    const keeper = Implementation.define('acme2/keeper', { provides: [Log], make: ctx => { kept = ok(ctx.one(Store)); return [provide(Log, { record: async () => success(null) })] } })
     const reg = registry(); reg.add(Provider.define('acme2', [keeper]))
     const d: AppDeployment = { pods: { w: Pod.eager(keeper), db: Pod.lazy(store, { config: 'db' }) },
       runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }
@@ -336,7 +338,7 @@ describe('subscriptions in code', () => {
   })
   test('given a watcher whose on callback throws, when the store saves, then it is a failure on the stream and the caller still gets its result', async () => {
     const thrower = Implementation.define('acme2/thrower', { provides: [Log], make: ctx => {
-      ctx.one(Store).on(Store.ops.save, () => { throw new Error('boom') })
+      ok(ctx.one(Store)).on(Store.ops.save, () => { throw new Error('boom') })
       return [provide(Log, { record: async () => success(null) })]
     } })
     const reg = registry(); reg.add(Provider.define('acme2', [thrower]))
@@ -349,7 +351,7 @@ describe('subscriptions in code', () => {
   })
   test("given a store publishing data that breaks its event's schema, when it saves, then it is a failure on the stream and no pipe or on delivers it", async () => {
     const liar = Implementation.define('acme2/liar', { provides: [Store], make: ctx => [provide(Store, { save: async s => {
-      await ctx.publish(Store.ops.saved, 42)
+      await ctx.publish(Store.ops.saved, 42 as unknown as string)   // breaks the schema on purpose
       return success(s)
     } })] })
     const reg = registry(); reg.add(Provider.define('acme2', [liar]))
@@ -373,14 +375,13 @@ describe('selections and chains', () => {
     expect('cause' in e).toBe(false)
   })
   test('given a pod wired to two stores, when its code selects one, then it is ambiguous, and all gives both in deployment order', async () => {
-    let one: Selection<typeof Store> | undefined, all: Selection<typeof Store>[] = []
+    let one: NanoResult<Selection<typeof Store>> | undefined, all: Selection<typeof Store>[] = []
     const picker = Implementation.define('acme2/picker', { provides: [Log], make: ctx => { one = ctx.one(Store); all = ctx.all(Store); return [provide(Log, { record: async () => success(null) })] } })
     const reg = registry(); reg.add(Provider.define('acme2', [picker]))
     await create({ pods: { p: Pod.eager(picker), a: Pod.lazy(store, { config: 'a' }), b: Pod.lazy(store, { config: 'b' }) },
       runtimes: { r: { pods: ['p', 'a', 'b'], subscriptions: [{ kind: 'call', from: 'p', to: 'b' }, { kind: 'call', from: 'p', to: 'a' }] } } }, reg)
     expect(one).toMatchObject({ ok: false, fail: { type: 'ambiguous' } })
-    expect(await one!.call.save('x')).toMatchObject({ ok: false, fail: { type: 'ambiguous' } })
-    expect(all.map(s => [s.ok, s.pod, s.runtime])).toEqual([[true, 'b', 'r'], [true, 'a', 'r']])
+    expect(all.map(s => [s.pod, s.runtime])).toEqual([['b', 'r'], ['a', 'r']])
     expect(await all[1]!.call.save('x')).toEqual(success('a:x'))
   })
   test('given an event piped twice and heard by one on, when it is published, then all three deliveries are one chain: the first delivery\'s id, no cause', async () => {
@@ -395,7 +396,7 @@ describe('selections and chains', () => {
   })
   test("given an on subscription to an action's results, when the host calls it, then the on delivery is caused by that call, in its chain", async () => {
     const results = Implementation.define('acme2/results', { provides: [Log], make: ctx => {
-      ctx.one(Store).on(Store.ops.save, d => { heard.push(d as string) })
+      ok(ctx.one(Store)).on(Store.ops.save, d => { heard.push(d) })
       return [provide(Log, { record: async () => success(null) })]
     } })
     const reg = registry(); reg.add(Provider.define('acme2', [results]))
@@ -409,7 +410,7 @@ describe('selections and chains', () => {
   })
   test('given on with an op the selected pod lacks, when it subscribes, then there is one warning and fn is never called', async () => {
     const wrong = Implementation.define('acme2/wrong', { provides: [Log], make: ctx => {
-      ctx.one(Store).on(Log.ops.record, () => { heard.push('never') })
+      ok(ctx.one(Store)).on(Log.ops.record as never, () => { heard.push('never') })   // not an op of Store
       return [provide(Log, { record: async () => success(null) })]
     } })
     const reg = registry(); reg.add(Provider.define('acme2', [wrong]))
@@ -423,7 +424,7 @@ describe('selections and chains', () => {
   })
   test('given a selection kept past its build, when on is called after that build closed, then it is a no-op', async () => {
     let kept: Selection<typeof Store> | undefined
-    const keeper = Implementation.define('acme2/keeper', { provides: [Log], make: ctx => { kept ??= ctx.one(Store); return [provide(Log, { record: async () => success(null) })] } })
+    const keeper = Implementation.define('acme2/keeper', { provides: [Log], make: ctx => { kept ??= ok(ctx.one(Store)); return [provide(Log, { record: async () => success(null) })] } })
     const reg = registry(); reg.add(Provider.define('acme2', [keeper]))
     const { app, events } = await create({ pods: { w: Pod.eager(keeper), db: Pod.lazy(store, { config: 'db' }) },
       runtimes: { r: { pods: ['w', 'db'], subscriptions: [{ kind: 'call', from: 'w', to: 'db' }] } } }, reg)
@@ -436,7 +437,7 @@ describe('selections and chains', () => {
     off()
   })
   // Behaviour 14.
-  test('given a pod not wired to any store, when its code selects one, then call resolves to not-found and on does nothing', async () => {
+  test('given a pod not wired to any store, when its code selects one, then one is not-found: its call is not made and on is not reached', async () => {
     const { app, events } = await create({ pods: { l: Pod.eager(lonely), db: Pod.lazy(store, { config: 'db' }) }, runtimes: { r: { pods: ['l', 'db'], subscriptions: [] } } })
     expect(await app.call('r', 'l').save('x')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
     expect(await app.call('r', 'db').save('y')).toEqual(success('db:y'))   // db does emit saved
@@ -495,8 +496,8 @@ describe('nothing throws', () => {
     const seen: unknown[] = []
     const sloppy = Implementation.define('acme2/sloppy', { provides: [Log], make: async ctx => {
       const none = undefined as never
-      ctx.one(Store).on(none, () => { heard.push('never') })
-      await ctx.publish(none, 1)
+      ok(ctx.one(Store)).on(none, () => { heard.push('never') })
+      await ctx.publish(none, 1 as never)
       seen.push(ctx.one(none), ctx.all(none))
       return [provide(Log, { record: async () => success(null) })]
     } })

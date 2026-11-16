@@ -35,5 +35,18 @@ export type Client<I extends Interface> = {
   [K in keyof I['ops'] as I['ops'][K]['kind'] extends 'event' ? never : K]: (input: Data<I['ops'][K]['input']>) => Promise<NanoResult<Data<I['ops'][K]['output']>>>
 }
 
+type Ops<I extends Interface> = I['ops']
+type In<I extends Interface, K extends keyof Ops<I>> = Data<Ops<I>[K]['input']>
+type Out<I extends Interface, K extends keyof Ops<I>> = Data<Ops<I>[K]['output']>
+
 /** `Interface.define(coord, ops)`. */
 export const Interface = { define }
+
+export declare namespace Interface {
+  /** The plain object an interface's actions describe: an input that is only `null` is no argument, an output that is
+   *  only `null` is `void`. Events are not methods. */
+  type Type<I extends Interface> = {
+    [K in keyof Ops<I> as Ops<I>[K]['kind'] extends 'event' ? never : K]:
+      (...args: [In<I, K>] extends [null] ? [] : [input: In<I, K>]) => Promise<[Out<I, K>] extends [null] ? void : Out<I, K>>
+  }
+}

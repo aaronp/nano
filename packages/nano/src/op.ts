@@ -5,7 +5,7 @@
  *   fits(Op.event('tick', Num), Op.action('record', Num, Nothing))   // true
  */
 import type { TSchema } from 'typebox'
-import { canonical, hashOf, canonicalSchema, type SchemaDef } from './schema.ts'
+import { canonical, hashOf, canonicalSchema, Schema, type SchemaDef } from './schema.ts'
 
 export type OpKind = 'action' | 'event'
 
@@ -19,16 +19,21 @@ export type Op<I extends TSchema | undefined = TSchema | undefined, O extends TS
 }
 
 type Opts = { description?: string }
+/** A `SchemaDef`, or a bare TypeBox schema (defined under `<op>.in` / `<op>.out`). */
+type Given = SchemaDef | TSchema
+type Of<G> = G extends SchemaDef<infer S> ? S : G extends TSchema ? G : never
+const def = (g: Given, name: string): SchemaDef => ('hash' in g && 'check' in g ? g as SchemaDef : Schema.define(name, g as TSchema))
 
-function make<K extends OpKind>(name: string, kind: K, input: SchemaDef | undefined, output: SchemaDef, o?: Opts): Op<any, any, K> {
+function make<K extends OpKind>(name: string, kind: K, given: Given | undefined, out: Given, o?: Opts): Op<any, any, K> {
+  const input = given && def(given, `${name}.in`), output = def(out, `${name}.out`)
   const coord = hashOf(canonical({ name, input: input?.hash ?? null, output: output.hash }))
   return { name, kind, ...(input && { input }), output, coord, ...(o?.description !== undefined && { description: o.description }) }
 }
 
 export const Op = {
-  action: <I extends TSchema, O extends TSchema>(name: string, input: SchemaDef<I>, output: SchemaDef<O>, o?: Opts): Op<I, O, 'action'> =>
+  action: <I extends Given, O extends Given>(name: string, input: I, output: O, o?: Opts): Op<Of<I>, Of<O>, 'action'> =>
     make(name, 'action', input, output, o),
-  event: <O extends TSchema>(name: string, data: SchemaDef<O>, o?: Opts): Op<undefined, O, 'event'> => make(name, 'event', undefined, data, o),
+  event: <O extends Given>(name: string, data: O, o?: Opts): Op<undefined, Of<O>, 'event'> => make(name, 'event', undefined, data, o),
 }
 
 /** The source's data (an event's, or an action's result) is the target action's input, or the action takes anything. */

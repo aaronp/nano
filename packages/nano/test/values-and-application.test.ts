@@ -55,14 +55,15 @@ const kv = Implementation.define('acme/kv', { provides: [KV], make: () => {
 } })
 /** Sends by putting into whichever KV it is wired to; never names a runtime. */
 const sender = Implementation.define('acme/sender', { provides: [Send], dependencies: { store: KV }, make: ctx => [provide(Send, {
-  send: async msg => ctx.one(KV).call.put(msg),
+  send: async msg => { const s = ctx.one(KV); return s.ok ? s.value.call.put(msg) : s },
 })] })
 /** Falls back to a local note when no KV is wired. */
 const adaptive = Implementation.define('acme/adaptive', { provides: [Send], dependencies: { store: KV }, make: ctx => {
   const local: string[] = []
   return [provide(Send, { send: async msg => {
     if (ctx.all(KV).length === 0) { local.push(msg); return success(null) }
-    return ctx.one(KV).call.put(msg)
+    const s = ctx.one(KV)
+    return s.ok ? s.value.call.put(msg) : s
   } })]
 } })
 const ticker = Implementation.define('acme/ticker', { provides: [Ticks], make: () => [] })
@@ -75,14 +76,15 @@ const db = Implementation.define('acme/db', { provides: [DB], make: (_ctx, seed:
 /** Copies rows from config.from to config.to, naming runtimes only through config. */
 const migrate = Implementation.define('acme/migrate', { provides: [Run], dependencies: { db: DB }, make: (ctx, cfg) => [provide(Run, { run: async () => {
   const from = ctx.one(Selector.of(DB, { runtime: cfg.from })), to = ctx.one(Selector.of(DB, { runtime: cfg.to }))
-  if (!to.ok) return { ok: false, fail: to.fail! }
-  const rows = await from.call.all(null)
+  if (!to.ok) return to
+  if (!from.ok) return from
+  const rows = await from.value.call.all(null)
   if (!rows.ok) return rows
-  const put = await to.call.insert(rows.value)
+  const put = await to.value.call.insert(rows.value)
   return put.ok ? success(rows.value.length) : put
 } })] })
 const careless = Implementation.define('acme/careless', { provides: [Run], dependencies: { db: DB }, make: ctx => [provide(Run, { run: async () => {
-  const d = ctx.one(DB); return d.ok ? success(0) : { ok: false, fail: d.fail! }
+  const d = ctx.one(DB); return d.ok ? success(0) : d
 } })] })
 /** Each instance's first call waits until the test opens every gate. */
 let gates: (() => void)[] = []
@@ -183,7 +185,7 @@ describe('building', () => {
 describe('placing', () => {
   test('given two KVs, one tagged primary, when a pod selects the primary KV, then it reaches that one, straight after assemble and create', async () => {
     const picker = Implementation.define('acme5/picker', { provides: [Send], dependencies: { store: KV }, make: ctx => [provide(Send, {
-      send: async msg => { return ctx.one(Selector.of(KV, { tags: ['primary'] })).call.put(msg) },
+      send: async msg => { const s = ctx.one(Selector.of(KV, { tags: ['primary'] })); return s.ok ? s.value.call.put(msg) : s },
     })] })
     const reg = registry(); reg.add(Provider.define('acme5', [picker]))
     const calls = [{ kind: 'call', from: 'p', to: 'k1' }, { kind: 'call', from: 'p', to: 'k2' }] as const
@@ -323,7 +325,7 @@ describe('changing, at the edges', () => {
     let kept: Record<string, (i: unknown) => Promise<unknown>> | undefined
     const holder = Implementation.define('acme3/holder', { provides: [Send], dependencies: { store: KV }, make: ctx => {
       return [provide(Send, { send: async msg => {
-        if (!kept) { const s = ctx.one(KV); if (!s.ok) return { ok: false, fail: s.fail! }; kept = s.call as never }
+        if (!kept) { const s = ctx.one(KV); if (!s.ok) return s; kept = s.value.call as never }
         return kept!.put(msg) as never
       } })]
     } })
