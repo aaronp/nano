@@ -23,14 +23,18 @@ is a parallel mechanism, so it goes.
 An **emission** is what a source produces: for an action, `{ input, output }` of each successful call; for an event,
 `{ output }` (my call: an event has no input). The low level never drops data.
 
-`deliver(runtime, source, sink)` takes an emission from a source (a pod instance's port) to a sink in one runtime,
-through `send`: policed and traced. A sink is one of:
+The primitive is today's `send` (`application/messages.ts`), not a new function. It takes an emission from a source (a pod
+instance's port) to a sink in one runtime, and it is policed and traced. Pipes already use it (`act` → `send`), and so do
+`on` listeners (`send` with `work`). A sink is one of:
 - **a pod's action**, for a pipe Connection. The Connection passes the emission's `output` as the action's input,
   so `fits` and `nano.json` don't change (my call);
 - **a listener run inside a pod** (or the host), for a programmatic subscription.
 
-The policy is asked once, when a Connection or listener connects, and again only if `apply` changes the policy. A
-listener that is now denied is dropped, and the stream says `denied` (my call).
+Two checks, kept apart. **Each message** is still policed by `send` as today, which is the authorisation point.
+**Subscribing** (`isAllowed(owner, pod, 'subscribe')`) is asked once, when a listener connects, and again only if
+`apply` changes the policy. A listener that is now denied is dropped, and the stream says `denied` (my call). The
+live record is today's `live.ons` (`On`, which already holds a build's listeners and drops them at close). Pipes stay
+read from the deployment, so no new Connection type is needed in this step.
 
 ## The four use cases, one test file each (`packages/nano/test/use-cases/`)
 
@@ -41,11 +45,13 @@ listener that is now denied is dropped, and the stream says `denied` (my call).
    `items: Op.event(Todo)`, so `Interface.Type` gives `items(): AsyncIterable<Todo>`. The implementation builds it
    from `ctx.one(KeyValueStoreDef.api)` and listens to `put`, getting `{ input, output }`. Nano runs the yielded values
    as the pod's events (hot). A consumer's `for await` sees items added after it starts, and `break` ends the listener.
-3. **`lifecycle.test.ts`: a pod hears components mounted and unmounted in its runtime.** When `apply` adds a pod to
-   the runtime, a listening pod hears `mounted`; when it removes one, `unmounted`. **This needs new API, see below.**
-4. **`observability.test.ts`: the runtime's own stream.** `app.runtime(id).listen(fn)` sees every message in that
-   runtime as `sent` (from, to, port), `delivered` and `denied`, plus its lifecycle. It sees nothing from another
-   runtime. `app.listen` stays the operator's stream across every runtime.
+3. **`lifecycle.test.ts`: lifecycle in a runtime.** These already exist as `AppEvent`s. Placement is `applied`
+   (`added`/`removed`), and instances are `built`/`closed`/`restarted`. No `mounted`/`unmounted` names and no new
+   event type: the test shows them on the runtime's stream (4), and a pod hearing them uses that same stream.
+4. **`observability.test.ts`: the runtime's own stream.** `app.runtime(id).listen(fn)` is a **filter over the one
+   existing stream** (`trace`), not a second stream. It keeps events whose pod is placed in `id`, `sent` with that
+   `runtime`, and `delivered`/`denied` whose `id` was sent there. It sees nothing from another runtime. `app.listen`
+   stays the operator's stream.
 
 The todo example then uses 1 and 2 (`frontend` reads `items()` and `backend` holds the store), and its own tests
 stay as the end-to-end proof.
@@ -53,7 +59,8 @@ stay as the end-to-end proof.
 ## Also in this step
 
 - `Entry` is renamed `RuntimeView`.
-- `Hear` is deleted: the host's `subscribe` registers a listener sink with the host as its owner.
+- `Hear` is deleted: the host's `subscribe` becomes an `On` with the host as its owner, sent through `send`.
+- `sent.kind` already has `'on'`, so listener deliveries show up on the stream without changes.
 - **Whoever holds `app` is the operator:** components get a `RuntimeView` or `deps`, never `app`. Docs only.
 
 ## New public names (for the user's approval)
@@ -61,9 +68,10 @@ stay as the end-to-end proof.
 - `RuntimeView` (renaming `Entry`) and `RuntimeView.listen`.
 - `Interface.Type` maps an event op to `() => AsyncIterable<T>`; a plain `make` source method that nano publishes.
 - `selection.on(op)` with no callback returns an `AsyncIterable` (the programmatic listener as an iterable).
-- **Lifecycle for pods (use case 3):** today a pod can only hear its own close (`ctx.addOnCloseListener`). It needs a
-  way to hear other pods `mounted`/`unmounted` in its runtime. My proposal is `ctx.onLifecycle(fn)`, given
-  `{ type: 'mounted' | 'unmounted', pod, implementation }` for its runtime. The name and shape are yours to decide.
+- **A pod's view of its runtime's stream (use case 3):** today a pod can only hear its own close
+  (`ctx.addOnCloseListener`). Rather than a new `onLifecycle`, I propose `ctx.listen(fn)`: the same filter as
+  `RuntimeView.listen`, for the runtimes the pod is placed in. Whether pods should see traffic, or lifecycle only, is
+  yours to decide.
 - Emission subscribers get `{ input, output }` (a change: today `on` gets the output alone).
 
 ## Not in this step
