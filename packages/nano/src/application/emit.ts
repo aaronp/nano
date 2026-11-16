@@ -25,15 +25,16 @@ const fly = <T>(live: Live, p: Promise<T>): Promise<T> => {
 async function act(live: Live, runtime: string, from: string, to: string, p: string, input: unknown, kind: 'call' | 'pipe', chain: Chain = {}) {
   const id = chain.id ?? live.trace.id(), correlation = chain.correlation ?? id
   const r = await send(live, runtime, from, to, p, input, { ...chain, kind, id, correlation })
-  if (r.ok) void emit(live, to, p, { input, output: r.value }, { correlation, cause: id })
+  if (r.ok) void emit(live, to, p, { input, output: r.value }, { correlation, cause: id }, runtime)
   return r
 }
 
 /**
  * `from`'s emission at port `port`. With no `chain` (a published event) it starts one: the first delivery's id is the
- * correlation of every delivery, none with a cause. Resolves once the pipe deliveries settle, not the `on` ones.
+ * correlation of every delivery, none with a cause. An action's emission (`travelled`: the runtime its call went in)
+ * reaches only the `On`s in that runtime. Resolves once the pipe deliveries settle, not the `on` ones.
  */
-export function emit(live: Live, from: string, port: string, e: Parameters<On['fn']>[0], chain?: Chain): Promise<unknown> {
+export function emit(live: Live, from: string, port: string, e: Parameters<On['fn']>[0], chain?: Chain, travelled?: string): Promise<unknown> {
   if (live.closed()) return Promise.resolve()
   let first: string | undefined
   const link = (): Chain => chain ?? (first ? { correlation: first } : { id: (first = live.trace.id()), correlation: first })
@@ -41,7 +42,7 @@ export function emit(live: Live, from: string, port: string, e: Parameters<On['f
     r.subscriptions.flatMap(s => s.kind === 'pipe' && s.from === from && s.source === port
       ? [fly(live, act(live, runtime, from, s.to, s.target, e.output, 'pipe', link()))] : []))
   for (const o of [...live.ons]) {
-    if (o.from !== from || o.port !== port) continue
+    if (o.from !== from || o.port !== port || (travelled !== undefined && o.runtime !== travelled)) continue
     const work = async () => { const r = await attempt(live, o.to, `${o.to} hearing ${port}`, () => o.fn(e)); return r.ok ? success(undefined) : r }
     fly(live, send(live, o.runtime, from, o.to, port, e.output, { kind: 'on', ...link(), work }))
   }

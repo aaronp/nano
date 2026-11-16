@@ -83,16 +83,18 @@ export function entry(live: Live, id?: string): Entry {
   }
   /** The host's `On` to the one pod providing `op` in this runtime; asked 'subscribe' once, now. */
   const subscribe: Entry['subscribe'] = (op, fn) => {
-    const r = at(), runtime = r.ok ? r.value : ''
-    if (!r.ok) thrown(r.fail)()
+    const r = at()
+    if (!r.ok) return thrown(r.fail)()
+    const runtime = r.value
     const api = (live.now().runtimes[runtime]?.pods ?? []).flatMap(p => impl(live, p)?.provides ?? []).find(i => i.byCoord.has(op.coord))
-    const p = api ? placement(live, runtime, api, {}) : miss('not-found', `no pod provides ${op.coord} in ${runtime}`)
-    if (!p.ok) thrown(p.fail)()
-    const from = p.ok ? p.value.pod : ''
+    if (!api) return thrown(miss('not-found', `no pod provides ${op.coord} in ${runtime}`).fail)()
+    const p = placement(live, runtime, api, {})
+    if (!p.ok) return thrown(p.fail)()
+    const from = p.value.pod
     const why = refusal(live, runtime, 'host', from, 'subscribe')
     if (why !== undefined) { live.trace.emit({ type: 'denied', id: live.trace.id(), reason: why }); return () => {} }
     const gone = () => !live.now().runtimes[runtime]?.pods.includes(from)
-    const h: On = { runtime, from, port: port(api!, op), to: 'host', gone, fn: fn as On['fn'] }
+    const h: On = { runtime, from, port: port(api, op), to: 'host', gone, fn: fn as On['fn'] }
     live.ons.add(h)
     return () => { live.ons.delete(h) }
   }

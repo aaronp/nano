@@ -78,3 +78,14 @@ test('a denied subscribe is asked once, at connect: no-op unsubscribe, one denie
   expect(events.filter(e => e.type === 'denied')).toHaveLength(1)
   expect(seen).toEqual([])
 })
+
+test('a host subscriber hears only calls made in its own runtime', async () => {
+  const app = await open({ pods: { store: { implementation: 'acme/kv', eager: false } },
+    runtimes: { frontend: { pods: ['store'], subscriptions: [] }, backend: { pods: ['store'], subscriptions: [] } } })
+  const heard: unknown[] = []
+  app.runtime('frontend').subscribe(KV.ops.put, ({ input }) => { heard.push(input) })
+  await app.runtime('backend').call('store').put({ key: 'back', value: 'v' })
+  await app.runtime('frontend').call('store').put({ key: 'front', value: 'v' })
+  await Bun.sleep(0)
+  expect(heard).toEqual([{ key: 'front', value: 'v' }])
+})
