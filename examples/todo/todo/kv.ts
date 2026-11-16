@@ -4,13 +4,14 @@
  *
  *   const todos = todoList(inMemory()); const t = await todos.add('milk')
  */
+import { Implementation } from '@pritzlaff/nano-core'
 import { KeyValueStoreDef } from '../kv/contract.ts'
 import { TodoListDef } from './contract.ts'
 
 type Todo = TodoListDef.Todo
 const at = (id: string) => ['todos', id]
 
-export function todoList(store: KeyValueStoreDef.KeyValueStore, newId: () => string = () => crypto.randomUUID()): TodoListDef.TodoList {
+export function todoList(store: KeyValueStoreDef.KeyValueStore, newId: () => string = () => crypto.randomUUID()): Omit<TodoListDef.TodoList, 'items'> {
   return {
     async add(title) { const t = { id: newId(), title, done: false }; await store.put({ key: at(t.id), value: t }); return t },
     // A cast: the store holds Json, and only this list writes under ['todos'], always a Todo.
@@ -30,9 +31,19 @@ export function todoList(store: KeyValueStoreDef.KeyValueStore, newId: () => str
   }
 }
 
-const todos = TodoListDef.api.impl(TodoListDef.ns.implementationId('kv'))
-  .description('Todos kept in whichever KeyValueStore its call edge reaches.')
-  .needs({ store: KeyValueStoreDef.api })
-  .make(({ deps }) => todoList(deps.store))
+// `Implementation.define`, not the `api.impl(...)` builder: the builder returns provided parts, and only a plain
+// object's event methods (`items`) run as sources.
+const todos = Implementation.define(TodoListDef.ns.implementationId('kv'), {
+  provides: [TodoListDef.api],
+  dependencies: { store: KeyValueStoreDef.api },
+  description: 'Todos kept in whichever KeyValueStore its call edge reaches.',
+  make: ctx => ({
+    ...todoList(ctx.deps.store),
+    async *items() {
+      const s = ctx.one(KeyValueStoreDef.api)
+      if (s.ok) for await (const { input } of s.value.on(KeyValueStoreDef.api.ops.put)) if (input.key[0] === 'todos') yield input.value as Todo
+    },
+  }),
+})
 
 export default TodoListDef.ns.provider([todos])

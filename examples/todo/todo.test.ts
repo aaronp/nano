@@ -45,6 +45,17 @@ test('2. the runtime: the stream shows every todos → store call with its timin
   expect(typeof (done as { ms: number }).ms).toBe('number')
 })
 
+test('2. the runtime: the frontend iterates items() as todos are added', async () => {
+  const todos = (await open()).runtime('frontend').get(TodoListDef.api)
+  const it = todos.items()[Symbol.asyncIterator]()
+  await todos.add('before')   // the pod builds here; not yet iterated, so unseen
+  const first = it.next()
+  await Bun.sleep(0)
+  await todos.add('milk')
+  expect(await first).toMatchObject({ done: false, value: { title: 'milk', done: false } })
+  await it.return!()
+})
+
 test('2. the runtime: apply swaps the store for another implementation and the next call reaches it', async () => {
   const app = await open()
   const todos = app.runtime('frontend').get(TodoListDef.api)

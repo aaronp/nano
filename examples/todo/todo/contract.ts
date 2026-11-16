@@ -22,6 +22,8 @@ export namespace TodoListDef {
     update: Op.action(Change, Type.Union([Todo, Type.Null()])),
     /** Whether there was one to remove. */
     remove: Op.action(Type.String(), Type.Boolean()),
+    /** Each todo as it is saved to the store, added or changed. */
+    items: Op.event(Todo),
   })
   export type TodoList = Interface.Type<typeof api>
 }

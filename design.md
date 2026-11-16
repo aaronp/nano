@@ -93,6 +93,7 @@ most 50). Inside `runtime.ts`: `isRuntime(r)` is whether `Runtime.create` made `
 5. **Mount.** One instance per pod name, made by the factory when first needed, once: concurrent first calls share
    the build. That is when the pod gets its context. A factory that throws, rejects or times out fails the call
    that needed it and caches nothing. State is whatever the factory closes over (D71).
+   Whoever holds `app` is the operator; components get a `RuntimeView` or `deps`, never `app`.
 6. **Calls through edges.** `app.call(runtime, pod).op(input)` is a message from `'host'` in that runtime. A handler
    reaches others through the `ctx` its factory closed over: `ctx.one(selector)` is the single matching call edge from the pod as `success(Selection)`, or the `Fail`
    (`not-found` or `not-unique`); `ctx.deps.role.op(x)` calls through `one(role)` and throws a `Fail` as an `Error`; `ctx.all(selector)` every one, in deployment order (D86); both read the
