@@ -125,6 +125,16 @@ most 50). Inside `runtime.ts`: `isRuntime(r)` is whether `Runtime.create` made `
     `AppDeployment.assemble` carried in); saving is its JSON, and `AppDeployment.assemble` + `Application.create` on it gives an equivalent
     application (D74).
 
+## Views and layout (hosts, nano-ui)
+
+Outside nano-core, a convention every host shares. **A pod has at most one view**: its implementation's, named by the
+provider module's `views` export (implementation coordinate → custom-element tag), or the deployment's `views` override
+for that pod. Two displays of the same data are two pods joined by a subscription. **The layout** lives in
+`AppDeployment.layout`: `slots` (`LayoutSlot`: `{ id, runtime, pod }`, the pods on the page) and optional `geometry`
+(`LayoutBox` per slot id: `{ x, y, w, h }`, fractions of the page), typed as `LayoutData` in nano-ui
+(`packages/ui/src/layout.ts`); each engine keeps its own state beside them (`layout.workspace` for the workspace's dock).
+A pod not in `slots` runs unseen. See `examples/todo/side-by-side.json`.
+
 ## FAQ
 
 **Values vs live?** `Pod`, `AppDeployment`, `Subscription`, `Selector`, `Policy`, `Registry` and the rest are plain
