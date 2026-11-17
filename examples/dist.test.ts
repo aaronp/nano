@@ -1,4 +1,4 @@
-/** The build: each example's dist/<name>/ holds its own module files and a nano.json that loads and runs. */
+/** The build: each example's dist/<name>/ holds its own module files (the shared kv in dist/kv/) and a nano.json that loads and runs. */
 import { beforeAll, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -9,11 +9,11 @@ import { TodoListDef } from './todo/todo/contract.ts'
 const dist = join(import.meta.dir, 'dist')
 beforeAll(() => { if (!Bun.spawnSync(['bun', 'scripts/build.ts'], { cwd: import.meta.dir }).success) throw new Error('build failed') })
 
-test('each built nano.json names only module files in its own folder, and they exist', async () => {
+test('each built nano.json names module files in its own folder or the shared kv, and they exist', async () => {
   for (const name of ['todo', 'chat', 'auth']) {
     const { modules } = await Bun.file(join(dist, name, 'nano.json')).json() as { modules: Record<string, string> }
     for (const file of Object.values(modules)) {
-      expect(file).toMatch(/^\.\/[^/]+\.js$/)
+      expect(file).toMatch(/^(\.\/[^/]+|\.\.\/kv\/example\.kv)\.js$/)
       expect(existsSync(join(dist, name, file))).toBe(true)
     }
   }

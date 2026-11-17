@@ -48,7 +48,7 @@ async function ceremony(purpose: string, run: (c: CredentialsContainer) => Promi
 /** Example-only: the view's Register button, a new passkey (no modal: the click is the user's). */
 export const register = (rpName = 'nano examples') => ceremony('register', c => c.create({ publicKey: {
   challenge: challenge(), rp: { name: rpName }, user: { id: challenge(), name: 'nano', displayName: 'nano' },
-  pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }], authenticatorSelection: { userVerification: 'preferred' },
+  pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }], authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },   // discoverable: Passkey's get names no credential
 } }))
 
 const passkey = AuthDef.api.impl(AuthDef.ns.implementationId('passkey'))

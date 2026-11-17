@@ -44,7 +44,7 @@ test('the gateway: chat\'s calls travel in backend; chat\'s own stream shows onl
   app.runtime('example.chat.backend').listen(e => { const l = line(e); if (l) back.push(l) })
   app.runtime('example.chat.room').listen(e => { const l = line(e); if (l) front.push(l) })
   await app.runtime('example.chat.room').get(ChatDef.api, { pod: 'alice' }).say('hello')
-  expect(back).toEqual(['alice→messaging', 'messaging→store'])
+  expect(back).toEqual(['alice→messaging', 'messaging→chatStore'])
   expect(front).toEqual(['host→alice'])
 })
 
@@ -54,7 +54,7 @@ test('nothing in chat can reach the store: not by resolving, and not by an edge 
   const d = chatDeployment(registry)
   d.pods.mallory = { implementation: 'example.messaging/kv', eager: false }   // a messaging pod in chat, wired straight to the store
   d.runtimes['example.chat.room']!.pods.push('mallory')
-  d.runtimes['example.chat.backend']!.subscriptions.push({ kind: 'call', from: 'mallory', to: 'store' })
+  d.runtimes['example.chat.backend']!.subscriptions.push({ kind: 'call', from: 'mallory', to: 'chatStore' })
   must(await app.apply(d))
   await expect(app.runtime('example.chat.room').get(MessagingDef.api).post({ room: 'general', from: 'mallory', text: 'x' }))
     .rejects.toMatchObject({ fail: { type: 'denied' } })
@@ -70,7 +70,7 @@ test('swapping the store behind the gateway: the participants don\'t change, and
   const app = await open(), alice = app.runtime('example.chat.room').get(ChatDef.api, { pod: 'alice' })
   await alice.say('before')
   const next = app.deployment()
-  next.pods.store = { implementation: String(kvImpls.backup), eager: false }
+  next.pods.chatStore = { implementation: String(kvImpls.backup), eager: false }
   must(await app.apply(next))
   await alice.say('after')
   expect((await alice.transcript()).map(m => m.text)).toEqual(['after'])   // a fresh store: only what came after

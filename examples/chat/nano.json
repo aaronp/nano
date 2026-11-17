@@ -1,6 +1,6 @@
 {
   "pods": {
-    "store": {
+    "chatStore": {
       "implementation": "example.kv/memory",
       "eager": false
     },
@@ -20,14 +20,14 @@
   "runtimes": {
     "example.chat.backend": {
       "pods": [
-        "store",
+        "chatStore",
         "messaging"
       ],
       "subscriptions": [
         {
           "kind": "call",
           "from": "messaging",
-          "to": "store"
+          "to": "chatStore"
         },
         {
           "kind": "call",

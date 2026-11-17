@@ -3,7 +3,7 @@ import { expect, test } from 'bun:test'
 import { Application, AppDeployment, Registry, success, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider from '@pritzlaff/nano-ui'
 import { AuthDef } from './contract.ts'
-import auth, { setEnv } from './passkey.ts'
+import auth, { register, setEnv } from './passkey.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const settle = () => new Promise(r => setTimeout(r, 20))
@@ -75,4 +75,11 @@ test('no result carries more than ok, purpose, at, credentialId, reason', async 
     results.push(await (await open()).auth.authenticate('p'))
   }
   for (const r of results) for (const k of Object.keys(r)) expect(KEYS).toContain(k)
+})
+
+test('Register makes a discoverable credential, since Passkey asks for none by id', async () => {
+  let options: CredentialCreationOptions | undefined
+  setEnv({ sandboxed: false, confirm: async () => true, credentials: { create: async (o: CredentialCreationOptions) => { options = o; return { rawId: new Uint8Array([7]).buffer } } } as unknown as CredentialsContainer })
+  expect(await register()).toMatchObject({ ok: true, credentialId: 'Bw' })
+  expect(options?.publicKey?.authenticatorSelection?.residentKey).toBe('required')
 })
