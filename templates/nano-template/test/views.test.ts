@@ -30,6 +30,18 @@ describe('the views', () => {
     expect(Number(el.shadowRoot!.querySelector('.badge')!.textContent)).toBe(stopped)
   })
 
+  test('<nano-timer> counts its own ticks with no pipe from its pod, and ends its subscription when removed', async () => {
+    const { app, registry } = await open(true)
+    const el = await mount('nano-timer', { app, registry, runtime: 'main', pod: 'timer' })
+    click(el, 'Start')
+    await sleep(60)
+    await el.updateComplete
+    expect(Number(el.shadowRoot!.querySelector('.badge')!.textContent)).toBeGreaterThan(1)
+    const it = (el as unknown as { iter?: AsyncIterator<unknown> }).iter!
+    el.remove()
+    expect(await it.next()).toEqual({ done: true, value: undefined })
+  })
+
   test('<nano-picker> renders the kit select, whose change picks', async () => {
     const { app, registry } = await open()
     const el = await mount('nano-picker', { app, registry, runtime: 'main', pod: 'picker' })

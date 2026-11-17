@@ -1,5 +1,5 @@
-// The base of the template's views: a custom element over one pod, with `target`; it reaches the pod only by
-// `target.app.call` and `target.app.listen`. `hear` sees every application event while connected.
+// The base of the template's views: a custom element over one pod, with `target`; it reaches the pod through
+// `target.app` (`call`, `listen`, or a runtime's typed client). `hear` sees every application event while connected.
 import { LitElement, html } from 'lit'
 import type { AppEvent } from '@pritzlaff/nano-core'
 import { base, kit } from '@pritzlaff/nano-elements'
