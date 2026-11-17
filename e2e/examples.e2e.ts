@@ -16,13 +16,14 @@ async function start(page: Page) {
   await expect(dock(page).locator('nano-explorer')).toBeVisible()
 }
 
-/** File › Open…, the URL field, Fetch, Import. */
+/** File › Open…, the URL field, Fetch, Trusted (the examples' views run in this page), Import. */
 async function open(page: Page, url: string) {
   await page.getByRole('button', { name: 'File', exact: true }).click()
   await page.getByRole('button', { name: /^Open/ }).click()
   const d = page.getByRole('dialog', { name: 'Import components' })
   await d.getByLabel('nano.json URL').fill(url)
   await d.getByRole('button', { name: 'Fetch' }).click()
+  await d.getByRole('radio', { name: /^Trusted/ }).check()
   await d.getByRole('button', { name: 'Import', exact: true }).click()
   await expect(d).toHaveCount(0)
 }
@@ -101,6 +102,7 @@ test('a built example opens from a local file when its modules are absolute', as
   await page.getByRole('button', { name: /^Open/ }).click()
   const d = page.getByRole('dialog', { name: 'Import components' })
   await d.getByLabel('nano.json file').setInputFiles(join(out, 'todo/nano.json'))
+  await d.getByRole('radio', { name: /^Trusted/ }).check()
   await d.getByRole('button', { name: 'Import', exact: true }).click()
   await expect(d).toHaveCount(0)
   const list = dock(page).locator('todo-list').first()
