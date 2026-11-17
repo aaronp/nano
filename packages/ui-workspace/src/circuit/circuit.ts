@@ -1,11 +1,10 @@
-// <c-circuit>: the app as a tilted stack of page layers and a side area of systems. Read-only: it fetches the Application's
-// systems, kinds, screens and placements through ops, rebuilds on its `changed`, and holds the view (focus, zoom, pan).
+// <c-circuit>: the app as a tilted stack of page layers and a side area of systems. Read-only: it reads the host's
+// deployment and registry and the pages' placements, rebuilds on an `applied`, and holds the view (focus, zoom, pan).
 import { LitElement, css } from 'lit'
-import { Ops, type Op, type Runtime } from '@pritzlaff/nano-core'
-import { ApplicationOps as P } from '@pritzlaff/nano-app'
+import type { Host } from '../host.ts'
 import { HIDE_DIST, LIFT_ON, MARGIN, ZOOM_MAX, ZOOM_MIN } from './constants'
 import { frameId, layout, posKey, type Layout, type Rect } from './layout'
-import { buildCircuit } from './model'
+import { buildCircuit, type Placement, type Screen } from './model'
 import { renderPills } from './render-pills'
 import { renderStage } from './render-stage'
 import type { Circuit as Model } from './types'
@@ -19,7 +18,7 @@ const clamp = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z))
 const none: Model = { layers: [], side: [], cables: [] }
 
 export class Circuit extends LitElement {
-  static properties = { runtime: { attribute: false }, application: {} }
+  static properties = { host: { attribute: false }, application: {} }
   static styles = css`
     :host { display: block; height: 100%; min-height: 360px; color: #E6EDF3; font: 12px system-ui, sans-serif }
     .pills { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px; background: #0B0E12 }
@@ -61,9 +60,13 @@ export class Circuit extends LitElement {
     .pad:focus-visible, .pill:focus-visible, .tab:focus-visible, .stage:focus-visible { outline: 2px solid #4CC2FF; outline-offset: 2px }
     .minimap { position: absolute; right: 12px; bottom: 12px; width: 176px; height: 108px; background: #0B0E12cc; border: 1px solid #2A323D; border-radius: 6px }
     .mm-layer { fill: #1E252F } .mm-layer[data-focus="true"] { fill: #2c5a73 } .mm-side { fill: #2A323D } .mm-view { fill: none; stroke: #4CC2FF; stroke-width: 12 }`
-  declare runtime?: Runtime
-  /** The instance the Application lives in. */
+  /** The page's host: its app, registry and deployment. */
+  declare host?: Host
+  /** The host's own pod, never drawn. */
   declare application: string
+  /** The pages, and the pods their docks show (the page sets these; none: one page, every pod on the side). */
+  screens: () => Screen[] = () => []
+  placements: () => Placement[] = () => []
   s: State = { focus: null, zoom: 1, panX: 0, panY: 0, sel: null, lift: 0, hidden: {} }
   model: Model = none
   geo: Layout = layout(none)
@@ -77,7 +80,7 @@ export class Circuit extends LitElement {
 
   constructor() {
     super()
-    this.application = 'application'
+    this.application = 'ui'
     this.addEventListener('keydown', e => this.key(e))
   }
   /** The focused screen id. (Not `focus`: that is HTMLElement.focus().) */
@@ -86,13 +89,13 @@ export class Circuit extends LitElement {
 
   connectedCallback() { super.connectedCallback(); if (this.hasUpdated) this.#attach() }
   disconnectedCallback() { super.disconnectedCallback(); this.#detach() }
-  willUpdate(changed: Map<string, unknown>) { if (changed.has('runtime')) { this.#detach(); this.#attach() } }
+  willUpdate(changed: Map<string, unknown>) { if (changed.has('host')) { this.#detach(); this.#attach() } }
   render() { return [renderPills(this), renderStage(this)] }
 
   #attach() {
-    const rt = this.runtime
-    if (!rt || !this.isConnected || this.#off.length) return
-    this.#off = [rt.listen(t => { if (t.kind === 'publish' && t.from.instance === this.application && t.op === Ops.key(P.changed)) this.schedule() })]
+    const h = this.host
+    if (!h || !this.isConnected || this.#off.length) return
+    this.#off = [h.app.listen(e => { if (e.type === 'applied') this.schedule() })]
     this.schedule()
   }
   #detach() { this.#off.forEach(f => f()); this.#off = [] }
@@ -100,17 +103,12 @@ export class Circuit extends LitElement {
   schedule() { if (!this.#pending) { this.#pending = true; queueMicrotask(() => { this.#pending = false; void this.load() }) } }
 
   async load() {
-    const rt = this.runtime
-    if (!rt) return
-    const ask = async <A>(op: Op, arg: unknown): Promise<A> => {
-      const r = await rt.call({ registry: rt.registry.id, instance: 'circuit' }, this.application, Ops.key(op), arg)
-      return 'error' in r ? ([] as A) : (r.value as A)
-    }
-    const [systems, kinds, screens, placements] = await Promise.all([ask<any[]>(P.systems, undefined), ask<any[]>(P.kinds, undefined), ask<any[]>(P.screens, undefined), ask<any[]>(P.placements, {})])
-    if (!this.#off.length) return   // detached while waiting
-    this.model = buildCircuit({ systems, screens, placements, kinds })
+    const h = this.host
+    if (!h || !this.#off.length) return   // detached while waiting
+    const deployment = h.data()
+    this.model = buildCircuit({ deployment, registry: h.registry, screens: this.screens(), placements: this.placements(), application: this.application })
     this.geo = layout(this.model)
-    this.systems = systems.map(s => s.id)
+    this.systems = Object.keys(deployment.runtimes)
     if (!this.model.layers.some(l => l.screen === this.s.focus)) this.s = { ...this.s, focus: this.model.layers[0]?.screen ?? null }
     if (!this.#fitted && this.s.focus !== null) { this.#fitted = true; this.fitPage(this.s.focus) }
     this.requestUpdate()

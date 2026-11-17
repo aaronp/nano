@@ -1,5 +1,4 @@
 import { afterEach, expect, test } from 'bun:test'
-import { ApplicationOps as P } from '@pritzlaff/nano-app'
 import { mount } from './mount'
 
 afterEach(() => { document.body.innerHTML = '' })
@@ -43,14 +42,16 @@ test('wheel zoom is clamped to 0.3–2.5', async () => {
 
 test('a pad has an accessible label', async () => {
   const { root } = await mount()
-  expect(root.querySelector('button.pad[aria-label="r.value, Number, out"]')).not.toBeNull()
-  expect(root.querySelector('button.pad[aria-label="l.info, Any, in"]')).not.toBeNull()
+  expect(root.querySelector('button.pad[aria-label="r.submit, Any, out"]')).not.toBeNull()
+  expect(root.querySelector('button.pad[aria-label="l.log, Any, in"]')).not.toBeNull()
 })
 
 test('a change in the Application re-renders', async () => {
-  const { call, root, settle } = await mount()
+  const { el, host, root, settle } = await mount()
   expect(root.querySelectorAll('.pill[data-screen]').length).toBe(2)
-  await call(P.setScreen, { id: '/c', title: 'Gamma', system: 'host', layout: [] })
+  const screens = el.screens()
+  el.screens = () => [...screens, { id: '/c', title: 'Gamma' }]
+  await host.apply(host.data())
   await settle()
   expect(root.querySelector('.pill[data-screen="/c"]')!.textContent).toContain('Gamma')
 })

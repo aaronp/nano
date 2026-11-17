@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
-import { padTypeOf } from '../src'
+import { padTypeOf } from '../../src/circuit'
 
 test('padTypeOf maps schemas to pad types', () => {
   expect(padTypeOf(Type.String())).toBe('string')

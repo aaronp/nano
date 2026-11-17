@@ -1,13 +1,19 @@
-// The Circuit, as pure functions of the Application's systems, screens, placements and kinds.
-import { Ops, type Op, type Snapshot } from '@pritzlaff/nano-core'
-import { isInfrastructure, viewIds, type Box, type Kind, type Placement, type Screen } from '@pritzlaff/nano-app'
-import { padTypeOf, type Cable, type CableEnd, type Circuit, type Footprint, type Pad } from './types'
+// The Circuit, as pure functions of the app's deployment (runtimes are the systems, pods the instances, pipes the
+// cables), the registry (an implementation's ops are the pads), and the pages with the pods their docks show.
+import type { AppDeployment, Registry } from '@pritzlaff/nano-core'
+import { jacksOfImpl, wireId, type Jack } from '../wires/model'
+import { padTypeOf, type Box, type Cable, type CableEnd, type Circuit, type Footprint, type Pad } from './types'
 
-const padOf = (system: string, instance: string, op: Op): Pad | null => {
-  const key = `${system}/${instance} ${Ops.key(op)}`, base = { key, instance, op: Ops.key(op), label: op.name, ...(op.description !== undefined && { description: op.description }) }
-  if (op.input) return { ...base, dir: 'in', kind: op.output ? 'call' : 'event', type: padTypeOf(op.input), schema: op.input }
-  if (op.output) return { ...base, dir: 'out', kind: 'event', type: padTypeOf(op.output), schema: op.output }
-  return null
+/** A page (the old Application's screen): a route and its title. */
+export type Screen = { id: string; title: string; icon?: string }
+/** A pod a page's dock shows, where (fractions of the dock), and its tab group if stacked. */
+export type Placement = { screen: string; instance: string; box?: Box; tab?: { group: string; active: boolean } }
+
+// An action is an in pad (a call if it answers) and, for its result, an out pad; an event is an out pad.
+const padOf = (system: string, instance: string, j: Jack): Pad => {
+  const { op } = j, def = j.dir === 'in' ? op.input : op.output, key = `${system}/${instance} ${j.port}:${j.dir}`
+  return { key, instance, op: `${j.port}:${j.dir}`, label: op.name, ...(op.description !== undefined && { description: op.description }),
+    dir: j.dir, kind: op.kind === 'action' && op.output ? 'call' : 'event', type: padTypeOf(def?.schema), ...(def && { schema: def.schema }) }
 }
 
 /** The page's unboxed placements get an equal grid, ceil(sqrt(n)) columns wide. */
@@ -16,35 +22,58 @@ const gridBoxes = (n: number): Box[] => {
   return Array.from({ length: n }, (_, i) => ({ x: (i % cols) / cols, y: Math.floor(i / cols) / rows, w: 1 / cols, h: 1 / rows }))
 }
 
-export function buildCircuit({ systems, screens, placements, kinds }: { systems: Snapshot[]; screens: Screen[]; placements: Placement[]; kinds: Kind[] }): Circuit {
-  const titleOf = new Map(kinds.map(k => [k.component, k.title])), kindOf = new Map(kinds.map(k => [k.component, k.kind]))
-  const snap = new Map(systems.map(s => [s.id, s]))
-  const lookup = (system: string, instance: string) => snap.get(system)?.instances.find(i => i.id === instance)
-  const padsOf = (system: string, instance: string) => (lookup(system, instance)?.ops ?? []).flatMap(o => padOf(system, instance, o) ?? [])
-  const describe = (system: string, instance: string) => { const c = lookup(system, instance)?.component; return { ...(c !== undefined && kindOf.has(c) && { kind: kindOf.get(c)! }), title: (c !== undefined && titleOf.get(c)) || instance, pads: padsOf(system, instance) } }
+type Item = { type: string; size?: number; content?: readonly Item[]; activeItemIndex?: number; componentState?: unknown }
+/** The pods a dock's golden-layout tree shows on `screen`, boxed by its rows, columns and sizes; a stack is a tab group. */
+export function dockPlacements(screen: string, root: Item | null | undefined): Placement[] {
+  const out: Placement[] = []
+  let groups = 0
+  const walk = (it: Item, b: Box, tab?: { group: string; active: boolean }) => {
+    const kids = it.content ?? []
+    if (it.type === 'component') {
+      const name = (it.componentState as { name?: unknown } | undefined)?.name
+      if (typeof name === 'string') out.push({ screen, instance: name, box: b, ...(tab && { tab }) })
+    } else if (it.type === 'stack') {
+      const g = `g${groups++}`
+      kids.forEach((k, i) => walk(k, b, kids.length > 1 ? { group: g, active: i === (it.activeItemIndex ?? 0) } : undefined))
+    } else {
+      const total = kids.reduce((n, k) => n + (k.size ?? 1), 0) || 1, across = it.type === 'row'
+      let at = 0
+      for (const k of kids) {
+        const f = (k.size ?? 1) / total
+        walk(k, across ? { ...b, x: b.x + at * b.w, w: f * b.w } : { ...b, y: b.y + at * b.h, h: f * b.h })
+        at += f
+      }
+    }
+  }
+  if (root) walk(root, { x: 0, y: 0, w: 1, h: 1 })
+  return out
+}
+
+export function buildCircuit({ deployment: d, registry, screens, placements, application = 'ui' }: { deployment: AppDeployment; registry: Registry; screens: Screen[]; placements: Placement[]; application?: string }): Circuit {
+  const systems = Object.entries(d.runtimes).map(([id, r]) => ({ id, pods: r.pods.filter(p => p !== application && d.pods[p]), subscriptions: r.subscriptions }))
+  const systemOf = new Map(systems.flatMap(s => s.pods.map(p => [p, s.id] as const)))
+  const padsOf = (system: string, instance: string) => jacksOfImpl(registry.implementation(d.pods[instance]?.implementation ?? '')).map(j => padOf(system, instance, j))
+  const describe = (system: string, instance: string) => { const c = d.pods[instance]?.implementation; return { ...(c !== undefined && { kind: c }), title: c?.slice(c.indexOf('/') + 1) || instance, pads: padsOf(system, instance) } }
 
   const screenOf = new Map(screens.map(s => [s.id, s]))
-  const views = new Map(systems.map(s => [s.id, viewIds(s)]))
-  // infrastructure is never drawn as a user's component, even when a panel shows it
-  placements = placements.filter(p => { const sc = screenOf.get(p.screen); return !sc || !isInfrastructure(p.instance, views.get(sc.system) ?? new Set()) })
+  // only pods of the app (never the host's own) on a known page
+  placements = placements.filter(p => screenOf.has(p.screen) && systemOf.has(p.instance))
   const pages = new Map<string, Set<string>>()
-  for (const p of placements) { const sc = screenOf.get(p.screen); if (sc) { const k = `${sc.system}/${p.instance}`; pages.set(k, (pages.get(k) ?? new Set()).add(p.screen)) } }
+  for (const p of placements) pages.set(p.instance, (pages.get(p.instance) ?? new Set()).add(p.screen))
 
   const layers = screens.map(sc => {
     const mine = placements.filter(p => p.screen === sc.id)
     const grid = gridBoxes(mine.filter(p => !p.box).length)
     let g = 0
     const footprints: Footprint[] = mine.map(p => ({
-      system: sc.system, instance: p.instance, ...describe(sc.system, p.instance), box: p.box ?? grid[g++]!,
-      ...(p.tab && { tab: p.tab }), shared: (pages.get(`${sc.system}/${p.instance}`)?.size ?? 0) > 1,
+      system: systemOf.get(p.instance)!, instance: p.instance, ...describe(systemOf.get(p.instance)!, p.instance), box: p.box ?? grid[g++]!,
+      ...(p.tab && { tab: p.tab }), shared: (pages.get(p.instance)?.size ?? 0) > 1,
     }))
-    return { screen: sc.id, title: sc.title, ...(sc.icon !== undefined && { icon: sc.icon }), system: sc.system, footprints }
+    return { screen: sc.id, title: sc.title, ...(sc.icon !== undefined && { icon: sc.icon }), system: systemOf.get(mine[0]?.instance ?? '') ?? 'main', footprints }
   })
 
-  const placed = new Set(pages.keys())
   const side = systems.flatMap(s => {
-    const views = viewIds(s)
-    const items = s.instances.filter(i => !placed.has(`${s.id}/${i.id}`) && !isInfrastructure(i.id, views)).map(i => ({ system: s.id, instance: i.id, ...describe(s.id, i.id) }))
+    const items = s.pods.filter(p => !pages.has(p)).map(p => ({ system: s.id, instance: p, ...describe(s.id, p) }))
     return items.length ? [{ system: s.id, items }] : []
   })
 
@@ -52,14 +81,12 @@ export function buildCircuit({ systems, screens, placements, kinds }: { systems:
     const layer = layers.find(l => l.footprints.some(f => f.system === system && f.instance === instance))
     return layer ? { layer: layer.screen } : { side: system }
   }
-  const cables: Cable[] = systems.flatMap(s => {
-    const views = viewIds(s)
-    return s.subscriptions.flatMap(sub => {
-      if (isInfrastructure(sub.source, views) || isInfrastructure(sub.listener, views)) return []
-      const from = padsOf(s.id, sub.source).find(p => p.op === sub.op), to = padsOf(s.id, sub.listener).find(p => p.op === sub.target)
-      if (!from || !to) return []
-      return [{ id: sub.id, system: s.id, from: { pad: from.key, at: endAt(s.id, sub.source) }, to: { pad: to.key, at: endAt(s.id, sub.listener) }, type: from.type }]
-    })
-  })
+  // BACKLOG(6): call edges have no pad, so (as on c-wires) only pipes are drawn.
+  const cables: Cable[] = systems.flatMap(s => s.subscriptions.flatMap(sub => {
+    if (sub.kind !== 'pipe' || !systemOf.has(sub.from) || !systemOf.has(sub.to)) return []
+    const from = padsOf(s.id, sub.from).find(p => p.op === sub.source + ':out'), to = padsOf(s.id, sub.to).find(p => p.op === sub.target + ':in')
+    if (!from || !to) return []
+    return [{ id: wireId(s.id, sub), system: s.id, from: { pad: from.key, at: endAt(s.id, sub.from) }, to: { pad: to.key, at: endAt(s.id, sub.to) }, type: from.type }]
+  }))
   return { layers, side, cables }
 }

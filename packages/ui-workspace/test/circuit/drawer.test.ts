@@ -1,5 +1,4 @@
 import { afterEach, expect, test } from 'bun:test'
-import { ApplicationOps as P } from '@pritzlaff/nano-app'
 import { mount } from './mount'
 
 afterEach(() => { document.body.innerHTML = '' })
@@ -7,11 +6,11 @@ afterEach(() => { document.body.innerHTML = '' })
 test('selecting a pad opens the drawer with its type', async () => {
   const { root, settle } = await mount()
   expect(root.querySelector('aside')!.hasAttribute('hidden')).toBe(true)
-  root.querySelector<HTMLElement>('button.pad[aria-label="r.value, Number, out"]')!.click(); await settle()
+  root.querySelector<HTMLElement>('button.pad[aria-label="r.submit, Any, out"]')!.click(); await settle()
   const d = root.querySelector('aside[aria-label="Details"]')!
-  expect(d.textContent).toContain('r.value')
-  expect(d.textContent).toContain('Number')
-  expect(d.querySelector('pre')!.textContent).toContain('"type"')
+  expect(d.textContent).toContain('r.submit')
+  expect(d.textContent).toContain('Any')
+  expect(d.querySelector('pre')!.textContent).toContain('{}')
   d.querySelector<HTMLElement>('button[aria-label="Close details"]')!.click(); await settle()
   expect(root.querySelector('aside')!.hasAttribute('hidden')).toBe(true)
 })
@@ -27,8 +26,9 @@ test('a tab and a cable open the drawer; Escape closes it', async () => {
 })
 
 test("Follow cable focuses the other end's page", async () => {
-  const { call, el, root, settle } = await mount()
-  await call(P.setScreen, { id: '/a', title: 'Alpha', system: 'host', layout: [{ panel: 'r', instance: 'r' }, { panel: 'd', instance: 'd' }] })
+  const { el, host, root, settle } = await mount()
+  el.placements = () => [{ screen: '/a', instance: 'r' }, { screen: '/a', instance: 'd' }, { screen: '/b', instance: 'l' }]
+  await host.apply(host.data())
   await settle()
   expect(el.page).toBe('/a')
   root.querySelector<HTMLElement>('button.pad[aria-label="d.flushed, Any, out"], button.pad[data-pad$="flushed"]')!.click(); await settle()

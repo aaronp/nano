@@ -1,7 +1,8 @@
 // The Circuit's data and the pad typing. Pure: no Lit, no DOM.
 import type { TSchema } from 'typebox'
-import type { Box } from '@pritzlaff/nano-app'
 
+/** A box on a page, in fractions of it. */
+export type Box = { x: number; y: number; w: number; h: number }
 export type PadType = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'signal' | 'any'
 
 /** A pad's data type, from its schema's type: none (or Void) is a signal; unions, Unknown and the rest are any. */

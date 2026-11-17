@@ -7,9 +7,10 @@ test('use case 1: import, see, swap live, save', async ({ page }) => {
   const log = page.locator('nano-log')
 
   for (const pod of ['in', 'wait', 'up', 'out']) await expect(page.locator('nano-explorer').getByText(pod, { exact: true }).first()).toBeVisible()
-  // the host's own pod `ui` is a footprint too: the slice's four, plus it
-  for (const pod of ['in', 'wait', 'up', 'out']) await expect(page.locator(`nano-wiring .fp[data-instance="${pod}"]`)).toHaveCount(1)
-  await expect(page.locator('nano-wiring path[data-cable]')).toHaveCount(3)
+  // the Wiring page's circuit: the slice's four on the side (no panel shows them), never the host's own pod `ui`
+  for (const pod of ['in', 'wait', 'up', 'out']) await expect(page.locator(`c-circuit .fp[data-instance="${pod}"]`)).toHaveCount(1)
+  await expect(page.locator('c-circuit .fp[data-instance="ui"]')).toHaveCount(0)
+  await expect(page.locator('c-circuit path[data-cable]')).toHaveCount(3)
 
   await open('in')
   await page.getByRole('textbox', { name: 'in', exact: true }).fill('hi')

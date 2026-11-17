@@ -11,7 +11,7 @@ test('the slider lifts covers', async () => {
   s.value = '100'; s.dispatchEvent(new Event('input', { bubbles: true }))
   await settle()
   expect(cover(root)!.style.transform).toMatch(/translateZ\((?!0px)/)
-  expect(cover(root)!.textContent).toContain('Log')
+  expect(cover(root)!.textContent).toContain('log')
 })
 
 test('Lift covers toggles between 0.85 and 0', async () => {
