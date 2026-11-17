@@ -21,8 +21,9 @@ import {
 import type { ViewMap } from '@pritzlaff/nano-ui'
 import { checkMsg, type Described, type SchemaJson } from './sandbox/protocol.ts'
 import { READY_MS, type Frame } from './sandbox/stand-in.ts'
+import type { Built } from './built.ts'
 
-export type Probed = { provider: Provider; views: ViewMap }
+export type Probed = { provider: Provider; views: ViewMap; built?: Built }
 
 const TAG = /^[a-z][a-z0-9._]*-[a-z0-9._-]*$/
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -47,7 +48,8 @@ export function described(d: Described): NanoResult<Probed> {
     }))
     // Only its own implementations' views, and only custom element names (an invalid one would throw where it is made).
     const own = new Set(impls.map(i => i.coord)), ok = ([c, tag]: [string, string]) => own.has(c) && TAG.test(tag)
-    return success({ provider: Provider.define(d.coord, impls, { ...d.meta }), views: Object.fromEntries(Object.entries(d.views).filter(ok)) })
+    return success({ provider: Provider.define(d.coord, impls, { ...d.meta }), views: Object.fromEntries(Object.entries(d.views).filter(ok)),
+      ...(d.built && { built: { ...d.built } }) })
   } catch (e) {
     return failure('invalid-input', `${d.coord}: a bad description: ${message(e)}`)
   }

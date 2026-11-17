@@ -39,7 +39,8 @@ type DescribedImpl = {
   dependencies: Record<string, SelectorData>; config?: SchemaJson
 }
 /** A provider as data, with the view tag of each implementation that has one. */
-export type Described = { coord: string; meta: Record<string, string>; implementations: DescribedImpl[]; views: Record<string, string> }
+/** `built`: the module's stamp (the nano-core it was built with), when it has one. */
+export type Described = { coord: string; meta: Record<string, string>; implementations: DescribedImpl[]; views: Record<string, string>; built?: Record<string, string> }
 
 const json = (s: SchemaDef): SchemaJson => ({ type: s.label ?? '', schema: JSON.parse(JSON.stringify(s.schema)) })
 
@@ -97,7 +98,8 @@ function implError(i: unknown): string | undefined {
 }
 
 const described = (p: unknown) => !obj(p) || !str(p.coord) || !obj(p.meta) || !Object.values(p.meta).every(str)
-  || !obj(p.views) || !Object.values(p.views).every(str) || !Array.isArray(p.implementations) ? 'a provider needs coord, meta, views and implementations'
+  || !obj(p.views) || !Object.values(p.views).every(str) || !Array.isArray(p.implementations)
+  || (p.built !== undefined && (!obj(p.built) || !Object.values(p.built).every(str))) ? 'a provider needs coord, meta, views and implementations (and a built, if any, of strings)'
   : p.implementations.map(implError).find(w => w !== undefined)
 
 const result: Check = v => isNanoResult(v)

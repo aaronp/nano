@@ -8,15 +8,15 @@ import { defineViews, viewFor, type ViewMap } from '@pritzlaff/nano-ui'
 import { describeProvider } from './protocol.ts'
 import { serve } from './serve.ts'
 
-type Mod = { default: Provider; views: ViewMap }
+type Mod = { default: Provider; views: ViewMap; built?: Record<string, string> }
 
 const mods = new Map<string, Promise<Mod>>()
 /** The provider module at `url`, imported once. */
 function mod(url: string): Promise<Mod> {
-  if (!mods.has(url)) mods.set(url, import(url).then((m: { default?: unknown; views?: ViewMap }) => {
+  if (!mods.has(url)) mods.set(url, import(url).then((m: { default?: unknown; views?: ViewMap; built?: Record<string, string> }) => {
     const p = m.default as Provider | undefined
     if (!p || typeof p.coord !== 'string' || !(p.implementations instanceof Map)) throw new Error(`${url} has no default Provider`)
-    return { default: p, views: { ...m.views } }
+    return { default: p, views: { ...m.views }, ...(m.built && { built: { ...m.built } }) }
   }))
   return mods.get(url)!
 }
@@ -30,7 +30,7 @@ addEventListener('message', function once(e: MessageEvent) {
     if (!i) throw new Error(`${u} has no implementation ${coord}`)
     return i
   }, {
-    probe: async u => { const m = await mod(u); return [describeProvider(m.default, m.views)] },
+    probe: async u => { const m = await mod(u); return [{ ...describeProvider(m.default, m.views), ...(m.built && { built: m.built }) }] },
     render(coord, target) {
       const m = built!, registry = Registry.create()
       registry.add(m.default)

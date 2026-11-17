@@ -17,15 +17,18 @@ import {
   type Registry,
 } from '@pritzlaff/nano-core'
 import type { ViewMap } from '@pritzlaff/nano-ui'
+import { newerCore, type Built } from './built.ts'
 
 export type Loaded = { deployment: AppDeployment; registry: Registry; views: ViewMap }
 /** A provider from another origin, as the confirm prompt lists it. `fullAccess`: the pod runs with this page's access. */
 export type Foreign = { coord: string; url: string; origin: string; pods: { name: string; isolation: string; fullAccess: boolean }[] }
 type Deps = {
   load(url: string): Promise<unknown>
-  probe(url: string): Promise<NanoResult<{ provider: Provider; views: ViewMap }>>
+  probe(url: string): Promise<NanoResult<{ provider: Provider; views: ViewMap; built?: Built }>>
   confirm(list: Foreign[]): Promise<boolean>
   approve(title: string): Promise<boolean>
+  /** Told when a module was built with a newer nano-core than this page's; the import goes on. */
+  warn?(text: string): void
 }
 
 const clash = (what: string, name: string) => failure('invalid-input', `clash: ${what} ${name} is already loaded`)
@@ -141,13 +144,15 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
         if (!isProvider(probed.value.provider, coord)) return failure('invalid-input', `${at} has no default Provider ${coord}`)
         fresh.push(gated(probed.value.provider, at, u.origin, deps))
         Object.assign(views, probed.value.views)
+        const w = newerCore(coord, probed.value.built); if (w) deps.warn?.(w)
         continue
       }
-      let mod: { default?: unknown; views?: ViewMap }
+      let mod: { default?: unknown; views?: ViewMap; built?: Built }
       try { mod = (await deps.load(at)) as typeof mod } catch (e) { return failure('invalid-input', `cannot load ${at}: ${why(e)}`) }
       if (!isProvider(mod?.default, coord)) return failure('invalid-input', `${at} has no default Provider ${coord}`)
       fresh.push(mod.default)
       Object.assign(views, mod.views)
+      const w = newerCore(coord, mod.built); if (w) deps.warn?.(w)
     }
     // The registry cannot be copied, so it is added to only here, after everything else succeeded.
     for (const p of fresh) { const added = loaded.registry.add(p); if (!added.ok) return added }

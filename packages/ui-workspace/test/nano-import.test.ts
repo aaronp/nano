@@ -53,6 +53,13 @@ describe('importApp', () => {
   })
 })
 
+test('given a module built with a newer nano-core, then the import warns and still succeeds', async () => {
+  const warned: string[] = []
+  const r = await importApp(fx('app.json'), empty(), { ...deps, warn: (t: string) => void warned.push(t) })
+  expect(r.ok).toBe(true)
+  expect(warned).toEqual([expect.stringMatching(/^example\.fx was built with nano-core 99\.0\.0; this workspace has /)])
+})
+
 describe('provider URLs', () => {
   test('given a relative provider, then it is stored resolved, and another nano.json naming the same module is no clash', async () => {
     const first = await importApp(fx('app.json'), empty(), deps)

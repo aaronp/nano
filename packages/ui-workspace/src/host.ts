@@ -127,7 +127,7 @@ export async function start(): Promise<NanoResult<Host>> {
     async importUrl(url) {
       // With the pod ui still in it, so merge refuses an app naming a pod ui before any provider is registered.
       const imported = shown(await importApp(url, { ...loaded, deployment: unplaced(data()) }, {
-        load: u => import(u), probe: u => probe(u, () => openFrame('isolated-sandbox')), confirm: confirmImports, approve,
+        load: u => import(u), probe: u => probe(u, () => openFrame('isolated-sandbox')), confirm: confirmImports, approve, warn: t => toast(t, { variant: 'warn' }),
       }))
       if (!imported.ok) return imported
       // ponytail: an apply that fails now leaves the new providers registered (a Registry has no remove); harmless, unused.
