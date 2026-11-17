@@ -207,3 +207,45 @@ test('imported Sandboxed, todos shows <todo-list> in its frame, and every frame 
   await expect.poll(async () => await bg(page)).not.toBe(before)
   await expect.poll(async () => await bg(f)).toBe(await bg(page))
 })
+
+/** File › Open… the served examples, Sandboxed (the default), only runtimes matching `want` ticked. */
+async function openSandboxed(page: Page, want: RegExp) {
+  await page.getByRole('button', { name: 'File', exact: true }).click()
+  await page.getByRole('button', { name: /^Open/ }).click()
+  const d = page.getByRole('dialog', { name: 'Import components' })
+  await d.getByLabel('nano.json URL').fill('http://localhost:4310/nano.json')
+  await d.getByRole('button', { name: 'Fetch' }).click()
+  await expect(d.locator('input[data-select-runtime]').first()).toBeVisible()
+  for (const box of await d.locator('input[data-select-runtime]').all()) await box.uncheck()
+  for (const box of await d.locator('input[data-select-runtime]').all()) if (want.test((await box.getAttribute('data-select-runtime')) ?? '')) await box.check()
+  await d.getByRole('button', { name: 'Import', exact: true }).click()
+  await expect(d).toHaveCount(0)
+}
+/** `op(input)` on `pod` through the page's application (the frame's own form cannot submit: its sandbox has no allow-forms). */
+const call = (page: Page, runtime: string, pod: string, op: string, input: unknown) => page.evaluate(([r, p, o, i]) =>
+  ((document.querySelector('workspace-dock') as any).host.app.call(r, p)[o](i)).then((x: { ok: boolean }) => x.ok), [runtime, pod, op, input] as const)
+/** The first frame holding `css` (a heading `name` inside it, if given). */
+async function frameWith(page: Page, css: string, name?: string) {
+  for (const f of page.frames()) {
+    const l = name ? f.locator(css).filter({ has: f.getByRole('heading', { name, exact: true }) }) : f.locator(css)
+    if (await l.count()) return l
+  }
+}
+
+test("imported Sandboxed, alice says something and bob's frame shows it live", async ({ page }) => {
+  await start(page)
+  await openSandboxed(page, /example\.chat\./)
+  await expect.poll(async () => !!(await frameWith(page, 'chat-room', 'bob')), { timeout: 10_000 }).toBe(true)
+  const bob = (await frameWith(page, 'chat-room', 'bob'))!
+  expect(await call(page, 'example.chat.room', 'alice', 'say', 'hi from a frame')).toBe(true)
+  await expect(bob.locator('li')).toHaveText([/alice.*hi from a frame/])
+})
+
+test('imported Sandboxed, todos: an add puts the item in the list in its frame', async ({ page }) => {
+  await start(page)
+  await openSandboxed(page, /example\.todo\./)
+  await expect.poll(async () => !!(await frameWith(page, 'todo-list')), { timeout: 10_000 }).toBe(true)
+  const list = (await frameWith(page, 'todo-list'))!
+  expect(await call(page, 'example.todo.frontend', 'todos', 'add', 'milk')).toBe(true)
+  await expect(list.locator('li')).toHaveText([/milk/])
+})
