@@ -44,11 +44,15 @@ export function merge(current: AppDeployment, incoming: AppDeployment): NanoResu
     if (Object.hasOwn(modules, k) && modules[k] !== url) return clash('provider', k)
     modules[k] = url
   }
+  // Merging into a runtime that is already there: two policies would silently lose one's rules, so that is refused.
+  for (const [k, r] of Object.entries(incoming.runtimes))
+    if (r.policy && Object.hasOwn(current.runtimes, k) && current.runtimes[k]!.policy)
+      return failure('invalid-input', `runtime ${k} already has a policy; import into another runtime`)
   return success({
     pods: { ...current.pods, ...incoming.pods },
     runtimes: { ...current.runtimes, ...Object.fromEntries(Object.entries(incoming.runtimes).map(([k, r]) => {
       const was = Object.hasOwn(current.runtimes, k) ? current.runtimes[k] : undefined
-      return [k, was ? { ...was, pods: [...was.pods, ...r.pods], subscriptions: [...was.subscriptions, ...r.subscriptions] } : r]
+      return [k, was ? { ...was, pods: [...was.pods, ...r.pods], subscriptions: [...was.subscriptions, ...r.subscriptions], ...((was.policy ?? r.policy) && { policy: was.policy ?? r.policy }) } : r]
     })) },
     tags: { ...current.tags, ...incoming.tags },
     modules,
