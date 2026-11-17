@@ -1,7 +1,7 @@
 /**
- * The app bar on the page: <nano-app-bar> shows the shown page's controls (a workspace's controls, or nothing), or,
- * while a pod's panel is focused (or a pod was just opened from the explorer), that pod's: its view and its
- * implementation. A page change clears focus back to the page's default.
+ * The app bar on the page: <nano-app-bar> shows the shown page's controls (a workspace's controls, or nothing) and,
+ * after them while a pod's panel is focused (or a pod was just opened from the explorer), that pod's: its view and its
+ * implementation. A page change drops the pod's.
  *
  * On nano-core 0.4 (BACKLOG(5)): the app gateway is gone, so this hands the bar its element; a pod's controls are the
  * host's (the View and Change implementation pickers), each change an `apply` through the host.
@@ -28,6 +28,7 @@ function pageControls(route: Element | null): Element | null {
 function podControls(h: Host, pod: string): Element {
   const el = document.createElement('span')
   el.className = 'pod-controls'
+  el.style.cssText = 'display:flex;align-items:center;gap:8px;padding-left:12px;border-left:1px solid color-mix(in srgb, currentColor 25%, transparent)'
   const swap = (coord: string) => {
     const d = h.data(), p = d.pods[pod]!, keeps = h.registry.implementation(coord)?.config?.check(p.config)
     return h.apply({ ...d, pods: { ...d.pods, [pod]: { implementation: coord, eager: p.eager, ...(keeps && { config: p.config }) } } })
@@ -39,9 +40,9 @@ function podControls(h: Host, pod: string): Element {
     const mine = same(h.registry.implementation(p.implementation)?.provides.map(i => i.coord) ?? [])
     const impls = h.registry.manifest().implementations.filter(i => same(i.provides) === mine).map(i => i.coord)
     render(html`<b>${pod}</b>
-      <nano-select label="View" .options=${viewTags(h, pod, p.implementation)} .value=${chosen(h, pod)}
+      <small>View</small><nano-select label="View" .options=${viewTags(h, pod, p.implementation)} .value=${chosen(h, pod)}
         @change=${(e: Event) => h.apply({ ...d, views: { ...d.views, [pod]: value(e) } })}></nano-select>
-      <nano-select label="Change implementation" .options=${impls} .value=${p.implementation}
+      <small>Implementation</small><nano-select label="Change implementation" .options=${impls} .value=${p.implementation}
         @change=${(e: Event) => swap(value(e))}></nano-select>`, el)
   }
   draw()
@@ -54,11 +55,20 @@ export function bootAppBar(h: Host) {
   defineWorkspaceControls()
   const bar = document.querySelector<AppBarEl>('nano-app-bar')
   if (!bar) return
-  const shown = () => document.querySelector('app-shell > app-route:not([hidden])')
-  requestBus(bar).subscribe('route:changed', m =>
-    bar.show(pageControls(document.querySelector(`app-shell > app-route[path="${(m.payload as { path: string }).path}"]`))))
-  bar.show(pageControls(shown()))   // the page shown now, if the shell routed already
-  const pod = (name: string | undefined) => bar.show(name && h.data().pods[name] ? podControls(h, name) : pageControls(shown()))
+  let page = pageControls(document.querySelector('app-shell > app-route:not([hidden])')), focused: Element | null = null
+  const draw = () => {
+    const both = document.createElement('span')
+    both.style.display = 'contents'   // its children are the bar's own flex items
+    both.append(...[page, focused].filter(e => e !== null))
+    bar.show(both)
+  }
+  requestBus(bar).subscribe('route:changed', m => {
+    page = pageControls(document.querySelector(`app-shell > app-route[path="${(m.payload as { path: string }).path}"]`))
+    focused = null
+    draw()
+  })
+  draw()   // the page shown now, if the shell routed already
+  const pod = (name: string | undefined) => { focused = name && h.data().pods[name] ? podControls(h, name) : null; draw() }
   document.addEventListener('dock:focus', e => pod((e as CustomEvent<{ instance: string } | null>).detail?.instance))
   document.addEventListener('nano-open', e => pod((e as CustomEvent<{ pod: string }>).detail.pod))
 }

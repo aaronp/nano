@@ -266,3 +266,13 @@ test('imported Sandboxed, Connections tilts the frames with the dock (they follo
   expect(t === '' ? 'hidden' : t).toMatch(/matrix3d|hidden/)
   expect(t).not.toMatch(/^matrix3d\([^,]+,0,0,0,0,[^,]+,0,0,/)   // not flat: it has the tilt's perspective terms
 })
+
+test("focusing a pod's panel adds its View and Implementation to the app bar, beside the workspace's own controls", async ({ page }) => {
+  await start(page)
+  await open(page, '/examples/todo/nano.json')
+  await dock(page).locator('todo-list').first().click()
+  const bar = page.locator('nano-app-bar')
+  await expect(bar.getByText('Implementation', { exact: true })).toBeVisible()
+  await expect(bar.getByText('View', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Connections' }).first()).toBeVisible()
+})
