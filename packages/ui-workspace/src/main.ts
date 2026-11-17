@@ -26,6 +26,7 @@ import type { WorkspaceDock } from './components/workspace-dock.ts';
 import { defineWires, type Wires } from './wires/index.ts';
 import { defineCircuit, dockPlacements, type Circuit } from './circuit/index.ts';
 import { bootWiring } from './boot-wiring.ts';   // after the shell (its bus)
+import { layoutFromDock, slotsToOpen } from './layout-data.ts';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
 if (host) {
@@ -38,6 +39,9 @@ if (host) {
   const shown = async (r: Promise<{ ok: boolean }>, before: string) => {
     const done = await r, l = dock && h.data().layout?.[dock.id], key = dock?.getAttribute('storage-key');
     if (done.ok && l && key && JSON.stringify(l) !== before) { try { localStorage.setItem(key, JSON.stringify(l)); } catch { /* no storage: the layout is not shown */ } dock!.restore(); }
+    // A file from another engine: its neutral slots, a panel each, in order.
+    const open = done.ok && dock ? slotsToOpen(h.data(), dock.id) : [];
+    if (open.length) { dock!.reset(); for (const pod of open) dock!.openPod(pod); }
     return done;
   };
   const layoutNow = () => JSON.stringify(dock && h.data().layout?.[dock.id]);
@@ -52,7 +56,8 @@ if (host) {
   const download = (name: string) => {
     const a = document.createElement('a');
     const saved = h.saved(), l = arrangement();
-    const file = l && dock ? { ...saved, layout: { ...saved.layout, [dock.id]: l } } : saved;
+    const runtimeOf = (pod: string) => Object.entries(saved.runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
+    const file = l && dock ? { ...saved, layout: { ...saved.layout, [dock.id]: l, ...layoutFromDock(l.root as never, runtimeOf) } } : saved;
     a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' }));
     a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);

@@ -63,6 +63,9 @@ test('drop four controls, wire them in Connections, save, New, import the file: 
   expect(Object.keys(saved.pods).sort()).toEqual(['debounce1', 'input1', 'log1', 'map1'])
   expect(saved.runtimes.main.subscriptions).toHaveLength(3)
   expect(JSON.stringify(saved.layout.workspace)).toContain('log1')
+  // beside the dock's own state, the neutral layout: a slot and a box per pod
+  expect(saved.layout.slots.map((s: { pod: string }) => s.pod).sort()).toEqual(['debounce1', 'input1', 'log1', 'map1'])
+  for (const s of saved.layout.slots) expect(saved.layout.geometry[s.id]).toMatchObject({ w: expect.any(Number), h: expect.any(Number) })
   await shot(page, '3-saved')
 
   // 4. File › New: nothing but the starting dock
@@ -89,4 +92,19 @@ test('drop four controls, wire them in Connections, save, New, import the file: 
   await expect(page.locator('c-circuit').locator('path[data-cable]')).toHaveCount(3)
   await page.waitForTimeout(800)
   await shot(page, '6-wiring-page')
+})
+
+test('opens a file with slots but no workspace state: a panel per slot', async ({ page }) => {
+  await page.goto('/#/workspace')
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
+  const file = { pods: { in1: { implementation: 'nano.ui/input', eager: false }, out1: { implementation: 'nano.ui/log', eager: false } },
+    runtimes: { main: { pods: ['in1', 'out1'], subscriptions: [{ kind: 'pipe', from: 'in1', source: 'nano.ui.Input/submit', to: 'out1', target: 'nano.ui.Log/log' }] } },
+    layout: { slots: [{ id: 'a', runtime: 'main', pod: 'in1' }, { id: 'b', runtime: 'main', pod: 'out1' }] } }
+  await page.getByRole('button', { name: 'File', exact: true }).click()
+  await page.getByRole('button', { name: /^Open/ }).click()
+  await page.getByLabel('nano.json file').setInputFiles({ name: 'slots.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(file)) })
+  await page.locator('dialog').getByRole('button', { name: 'Import', exact: true }).click()
+  await expect(dock(page).locator('nano-log')).toHaveCount(1)
+  await expect(dock(page).getByRole('textbox', { name: 'in1', exact: true })).toBeVisible()
 })
