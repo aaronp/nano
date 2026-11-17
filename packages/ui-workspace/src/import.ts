@@ -114,7 +114,8 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
     const res = await fetch(url)
     if (!res.ok) return failure('invalid-input', `cannot load ${url}: ${res.status}`)
     const incoming = (await res.json()) as AppDeployment
-    const base = new URL(url, globalThis.location?.href), home = page() ?? base.origin
+    // a local file (a blob: URL) is no base: its modules resolve against the page, as saved
+    const base = new URL(url.startsWith('blob:') ? globalThis.location.href : url, globalThis.location?.href), home = page() ?? base.origin
     // Each provider is resolved against the nano.json. Stored: its path when it is on this page's origin (so the same
     // tree served elsewhere still loads), else whole; also whole when the path would read as protocol-relative
     // (`/.//evil.test/x.js` has the path `//evil.test/x.js`, another origin once resolved again).

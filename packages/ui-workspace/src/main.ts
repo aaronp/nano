@@ -24,20 +24,36 @@ import { bootAppBar } from './boot-app-bar.ts';   // after the shell (its bus) a
 import { showStatus } from './lib/status.ts';
 import type { WorkspaceDock } from './components/workspace-dock.ts';
 import { defineWires, type Wires } from './wires/index.ts';
+import { defineCircuit, dockPlacements, type Circuit } from './circuit/index.ts';
+import { bootWiring } from './boot-wiring.ts';   // after the shell (its bus)
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
 if (host) {
   const h = host, target = { app: h.app, registry: h.registry };
-  setImportHost(host);
+  const dock = document.querySelector<WorkspaceDock>('workspace-dock#workspace');
+  // The dock's arrangement (golden-layout's resolved config). ponytail: reads the dock's private layout; a public
+  // accessor on <workspace-dock> is a new method (a question for the user).
+  const arrangement = () => (dock as unknown as { layout?: { saveLayout(): { root: unknown } } | null } | null)?.layout?.saveLayout();
+  // An import whose nano.json brings a layout for this dock shows it: through the dock's own saved layout and restore().
+  const shown = async (r: Promise<{ ok: boolean }>, before: string) => {
+    const done = await r, l = dock && h.data().layout?.[dock.id], key = dock?.getAttribute('storage-key');
+    if (done.ok && l && key && JSON.stringify(l) !== before) { try { localStorage.setItem(key, JSON.stringify(l)); } catch { /* no storage: the layout is not shown */ } dock!.restore(); }
+    return done;
+  };
+  const layoutNow = () => JSON.stringify(dock && h.data().layout?.[dock.id]);
+  setImportHost({ ...host, importUrl: (url) => { const before = layoutNow(); return shown(host!.importUrl(url), before) as ReturnType<typeof h.importUrl>; } });
   for (const dock of document.querySelectorAll<WorkspaceDock>('workspace-dock')) dock.host = host;
   for (const el of document.querySelectorAll<HTMLElement & { target?: unknown }>('nano-explorer, nano-wiring')) el.target ??= target;
   bootAppBar(host);
 
-  // The File menu: Save and Download write the app's nano.json (without the host's own pod); Open and Import import one.
+  // The File menu: Save and Download write the app's nano.json (without the host's own pod), with the dock's
+  // arrangement as its `layout` under the dock's id; Open and Import import one (and show its layout); New empties it.
   const menu = document.querySelector<FileMenuEl>('nano-file-menu');
   const download = (name: string) => {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(h.saved(), null, 2) + '\n'], { type: 'application/json' }));
+    const saved = h.saved(), l = arrangement();
+    const file = l && dock ? { ...saved, layout: { ...saved.layout, [dock.id]: l } } : saved;
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' }));
     a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     if (menu) menu.dirty = false;
@@ -47,8 +63,14 @@ if (host) {
     save: () => download('nano.json'), download: () => download('nano.json'),
     'save-as': async () => { const name = await askName(document, 'nano'); if (name) download(`${name}.json`); },
     open: () => openImportDialog(document), import: () => openImportDialog(document),
-    // BACKLOG(8): New started an empty app document (and kept the working copy); 0.4's host has no "new".
-    new: () => showStatus(document, 'New is not available yet.'),
+    // New: an apply of an empty deployment (the host's own pod `ui` stays; providers stay loaded), and the dock's
+    // starting layout. BACKLOG(8): the old New also started a working copy.
+    new: async () => {
+      const d = h.data(), r = await h.apply({ ...d, pods: { ui: d.pods['ui']! }, runtimes: { main: { pods: ['ui'], subscriptions: [] } }, tags: {}, views: {}, layout: undefined });
+      if (!r.ok) return;
+      dock?.reset();
+      if (menu) menu.dirty = false;
+    },
   };
   for (const [c, run] of Object.entries(commands)) document.addEventListener(`file:${c}`, () => void run());
 
@@ -64,8 +86,19 @@ if (host) {
   document.addEventListener('dock:save-as', () => showStatus(document, 'Saved workspaces are not available yet.'));
   document.querySelector('[data-new-workspace]')?.addEventListener('click', () => showStatus(document, 'Saved workspaces are not available yet.'));
 
+  // The Wiring page: <c-circuit> over the app; the one page is the Workspace, its footprints the pods its dock shows.
+  defineCircuit();
+  for (const c of document.querySelectorAll<Circuit>('c-circuit')) {
+    c.screens = () => [{ id: '/workspace', title: 'Main' }];
+    c.placements = () => dockPlacements('/workspace', arrangement()?.root as never);
+    c.host = host;
+  }
+  bootWiring(document, async () => [{ id: '/workspace' }]);
+  // the dock's arrangement is not an apply: the circuit reads it again whenever the Wiring page is shown
+  addEventListener('hashchange', () => { if (location.hash === '#/wiring') for (const c of document.querySelectorAll<Circuit>('c-circuit')) c.schedule(); });
+
   const src = new URL(location.href).searchParams.get('src');
   // Only a URL on this page's origin: a crafted link must not open the import prompt on load.
   if (src && new URL(src, location.href).origin !== location.origin) toast(`${src} is not on this origin`, { variant: 'bad' });
-  else if (src) await host.importUrl(new URL(src, location.href).href);   // a failure is shown as a toast
+  else if (src) await shown(host.importUrl(new URL(src, location.href).href), layoutNow());   // a failure is shown as a toast
 }

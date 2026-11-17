@@ -69,7 +69,15 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
    Still stubbed (`BACKLOG(6)` in `src/wires/`): a packet is labelled with its target op, not the value (`sent` carries
    no data); the selection is the view's own (no Application `select`); call edges are not drawn; Detail's tree is
    `<nano-explorer>` (was `<c-platform>`), without schema examples; a cord between pods in different runtimes is refused.
-   The Wiring page still shows `<nano-wiring>` (`<c-circuit>` retired; `boot-wiring.ts` is in `retired/`).
+   `<c-circuit>` is back too, verbatim from `35f1675^` (`packages/circuit`) in `src/circuit/`, ported the same way:
+   runtimes are the systems, pods the instances (titled by implementation, e.g. `log`, was the kind's title `Log`), an
+   implementation's ops the pads (an action is an in pad and, for its result, an out pad; an event an out pad), pipes
+   the cables; it rebuilds on `applied`. The one page is the Workspace (`/workspace`, titled *Main* as before); its
+   footprints are the pods the live dock shows, boxed from the dock's golden-layout tree (`dockPlacements`; was the
+   screen's saved layout), read again when the Wiring page is shown. `src/boot-wiring.ts` and `test/wiring.test.ts`
+   are back from `retired/` unchanged (one page; its profile-menu test stays retired, item 4). Still stubbed: no
+   saved workspaces, so one layer (item 3); call edges are not drawn; the dock's layout is read through its private
+   golden-layout (`main.ts` `arrangement`; a public accessor on `<workspace-dock>` would be a new method).
 
 7. **Importing a package by its manifest.**
    Old: `src/imports.ts`, `src/lib/imports.ts`, `src/components/import-dialog.ts`: fetch a manifest, preview components,
@@ -86,10 +94,15 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
    (working copy, autosave, apps by name, dirty tracking against a baseline), Open from saved apps / a URL / a file,
    consent for code (map/filter) and trusted packages.
    Why: all on nano-app's document and stores (retired); 0.4's host has `saved()` and `importUrl` only.
-   Stubbed: `<nano-file-menu>` (restored verbatim from `@composable/shell` to `src/components/file-menu.ts`) —
-   Save/Download download `nano.json`; Save As… asks a name (`name-dialog.ts`) and downloads `<name>.json`;
-   Open/Import open the import dialog; New says it is not available. `dirty` is "applied since last save".
-   Options: a working copy of `host.saved()` in localStorage; Open from a file input; New = an apply of an empty deployment.
+   Now: `<nano-file-menu>` (restored verbatim from `@composable/shell` to `src/components/file-menu.ts`) —
+   Save/Download download `nano.json`; Save As… asks a name (`name-dialog.ts`) and downloads `<name>.json`; the file
+   is `host.saved()` plus the dock's arrangement as `layout.workspace` (the dock's id). Open/Import open the import
+   dialog, which takes a URL or a local file (a file input; imported through a `blob:` URL, whose modules resolve
+   against the page); an import whose `layout` for the dock is new shows it (through the dock's saved layout and
+   `restore()`). New is an apply of an empty deployment (only the host's pod `ui` in `main`; providers stay loaded),
+   then the dock's starting layout. `dirty` is "applied since last save". `e2e/workflow.e2e.ts` runs it end to end.
+   Still stubbed: no working copy, autosave, saved apps by name, or consent for code.
+   Options: a working copy of `host.saved()` in localStorage.
 
 9. **Needs: choosing a binding, Dependencies.**
    Old: `src/boot-needs.ts`, `src/components/needs-dialog.ts`, the dock's Dependencies button (`workspace-dock.ts:238-248`).
@@ -106,7 +119,7 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
 
 12. **Retired tests.** In `retired/test/` verbatim: app-apply, app-bar, app-boot, app-snapshot, app-store, described
     (old), dock-focus, file, host (old), import (old), imports, needs, open-dialog, panel-content, sandbox-deploy,
-    sandbox-dock, sandbox-frames, sandbox-protocol, saved-workspaces, screens, wiring, workspace-controls (old),
+    sandbox-dock, sandbox-frames, sandbox-protocol, saved-workspaces, screens, workspace-controls (old),
     needs-lib (split from `src/lib/lib.test.ts`), and fixtures (app-host, pkg, pkg2, pkg3). `test/workspace-controls.test.ts`
     drops the component test (item 5).
 
@@ -130,7 +143,7 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
   is nano-ui's explorer; *Connections* is nano-ui's wiring; no *Instances* or *Puzzle editor* (items 1, 6).
 - A pod opened from the explorer gets a *Pod* panel (or its existing one is focused); the app bar shows its View and
   Change implementation pickers (item 5).
-- Systems page: explorer only; Wiring page: nano-ui's wiring (items 1, 6). Profile avatar missing (item 4).
-- Import dialog previews pods/modules and imports a nano.json; File › New and saved workspaces say "not available yet".
+- Systems page: explorer only (item 1); Wiring page: `<c-circuit>` with one page, *Main* (item 6). Profile avatar missing (item 4).
+- Import dialog previews pods/modules and imports a nano.json from a URL or a file; saved workspaces say "not available yet".
 - `e2e/slice.e2e.ts`: the app is reached through `workspace-dock` (was `workspace-shell`), and Save is File › Save.
 - Import map: no `@pritzlaff/nano-runes`; adds `lit/directives/ref.js` and `@pritzlaff/nano-ui` (bundle).
