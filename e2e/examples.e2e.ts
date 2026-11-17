@@ -167,3 +167,22 @@ test('make serve-examples, imported from its own origin: every example is offere
   await say(room(page, 'alice'), 'across origins'); await approveAll()
   await expect(room(page, 'bob').locator('li')).toHaveText([/alice.*across origins/])
 })
+
+test('imported Sandboxed (the default), the pods start at once and their own views render in their frames', async ({ page }) => {
+  await start(page)
+  await page.getByRole('button', { name: 'File', exact: true }).click()
+  await page.getByRole('button', { name: /^Open/ }).click()
+  const d = page.getByRole('dialog', { name: 'Import components' })
+  await d.getByLabel('nano.json URL').fill('http://localhost:4310/nano.json')
+  await d.getByRole('button', { name: 'Fetch' }).click()
+  for (const box of await d.locator('input[data-select-runtime]').all()) await box.uncheck()
+  for (const r of ['example.chat.backend', 'example.chat.room']) await d.getByLabel(`Import runtime ${r}`, { exact: true }).check()
+  await d.getByRole('button', { name: 'Import', exact: true }).click()
+  await expect(d).toHaveCount(0)
+  await expect(dock(page).getByText('not running')).toHaveCount(0)
+  // alice's own <chat-room> renders inside her sandbox frame
+  await expect.poll(async () => {
+    for (const f of page.frames()) if (await f.locator('chat-room').filter({ has: f.getByRole('heading', { name: 'alice', exact: true }) }).count()) return true
+    return false
+  }, { timeout: 10_000 }).toBe(true)
+})

@@ -48,10 +48,12 @@ export function suggestedName(d: AppDeployment, runtime: string, known: Known = 
 export const isolationUnder = (p: Pod, trust: Trust, known: Known = none): NonNullable<Pod['isolation']> =>
   known(providerOf(p)) ? p.isolation ?? 'host' : trust === 'sandboxed' ? 'isolated-sandbox' : p.isolation === 'sandbox' || p.isolation === 'isolated-sandbox' ? p.isolation : 'host'
 
-/** `d` with each pod's isolation under `trust` (host left out, as `Pod` writes it). Pure. */
+/** `d` with each pod's isolation under `trust` (host left out, as `Pod` writes it). A pod it runs in a frame is also
+ * eager: nothing in this page can call it first, so a lazy one would never start and its panel would stay empty. Pure. */
 export const trusted = (d: AppDeployment, trust: Trust, known: Known = none): AppDeployment => ({ ...d, pods: Object.fromEntries(Object.entries(d.pods).map(([n, p]) => {
   const { isolation: _, ...rest } = p, isolation = isolationUnder(p, trust, known)
-  return [n, isolation === 'host' ? rest : { ...rest, isolation }]
+  if (isolation === 'host') return [n, rest]
+  return [n, known(providerOf(p)) ? { ...rest, isolation } : { ...rest, isolation, eager: true }]
 })) })
 
 const op = (coord: string) => coord.slice(coord.lastIndexOf('/') + 1)

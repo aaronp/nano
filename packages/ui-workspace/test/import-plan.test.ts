@@ -111,3 +111,10 @@ test("only a provider the workspace loaded from its own origin counts as its own
   expect(ownProvider(true, 'https://other.test/index.js')).toBe(false)
   expect(ownProvider(false, '/bundle/nano-ui.js')).toBe(false)
 })
+
+test('a pod the import sandboxes is eager: its frame (and view) opens at once, since nothing in the page can call it first', () => {
+  const sandboxed = trusted(file(), 'sandboxed'), kept = trusted(file(), 'sandboxed', c => c === 'acme.template')
+  expect(Object.values(sandboxed.pods).map(p => p.eager)).toEqual([true, true, true])
+  expect(Object.values(trusted(file(), 'trusted').pods).map(p => [p.isolation ?? 'host', p.eager])).toEqual([['host', false], ['sandbox', true], ['isolated-sandbox', true]])
+  expect(Object.values(kept.pods)[0]!.eager).toBe(false)   // a pod Trust leaves alone keeps its own
+})
