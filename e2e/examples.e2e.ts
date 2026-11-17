@@ -252,3 +252,17 @@ test('imported Sandboxed, todos: an add puts the item in the list in its frame',
   await list.getByRole('textbox', { name: 'New todo' }).press('Enter')
   await expect(list.locator('li')).toHaveText([/milk/, /eggs/])   // in the order they were added
 })
+
+test('imported Sandboxed, Connections tilts the frames with the dock (they follow its 3D projection)', async ({ page }) => {
+  await start(page)
+  await openSandboxed(page, /todo/)
+  const frame = page.locator('#nano-sandbox-layer iframe').filter({ visible: true }).first()
+  await expect(frame).toBeVisible({ timeout: 10_000 })
+  await page.getByRole('button', { name: 'Connections' }).first().click()
+  await page.locator('c-wires').getByRole('button', { name: 'Angled' }).click()
+  await page.waitForTimeout(1200)   // the pane turns
+  await page.screenshot({ path: test.info().outputPath('connections.png') })
+  const t = await frame.evaluate(f => (f as HTMLElement).style.transform)
+  expect(t === '' ? 'hidden' : t).toMatch(/matrix3d|hidden/)
+  expect(t).not.toMatch(/^matrix3d\([^,]+,0,0,0,0,[^,]+,0,0,/)   // not flat: it has the tilt's perspective terms
+})
