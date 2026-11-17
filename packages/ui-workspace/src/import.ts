@@ -1,8 +1,8 @@
 /**
  * Import: fetch a `nano.json`, load its provider modules, and merge it into what is loaded. The caller applies the
  * deployment. Nothing throws, and on failure `loaded` is unchanged. A provider on another origin than this page is
- * foreign: `confirm` is asked once for all of them, and each is probed (`deps.probe`), never loaded; one of its pods
- * that runs with this page's access (`host` here, `sandbox` through `isolated`) asks `approve` first.
+ * foreign: `confirm` is asked once for all of them, then each is probed (`deps.probe`) and loaded, so its views are
+ * defined; one of its pods that runs with this page's access (`host` here, `sandbox` through `isolated`) asks `approve` first.
  *
  *   const r = await importApp('/apps/slice/nano.json', loaded, { load: u => import(u), probe, confirm, approve })
  */
@@ -91,19 +91,20 @@ export const isolated = (standIn: Implementation, isolation: Pod['isolation'], o
 /** The interfaces with their op hashes, to tell a module that changed since it was probed. */
 const shape = (i: Implementation) => i.provides.map(f => `${f.coord}:${Object.values(f.ops).map(o => o.coord).join()}`).join(';')
 
-/** `probed` whose implementations, run in this page, ask first, then load `url` and run the real one. */
-function gated(probed: Provider, url: string, origin: string, deps: Deps): Provider {
+/** `probed` whose implementations, run in this page, ask first, then run the real one from `url`; and `load`, which
+ * loads `url` once (again only after a failure). */
+function gated(probed: Provider, url: string, origin: string, deps: Deps): [Provider, () => Promise<Provider>] {
   let real: Promise<Provider> | undefined
   const load = () => real ??= deps.load(url).then(m => {
     const p = (m as { default?: unknown } | undefined)?.default
     if (!isProvider(p, probed.coord)) throw new Error(`${url} has no default Provider ${probed.coord}`)
     return p
   }).catch(e => { real = undefined; throw e })
-  return Provider.define(probed.coord, [...probed.implementations.values()].map(i => asking({ ...i, async make(ctx, config) {
+  return [Provider.define(probed.coord, [...probed.implementations.values()].map(i => asking({ ...i, async make(ctx, config) {
     const r = (await load()).implementations.get(i.coord)
     if (!r || shape(r) !== shape(i)) throw new Error(`${i.coord} is not what ${url} described`)
     return r.make(ctx, config)
-  } }, origin, deps.approve)), { ...probed.meta })
+  } }, origin, deps.approve)), { ...probed.meta }), load]
 }
 
 const isProvider = (p: unknown, coord: string): p is Provider =>
@@ -138,11 +139,13 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
     const views: ViewMap = { ...loaded.views }
     for (const [coord, u] of todo) {
       const at = u.href
-      if (away(u)) {   // never loaded here: probed in a frame, and run in this page only once approved
+      if (away(u)) {   // probed in a frame, loaded (confirmed) for its views, and run in this page only once approved
         const probed = await deps.probe(at)
         if (!probed.ok) return probed
         if (!isProvider(probed.value.provider, coord)) return failure('invalid-input', `${at} has no default Provider ${coord}`)
-        fresh.push(gated(probed.value.provider, at, u.origin, deps))
+        const [p, load] = gated(probed.value.provider, at, u.origin, deps)
+        try { await load() } catch (e) { return failure('invalid-input', `cannot load ${at}: ${why(e)}`) }
+        fresh.push(p)
         Object.assign(views, probed.value.views)
         const w = newerCore(coord, probed.value.built); if (w) deps.warn?.(w)
         continue

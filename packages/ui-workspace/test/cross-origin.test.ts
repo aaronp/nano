@@ -1,4 +1,4 @@
-// Import from another origin: confirmed once, probed (never loaded), and a pod that would run it with the page's access
+// Import from another origin: confirmed once, probed, then loaded once confirmed (its views defined), and a pod that would run it with the page's access
 // asks `approve` first. The page is http://host.test; the foreign nano.json and module are on https://other.test.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: 'http://host.test/' })
@@ -74,11 +74,11 @@ test('given confirm says no, then the registry gains nothing and the result is i
   expect(seen).toMatchObject({ probe: [], load: [] })
 })
 
-test('given confirm says yes, then it is probed, not loaded, kept whole, and its ops keep their coords', async () => {
+test('given confirm says yes, then it is probed and loaded once before any pod builds, kept whole, and its ops keep their coords', async () => {
   const { seen, deps } = fakes()
   const r = await importApp('https://other.test/app/nano.json', empty(), deps)
   if (!r.ok) throw new Error(r.fail.reason)
-  expect(seen).toMatchObject({ probe: ['https://other.test/app/x.js'], load: [] })
+  expect(seen).toMatchObject({ probe: ['https://other.test/app/x.js'], load: ['https://other.test/app/x.js'], approve: [] })
   expect(r.value.deployment.modules).toEqual({ 'other.fx': 'https://other.test/app/x.js' })
   expect(foreignOrigin(r.value.deployment.modules!['other.fx'])).toBe('https://other.test')
   expect(r.value.views).toEqual({ 'other.fx/x': 'x-view' })
@@ -99,11 +99,11 @@ async function running(o: { approve: boolean; remember?: boolean }) {
   return { seen, app: made.value, call: (pod: string) => (made.value.call('main', pod) as unknown as { x(s: string): Promise<unknown> }).x('hi') }
 }
 
-test('given a host-mode pod of it and approve says no, then the call fails and nothing is loaded', async () => {
+test('given a host-mode pod of it and approve says no, then the call fails and it is not loaded again', async () => {
   const { seen, call } = await running({ approve: false })
   expect(await call('h')).toMatchObject({ ok: false })
   expect(seen.approve).toEqual(['Run other.fx from https://other.test in this page?'])
-  expect(seen.load).toEqual([])
+  expect(seen.load).toEqual(['https://other.test/app/x.js'])
 })
 
 test('given a host-mode pod of it and approve says yes, then it is loaded once and the call succeeds', async () => {
@@ -119,7 +119,14 @@ test('given a sandbox pod of it, then approve is asked; an isolated-sandbox pod 
   const iso = await running({ approve: false })
   expect(await iso.call('i')).toEqual(success('real hi'))
   expect(iso.seen.approve).toEqual([])
-  expect(iso.seen.load).toEqual([])
+  expect(iso.seen.load).toEqual(['https://other.test/app/x.js'])
+})
+
+test('given a foreign module that fails to load, then the import fails as a same-origin load would', async () => {
+  const { deps } = fakes(), loaded = empty()
+  const r = await importApp('https://other.test/app/nano.json', loaded, { ...deps, load: async () => { throw new Error('404') } })
+  expect(r).toMatchObject({ ok: false, fail: { reason: 'cannot load https://other.test/app/x.js: 404' } })
+  expect(loaded.registry.manifest().providers).toEqual([])
 })
 
 test('given a probe that fails, then the import fails with its reason and nothing is registered', async () => {
