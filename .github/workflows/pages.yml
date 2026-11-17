@@ -32,13 +32,18 @@ jobs:
       - name: Test
         run: |
           for p in nano elements ui ui-workspace; do (cd packages/$p && bun test --isolate) || exit 1; done   # --isolate: a fresh global per test file, whatever order the OS lists them in
+          cd examples && bun test --isolate
       - name: The template, against this commit's libraries
         run: bun scripts/template-check.ts
+      # Not on a pull request (no Pages there): the examples' nano.json then name their modules relatively.
+      - if: github.event_name != 'pull_request'
+        id: pages
+        uses: actions/configure-pages@v5
       - name: Build
         working-directory: packages/ui-workspace
+        env:
+          PUBLIC_URL: ${{ steps.pages.outputs.base_url && format('{0}/', steps.pages.outputs.base_url) || '' }}   # examples/<name>/nano.json names ${PUBLIC_URL}examples/<name>/<key>.js
         run: bun run build
-      - if: github.event_name != 'pull_request'
-        uses: actions/configure-pages@v5
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:

@@ -27,8 +27,11 @@ jobs:
           bun-version: 1.3.13
       - run: bun install
       - run: bun test
+      - id: pages
+        uses: actions/configure-pages@v5
       - run: bun run build
-      - uses: actions/configure-pages@v5
+        env:
+          PUBLIC_URL: ${{ steps.pages.outputs.base_url }}/   # dist/nano.json names ${PUBLIC_URL}index.js: a downloaded copy loads too
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
