@@ -10,6 +10,7 @@ import { join } from 'node:path'
 export const EXAMPLES: Record<string, Record<string, string>> = {
   todo: { 'example.kv': 'kv/memory.ts', 'example.todo': 'todo/index.ts' },
   chat: { 'example.kv': 'kv/memory.ts', 'example.messaging': 'chat/messaging/kv.ts', 'example.chat': 'chat/index.ts' },
+  auth: { 'example.auth': 'auth/index.ts' },
 }
 
 const root = join(import.meta.dir, '..'), dist = join(root, 'dist')

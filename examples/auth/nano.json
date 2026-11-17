@@ -1,0 +1,46 @@
+{
+  "pods": {
+    "auth": {
+      "implementation": "example.auth/passkey",
+      "eager": false
+    },
+    "log": {
+      "implementation": "nano.ui/log",
+      "eager": false
+    }
+  },
+  "runtimes": {
+    "example.auth.main": {
+      "pods": [
+        "auth",
+        "log"
+      ],
+      "subscriptions": [
+        {
+          "kind": "pipe",
+          "from": "auth",
+          "source": "example.auth.Auth/authenticated",
+          "to": "log",
+          "target": "nano.ui.Log/log"
+        }
+      ]
+    }
+  },
+  "modules": {
+    "example.auth": "./passkey.js"
+  },
+  "layout": {
+    "slots": [
+      {
+        "id": "auth",
+        "runtime": "example.auth.main",
+        "pod": "auth"
+      },
+      {
+        "id": "log",
+        "runtime": "example.auth.main",
+        "pod": "log"
+      }
+    ]
+  }
+}
