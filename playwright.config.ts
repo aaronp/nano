@@ -7,5 +7,9 @@ export default defineConfig({
   timeout: 60_000,
   // ports of their own, never reused: a server already on 3000 (any app) would otherwise be tested instead
   use: { baseURL: 'http://localhost:3210', channel: 'chrome', trace: 'retain-on-failure' },
-  webServer: { command: 'make ui PORT=3210', url: 'http://localhost:3210', reuseExistingServer: false, timeout: 120_000 },
+  webServer: [
+    { command: 'make ui PORT=3210', url: 'http://localhost:3210', reuseExistingServer: false, timeout: 120_000 },
+    // the template on another origin, for a cross-origin import
+    { command: 'make serve-template TEMPLATE_PORT=5174', url: 'http://localhost:5174/nano.json', reuseExistingServer: false, timeout: 120_000 },
+  ],
 })
