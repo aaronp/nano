@@ -1,4 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const dock = (page: Page) => page.locator('workspace-dock#workspace')
 /** The participant's window, by its heading (its text would also match a line mentioning the name). */
@@ -87,3 +91,20 @@ test('auth: with a virtual authenticator, Register then Passkey; the log shows o
   await expect(log).not.toContainText(/prf|secret|signature|clientDataJSON/i)   // nothing sensitive reaches the log
 })
 
+
+test('a built example opens from a local file when its modules are absolute', async ({ page, baseURL }) => {
+  const out = mkdtempSync(join(tmpdir(), 'nano-examples-'))
+  const built = spawnSync('bun', ['scripts/build.ts', out], { stdio: 'inherit', cwd: join(__dirname, '../examples'), env: { ...process.env, PUBLIC_URL: `${baseURL}/` } })
+  expect(built.status).toBe(0)
+  await start(page)
+  await page.getByRole('button', { name: 'File', exact: true }).click()
+  await page.getByRole('button', { name: /^Open/ }).click()
+  const d = page.getByRole('dialog', { name: 'Import components' })
+  await d.getByLabel('nano.json file').setInputFiles(join(out, 'todo/nano.json'))
+  await d.getByRole('button', { name: 'Import', exact: true }).click()
+  await expect(d).toHaveCount(0)
+  const list = dock(page).locator('todo-list').first()
+  await list.getByRole('textbox', { name: 'New todo' }).fill('milk')
+  await list.getByRole('button', { name: 'Add' }).click()
+  await expect(list.locator('li')).toHaveText([/milk/])   // exactly one item
+})
