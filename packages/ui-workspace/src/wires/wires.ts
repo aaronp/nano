@@ -32,7 +32,7 @@ export interface State {
   packets: Packet[]; hits: Record<string, number>; flashes: Record<string, number>; stats: Record<string, { in: number; out: number }>
 }
 
-const empty = (): Model => ({ W: 1340, H: 560, chassis: [], rack: [], P: {}, wires: [], routes: [], rackH: 128 })
+const empty = (): Model => ({ W: 1340, H: 560, chassis: [], rack: [], P: {}, wires: [], routes: [], calls: [], rackH: 128 })
 /** Fonts only reach a shadow root when the document loads them, so the link goes into the document's head, once. */
 function loadFonts(doc: Document) {
   if (doc.head.querySelector('link[data-wires-fonts]')) return

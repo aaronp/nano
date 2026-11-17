@@ -129,6 +129,10 @@ export function renderBack(el: Wires, d: Vals) {
       <circle cx=${w.gm.a[0]} cy=${w.gm.a[1]} r="7" fill=${w.color} stroke="#0A0D11" stroke-width="2"></circle>
       <circle cx=${w.gm.b[0]} cy=${w.gm.b[1]} r="7" fill=${w.color} stroke="#0A0D11" stroke-width="2"></circle>
     </g>`)}
+    ${m.calls.map(c => { const g = cordGeo(c.a, c.b); return svg`<g data-call=${c.id} opacity=${selId === null ? 0.9 : 0.3}>
+      <path d=${cordD(g)} fill="none" stroke="#8B96A5" stroke-width="2" stroke-dasharray="6 5" stroke-linecap="round"></path>
+      <circle cx=${c.a.x} cy=${c.a.y} r="4" fill="#8B96A5"></circle><path d=${`M${c.b.x - 6} ${c.b.y - 9} L${c.b.x} ${c.b.y} L${c.b.x + 6} ${c.b.y - 9}`} fill="none" stroke="#8B96A5" stroke-width="2"></path>
+      <text x=${c.a.x + 8} y=${c.a.y + 16} font-family="JetBrains Mono, monospace" font-size="10" fill="#8B96A5">calls ${c.to}</text></g>` })}
     ${relayPackets.map(k => packet(k, 6, 3, 10))}
   </svg>` : ''}
 

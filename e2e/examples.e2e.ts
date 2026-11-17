@@ -300,3 +300,15 @@ test('Import groups runtimes by namespace: one box ticks a namespace, and a warn
   await expect(d.getByLabel('Import all of example.chat')).toHaveJSProperty('indeterminate', true)
   await expect(d.locator('[data-pod="alice"] .warning')).toContainText('alice calls messaging, which is not selected')
 })
+
+test('Connections draws the chat example\'s call edges: alice and bob to messaging, messaging to chatStore', async ({ page }) => {
+  await start(page)
+  await open(page, '/examples/chat/nano.json')
+  await page.getByRole('button', { name: 'Connections' }).first().click()
+  await expect(page.locator('c-wires')).toHaveAttribute('flipped', '')
+  for (const c of ['alice|messaging', 'bob|messaging', 'messaging|chatStore'])
+    await expect(page.locator(`c-wires [data-call="example.chat.backend|${c}"]`)).toHaveCount(1)
+  await page.locator('c-wires').getByRole('button', { name: 'Back', exact: true }).click()
+  await page.waitForTimeout(1200)
+  await page.screenshot({ path: test.info().outputPath('calls.png') })
+})

@@ -56,3 +56,11 @@ test('the puzzle lays a route out as a chain, and a fork where one output feeds 
   expect(Object.values(pz.descs)).toEqual(['r.submit → d → fork(l.log | m)'])
   expect(pz.pieces.find(p => p.kind === 'fork')!.tabs).toEqual([20, 66])
 })
+
+test('a call edge is drawn from the bottom of the caller\'s box to the top of the callee\'s, apart from the wires', () => {
+  const d = deployment()
+  d.runtimes['main']!.subscriptions.push({ kind: 'call', from: 'r', to: 'd' })
+  const m = model(d), r = m.chassis.find(c => c.instance === 'r')!, rack = m.rack.find(x => x.id === 'd')!
+  expect(m.calls).toEqual([{ id: 'main|r|d', from: 'r', to: 'd', a: { x: r.x + r.w / 2, y: r.y + r.h }, b: { x: Math.round(rack.x + rack.w / 2), y: rack.y } }])
+  expect(m.wires.length).toBe(2)
+})
