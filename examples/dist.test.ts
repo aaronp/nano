@@ -39,3 +39,20 @@ test('every module a source nano.json names is in its built nano.json', async ()
     for (const key of Object.keys(src.modules ?? {})) expect(modules[key]).toBeString()
   }
 })
+
+test('with PUBLIC_URL, every built module is an https URL under it, where ui-workspace serves the examples', async () => {
+  const out = join(import.meta.dir, '../node_modules/.cache/examples-public')
+  const env = { ...process.env, PUBLIC_URL: 'https://owner.github.io/repo/' }
+  if (!Bun.spawnSync(['bun', 'scripts/build.ts', out], { cwd: import.meta.dir, env }).success) throw new Error('build failed')
+  const { modules } = await Bun.file(join(out, 'chat/nano.json')).json() as { modules: Record<string, string> }
+  expect(modules).toEqual({
+    'example.messaging': 'https://owner.github.io/repo/examples/chat/example.messaging.js',
+    'example.chat': 'https://owner.github.io/repo/examples/chat/example.chat.js',
+    'example.kv': 'https://owner.github.io/repo/examples/kv/example.kv.js',
+  })
+})
+
+test('every bundle is stamped with the nano-core it was built with', async () => {
+  const { version } = await Bun.file(join(import.meta.dir, '../packages/nano/package.json')).json()
+  expect((await import(join(dist, 'kv/example.kv.js'))).built).toEqual({ '@pritzlaff/nano-core': version })
+})
