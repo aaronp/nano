@@ -13,3 +13,8 @@ test('the same, an older or a patch-newer nano-core, or no stamp, is not', () =>
   expect(newerCore('acme.x', undefined, '0.4.0')).toBeUndefined()
   expect(newerCore('acme.x', {}, '0.4.0')).toBeUndefined()
 })
+
+test('a malformed stamp never throws and never warns: not a string, not semver, or too long', () => {
+  for (const bad of [5, {}, [], null, 'v0.9.0', '9.0.0<b>x</b>', '9.0.0' + 'x'.repeat(100_000)])
+    expect(newerCore('acme.x', { '@pritzlaff/nano-core': bad } as never, '0.4.0')).toBeUndefined()
+})
