@@ -11,5 +11,7 @@ export default defineConfig({
     { command: 'make ui PORT=3210', url: 'http://localhost:3210', reuseExistingServer: false, timeout: 120_000 },
     // the template on another origin, for a cross-origin import; a `make serve-template` already running is reused (same files)
     { command: 'make serve-template TEMPLATE_PORT=5174', url: 'http://localhost:5174/nano.json', reuseExistingServer: true, timeout: 120_000 },
+    // every example in one nano.json, served as `make serve-examples` serves it (reused when already running)
+    { command: 'make serve-examples', url: 'http://localhost:4310/nano.json', reuseExistingServer: true, timeout: 120_000 },
   ],
 })

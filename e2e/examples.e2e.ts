@@ -145,3 +145,25 @@ test('all the examples in one file, todos ticked without todoStore: the dialog w
   await expect(d.locator('.warnings')).toContainText('todos calls todoStore, which is not selected: todos will fail when it runs')
   await expect(d.getByRole('button', { name: 'Import', exact: true })).toBeEnabled()
 })
+
+test('make serve-examples, imported from its own origin: every example is offered, and the chat, imported trusted and approved, works', async ({ page }) => {
+  await start(page)
+  await page.getByRole('button', { name: 'File', exact: true }).click()
+  await page.getByRole('button', { name: /^Open/ }).click()
+  const d = page.getByRole('dialog', { name: 'Import components' })
+  await d.getByLabel('nano.json URL').fill('http://localhost:4310/nano.json')
+  await d.getByRole('button', { name: 'Fetch' }).click()
+  for (const r of ['example.todo.frontend', 'example.todo.backend', 'example.chat.room', 'example.chat.backend', 'example.auth.main', 'acme.template.main'])
+    await expect(d.getByLabel(`Import runtime ${r}`, { exact: true })).toBeVisible()
+  await expect(d).toContainText('localhost:4310')   // the foreign-origin notice
+  await d.getByRole('radio', { name: /^Trusted/ }).check()
+  for (const box of await d.locator('input[data-select-runtime]').all()) await box.uncheck()
+  for (const r of ['example.chat.backend', 'example.chat.room']) await d.getByLabel(`Import runtime ${r}`, { exact: true }).check()
+  await d.getByRole('button', { name: 'Import', exact: true }).click()
+  await expect(d).toHaveCount(0)
+  // a trusted pod from another origin asks once before it first runs with this page's access
+  const approveAll = async () => { for (let i = 0; i < 6; i++) { const a = page.locator('dialog[open]').getByRole('button', { name: 'Approve' }); if (await a.count()) await a.first().click(); else await page.waitForTimeout(300) } }
+  await approveAll()
+  await say(room(page, 'alice'), 'across origins'); await approveAll()
+  await expect(room(page, 'bob').locator('li')).toHaveText([/alice.*across origins/])
+})
