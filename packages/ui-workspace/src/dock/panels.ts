@@ -6,6 +6,7 @@
  */
 import { viewFor, type ViewTarget } from '@pritzlaff/nano-ui'
 import type { Host } from '../host.ts'
+import { connected } from '../auto-connect.ts'
 import '../sandbox/sandboxed-view.ts'
 
 const away = (h: Host, pod: string) => (h.data().pods[pod]?.isolation ?? 'host') !== 'host'
@@ -66,6 +67,6 @@ export async function addPod(h: Host, coord: string): Promise<string | undefined
   while (`${kind}${n}` in d.pods) n++
   const name = `${kind}${n}`, pod = { implementation: coord, eager: true, ...(starts[coord] !== undefined && { config: starts[coord] }) }
   const main = d.runtimes['main'] ?? { pods: [], subscriptions: [] }
-  const r = await h.apply({ ...d, pods: { ...d.pods, [name]: pod }, runtimes: { ...d.runtimes, main: { ...main, pods: [...main.pods, name] } } })
+  const r = await h.apply(connected({ ...d, pods: { ...d.pods, [name]: pod }, runtimes: { ...d.runtimes, main: { ...main, pods: [...main.pods, name] } } }, h.registry, [name]))
   return r.ok ? name : undefined
 }

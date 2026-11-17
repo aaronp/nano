@@ -41,7 +41,7 @@ export class AppShell extends LitElement {
   static override styles = css`
     :host { --drawer-w: 248px; display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100vh; height: 100dvh; background: var(--bg); color: var(--fg);
       font: 15px/1.5 var(--font); }
-    .bar { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 12px 0 0; background: var(--appbar-bg); color: var(--appbar-fg);
+    .bar { position: relative; z-index: 1001; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 12px 0 0; background: var(--appbar-bg); color: var(--appbar-fg);
       border-bottom: 1px solid var(--line); }
     /* the bar's colour reaches what's slotted in it (the File menu, the view's controls): their own :host rules (a
        shared base sets color: --nano-fg) lose to this outer one, so nothing in the bar takes the page's text colour */

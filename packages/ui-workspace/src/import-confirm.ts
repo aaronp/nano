@@ -8,14 +8,16 @@
  */
 import type { Foreign } from './import.ts'
 
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', ...kids: Node[]) => {
+/** An element with `text` as text, never HTML. */
+export const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', ...kids: Node[]) => {
   const e = document.createElement(tag)
   e.textContent = text   // untrusted text: never HTML
   e.append(...kids)
   return e
 }
 
-const row = (f: Foreign) => el('li', '', el('code', f.coord), document.createTextNode(` from ${f.origin} `), el('small', f.url),
+/** A foreign provider: its origin and URL, each pod with its isolation, full access flagged. Also the Import dialog's notice. */
+export const row = (f: Foreign) => el('li', '', el('code', f.coord), document.createTextNode(` from ${f.origin} `), el('small', f.url),
   el('ul', '', ...f.pods.map(p => el('li', '', el('code', p.name), document.createTextNode(` ${p.isolation}`),
     ...(p.fullAccess ? [el('br'), el('strong', 'runs with this workspace’s full access')] : [el('small', ': isolated in its own frame')])))))
 

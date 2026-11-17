@@ -25,7 +25,7 @@ const backendPolicy = (): RuntimeDeployment['policy'] => ({ kind: 'rules', rules
 /** The todo app, in code. */
 function build(base: AppDeployment) {
   const d = AppDeployment.edit(base, registry)
-  d.place(memory, { pod: 'store', in: 'example.todo.backend' })
+  d.place(memory, { pod: 'todoStore', in: 'example.todo.backend' })
   d.resolve('example.todo.backend', KeyValueStoreDef.api).create(todosKv, { pod: 'todos', in: 'example.todo.frontend' })
   return d.deployment()
 }
@@ -48,7 +48,7 @@ test('2. it runs: created from the built data, the todo list works and its store
 
 test('3. editing a running app: resolve the store, create todos over it, apply; the saved deployment carries the edge and rule', async () => {
   const start = AppDeployment.edit(empty(), registry)
-  start.place(memory, { pod: 'store', in: 'example.todo.backend' })
+  start.place(memory, { pod: 'todoStore', in: 'example.todo.backend' })
   const app = must(await Application.create(must(AppDeployment.assemble(start.deployment(), registry))))
   expect(app.runtime('example.todo.frontend').resolve(TodoListDef.api)).toMatchObject({ ok: false, reason: 'not-found' })
   const d = AppDeployment.edit(app.deployment(), registry)
@@ -56,7 +56,7 @@ test('3. editing a running app: resolve the store, create todos over it, apply; 
   expect([todos.runtime, todos.pod, todos.implementation]).toEqual(['example.todo.frontend', 'todos', 'example.todo/kv'])
   must(await app.apply(d.deployment()))
   expect((await app.runtime('example.todo.frontend').get(TodoListDef.api).add('eggs')).title).toBe('eggs')
-  expect(app.deployment().runtimes['example.todo.backend']!.subscriptions).toEqual([{ kind: 'call', from: 'todos', to: 'store' }])
+  expect(app.deployment().runtimes['example.todo.backend']!.subscriptions).toEqual([{ kind: 'call', from: 'todos', to: 'todoStore' }])
   const policy = app.deployment().runtimes['example.todo.backend']!.policy
   expect(policy?.kind === 'rules' && policy.rules[0]).toEqual({ allow: ['call', 'subscribe'], from: 'todos', outside: true, toInterface: 'example.kv.KeyValueStore' })   // first: it wins
 })
@@ -65,7 +65,7 @@ test('4. the rule is what lets it in: a pod given an edge to the store by hand, 
   const d = build(empty())
   d.pods.sneaky = { implementation: 'example.todo/kv', eager: false }
   d.runtimes['example.todo.frontend']!.pods.push('sneaky')
-  d.runtimes['example.todo.backend']!.subscriptions.push({ kind: 'call', from: 'sneaky', to: 'store' })
+  d.runtimes['example.todo.backend']!.subscriptions.push({ kind: 'call', from: 'sneaky', to: 'todoStore' })
   const app = must(await Application.create(must(AppDeployment.assemble(d, registry))))
   await expect(app.runtime('example.todo.frontend').get(TodoListDef.api, { pod: 'sneaky' }).add('x')).rejects.toMatchObject({ fail: { type: 'denied' } })
   expect((await app.runtime('example.todo.frontend').get(TodoListDef.api, { pod: 'todos' }).add('y')).title).toBe('y')
@@ -75,7 +75,7 @@ test('5. resolving fails as a running app would: not-found, and not-unique with 
   const d = AppDeployment.edit(empty(), registry)
   const err = (f: () => unknown) => { try { f() } catch (e) { return (e as { fail: { type: string } }).fail.type } }
   expect(err(() => d.resolve('example.todo.backend', KeyValueStoreDef.api))).toBe('not-found')
-  d.place(memory, { pod: 'store', in: 'example.todo.backend' })
+  d.place(memory, { pod: 'todoStore', in: 'example.todo.backend' })
   d.place(kv.implementations.get(String(impls.backup))!, { pod: 'spare', in: 'example.todo.backend' })
   expect(err(() => d.resolve('example.todo.backend', KeyValueStoreDef.api))).toBe('not-unique')
 })

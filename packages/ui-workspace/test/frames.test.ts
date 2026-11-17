@@ -25,18 +25,18 @@ const tick = (ms = 0) => new Promise(r => setTimeout(r, ms))
 
 // Each channel openFrame makes: its port2 is served as the frame would serve it.
 const Real = MessageChannel
-let rendered: Omit<ViewTarget, 'registry'>[] = []
+let rendered: Omit<ViewTarget, 'registry'>[] = [], themed: unknown[] = []
 globalThis.MessageChannel = class extends Real {
-  constructor() { super(); serve(this.port2, async () => sImpl, { render: (_, t) => { rendered.push(t) } }) }
+  constructor() { super(); serve(this.port2, async () => sImpl, { render: (_, t) => { rendered.push(t) }, theme: c => { themed.push(c) } }) }
 }
-afterEach(() => { layer()?.remove(); rendered = [] })
+afterEach(() => { layer()?.remove(); rendered = []; themed = [] })
 
 async function app() {
   const rts = AppDeployment.assemble({ pods: { s: Pod.lazy(sImpl, { isolation: 'isolated-sandbox' }) }, runtimes: { r: { pods: ['s'], subscriptions: [] } } }, registry)
   if (!rts.ok) throw new Error(rts.fail.reason)
   let a: Application | undefined
   const made = await Application.create(rts.value, { isolate: (_, pod) => standIn(registry.implementation(pod.implementation)!, {
-    url: 'mem:acme', open: () => openFrame('isolated-sandbox'), edges: p => edgesFor(a!.deployment(), registry, p),
+    url: 'mem:acme', open: () => openFrame('isolated-sandbox'), edges: p => edgesFor(a!.deployment(), registry, p), implementation: c => registry.implementation(c),
     onApplied: () => () => {}, warn: () => {}, app: () => a!, readyMs: 500,
   }) })
   if (!made.ok) throw new Error(made.fail.reason)
@@ -84,4 +84,26 @@ test('given the frame renders a view, then its app calls its own pod through the
   expect(heard).toContainEqual(expect.objectContaining({ type: 'sent', to: 's', port: 't.Echo/echo' }))
   expect(heard).toContainEqual(expect.objectContaining({ type: 'delivered', result: success('v') }))
   await a.close()
+})
+
+test("given the frame's view, then get reaches its own pod's actions and refuses any other pod", async () => {
+  const a = await app()
+  await a.call('r', 's').echo!('warm')
+  const t = rendered.at(-1)!, rt = t.app.runtime(t.runtime)
+  expect(await rt.get(Echo, { pod: 's' }).echo('v')).toBe('v')
+  expect(() => rt.get(Echo, { pod: 'other' })).toThrow()
+  await a.close()
+})
+
+test('a frame gets the theme on <html> when it opens, and again on each theme change', async () => {
+  document.documentElement.dataset['theme'] = 'enterprise'; document.documentElement.dataset['mode'] = 'dark'
+  const f = openFrame('isolated-sandbox')
+  f.element!.dispatchEvent(new Event('load')); await tick(5)
+  expect(themed).toEqual([{ theme: 'enterprise', mode: 'dark' }])
+  document.documentElement.dataset['mode'] = 'light'
+  document.dispatchEvent(new CustomEvent('app-theme-change', { detail: { theme: 'enterprise', mode: 'light' } })); await tick(5)
+  expect(themed.at(-1)).toEqual({ theme: 'enterprise', mode: 'light' })
+  f.dispose(); const n = themed.length
+  document.dispatchEvent(new CustomEvent('app-theme-change', { detail: { theme: 'enterprise', mode: 'dark' } })); await tick(5)
+  expect(themed.length).toBe(n)
 })

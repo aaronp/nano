@@ -52,6 +52,10 @@ export function renderAside(el: Wires, d: Vals) {
     <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:4px; padding:4px; border-radius:8px; background:#161B22; border:1px solid #262D38">
       ${seg('Relay wires', isRelay, () => el.setState({ mode: 'relay', armed: null, cord: null }))}${seg('Puzzle blocks', !isRelay, () => el.setState({ mode: 'puzzle', cord: null }))}
     </div>
+    <div style="display:flex; gap:16px; font-size:12px; color:#C9D1D9">
+      <label style="display:flex; gap:6px; align-items:center"><input type="checkbox" .checked=${s.showPipes} @change=${(e: Event) => el.setState({ showPipes: (e.target as HTMLInputElement).checked })} style="accent-color:#E6EDF3"> Pipes</label>
+      <label style="display:flex; gap:6px; align-items:center"><input type="checkbox" .checked=${s.showCalls} @change=${(e: Event) => el.setState({ showCalls: (e.target as HTMLInputElement).checked })} style="accent-color:#E6EDF3"> Call edges</label>
+    </div>
     <button type="button" class="sidebtn" aria-pressed=${editing ? 'true' : 'false'} @click=${() => toggleEdit(el)} style="height:44px; border-radius:6px; border:1px solid ${editing ? OK_COLOR : '#2F3845'}; background:${editing ? OK_COLOR : '#161B22'}; color:${editFg}; font:inherit; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke=${editFg} stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v5M17 3v5M5 8h14v3a7 7 0 0 1-14 0z"></path><path d="M12 18v3"></path></svg>
       ${editing ? 'Done editing' : 'Edit wiring'}

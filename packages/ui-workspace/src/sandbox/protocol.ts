@@ -7,6 +7,7 @@
  */
 import { isNanoResult, type NanoResult, type Provider, type SchemaDef, type SelectorData } from '@pritzlaff/nano-core'
 import type { Edge } from './edges.ts'
+import { isMode, isThemeId, type Mode, type ThemeId } from '../lib/themes.ts'
 
 type Reason = 'restarted' | 'removed' | 'changed' | 'closed'
 type R = NanoResult<unknown>
@@ -21,6 +22,9 @@ export type Msg =
   | { type: 'view-result'; id: number; result: R }
   | { type: 'stream'; event: Record<string, unknown> }
   | { type: 'probe'; url: string }
+  | { type: 'theme'; theme: ThemeId; mode: Mode }   // the host's theme choice: an id, never CSS
+  | { type: 'emission'; id: number; event: unknown }   // one emission heard for the frame's `on`/`view-on` id
+  | { type: 'ended'; id: number; result: R }           // that subscription ended: success, or the Fail (denied, not-found, …)
   // frame → host
   | { type: 'ready' } | { type: 'closed' }
   | { type: 'failed'; error: string }
@@ -28,6 +32,9 @@ export type Msg =
   | { type: 'publish'; op: string; data: unknown }
   | { type: 'outcall'; id: number; pod: string; runtime: string; op: string; input: unknown }
   | { type: 'view-call'; id: number; op: string; input: unknown }
+  | { type: 'on'; id: number; pod: string; runtime: string; op: string }   // the pod's `on` through its edge: subscribed as the pod
+  | { type: 'view-on'; id: number; op: string }                            // the view's own pod's event: subscribed as the page's view is
+  | { type: 'off'; id: number }
   | { type: 'described'; providers: Described[] }
   | { type: 'warn'; reason: string }
 
@@ -108,9 +115,12 @@ const FIELDS: Record<Msg['type'], Record<string, Check>> = {
   call: { id: num, port: str, input: any }, outresult: { id: num, result }, edges: { edges: arrOf(edge) },
   close: { reason: v => ['restarted', 'removed', 'changed', 'closed'].includes(v as string) },
   'view-result': { id: num, result }, stream: { event: obj }, probe: { url: str },
+  theme: { theme: v => str(v) && isThemeId(v as string), mode: v => str(v) && isMode(v as string) },
   ready: {}, closed: {}, failed: { error: str }, result: { id: num, result }, publish: { op: str, data: any },
   outcall: { id: num, pod: str, runtime: str, op: str, input: any }, 'view-call': { id: num, op: str, input: any },
   described: { providers: Array.isArray }, warn: { reason: str },
+  emission: { id: num, event: any }, ended: { id: num, result },
+  on: { id: num, pod: str, runtime: str, op: str }, 'view-on': { id: num, op: str }, off: { id: num },
 }
 
 /** `x` as a message, or why it is not one: a JSON copy of it, so only JSON crosses (a Map, an ArrayBuffer or a Blob is

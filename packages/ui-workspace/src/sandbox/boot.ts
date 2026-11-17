@@ -7,6 +7,7 @@ import { Registry, type Provider } from '@pritzlaff/nano-core'
 import { defineViews, viewFor, type ViewMap } from '@pritzlaff/nano-ui'
 import { describeProvider } from './protocol.ts'
 import { serve } from './serve.ts'
+import { applyChoice } from '../lib/theme-state.ts'
 
 type Mod = { default: Provider; views: ViewMap; built?: Record<string, string> }
 
@@ -30,6 +31,7 @@ addEventListener('message', function once(e: MessageEvent) {
     if (!i) throw new Error(`${u} has no implementation ${coord}`)
     return i
   }, {
+    theme: c => applyChoice(document, c),
     probe: async u => { const m = await mod(u); return [{ ...describeProvider(m.default, m.views), ...(m.built && { built: m.built }) }] },
     render(coord, target) {
       const m = built!, registry = Registry.create()

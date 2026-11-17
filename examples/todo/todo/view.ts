@@ -1,12 +1,12 @@
 // `<todo-list>`: the todo example's view, a Lit element over one `example.todo/kv` pod, reached through `target.app`.
-import { LitElement, html } from 'lit'
+import { LitElement, css, html } from 'lit'
 import { base, kit } from '@pritzlaff/nano-elements'
 import type { ViewTarget } from '@pritzlaff/nano-ui'
 import { TodoListDef } from './contract.ts'
 
 export class TodoListView extends LitElement {
   static properties = { target: { attribute: false }, todos: { state: true }, error: { state: true } }
-  static styles = [base, kit]
+  static styles = [base, kit, css`ul { list-style: none; margin: 0; padding: 0 } li > span { flex: 1 } [role='alert'] { margin: 0 }`]
   declare target?: ViewTarget
   declare todos: TodoListDef.Todo[]
   declare error?: string
@@ -48,11 +48,11 @@ export class TodoListView extends LitElement {
     const t = this.target
     if (!t) return html``
     const list = this.pod(t)
-    return html`${this.error ? html`<p role="alert">${this.error}</p>` : ''}<form @submit=${(e: Event) => { e.preventDefault(); void this.add(t, this.renderRoot.querySelector('input')!) }}>
-        <input class="input" aria-label="New todo" placeholder="What needs doing?"><button class="btn" type="submit">Add</button></form>
-      <ul>${this.todos.map(d => html`<li>
+    return html`<div class="col">${this.error ? html`<p class="alert bad" role="alert">${this.error}</p>` : ''}<div class="row">
+        <input class="input" aria-label="New todo" placeholder="What needs doing?" @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' && !e.isComposing) void this.add(t, e.target as HTMLInputElement) }}><button class="btn" type="button" @click=${() => void this.add(t, this.renderRoot.querySelector('input')!)}>Add</button></div>
+      <ul>${this.todos.map(d => html`<li class="list-row">
         <input type="checkbox" aria-label="Done: ${d.title}" .checked=${d.done} @change=${(e: Event) => this.run(list.update({ id: d.id, done: (e.target as HTMLInputElement).checked }))}>
         <span>${d.title}</span>
-        <button class="btn small" aria-label="Remove ${d.title}" @click=${() => this.run(list.remove(d.id))}>×</button></li>`)}</ul>`
+        <button class="btn small" aria-label="Remove ${d.title}" @click=${() => this.run(list.remove(d.id))}>×</button></li>`)}</ul></div>`
   }
 }

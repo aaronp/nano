@@ -15,8 +15,8 @@ It ships three pods in one provider, `acme.template`, to start from:
 
 `nano.json` places all three in runtime `main`, and pipes `picker.changed` and `timer.tick` to `store.set`: an event
 can be piped to an action when its data has the action's input schema (`Entry`, in `src/interfaces.ts`).
-The `timer.tick` pipe is there for a second reason: an event nobody subscribes to is not on the application's stream, so a
-view could not see it; the pipe makes each tick visible to `<nano-timer>`, and stores the count as a bonus.
+`<nano-timer>` does not rely on that pipe: while connected it subscribes to its own pod's `tick` (through the `Timer`
+interface) and counts what arrives, so a timer added with no pipes counts too.
 
 ## Make it yours
 

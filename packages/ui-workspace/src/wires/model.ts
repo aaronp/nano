@@ -17,8 +17,10 @@ export type RackItem = { id: string; title: string; sub: string; kind?: string; 
 export type Wire = { id: string; route: string; from: string; to: string }
 /** A connected group of components, with its generated name and colour. */
 export type Route = { id: string; name: string; color: string }
+/** A call edge, drawn from the caller's box to the callee's (a pod as a whole: it has no Op of its own to plug into). */
+export type Call = { id: string; from: string; to: string; a: { x: number; y: number }; b: { x: number; y: number }[] }
 /** Everything the stage draws. */
-export type Model = { W: number; H: number; chassis: Chassis[]; rack: RackItem[]; P: Record<string, Port>; wires: Wire[]; routes: Route[]; rackH: number }
+export type Model = { W: number; H: number; chassis: Chassis[]; rack: RackItem[]; P: Record<string, Port>; wires: Wire[]; routes: Route[]; rackH: number; calls: Call[] }
 
 /** What the model is made from. `kinds` maps an instance to its catalog kind; `titles` maps a kind to its title. */
 export type ModelInput = {
@@ -32,6 +34,9 @@ export type Jack = { op: Op; port: string; dir: 'in' | 'out' }
 export type Snapshot = {
   instances: { id: string; ops: Jack[]; labels?: Record<string, string> }[]
   subscriptions: { id: string; source: string; op: string; listener: string; target: string }[]
+  /** The call edges, by runtime: `from` may call `to`, at `ops` (its jacks for the interface `from` needs: each
+   * action's in jack, each event's out jack, as `<port>:<dir>`). */
+  calls?: { id: string; from: string; to: string; ops: string[] }[]
 }
 /** An action is an in jack and, for its result, an out jack; an event is an out jack (as nano-ui's wiring reads them). */
 export const jacksOfImpl = (impl: Implementation | undefined): Jack[] => (impl?.provides ?? []).flatMap(i => Object.values(i.ops).flatMap(op => {
@@ -43,10 +48,20 @@ export const wireId = (runtime: string, s: { from: string; source: string; to: s
 /** The snapshot of a deployment: each pod with its implementation's jacks and its isolation as `nano/deploy`, each pipe. */
 export function snapshotOf(d: AppDeployment, registry: Registry): Snapshot {
   const instances = Object.entries(d.pods).map(([id, p]) => ({ id, ops: jacksOfImpl(registry.implementation(p.implementation)), labels: { 'nano/deploy': p.isolation ?? 'host' } }))
-  // BACKLOG(6): call edges (`kind: 'call'`) have no port; the old view had none either, so they are not drawn.
+  const calls = Object.entries(d.runtimes).flatMap(([rt, r]) => r.subscriptions.flatMap(s => s.kind === 'call'
+    ? [{ id: `${rt}|${s.from}|${s.to}`, from: s.from, to: s.to, ops: calledOps(d, registry, s.from, s.to) }] : []))
   const subscriptions = Object.entries(d.runtimes).flatMap(([rt, r]) => r.subscriptions.flatMap(s => s.kind === 'pipe'
     ? [{ id: wireId(rt, s), source: s.from, op: s.source + ':out', listener: s.to, target: s.target + ':in' }] : []))
-  return { instances, subscriptions }
+  return { instances, subscriptions, calls }
+}
+
+/** The jacks of `to` that `from` may call: the ops of the interfaces its dependencies name that `to` provides (all of
+ * `to`'s when none names one). */
+function calledOps(d: AppDeployment, registry: Registry, from: string, to: string): string[] {
+  const provides = registry.implementation(d.pods[to]?.implementation ?? '')?.provides ?? []
+  const named = new Set(Object.values(registry.implementation(d.pods[from]?.implementation ?? '')?.dependencies ?? {}).flatMap(s => s.implements ?? []))
+  const used = provides.some(i => named.has(i.coord)) ? provides.filter(i => named.has(i.coord)) : provides
+  return used.flatMap(i => Object.values(i.ops).map(op => `${i.coord}/${op.name}:${op.kind === 'action' ? 'in' : 'out'}`))
 }
 
 /** A jack's key: the instance, and the port with its direction. */
@@ -102,7 +117,15 @@ export function buildModel({ snapshot, panels, W, H, application, kinds = {}, ti
   const subs = snapshot.subscriptions.filter(s => P[portKey(s.source, s.op)] && P[portKey(s.listener, s.target)])
   const { routeOf, routes } = routesOf(subs, chassis)
   const wires = subs.map(s => ({ id: s.id, route: routeOf.get(s.id)!, from: portKey(s.source, s.op), to: portKey(s.listener, s.target) }))
-  return { W, H, chassis, rack, P, wires, routes, rackH: 128 + row * 132 }
+  // a call edge leaves the bottom of the caller's box and enters the top of the callee's
+  const box = (id: string) => chassis.find(c => c.instance === id) ?? rack.find(r => r.id === id)
+  const calls = (snapshot.calls ?? []).flatMap(c => {
+    const f = box(c.from), t = box(c.to)
+    if (!f || !t) return []
+    const ends = (c.ops ?? []).flatMap(o => P[portKey(c.to, o)] ?? [])   // the callee's jacks, else the top of its box
+    return [{ id: c.id, from: c.from, to: c.to, a: { x: Math.round(f.x + f.w / 2), y: f.y + f.h }, b: ends.length ? ends.map(j => ({ x: j.x, y: j.y })) : [{ x: Math.round(t.x + t.w / 2), y: t.y }] }]
+  })
+  return { W, H, chassis, rack, P, wires, routes, rackH: 128 + row * 132, calls }
 }
 
 /** Routes: the weakly connected groups of components, named `<first source> → <last sink>`, coloured in order. */

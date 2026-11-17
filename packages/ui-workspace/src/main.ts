@@ -15,6 +15,7 @@ import './components/component-drawer.ts';
 import { openImportDialog, setImportHost } from './components/import-dialog.ts';
 import './components/gallery.ts';
 import './components/theme-picker.ts';
+import './components/profile-menu.ts';
 import { FileMenuEl } from './components/file-menu.ts';
 import { askName } from './components/name-dialog.ts';
 import './widgets/widgets.ts';
@@ -45,7 +46,7 @@ if (host) {
     return done;
   };
   const layoutNow = () => JSON.stringify(dock && h.data().layout?.[dock.id]);
-  setImportHost({ ...host, importUrl: (url) => { const before = layoutNow(); return shown(host!.importUrl(url), before) as ReturnType<typeof h.importUrl>; } });
+  setImportHost({ ...host, importUrl: (url, chosen) => { const before = layoutNow(); return shown(host!.importUrl(url, chosen), before) as ReturnType<typeof h.importUrl>; } });
   for (const dock of document.querySelectorAll<WorkspaceDock>('workspace-dock')) dock.host = host;
   for (const el of document.querySelectorAll<HTMLElement & { target?: unknown }>('nano-explorer, nano-wiring')) el.target ??= target;
   bootAppBar(host);

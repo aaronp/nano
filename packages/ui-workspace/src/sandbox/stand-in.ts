@@ -1,11 +1,12 @@
 /**
  * The host's side of a sandboxed pod: an implementation with the real one's coord, interfaces, dependencies and
  * config, whose `make` opens a frame and whose handlers cross its port. The frame's outcalls go through the pod's own
- * context (so its own call edges, policed and on the stream), its publishes through `ctx.publish`.
+ * context (so its own call edges, policed and on the stream), its publishes through `ctx.publish`, its `on`s through
+ * `ctx`'s Selections (as the pod) and its view's `view-on`s through the host's `get` (as the page's view).
  *
  *   isolate: (name, pod) => standIn(registry.implementation(pod.implementation)!, { url, open, edges, onApplied, warn, app })
  */
-import { failure, port, type AppEvent, type Application, type Handler, type Implementation, type NanoResult } from '@pritzlaff/nano-core'
+import { failure, port, success, type AppEvent, type Fail, type Application, type Handler, type Implementation, type NanoResult } from '@pritzlaff/nano-core'
 import type { Edge } from './edges.ts'
 import { checkMsg, type Msg } from './protocol.ts'
 
@@ -20,6 +21,8 @@ type Deps = {
   edges(pod: string): Edge[]
   onApplied(fn: () => void): () => void
   warn(reason: string): void
+  /** The host's implementation at a coord: the frame names an op by its coord, and the host finds it here. */
+  implementation(coord: string): Implementation | undefined
   /** The application, for the frame's view: its `view-call`s and the stream events naming its pod. */
   app(): Application
   readyMs?: number
@@ -27,6 +30,12 @@ type Deps = {
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 type Calls = Record<string, ((input: unknown) => Promise<NanoResult<unknown>>) | undefined>
+const thrown = (fail: Fail) => Object.assign(new Error(`${fail.type}: ${fail.reason}`), { fail })
+/** The op with `coord` among `i`'s interfaces, and its interface. */
+const opIn = (i: Implementation | undefined, coord: string) => {
+  const api = i?.provides.find(f => f.byCoord.has(coord))
+  return api && { api, op: api.byCoord.get(coord)! }
+}
 
 /** Whether `e` names `pod`, keeping the ids of its `sent` so their `delivered`/`denied` count too. */
 function naming(pod: string) {
@@ -67,6 +76,36 @@ export function standIn(real: Implementation, deps: Deps): Implementation {
         try { post({ type, id, result: r }) } catch (e) { try { post({ type, id, result: failure('invalid-output', message(e)) }) } catch { /* port gone */ } }
       }
 
+      /** The frame's subscriptions, by its id: each connected here (policy asked as for a page pod or view), its
+       *  emissions posted, its end posted as `ended`; `off` or this build's close ends it. */
+      const hearing = new Map<number, () => void>()
+      const subscribe = (m: Extract<Msg, { type: 'on' | 'view-on' }>): AsyncIterable<unknown> => {
+        if (m.type === 'view-on') {   // as the page's view: the host's get on its own pod, an event's outputs
+          const o = opIn(real, m.op)
+          if (!o || o.op.kind !== 'event') throw thrown({ type: 'unknown-op', reason: `${self}: ${m.op} is not one of its events` })
+          return (deps.app().runtime(ctx.runtimes[0]!).get(o.api, { pod: self }) as unknown as Record<string, () => AsyncIterable<unknown>>)[o.op.name]!()
+        }
+        const sel = ctx.all({}).find(s => s.pod === m.pod && s.runtime === m.runtime)
+        if (!sel) throw thrown({ type: 'not-found', reason: `${self}->${m.pod} is not in ${m.runtime}` })
+        const o = opIn(deps.implementation(deps.app().deployment().pods[m.pod]?.implementation ?? ''), m.op)
+        if (!o) throw thrown({ type: 'unknown-op', reason: `${self}: ${m.op} is not an op of ${m.pod}` })
+        return sel.on(o.op)   // as the pod: kind subscribe, from self; nano ends it with this build
+      }
+      const hear = (m: Extract<Msg, { type: 'on' | 'view-on' }>) => {
+        const ended = (r: NanoResult<unknown>) => { if (hearing.delete(m.id) || r.ok === false) try { post({ type: 'ended', id: m.id, result: r }) } catch { /* port gone */ } }
+        if (hearing.has(m.id)) return drop(`a second subscription ${m.id}`)
+        let it: AsyncIterator<unknown>
+        try {
+          if (failed) throw thrown({ type: 'not-found', reason: failed })
+          it = subscribe(m)[Symbol.asyncIterator]()
+        } catch (e) { return ended({ ok: false, fail: (e as { fail?: Fail }).fail ?? { type: 'threw', reason: message(e) } }) }
+        hearing.set(m.id, () => void it.return?.())
+        void (async () => {
+          try { for (let r = await it.next(); !r.done && hearing.has(m.id); r = await it.next()) post({ type: 'emission', id: m.id, event: r.value }); ended(success(undefined)) }
+          catch (e) { ended({ ok: false, fail: (e as { fail?: Fail }).fail ?? { type: 'threw', reason: message(e) } }) }
+        })()
+      }
+
       frame.port.onmessage = ({ data }) => {
         const m = checkMsg(data)
         if (typeof m === 'string') return fail(`a malformed message: ${m}`)   // untrusted: fails the frame as `failed` does
@@ -98,6 +137,8 @@ export function standIn(real: Implementation, deps: Deps): Implementation {
             const r = f ? Promise.resolve().then(() => f(m.input)) : Promise.resolve(failure('not-found', `${self}->${m.pod} is not in ${m.runtime}`))
             return void r.then(x => answer('outresult', m.id, x), e => answer('outresult', m.id, failure('threw', message(e))))
           }
+          case 'on': case 'view-on': return hear(m)
+          case 'off': { const stop = hearing.get(m.id); hearing.delete(m.id); return stop?.() }
           default: return drop(`unexpected ${m.type}`)
         }
       }
@@ -108,6 +149,8 @@ export function standIn(real: Implementation, deps: Deps): Implementation {
       // Added first, so a failed build (nano closes it) lets go of the frame too.
       ctx.addOnCloseListener(async ({ reason }) => {
         off(); unheard()
+        for (const stop of hearing.values()) stop()
+        hearing.clear()
         if (!failed) {
           const done = new Promise<void>(res => { closed = res })
           try { post({ type: 'close', reason }); await bounded(done, ms, 'no closed') } catch { /* gone or late: disposed anyway */ }

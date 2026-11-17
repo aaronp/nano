@@ -7,10 +7,14 @@
  * - every bundle ends `export const built = { '@pritzlaff/nano-core': '<version>' }`, the nano-core it was built with.
  * With PUBLIC_URL set (`https://owner.github.io/repo/`), `modules` are absolute: `${PUBLIC_URL}examples/<name>/<key>.js`
  * (the shared kv `${PUBLIC_URL}examples/kv/example.kv.js`), where ui-workspace's build puts them in public/; a downloaded
- * nano.json then loads from anywhere. `bun scripts/build.ts <outdir>` builds elsewhere than dist/.
+ * nano.json then loads from anywhere.
+ * - the template (templates/nano-template) is built as an example too, to dist/template/;
+ * - dist/nano.json: every example in one file (scripts/combine.ts; a pod or module clash fails the build), its `main`
+ *   runtime renamed acme.template.main. `bun scripts/build.ts <outdir>` builds elsewhere than dist/.
  */
 import { rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { combine } from './combine.ts'
 import { version } from '../../packages/nano/package.json'
 
 /** example name -> (module key -> entry file, relative to examples/); `kv` is the shared folder, no example. */
@@ -19,12 +23,17 @@ export const EXAMPLES: Record<string, Record<string, string>> = {
   todo: { 'example.todo': 'todo/index.ts' },
   chat: { 'example.messaging': 'chat/messaging/kv.ts', 'example.chat': 'chat/index.ts' },
   auth: { 'example.auth': 'auth/index.ts' },
+  template: { 'acme.template': '../templates/nano-template/src/index.ts' },
 }
+/** Where an example's own nano.json is, when not <name>/nano.json; its runtimes renamed in the combined file. */
+const SOURCE: Record<string, string> = { template: '../templates/nano-template/nano.json' }
+const RENAME: Record<string, Record<string, string>> = { template: { main: 'acme.template.main' } }
 const SHARED: Record<string, string> = { 'example.kv': '../kv/example.kv.js' }
 
 const root = join(import.meta.dir, '..'), dist = process.argv[2] ? resolve(process.argv[2]) : join(root, 'dist'), PUBLIC_URL = process.env.PUBLIC_URL
 const footer = `export const built = ${JSON.stringify({ '@pritzlaff/nano-core': version })}`
 rmSync(dist, { recursive: true, force: true })
+const all: Record<string, Parameters<typeof combine>[0][string]> = {}
 for (const [name, entries] of Object.entries(EXAMPLES)) {
   const outdir = join(dist, name), modules: Record<string, string> = {}
   for (const [key, entry] of Object.entries(entries)) {
@@ -36,9 +45,16 @@ for (const [name, entries] of Object.entries(EXAMPLES)) {
     modules[key] = `./${key}.js`
   }
   if (name === 'kv') continue
-  const source = await Bun.file(join(root, name, 'nano.json')).json()
+  const source = await Bun.file(join(root, SOURCE[name] ?? join(name, 'nano.json'))).json()
   for (const key of Object.keys(source.modules ?? {})) modules[key] ??= SHARED[key] ?? (() => { throw new Error(`${name}/nano.json: no build for module ${key}`) })()
   if (PUBLIC_URL) for (const k in modules) modules[k] = new URL(modules[k]!, new URL(`examples/${name}/`, PUBLIC_URL)).href
   writeFileSync(join(outdir, 'nano.json'), JSON.stringify({ ...source, modules }, null, 2) + '\n')
+  // in dist/nano.json, a module file is under <name>/ (or kv/); with PUBLIC_URL it is absolute already
+  const from = (m: string) => (PUBLIC_URL ? m : `.${new URL(m, `file:///${name}/`).pathname}`)
+  const to = (id: string) => RENAME[name]?.[id] ?? id
+  all[name] = { ...source, modules: Object.fromEntries(Object.entries(modules).map(([k, m]) => [k, from(m)])),
+    runtimes: Object.fromEntries(Object.entries(source.runtimes).map(([id, r]) => [to(id), r])),
+    layout: source.layout && { ...source.layout, slots: source.layout.slots?.map((s: { runtime: string }) => ({ ...s, runtime: to(s.runtime) })) } }
 }
-console.log(`built dist/ (${Object.keys(EXAMPLES).join(', ')})`)
+writeFileSync(join(dist, 'nano.json'), JSON.stringify(combine(all), null, 2) + '\n')
+console.log(`built dist/ (${Object.keys(EXAMPLES).join(', ')}; all of them in nano.json)`)

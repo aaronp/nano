@@ -8,7 +8,9 @@ const server = Bun.serve({
   async fetch(req) {
     const path = normalize(decodeURIComponent(new URL(req.url).pathname)).replace(/^(\.\.[/\\])+/, '')
     const file = Bun.file(join(dist, path))
-    return (await file.exists()) ? new Response(file) : new Response('not found', { status: 404 })
+    // Any origin may import these bundles (a workspace on another port or host), as GitHub Pages allows.
+    const cors = { 'Access-Control-Allow-Origin': '*' }
+    return (await file.exists()) ? new Response(file, { headers: cors }) : new Response('not found', { status: 404, headers: cors })
   },
 })
 console.log(`serving dist/ at ${server.url}`)

@@ -1,8 +1,8 @@
 /**
  * Import: fetch a `nano.json`, load its provider modules, and merge it into what is loaded. The caller applies the
  * deployment. Nothing throws, and on failure `loaded` is unchanged. A provider on another origin than this page is
- * foreign: `confirm` is asked once for all of them, and each is probed (`deps.probe`), never loaded; one of its pods
- * that runs with this page's access (`host` here, `sandbox` through `isolated`) asks `approve` first.
+ * foreign: `confirm` is asked once for all of them, then each is probed (`deps.probe`) and loaded, so its views are
+ * defined; one of its pods that runs with this page's access (`host` here, `sandbox` through `isolated`) asks `approve` first.
  *
  *   const r = await importApp('/apps/slice/nano.json', loaded, { load: u => import(u), probe, confirm, approve })
  */
@@ -27,24 +27,33 @@ type Deps = {
   probe(url: string): Promise<NanoResult<{ provider: Provider; views: ViewMap; built?: Built }>>
   confirm(list: Foreign[]): Promise<boolean>
   approve(title: string): Promise<boolean>
+  /** The nano.json as fetched, edited before anything is decided (the Import dialog's runtime names and Trust). */
+  edit?(d: AppDeployment): AppDeployment
   /** Told when a module was built with a newer nano-core than this page's; the import goes on. */
   warn?(text: string): void
 }
 
 const clash = (what: string, name: string) => failure('invalid-input', `clash: ${what} ${name} is already loaded`)
 
-/** `current` and `incoming` unioned; a name already present is a clash. Pure. */
+/** `current` and `incoming` unioned; a pod or provider name already present is a clash, a runtime already present gains
+ * the incoming pods and subscriptions (its own policy kept). Pure. */
 export function merge(current: AppDeployment, incoming: AppDeployment): NanoResult<AppDeployment> {
   for (const k of Object.keys(incoming.pods)) if (Object.hasOwn(current.pods, k)) return clash('pod', k)
-  for (const k of Object.keys(incoming.runtimes)) if (Object.hasOwn(current.runtimes, k)) return clash('runtime', k)
   const modules: Record<string, string> = { ...current.modules }
   for (const [k, url] of Object.entries(incoming.modules ?? {})) {
     if (Object.hasOwn(modules, k) && modules[k] !== url) return clash('provider', k)
     modules[k] = url
   }
+  // Merging into a runtime that is already there: two policies would silently lose one's rules, so that is refused.
+  for (const [k, r] of Object.entries(incoming.runtimes))
+    if (r.policy && Object.hasOwn(current.runtimes, k) && current.runtimes[k]!.policy)
+      return failure('invalid-input', `runtime ${k} already has a policy; import into another runtime`)
   return success({
     pods: { ...current.pods, ...incoming.pods },
-    runtimes: { ...current.runtimes, ...incoming.runtimes },
+    runtimes: { ...current.runtimes, ...Object.fromEntries(Object.entries(incoming.runtimes).map(([k, r]) => {
+      const was = Object.hasOwn(current.runtimes, k) ? current.runtimes[k] : undefined
+      return [k, was ? { ...was, pods: [...was.pods, ...r.pods], subscriptions: [...was.subscriptions, ...r.subscriptions], ...((was.policy ?? r.policy) && { policy: was.policy ?? r.policy }) } : r]
+    })) },
     tags: { ...current.tags, ...incoming.tags },
     modules,
     views: { ...current.views, ...incoming.views },
@@ -91,19 +100,20 @@ export const isolated = (standIn: Implementation, isolation: Pod['isolation'], o
 /** The interfaces with their op hashes, to tell a module that changed since it was probed. */
 const shape = (i: Implementation) => i.provides.map(f => `${f.coord}:${Object.values(f.ops).map(o => o.coord).join()}`).join(';')
 
-/** `probed` whose implementations, run in this page, ask first, then load `url` and run the real one. */
-function gated(probed: Provider, url: string, origin: string, deps: Deps): Provider {
+/** `probed` whose implementations, run in this page, ask first, then run the real one from `url`; and `load`, which
+ * loads `url` once (again only after a failure). */
+function gated(probed: Provider, url: string, origin: string, deps: Deps): [Provider, () => Promise<Provider>] {
   let real: Promise<Provider> | undefined
   const load = () => real ??= deps.load(url).then(m => {
     const p = (m as { default?: unknown } | undefined)?.default
     if (!isProvider(p, probed.coord)) throw new Error(`${url} has no default Provider ${probed.coord}`)
     return p
   }).catch(e => { real = undefined; throw e })
-  return Provider.define(probed.coord, [...probed.implementations.values()].map(i => asking({ ...i, async make(ctx, config) {
+  return [Provider.define(probed.coord, [...probed.implementations.values()].map(i => asking({ ...i, async make(ctx, config) {
     const r = (await load()).implementations.get(i.coord)
     if (!r || shape(r) !== shape(i)) throw new Error(`${i.coord} is not what ${url} described`)
     return r.make(ctx, config)
-  } }, origin, deps.approve)), { ...probed.meta })
+  } }, origin, deps.approve)), { ...probed.meta }), load]
 }
 
 const isProvider = (p: unknown, coord: string): p is Provider =>
@@ -116,7 +126,7 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
   try {
     const res = await fetch(url)
     if (!res.ok) return failure('invalid-input', `cannot load ${url}: ${res.status}`)
-    const incoming = (await res.json()) as AppDeployment
+    const fetched = (await res.json()) as AppDeployment, incoming = deps.edit ? deps.edit(fetched) : fetched
     // a local file (a blob: URL) is no base: its modules resolve against the page, as saved
     const base = new URL(url.startsWith('blob:') ? globalThis.location.href : url, globalThis.location?.href), home = page() ?? base.origin
     // Each provider is resolved against the nano.json. Stored: its path when it is on this page's origin (so the same
@@ -138,11 +148,16 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
     const views: ViewMap = { ...loaded.views }
     for (const [coord, u] of todo) {
       const at = u.href
-      if (away(u)) {   // never loaded here: probed in a frame, and run in this page only once approved
+      if (away(u)) {   // probed in a frame, loaded (confirmed) for its views, and run in this page only once approved
         const probed = await deps.probe(at)
         if (!probed.ok) return probed
         if (!isProvider(probed.value.provider, coord)) return failure('invalid-input', `${at} has no default Provider ${coord}`)
-        fresh.push(gated(probed.value.provider, at, u.origin, deps))
+        const [p, load] = gated(probed.value.provider, at, u.origin, deps)
+        // Loaded now (for its views) only when a pod of it would run with this page's access, as the confirm said;
+        // a provider whose pods are all isolated-sandbox never runs in this page.
+        if (foreign.find(f => f.coord === coord)?.pods.some(p => p.fullAccess))
+          try { await load() } catch (e) { return failure('invalid-input', `cannot load ${at}: ${why(e)}`) }
+        fresh.push(p)
         Object.assign(views, probed.value.views)
         const w = newerCore(coord, probed.value.built); if (w) deps.warn?.(w)
         continue

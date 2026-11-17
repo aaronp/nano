@@ -2,10 +2,10 @@
 
 ## Ready
 
-- Versions: `@pritzlaff/nano-core` 0.4.0, `@pritzlaff/nano-elements` 0.4.0, `@pritzlaff/nano-ui` 0.1.0 (its own line,
-  as `scripts/version.ts` keeps it; not yet on npm, so 0.1.0 is its first release). Siblings are `workspace:*`; the
+- Versions: `@pritzlaff/nano-core`, `@pritzlaff/nano-elements` and `@pritzlaff/nano-ui` are all 0.4.0; they release together (`scripts/version.ts` sets all three by default). nano-ui's first npm release.
+  Siblings are `workspace:*`; the
   package build makes them peer ranges `^0.4.0`.
-- The template depends on `nano-core ^0.4.0`, `nano-elements ^0.4.0`, `nano-ui ^0.1.0`.
+- The template depends on `^0.4.0` of nano-core, nano-elements and nano-ui.
 - Built bundles carry `export const built = { '@pritzlaff/nano-core': '<version>' }`; the workspace warns when a module
   was built with a newer nano-core (major or minor) than its own, and imports it anyway.
 - `PUBLIC_URL` (set by both Pages workflows from the Pages URL) makes a built nano.json's `modules` absolute:

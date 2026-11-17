@@ -7,7 +7,7 @@ import { Application, AppDeployment, Registry, type AppEvent, type NanoResult } 
 import { KeyValueStoreDef } from '../kv/contract.ts'
 import kv, { impls, inMemory } from '../kv/memory.ts'
 import { TodoListDef } from './todo/contract.ts'
-import todo from './todo/kv.ts'
+import todo, { todoList } from './todo/kv.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const saved = async (): Promise<AppDeployment> => Bun.file(new URL('./nano.json', import.meta.url)).json()
@@ -38,7 +38,7 @@ test('2. the runtime: the stream shows every todos → store call with its timin
   const events: AppEvent[] = []
   app.listen(e => events.push(e))
   await app.runtime('example.todo.frontend').get(TodoListDef.api).add('milk')
-  const call = events.find(e => e.type === 'sent' && e.kind === 'call' && e.from === 'todos' && e.to === 'store')
+  const call = events.find(e => e.type === 'sent' && e.kind === 'call' && e.from === 'todos' && e.to === 'todoStore')
   expect(call).toMatchObject({ kind: 'call', port: 'example.kv.KeyValueStore/put' })
   const done = events.find(e => e.type === 'delivered' && call?.type === 'sent' && e.id === call.id)
   expect(done).toMatchObject({ result: { ok: true } })
@@ -59,7 +59,7 @@ test('2. the runtime: apply swaps the store for another implementation and the n
   const todos = app.runtime('example.todo.frontend').get(TodoListDef.api)
   await todos.add('milk')
   const next = app.deployment()
-  next.pods.store = { implementation: String(impls.backup), eager: false }
+  next.pods.todoStore = { implementation: String(impls.backup), eager: false }
   must(await app.apply(next))
   expect(await todos.list()).toEqual([])   // the same plain object, now over the backup store
   await todos.add('eggs')
@@ -133,7 +133,7 @@ test('2. the runtime: todos lives in frontend; its store calls travel in backend
   app.runtime('example.todo.backend').listen(e => events.push(e))
   const todos = app.runtime('example.todo.frontend').get(TodoListDef.api)
   await todos.add('milk')
-  const sent = events.filter(e => e.type === 'sent' && e.from === 'todos' && e.to === 'store')
+  const sent = events.filter(e => e.type === 'sent' && e.from === 'todos' && e.to === 'todoStore')
   expect(sent.length).toBeGreaterThan(0)
   expect(sent.every(e => e.type === 'sent' && e.runtime === 'example.todo.backend')).toBe(true)
   const next = app.deployment()
@@ -142,4 +142,10 @@ test('2. the runtime: todos lives in frontend; its store calls travel in backend
   const e = await todos.add('eggs').catch(x => x)
   expect(e.fail.type).toBe('denied')
   expect(events.some(x => x.type === 'denied')).toBe(true)
+})
+
+test('the list keeps the order todos were added in, however fast they come', async () => {
+  const todos = todoList(inMemory())
+  for (const t of ['c', 'a', 'b', 'd', 'e', 'f', 'g', 'h']) await todos.add(t)
+  expect((await todos.list()).map(t => t.title)).toEqual(['c', 'a', 'b', 'd', 'e', 'f', 'g', 'h'])
 })

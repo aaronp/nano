@@ -23,7 +23,7 @@ export type Result = { value?: unknown } | { error: string }
 export type Catalog = Record<string, { title: string; jacks: Jack[] }>
 /** All of the view's state. */
 export interface State {
-  ry: number; rx: number; dragging: boolean; mode: 'relay' | 'puzzle'; sel: string | null; depth: number; editing: boolean; entering: boolean; leaving: boolean; hl: boolean
+  ry: number; rx: number; dragging: boolean; mode: 'relay' | 'puzzle'; sel: string | null; depth: number; showCalls: boolean; showPipes: boolean; editing: boolean; entering: boolean; leaving: boolean; hl: boolean
   /** Zoom (1 = fitted) and pan (screen px) on top of the camera; `zooming` makes them follow the wheel without easing. */
   zoom: number; panX: number; panY: number; zooming: boolean
   /** The drawer's tab, and what is selected (the Application's selection, kept in step through the trace). */
@@ -32,7 +32,7 @@ export interface State {
   packets: Packet[]; hits: Record<string, number>; flashes: Record<string, number>; stats: Record<string, { in: number; out: number }>
 }
 
-const empty = (): Model => ({ W: 1340, H: 560, chassis: [], rack: [], P: {}, wires: [], routes: [], rackH: 128 })
+const empty = (): Model => ({ W: 1340, H: 560, chassis: [], rack: [], P: {}, wires: [], routes: [], calls: [], rackH: 128 })
 /** Fonts only reach a shadow root when the document loads them, so the link goes into the document's head, once. */
 function loadFonts(doc: Document) {
   if (doc.head.querySelector('link[data-wires-fonts]')) return
@@ -73,7 +73,7 @@ export class Wires extends LitElement {
   declare application: string
   declare system: string
   declare flipped: boolean
-  s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, editing: false, entering: false, leaving: false, hl: false, zoom: 1, panX: 0, panY: 0, zooming: false, tab: 'view', picked: null, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
+  s: State = { ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, showCalls: true, showPipes: true, editing: false, entering: false, leaving: false, hl: false, zoom: 1, panX: 0, panY: 0, zooming: false, tab: 'view', picked: null, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} }
   model: Model = empty()
   puzzle = buildPuzzle(this.model)
   stage = { w: 0, h: 0 }

@@ -46,8 +46,9 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
    Old: `public/index.html` slot `actions`; `src/composable.ts:64,74-75` made a `Profile` (`@composable/shell`) with
    `HOST_ENTRIES` (`src/app/stores.ts`).
    Why: `Profile` is a retired component; `<nano-profile>` was a `PlacedElement`.
-   Stubbed: the element stays in the markup, undefined (renders nothing).
-   Options: a plain element with static entries; a provider pod with a view.
+   Now (the first option): `src/components/profile-menu.ts` defines `<nano-profile>` as a plain element: the old
+   avatar and menu, same markup and styles, with `HOST_ENTRIES` (Components, Settings, Systems, Themes, Wiring) and
+   the user *You* static. Gone: setting the user, an avatar image, entries set at runtime (a provider pod with a view).
 
 5. **The app gateway: the app bar and the workspace controls as components.**
    Old: `src/components/app-bar.ts` (a `PlacedElement` over `AppGateway.appBar`), `src/boot-app-bar.ts` (setFocus,
@@ -75,7 +76,7 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
    the cables; it rebuilds on `applied`. The one page is the Workspace (`/workspace`, titled *Main* as before); its
    footprints are the pods the live dock shows, boxed from the dock's golden-layout tree (`dockPlacements`; was the
    screen's saved layout), read again when the Wiring page is shown. `src/boot-wiring.ts` and `test/wiring.test.ts`
-   are back from `retired/` unchanged (one page; its profile-menu test stays retired, item 4). Still stubbed: no
+   are back from `retired/` unchanged (one page; its profile-menu test is back with item 4). Still stubbed: no
    saved workspaces, so one layer (item 3); call edges are not drawn; the dock's layout is read through its private
    golden-layout (`main.ts` `arrangement`; a public accessor on `<workspace-dock>` would be a new method).
 
@@ -83,10 +84,16 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
    Old: `src/imports.ts`, `src/lib/imports.ts`, `src/components/import-dialog.ts`: fetch a manifest, preview components,
    ops and shared-library versions, choose Trust (sandboxed/trusted), remember imports, list failures in the drawer.
    Why: 0.4 imports a nano.json (deployment + `modules`); trust is a pod's `isolation` and a foreign-origin approval.
-   Stubbed: the same dialog fetches a nano.json, previews its pods and modules, and imports through `host.importUrl`.
-   The Trust radios are shown but ignored; imports are not remembered. Imported providers' implementations appear
+   Now: the same dialog fetches a nano.json and previews it: each runtime with the name it is imported as
+   (`<namespace>.<runtime>` suggested, e.g. `acme.template.main`, from providers new to the workspace; a dotted id
+   is kept; an existing name merges its pods and subscriptions in; `import-plan.ts`
+   `renameRuntimes` renames the keys and `layout.slots[].runtime`), its pods with the isolation Trust gives them
+   (Sandboxed: `isolated-sandbox`; Trusted: `host`, never loosening a pod the file sandboxes; a pod of a provider
+   the workspace already has, e.g. nano.ui, keeps the file's), its modules, and which
+   providers come from another origin, flagging full access. Its Import is the consent (one click); `confirmImports`
+   still asks for a `?src=` boot import. Imports are not remembered. Imported providers' implementations appear
    under *Imported* in the drawer (their ✕ only fires `imports:remove`, nothing listens).
-   Options: map Trust to the imported pods' `isolation`; remember imported nano.json URLs; a provider-module import.
+   Options: remember imported nano.json URLs; a provider-module import.
 
 8. **File: the working copy, autosave, New, Open, Save/Save As semantics.**
    Old: `src/boot-app.ts`, `src/boot-file.ts`, `src/app/{boot,file,known,store,stores}.ts`,
@@ -123,6 +130,28 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
     needs-lib (split from `src/lib/lib.test.ts`), and fixtures (app-host, pkg, pkg2, pkg3). `test/workspace-controls.test.ts`
     drops the component test (item 5).
 
+13. **Auto-connect.** A subscription whose pod(s) are absent stays pending; an orthogonal listener deployed with the app
+    (git-ops/Argo-like) watches the Runtime and subscribes once both ends exist. Today selective import drops such
+    subscriptions with a warning. Its own design, later.
+    Done (the small part): the workspace auto-connects a pod it places (drawer add, implementation change, import):
+    each unmet dependency with exactly one matching pod gets a call edge in that pod's runtime, plus the rule letting it
+    in when that runtime's policy is `rules` (as `AppDeployment.edit`'s `create`); none or several is a warning toast.
+    `src/auto-connect.ts`. The listener above is still to design.
+
+14. **Settings: the decisions made so far, visible and editable, per runtime or per pod.** A Settings page in the
+    workspace that shows and changes the choices currently hard-coded or implicit, at workspace, runtime and pod
+    granularity. Candidates, all decided along the way without a place to see them:
+    - a frame's sandbox permissions (today a fixed `allow-scripts` / `allow-same-origin` per isolation mode; e.g.
+      `allow-forms` was refused rather than chosen) — a frame **strategy/policy component**, as `PolicyRules` sits
+      behind `Policy` for calls;
+    - Trust at import (Sandboxed by default), and that imported sandboxed pods are eager;
+    - which providers count as the workspace's own (same-origin), and the foreign-origin consent;
+    - approve-once memory for pods with page access;
+    - the runtime policy (`PolicyRules`) of each runtime, readable and editable;
+    - merge rules on import (a runtime with a policy refuses another policy).
+    Its own design: where these settings live (the deployment, so they travel in `nano.json`, vs the host), and which
+    are the host's versus the deployer's.
+
 ## Current-rewrite files kept (0.4 plumbing, behind the old UI)
 
 - `src/host.ts`, `src/host-ui.ts` (setAppBar now sets the app shell's title), `src/import.ts`, `src/import-confirm.ts`,
@@ -143,7 +172,7 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
   is nano-ui's explorer; *Connections* is nano-ui's wiring; no *Instances* or *Puzzle editor* (items 1, 6).
 - A pod opened from the explorer gets a *Pod* panel (or its existing one is focused); the app bar shows its View and
   Change implementation pickers (item 5).
-- Systems page: explorer only (item 1); Wiring page: `<c-circuit>` with one page, *Main* (item 6). Profile avatar missing (item 4).
+- Systems page: explorer only (item 1); Wiring page: `<c-circuit>` with one page, *Main* (item 6).
 - Import dialog previews pods/modules and imports a nano.json from a URL or a file; saved workspaces say "not available yet".
 - `e2e/slice.e2e.ts`: the app is reached through `workspace-dock` (was `workspace-shell`), and Save is File › Save.
 - Import map: no `@pritzlaff/nano-runes`; adds `lit/directives/ref.js` and `@pritzlaff/nano-ui` (bundle).
