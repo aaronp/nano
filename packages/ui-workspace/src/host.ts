@@ -90,7 +90,7 @@ export async function start(): Promise<NanoResult<Host>> {
     const real = registry.implementation(pod.implementation), at = real && loaded.deployment.modules?.[real.provider]
     if (!real || !at) throw new Error(`${name}: no provider URL for ${pod.implementation}`)
     return isolated(standIn(real, {
-      url: new URL(at, document.baseURI).href, edges: p => edgesFor(live().deployment(), registry, p), app: live,
+      url: new URL(at, document.baseURI).href, edges: p => edgesFor(live().deployment(), registry, p), app: live, implementation: c => registry.implementation(c),
       onApplied: fn => live().listen(e => { if (e.type === 'applied') fn() }), warn: reason => void toast(reason, { variant: 'warn' }),
       open(p) {
         const f = openFrame(pod.isolation === 'sandbox' ? 'sandbox' : 'isolated-sandbox')

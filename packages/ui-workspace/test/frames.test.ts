@@ -36,7 +36,7 @@ async function app() {
   if (!rts.ok) throw new Error(rts.fail.reason)
   let a: Application | undefined
   const made = await Application.create(rts.value, { isolate: (_, pod) => standIn(registry.implementation(pod.implementation)!, {
-    url: 'mem:acme', open: () => openFrame('isolated-sandbox'), edges: p => edgesFor(a!.deployment(), registry, p),
+    url: 'mem:acme', open: () => openFrame('isolated-sandbox'), edges: p => edgesFor(a!.deployment(), registry, p), implementation: c => registry.implementation(c),
     onApplied: () => () => {}, warn: () => {}, app: () => a!, readyMs: 500,
   }) })
   if (!made.ok) throw new Error(made.fail.reason)
