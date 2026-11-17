@@ -9,7 +9,7 @@ export default defineConfig({
   use: { baseURL: 'http://localhost:3210', channel: 'chrome', trace: 'retain-on-failure' },
   webServer: [
     { command: 'make ui PORT=3210', url: 'http://localhost:3210', reuseExistingServer: false, timeout: 120_000 },
-    // the template on another origin, for a cross-origin import
-    { command: 'make serve-template TEMPLATE_PORT=5174', url: 'http://localhost:5174/nano.json', reuseExistingServer: false, timeout: 120_000 },
+    // the template on another origin, for a cross-origin import; a `make serve-template` already running is reused (same files)
+    { command: 'make serve-template TEMPLATE_PORT=5174', url: 'http://localhost:5174/nano.json', reuseExistingServer: true, timeout: 120_000 },
   ],
 })
