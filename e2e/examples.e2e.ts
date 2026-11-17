@@ -110,3 +110,38 @@ test('a built example opens from a local file when its modules are absolute', as
   await list.getByRole('button', { name: 'Add' }).click()
   await expect(list.locator('li')).toHaveText([/milk/])   // exactly one item
 })
+
+/** File › Open… /examples/nano.json (every example in one file), Fetch, Trusted, and every runtime unticked: the dialog. */
+async function openAllUnticked(page: Page) {
+  await page.getByRole('button', { name: 'File', exact: true }).click()
+  await page.getByRole('button', { name: /^Open/ }).click()
+  const d = page.getByRole('dialog', { name: 'Import components' })
+  await d.getByLabel('nano.json URL').fill('/examples/nano.json')
+  await d.getByRole('button', { name: 'Fetch' }).click()
+  await d.getByRole('radio', { name: /^Trusted/ }).check()
+  for (const box of await d.locator('input[data-select-runtime]').all()) await box.uncheck()
+  await expect(d.getByRole('button', { name: 'Import', exact: true })).toBeDisabled()
+  return d
+}
+
+test('all the examples in one file, only the chat ticked: only its pods land, and alice reaches bob', async ({ page }) => {
+  await start(page)
+  const d = await openAllUnticked(page)
+  for (const r of ['example.chat.backend', 'example.chat.room']) await d.getByLabel(`Import runtime ${r}`, { exact: true }).check()
+  await d.getByRole('button', { name: 'Import', exact: true }).click()
+  await expect(d).toHaveCount(0)
+  expect((await runtimes(page)).filter(r => r.includes('.'))).toEqual(['example.chat.backend', 'example.chat.room'])   // and the workspace's own main
+  const pods = await page.evaluate(() => Object.keys((document.querySelector('workspace-dock') as any).host.data().pods))
+  expect(pods).toEqual(expect.arrayContaining(['alice', 'bob', 'chatStore', 'messaging']))
+  for (const p of ['todos', 'todoStore', 'auth', 'timer', 'store']) expect(pods).not.toContain(p)
+  await say(room(page, 'alice'), 'hi bob')
+  await expect(room(page, 'bob').locator('li')).toHaveText([/alice.*hi bob/])
+})
+
+test('all the examples in one file, todos ticked without todoStore: the dialog warns, and Import is still allowed', async ({ page }) => {
+  await start(page)
+  const d = await openAllUnticked(page)
+  await d.getByLabel('Import pod todos', { exact: true }).check()
+  await expect(d.locator('.warnings')).toContainText('todos calls todoStore, which is not selected: todos will fail when it runs')
+  await expect(d.getByRole('button', { name: 'Import', exact: true })).toBeEnabled()
+})
