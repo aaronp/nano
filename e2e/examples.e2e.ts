@@ -250,8 +250,5 @@ test('imported Sandboxed, todos: an add puts the item in the list in its frame',
   await expect(list.locator('li')).toHaveText([/milk/])
   await list.getByRole('textbox', { name: 'New todo' }).fill('eggs')
   await list.getByRole('textbox', { name: 'New todo' }).press('Enter')
-  // two items, in either order: todos are stored under random ids and listed in key order
-  await expect(list.locator('li')).toHaveCount(2)
-  await expect(list.locator('li').filter({ hasText: 'milk' })).toHaveCount(1)
-  await expect(list.locator('li').filter({ hasText: 'eggs' })).toHaveCount(1)
+  await expect(list.locator('li')).toHaveText([/milk/, /eggs/])   // in the order they were added
 })

@@ -10,7 +10,12 @@ import { TodoListDef } from './contract.ts'
 type Todo = TodoListDef.Todo
 const at = (id: string) => ['todos', id]
 
-export function todoList(store: KeyValueStoreDef.KeyValueStore, newId: () => string = () => crypto.randomUUID()): Omit<TodoListDef.TodoList, 'items'> {
+/** Ids that sort in the order they were made (the store lists by key): the time, a counter for the same millisecond,
+ * then randomness so two lists never collide. */
+let seq = 0
+export const orderedId = () => `${Date.now().toString(36).padStart(9, '0')}${(seq++ % 1679616).toString(36).padStart(4, '0')}-${crypto.randomUUID().slice(0, 8)}`
+
+export function todoList(store: KeyValueStoreDef.KeyValueStore, newId: () => string = orderedId): Omit<TodoListDef.TodoList, 'items'> {
   return {
     async add(title) { const t = { id: newId(), title, done: false }; await store.put({ key: at(t.id), value: t }); return t },
     // A cast: the store holds Json, and only this list writes under ['todos'], always a Todo.
