@@ -31,7 +31,7 @@ for (const [name, entries] of Object.entries(EXAMPLES)) {
   }
   if (name === 'kv') continue
   const source = await Bun.file(join(root, name, 'nano.json')).json()
-  for (const key of Object.keys(source.modules ?? {})) modules[key] ??= SHARED[key]!
+  for (const key of Object.keys(source.modules ?? {})) modules[key] ??= SHARED[key] ?? (() => { throw new Error(`${name}/nano.json: no build for module ${key}`) })()
   writeFileSync(join(outdir, 'nano.json'), JSON.stringify({ ...source, modules }, null, 2) + '\n')
 }
 console.log(`built dist/ (${Object.keys(EXAMPLES).join(', ')})`)

@@ -3,7 +3,7 @@
  * deployer's plain object). Each layout engine keeps its own state beside it under its own key.
  *
  *   "layout": {
- *     "slots": [{ "id": "a", "runtime": "frontend", "pod": "listA" }, { "id": "b", "runtime": "frontend", "pod": "listB" }],
+ *     "slots": [{ "id": "a", "runtime": "example.todo.frontend", "pod": "listA" }, { "id": "b", "runtime": "example.todo.frontend", "pod": "listB" }],
  *     "geometry": { "a": { "x": 0, "y": 0, "w": 0.5, "h": 1 }, "b": { "x": 0.5, "y": 0, "w": 0.5, "h": 1 } },
  *     "workspace": { ...golden-layout's own state }
  *   }

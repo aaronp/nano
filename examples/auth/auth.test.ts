@@ -3,7 +3,7 @@ import { expect, test } from 'bun:test'
 import { Application, AppDeployment, Registry, success, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider from '@pritzlaff/nano-ui'
 import { AuthDef } from './contract.ts'
-import auth, { register, setEnv } from './passkey.ts'
+import auth, { detectSandboxed, register, setEnv } from './passkey.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const settle = () => new Promise(r => setTimeout(r, 20))
@@ -15,13 +15,13 @@ async function open() {
   const app = must(await Application.create(must(AppDeployment.assemble(await Bun.file(new URL('./nano.json', import.meta.url)).json(), registry))))
   return { app, auth: app.runtime('example.auth.main').get(AuthDef.api, { pod: 'auth' }), log: () => app.call('example.auth.main', 'log').entries(null) }
 }
-function fake(opts: { approve?: boolean; sandboxed?: boolean; get?: () => Promise<unknown> } = {}) {
+function fake(opts: { approve?: boolean; sandboxed?: boolean; get?: () => Promise<unknown>; confirm?: () => Promise<boolean> } = {}) {
   const calls = { confirm: 0, get: 0, create: 0 }
   const credentials = {
     get: () => { calls.get++; return opts.get?.() ?? Promise.resolve({ rawId: new Uint8Array([1, 2, 3]).buffer, getClientExtensionResults: () => ({ prf: { results: { first: 'secret' } } }) }) },
     create: () => { calls.create++; return Promise.reject(new Error('unused')) },
   } as unknown as CredentialsContainer
-  setEnv({ credentials, sandboxed: opts.sandboxed ?? false, confirm: async () => { calls.confirm++; return opts.approve ?? true } })
+  setEnv({ credentials, sandboxed: opts.sandboxed ?? false, confirm: opts.confirm ?? (async () => { calls.confirm++; return opts.approve ?? true }) })
   return calls
 }
 
@@ -82,4 +82,27 @@ test('Register makes a discoverable credential, since Passkey asks for none by i
   setEnv({ sandboxed: false, confirm: async () => true, credentials: { create: async (o: CredentialCreationOptions) => { options = o; return { rawId: new Uint8Array([7]).buffer } } } as unknown as CredentialsContainer })
   expect(await register()).toMatchObject({ ok: true, credentialId: 'Bw' })
   expect(options?.publicKey?.authenticatorSelection?.residentKey).toBe('required')
+})
+
+test('detectSandboxed: an opaque origin, a frame, or no credentials is a sandbox; a top page with credentials is not', () => {
+  const page = { location: { origin: 'https://x' }, navigator: { credentials: {} } }
+  const self = {} as object
+  expect(detectSandboxed({ ...page, top: self, self })).toBe(false)
+  expect(detectSandboxed({ ...page, top: {}, self })).toBe(true)
+  expect(detectSandboxed({ ...page, location: { origin: 'null' }, top: self, self })).toBe(true)
+  expect(detectSandboxed({ location: page.location, navigator: {}, top: self, self })).toBe(true)
+})
+
+test('a framed environment is refused without a modal and without credentials', async () => {
+  const calls = fake({ sandboxed: detectSandboxed({ location: { origin: 'https://x' }, navigator: { credentials: {} }, top: {}, self: {} }) })
+  expect(await (await open()).auth.authenticate('sign in')).toMatchObject({ ok: false, reason: 'passkeys are not available in a sandbox' })
+  expect(calls).toEqual({ confirm: 0, get: 0, create: 0 })
+})
+
+test('a throwing confirm is a refusal with the error name, and the next call is not busy', async () => {
+  let n = 0
+  fake({ confirm: async () => { if (n++ === 0) throw new DOMException('x', 'InvalidStateError'); return false } })
+  const { auth } = await open()
+  expect(await auth.authenticate('a')).toMatchObject({ ok: false, reason: 'InvalidStateError' })
+  expect(await auth.authenticate('b')).toMatchObject({ ok: false, reason: 'cancelled' })
 })

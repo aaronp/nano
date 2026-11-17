@@ -31,3 +31,11 @@ test('the built chat nano.json loads and runs', async () => {
   await room.get(ChatDef.api, { pod: 'alice' }).say('hi')
   expect((await room.get(ChatDef.api, { pod: 'bob' }).transcript()).map(m => m.text)).toEqual(['hi'])
 })
+
+test('every module a source nano.json names is in its built nano.json', async () => {
+  for (const name of ['todo', 'chat', 'auth']) {
+    const src = await Bun.file(join(import.meta.dir, name, 'nano.json')).json() as { modules?: Record<string, string> }
+    const { modules } = await Bun.file(join(dist, name, 'nano.json')).json() as { modules: Record<string, string> }
+    for (const key of Object.keys(src.modules ?? {})) expect(modules[key]).toBeString()
+  }
+})

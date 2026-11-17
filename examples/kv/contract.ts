@@ -2,7 +2,7 @@
  * The key/value store contract: keys are paths, values are JSON. No implementation code; this is what other teams
  * import. `KeyValueStoreDef.KeyValueStore` is the plain TypeScript interface, derived from `api`.
  *
- *   const s: KeyValueStoreDef.KeyValueStore = app.runtime('backend').get(KeyValueStoreDef.api)
+ *   const s: KeyValueStoreDef.KeyValueStore = app.runtime('example.todo.backend').get(KeyValueStoreDef.api)
  *   await s.put({ key: ['todos', '1'], value: { title: 'milk' } }); await s.list({ prefix: ['todos'] })
  */
 import { Type, type Static } from 'typebox'

@@ -1,8 +1,7 @@
 /**
  * `example.auth/passkey`: a passkey behind a modal. Headless: no lit; the default `confirm` builds a plain `<dialog>`
- * only when called. In a sandbox (opaque origin, or no `navigator.credentials`) it refuses without a modal.
+ * only when called. In a sandbox (opaque origin, any frame, or no `navigator.credentials`) it refuses without a modal.
  */
-import { Type } from 'typebox'
 import { AuthDef } from './contract.ts'
 
 type Result = AuthDef.Result
@@ -24,8 +23,13 @@ function ask(purpose: string, caller: string): Promise<boolean> {
   return answer.finally(() => d.remove())
 }
 
+/** Example-only: opaque origin, any frame (the workspace's sandbox keeps its origin), or no credentials. */
+export function detectSandboxed(g: { location?: { origin?: string }; navigator?: { credentials?: unknown }; top?: unknown; self?: unknown }) {
+  try { return g.location?.origin === 'null' || g.top !== g.self || !g.navigator?.credentials } catch { return true }
+}
+
 let env: Env = {
-  get sandboxed() { try { return globalThis.location?.origin === 'null' || !globalThis.navigator?.credentials } catch { return true } },
+  get sandboxed() { return detectSandboxed(globalThis) },
   get credentials() { return globalThis.navigator?.credentials },
   confirm: ask,
 }
@@ -53,7 +57,6 @@ export const register = (rpName = 'nano examples') => ceremony('register', c => 
 
 const passkey = AuthDef.api.impl(AuthDef.ns.implementationId('passkey'))
   .description('Asks the user, in a modal, for a passkey; refuses in a sandbox.')
-  .config(Type.Union([Type.Object({ rpName: Type.Optional(Type.String()) }), Type.Undefined()]))
   .make(() => {
     const listeners = new Set<(r: Result) => void>()
     let pending = false
@@ -64,7 +67,9 @@ const passkey = AuthDef.api.impl(AuthDef.ns.implementationId('passkey'))
         pending = true
         try {
           // ponytail: the caller's pod is not visible to an action handler, so the modal names no one in particular
-          if (!await env.confirm(purpose, 'A pod')) return { ok: false, purpose, at: new Date().toISOString(), reason: 'cancelled' }
+          let approved: boolean
+          try { approved = await env.confirm(purpose, 'A pod') } catch (e) { return { ok: false, purpose, at: new Date().toISOString(), reason: (e as Error)?.name ?? 'Error' } }
+          if (!approved) return { ok: false, purpose, at: new Date().toISOString(), reason: 'cancelled' }
           const r = await ceremony(purpose, c => c.get({ publicKey: { challenge: challenge(), userVerification: 'preferred' } }))
           if (r.ok) for (const l of listeners) l(r)
           return r
