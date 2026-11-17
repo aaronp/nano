@@ -59,5 +59,14 @@
   "modules": {
     "example.kv": "../kv/memory.js",
     "example.todo": "./todo/kv.js"
+  },
+  "layout": {
+    "slots": [
+      {
+        "id": "todos",
+        "runtime": "example.todo.frontend",
+        "pod": "todos"
+      }
+    ]
   }
 }

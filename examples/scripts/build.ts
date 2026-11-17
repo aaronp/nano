@@ -8,8 +8,8 @@ import { join } from 'node:path'
 
 /** example name -> (module key -> entry file, relative to examples/). */
 export const EXAMPLES: Record<string, Record<string, string>> = {
-  todo: { 'example.kv': 'kv/memory.ts', 'example.todo': 'todo/todo/kv.ts' },
-  chat: { 'example.kv': 'kv/memory.ts', 'example.messaging': 'chat/messaging/kv.ts', 'example.chat': 'chat/room/messaging.ts' },
+  todo: { 'example.kv': 'kv/memory.ts', 'example.todo': 'todo/index.ts' },
+  chat: { 'example.kv': 'kv/memory.ts', 'example.messaging': 'chat/messaging/kv.ts', 'example.chat': 'chat/index.ts' },
 }
 
 const root = join(import.meta.dir, '..'), dist = join(root, 'dist')

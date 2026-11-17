@@ -95,7 +95,7 @@ test('2. the runtime: after unsubscribing, a later put reaches only the subscrib
 test('3. configuration as data: the running app\'s deployment() round-trips through nano.json', async () => {
   const json = await saved()
   const app = await open()
-  const { modules, ...rest } = json
+  const { modules, layout: _layout, ...rest } = json   // the layout is the page's, not the running app's
   expect(app.deployment()).toEqual(rest)
   const again = JSON.parse(JSON.stringify(app.deployment()))
   const registry = Registry.create()

@@ -30,7 +30,8 @@ function build(base: AppDeployment) {
   return d.deployment()
 }
 const empty = (): AppDeployment => ({ pods: {}, runtimes: { 'example.todo.frontend': { pods: [], subscriptions: [] }, 'example.todo.backend': { pods: [], subscriptions: [], policy: backendPolicy() } },
-  modules: { 'example.kv': '../kv/memory.js', 'example.todo': './todo/kv.js' } })
+  modules: { 'example.kv': '../kv/memory.js', 'example.todo': './todo/kv.js' },
+  layout: { slots: [{ id: 'todos', runtime: 'example.todo.frontend', pod: 'todos' }] } })
 
 test('1. code gives the checked-in nano.json: the pods, the edge todos→store in backend, and the rule letting it in', async () => {
   expect(build(empty())).toEqual(await saved())
