@@ -32,8 +32,8 @@ TEMPLATE_PORT ?= 5174
 serve-template:
 	$(MAKE) -C templates/nano-template serve PORT=$(TEMPLATE_PORT)
 
-# Build examples/dist (each example, the template, and all of them in one nano.json) and serve it at :5175.
-EXAMPLES_PORT ?= 5175
+# Build examples/dist (each example, the template, and all of them in one nano.json) and serve it at :4310 (away from Vite's 517x).
+EXAMPLES_PORT ?= 4310
 serve-examples:
 	cd examples && bun scripts/build.ts && bun scripts/serve.ts $(EXAMPLES_PORT)
 
