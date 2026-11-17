@@ -16,7 +16,7 @@ async function importTemplate(page: Page, trust: 'Sandboxed' | 'Trusted') {
   await d.getByLabel('nano.json URL').fill('http://localhost:5174/nano.json')
   await d.getByRole('button', { name: 'Fetch' }).click()
   await expect(d.getByLabel('Import runtime main as')).toHaveValue('acme.template.main')
-  await expect(d.locator('.foreign')).toContainText('acme.template from http://localhost:5174')
+  await expect(d.locator('.foreign')).toContainText('Code from http://localhost:5174 (acme.template)')
   await d.getByRole('radio', { name: new RegExp(`^${trust}`) }).check()
   await d.getByRole('button', { name: 'Import', exact: true }).click()   // the one click: no second confirm
   await expect(d).toHaveCount(0)

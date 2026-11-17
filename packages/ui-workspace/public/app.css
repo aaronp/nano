@@ -100,6 +100,12 @@ html[data-theme='retro'] .page-head a { color: #FFFF9E; }
 .import-dialog .preview ul { list-style: none; padding-left: 24px; } .import-dialog .preview > div > ul { padding-left: 0; }
 .import-dialog .ops { margin-top: 2px; display: flex; flex-wrap: wrap; gap: 4px; font-size: 12px; color: var(--muted); }
 .import-dialog .group { margin-top: 8px; } .import-dialog .group > ul { padding-left: 24px; }
+.import-dialog .runtime > input[data-runtime] { width: 60%; padding: 2px 6px; }
+.import-dialog .edit { visibility: hidden; margin-left: 4px; padding: 0 6px !important; border: 0 !important; background: none !important; }
+.import-dialog .runtime:hover > .edit, .import-dialog .edit:focus-visible { visibility: visible; }
+.import-dialog .badge { font-size: 11px; color: var(--muted); }
+.import-dialog .foreign p { margin: 0; font-size: 13px; color: var(--muted); } .import-dialog .foreign strong { color: var(--fg); }
+.import-dialog details { font-size: 12px; color: var(--muted); } .import-dialog summary { cursor: pointer; }
 .import-dialog .warning { margin: 2px 0 0 24px; font-size: 12px; color: var(--warn, #d9a400); }
 .import-dialog [role='alert'] { min-height: 1em; margin-top: 8px; color: var(--danger, #c33); }
 .import-dialog [role='alert']:empty { display: none; }

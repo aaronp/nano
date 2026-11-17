@@ -142,7 +142,7 @@ test('all the examples in one file, todos ticked without todoStore: the dialog w
   await start(page)
   const d = await openAllUnticked(page)
   await d.getByLabel('Import pod todos', { exact: true }).check()
-  await expect(d.locator('[data-pod-row="todos"] .warning')).toContainText('todos calls todoStore, which is not selected: todos will fail when it runs')
+  await expect(d.locator('[data-pod="todos"] .warning')).toContainText('todos calls todoStore, which is not selected: todos will fail when it runs')
   await expect(d.getByRole('button', { name: 'Import', exact: true })).toBeEnabled()
 })
 
@@ -298,6 +298,5 @@ test('Import groups runtimes by namespace: one box ticks a namespace, and a warn
   await expect(d.getByLabel('Import pod todos', { exact: true })).toBeChecked()
   await d.getByLabel('Import pod alice', { exact: true }).check()
   await expect(d.getByLabel('Import all of example.chat')).toHaveJSProperty('indeterminate', true)
-  await expect(d.locator('[data-pod-row="alice"] .warning')).toContainText('alice calls messaging, which is not selected')
-  await page.screenshot({ path: process.env.TMPDIR + '/groups.png', fullPage: true })
+  await expect(d.locator('[data-pod="alice"] .warning')).toContainText('alice calls messaging, which is not selected')
 })

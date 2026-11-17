@@ -29,7 +29,8 @@ function open(url: string, known = (_: string) => false, file = template) {
     q<HTMLFormElement>('form').dispatchEvent(new Event('submit', { cancelable: true }))
     for (let i = 0; i < 5; i++) await Promise.resolve()
   }
-  const isolations = () => [...d.querySelectorAll('[data-pod]')].map(li => `${li.getAttribute('data-pod')} ${li.querySelector('[data-isolation]')!.textContent}`)
+  const isolations = () => [...d.querySelectorAll('[data-pod]:has(input:checked)')]   // the ticked pods'
+    .map(li => `${li.getAttribute('data-pod')} ${li.querySelector('[data-isolation]')!.textContent}`)
   const importButton = () => q<HTMLButtonElement>('[data-import]')
   const choose = (v: string) => { const r = q<HTMLInputElement>(`input[name="trust"][value="${v}"]`); r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })) }
   return { d, q, calls, fetched, isolations, importButton, choose }
@@ -131,7 +132,7 @@ test('given todos ticked without todoStore, then a warning shows as text, and Im
   const t = open('http://host.test/t/nano.json', undefined, two)
   await t.fetched()
   tick(t.q<HTMLInputElement>('input[data-select-pod="todoStore"]'), false)
-  expect(t.q('.warnings').textContent).toContain('todos calls todoStore, which is not selected: todos will fail when it runs')
+  expect(t.q('[data-pod="todos"] .warning').textContent).toContain('todos calls todoStore, which is not selected: todos will fail when it runs')
   expect(t.importButton().disabled).toBe(false)
 })
 
@@ -157,4 +158,18 @@ test('given only the chat ticked, then the preview and notice show only its pods
   expect(Object.keys(out.pods)).toEqual(['alice', 'bob'])
   expect(Object.keys(out.runtimes)).toEqual(['example.chat.room'])
   expect(out.modules).toEqual({ 'example.chat': './c.js' })
+})
+
+test('a runtime shows the name it is imported as; its edit button opens the field, and Import takes the new name', async () => {
+  const t = open('http://host.test/t/nano.json')
+  await t.fetched()
+  const input = t.q<HTMLInputElement>('input[data-runtime="main"]')
+  expect(input.hidden).toBe(true)
+  expect(t.q('[data-runtime-of="main"]').textContent).toContain('acme.template.main')
+  t.q<HTMLButtonElement>('[aria-label="Rename runtime main"]').click()
+  expect(input.hidden).toBe(false)
+  input.value = 'mine'; input.dispatchEvent(new Event('input', { bubbles: true }))
+  t.importButton().click()
+  await Promise.resolve()
+  expect(Object.keys(t.calls[0]!.chosen!.edit(template()).runtimes)).toEqual(['mine'])
 })
