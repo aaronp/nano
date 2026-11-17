@@ -19,7 +19,7 @@ async function open() {
 }
 
 test('1. it just works: the frontend gives a plain TodoList, CRUD over the store', async () => {
-  const todos = (await open()).runtime('frontend').get(TodoListDef.api)
+  const todos = (await open()).runtime('example.todo.frontend').get(TodoListDef.api)
   const milk = await todos.add('milk')
   const eggs = await todos.add('eggs')
   expect(milk).toEqual({ id: milk.id, title: 'milk', done: false })
@@ -37,7 +37,7 @@ test('2. the runtime: the stream shows every todos → store call with its timin
   const app = await open()
   const events: AppEvent[] = []
   app.listen(e => events.push(e))
-  await app.runtime('frontend').get(TodoListDef.api).add('milk')
+  await app.runtime('example.todo.frontend').get(TodoListDef.api).add('milk')
   const call = events.find(e => e.type === 'sent' && e.kind === 'call' && e.from === 'todos' && e.to === 'store')
   expect(call).toMatchObject({ kind: 'call', port: 'example.kv.KeyValueStore/put' })
   const done = events.find(e => e.type === 'delivered' && call?.type === 'sent' && e.id === call.id)
@@ -46,7 +46,7 @@ test('2. the runtime: the stream shows every todos → store call with its timin
 })
 
 test('2. the runtime: the frontend iterates items() as todos are added', async () => {
-  const todos = (await open()).runtime('frontend').get(TodoListDef.api)
+  const todos = (await open()).runtime('example.todo.frontend').get(TodoListDef.api)
   await todos.add('before')                 // before items() is called: unseen (items is hot)
   const it = todos.items()[Symbol.asyncIterator]()   // connected here, at the call
   await todos.add('milk')
@@ -56,7 +56,7 @@ test('2. the runtime: the frontend iterates items() as todos are added', async (
 
 test('2. the runtime: apply swaps the store for another implementation and the next call reaches it', async () => {
   const app = await open()
-  const todos = app.runtime('frontend').get(TodoListDef.api)
+  const todos = app.runtime('example.todo.frontend').get(TodoListDef.api)
   await todos.add('milk')
   const next = app.deployment()
   next.pods.store = { implementation: String(impls.backup), eager: false }
@@ -69,9 +69,9 @@ test('2. the runtime: apply swaps the store for another implementation and the n
 test('2. the runtime: a host subscriber to the store\'s put in backend gets { input, output }; the frontend cannot hear the store (subscribe throws not-found)', async () => {
   const app = await open()
   const back: unknown[] = [], front: unknown[] = []
-  app.runtime('backend').subscribe(KeyValueStoreDef.api.ops.put, call => { back.push(call) })
-  expect(() => app.runtime('frontend').subscribe(KeyValueStoreDef.api.ops.put, call => { front.push(call) })).toThrow('not-found')
-  const t = await app.runtime('frontend').get(TodoListDef.api).add('milk')
+  app.runtime('example.todo.backend').subscribe(KeyValueStoreDef.api.ops.put, call => { back.push(call) })
+  expect(() => app.runtime('example.todo.frontend').subscribe(KeyValueStoreDef.api.ops.put, call => { front.push(call) })).toThrow('not-found')
+  const t = await app.runtime('example.todo.frontend').get(TodoListDef.api).add('milk')
   await Bun.sleep(0)
   expect(back).toEqual([{ input: { key: ['todos', t.id], value: t }, output: null }])
   expect(front).toEqual([])
@@ -80,10 +80,10 @@ test('2. the runtime: a host subscriber to the store\'s put in backend gets { in
 test('2. the runtime: after unsubscribing, a later put reaches only the subscriber still in place', async () => {
   const app = await open()
   const gone: unknown[] = [], kept: unknown[] = []
-  const backend = app.runtime('backend')
+  const backend = app.runtime('example.todo.backend')
   const off = backend.subscribe(KeyValueStoreDef.api.ops.put, call => { gone.push(call.input.key) })
   backend.subscribe(KeyValueStoreDef.api.ops.put, call => { kept.push(call.input.key) })
-  const todos = app.runtime('frontend').get(TodoListDef.api)
+  const todos = app.runtime('example.todo.frontend').get(TodoListDef.api)
   const milk = await todos.add('milk')
   off()
   const eggs = await todos.add('eggs')
@@ -108,9 +108,9 @@ test('3. configuration as data: the running app\'s deployment() round-trips thro
 test('a store Fail reaches the todo caller as itself: with no store wired, add is not-found, not threw', async () => {
   const app = await open()
   const next = app.deployment()
-  next.runtimes.backend!.subscriptions = []
+  next.runtimes['example.todo.backend']!.subscriptions = []
   must(await app.apply(next))
-  const e = await app.runtime('frontend').get(TodoListDef.api).add('milk').catch(x => x)
+  const e = await app.runtime('example.todo.frontend').get(TodoListDef.api).add('milk').catch(x => x)
   expect(e.fail.type).toBe('not-found')
 })
 
@@ -130,14 +130,14 @@ test('the store is plain TypeScript too: no nano, values copied, list in path or
 test('2. the runtime: todos lives in frontend; its store calls travel in backend, allowed by backend\'s rules', async () => {
   const app = await open()
   const events: AppEvent[] = []
-  app.runtime('backend').listen(e => events.push(e))
-  const todos = app.runtime('frontend').get(TodoListDef.api)
+  app.runtime('example.todo.backend').listen(e => events.push(e))
+  const todos = app.runtime('example.todo.frontend').get(TodoListDef.api)
   await todos.add('milk')
   const sent = events.filter(e => e.type === 'sent' && e.from === 'todos' && e.to === 'store')
   expect(sent.length).toBeGreaterThan(0)
-  expect(sent.every(e => e.type === 'sent' && e.runtime === 'backend')).toBe(true)
+  expect(sent.every(e => e.type === 'sent' && e.runtime === 'example.todo.backend')).toBe(true)
   const next = app.deployment()
-  next.runtimes.backend!.policy = { kind: 'rules', rules: [{ deny: '*', from: 'todos' }, { allow: '*' }] }
+  next.runtimes['example.todo.backend']!.policy = { kind: 'rules', rules: [{ deny: '*', from: 'todos' }, { allow: '*' }] }
   must(await app.apply(next))
   const e = await todos.add('eggs').catch(x => x)
   expect(e.fail.type).toBe('denied')

@@ -1,6 +1,6 @@
 /**
- * Subscribing is a message, in the todo case study. A consumer of `items()` (the host in `frontend`) and the `todos`
- * pod hearing its store's puts (in `backend`) each connect by a `subscribe` message and end by an `unsubscribe`, both
+ * Subscribing is a message, in the todo case study. A consumer of `items()` (the host in `example.todo.frontend`) and the `todos`
+ * pod hearing its store's puts (in `example.todo.backend`) each connect by a `subscribe` message and end by an `unsubscribe`, both
  * on the stream of the runtime they travel in. Every form behaves the same at the call site: it connects at the call,
  * and when it can't, it throws there an Error carrying the Fail. A refusal that comes later (on apply) ends it: the
  * loop throws it, and the stream shows the unsubscribe with the Fail.
@@ -35,8 +35,8 @@ const deny = (when: () => boolean): Policy => ({ isAllowed: ask => ask.kind === 
 
 test('iterating items() is a subscribe message on frontend\'s stream; break is the unsubscribe', async () => {
   const app = await open()
-  const front = subscriptions(app, 'frontend')
-  const todos = app.runtime('frontend').get(TodoListDef.api)
+  const front = subscriptions(app, 'example.todo.frontend')
+  const todos = app.runtime('example.todo.frontend').get(TodoListDef.api)
   const it = todos.items()[Symbol.asyncIterator]()
   const first = it.next()
   await Bun.sleep(0)
@@ -48,8 +48,8 @@ test('iterating items() is a subscribe message on frontend\'s stream; break is t
 
 test('the todos pod\'s own subscription to the store\'s puts travels in backend, never on frontend\'s stream', async () => {
   const app = await open()
-  const front = subscriptions(app, 'frontend'), back = subscriptions(app, 'backend')
-  const todos = app.runtime('frontend').get(TodoListDef.api)
+  const front = subscriptions(app, 'example.todo.frontend'), back = subscriptions(app, 'example.todo.backend')
+  const todos = app.runtime('example.todo.frontend').get(TodoListDef.api)
   await todos.add('milk')   // builds todos; its items() source subscribes to the store
   await Bun.sleep(0)
   expect(back).toEqual(['subscribe todos→store: ok'])
@@ -57,8 +57,8 @@ test('the todos pod\'s own subscription to the store\'s puts travels in backend,
 })
 
 test('a refused subscription throws at the call, in every form, and is denied on frontend\'s stream', async () => {
-  const app = await open({ frontend: deny(() => true) })
-  const front = subscriptions(app, 'frontend'), frontend = app.runtime('frontend')
+  const app = await open({ 'example.todo.frontend': deny(() => true) })
+  const front = subscriptions(app, 'example.todo.frontend'), frontend = app.runtime('example.todo.frontend')
   const thrown = (f: () => unknown) => { try { f(); return undefined } catch (e) { return (e as { fail?: unknown }).fail } }
   expect(thrown(() => frontend.get(TodoListDef.api).items())).toMatchObject({ type: 'denied', reason: 'not now' })   // the plain method
   expect(thrown(() => frontend.subscribe(TodoListDef.api.ops.add))).toMatchObject({ type: 'denied' })               // the iterable
@@ -67,7 +67,7 @@ test('a refused subscription throws at the call, in every form, and is denied on
 })
 
 test('items() connects at the call: a todo added between the call and the loop is seen', async () => {
-  const todos = (await open()).runtime('frontend').get(TodoListDef.api)
+  const todos = (await open()).runtime('example.todo.frontend').get(TodoListDef.api)
   await todos.list()               // build todos, so its source is listening to the store
   const items = todos.items()      // connected here
   await todos.add('milk')          // before the loop starts
@@ -76,9 +76,9 @@ test('items() connects at the call: a todo added between the call and the loop i
 
 test('a policy that stops allowing it ends a live subscription on the next apply: unsubscribe carries denied, the loop throws', async () => {
   let closed = false
-  const app = await open({ frontend: deny(() => closed) })
-  const front = subscriptions(app, 'frontend')
-  const todos = app.runtime('frontend').get(TodoListDef.api)
+  const app = await open({ 'example.todo.frontend': deny(() => closed) })
+  const front = subscriptions(app, 'example.todo.frontend')
+  const todos = app.runtime('example.todo.frontend').get(TodoListDef.api)
   const seen: string[] = []
   const loop = (async () => { for await (const t of todos.items()) seen.push(t.title) })()
   await Bun.sleep(0)
@@ -92,11 +92,11 @@ test('a policy that stops allowing it ends a live subscription on the next apply
 
 test('apply removing the store\'s call edge ends the todos pod\'s subscription: backend shows the unsubscribe', async () => {
   const app = await open()
-  const back = subscriptions(app, 'backend')
-  await app.runtime('frontend').get(TodoListDef.api).list()   // builds todos
+  const back = subscriptions(app, 'example.todo.backend')
+  await app.runtime('example.todo.frontend').get(TodoListDef.api).list()   // builds todos
   await Bun.sleep(0)
   const next = app.deployment()
-  next.runtimes.backend!.subscriptions = []
+  next.runtimes['example.todo.backend']!.subscriptions = []
   must(await app.apply(next))
   expect(back).toEqual(['subscribe todos→store: ok', 'unsubscribe todos→store: ok'])
 })

@@ -1,6 +1,6 @@
 /**
  * A chat participant over the Messaging API, and nothing lower: it is written to `MessagingDef.Messaging` alone, so
- * it never knows a store exists. In nano it lives in `chat` and reaches `messaging` in `backend` through its edge.
+ * it never knows a store exists. In nano it lives in `example.chat.room` and reaches `messaging` in `example.chat.backend` through its edge.
  */
 import { MessagingDef } from '../messaging/contract.ts'
 import { ChatDef } from './contract.ts'

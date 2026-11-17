@@ -2,7 +2,7 @@
  * A chat room as one participant sees it: what the chat UI would be written against. Who the participant is, is the
  * pod's name; the room is `general`.
  *
- *   const alice = app.runtime('chat').get(ChatDef.api, { pod: 'alice' }); await alice.say('hi')
+ *   const alice = app.runtime('example.chat.room').get(ChatDef.api, { pod: 'alice' }); await alice.say('hi')
  */
 import { Type } from 'typebox'
 import { Coord, Interface, Op } from '@pritzlaff/nano-core'

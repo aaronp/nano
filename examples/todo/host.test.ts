@@ -1,6 +1,6 @@
 /**
  * A headless platform host, in the todo case study. The host is just another nano component: an implementation of a
- * `PlatformHost` contract, placed in `frontend` like any pod. Two routes reach it, and neither is a special case:
+ * `PlatformHost` contract, placed in `example.todo.frontend` like any pod. Two routes reach it, and neither is a special case:
  * - **A pod, on purpose**, declares the host as a dependency and calls it (`deps.host.notify(...)`): a call edge,
  *   policed and on the stream like any call.
  * - **nano's own failures** (here a `todos` whose `items()` source throws) are `failure` events on the stream. The
@@ -49,13 +49,13 @@ async function open() {
       store: { implementation: 'example.kv/memory', eager: false },
     },
     runtimes: {
-      frontend: { pods: ['platform', 'reminder', 'todos'], subscriptions: [{ kind: 'call', from: 'reminder', to: 'platform' }] },
-      backend: { pods: ['store', 'todos'], subscriptions: [{ kind: 'call', from: 'todos', to: 'store' }] },
+      'example.todo.frontend': { pods: ['platform', 'reminder', 'todos'], subscriptions: [{ kind: 'call', from: 'reminder', to: 'platform' }] },
+      'example.todo.backend': { pods: ['store', 'todos'], subscriptions: [{ kind: 'call', from: 'todos', to: 'store' }] },
     },
   }
   const app = must(await Application.create(must(AppDeployment.assemble(d, registry))))
   // The platform: it holds `app`, so it is the operator. It hands nano's failures to the host component.
-  const platformHost = app.runtime('frontend').get(PlatformHost)
+  const platformHost = app.runtime('example.todo.frontend').get(PlatformHost)
   app.listen(e => { if (e.type === 'failure' && e.pod) void platformHost.raiseError({ pod: e.pod, reason: e.reason }) })
   return app
 }
@@ -63,15 +63,15 @@ async function open() {
 test('a pod notifies through the host component, a dependency like any other: a call on frontend\'s stream', async () => {
   const app = await open()
   const calls: string[] = []
-  app.runtime('frontend').listen(e => { if (e.type === 'sent' && e.kind === 'call') calls.push(`${e.from}→${e.to} ${e.port.split('/').pop()}`) })
-  await app.runtime('frontend').get(Reminder).remind('buy milk')
+  app.runtime('example.todo.frontend').listen(e => { if (e.type === 'sent' && e.kind === 'call') calls.push(`${e.from}→${e.to} ${e.port.split('/').pop()}`) })
+  await app.runtime('example.todo.frontend').get(Reminder).remind('buy milk')
   expect(shown.notices).toEqual(['reminder: buy milk'])
   expect(calls).toEqual(['host→reminder remind', 'reminder→platform notify'])
 })
 
 test('a source that throws is a failure on the stream, which the platform raises through the host component', async () => {
   const app = await open()
-  const todos = app.runtime('frontend').get(TodoListDef.api)
+  const todos = app.runtime('example.todo.frontend').get(TodoListDef.api)
   await todos.add('milk')   // builds todos; its items() source starts and throws
   await Bun.sleep(0)
   expect(shown.errors).toEqual([{ pod: 'todos', reason: 'items threw feed lost' }])

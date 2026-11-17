@@ -1,6 +1,6 @@
 /**
  * Messaging over any key/value store, each message at `['rooms', room, id]`: plain TypeScript, plus a `messages()`
- * source built from the store's puts. In nano it reaches its store only through its call edge, in `backend`.
+ * source built from the store's puts. In nano it reaches its store only through its call edge, in `example.chat.backend`.
  *
  *   const m = messaging(inMemory()); await m.post({ room: 'general', from: 'alice', text: 'hi' })
  */

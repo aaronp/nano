@@ -1,7 +1,7 @@
 /**
- * The chat case study: the App Gateway pattern. `backend` keeps the store and the Messaging API over it; `chat` keeps
- * two participants, written to the Messaging API alone. Their calls and subscriptions travel in `backend`, let in by
- * its rules; nothing in `chat`, and not the host, can reach the store.
+ * The chat case study: the App Gateway pattern. `example.chat.backend` keeps the store and the Messaging API over it; `example.chat.room` keeps
+ * two participants, written to the Messaging API alone. Their calls and subscriptions travel in `example.chat.backend`, let in by
+ * its rules; nothing in `example.chat.room`, and not the host, can reach the store.
  */
 import { expect, test } from 'bun:test'
 import { Application, AppDeployment, Registry, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
@@ -22,11 +22,11 @@ const failOf = (f: () => unknown) => { try { f(); return undefined } catch (e) {
 test('code gives the checked-in nano.json, and loading it runs the same app', async () => {
   expect(chatDeployment(registry)).toEqual(await Bun.file(new URL('./nano.json', import.meta.url)).json())
   const app = await Application.load(new URL('./nano.json', import.meta.url))
-  expect((await app.runtime('chat').get(ChatDef.api, { pod: 'alice' }).say('loaded')).text).toBe('loaded')
+  expect((await app.runtime('example.chat.room').get(ChatDef.api, { pod: 'alice' }).say('loaded')).text).toBe('loaded')
 })
 
 test('participants chat through the Messaging API: what alice says, bob reads, and bob hears it live', async () => {
-  const app = await open(), room = app.runtime('chat')
+  const app = await open(), room = app.runtime('example.chat.room')
   const alice = room.get(ChatDef.api, { pod: 'alice' }), bob = room.get(ChatDef.api, { pod: 'bob' })
   await bob.transcript()                                // builds bob, and messaging's source over the store
   const lines = bob.lines()[Symbol.asyncIterator]()     // connected here
@@ -41,33 +41,33 @@ test('the gateway: chat\'s calls travel in backend; chat\'s own stream shows onl
   const app = await open()
   const back: string[] = [], front: string[] = []
   const line = (e: AppEvent) => e.type === 'sent' && e.kind === 'call' ? `${e.from}→${e.to}` : undefined
-  app.runtime('backend').listen(e => { const l = line(e); if (l) back.push(l) })
-  app.runtime('chat').listen(e => { const l = line(e); if (l) front.push(l) })
-  await app.runtime('chat').get(ChatDef.api, { pod: 'alice' }).say('hello')
+  app.runtime('example.chat.backend').listen(e => { const l = line(e); if (l) back.push(l) })
+  app.runtime('example.chat.room').listen(e => { const l = line(e); if (l) front.push(l) })
+  await app.runtime('example.chat.room').get(ChatDef.api, { pod: 'alice' }).say('hello')
   expect(back).toEqual(['alice→messaging', 'messaging→store'])
   expect(front).toEqual(['host→alice'])
 })
 
 test('nothing in chat can reach the store: not by resolving, and not by an edge added by hand without a rule', async () => {
   const app = await open()
-  expect(app.runtime('chat').resolve(KeyValueStoreDef.api)).toMatchObject({ ok: false, reason: 'not-found' })   // not placed there
+  expect(app.runtime('example.chat.room').resolve(KeyValueStoreDef.api)).toMatchObject({ ok: false, reason: 'not-found' })   // not placed there
   const d = chatDeployment(registry)
   d.pods.mallory = { implementation: 'example.messaging/kv', eager: false }   // a messaging pod in chat, wired straight to the store
-  d.runtimes.chat!.pods.push('mallory')
-  d.runtimes.backend!.subscriptions.push({ kind: 'call', from: 'mallory', to: 'store' })
+  d.runtimes['example.chat.room']!.pods.push('mallory')
+  d.runtimes['example.chat.backend']!.subscriptions.push({ kind: 'call', from: 'mallory', to: 'store' })
   must(await app.apply(d))
-  await expect(app.runtime('chat').get(MessagingDef.api).post({ room: 'general', from: 'mallory', text: 'x' }))
+  await expect(app.runtime('example.chat.room').get(MessagingDef.api).post({ room: 'general', from: 'mallory', text: 'x' }))
     .rejects.toMatchObject({ fail: { type: 'denied' } })
 })
 
 test('the host holds no rule in backend: it can reach neither the Messaging API nor the store there', async () => {
-  const app = await open(), backend = app.runtime('backend')
+  const app = await open(), backend = app.runtime('example.chat.backend')
   expect(failOf(() => backend.get(MessagingDef.api))).toBe('denied')
   expect(failOf(() => backend.get(KeyValueStoreDef.api))).toBe('denied')
 })
 
 test('swapping the store behind the gateway: the participants don\'t change, and the next message lands in the new store', async () => {
-  const app = await open(), alice = app.runtime('chat').get(ChatDef.api, { pod: 'alice' })
+  const app = await open(), alice = app.runtime('example.chat.room').get(ChatDef.api, { pod: 'alice' })
   await alice.say('before')
   const next = app.deployment()
   next.pods.store = { implementation: String(kvImpls.backup), eager: false }

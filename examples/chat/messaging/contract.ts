@@ -2,7 +2,7 @@
  * The messaging contract: rooms of messages. What the chat app (or anything else) writes to; it knows nothing of
  * where messages are kept.
  *
- *   const m: MessagingDef.Messaging = app.runtime('backend').get(MessagingDef.api)
+ *   const m: MessagingDef.Messaging = app.runtime('example.chat.backend').get(MessagingDef.api)
  *   await m.post({ room: 'general', from: 'alice', text: 'hi' }); for await (const msg of m.messages()) …
  */
 import { Type, type Static } from 'typebox'

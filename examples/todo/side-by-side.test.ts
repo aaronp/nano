@@ -9,7 +9,7 @@ import { TodoListDef } from './todo/contract.ts'
 
 const url = new URL('./side-by-side.json', import.meta.url)
 const open = async () => {
-  const app = await Application.load(url), front = app.runtime('frontend')
+  const app = await Application.load(url), front = app.runtime('example.todo.frontend')
   const a = front.get(TodoListDef.api, { pod: 'listA' }), b = front.get(TodoListDef.api, { pod: 'listB' })
   await a.list(); await b.list()   // builds both, and A's source behind the pipe
   return { app, a, b }

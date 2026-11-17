@@ -10,13 +10,13 @@
     }
   },
   "runtimes": {
-    "frontend": {
+    "example.todo.frontend": {
       "pods": [
         "todos"
       ],
       "subscriptions": []
     },
-    "backend": {
+    "example.todo.backend": {
       "pods": [
         "store"
       ],

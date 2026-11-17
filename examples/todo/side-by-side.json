@@ -18,7 +18,7 @@
     }
   },
   "runtimes": {
-    "frontend": {
+    "example.todo.frontend": {
       "pods": [
         "listA",
         "listB"
@@ -33,7 +33,7 @@
         }
       ]
     },
-    "backend": {
+    "example.todo.backend": {
       "pods": [
         "storeA",
         "storeB"
@@ -90,12 +90,12 @@
     "slots": [
       {
         "id": "a",
-        "runtime": "frontend",
+        "runtime": "example.todo.frontend",
         "pod": "listA"
       },
       {
         "id": "b",
-        "runtime": "frontend",
+        "runtime": "example.todo.frontend",
         "pod": "listB"
       }
     ],
