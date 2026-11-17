@@ -111,9 +111,14 @@ tags. The import confirm for foreign-origin providers (`import.ts` `Foreign`).
 - **Vault flow** (the worked example, not the fit target): import an app with an Auth pod at `vault.example` → user
   unlocks with a passkey → the vault calls the host's `deployPod` offering a KeyValueStore at its origin → the host
   approves (user prompt) and places it gateway-style in chosen runtimes → the user wires it in Connections → Save.
-  The store's lock state lives at `vault.example`; nano adds no lifecycle for it. *(My call.)*
-  Reopened, the vault store comes back **locked** and asks to unlock before first use; no secret is ever in the file.
-  *(My call.)*
+  Authentication state (a passkey unlock, a bearer cookie that later expires) is the component's own concern, at its
+  origin, not nano's. What nano and the host contribute is policy: application `Policy` and the host's Deployer
+  decide who may reach or deploy such a pod, so imported code cannot just import an authenticated site and scrape it.
+
+**Out of scope, noted (a separate design):** loading a saved deployment does not mean every pod in it can be
+instantiated. In the auth flow, an action in one component (authenticate) creates a pod in its runtime, and a later
+host request deploys it into other runtimes; a reopened file may name pods whose preconditions (auth, approval) do
+not hold yet. How a deployment records and replays such flows is not specified here.
 
 ## Left to the builder / planning
 
