@@ -129,6 +129,10 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
     needs-lib (split from `src/lib/lib.test.ts`), and fixtures (app-host, pkg, pkg2, pkg3). `test/workspace-controls.test.ts`
     drops the component test (item 5).
 
+13. **Auto-connect.** A subscription whose pod(s) are absent stays pending; an orthogonal listener deployed with the app
+    (git-ops/Argo-like) watches the Runtime and subscribes once both ends exist. Today selective import drops such
+    subscriptions with a warning. Its own design, later.
+
 ## Current-rewrite files kept (0.4 plumbing, behind the old UI)
 
 - `src/host.ts`, `src/host-ui.ts` (setAppBar now sets the app shell's title), `src/import.ts`, `src/import-confirm.ts`,
