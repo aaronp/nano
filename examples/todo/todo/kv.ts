@@ -15,6 +15,7 @@ export function todoList(store: KeyValueStoreDef.KeyValueStore, newId: () => str
     async add(title) { const t = { id: newId(), title, done: false }; await store.put({ key: at(t.id), value: t }); return t },
     // A cast: the store holds Json, and only this list writes under ['todos'], always a Todo.
     async list() { return (await store.list({ prefix: ['todos'] })).map(e => e.value as Todo) },
+    async put(t) { await store.put({ key: at(t.id), value: t }); return t },
     async update(c) {
       const t = await store.get(at(c.id)) as Todo | null
       if (!t) return null

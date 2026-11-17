@@ -20,6 +20,8 @@ export namespace TodoListDef {
     list: Op.action(Type.Null(), Type.Array(Todo)),
     /** The changed todo, or `null` if there is none with that id. */
     update: Op.action(Change, Type.Union([Todo, Type.Null()])),
+    /** Adds or replaces this todo by id, as given: a second list fed from the first. */
+    put: Op.action(Todo, Todo),
     /** Whether there was one to remove. */
     remove: Op.action(Type.String(), Type.Boolean()),
     /** Each todo as it is saved to the store, added or changed. */
