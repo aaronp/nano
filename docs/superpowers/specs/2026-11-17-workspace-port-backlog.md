@@ -83,10 +83,14 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
    Old: `src/imports.ts`, `src/lib/imports.ts`, `src/components/import-dialog.ts`: fetch a manifest, preview components,
    ops and shared-library versions, choose Trust (sandboxed/trusted), remember imports, list failures in the drawer.
    Why: 0.4 imports a nano.json (deployment + `modules`); trust is a pod's `isolation` and a foreign-origin approval.
-   Stubbed: the same dialog fetches a nano.json, previews its pods and modules, and imports through `host.importUrl`.
-   The Trust radios are shown but ignored; imports are not remembered. Imported providers' implementations appear
+   Now: the same dialog fetches a nano.json and previews it: each runtime with the name it is imported as
+   (`<namespace>.<runtime>` suggested, e.g. `acme.template.main`; an existing name merges; `import-plan.ts`
+   `renameRuntimes` renames the keys and `layout.slots[].runtime`), its pods with the isolation Trust gives them
+   (Sandboxed: `isolated-sandbox`; Trusted: `host`, never loosening a pod the file sandboxes), its modules, and which
+   providers come from another origin, flagging full access. Its Import is the consent (one click); `confirmImports`
+   still asks for a `?src=` boot import. Imports are not remembered. Imported providers' implementations appear
    under *Imported* in the drawer (their ✕ only fires `imports:remove`, nothing listens).
-   Options: map Trust to the imported pods' `isolation`; remember imported nano.json URLs; a provider-module import.
+   Options: remember imported nano.json URLs; a provider-module import.
 
 8. **File: the working copy, autosave, New, Open, Save/Save As semantics.**
    Old: `src/boot-app.ts`, `src/boot-file.ts`, `src/app/{boot,file,known,store,stores}.ts`,

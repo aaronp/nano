@@ -27,7 +27,9 @@ export type Host = {
   /** Implementation → its default view tag, from nano.ui and every loaded module. */
   defaults(): ViewMap
   apply(next: AppDeployment): Promise<NanoResult<void>>
-  importUrl(url: string): Promise<NanoResult<void>>
+  /** `chosen`: the Import dialog's edit of the file; the dialog showed what comes from another origin, so its Import is
+   * the consent and `confirmImports` is not asked. Without it (a `?src=` boot import) the import asks. */
+  importUrl(url: string, chosen?: { edit(d: AppDeployment): AppDeployment }): Promise<NanoResult<void>>
   /** Whether the provider `coord` is loaded from another origin than this page (so imported only once approved). */
   foreign(coord: string): boolean
   /** What Save writes: `data()` without the host pod `ui`, and without `main` once nothing else is in it. */
@@ -124,10 +126,10 @@ export async function start(): Promise<NanoResult<Host>> {
     defaults: () => ({ ...loaded.views }),
     foreign: coord => !!foreignOrigin(loaded.deployment.modules?.[coord]),
     saved: () => withoutHost(data()),
-    async importUrl(url) {
+    async importUrl(url, chosen) {
       // With the pod ui still in it, so merge refuses an app naming a pod ui before any provider is registered.
       const imported = shown(await importApp(url, { ...loaded, deployment: unplaced(data()) }, {
-        load: u => import(u), probe: u => probe(u, () => openFrame('isolated-sandbox')), confirm: confirmImports, approve, warn: t => toast(t, { variant: 'warn' }),
+        load: u => import(u), probe: u => probe(u, () => openFrame('isolated-sandbox')), confirm: chosen ? async () => true : confirmImports, ...(chosen && { edit: chosen.edit }), approve, warn: t => toast(t, { variant: 'warn' }),
       }))
       if (!imported.ok) return imported
       // ponytail: an apply that fails now leaves the new providers registered (a Registry has no remove); harmless, unused.

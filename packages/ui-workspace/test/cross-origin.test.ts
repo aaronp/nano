@@ -9,6 +9,7 @@ import { importApp, isolated, foreignOrigin, remembered, type Foreign, type Load
 import { described, probe } from '../src/described.ts'
 import { serve } from '../src/sandbox/serve.ts'
 import { confirmImports } from '../src/import-confirm.ts'
+import { renameRuntimes, trusted } from '../src/import-plan.ts'
 import { describeProvider } from '../src/sandbox/protocol.ts'
 
 const ns = Coord.namespace('other.fx')
@@ -73,6 +74,16 @@ test('given a foreign provider whose pods are all isolated-sandbox, then confirm
   const r = await importApp('https://other.test/iso/nano.json', empty(), deps)
   if (!r.ok) throw new Error(r.fail.reason)
   expect(seen).toMatchObject({ probe: ['https://other.test/app/x.js'], load: [] })
+})
+
+test('given an edit (the dialog\'s choices), then it applies before anything is decided: all isolated-sandbox loads nothing', async () => {
+  const { seen, deps } = fakes()
+  const edit = (d: AppDeployment) => trusted(renameRuntimes(d, { main: 'other.fx.main' }), 'sandboxed')
+  const r = await importApp('https://other.test/app/nano.json', empty(), { ...deps, edit })
+  if (!r.ok) throw new Error(r.fail.reason)
+  expect(Object.keys(r.value.deployment.runtimes)).toEqual(['other.fx.main'])
+  expect(seen.confirm[0]![0]!.pods.every(p => !p.fullAccess)).toBe(true)
+  expect(seen.load).toEqual([])
 })
 
 test('given confirm says no, then the registry gains nothing and the result is import cancelled', async () => {

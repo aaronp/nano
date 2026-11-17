@@ -27,6 +27,8 @@ type Deps = {
   probe(url: string): Promise<NanoResult<{ provider: Provider; views: ViewMap; built?: Built }>>
   confirm(list: Foreign[]): Promise<boolean>
   approve(title: string): Promise<boolean>
+  /** The nano.json as fetched, edited before anything is decided (the Import dialog's runtime names and Trust). */
+  edit?(d: AppDeployment): AppDeployment
   /** Told when a module was built with a newer nano-core than this page's; the import goes on. */
   warn?(text: string): void
 }
@@ -117,7 +119,7 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
   try {
     const res = await fetch(url)
     if (!res.ok) return failure('invalid-input', `cannot load ${url}: ${res.status}`)
-    const incoming = (await res.json()) as AppDeployment
+    const fetched = (await res.json()) as AppDeployment, incoming = deps.edit ? deps.edit(fetched) : fetched
     // a local file (a blob: URL) is no base: its modules resolve against the page, as saved
     const base = new URL(url.startsWith('blob:') ? globalThis.location.href : url, globalThis.location?.href), home = page() ?? base.origin
     // Each provider is resolved against the nano.json. Stored: its path when it is on this page's origin (so the same
