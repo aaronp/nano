@@ -44,6 +44,11 @@ export function merge(current: AppDeployment, incoming: AppDeployment): NanoResu
     if (Object.hasOwn(modules, k) && modules[k] !== url) return clash('provider', k)
     modules[k] = url
   }
+  const frames: Record<string, string> = { ...current.frames }
+  for (const [k, url] of Object.entries(incoming.frames ?? {})) {
+    if (Object.hasOwn(frames, k) && frames[k] !== url) return clash('frame', k)
+    frames[k] = url
+  }
   // Merging into a runtime that is already there: two policies would silently lose one's rules, so that is refused.
   for (const [k, r] of Object.entries(incoming.runtimes))
     if (r.policy && Object.hasOwn(current.runtimes, k) && current.runtimes[k]!.policy)
@@ -56,6 +61,7 @@ export function merge(current: AppDeployment, incoming: AppDeployment): NanoResu
     })) },
     tags: { ...current.tags, ...incoming.tags },
     modules,
+    ...(Object.keys(frames).length && { frames }),
     views: { ...current.views, ...incoming.views },
     ...((incoming.layout ?? current.layout) && { layout: incoming.layout ?? current.layout }),   // the newest arrangement
   })
@@ -135,11 +141,13 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
     const refs = Object.entries(incoming.modules ?? {}).map(([coord, ref]) => [coord, new URL(ref, base)] as const)
     const away = (u: URL) => u.origin !== home
     incoming.modules = Object.fromEntries(refs.map(([coord, u]) => [coord, !away(u) && /^https?:$/.test(u.protocol) && !u.pathname.startsWith('//') ? u.pathname + u.search : u.href]))
+    // a provider's own page (its home-origin pods' frame): always whole, as the origin is the point
+    if (incoming.frames) incoming.frames = Object.fromEntries(Object.entries(incoming.frames).map(([c, ref]) => [c, new URL(ref, base).href]))
     const todo = refs.filter(([coord]) => !loaded.registry.provider(coord))   // already loaded; merge still checks the stored URL matches
     const foreign: Foreign[] = todo.filter(([, u]) => away(u)).map(([coord, u]) => ({ coord, url: u.href, origin: u.origin,
       pods: Object.entries(incoming.pods).filter(([, p]) => providerOf(p.implementation) === coord).map(([name, p]) => {
         const isolation = p.isolation ?? 'host'
-        return { name, isolation, fullAccess: isolation !== 'isolated-sandbox' }
+        return { name, isolation, fullAccess: isolation !== 'isolated-sandbox' && isolation !== 'home-origin' }   // a home-origin frame is that (other) origin's
       }) }))
     const deployment = merge(loaded.deployment, incoming)   // a clash is refused before anyone is asked
     if (!deployment.ok) return deployment

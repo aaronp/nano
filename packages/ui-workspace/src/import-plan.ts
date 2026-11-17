@@ -44,9 +44,9 @@ export function suggestedName(d: AppDeployment, runtime: string, known: Known = 
 }
 
 /** The isolation pod `p` gets under `trust`: Sandboxed always isolated-sandbox; Trusted host, unless the file sandboxes
- * it; a pod of a provider the workspace has, the file's. */
+ * it; a pod of a provider the workspace has, the file's; a home-origin pod stays one (it runs as its provider's origin, apart from this page). */
 export const isolationUnder = (p: Pod, trust: Trust, known: Known = none): NonNullable<Pod['isolation']> =>
-  known(providerOf(p)) ? p.isolation ?? 'host' : trust === 'sandboxed' ? 'isolated-sandbox' : p.isolation === 'sandbox' || p.isolation === 'isolated-sandbox' ? p.isolation : 'host'
+  known(providerOf(p)) || p.isolation === 'home-origin' ? p.isolation ?? 'host' : trust === 'sandboxed' ? 'isolated-sandbox' : p.isolation === 'sandbox' || p.isolation === 'isolated-sandbox' ? p.isolation : 'host'
 
 /** `d` with each pod's isolation under `trust` (host left out, as `Pod` writes it). A pod it runs in a frame is also
  * eager: nothing in this page can call it first, so a lazy one would never start and its panel would stay empty. Pure. */
@@ -82,6 +82,7 @@ export function selectPods(d: AppDeployment, keep: Set<string>): { deployment: A
   }))
   const out: AppDeployment = { ...d, pods, runtimes }
   if (d.modules) out.modules = kept(d.modules, c => providers.has(c))
+  if (d.frames) out.frames = kept(d.frames, c => providers.has(c))
   if (d.tags) out.tags = kept(d.tags, p => keep.has(p))
   if (d.views) out.views = kept(d.views, k => keep.has(k) || implementations.has(k))
   const slots = (d.layout as LayoutData | undefined)?.slots

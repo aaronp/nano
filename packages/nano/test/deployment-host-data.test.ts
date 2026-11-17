@@ -46,4 +46,10 @@ describe('an AppDeployment carries host-owned modules and views', () => {
   test('given a views key that is not an id, when assembled, then it is invalid-input', () => {
     expect(AppDeployment.assemble({ ...d, views: { '': 'x' } }, registry())).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   })
+
+  test('given frames and a home-origin pod, when assembled, then it succeeds; a non-string frame is invalid-input', () => {
+    const home: AppDeployment = { ...d, pods: { c: Pod.lazy(counter, { isolation: 'home-origin' }) }, frames: { acme: 'https://acme.test/frame.html' } }
+    expect(AppDeployment.assemble(home, registry()).ok).toBe(true)
+    expect(AppDeployment.assemble({ ...d, frames: { acme: 3 } } as never, registry())).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+  })
 })

@@ -94,7 +94,9 @@ export async function start(): Promise<NanoResult<Host>> {
       url: new URL(at, document.baseURI).href, edges: p => edgesFor(live().deployment(), registry, p), app: live, implementation: c => registry.implementation(c),
       onApplied: fn => live().listen(e => { if (e.type === 'applied') fn() }), warn: reason => void toast(reason, { variant: 'warn' }),
       open(p) {
-        const f = openFrame(pod.isolation === 'sandbox' ? 'sandbox' : 'isolated-sandbox')
+        const page = pod.isolation === 'home-origin' ? loaded.deployment.frames?.[real.provider] : undefined
+        if (pod.isolation === 'home-origin' && !page) throw new Error(`${name}: no frame page for ${real.provider} (home-origin needs frames.${real.provider})`)
+        const f = page ? openFrame('home-origin', page) : openFrame(pod.isolation === 'sandbox' ? 'sandbox' : 'isolated-sandbox')
         frames.set(p, f)
         return { ...f, dispose() { if (frames.get(p) === f) frames.delete(p); f.dispose() } }
       },
@@ -111,7 +113,7 @@ export async function start(): Promise<NanoResult<Host>> {
   const app = made = created.value
   framesOf.set(app, frames)
 
-  const kept = (d: AppDeployment) => ({ modules: { ...d.modules }, views: { ...d.views }, ...(d.layout && { layout: structuredClone(d.layout) }) })
+  const kept = (d: AppDeployment) => ({ modules: { ...d.modules }, ...(d.frames && { frames: { ...d.frames } }), views: { ...d.views }, ...(d.layout && { layout: structuredClone(d.layout) }) })
   const data = (): AppDeployment => ({ ...app.deployment(), ...kept(loaded.deployment) })
   async function apply(next: AppDeployment, views = loaded.views): Promise<NanoResult<void>> {
     // The modules, views and layout are kept before the apply, so listeners of its `applied` event already read them from data().

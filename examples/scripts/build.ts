@@ -15,6 +15,7 @@
 import { rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { combine } from './combine.ts'
+import { framePage } from './frame.ts'
 import { version } from '../../packages/nano/package.json'
 
 /** example name -> (module key -> entry file, relative to examples/); `kv` is the shared folder, no example. */
@@ -23,6 +24,7 @@ export const EXAMPLES: Record<string, Record<string, string>> = {
   todo: { 'example.todo': 'todo/index.ts' },
   chat: { 'example.messaging': 'chat/messaging/kv.ts', 'example.chat': 'chat/index.ts' },
   auth: { 'example.auth': 'auth/index.ts' },
+  originkey: { 'example.originkey': 'originkey/index.ts' },
   template: { 'acme.template': '../templates/nano-template/src/index.ts' },
 }
 /** Where an example's own nano.json is, when not <name>/nano.json; its runtimes renamed in the combined file. */
@@ -48,11 +50,16 @@ for (const [name, entries] of Object.entries(EXAMPLES)) {
   const source = await Bun.file(join(root, SOURCE[name] ?? join(name, 'nano.json'))).json()
   for (const key of Object.keys(source.modules ?? {})) modules[key] ??= SHARED[key] ?? (() => { throw new Error(`${name}/nano.json: no build for module ${key}`) })()
   if (PUBLIC_URL) for (const k in modules) modules[k] = new URL(modules[k]!, new URL(`examples/${name}/`, PUBLIC_URL)).href
-  writeFileSync(join(outdir, 'nano.json'), JSON.stringify({ ...source, modules }, null, 2) + '\n')
+  // a provider with home-origin pods serves its own frame page (frame.ts), named in `frames` like a module
+  const frames: Record<string, string> | undefined = source.frames && Object.fromEntries(Object.keys(source.frames).map(k =>
+    [k, PUBLIC_URL ? new URL('frame.html', new URL(`examples/${name}/`, PUBLIC_URL)).href : './frame.html']))
+  if (frames) await framePage(outdir)
+  writeFileSync(join(outdir, 'nano.json'), JSON.stringify({ ...source, modules, ...(frames && { frames }) }, null, 2) + '\n')
   // in dist/nano.json, a module file is under <name>/ (or kv/); with PUBLIC_URL it is absolute already
   const from = (m: string) => (PUBLIC_URL ? m : `.${new URL(m, `file:///${name}/`).pathname}`)
   const to = (id: string) => RENAME[name]?.[id] ?? id
   all[name] = { ...source, modules: Object.fromEntries(Object.entries(modules).map(([k, m]) => [k, from(m)])),
+    ...(frames && { frames: Object.fromEntries(Object.entries(frames).map(([k, m]) => [k, from(m)])) }),
     runtimes: Object.fromEntries(Object.entries(source.runtimes).map(([id, r]) => [to(id), r])),
     layout: source.layout && { ...source.layout, slots: source.layout.slots?.map((s: { runtime: string }) => ({ ...s, runtime: to(s.runtime) })) } }
 }

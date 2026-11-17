@@ -38,7 +38,7 @@ function origins(d: AppDeployment, base: string, trust: Trust, known: ImportDeps
     const url = new URL(m, base).href, origin = foreignOrigin(url);
     return origin ? [{ coord, url, origin, pods: Object.entries(d.pods).filter(([, p]) => p.implementation.split('/')[0] === coord).map(([name, p]) => {
       const isolation = isolationUnder(p, trust, known);
-      return { name, isolation, fullAccess: isolation !== 'isolated-sandbox' };
+      return { name, isolation, fullAccess: isolation !== 'isolated-sandbox' && isolation !== 'home-origin' };
     }) }] : [];
   });
   const notice = el('div');

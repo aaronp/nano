@@ -90,6 +90,12 @@ describe('own names', () => {
 })
 
 describe('merge', () => {
+  test('frames are unioned like modules: the same page again is fine, another page for the provider is a clash', () => {
+    const a = dep({ frames: { 'x.y': 'https://x.test/f.html' } })
+    expect(merge(dep({}), a)).toMatchObject({ ok: true, value: { frames: { 'x.y': 'https://x.test/f.html' } } })
+    expect(merge(a, a).ok).toBe(true)
+    expect(merge(a, dep({ frames: { 'x.y': 'https://evil.test/f.html' } }))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+  })
   test('merging into a runtime: both with a policy is refused; one policy is kept, never dropped', () => {
     const rules = (from: string) => ({ kind: 'rules' as const, rules: [{ allow: '*' as const, from }] })
     const has = (p?: ReturnType<typeof rules>) => ({ pods: [], subscriptions: [], ...(p && { policy: p }) })

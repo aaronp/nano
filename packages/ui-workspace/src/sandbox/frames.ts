@@ -38,15 +38,20 @@ function layer(): HTMLElement {
 
 /** An iframe running sandbox/boot.js, hidden until a `<nano-sandboxed>` places it. Its `ready` resolves once it has
  * loaded and holds the port (the boot answers on it), and rejects if it fails to load. */
-export function openFrame(mode: 'sandbox' | 'isolated-sandbox'): Frame {
+export function openFrame(mode: 'sandbox' | 'isolated-sandbox'): Frame
+/** A `home-origin` frame: the provider's own `page`, so it runs as that origin (its passkeys, its storage); `allow-same-origin`
+ * is its own origin, never this page's. It may use WebAuthn. */
+export function openFrame(mode: 'home-origin', page: string): Frame
+export function openFrame(mode: 'sandbox' | 'isolated-sandbox' | 'home-origin', page?: string): Frame {
   const ch = new MessageChannel(), f = document.createElement('iframe')
-  f.setAttribute('sandbox', mode === 'sandbox' ? 'allow-scripts allow-same-origin' : 'allow-scripts')
-  f.srcdoc = srcdoc(hostMap(), './sandbox/boot.js', document.baseURI)
+  f.setAttribute('sandbox', mode === 'isolated-sandbox' ? 'allow-scripts' : 'allow-scripts allow-same-origin')
+  if (mode === 'home-origin') { f.allow = 'publickey-credentials-get *; publickey-credentials-create *'; f.src = page! }
+  else f.srcdoc = srcdoc(hostMap(), './sandbox/boot.js', document.baseURI)
   f.style.cssText = 'position:fixed;border:0;display:none;pointer-events:auto;background:transparent'
   // The host's theme choice, now and on each change (the frame applies it to its own <html>; only an id crosses).
   const theme = () => { try { ch.port1.postMessage({ type: 'theme', ...currentChoice(document) }) } catch { /* no theme applied, or port gone */ } }
   const ready = new Promise<void>((res, rej) => {
-    f.addEventListener('load', () => { f.contentWindow?.postMessage('nano-sandbox', '*', [ch.port2]); theme(); document.addEventListener(THEME_EVENT, theme); res() }, { once: true })
+    f.addEventListener('load', () => { f.contentWindow?.postMessage('nano-sandbox', mode === 'home-origin' ? new URL(page!).origin : '*', [ch.port2]); theme(); document.addEventListener(THEME_EVENT, theme); res() }, { once: true })
     f.addEventListener('error', () => rej(new Error(`the ${mode} frame did not load`)), { once: true })
   })
   ready.catch(() => {})
