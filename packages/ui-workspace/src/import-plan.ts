@@ -58,16 +58,20 @@ export const trusted = (d: AppDeployment, trust: Trust, known: Known = none): Ap
 
 const op = (coord: string) => coord.slice(coord.lastIndexOf('/') + 1)
 /** Why subscription `s` is left out, both its ends not kept; nothing when neither is (as text, never HTML). */
-function leftOut(s: Subscription, keep: Set<string>): string[] {
-  const missing = [s.from, s.to].filter(p => !keep.has(p))
-  if (missing.length !== 1) return []
-  if (s.kind === 'pipe') return [`pipe ${s.from}.${op(s.source)} → ${s.to}.${op(s.target)} is left out (${missing[0]} not selected)`]
-  return keep.has(s.from) ? [`${s.from} calls ${s.to}, which is not selected: ${s.from} will fail when it runs`] : [`call ${s.from} → ${s.to} is left out (${s.from} not selected)`]
+/** A warning, with the selected pod it concerns (the end of the subscription that is kept). */
+export type Warning = { pod: string; text: string }
+function leftOut(s: Subscription, keep: Set<string>): Warning[] {
+  const missing = [s.from, s.to].filter(p => !keep.has(p)), pod = keep.has(s.from) ? s.from : s.to
+  return missing.length !== 1 ? [] : [{ pod, text: text(s, keep, missing[0]!) }]
+}
+function text(s: Subscription, keep: Set<string>, missing: string): string {
+  if (s.kind === 'pipe') return `pipe ${s.from}.${op(s.source)} → ${s.to}.${op(s.target)} is left out (${missing} not selected)`
+  return keep.has(s.from) ? `${s.from} calls ${s.to}, which is not selected: ${s.from} will fail when it runs` : `call ${s.from} → ${s.to} is left out (${s.from} not selected)`
 }
 
 /** `d` with only the pods in `keep`: a runtime left empty goes, a subscription stays only with both ends (else a
  * warning when one end is kept), and modules, slots, tags and views follow the kept pods. Policy rules stay as they are. Pure. */
-export function selectPods(d: AppDeployment, keep: Set<string>): { deployment: AppDeployment; warnings: string[] } {
+export function selectPods(d: AppDeployment, keep: Set<string>): { deployment: AppDeployment; warnings: Warning[] } {
   const kept = <T>(o: Record<string, T> | undefined, by: (k: string) => boolean) => o && Object.fromEntries(Object.entries(o).filter(([k]) => by(k)))
   const pods = kept(d.pods, p => keep.has(p))!, implementations = new Set(Object.values(pods).map(p => p.implementation))
   const providers = new Set(Object.values(pods).map(providerOf))

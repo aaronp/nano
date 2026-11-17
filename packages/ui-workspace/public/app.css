@@ -97,8 +97,10 @@ html[data-theme='retro'] .page-head a { color: #FFFF9E; }
 .import-dialog .trust input { margin-top: 3px; accent-color: var(--accent); }
 .import-dialog .trust span { display: flex; flex-direction: column; } .import-dialog .trust small { color: var(--muted); }
 .import-dialog ul { margin: 0; padding-left: 18px; } .import-dialog li { margin: 4px 0; }
-.import-dialog .preview > ul { list-style: none; padding-left: 0; } .import-dialog .preview > ul ul { list-style: none; padding-left: 24px; }
+.import-dialog .preview ul { list-style: none; padding-left: 24px; } .import-dialog .preview > div > ul { padding-left: 0; }
 .import-dialog .ops { margin-top: 2px; display: flex; flex-wrap: wrap; gap: 4px; font-size: 12px; color: var(--muted); }
+.import-dialog .group { margin-top: 8px; } .import-dialog .group > ul { padding-left: 24px; }
+.import-dialog .warning { margin: 2px 0 0 24px; font-size: 12px; color: var(--warn, #d9a400); }
 .import-dialog [role='alert'] { min-height: 1em; margin-top: 8px; color: var(--danger, #c33); }
 .import-dialog [role='alert']:empty { display: none; }
 .import-dialog .preview:empty { display: none; }

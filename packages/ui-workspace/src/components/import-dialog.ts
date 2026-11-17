@@ -59,23 +59,35 @@ function preview(d: AppDeployment, url: string, name: string, known: ImportDeps[
     const b = el('input'); b.type = 'checkbox'; b.checked = true; b.dataset[key] = value; b.setAttribute('aria-label', label);
     return b;
   };
-  const runtimes = Object.entries(d.runtimes).map(([id, r]) => {
+  const runtime = ([id, r]: [string, AppDeployment['runtimes'][string]]) => {
     const input = el('input');
     input.value = suggestedName(d, id, known); input.dataset['runtime'] = id; input.setAttribute('aria-label', `Import runtime ${id} as`);
-    const pods = el('ul', '', ...r.pods.map(p => el('li', '', box('selectPod', p, `Import pod ${p}`), text(' '), el('code', p))));
+    const pods = el('ul', '', ...r.pods.map(p => { const li = el('li', '', box('selectPod', p, `Import pod ${p}`), text(' '), el('code', p)); li.dataset['podRow'] = p; return li; }));
     const li = el('li', '', box('selectRuntime', id, `Import runtime ${id}`), text(' '), el('code', id), text(' as '), input, pods);
     li.dataset['runtimeOf'] = id;
     return li;
+  };
+  /** Runtimes by namespace (the id less its last segment): `example.chat` holds example.chat.room and .backend. */
+  const groups = Map.groupBy(Object.entries(d.runtimes), ([id]) => id.includes('.') ? id.slice(0, id.lastIndexOf('.')) : id);
+  const runtimes = [...groups].map(([ns, rs]) => {
+    const li = el('li', '', box('selectGroup', ns, `Import all of ${ns}`), text(' '), el('b', ns), el('ul', '', ...rs.map(runtime)));
+    li.dataset['groupOf'] = ns; li.className = 'group';
+    return li;
   });
   const pane = el('div'); pane.className = 'pods';
-  return { nodes: [el('p', '', el('b', name)), ...list('Runtimes', runtimes), pane],
+  const tree = el('div', '', ...list('Runtimes', runtimes));
+  return { nodes: [el('p', '', el('b', name)), tree, pane],
     /** The ticked pods' preview: their isolation under `trust`, the providers from another origin, their modules, and
      * the subscriptions left out (as text). */
     show: (trust: Trust, keep: Set<string>) => {
-      const { deployment: s, warnings } = selectPods(d, keep), warn = el('ul', '', ...warnings.map(w => el('li', w)));
-      warn.className = 'warnings';
+      const { deployment: s, warnings } = selectPods(d, keep);
+      for (const old of tree.querySelectorAll('.warning')) old.remove();
+      for (const w of warnings) {   // each under the pod it concerns
+        const p = el('p', `⚠ ${w.text}`); p.className = 'warning';
+        tree.querySelector(`[data-pod-row="${CSS.escape(w.pod)}"]`)?.append(p);
+      }
       const modules = Object.entries(s.modules ?? {}).map(([c, m]) => el('li', '', el('code', c), text(' — '), el('code', new URL(m, base).href)));
-      pane.replaceChildren(warn, ...pods(s, base, trust, known), ...list('Modules', modules));
+      pane.replaceChildren(...pods(s, base, trust, known), ...list('Modules', modules));
     } };
 }
 
@@ -117,13 +129,17 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
     say(bad === undefined ? '' : bad ? `“${bad}” is not a runtime name: no /, spaces or #, at most 64 characters.` : 'Name each runtime.');
   };
   d.addEventListener('change', (e) => {
-    const t = e.target as HTMLInputElement, runtime = t.dataset['selectRuntime'];
-    if (t.name !== 'trust' && runtime === undefined && t.dataset['selectPod'] === undefined) return;
-    if (runtime !== undefined) for (const b of boxes(`[data-runtime-of="${CSS.escape(runtime)}"] input[data-select-pod]`)) b.checked = t.checked;
-    for (const r of boxes('input[data-select-runtime]')) {   // a runtime with some pods ticked is indeterminate
-      const pods = boxes(`[data-runtime-of="${CSS.escape(r.dataset['selectRuntime']!)}"] input[data-select-pod]`), on = pods.filter(b => b.checked).length;
-      r.checked = on > 0; r.indeterminate = on > 0 && on < pods.length;
-    }
+    const t = e.target as HTMLInputElement, runtime = t.dataset['selectRuntime'], group = t.dataset['selectGroup'];
+    if (t.name !== 'trust' && runtime === undefined && group === undefined && t.dataset['selectPod'] === undefined) return;
+    const under = (attr: string, v: string) => boxes(`[${attr}="${CSS.escape(v)}"] input[data-select-pod]`);
+    if (runtime !== undefined) for (const b of under('data-runtime-of', runtime)) b.checked = t.checked;
+    if (group !== undefined) for (const b of under('data-group-of', group)) b.checked = t.checked;
+    // a runtime or namespace with some of its pods ticked is indeterminate
+    for (const [sel, attr, key] of [['input[data-select-runtime]', 'data-runtime-of', 'selectRuntime'], ['input[data-select-group]', 'data-group-of', 'selectGroup']] as const)
+      for (const r of boxes(sel)) {
+        const pods = under(attr, r.dataset[key]!), on = pods.filter(b => b.checked).length;
+        r.checked = on > 0; r.indeterminate = on > 0 && on < pods.length;
+      }
     shown?.show(trust(), kept()); check();
   });
   d.addEventListener('input', (e) => { if ((e.target as HTMLElement).dataset?.['runtime']) check(); });

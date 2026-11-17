@@ -91,12 +91,12 @@ test('selectPods keeps a subscription only with both ends; one end kept is a war
   const { deployment: d, warnings } = selectPods(app(), new Set(['todos', 'timer']))
   expect(d.runtimes['main']!.subscriptions).toEqual([])
   expect(warnings).toEqual([
-    'todos calls todoStore, which is not selected: todos will fail when it runs',
-    'pipe timer.tick → store.set is left out (store not selected)',
+    { pod: 'todos', text: 'todos calls todoStore, which is not selected: todos will fail when it runs' },
+    { pod: 'timer', text: 'pipe timer.tick → store.set is left out (store not selected)' },
   ])
   expect(selectPods(app(), new Set(['todoStore', 'store'])).warnings).toEqual([
-    'call todos → todoStore is left out (todos not selected)',
-    'pipe timer.tick → store.set is left out (timer not selected)',
+    { pod: 'todoStore', text: 'call todos → todoStore is left out (todos not selected)' },
+    { pod: 'store', text: 'pipe timer.tick → store.set is left out (timer not selected)' },
   ])
 })
 
