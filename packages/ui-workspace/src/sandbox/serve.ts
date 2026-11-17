@@ -9,12 +9,13 @@
 import { failure, type AppDeployment, type AppEvent, type Application, type Handler, type Implementation, type NanoResult } from '@pritzlaff/nano-core'
 import type { ViewTarget } from '@pritzlaff/nano-ui'
 import type { Edge } from './edges.ts'
+import type { Mode, ThemeId } from '../lib/themes.ts'
 import { frameContext } from './frame-context.ts'
 import { checkMsg, type Described, type Msg } from './protocol.ts'
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 type R = NanoResult<unknown>
-type Opts = { render?(coord: string, target: Omit<ViewTarget, 'registry'>): void; probe?(url: string): Promise<Described[]> }
+type Opts = { render?(coord: string, target: Omit<ViewTarget, 'registry'>): void; probe?(url: string): Promise<Described[]>; theme?(c: { theme: ThemeId; mode: Mode }): void }
 
 export function serve(port: MessagePort, load: (url: string, coord: string) => Promise<Implementation>, opts: Opts = {}): void {
   const post = (m: Msg) => port.postMessage(m)
@@ -39,9 +40,13 @@ export function serve(port: MessagePort, load: (url: string, coord: string) => P
     const deployment: AppDeployment = { pods: { [m.pod]: { implementation: m.coord, eager: true, config: m.config } },
       runtimes: Object.fromEntries(m.runtimes.map(r => [r, { pods: [m.pod], subscriptions: [] }])) }
     const thrown = () => { throw Object.assign(new Error(refused.reason), { fail: refused }) }
-    // A view uses call: resolve finds nothing, and get throws its Fail, as app.get's would on a missing pod.
+    // Its own pod as a plain object (actions cross as view-calls; an event never emits: sources and `on` do not run
+    // in a frame yet); any other pod: get throws its Fail, as app.get's would on a missing pod.
+    const own = (api: { ops: Record<string, { kind: string }> }) => new Proxy({}, { get: (_, op) => typeof op !== 'string' || op === 'then' ? undefined
+      : api.ops[op]?.kind === 'event' ? () => ({ [Symbol.asyncIterator]: () => ({ next: () => new Promise(() => {}), return: async () => ({ done: true, value: undefined }) }) })
+      : async (input: unknown) => { const r = await ask(id => ({ type: 'view-call', id, op, input: input ?? null })); if (r.ok) return r.value; throw Object.assign(new Error(`${r.fail.type}: ${r.fail.reason}`), { fail: r.fail }) } })
     const one: ReturnType<Application['runtime']> = {
-      call: client, get: thrown, subscribe: ((_op: unknown, fn?: unknown) => fn ? () => {} : (async function* () {})()) as never, resolve: () => ({ ok: false, reason: refused.type, fail: refused, getOrThrow: thrown }), listen: () => () => {},
+      call: client, get: ((api: never, where?: { pod?: string }) => where?.pod === m.pod ? own(api) : thrown()) as never, subscribe: ((_op: unknown, fn?: unknown) => fn ? () => {} : (async function* () {})()) as never, resolve: () => ({ ok: false, reason: refused.type, fail: refused, getOrThrow: thrown }), listen: () => () => {},
     }
     return {
       ...one, runtime: () => one, call: (...at) => client(at[at.length - 1]!), deployment: () => structuredClone(deployment),
@@ -87,6 +92,7 @@ export function serve(port: MessagePort, load: (url: string, coord: string) => P
       case 'edges': edges = m.edges; return
       case 'stream': for (const fn of heard) try { fn(m.event as AppEvent) } catch (e) { console.warn(`sandbox: a listener threw: ${message(e)}`) } return
       case 'probe': return void probe(m.url)
+      case 'theme': return opts.theme?.({ theme: m.theme, mode: m.mode })
       case 'close': return void (close ?? (async () => {}))(m.reason).then(() => post({ type: 'closed' }))
       default: return console.warn(`sandbox: dropped message of type ${m.type}`)
     }

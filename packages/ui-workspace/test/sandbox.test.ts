@@ -159,3 +159,17 @@ test('given non-JSON clone types, then checkMsg sizes and returns only their JSO
   expect(checkMsg({ type: 'publish', op: 'tick', data: { big: 'x'.repeat(2 * 1024 * 1024), m: new Map() } })).toContain('over 1 MiB')
   expect(checkMsg({ type: 'result', id: 1, result: success(undefined) })).toEqual({ type: 'result', id: 1, result: success(undefined) })
 })
+
+test('a theme message carries a known theme id and mode, never CSS', () => {
+  expect(checkMsg({ type: 'theme', theme: 'enterprise', mode: 'dark' })).toEqual({ type: 'theme', theme: 'enterprise', mode: 'dark' })
+  expect(checkMsg({ type: 'theme', theme: 'nope', mode: 'dark' })).toBe('theme: bad theme')
+  expect(checkMsg({ type: 'theme', theme: 'enterprise', mode: 'neon' })).toBe('theme: bad mode')
+  expect(checkMsg({ type: 'theme', theme: 'body{background:red}', mode: 'light' })).toBe('theme: bad theme')
+  expect(checkMsg({ type: 'theme', theme: 'toString', mode: 'light' })).toBe('theme: bad theme')
+})
+
+test("a call edge in another runtime (its target's, the caller outside) is the caller's edge, as nano's ctx.one has it", () => {
+  const d: AppDeployment = { pods: { s: Pod.lazy(sImpl), h: Pod.lazy(hImpl) },
+    runtimes: { front: { pods: ['s'], subscriptions: [] }, back: { pods: ['h'], subscriptions: [{ kind: 'call', from: 's', to: 'h' }] } } }
+  expect(edgesFor(d, registry, 's')).toEqual([{ pod: 'h', runtime: 'back', implementation: hImpl.coord, provider: hImpl.provider, provides: ['t.H'], tags: [] }])
+})

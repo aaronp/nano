@@ -5,6 +5,7 @@
  *   f.port.postMessage({ type: 'build', … }); f.dispose()
  */
 import type { Frame } from './stand-in.ts'
+import { currentChoice, THEME_EVENT } from '../lib/theme-state.ts'
 
 type ImportMap = { imports?: Record<string, string> }
 
@@ -14,7 +15,7 @@ const attr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').rep
 /** The bootstrap page: `importMap` with every URL made absolute against `base`, and the boot module by absolute URL. */
 export function srcdoc(importMap: ImportMap, bootUrl: string, base: string): string {
   const imports = Object.fromEntries(Object.entries(importMap.imports ?? {}).map(([k, v]) => [k, new URL(v, base).href]))
-  return `<!doctype html><html><head><meta charset="utf-8"><script type="importmap">${esc(JSON.stringify({ imports }))}</script>` +
+  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0}body{background:var(--bg);color:var(--fg);font-family:var(--font)}</style><script type="importmap">${esc(JSON.stringify({ imports }))}</script>` +
     `<script type="module" src="${attr(new URL(bootUrl, base).href)}"></script></head><body></body></html>`
 }
 
@@ -29,7 +30,7 @@ function layer(): HTMLElement {
   if (!el) {
     el = document.createElement('div')
     el.id = 'nano-sandbox-layer'
-    el.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1000'
+    el.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1000'   /* under the app bar (1001), so its menus open over the frames */
     document.body.append(el)
   }
   return el
@@ -42,11 +43,13 @@ export function openFrame(mode: 'sandbox' | 'isolated-sandbox'): Frame {
   f.setAttribute('sandbox', mode === 'sandbox' ? 'allow-scripts allow-same-origin' : 'allow-scripts')
   f.srcdoc = srcdoc(hostMap(), './sandbox/boot.js', document.baseURI)
   f.style.cssText = 'position:fixed;border:0;display:none;pointer-events:auto;background:transparent'
+  // The host's theme choice, now and on each change (the frame applies it to its own <html>; only an id crosses).
+  const theme = () => { try { ch.port1.postMessage({ type: 'theme', ...currentChoice(document) }) } catch { /* no theme applied, or port gone */ } }
   const ready = new Promise<void>((res, rej) => {
-    f.addEventListener('load', () => { f.contentWindow?.postMessage('nano-sandbox', '*', [ch.port2]); res() }, { once: true })
+    f.addEventListener('load', () => { f.contentWindow?.postMessage('nano-sandbox', '*', [ch.port2]); theme(); document.addEventListener(THEME_EVENT, theme); res() }, { once: true })
     f.addEventListener('error', () => rej(new Error(`the ${mode} frame did not load`)), { once: true })
   })
   ready.catch(() => {})
   layer().append(f)
-  return { port: ch.port1, ready, element: f, dispose() { f.remove(); ch.port1.close() } }
+  return { port: ch.port1, ready, element: f, dispose() { document.removeEventListener(THEME_EVENT, theme); f.remove(); ch.port1.close() } }
 }

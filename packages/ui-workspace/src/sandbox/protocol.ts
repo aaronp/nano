@@ -7,6 +7,7 @@
  */
 import { isNanoResult, type NanoResult, type Provider, type SchemaDef, type SelectorData } from '@pritzlaff/nano-core'
 import type { Edge } from './edges.ts'
+import { isMode, isThemeId, type Mode, type ThemeId } from '../lib/themes.ts'
 
 type Reason = 'restarted' | 'removed' | 'changed' | 'closed'
 type R = NanoResult<unknown>
@@ -21,6 +22,7 @@ export type Msg =
   | { type: 'view-result'; id: number; result: R }
   | { type: 'stream'; event: Record<string, unknown> }
   | { type: 'probe'; url: string }
+  | { type: 'theme'; theme: ThemeId; mode: Mode }   // the host's theme choice: an id, never CSS
   // frame → host
   | { type: 'ready' } | { type: 'closed' }
   | { type: 'failed'; error: string }
@@ -108,6 +110,7 @@ const FIELDS: Record<Msg['type'], Record<string, Check>> = {
   call: { id: num, port: str, input: any }, outresult: { id: num, result }, edges: { edges: arrOf(edge) },
   close: { reason: v => ['restarted', 'removed', 'changed', 'closed'].includes(v as string) },
   'view-result': { id: num, result }, stream: { event: obj }, probe: { url: str },
+  theme: { theme: v => str(v) && isThemeId(v as string), mode: v => str(v) && isMode(v as string) },
   ready: {}, closed: {}, failed: { error: str }, result: { id: num, result }, publish: { op: str, data: any },
   outcall: { id: num, pod: str, runtime: str, op: str, input: any }, 'view-call': { id: num, op: str, input: any },
   described: { providers: Array.isArray }, warn: { reason: str },

@@ -186,3 +186,24 @@ test('imported Sandboxed (the default), the pods start at once and their own vie
     return false
   }, { timeout: 10_000 }).toBe(true)
 })
+
+test('imported Sandboxed, todos shows <todo-list> in its frame, and every frame takes the theme, live', async ({ page }) => {
+  await start(page)
+  await page.getByRole('button', { name: 'File', exact: true }).click()
+  await page.getByRole('button', { name: /^Open/ }).click()
+  const d = page.getByRole('dialog', { name: 'Import components' })
+  await d.getByLabel('nano.json URL').fill('http://localhost:4310/nano.json')
+  await d.getByRole('button', { name: 'Fetch' }).click()
+  await d.getByRole('button', { name: 'Import', exact: true }).click()
+  await expect(d).toHaveCount(0)
+  const todoFrame = async () => { for (const f of page.frames()) if (await f.locator('todo-list').count()) return f }
+  await expect.poll(async () => (await todoFrame())?.getByRole('textbox', { name: 'New todo' }).count(), { timeout: 10_000 }).toBe(1)
+  const f = (await todoFrame())!
+  const bg = (w: { evaluate: Page['evaluate'] }) => w.evaluate(() => getComputedStyle(document.body).backgroundColor)
+  await expect.poll(async () => await bg(f)).toBe(await bg(page))
+  const before = await bg(page)
+  await page.goto('/#/themes')
+  await page.locator('theme-picker').getByText('Terminal', { exact: true }).click()
+  await expect.poll(async () => await bg(page)).not.toBe(before)
+  await expect.poll(async () => await bg(f)).toBe(await bg(page))
+})
