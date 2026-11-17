@@ -15,6 +15,7 @@ import './components/component-drawer.ts';
 import { openImportDialog, setImportHost } from './components/import-dialog.ts';
 import './components/gallery.ts';
 import './components/theme-picker.ts';
+import './components/profile-menu.ts';
 import { FileMenuEl } from './components/file-menu.ts';
 import { askName } from './components/name-dialog.ts';
 import './widgets/widgets.ts';

@@ -4,6 +4,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
 import { createBus, provideBus } from '../src/lib/bus.ts'
 import { bootWiring } from '../src/boot-wiring.ts'
+import { HOST_ENTRIES } from '../src/components/profile-menu.ts'
 
 const tick = () => new Promise(r => setTimeout(r, 5))
 const setup = () => {
@@ -18,7 +19,11 @@ const setup = () => {
   return { go, flips: () => flips, circuit: document.querySelector('c-circuit') as any, link: document.querySelector('a[data-connections]') as HTMLAnchorElement }
 }
 
-// BACKLOG(4): 'the profile menu lists Wiring after Themes' stays in retired (the profile is not ported).
+test('the profile menu lists Wiring after Themes', () => {
+  const labels = HOST_ENTRIES.map(e => e.label)
+  expect(labels.slice(labels.indexOf('Themes'))).toEqual(['Themes', 'Wiring'])
+  expect(HOST_ENTRIES.at(-1)).toEqual({ label: 'Wiring', href: '#/wiring' })
+})
 
 test('opening Wiring after a workspace focuses that page', async () => {
   const t = setup()

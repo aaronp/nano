@@ -46,8 +46,9 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
    Old: `public/index.html` slot `actions`; `src/composable.ts:64,74-75` made a `Profile` (`@composable/shell`) with
    `HOST_ENTRIES` (`src/app/stores.ts`).
    Why: `Profile` is a retired component; `<nano-profile>` was a `PlacedElement`.
-   Stubbed: the element stays in the markup, undefined (renders nothing).
-   Options: a plain element with static entries; a provider pod with a view.
+   Now (the first option): `src/components/profile-menu.ts` defines `<nano-profile>` as a plain element: the old
+   avatar and menu, same markup and styles, with `HOST_ENTRIES` (Components, Settings, Systems, Themes, Wiring) and
+   the user *You* static. Gone: setting the user, an avatar image, entries set at runtime (a provider pod with a view).
 
 5. **The app gateway: the app bar and the workspace controls as components.**
    Old: `src/components/app-bar.ts` (a `PlacedElement` over `AppGateway.appBar`), `src/boot-app-bar.ts` (setFocus,
@@ -75,7 +76,7 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
    the cables; it rebuilds on `applied`. The one page is the Workspace (`/workspace`, titled *Main* as before); its
    footprints are the pods the live dock shows, boxed from the dock's golden-layout tree (`dockPlacements`; was the
    screen's saved layout), read again when the Wiring page is shown. `src/boot-wiring.ts` and `test/wiring.test.ts`
-   are back from `retired/` unchanged (one page; its profile-menu test stays retired, item 4). Still stubbed: no
+   are back from `retired/` unchanged (one page; its profile-menu test is back with item 4). Still stubbed: no
    saved workspaces, so one layer (item 3); call edges are not drawn; the dock's layout is read through its private
    golden-layout (`main.ts` `arrangement`; a public accessor on `<workspace-dock>` would be a new method).
 
@@ -153,7 +154,7 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
   is nano-ui's explorer; *Connections* is nano-ui's wiring; no *Instances* or *Puzzle editor* (items 1, 6).
 - A pod opened from the explorer gets a *Pod* panel (or its existing one is focused); the app bar shows its View and
   Change implementation pickers (item 5).
-- Systems page: explorer only (item 1); Wiring page: `<c-circuit>` with one page, *Main* (item 6). Profile avatar missing (item 4).
+- Systems page: explorer only (item 1); Wiring page: `<c-circuit>` with one page, *Main* (item 6).
 - Import dialog previews pods/modules and imports a nano.json from a URL or a file; saved workspaces say "not available yet".
 - `e2e/slice.e2e.ts`: the app is reached through `workspace-dock` (was `workspace-shell`), and Save is File › Save.
 - Import map: no `@pritzlaff/nano-runes`; adds `lit/directives/ref.js` and `@pritzlaff/nano-ui` (bundle).
