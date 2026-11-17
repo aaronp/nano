@@ -62,9 +62,14 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
    Old: `<c-wires>` around the dock (`public/index.html`, `src/composable.ts:111-124`), `wires:open-panel`;
    `<c-circuit>` and `src/boot-wiring.ts` (page layers, Connections link flipping the last workspace's dock).
    Why: `@composable/wires|circuit` are retired.
-   Stubbed: *Connections* opens a `nano-wiring` panel in the dock; the Wiring page shows `<nano-wiring>`. `<c-wires>`
-   stays in the markup, undefined. `boot-wiring.ts` is in `retired/`.
-   Options: a tilt/flip mode in nano-ui's wiring; drop the Connections link.
+   Restored: `<c-wires>` is back, verbatim from `35f1675^` in `src/wires/`, its seams ported to 0.4: pods are the
+   instances, an implementation's ops the jacks (an action is an in jack and, for its result, an out jack, as nano-ui's
+   wiring reads them), pipes the cords; connect, disconnect, add and remove are an `apply` of the deployment; packets
+   come from `sent` pipe messages; `wires:open-panel` opens the pod's panel (`openPod`). *Connections* tilts the dock again.
+   Still stubbed (`BACKLOG(6)` in `src/wires/`): a packet is labelled with its target op, not the value (`sent` carries
+   no data); the selection is the view's own (no Application `select`); call edges are not drawn; Detail's tree is
+   `<nano-explorer>` (was `<c-platform>`), without schema examples; a cord between pods in different runtimes is refused.
+   The Wiring page still shows `<nano-wiring>` (`<c-circuit>` retired; `boot-wiring.ts` is in `retired/`).
 
 7. **Importing a package by its manifest.**
    Old: `src/imports.ts`, `src/lib/imports.ts`, `src/components/import-dialog.ts`: fetch a manifest, preview components,

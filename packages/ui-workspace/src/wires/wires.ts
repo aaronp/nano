@@ -1,12 +1,13 @@
-// <c-wires>: the prototype's Component class as a Lit element over the live system. It holds the view state, keeps
-// the model in step with the registry and the dock's layout, turns trace deliveries into packets, and edits the
-// system through the Application. The render-* files draw it, as the prototype's template does from renderVals.
+// <c-wires>: the prototype's Component class as a Lit element over the live app. It holds the view state, keeps
+// the model in step with the app's deployment and the dock's layout, turns `sent` pipe messages into packets, and edits
+// the app by applying its deployment with a pod or pipe added or removed. The render-* files draw it, as the
+// prototype's template does from renderVals.
 import { LitElement, css } from 'lit'
-import { Ops, type Op, type Result, type Runtime, type Trace } from '@pritzlaff/nano-core'
-import { ApplicationOps, ApplicationOps as P, type Selection } from '@pritzlaff/nano-app'
-import type { Catalog } from '@pritzlaff/nano-elements'
+import type { AppDeployment, AppEvent } from '@pritzlaff/nano-core'
+import type { Host } from '../host.ts'
+import { addPod } from '../dock/panels.ts'
 import { FLASH_MS, FONTS, FRAME_MS, MAX_PACKETS, TRAVEL_MS, TURN_MS, VIEWS, short, type View } from './constants'
-import { buildModel, type Model, type Panel } from './model'
+import { buildModel, jacksOfImpl, snapshotOf, wireId, type Jack, type Model, type Panel } from './model'
 import { buildPuzzle } from './puzzle'
 import { renderRoot } from './render-root'
 
@@ -14,6 +15,12 @@ import { renderRoot } from './render-root'
 export type Cord = { anchor: string; picked: string | null; x: number; y: number; hover: string | null; err: string | null }
 /** A message in flight along a wire (a subscription), from a trace delivery. */
 export type Packet = { id: number; wire: string; born: number; label: string }
+/** What is selected: a pod, or one of its ports (`system` is the runtime shown). */
+export type Selection = { system: string; instance: string; op?: string } | null
+/** An edit's outcome, as the old Application's: a value, or a refusal. */
+export type Result = { value?: unknown } | { error: string }
+/** What the host can make: an implementation's title and jacks, by its coordinate. */
+export type Catalog = Record<string, { title: string; jacks: Jack[] }>
 /** All of the view's state. */
 export interface State {
   ry: number; rx: number; dragging: boolean; mode: 'relay' | 'puzzle'; sel: string | null; depth: number; editing: boolean; entering: boolean; leaving: boolean; hl: boolean
@@ -33,8 +40,8 @@ function loadFonts(doc: Document) {
   link.rel = 'stylesheet'; link.href = FONTS; link.dataset.wiresFonts = ''
   doc.head.append(link)
 }
-/** A panel's instance: the `model` of the first element inside it that has one. */
-const modelIn = (panel: Element) => [...panel.querySelectorAll('*')].find(e => typeof (e as { model?: unknown }).model === 'string') as (Element & { model: string }) | undefined
+/** A panel's instance: the pod of the first element inside it whose view target names one. */
+const modelIn = (panel: Element) => [...panel.querySelectorAll('*')].find(e => typeof (e as { target?: { pod?: unknown } }).target?.pod === 'string') as (Element & { target: { pod: string } }) | undefined
 /** An element's layout box relative to `dock`, from offsets: unlike client rects, these ignore the 3D transform. */
 const rectIn = (el: HTMLElement, dock: HTMLElement) => {
   let x = 0, y = 0, e: HTMLElement | null = el
@@ -46,7 +53,7 @@ let packetId = 0
 
 /** The wiring view: slot the live `<workspace-dock>`; its `dock:connections` event flips it to show the back. */
 export class Wires extends LitElement {
-  static properties = { runtime: { attribute: false }, host: { attribute: false }, catalog: { attribute: false }, application: {}, system: {}, flipped: { type: Boolean, reflect: true } }
+  static properties = { host: { attribute: false }, application: {}, system: {}, flipped: { type: Boolean, reflect: true } }
   static styles = css`
     :host { display: block; height: 100% }
     .stage-bg{background-color:#0B0E12;background-image:radial-gradient(#1C222B 1px, transparent 1px);background-size:22px 22px}
@@ -60,11 +67,9 @@ export class Wires extends LitElement {
     .sidebtn:disabled{opacity:0.4;cursor:not-allowed}
     .joint:hover{background:#FFFFFF}
     .pkt-label{paint-order:stroke;stroke:#0A0D11;stroke-width:3px;stroke-linejoin:round}`
-  declare runtime?: Runtime
-  /** The runtime the Application lives in (its calls, selection); defaults to `runtime`. */
-  declare host?: Runtime
-  declare catalog: Catalog
-  /** The instance the Application lives in (its ops are called as the view). */
+  /** The page's host: its app, registry and deployment. */
+  declare host?: Host
+  /** The host's own pod, never shown. */
   declare application: string
   declare system: string
   declare flipped: boolean
@@ -80,13 +85,13 @@ export class Wires extends LitElement {
 
   constructor() {
     super()
-    this.catalog = {}; this.application = 'application'; this.system = ''; this.flipped = false
+    this.application = 'ui'; this.system = ''; this.flipped = false
     this.addEventListener('dock:connections', () => { if (this.flipped) this.close(); else this.flipped = true })
   }
   connectedCallback() { super.connectedCallback(); loadFonts(this.ownerDocument); if (this.hasUpdated) this.#attach() }
   disconnectedCallback() { super.disconnectedCallback(); this.#detach(); this.#stop() }
   willUpdate(changed: Map<string, unknown>) {
-    if (changed.has('runtime') || changed.has('host')) { this.#detach(); this.#attach() }
+    if (changed.has('host')) { this.#detach(); this.#attach() }
     if (changed.has('flipped')) this.flipped ? this.#open() : this.#close()
   }
   render() { return renderRoot(this) }
@@ -111,7 +116,8 @@ export class Wires extends LitElement {
     else this.setState({ panX: this.s.panX - e.deltaX, panY: this.s.panY - e.deltaY, zooming: true })
   }
   /** Selects a component, or one of its actions, through the Application, and shows it in Detail. */
-  pick(sel: Exclude<Selection, null>) { this.setState({ picked: sel, tab: 'detail' }); void this.call(P.select, sel) }
+  // BACKLOG(6): the old Application kept the selection (select / selectionChanged); 0.4 has none, so it is the view's own.
+  pick(sel: Exclude<Selection, null>) { this.setState({ picked: sel, tab: 'detail' }) }
   /** Back to the fitted view. */
   fit() { this.setState({ zoom: 1, panX: 0, panY: 0, zooming: false }) }
   now() { return performance.now() }
@@ -120,11 +126,9 @@ export class Wires extends LitElement {
   dock() { return this.firstElementChild as HTMLElement | null }
 
   #attach() {
-    const rt = this.runtime
-    if (!rt || !this.isConnected || this.#off.length) return
-    this.#off = [rt.registry.listen(() => this.schedule()), rt.listen(t => this.trace(t))]
-    // the Application's selection is published where it lives
-    if (this.host && this.host !== rt) this.#off.push(this.host.listen(t => { if (t.kind === 'publish') this.trace(t) }))
+    const h = this.host
+    if (!h || !this.isConnected || this.#off.length) return
+    this.#off = [h.app.listen(e => { if (e.type === 'applied') this.schedule(); else this.trace(e) })]
     this.rebuild()
   }
   #detach() { this.#off.forEach(f => f()); this.#off = [] }
@@ -136,14 +140,14 @@ export class Wires extends LitElement {
     if (!dock) return []
     // only panels that are showing: an inactive tab has no size or place, and its component waits in the rack
     return [...dock.querySelectorAll<HTMLElement>('.dock-panel')].filter(p => p.offsetWidth > 0 && p.offsetHeight > 0).map(p => {
-      const el = modelIn(p), id = el?.model ?? null
+      const el = modelIn(p), id = el?.target.pod ?? null
       return { instance: id, rect: rectIn(p, dock), tag: (el ?? p.firstElementChild ?? p).localName }
     })
   }
   rebuild() {
-    const rt = this.runtime
-    if (!rt) return
-    const snapshot = rt.registry.snapshot(), panels = this.panels(), kinds: Record<string, string> = {}
+    const h = this.host
+    if (!h) return
+    const snapshot = snapshotOf(h.data(), h.registry), panels = this.panels(), kinds: Record<string, string> = {}
     for (const i of snapshot.instances) { const k = this.kindOf(i.id); if (k) kinds[i.id] = k }
     const titles = Object.fromEntries(Object.entries(this.catalog).map(([k, e]) => [k, e.title]))
     this.#layout = JSON.stringify(panels)
@@ -151,24 +155,29 @@ export class Wires extends LitElement {
     this.puzzle = buildPuzzle(this.model)
     this.requestUpdate()
   }
-  /** The catalog kind an instance was made from: the entry whose component is the instance's. */
-  kindOf(id: string) {
-    const c = this.runtime?.registry.get(id)?.component
-    return c ? Object.keys(this.catalog).find(k => this.catalog[k]!.component === c) : undefined
+  /** The kind an instance was made from: its pod's implementation. */
+  kindOf(id: string) { return this.host?.data().pods[id]?.implementation }
+  /** What the host can make (the dock's palette), by implementation coordinate. */
+  get catalog(): Catalog {
+    const h = this.host
+    if (!h) return {}
+    return Object.fromEntries(h.registry.manifest().providers.filter(p => p.coord !== 'workspace.host').flatMap(p => p.implementations.map(c =>
+      [c, { title: c.slice(c.indexOf('/') + 1), jacks: jacksOfImpl(h.registry.implementation(c)) }])))
   }
 
-  /** A delivery on a drawn wire sends a packet along it, flashes its source and counts it. */
-  trace(t: Trace) {
-    if (this.flipped && t.kind === 'publish' && t.from.instance === this.application && t.op === Ops.key(P.selectionChanged)) this.setState({ picked: (t.data ?? null) as Selection })
-    if (!this.flipped || t.kind !== 'delivery' || !this.model.wires.some(w => w.id === t.subscription)) return   // flat: nothing to draw
+  /** A pipe message on a drawn wire sends a packet along it, flashes its source and counts it. */
+  trace(t: AppEvent) {
+    if (!this.flipped || t.type !== 'sent' || t.kind !== 'pipe') return   // flat: nothing to draw
+    const prefix = `${t.runtime}|${t.from}|${t.to}|${t.port}|`, wire = this.model.wires.find(w => w.id.startsWith(prefix))
+    if (!wire) return
     const now = this.now(), { stats, flashes } = this.s
     const stat = (id: string) => stats[id] ?? { in: 0, out: 0 }
-    let label: string
-    try { label = short(JSON.stringify(t.data) ?? String(t.data), 12) } catch { label = '…' }
+    // BACKLOG(6): a `sent` event carries no data, so the packet is labelled with the target op, not the value.
+    const label = short(t.port.slice(t.port.lastIndexOf('/') + 1), 12)
     this.setState({
-      packets: [...this.s.packets, { id: packetId++, wire: t.subscription, born: now, label }].slice(-MAX_PACKETS),
-      flashes: { ...flashes, [t.from.instance]: now },
-      stats: { ...stats, [t.from.instance]: { ...stat(t.from.instance), out: stat(t.from.instance).out + 1 }, [t.target]: { ...stat(t.target), in: stat(t.target).in + 1 } },
+      packets: [...this.s.packets, { id: packetId++, wire: wire.id, born: now, label }].slice(-MAX_PACKETS),
+      flashes: { ...flashes, [t.from]: now },
+      stats: { ...stats, [t.from]: { ...stat(t.from), out: stat(t.from).out + 1 }, [t.to]: { ...stat(t.to), in: stat(t.to).in + 1 } },
     })
   }
   /** Each frame: packets that arrived flash their target; a changed dock layout rebuilds the model. */
@@ -216,30 +225,47 @@ export class Wires extends LitElement {
   ok(text: string) { this.setState({ cord: null, toast: { kind: 'ok', text } }) }
   fail(text: string) { this.setState({ cord: null, toast: { kind: 'err', text } }) }
 
-  /** Calls an Application op as the view; a refusal is shown, and returned. */
-  /** The system shown: `system`, or the runtime's registry. */
-  get sys() { return this.system || this.runtime?.registry.id || 'host' }
-  async call(op: Op, arg: unknown): Promise<Result> {
-    const at = this.host ?? this.runtime
-    if (!at) return { error: 'no runtime' }
-    const r = await at.call({ registry: at.registry.id, instance: 'wires' }, this.application, Ops.key(op), arg)
-    if ('error' in r) this.fail(r.error)
-    return r
+  /** The system shown: `system`, or the host's runtime `main`. */
+  get sys() { return this.system || 'main' }
+  /** Applies the deployment `edit` makes of the live one; a refusal is shown, and returned. */
+  async change(edit: (d: AppDeployment) => AppDeployment | string, value?: unknown): Promise<Result> {
+    const h = this.host
+    if (!h) return { error: 'no host' }
+    const next = edit(structuredClone(h.data()))
+    const r = typeof next === 'string' ? { ok: false as const, fail: { reason: next } } : await h.apply(next)
+    if (!r.ok) { this.fail(r.fail.reason); return { error: r.fail.reason } }
+    return { value }
   }
-  async connect(from: string, to: string) {
-    const a = this.model.P[from]!, b = this.model.P[to]!
-    return this.call(ApplicationOps.connect, { system: this.sys, source: a.owner, op: Ops.key(a.op), listener: b.owner, target: Ops.key(b.op) })
+  /** Adds a pipe from an out jack to an in jack, in a runtime both pods are placed in; its value is `{ id }`. */
+  connect(from: string, to: string) {
+    const a = this.model.P[from]!, b = this.model.P[to]!, pipe = { kind: 'pipe' as const, from: a.owner, source: a.port, to: b.owner, target: b.port }
+    const rt = Object.keys(this.host?.data().runtimes ?? {}).find(r => [a.owner, b.owner].every(p => this.host!.data().runtimes[r]!.pods.includes(p)))
+    return this.change(d => rt ? (d.runtimes[rt]!.subscriptions.push(pipe), d) : a.owner + ' and ' + b.owner + ' are not in one runtime', rt && { id: wireId(rt, pipe) })
   }
-  disconnect(id: string) { return this.call(ApplicationOps.disconnect, { system: this.sys, id }) }
-  removeComponent(instance: string) { return this.call(ApplicationOps.removeFromSystem, { instance, system: this.sys }) }
-  /** Adds a component of `kind` to the rack, under a fresh name; returns the name, or null if refused. */
+  /** Removes the pipe a wire id names. */
+  disconnect(id: string) {
+    const [rt, from, to, target, source] = id.split('|')
+    return this.change(d => {
+      const r = d.runtimes[rt!]
+      if (r) r.subscriptions = r.subscriptions.filter(s => !(s.kind === 'pipe' && s.from === from && s.to === to && s.target === target && s.source === source))
+      return d
+    })
+  }
+  /** Removes a pod, from every runtime, with its pipes and edges. */
+  removeComponent(instance: string) {
+    return this.change(d => {
+      delete d.pods[instance]; delete d.views?.[instance]; delete d.tags?.[instance]
+      for (const r of Object.values(d.runtimes)) { r.pods = r.pods.filter(p => p !== instance); r.subscriptions = r.subscriptions.filter(s => s.from !== instance && s.to !== instance) }
+      return d
+    })
+  }
+  /** Adds a pod of `kind` (an implementation) to runtime main, under a fresh name; returns the name, or null if refused. */
   async create(kind: string) {
-    let n = 1
-    while (this.runtime?.registry.get(kind + '-' + n)) n += 1
-    const r = await this.call(ApplicationOps.createComponent, { kind, name: kind + '-' + n, system: this.sys })
-    return 'error' in r ? null : kind + '-' + n
+    const name = this.host && await addPod(this.host, kind)
+    if (!name) this.fail('Could not add a ' + kind)
+    return name ?? null
   }
-  /** Asks the workspace to open a rack component as a panel again, with the element of the kind it was made from. */
+  /** Asks the workspace to open a rack component as a panel again: the dock's panel for that pod. */
   openPanel(name: string) {
     const kind = this.kindOf(name)
     if (!kind) { this.fail(name + ' has no element to open'); return }

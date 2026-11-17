@@ -23,6 +23,7 @@ import './components/workspace-dock.ts';
 import { bootAppBar } from './boot-app-bar.ts';   // after the shell (its bus) and the dock: the app bar follows the page and panel focus
 import { showStatus } from './lib/status.ts';
 import type { WorkspaceDock } from './components/workspace-dock.ts';
+import { defineWires, type Wires } from './wires/index.ts';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
 if (host) {
@@ -51,8 +52,14 @@ if (host) {
   };
   for (const [c, run] of Object.entries(commands)) document.addEventListener(`file:${c}`, () => void run());
 
-  // Connections: the dock's wiring view. BACKLOG(6): <c-wires> tilted the dock to show the cables behind it.
-  document.addEventListener('dock:connections', e => (e.target as WorkspaceDock).addWidget('nano-wiring'));
+  // Connections: <c-wires> around the dock hears its `dock:connections` and tilts the dock to show the cables behind it.
+  defineWires();
+  for (const w of document.querySelectorAll<Wires>('c-wires')) w.host = host;
+  // The wiring view asks for a rack component back on the front: the dock's panel for that pod.
+  document.addEventListener('wires:open-panel', e => {
+    const { name } = (e as CustomEvent<{ kind: string; name: string }>).detail;
+    ((e.target as Element).querySelector<WorkspaceDock>('workspace-dock') ?? document.querySelector<WorkspaceDock>('workspace-dock'))?.openPod(name);
+  });
   // BACKLOG(3): Save as workspace… and + (new workspace) made saved workspaces, each its own system and route.
   document.addEventListener('dock:save-as', () => showStatus(document, 'Saved workspaces are not available yet.'));
   document.querySelector('[data-new-workspace]')?.addEventListener('click', () => showStatus(document, 'Saved workspaces are not available yet.'));

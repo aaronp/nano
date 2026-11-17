@@ -1,6 +1,6 @@
 // The prototype's stage handlers (onDown, onMove, onUp, …) and edit actions, over the live system: cords connect
-// and disconnect through the platform, the palette creates components, and a rack module dropped on the pane opens it.
-import { Ops } from '@pritzlaff/nano-core'
+// and disconnect by applying the app's deployment, the palette creates components, and a rack module dropped on the pane opens it.
+import { fits } from '@pritzlaff/nano-core'
 import { clamp } from './constants'
 import { nearestPort } from './geometry'
 import { checkConnect, dirOf, portKey, portName } from './model'
@@ -96,7 +96,7 @@ function pickAt(el: Wires, e: Ptr) {
   const m = el.model, pt = toLocal(el, e), hit = nearestPort(m.P, visibleKeys(el), pt, null)
   const inside = (r: { x: number; y: number; w: number; h: number }) => pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h
   const instance = hit !== null ? m.P[hit]!.owner : m.chassis.find(c => c.instance && inside(c))?.instance ?? m.rack.find(inside)?.id
-  if (instance) el.pick({ system: el.sys, instance, ...(hit !== null ? { op: Ops.key(m.P[hit]!.op) } : {}) })
+  if (instance) el.pick({ system: el.sys, instance, ...(hit !== null ? { op: m.P[hit]!.port } : {}) })
 }
 
 export function onCancel(el: Wires) { el.drag = null; el.setState({ dragging: false, cord: null, lift: null }) }
@@ -129,9 +129,9 @@ export async function joint(el: Wires, wireId: string) {
   const armed = el.s.armed
   if (armed === null) { if (!('error' in await el.disconnect(wireId))) el.ok('Unplugged ' + portName(el.model, w.from) + ' → ' + portName(el.model, w.to)); return }
   const from = el.model.P[w.from]!, to = el.model.P[w.to]!
-  const ops = [...(el.catalog[armed]?.component.actions.values() ?? [])].map(a => a.op)
+  const ops = el.catalog[armed]?.jacks ?? []
   // ponytail: the last fitting jacks, as components declare settings first and their main action and event last
-  const inOp = ops.findLast(o => dirOf(o) === 'in' && Ops.fits(from.op, o)), outOp = ops.findLast(o => dirOf(o) === 'out' && Ops.fits(o, to.op))
+  const inOp = ops.findLast(o => dirOf(o) === 'in' && fits(from.op, o.op)), outOp = ops.findLast(o => dirOf(o) === 'out' && fits(o.op, to.op))
   if (!inOp || !outOp) { el.fail((el.catalog[armed]?.title ?? armed) + " doesn't fit between " + portName(el.model, w.from) + ' and ' + portName(el.model, w.to)); return }
   const name = await el.create(armed)
   if (!name) return
@@ -145,8 +145,8 @@ export async function joint(el: Wires, wireId: string) {
   }
   if (!await step(el.disconnect(wireId), () => () => el.connect(w.from, w.to))) return
   el.rebuild()   // the new component's jacks, before patching them
-  if (!await step(el.connect(w.from, portKey(name, Ops.key(inOp))), sub => () => el.disconnect(sub.id))) return
-  if (!await step(el.connect(portKey(name, Ops.key(outOp)), w.to))) return
+  if (!await step(el.connect(w.from, portKey(name, inOp.port + ':in')), sub => () => el.disconnect(sub.id))) return
+  if (!await step(el.connect(portKey(name, outOp.port + ':out'), w.to))) return
   el.ok('Inserted ' + (el.catalog[armed]?.title ?? armed))
   el.setState({ armed: null })
 }

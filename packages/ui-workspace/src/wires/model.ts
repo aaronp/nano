@@ -1,7 +1,6 @@
-// The view model, as pure functions: from a registry snapshot, the dock's panel geometry and the catalog, the
-// prototype's chassis, jacks (ports), rack modules and blocks, wires and routes.
-import { Ops, type Op, type Snapshot } from '@pritzlaff/nano-core'
-import { isInfrastructure, viewIds } from '@pritzlaff/nano-app'
+// The view model, as pure functions: from a snapshot of the app's deployment, the dock's panel geometry and the
+// catalog, the prototype's chassis, jacks (ports), rack modules and blocks, wires and routes.
+import { fits, type AppDeployment, type Implementation, type Op, type Registry } from '@pritzlaff/nano-core'
 import { BLOCK_DY, BLOCK_H, BLOCK_JACK_DY, JACK_W, MOD_H, PALETTE, ROW_STEP, ROW_Y } from './constants'
 
 /** A rectangle in the dock's (front) coordinates. */
@@ -9,7 +8,7 @@ export type Rect = { x: number; y: number; w: number; h: number }
 /** One dock panel: the instance its element shows (null for none, like Notes), where it is, and how to name it. */
 export type Panel = { instance: string | null; rect: Rect; tag: string }
 /** A jack. `kind` is where it sits: a panel's back (chassis), a rack module, or a rack block. */
-export type Port = { key: string; owner: string; op: Op; x: number; y: number; dir: 'in' | 'out'; label: string; kind: 'chassis' | 'module' | 'block' }
+export type Port = { key: string; owner: string; op: Op; port: string; x: number; y: number; dir: 'in' | 'out'; label: string; kind: 'chassis' | 'module' | 'block' }
 /** A panel's back, mirrored into back-face coordinates. */
 export type Chassis = { id: string; instance: string | null; deploy?: string; label: string; tag: string; x: number; y: number; w: number; h: number }
 /** A component in the rack: an operator module, or (with no out jack) a store block. */
@@ -27,17 +26,40 @@ export type ModelInput = {
   kinds?: Record<string, string>; titles?: Record<string, string>
 }
 
-/** A jack's key: the instance and the op's key. */
+/** A jack of an implementation: an op at its port (`<interface>/<op>`), as an input or an output (nano-ui's pads). */
+export type Jack = { op: Op; port: string; dir: 'in' | 'out' }
+/** The pods (instances) and pipes (subscriptions) of a deployment, flattened over its runtimes. */
+export type Snapshot = {
+  instances: { id: string; ops: Jack[]; labels?: Record<string, string> }[]
+  subscriptions: { id: string; source: string; op: string; listener: string; target: string }[]
+}
+/** An action is an in jack and, for its result, an out jack; an event is an out jack (as nano-ui's wiring reads them). */
+export const jacksOfImpl = (impl: Implementation | undefined): Jack[] => (impl?.provides ?? []).flatMap(i => Object.values(i.ops).flatMap(op => {
+  const port = `${i.coord}/${op.name}`
+  return op.kind === 'action' ? [{ op, port, dir: 'in' as const }, { op, port, dir: 'out' as const }] : [{ op, port, dir: 'out' as const }]
+}))
+/** A pipe's wire id, as nano-ui's cable id: `runtime|from|to|target|source`. */
+export const wireId = (runtime: string, s: { from: string; source: string; to: string; target: string }) => `${runtime}|${s.from}|${s.to}|${s.target}|${s.source}`
+/** The snapshot of a deployment: each pod with its implementation's jacks and its isolation as `nano/deploy`, each pipe. */
+export function snapshotOf(d: AppDeployment, registry: Registry): Snapshot {
+  const instances = Object.entries(d.pods).map(([id, p]) => ({ id, ops: jacksOfImpl(registry.implementation(p.implementation)), labels: { 'nano/deploy': p.isolation ?? 'host' } }))
+  // BACKLOG(6): call edges (`kind: 'call'`) have no port; the old view had none either, so they are not drawn.
+  const subscriptions = Object.entries(d.runtimes).flatMap(([rt, r]) => r.subscriptions.flatMap(s => s.kind === 'pipe'
+    ? [{ id: wireId(rt, s), source: s.from, op: s.source + ':out', listener: s.to, target: s.target + ':in' }] : []))
+  return { instances, subscriptions }
+}
+
+/** A jack's key: the instance, and the port with its direction. */
 export const portKey = (instance: string, op: string) => instance + ' ' + op
-/** An op with an input is an in jack; one with an output and no input is an out jack; the rest get none. */
-export const dirOf = (op: Op): 'in' | 'out' | null => (op.input ? 'in' : op.output ? 'out' : null)
-const jacksOf = (ops: Op[]) => [...ops.filter(o => dirOf(o) === 'in'), ...ops.filter(o => dirOf(o) === 'out')]
-/** Instances that are never shown: infrastructure (the registry, the host's listeners, element views) and the application. */
-export const hidden = (id: string, application: string, views: Set<string>) => isInfrastructure(id, views) || id === application
+const jackKey = (instance: string, j: Jack) => portKey(instance, j.port + ':' + j.dir)
+export const dirOf = (j: Jack): 'in' | 'out' => j.dir
+const jacksOf = (ops: Jack[]) => [...ops.filter(o => o.dir === 'in'), ...ops.filter(o => o.dir === 'out')]
+/** Instances that are never shown: the host's own pod. */
+export const hidden = (id: string, application: string) => id === application
 
 /** Builds the model. Panels are given in front coordinates; the back face mirrors x. */
 export function buildModel({ snapshot, panels, W, H, application, kinds = {}, titles = {} }: ModelInput): Model {
-  const opsOf = new Map(snapshot.instances.map(i => [i.id, i.ops])), deployOf = new Map(snapshot.instances.map(i => [i.id, i.labels?.['nano/deploy'] ?? 'host'])), views = viewIds(snapshot)
+  const opsOf = new Map(snapshot.instances.map(i => [i.id, i.ops])), deployOf = new Map(snapshot.instances.map(i => [i.id, i.labels?.['nano/deploy'] ?? 'host']))
   const P: Record<string, Port> = {}
   const chassis: Chassis[] = []
   const placed = new Set<string>()
@@ -51,8 +73,8 @@ export function buildModel({ snapshot, panels, W, H, application, kinds = {}, ti
     for (const dir of ['out', 'in'] as const) {
       const row = jacksOf(opsOf.get(instance)!).filter(o => dirOf(o) === dir)
       row.forEach((op, i) => {
-        const key = portKey(instance, Ops.key(op))
-        P[key] = { key, owner: instance, op, x: Math.round(c.x + (i + 0.5) * c.w / row.length), y: dir === 'out' ? c.y + 56 : c.y + c.h - 40, dir, label: op.name, kind: 'chassis' }
+        const key = jackKey(instance, op)
+        P[key] = { key, owner: instance, op: op.op, port: op.port, x: Math.round(c.x + (i + 0.5) * c.w / row.length), y: dir === 'out' ? c.y + 56 : c.y + c.h - 40, dir, label: op.op.name, kind: 'chassis' }
       })
     }
   })
@@ -60,24 +82,24 @@ export function buildModel({ snapshot, panels, W, H, application, kinds = {}, ti
   const rack: RackItem[] = []
   let x = 20, row = 0
   for (const inst of snapshot.instances) {
-    if (placed.has(inst.id) || hidden(inst.id, application, views)) continue
+    if (placed.has(inst.id) || hidden(inst.id, application)) continue
     const jacks = jacksOf(inst.ops)
     const block = !jacks.some(o => dirOf(o) === 'out')
     const kind = kinds[inst.id]
-    const sub = kind ? (titles[kind] ?? kind) : (inst.ops[0]?.ns ?? '')
+    const sub = kind ? (titles[kind] ?? kind) : (inst.ops[0]?.port.replace(/\.[^.]*$/, '') ?? '')
     const w = Math.max(110, jacks.length * JACK_W, Math.ceil(inst.id.length * 7.4 + 24))
     if (x + w > W && x > 20) { x = 20; row += 1 }
     const y = H + ROW_Y + row * ROW_STEP
     const m: RackItem = { id: inst.id, title: inst.id, sub, kind, deploy: inst.labels?.['nano/deploy'] ?? 'host', block, x, y: block ? y + BLOCK_DY : y, w, h: block ? BLOCK_H : MOD_H }
     rack.push(m)
     jacks.forEach((op, i) => {
-      const key = portKey(inst.id, Ops.key(op))
-      P[key] = { key, owner: inst.id, op, x: Math.round(m.x + (i + 0.5) * m.w / jacks.length), y: block ? y + BLOCK_JACK_DY : y + 22, dir: dirOf(op)!, label: op.name, kind: block ? 'block' : 'module' }
+      const key = jackKey(inst.id, op)
+      P[key] = { key, owner: inst.id, op: op.op, port: op.port, x: Math.round(m.x + (i + 0.5) * m.w / jacks.length), y: block ? y + BLOCK_JACK_DY : y + 22, dir: op.dir, label: op.op.name, kind: block ? 'block' : 'module' }
     })
     x += w + 15
   }
 
-  const subs = snapshot.subscriptions.filter(s => !views.has(s.listener) && P[portKey(s.source, s.op)] && P[portKey(s.listener, s.target)])
+  const subs = snapshot.subscriptions.filter(s => P[portKey(s.source, s.op)] && P[portKey(s.listener, s.target)])
   const { routeOf, routes } = routesOf(subs, chassis)
   const wires = subs.map(s => ({ id: s.id, route: routeOf.get(s.id)!, from: portKey(s.source, s.op), to: portKey(s.listener, s.target) }))
   return { W, H, chassis, rack, P, wires, routes, rackH: 128 + row * 132 }
@@ -113,6 +135,6 @@ export function checkConnect(m: Model, aKey: string, bKey: string): { error: str
   if (a.dir === b.dir) return { error: a.dir === 'out' ? 'Both jacks emit events — patch an output into an input' : 'Both jacks are inputs — patch an output into an input' }
   const [from, to] = a.dir === 'out' ? [aKey, bKey] : [bKey, aKey]
   if (m.wires.some(w => w.from === from && w.to === to)) return { error: 'Those jacks are already connected' }
-  if (!Ops.fits(m.P[from]!.op, m.P[to]!.op)) return { error: portName(m, from) + " doesn't fit " + portName(m, to) }
+  if (!fits(m.P[from]!.op, m.P[to]!.op)) return { error: portName(m, from) + " doesn't fit " + portName(m, to) }
   return { from, to }
 }

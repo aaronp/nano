@@ -1,85 +1,58 @@
+import './dom.ts'
 import { expect, test } from 'bun:test'
-import { Components, Ops } from '@pritzlaff/nano-core'
-import { Debounce, Log, Map, Range } from '@composable/bundle'
-import { ApplicationOps as P } from '@pritzlaff/nano-app'
-import { Type } from 'typebox'
-import { buildModel, buildPuzzle, checkConnect } from '../src'
-import { panels, setup } from './setup'
+import { buildPuzzle, checkConnect } from '../../src/wires'
+import { Debounce, deployment, Input, k, Log, MapIface, model, p1, p2 } from './setup.ts'
+import { wireId } from '../../src/wires/model.ts'
+import { Pod } from '@pritzlaff/nano-core'
+import { input } from '@pritzlaff/nano-ui'
 
-const k = (instance: string, op: { ns: string; name: string }) => instance + ' ' + Ops.key(op)
-const model = (host: Awaited<ReturnType<typeof setup>>['host']) =>
-  buildModel({ snapshot: host.registry.snapshot(), panels, W: 1200, H: 600, application: 'application', kinds: { d: 'debounce', m: 'map' }, titles: { debounce: 'Debounce', map: 'Map' } })
-
-test('panels become mirrored chassis with jacks: outs along the top, ins along the bottom', async () => {
-  const { host } = await setup()
-  const m = model(host)
+test('panels become mirrored chassis with jacks: outs along the top, ins along the bottom', () => {
+  const m = model(deployment())
   expect(m.chassis.map(c => [c.label, c.x, c.instance])).toEqual([['r', 800, 'r'], ['l', 400, 'l'], ['textarea', 0, null]])
-  const value = m.P[k('r', Range.ops.value)]!, set = m.P[k('r', Range.ops.set)]!
-  expect([value.dir, value.kind, value.y]).toEqual(['out', 'chassis', 56])
-  expect([set.dir, set.y]).toEqual(['in', 260])
-  expect(Object.values(m.P).filter(p => p.owner === 'l').map(p => [p.label, p.dir])).toEqual([['entries', 'out'], ['debug', 'in'], ['info', 'in'], ['warn', 'in'], ['clear', 'in']])
+  const out = m.P[k('r', Input, 'submit', 'out')]!, inn = m.P[k('r', Input, 'submit', 'in')]!
+  expect([out.dir, out.kind, out.y]).toEqual(['out', 'chassis', 56])
+  expect([inn.dir, inn.y]).toEqual(['in', 260])
+  // an action is an in jack and, for its result, an out jack
+  expect(Object.values(m.P).filter(p => p.owner === 'l').map(p => [p.label, p.dir])).toEqual([['log', 'out'], ['entries', 'out'], ['clear', 'out'], ['log', 'in'], ['entries', 'in'], ['clear', 'in']])
 })
 
-test('the rack holds instances with no panel, but not the registry, views or the platform', async () => {
-  const { host } = await setup()
-  host.registry.add('watcher', Components.instantiate(Components.create({ ns: 't', name: 'view' }, () => null)), { kind: 'view', name: 'el' })
-  const store = Components.create({ ns: 't', name: 'store' }, () => null)
-  store.action(Ops.sink('t', 'put', Type.Unknown()), () => {})
-  host.registry.add('s', Components.instantiate(store))
-  const m = model(host)
-  expect(m.rack.map(r => [r.id, r.sub, r.block])).toEqual([['d', 'Debounce', false], ['m', 'Map', false], ['s', 't', true]])
+test('the rack holds pods with no panel, but not the host\'s own pod', () => {
+  const d = deployment()
+  d.pods['ui'] = Pod.eager(input); d.runtimes['main']!.pods.push('ui')
+  const m = model(d, { d: 'nano.ui/debounce', m: 'nano.ui/map' }, { 'nano.ui/debounce': 'debounce', 'nano.ui/map': 'map' })
+  expect(m.rack.map(r => [r.id, r.sub, r.block])).toEqual([['d', 'debounce', false], ['m', 'map', false]])
   expect(m.rack[0]!.y).toBe(660)
-  expect(m.P[k('s', { ns: 't', name: 'put' })]!.kind).toBe('block')
+  expect(m.P[k('d', Debounce, 'push', 'in')]!.kind).toBe('module')
 })
 
-test('subscriptions are wires, grouped into named, coloured routes; view listeners are left out', async () => {
-  const { host, call, s1, s2 } = await setup()
-  host.registry.add('watcher', Components.instantiate(Components.create({ ns: 't', name: 'view' }, () => null)), { kind: 'view', name: 'el' })
-  host.registry.subscribe({ source: 'r', op: Ops.key(Range.ops.value), listener: 'watcher', target: 'x' })
-  let m = model(host)
-  expect(m.wires).toEqual([
-    { id: s1.id, route: s1.id, from: k('r', Range.ops.value), to: k('d', Debounce.ops.enqueue) },
-    { id: s2.id, route: s1.id, from: k('d', Debounce.ops.flushed), to: k('l', Log.ops.info) },
+test('pipes are wires, grouped into named, coloured routes', () => {
+  const d = deployment()
+  expect(model(d).wires).toEqual([
+    { id: wireId('main', p1), route: wireId('main', p1), from: k('r', Input, 'submit', 'out'), to: k('d', Debounce, 'push', 'in') },
+    { id: wireId('main', p2), route: wireId('main', p1), from: k('d', Debounce, 'flushed', 'out'), to: k('l', Log, 'log', 'in') },
   ])
-  expect(m.routes).toEqual([{ id: s1.id, name: 'r → l', color: '#7EE787' }])
-  await call(P.createComponent, { kind: 'input', name: 'i', system: 'host' })
-  await call(P.connect, { system: 'host', source: 'i', op: 'composable.bundle/input/submitted', listener: 'm', target: Ops.key(Map.ops.map) })
-  m = model(host)
-  expect(m.routes.map(r => [r.name, r.color])).toEqual([['r → l', '#7EE787'], ['i → m', '#F5A524']])
+  expect(model(d).routes).toEqual([{ id: wireId('main', p1), name: 'r → l', color: '#7EE787' }])
+  d.pods['i'] = Pod.eager(input); d.runtimes['main']!.pods.push('i')
+  d.runtimes['main']!.subscriptions.push({ kind: 'pipe', from: 'i', source: p1.source, to: 'm', target: 'nano.ui.Map/map' })
+  d.runtimes['main']!.subscriptions.push({ kind: 'call', from: 'i', to: 'm' })   // a call edge draws no wire
+  expect(model(d).routes.map(r => [r.name, r.color])).toEqual([['r → l', '#7EE787'], ['i → m', '#F5A524']])
 })
 
-test('checkConnect: out into in, fitting, not twice', async () => {
-  const { host } = await setup()
-  const m = model(host)
-  expect(checkConnect(m, k('m', Map.ops.map), k('r', Range.ops.value))).toEqual({ from: k('r', Range.ops.value), to: k('m', Map.ops.map) })
-  expect(checkConnect(m, k('r', Range.ops.value), k('l', Log.ops.entries))).toEqual({ error: 'Both jacks emit events — patch an output into an input' })
-  expect(checkConnect(m, k('l', Log.ops.entries), k('r', Range.ops.set))).toEqual({ error: "l.entries doesn't fit r.set" })
-  expect(checkConnect(m, k('r', Range.ops.value), k('d', Debounce.ops.enqueue))).toEqual({ error: 'Those jacks are already connected' })
+test('checkConnect: out into in, not into itself, not twice', () => {
+  const m = model(deployment())
+  expect(checkConnect(m, k('m', MapIface, 'map', 'in'), k('r', Input, 'submit', 'out'))).toEqual({ from: k('r', Input, 'submit', 'out'), to: k('m', MapIface, 'map', 'in') })
+  expect(checkConnect(m, k('r', Input, 'submit', 'out'), k('l', Log, 'entries', 'out'))).toEqual({ error: 'Both jacks emit events — patch an output into an input' })
+  expect(checkConnect(m, k('l', Log, 'log', 'out'), k('l', Log, 'clear', 'in'))).toEqual({ error: "l can't patch into itself" })
+  expect(checkConnect(m, k('r', Input, 'submit', 'out'), k('d', Debounce, 'push', 'in'))).toEqual({ error: 'Those jacks are already connected' })
 })
 
-test('the puzzle lays a route out as a chain, and a fork where one output feeds two inputs', async () => {
-  const { host, call } = await setup()
-  let pz = buildPuzzle(model(host))
-  expect(pz.pieces.map(p => [p.kind, p.label])).toEqual([['port', 'r.value'], ['op', 'd'], ['port', 'l.info']])
-  expect(Object.values(pz.descs)).toEqual(['r.value → d → l.info'])
-  await call(P.connect, { system: 'host', source: 'd', op: Ops.key(Debounce.ops.flushed), listener: 'm', target: Ops.key(Map.ops.map) })
-  pz = buildPuzzle(model(host))
-  expect(Object.values(pz.descs)).toEqual(['r.value → d → fork(l.info | m)'])
+test('the puzzle lays a route out as a chain, and a fork where one output feeds two inputs', () => {
+  const d = deployment()
+  let pz = buildPuzzle(model(d))
+  expect(pz.pieces.map(p => [p.kind, p.label])).toEqual([['port', 'r.submit'], ['op', 'd'], ['port', 'l.log']])
+  expect(Object.values(pz.descs)).toEqual(['r.submit → d → l.log'])
+  d.runtimes['main']!.subscriptions.push({ kind: 'pipe', from: 'd', source: p2.source, to: 'm', target: 'nano.ui.Map/map' })
+  pz = buildPuzzle(model(d))
+  expect(Object.values(pz.descs)).toEqual(['r.submit → d → fork(l.log | m)'])
   expect(pz.pieces.find(p => p.kind === 'fork')!.tabs).toEqual([20, 66])
-})
-
-test('an instance named ~view but owned by a widget is in the rack', async () => {
-  const { host } = await setup()
-  host.registry.add('x~view-9', Components.instantiate(Components.create({ ns: 't', name: 'thing' }, () => null)), { kind: 'widget', name: 'w' })
-  expect(model(host).rack.map(r => r.id)).toContain('x~view-9')
-})
-
-test('infrastructure never shows in the rack, and a subscription into app draws no wire', async () => {
-  const { host } = await setup()
-  const sink = () => { const c = Components.create({ ns: 't', name: 'sink' }, () => null); c.action(Ops.sink('t', 'in', Type.Unknown()), () => {}); return Components.instantiate(c) }
-  for (const id of ['app', 'alerts', 'ws-controls-workspace', 'r1']) host.registry.add(id, sink())
-  const m = buildModel({ snapshot: host.registry.snapshot(), panels: [], W: 1200, H: 600, application: 'application' })
-  expect(m.rack.map(r => r.id).filter(id => ['app', 'alerts', 'ws-controls-workspace', 'r1'].includes(id))).toEqual(['r1'])
-  host.registry.subscribe({ source: 'r', op: Ops.key(Range.ops.value), listener: 'app', target: 't/in' })
-  expect(buildModel({ snapshot: host.registry.snapshot(), panels, W: 1200, H: 600, application: 'application' }).wires.length).toBe(2)
 })

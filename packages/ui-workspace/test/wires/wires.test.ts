@@ -1,33 +1,28 @@
+import './dom.ts'
 import { afterEach, expect, test } from 'bun:test'
-import { Ops } from '@pritzlaff/nano-core'
-import { catalog, Map, Range } from '@composable/bundle'
-import { defineWires, type Wires } from '../src'
-import { definePlatform } from '@composable/platform'
-import { ApplicationOps as P } from '@pritzlaff/nano-app'
-import { onDown, onMove, onUp, removeSel, toggleEdit } from '../src/pointer'
-import { setup, tick } from './setup'
+import { defineWires, type Wires } from '../../src/wires'
+import { onDown, onMove, onUp, removeSel, toggleEdit } from '../../src/wires/pointer'
+import { Debounce, Input, k, Log, MapIface, setup, tick } from './setup.ts'
 
 defineWires()
-definePlatform()
 afterEach(() => { document.body.innerHTML = '' })
 
 const box = (el: HTMLElement, x: number, y: number, w: number, h: number) => {
   for (const [k, v] of Object.entries({ offsetLeft: x, offsetTop: y, offsetWidth: w, offsetHeight: h })) Object.defineProperty(el, k, { value: v, configurable: true })
 }
 
-// the host system, and a stand-in dock (1200×600) with panels for r and l, and a Notes panel
-async function mount(placementsOf?: (layout: any) => any[]) {
-  const t = await setup(placementsOf)
+// the host's app, and a stand-in dock (1200×600) with panels for r and l (their views' targets name the pod), and a Notes panel
+async function mount() {
+  const t = await setup()
   const el = document.createElement('c-wires') as Wires
-  el.runtime = t.host
-  el.catalog = catalog
+  el.host = t.host
   const dock = document.createElement('div')
   dock.innerHTML = '<div class="bar"><button>⇄ Connections</button></div><div class="dock-panel"><x-r></x-r></div><div class="dock-panel"><x-l></x-l></div><div class="dock-panel"><textarea></textarea></div>'
   box(dock, 0, 0, 1200, 600)
   const ps = [...dock.querySelectorAll<HTMLElement>('.dock-panel')]
   ps.forEach((p, i) => box(p, i * 400, 0, 400, 300))
-  Object.assign(dock.querySelector('x-r')!, { model: 'r' })
-  Object.assign(dock.querySelector('x-l')!, { model: 'l' })
+  Object.assign(dock.querySelector('x-r')!, { target: { pod: 'r' } })
+  Object.assign(dock.querySelector('x-l')!, { target: { pod: 'l' } })
   el.append(dock)
   document.body.append(el)
   await el.updateComplete
@@ -41,9 +36,10 @@ async function mount(placementsOf?: (layout: any) => any[]) {
     if (plate) plate.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1200, height: 600 }) as DOMRect
   }
   const at = (key: string) => ({ clientX: el.model.P[key]!.x, clientY: el.model.P[key]!.y })
-  return { ...t, el, dock, root, settle, flip, at }
+  const pipes = () => t.host.data().runtimes['main']!.subscriptions
+  const submit = (v: unknown) => (t.app.call('main', 'r') as unknown as { submit(v: unknown): Promise<unknown> }).submit(v)
+  return { ...t, el, dock, root, settle, flip, at, pipes, submit }
 }
-const k = (instance: string, op: { ns: string; name: string }) => instance + ' ' + Ops.key(op)
 
 test('unflipped it is just the dock; dock:connections flips it to the 3D view and back', async () => {
   const { el, root, flip, settle } = await mount()
@@ -64,70 +60,71 @@ test('unflipped it is just the dock; dock:connections flips it to the 3D view an
   expect(root.querySelector('.stage-bg')).toBeNull()
 })
 
-test('a delivery in the system pulses the wire of its subscription', async () => {
-  const { el, host, s1, flip, settle } = await mount()
+test('a pipe message pulses its wire', async () => {
+  const { el, s1, flip, settle, submit } = await mount()
   await flip()
-  await host.call({ registry: 'host', instance: 'test' }, 'r', Ops.key(Range.ops.set), 42)
+  await submit(42)
   await settle()
-  expect(el.s.packets.map(p => [p.wire, p.label])).toEqual([[s1.id, '42']])
+  expect(el.s.packets.map(p => [p.wire, p.label])[0]).toEqual([s1.id, 'push'])
   expect(el.s.stats['d']!.in).toBe(1)
 })
 
-test('dragging from an out jack to a fitting in jack connects them through the platform', async () => {
-  const { el, host, flip, settle, at } = await mount()
+test('dragging from an out jack to a fitting in jack connects them: a pipe is applied', async () => {
+  const { el, pipes, flip, settle, at } = await mount()
   await flip()
   toggleEdit(el)
-  onDown(el, at(k('r', Range.ops.value)))
-  onMove(el, at(k('m', Map.ops.map)))
+  onDown(el, at(k('r', Input, 'submit', 'out')))
+  onMove(el, at(k('m', MapIface, 'map', 'in')))
   expect(el.s.cord!.err).toBeNull()
-  await onUp(el, at(k('m', Map.ops.map)))
+  await onUp(el, at(k('m', MapIface, 'map', 'in')))
   await settle()
-  expect(host.registry.snapshot().subscriptions.some(s => s.source === 'r' && s.listener === 'm' && s.target === Ops.key(Map.ops.map))).toBe(true)
+  expect(pipes().some(s => s.from === 'r' && s.to === 'm' && s.kind === 'pipe' && s.target === 'nano.ui.Map/map')).toBe(true)
   expect(el.model.wires.length).toBe(3)
-  expect(el.shadowRoot!.querySelector('[role="status"]')!.textContent).toBe('Patched r.value → m.map')
+  expect(el.shadowRoot!.querySelector('[role="status"]')!.textContent).toBe('Patched r.submit → m.map')
 })
 
 test('a plugged input dropped in space is disconnected', async () => {
-  const { el, host, s1, flip, settle, at } = await mount()
+  const { el, pipes, s1, flip, settle, at } = await mount()
   await flip()
   toggleEdit(el)
-  onDown(el, at(k('d', { ns: 'composable.bundle/debounce', name: 'enqueue' })))
+  onDown(el, at(k('d', Debounce, 'push', 'in')))
   expect(el.s.cord!.picked).toBe(s1.id)
   await onUp(el, { clientX: 600, clientY: 400 })
   await settle()
-  expect(host.registry.snapshot().subscriptions.some(s => s.id === s1.id)).toBe(false)
+  expect(pipes().some(s => s.from === 'r' && s.to === 'd')).toBe(false)
 })
 
-test('refusals are shown: a misfit cord, and one the platform refuses', async () => {
+test('refusals are shown: a misfit cord, and one the app refuses', async () => {
   const { el, root, flip, settle, at } = await mount()
   await flip()
   toggleEdit(el)
-  onDown(el, at(k('l', { ns: 'composable.bundle/log', name: 'entries' })))
-  onMove(el, at(k('r', Range.ops.set)))
+  onDown(el, at(k('l', Log, 'entries', 'out')))
+  onMove(el, at(k('r', Input, 'submit', 'out')))
   await settle()
-  expect(root.querySelector('[role="status"]')!.textContent).toBe("l.entries doesn't fit r.set")
-  await onUp(el, at(k('r', Range.ops.set)))
-  expect(await el.create('nope')).toBeNull()
+  expect(root.querySelector('[role="status"]')!.textContent).toBe('Both jacks emit events — patch an output into an input')
+  await onUp(el, at(k('r', Input, 'submit', 'out')))
+  expect(await el.create('nope/nope')).toBeNull()
   await settle()
-  expect(root.querySelector('[role="status"]')!.textContent).toContain('no component kind nope')
+  expect(root.querySelector('[role="status"]')!.textContent).toContain('nope')
 })
 
 test('selecting a rack module and removing it removes the instance; the palette adds new ones', async () => {
   const { el, host, root, flip, settle } = await mount()
   await flip()
   toggleEdit(el)
+  await settle()
   const m = el.model.rack.find(r => r.id === 'm')!
   onDown(el, { clientX: m.x + 5, clientY: m.y + 80 })
   await onUp(el, { clientX: m.x + 5, clientY: m.y + 80 })
   expect(el.s.selMod).toBe('m')
   await removeSel(el)
   await settle()
-  expect(host.registry.get('m')).toBeUndefined()
+  expect(host.data().pods['m']).toBeUndefined()
   expect(el.model.rack.map(r => r.id)).toEqual(['d'])
-  ;(root.querySelector('[data-kind="filter"]') as HTMLButtonElement).click()
+  ;(root.querySelector('[data-kind="nano.ui/debounce"]') as HTMLButtonElement).click()
   await settle(); await settle()
-  expect(host.registry.get('filter-1')).toBeDefined()
-  expect(el.model.rack.map(r => r.id)).toEqual(['d', 'filter-1'])
+  expect(host.data().pods['debounce1']).toBeDefined()
+  expect(el.model.rack.map(r => r.id)).toEqual(['d', 'debounce1'])
 })
 
 test('dragging a rack module onto the pane asks the workspace to open it', async () => {
@@ -140,21 +137,21 @@ test('dragging a rack module onto the pane asks the workspace to open it', async
   onDown(el, { clientX: d.x + 5, clientY: d.y + 80 })
   await onUp(el, { clientX: 300, clientY: 200 })
   await settle()
-  expect(opened).toEqual([{ kind: 'debounce', name: 'd' }])
+  expect(opened).toEqual([{ kind: 'nano.ui/debounce', name: 'd' }])
 })
 
 test('puzzle mode draws the same connections as pieces, and a joint unplugs one', async () => {
-  const { el, host, s2, root, flip, settle } = await mount()
+  const { el, pipes, root, flip, settle } = await mount()
   await flip()
   el.setState({ mode: 'puzzle' })
   await settle()
-  expect([...root.querySelectorAll('[data-piece]')].map(p => p.getAttribute('data-piece'))).toEqual(['r.value', 'd', 'l.info'])
-  expect(root.querySelector('aside')!.textContent).toContain('r.value → d → l.info')
+  expect([...root.querySelectorAll('[data-piece]')].map(p => p.getAttribute('data-piece'))).toEqual(['r.submit', 'd', 'l.log'])
+  expect(root.querySelector('aside')!.textContent).toContain('r.submit → d → l.log')
   toggleEdit(el)
   await settle()
   ;(root.querySelector('[aria-label="Unplug the cord into l"]') as HTMLButtonElement).click()
   await settle(); await settle()
-  expect(host.registry.snapshot().subscriptions.some(s => s.id === s2.id)).toBe(false)
+  expect(pipes().some(s => s.from === 'd' && s.to === 'l')).toBe(false)
 })
 
 test('puzzle mode: an armed operator is spliced into a chain at a joint', async () => {
@@ -163,25 +160,25 @@ test('puzzle mode: an armed operator is spliced into a chain at a joint', async 
   el.setState({ mode: 'puzzle' })
   toggleEdit(el)
   await settle()
-  ;(root.querySelector('[data-kind="map"]') as HTMLButtonElement).click()
+  ;(root.querySelector('[data-kind="nano.ui/map"]') as HTMLButtonElement).click()
   await settle()
-  ;(root.querySelector('[aria-label="Insert Map before l"]') as HTMLButtonElement).click()
+  ;(root.querySelector('[aria-label="Insert map before l"]') as HTMLButtonElement).click()
   for (let i = 0; i < 4; i++) await settle()
-  expect(Object.values(el.puzzle.descs)).toEqual(['r.value → d → map-1 → l.info'])
-  expect(el.model.wires.map(w => w.to.split(' ')[1])).toEqual(['composable.bundle/debounce/enqueue', 'composable.bundle/map/map', 'composable.bundle/log/info'])
+  expect(Object.values(el.puzzle.descs)).toEqual(['r.submit → d → map1 → l.log'])
+  expect(el.model.wires.map(w => w.to.split(' ')[1])).toEqual(['nano.ui.Debounce/push:in', 'nano.ui.Map/map:in', 'nano.ui.Log/log:in'])
 })
 
 test('removed from the page, it stops listening', async () => {
-  const { el, host } = await mount()
+  const { el, submit } = await mount()
   el.remove()
-  await host.call({ registry: 'host', instance: 'test' }, 'r', Ops.key(Range.ops.set), 7)
+  await submit(7)
   await tick()
   expect(el.s.packets).toEqual([])
 })
 
 test('while flat it does no work: no packets pile up, and none fly in when it flips', async () => {
-  const { el, host, flip, settle } = await mount()
-  await host.call({ registry: 'host', instance: 'test' }, 'r', Ops.key(Range.ops.set), 7)
+  const { el, submit, flip, settle } = await mount()
+  await submit(7)
   await settle()
   expect(el.s.packets).toEqual([])
   await flip()
@@ -189,18 +186,17 @@ test('while flat it does no work: no packets pile up, and none fly in when it fl
 })
 
 test('a splice that fails partway puts the chain back as it was', async () => {
-  const { el, host, flip, settle, s1, root } = await mount()
+  const { el, host, pipes, flip, settle, s1, root } = await mount()
   await flip()
   toggleEdit(el); el.setState({ mode: 'puzzle' }); await settle()
-  el.setState({ armed: 'map' })
+  el.setState({ armed: 'nano.ui/map' })
   const real = el.connect.bind(el)
   let n = 0
   el.connect = async (a: string, b: string) => (++n === 2 ? { error: 'refused for the test' } : real(a, b))   // the second patch fails
-  const { joint } = await import('../src/pointer')
+  const { joint } = await import('../../src/wires/pointer')
   await joint(el, s1.id); await settle()
-  const subs = host.registry.snapshot().subscriptions.filter(s => !s.listener.includes('~view'))
-  expect(subs.some(s => s.source === 'r' && s.listener === 'd')).toBe(true)   // the original wire is back
-  expect(host.registry.snapshot().instances.some(i => i.id.startsWith('map-'))).toBe(false)   // no orphan
+  expect(pipes().some(s => s.from === 'r' && s.to === 'd')).toBe(true)   // the original wire is back
+  expect(Object.keys(host.data().pods).some(p => p.startsWith('map') && p !== 'm')).toBe(false)   // no orphan
   expect(root.textContent).toContain('refused for the test')
 })
 
@@ -279,7 +275,7 @@ test('a panel that is not showing (an inactive tab) is not drawn on the pane; it
   const hidden = document.createElement('div')
   hidden.className = 'dock-panel'
   hidden.innerHTML = '<x-m></x-m>'
-  Object.assign(hidden.querySelector('x-m')!, { model: 'm' })
+  Object.assign(hidden.querySelector('x-m')!, { target: { pod: 'm' } })
   box(hidden, 0, 0, 0, 0)   // display:none: no size
   dock.append(hidden)
   await flip()
@@ -288,87 +284,67 @@ test('a panel that is not showing (an inactive tab) is not drawn on the pane; it
   expect(el.model.rack.map(r => r.id)).toContain('m')
 })
 
-test('clicking a jack on the back selects its action, and Detail shows its op, schemas and connections', async () => {
-  const { el, root, call, flip, settle, at } = await mount()
+test('clicking a jack on the back selects its port, and Detail shows its op, schemas and connections', async () => {
+  const { el, root, flip, settle, at } = await mount()
   await flip()
-  const jack = at(k('r', Range.ops.value))
+  const jack = at(k('r', Input, 'submit', 'out'))
   onDown(el, jack); await onUp(el, jack); await settle(); await settle()
-  expect((await call(P.selected, null)).value).toEqual({ system: 'host', instance: 'r', op: Ops.key(Range.ops.value) })
+  expect(el.s.picked).toEqual({ system: 'main', instance: 'r', op: 'nano.ui.Input/submit' })
   expect(el.s.tab).toBe('detail')
   const card = root.querySelector('.detail')!.textContent!
-  expect(card).toContain(Ops.key(Range.ops.value))
-  expect(card).toContain('source')
-  expect(card).toContain('"type": "number"')
-  expect(card).toContain('r.value → d.enqueue')
-  expect(card).toContain(Range.ops.value.description!)   // what it is, then each schema's description and examples
-  expect(card).toContain('e.g. 50')
+  expect(card).toContain('nano.ui.Input/submit')
+  expect(card).toContain('action')
+  expect(card).toContain('r.submit → d.push')
 })
 
 test('clicking a panel selects its component: coordinates, kind, jacks and connections', async () => {
-  const { el, root, call, flip, settle } = await mount()
+  const { el, root, flip, settle } = await mount()
   await flip()
   const c = el.model.chassis.find(x => x.instance === 'r')!, mid = { clientX: c.x + c.w / 2, clientY: c.y + c.h / 2 }   // the back is the front mirrored
   onDown(el, mid); await onUp(el, mid); await settle(); await settle()
-  expect((await call(P.selected, null)).value).toEqual({ system: 'host', instance: 'r' })
+  expect(el.s.picked).toEqual({ system: 'main', instance: 'r' })
   const card = root.querySelector('.detail')!.textContent!
-  expect(card).toContain('host / r')
-  expect(card).toContain('range')
-  expect(card).toContain('composable.bundle/range')
-  expect(card).toContain('r.value → d.enqueue')
+  expect(card).toContain('main / r')
+  expect(card).toContain('nano.ui/input')
+  expect(card).toContain('r.submit → d.push')
 })
 
-test('the drawer has View and Detail tabs; Detail holds the system tree, in step with the selection', async () => {
-  const { el, root, flip, settle } = await mount()
+test('the drawer has View and Detail tabs; Detail holds the app\'s tree', async () => {
+  const { root, flip, settle } = await mount()
   await flip()
   const tab = (name: string) => [...root.querySelectorAll('[role="tab"]')].find(t => t.textContent!.trim() === name) as HTMLButtonElement
   expect(tab('View').getAttribute('aria-selected')).toBe('true')
   tab('Detail').click(); await settle()
   expect(root.querySelector('.detail')!.textContent).toContain('Click a panel')
-  const tree = root.querySelector('c-platform') as HTMLElement & { updateComplete: Promise<boolean> }
-  for (let i = 0; i < 4; i++) { await tree.updateComplete; await settle() }
-  const rows = tree.shadowRoot!.querySelector('nano-tree')!.shadowRoot!
-  ;(rows.querySelector('[data-id="c:host/d"] > .line') as HTMLElement).click()
-  for (let i = 0; i < 3; i++) await settle()
-  expect(el.s.picked).toEqual({ system: 'host', instance: 'd' })
-  expect(root.querySelector('.detail')!.textContent).toContain('host / d')
+  expect(root.querySelector('nano-explorer')).not.toBeNull()
   tab('View').click(); await settle()
-  expect(root.querySelector('c-platform')).toBeNull()
+  expect(root.querySelector('nano-explorer')).toBeNull()
 })
 
-test('over another system: cords connect in that system, through the platform in host, and picks name that system', async () => {
-  const t = await setup()
-  await t.call(P.createSystem, 'lab')
-  for (const [kind, name] of [['range', 'lr'], ['debounce', 'ld']]) await t.call(P.createComponent, { kind, name, system: 'lab' })
-  const { runtimeOf } = await import('@pritzlaff/nano-app')
-  const lab = runtimeOf(t.host.registry, 'lab')!
-  const el = document.createElement('c-wires') as Wires
-  Object.assign(el, { runtime: lab, host: t.host, catalog })
-  const dock = document.createElement('div')
-  box(dock, 0, 0, 1200, 600)
-  el.append(dock); document.body.append(el)
-  await el.updateComplete
-  expect(el.sys).toBe('lab')
-  el.flipped = true; await el.updateComplete; await tick(); await el.updateComplete
-  const plate = el.shadowRoot!.querySelector('.plate-bg')!
-  plate.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1200, height: 600 }) as DOMRect
-  const at = (key: string) => ({ clientX: el.model.P[key]!.x, clientY: el.model.P[key]!.y })
+test('a cord between pods in different runtimes is refused', async () => {
+  const { el, host, root, flip, settle, at } = await mount()
+  const d = host.data()
+  d.runtimes['main']!.pods = d.runtimes['main']!.pods.filter(p => p !== 'm')
+  d.runtimes['lab'] = { pods: ['m'], subscriptions: [] }
+  expect((await host.apply(d)).ok).toBe(true)
+  await flip()
   toggleEdit(el)
-  onDown(el, at(k('lr', Range.ops.value)))
-  onMove(el, at(k('ld', { ns: 'composable.bundle/debounce', name: 'enqueue' })))
-  await onUp(el, at(k('ld', { ns: 'composable.bundle/debounce', name: 'enqueue' })))
-  expect(lab.registry.snapshot().subscriptions.some(s => s.source === 'lr' && s.listener === 'ld')).toBe(true)
-  expect(t.host.registry.snapshot().subscriptions.some(s => s.source === 'lr')).toBe(false)
-  toggleEdit(el)
-  const jack = at(k('lr', Range.ops.value))
-  onDown(el, jack); await onUp(el, jack); await tick(); await el.updateComplete
-  expect((await t.call(P.selected, null)).value).toEqual({ system: 'lab', instance: 'lr', op: Ops.key(Range.ops.value) })
-  expect(el.s.picked).toEqual({ system: 'lab', instance: 'lr', op: Ops.key(Range.ops.value) })
-  expect(el.shadowRoot!.querySelector('.detail')!.textContent).toContain('lab / lr')
+  onDown(el, at(k('r', Input, 'submit', 'out')))
+  onMove(el, at(k('m', MapIface, 'map', 'in')))
+  await onUp(el, at(k('m', MapIface, 'map', 'in')))
+  await settle()
+  expect(root.querySelector('[role="status"]')!.textContent).toBe('r and m are not in one runtime')
 })
+
+// a pod's isolation is its deploy mode; the stand-in host reports one without running a frame
+const isolate = (host: { data(): any }, pod: string, isolation: string) => {
+  const real = host.data.bind(host)
+  host.data = () => { const d = real(); d.pods[pod] = { ...d.pods[pod], isolation }; return d }
+}
 
 test('modules carry data-deploy; the toggle marks exactly the non-host ones, and is off by default', async () => {
   const { host, root, flip, settle } = await mount()
-  host.registry.label('d', { 'nano/deploy': 'sandbox' })
+  isolate(host, 'd', 'sandbox')
   await flip()
   expect(root.querySelector('[data-module="d"]')!.getAttribute('data-deploy')).toBe('sandbox')
   expect(root.querySelector('[data-module="m"]')!.getAttribute('data-deploy')).toBe('host')
@@ -383,7 +359,7 @@ test('modules carry data-deploy; the toggle marks exactly the non-host ones, and
 
 test('a docked panel\'s chassis carries data-deploy and is marked by the toggle', async () => {
   const { host, root, flip, settle } = await mount()
-  host.registry.label('r', { 'nano/deploy': 'isolated-sandbox' })
+  isolate(host, 'r', 'isolated-sandbox')
   await flip()
   const chassis = (id: string) => root.querySelector(`[data-chassis="${id}"]`) as HTMLElement
   expect(chassis('panel-0').getAttribute('data-deploy')).toBe('isolated-sandbox')   // r
@@ -392,14 +368,4 @@ test('a docked panel\'s chassis carries data-deploy and is marked by the toggle'
   expect(root.querySelectorAll('[data-chassis][data-mark]').length).toBe(0)
   ;(root.querySelector('button.highlight') as HTMLElement).click(); await settle()
   expect([...root.querySelectorAll('[data-chassis][data-mark]')].map(e => e.getAttribute('data-chassis'))).toEqual(['panel-0'])
-})
-
-test('a live panel stays on its chassis even when the Application has not saved it', async () => {
-  const { el, dock, call, flip, settle } = await mount(l => l.p)
-  await call(P.setScreen, { id: '/x', title: 'X', system: 'host', layout: { p: [{ panel: 'a', instance: 'r' }] } })
-  await flip()
-  await settle()
-  expect(el.model.chassis.map(c => c.instance)).toEqual(['r', 'l', null])
-  expect(el.model.rack.map(r => r.id)).not.toContain('l')
-  expect(dock.querySelectorAll('.dock-panel').length).toBe(3)
 })
