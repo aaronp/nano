@@ -1,6 +1,6 @@
 {
   "pods": {
-    "store": {
+    "todoStore": {
       "implementation": "example.kv/memory",
       "eager": false
     },
@@ -18,13 +18,13 @@
     },
     "example.todo.backend": {
       "pods": [
-        "store"
+        "todoStore"
       ],
       "subscriptions": [
         {
           "kind": "call",
           "from": "todos",
-          "to": "store"
+          "to": "todoStore"
         }
       ],
       "policy": {

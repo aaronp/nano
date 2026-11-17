@@ -52,7 +52,7 @@ test('the todos pod\'s own subscription to the store\'s puts travels in backend,
   const todos = app.runtime('example.todo.frontend').get(TodoListDef.api)
   await todos.add('milk')   // builds todos; its items() source subscribes to the store
   await Bun.sleep(0)
-  expect(back).toEqual(['subscribe todos→store: ok'])
+  expect(back).toEqual(['subscribe todos→todoStore: ok'])
   expect(front).toEqual([])
 })
 
@@ -98,5 +98,5 @@ test('apply removing the store\'s call edge ends the todos pod\'s subscription: 
   const next = app.deployment()
   next.runtimes['example.todo.backend']!.subscriptions = []
   must(await app.apply(next))
-  expect(back).toEqual(['subscribe todos→store: ok', 'unsubscribe todos→store: ok'])
+  expect(back).toEqual(['subscribe todos→todoStore: ok', 'unsubscribe todos→todoStore: ok'])
 })
