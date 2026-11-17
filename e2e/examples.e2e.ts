@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 
 const dock = (page: Page) => page.locator('workspace-dock#workspace')
+/** The participant's window, by its heading (its text would also match a line mentioning the name). */
+const room = (page: Page, who: string) => dock(page).locator('chat-room').filter({ has: page.getByRole('heading', { name: who, exact: true }) })
 const runtimes = (page: Page) => page.evaluate(() => Object.keys((document.querySelector('workspace-dock') as any).host.data().runtimes).sort())
 
 async function start(page: Page) {
@@ -32,7 +34,7 @@ test('todo: add milk in <todo-list>, tick it', async ({ page }) => {
   const list = dock(page).locator('todo-list').first()
   await list.getByRole('textbox', { name: 'New todo' }).fill('milk')
   await list.getByRole('button', { name: 'Add' }).click()
-  await expect(list.locator('li')).toContainText('milk')
+  await expect(list.locator('li')).toHaveText([/milk/])   // exactly one item
   const box = list.getByRole('checkbox', { name: 'Done: milk' })
   await box.click()
   await expect(box).toBeChecked()
@@ -41,9 +43,11 @@ test('todo: add milk in <todo-list>, tick it', async ({ page }) => {
 test("chat: alice says hi, bob's window shows it", async ({ page }) => {
   await start(page)
   await open(page, '/examples/chat/nano.json')
-  const alice = dock(page).locator('chat-room').filter({ hasText: 'alice' }), bob = dock(page).locator('chat-room').filter({ hasText: 'bob' })
-  await say(alice, 'hi')
-  await expect(bob.locator('li')).toContainText('hi')
+  const alice = room(page, 'alice'), bob = room(page, 'bob')
+  await expect(alice).toHaveCount(1); await expect(bob).toHaveCount(1)
+  await say(alice, 'hi bob')
+  await expect(bob.locator('li')).toHaveText([/alice.*hi bob/])   // exactly one line, from alice
+  await expect(alice.locator('li')).toHaveText([/alice.*hi bob/])
 })
 
 test('todo and chat import side by side: no runtime clash', async ({ page }) => {
@@ -51,17 +55,18 @@ test('todo and chat import side by side: no runtime clash', async ({ page }) => 
   await open(page, '/examples/todo/nano.json')
   await open(page, '/examples/chat/nano.json')
   const names = await runtimes(page)
-  expect(names.filter(r => r.startsWith('example.todo.')).length).toBeGreaterThan(0)
-  expect(names.filter(r => r.startsWith('example.chat.')).length).toBeGreaterThan(0)
+  expect(names).toEqual(expect.arrayContaining(['example.chat.backend', 'example.chat.room', 'example.todo.backend', 'example.todo.frontend']))
   // the second file's slots replace the panels (the workspace's own rule); todos is still there, from the explorer
   await expect(dock(page).locator('chat-room')).toHaveCount(2)
-  await page.locator('nano-explorer').getByText('todos', { exact: true }).first().click()
+  const node = dock(page).locator('nano-explorer').getByText('todos', { exact: true })   // the dock's Systems panel
+  await expect(node).toHaveCount(1)
+  await node.click()
   const list = dock(page).locator('todo-list')
   await list.getByRole('textbox', { name: 'New todo' }).fill('eggs')
   await list.getByRole('button', { name: 'Add' }).click()
-  await expect(list.locator('li')).toContainText('eggs')
-  await say(dock(page).locator('chat-room').filter({ hasText: 'alice' }), 'still here')
-  await expect(dock(page).locator('chat-room').filter({ hasText: 'bob' }).locator('li')).toContainText('still here')
+  await expect(list.locator('li')).toHaveText([/eggs/])
+  await say(room(page, 'alice'), 'still here')
+  await expect(room(page, 'bob').locator('li')).toHaveText([/alice.*still here/])
 })
 
 test('auth: with a virtual authenticator, Register then Passkey; the log shows ok', async ({ page }) => {
@@ -76,5 +81,9 @@ test('auth: with a virtual authenticator, Register then Passkey; the log shows o
   await auth.getByRole('button', { name: 'Passkey' }).click()
   await page.locator('dialog[open]').getByRole('button', { name: 'Approve' }).click()
   await expect(auth.getByRole('status')).toContainText('sign in: ok')
-  await expect(dock(page).locator('nano-log')).toContainText('"ok":true')
+  const log = dock(page).locator('nano-log')
+  await expect(log).toContainText('"ok":true')
+  await expect(log).toContainText('"credentialId"')
+  await expect(log).not.toContainText(/prf|secret|signature|clientDataJSON/i)   // nothing sensitive reaches the log
 })
+
