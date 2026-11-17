@@ -29,6 +29,8 @@ const app: AppDeployment = {
 }
 const docs: Record<string, AppDeployment> = {
   'https://other.test/app/nano.json': app,
+  'https://other.test/iso/nano.json': { pods: { i: { implementation: 'other.fx/x', eager: false, isolation: 'isolated-sandbox' } },
+    runtimes: { main: { pods: ['i'], subscriptions: [] } }, modules: { 'other.fx': '../app/x.js' } },
   'http://host.test/app/nano.json': { pods: { h: { implementation: 'other.fx/x', eager: false } }, runtimes: {}, modules: { 'other.fx': './x.js' } },
 }
 const domFetch = globalThis.fetch
@@ -64,6 +66,13 @@ test('given a foreign provider, then confirm gets one entry: host and sandbox po
     { name: 's', isolation: 'sandbox', fullAccess: true },
     { name: 'i', isolation: 'isolated-sandbox', fullAccess: false },
   ] }]])
+})
+
+test('given a foreign provider whose pods are all isolated-sandbox, then confirming loads none of its code into the page', async () => {
+  const { seen, deps } = fakes()
+  const r = await importApp('https://other.test/iso/nano.json', empty(), deps)
+  if (!r.ok) throw new Error(r.fail.reason)
+  expect(seen).toMatchObject({ probe: ['https://other.test/app/x.js'], load: [] })
 })
 
 test('given confirm says no, then the registry gains nothing and the result is import cancelled', async () => {

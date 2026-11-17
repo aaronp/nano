@@ -144,7 +144,10 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
         if (!probed.ok) return probed
         if (!isProvider(probed.value.provider, coord)) return failure('invalid-input', `${at} has no default Provider ${coord}`)
         const [p, load] = gated(probed.value.provider, at, u.origin, deps)
-        try { await load() } catch (e) { return failure('invalid-input', `cannot load ${at}: ${why(e)}`) }
+        // Loaded now (for its views) only when a pod of it would run with this page's access, as the confirm said;
+        // a provider whose pods are all isolated-sandbox never runs in this page.
+        if (foreign.find(f => f.coord === coord)?.pods.some(p => p.fullAccess))
+          try { await load() } catch (e) { return failure('invalid-input', `cannot load ${at}: ${why(e)}`) }
         fresh.push(p)
         Object.assign(views, probed.value.views)
         const w = newerCore(coord, probed.value.built); if (w) deps.warn?.(w)
