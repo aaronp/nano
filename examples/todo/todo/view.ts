@@ -12,6 +12,7 @@ export class TodoListView extends LitElement {
   declare error?: string
   private watching?: ViewTarget
   private iter?: AsyncIterator<unknown>
+  constructor() { super(); this.todos = [] }
 
   connectedCallback() { super.connectedCallback(); void this.watch() }
   disconnectedCallback() { super.disconnectedCallback(); this.stop() }
@@ -24,11 +25,17 @@ export class TodoListView extends LitElement {
     if (!t || !this.isConnected || this.watching === t) return
     this.stop()
     this.watching = t
+    this.error = undefined
     const list = this.pod(t), it = this.iter = list.items()[Symbol.asyncIterator]()   // connected before the first list, so no change is missed
     try {
-      this.todos = await list.list()
-      while (!(await it.next()).done && this.iter === it) this.todos = await list.list()
-    } catch (e) { this.error = String(e) }
+      const first = await list.list()
+      if (this.iter !== it) return
+      this.todos = first
+      while (!(await it.next()).done && this.iter === it) {
+        const next = await list.list()
+        if (this.iter === it) this.todos = next
+      }
+    } catch (e) { if (this.iter === it) this.error = String(e) }
   }
   private async add(t: ViewTarget, input: HTMLInputElement) {
     const title = input.value.trim()

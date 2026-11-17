@@ -13,6 +13,7 @@ export class ChatRoomView extends LitElement {
   declare error?: string
   private watching?: ViewTarget
   private iter?: AsyncIterator<MessagingDef.Message>
+  constructor() { super(); this.lines = [] }
 
   connectedCallback() { super.connectedCallback(); void this.watch() }
   disconnectedCallback() { super.disconnectedCallback(); this.stop() }
@@ -25,11 +26,14 @@ export class ChatRoomView extends LitElement {
     if (!t || !this.isConnected || this.watching === t) return
     this.stop()
     this.watching = t
+    this.error = undefined
     const room = this.pod(t), it = this.iter = room.lines()[Symbol.asyncIterator]()   // connected before the transcript, so no line is missed
     try {
-      this.lines = await room.transcript()
+      const past = await room.transcript()
+      if (this.iter !== it) return
+      this.lines = past
       for (let m = await it.next(); !m.done && this.iter === it; m = await it.next()) this.lines = [...this.lines, m.value]
-    } catch (e) { this.error = String(e) }
+    } catch (e) { if (this.iter === it) this.error = String(e) }
   }
   private async send(t: ViewTarget, input: HTMLInputElement) {
     const text = input.value.trim()
