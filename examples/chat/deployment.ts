@@ -20,6 +20,7 @@ export function chatDeployment(registry: Registry): AppDeployment {
       'example.chat.room': { pods: [], subscriptions: [] },
     },
     modules: { 'example.kv': '../kv/memory.js', 'example.messaging': './messaging/kv.js', 'example.chat': './room/messaging.js' },
+    layout: { slots: [{ id: 'alice', runtime: 'example.chat.room', pod: 'alice' }, { id: 'bob', runtime: 'example.chat.room', pod: 'bob' }] },
   }, registry)
   d.place(kv.implementations.get(String(kvImpls.memory))!, { pod: 'store', in: 'example.chat.backend' })
   d.resolve('example.chat.backend', KeyValueStoreDef.api).create(messagingImpls.kv, { pod: 'messaging', in: 'example.chat.backend' })
