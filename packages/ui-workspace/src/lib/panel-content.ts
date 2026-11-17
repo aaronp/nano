@@ -1,6 +1,4 @@
-// A panel's content: its template's elements, upgraded, with its placed elements in the dock's system.
-import { PlacedElement } from '@pritzlaff/nano-elements'
-import { SandboxedElement } from '../sandbox/sandboxed-el.ts'
+// A panel's content: its template's elements, upgraded.
 
 /**
  * A panel's content from its template. Importing it into the page upgrades defined elements at once; only then are
@@ -10,14 +8,9 @@ import { SandboxedElement } from '../sandbox/sandboxed-el.ts'
 export function panelContent(doc: Document, template: HTMLTemplateElement, registry?: unknown): DocumentFragment {
   const content = doc.importNode(template.content, true);
   for (const e of content.querySelectorAll('*')) if (e.localName.includes('-')) customElements.upgrade(e);   // browsers already have
-  if (registry) handRegistry(content, registry);
+  // BACKLOG(2): placed elements (PlacedElement, <c-sandboxed>) took the dock's registry here; nano-core 0.4 has none.
+  void registry;
   return content;
-}
-
-/** Hands `registry` to the placed elements under `root`. Other model views (such as the platform's tree) keep the
- * page's registry, where the platform lives. */
-export function handRegistry(root: ParentNode, registry: unknown) {
-  for (const e of root.querySelectorAll('*')) if (e instanceof PlacedElement || e instanceof SandboxedElement) e.registry = registry as PlacedElement['registry'];
 }
 
 /** Shows the panel's instance sandboxed: a non-host `mode` replaces the template's element with <c-sandboxed keep kind mode name>

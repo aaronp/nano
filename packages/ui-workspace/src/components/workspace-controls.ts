@@ -1,46 +1,13 @@
-// WorkspaceControls: the controls of one workspace dock (window style, connections, save, restore, reset), as a component
-// and as the element the app bar shows while that dock is focused. It drives the dock by id; nothing here is persisted.
-import { css, html, svg } from 'lit'
-import { Type } from 'typebox'
-import { base, PlacedElement } from '@pritzlaff/nano-elements'
-import { component, state } from '@pritzlaff/nano-runes'
+// <nano-workspace-controls dock="<id>">: the controls of one workspace dock (window style, connections, save, restore,
+// reset), the element the app bar shows while that dock's page is shown. It drives the dock by id; nothing here is persisted.
+// BACKLOG(5): it was also a nano-runes component (WorkspaceControls) in the host registry; now only the element.
+import { LitElement, css, html, svg } from 'lit'
+import { base } from '@pritzlaff/nano-elements'
 import { WINDOW_STYLES, type WindowStyle } from '../lib/dock-layout.ts'
 
-/** The id of the controls instance for a dock. */
-export const controlsId = (dockId: string) => `ws-controls-${dockId}`
 
 type Dock = HTMLElement & { windowStyle: WindowStyle; setWindowStyle(s: WindowStyle): void; connections(): void; saveAs(): void; save(): void; restore(): void; reset(): void }
 type Command = 'connections' | 'saveAs' | 'save' | 'restore' | 'reset'
-
-// WINDOW_STYLES' ids, spelled out so the schema's type is exact (a mapped array widens it)
-const Style_ = Type.Union([Type.Literal('tabs'), Type.Literal('focus')], { description: 'How the dock shows its windows: tabs, or clear (no tab for a lone panel)', examples: ['tabs'] })
-const DockId_ = Type.String({ description: 'The id of the workspace dock these controls drive', examples: ['workspace'] })
-
-export const WorkspaceControls = component('composable.ui-workspace/workspace-controls', () => {
-  const s = state({ dock: '', style: 'tabs' as WindowStyle })
-  const dock = () => {
-    const d = document.getElementById(s.dock) as Dock | null
-    if (!d) throw new Error(`no dock ${s.dock}`)
-    return d
-  }
-  const run = (c: Command) => () => { dock()[c]() }
-  return {
-    get dock() { return s.dock }, get style() { return s.style },
-    attach: (id: string) => { s.dock = id; s.style = dock().windowStyle },
-    setStyle: (style: WindowStyle) => { dock().setWindowStyle(style); s.style = style },
-    connections: run('connections'), saveAs: run('saveAs'), save: run('save'), restore: run('restore'), reset: run('reset'),
-  }
-}, {
-  dock: DockId_,
-  style: Style_,
-  attach: { in: DockId_, description: 'Records the dock to drive and reads its current window style' },
-  setStyle: { in: Style_, description: 'Sets the dock\'s window style' },
-  connections: { description: 'Opens the dock\'s connections view' },
-  saveAs: { description: 'Saves the dock\'s layout as a named workspace' },
-  save: { description: 'Saves the dock\'s layout' },
-  restore: { description: 'Restores the dock\'s saved layout' },
-  reset: { description: 'Resets the dock to its initial layout' },
-}, { description: 'The controls of one workspace dock' })
 
 // 24×24 stroke paths, the File menu's icon style
 const ICONS: Record<Command | 'more', ReturnType<typeof svg>> = {
@@ -54,9 +21,8 @@ const ICONS: Record<Command | 'more', ReturnType<typeof svg>> = {
 const COMMANDS: [Command, string][] = [['connections', 'Connections'], ['saveAs', 'Save as workspace…'], ['save', 'Save layout'], ['restore', 'Restore'], ['reset', 'Reset']]
 const NARROW = '(max-width: 840px)'
 
-export class WorkspaceControlsEl extends PlacedElement {
-  static component = WorkspaceControls
-  static properties = { ...PlacedElement.properties, open: { state: true }, narrow: { state: true } }
+export class WorkspaceControlsEl extends LitElement {
+  static properties = { dock: {}, open: { state: true }, narrow: { state: true } }
   static styles = [base, css`
     :host { display: inline-flex; align-items: center; gap: 4px; position: relative; color: inherit }
     button { font: inherit; color: inherit; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px }
@@ -71,10 +37,16 @@ export class WorkspaceControlsEl extends PlacedElement {
     .panel[hidden] { display: none }
     .panel button { color: var(--nano-fg, #E6EAF0) }
     .panel button:hover { background: var(--nano-surface-2, #222933) }`]
+  declare dock: string
   declare open: boolean
   declare narrow: boolean
   #mq?: MediaQueryList
-  constructor() { super(); this.open = false; this.narrow = false }
+  constructor() { super(); this.dock = ''; this.open = false; this.narrow = false }
+  #dock() {
+    const d = document.getElementById(this.dock) as Dock | null
+    if (!d) throw new Error(`no dock ${this.dock}`)
+    return d
+  }
   #outside = (e: Event) => { if (this.open && !e.composedPath().includes(this)) this.open = false }
   #match = () => { this.narrow = !!this.#mq?.matches; if (!this.narrow) this.open = false }
 
@@ -94,13 +66,13 @@ export class WorkspaceControlsEl extends PlacedElement {
   }
 
   #close(refocus: boolean) { this.open = false; if (refocus) void this.updateComplete.then(() => this.renderRoot.querySelector<HTMLElement>('.more')?.focus()) }
-  #run(c: Command) { void this.act(WorkspaceControls.ops[c]) }
+  #run(c: Command) { this.#dock()[c]() }
   #cmd = (c: Command, label: string, text: boolean) => html`<button aria-label=${label} title=${label} @click=${() => { this.#close(false); this.#run(c) }}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[c]}</svg>${text ? label : ''}</button>`
 
   render() {
-    const style = this.read<WindowStyle>(WorkspaceControls.ops.style) ?? 'tabs'
+    const style: WindowStyle = (document.getElementById(this.dock) as Dock | null)?.windowStyle ?? 'tabs'
     return html`<span class="view" role="group" aria-label="View">${WINDOW_STYLES.map(w =>
-        html`<button aria-pressed=${style === w.id ? 'true' : 'false'} @click=${() => { void this.act(WorkspaceControls.ops.setStyle, w.id) }}>${w.title}</button>`)}</span>
+        html`<button aria-pressed=${style === w.id ? 'true' : 'false'} @click=${() => { this.#dock().setWindowStyle(w.id); this.requestUpdate() }}>${w.title}</button>`)}</span>
       ${this.narrow
         ? html`<button class="more" aria-label="More workspace actions" title="More workspace actions" aria-controls="panel" aria-expanded=${this.open ? 'true' : 'false'}
               @click=${() => { this.open = !this.open }}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.more}</svg></button>

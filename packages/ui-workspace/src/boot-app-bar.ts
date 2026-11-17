@@ -1,48 +1,64 @@
 /**
- * The app bar on the page: <nano-app-bar> shows what the app gateway's appBar names; this drives the gateway.
- * A page change clears focus and sets the page's default (a workspace's controls, made in host on first visit, or
- * nothing); a dock's `dock:focus` sets focus. Components put their own controls up through the gateway themselves.
+ * The app bar on the page: <nano-app-bar> shows the shown page's controls (a workspace's controls, or nothing), or,
+ * while a pod's panel is focused (or a pod was just opened from the explorer), that pod's: its view and its
+ * implementation. A page change clears focus back to the page's default.
+ *
+ * On nano-core 0.4 (BACKLOG(5)): the app gateway is gone, so this hands the bar its element; a pod's controls are the
+ * host's (the View and Change implementation pickers), each change an `apply` through the host.
  */
-import { Components, Ops, type Op } from '@pritzlaff/nano-core'
-import { runtimeOf } from '@pritzlaff/nano-app'
-import { AppGateway, type Focus } from '@pritzlaff/nano-app'
-import { catalog, host } from './composable.ts'
+import { html, render } from 'lit'
+import type { Host } from './host.ts'
 import { defineAppBar, type AppBarEl } from './components/app-bar.ts'
-import { controlsId, WorkspaceControls } from './components/workspace-controls.ts'
+import { defineWorkspaceControls } from './components/workspace-controls.ts'
+import { chosen, viewTags } from './dock/panels.ts'
 import { requestBus } from './lib/bus.ts'
 
-const call = async (id: string, op: Op, arg: unknown = null) => {
-  const r = await host.call({ registry: 'host', instance: 'app-bar' }, id, Ops.key(op), arg)
-  if ('error' in r) console.error('app bar:', r.error)
-}
-const app = (op: Op, arg: unknown) => call('app', op, arg)
+const value = (e: Event) => (e.target as HTMLElement & { value: string }).value
 
-/** Clears focus and sets the shown page's default controls: its dock's, or none. */
-async function show(route: Element | null) {
-  await app(AppGateway.ops.setFocus, null)
+/** The shown page's default controls: its dock's, or none. */
+function pageControls(route: Element | null): Element | null {
   const dock = route?.querySelector('workspace-dock')
-  if (!dock) return app(AppGateway.ops.setAppBarDefault, null)
-  const id = controlsId(dock.id)
-  if (!host.registry.get(id)) host.registry.add(id, Components.instantiate(WorkspaceControls), { kind: 'app', name: 'ui-workspace' })
-  await call(id, WorkspaceControls.ops.attach, dock.id)
-  await app(AppGateway.ops.setAppBarDefault, { system: 'host', instance: id })
+  if (!dock) return null
+  const el = document.createElement('nano-workspace-controls')
+  el.setAttribute('dock', dock.id)
+  return el
 }
-let queue = Promise.resolve()
-const sync = (route: Element | null) => { queue = queue.then(() => show(route)) }   // in order: a later page wins
 
-defineAppBar()
-const bar = document.querySelector<AppBarEl>('nano-app-bar')
-if (bar) {
-  bar.resolve = ({ system, instance }) => {
-    const registry = system === 'host' ? host.registry : runtimeOf(host.registry, system)?.registry
-    const c = registry?.get(instance)?.component
-    if (!registry || !c) return undefined
-    const tag = Object.values(catalog).find(e => e.component.id.ns === c.id.ns && e.component.id.name === c.id.name)?.tag
-      ?? (c === WorkspaceControls ? 'nano-workspace-controls' : undefined)
-    return tag ? { tag, registry } : undefined
+/** A pod's controls: its view and its implementation (those providing the same interfaces). */
+function podControls(h: Host, pod: string): Element {
+  const el = document.createElement('span')
+  el.className = 'pod-controls'
+  const swap = (coord: string) => {
+    const d = h.data(), p = d.pods[pod]!, keeps = h.registry.implementation(coord)?.config?.check(p.config)
+    return h.apply({ ...d, pods: { ...d.pods, [pod]: { implementation: coord, eager: p.eager, ...(keeps && { config: p.config }) } } })
   }
-  requestBus(bar).subscribe('route:changed', m =>
-    sync(document.querySelector(`app-shell > app-route[path="${(m.payload as { path: string }).path}"]`)))
-  sync(document.querySelector('app-shell > app-route:not([hidden])'))   // the page shown now, if the shell routed already
+  const draw = () => {
+    const d = h.data(), p = d.pods[pod]
+    if (!p) return render(html``, el)
+    const same = (a: readonly string[]) => [...a].sort().join()
+    const mine = same(h.registry.implementation(p.implementation)?.provides.map(i => i.coord) ?? [])
+    const impls = h.registry.manifest().implementations.filter(i => same(i.provides) === mine).map(i => i.coord)
+    render(html`<b>${pod}</b>
+      <nano-select label="View" .options=${viewTags(h, pod, p.implementation)} .value=${chosen(h, pod)}
+        @change=${(e: Event) => h.apply({ ...d, views: { ...d.views, [pod]: value(e) } })}></nano-select>
+      <nano-select label="Change implementation" .options=${impls} .value=${p.implementation}
+        @change=${(e: Event) => swap(value(e))}></nano-select>`, el)
+  }
+  draw()
+  const off = h.app.listen(e => { if (e.type === 'applied') { if (el.isConnected) draw(); else off() } })
+  return el
 }
-document.addEventListener('dock:focus', e => { void app(AppGateway.ops.setFocus, (e as CustomEvent<Focus>).detail) })
+
+export function bootAppBar(h: Host) {
+  defineAppBar()
+  defineWorkspaceControls()
+  const bar = document.querySelector<AppBarEl>('nano-app-bar')
+  if (!bar) return
+  const shown = () => document.querySelector('app-shell > app-route:not([hidden])')
+  requestBus(bar).subscribe('route:changed', m =>
+    bar.show(pageControls(document.querySelector(`app-shell > app-route[path="${(m.payload as { path: string }).path}"]`))))
+  bar.show(pageControls(shown()))   // the page shown now, if the shell routed already
+  const pod = (name: string | undefined) => bar.show(name && h.data().pods[name] ? podControls(h, name) : pageControls(shown()))
+  document.addEventListener('dock:focus', e => pod((e as CustomEvent<{ instance: string } | null>).detail?.instance))
+  document.addEventListener('nano-open', e => pod((e as CustomEvent<{ pod: string }>).detail.pod))
+}

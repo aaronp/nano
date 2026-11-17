@@ -1,6 +1,6 @@
 /**
  * `workspace.host/ui`: this host's HostUI. `alert` shows a toast, `approve` asks in a `<dialog>` (Approve is true,
- * Deny or closing it false), `setAppBar` sets the title.
+ * Deny or closing it false), `setAppBar` sets the title (the page's and the app shell's).
  *
  *   registry.add(hostProvider); Pod.eager(hostUi)   // the pod `ui` in runtime `main`
  */
@@ -43,7 +43,8 @@ export const hostUi = Implementation.define(ns.implementationId('ui'), {
     approve: async a => success(await approve(a as { title: string; detail?: string })),
     setAppBar: async text => {
       document.title = String(text)
-      for (const t of ['workspace-shell', 'workspace-app-bar']) document.querySelector(t)?.setAttribute('heading', String(text))
+      const title = document.querySelector('app-shell > [slot="title"]')
+      if (title) title.textContent = String(text)
       return success(null)
     },
   })],

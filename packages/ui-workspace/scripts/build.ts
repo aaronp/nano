@@ -1,28 +1,27 @@
 /**
- * The host's build, into public/: main.js; shared/golden-layout.css (the dock's base styles); sandbox/boot.js (a sandboxed pod's frame); the shared libraries in shared/ (one copy, named in index.html's import map);
+ * The host's build, into public/ (after prebuild.ts): main.js (CSS imported as text: the dock's golden-layout styles); sandbox/boot.js (a sandboxed pod's frame); the shared libraries in shared/ (one copy, named in index.html's import map);
  * bundle/nano-ui.js (packages/ui, itself shared); the slice example in examples/slice/, and the template in examples/template/ (index.js, nano.json). Every output imports
  * @pritzlaff/nano-core, nano-elements, nano-ui, lit and typebox through the import map, so a module loaded later shares them.
  * With --watch, it builds again on every source change.
  */
 import { copyFileSync, rmSync, watch } from 'node:fs'
 import { join } from 'node:path'
+import { SHARED } from '../src/shared/specifiers.ts'
 
 const root = join(import.meta.dir, '..'), pub = join(root, 'public'), repo = join(root, '../..'), watching = process.argv.includes('--watch')
 const external = ['@pritzlaff/nano-core', '@pritzlaff/nano-elements', '@pritzlaff/nano-ui', 'lit', 'lit/*', 'typebox', 'typebox/*']
 
 async function build(entrypoints: string[], outdir: string, opts: { splitting?: boolean; external?: string[]; entry?: string } = {}) {
-  const r = await Bun.build({ entrypoints, outdir, format: 'esm', external: opts.external ?? external, splitting: opts.splitting,
+  const r = await Bun.build({ entrypoints, outdir, format: 'esm', external: opts.external ?? external, splitting: opts.splitting, loader: { '.css': 'text' },
     naming: { entry: opts.entry ?? '[name].[ext]', chunk: 'chunks/[name]-[hash].[ext]' } })
   if (!r.success) { for (const l of r.logs) console.error(l); if (!watching) process.exit(1) }
 }
 
 async function all() {
-  for (const d of ['shared', 'bundle', 'examples', 'chunks', 'sandbox']) rmSync(join(pub, d), { recursive: true, force: true })
+  for (const d of ['bundle', 'examples', 'sandbox']) rmSync(join(pub, d), { recursive: true, force: true })   // shared/ and chunks/: prebuild.ts
   await build([join(root, 'src/main.ts')], pub)
   await build([join(root, 'src/sandbox/boot.ts')], join(pub, 'sandbox'))   // the frame's entry; its import map is the host's
-  await build(['nano', 'nano-elements', 'lit', 'lit-ref', 'lit-style-map', 'typebox', 'typebox-value'].map(f => join(root, `src/shared/${f}.ts`)),
-    join(pub, 'shared'), { splitting: true, external: [] })
-  copyFileSync(Bun.fileURLToPath(import.meta.resolve('golden-layout/dist/css/goldenlayout-base.css')), join(pub, 'shared/golden-layout.css'))   // the dock's
+  await build(SHARED.map(s => join(root, `src/shared/${s.file}.ts`)), join(pub, 'shared'), { splitting: true, external: [] })
   await build([join(repo, 'packages/ui/src/index.ts')], join(pub, 'bundle'), { entry: 'nano-ui.[ext]' })
   await build([join(repo, 'examples/slice/shout.ts')], join(pub, 'examples/slice'))
   copyFileSync(join(repo, 'examples/slice/nano.json'), join(pub, 'examples/slice/nano.json'))

@@ -1,19 +1,30 @@
 /**
- * The Import dialog (a drawer's Import button): paste a package's manifest URL, Fetch to preview it — its components
- * and their ops, and the shared libraries it expects against the host's — then Import. A clash or a bad manifest
- * disables Import with the reason; a refused load is shown and adds nothing. Imports are remembered.
+ * The Import dialog (a drawer's Import button, File › Open and Import): paste a nano.json URL, Fetch to preview it —
+ * its pods and their implementations, and the modules it loads — then Import (the host's importUrl: a refused import
+ * is shown as a toast and changes nothing).
+ * BACKLOG(7): it imported a package by its manifest (components, ops, shared libraries), remembered imports, and
+ * honoured the Trust choice; on 0.4 a nano.json is imported, and a module from another origin asks for approval instead.
  */
-import { fetchManifest, loadPackage, pageDeps, type ImportDeps } from '../imports.ts';
-import { importsStore, sharedReport, type Manifest } from '../lib/imports.ts';
+import type { AppDeployment } from '@pritzlaff/nano-core';
+import type { Host } from '../host.ts';
+
+/** How to reach the network and the host: the page's fetch and the host, or stand-ins in tests. */
+export type ImportDeps = { fetchJson(url: string): Promise<unknown>; importUrl(url: string): Promise<{ ok: boolean }> };
+let host: Host | undefined;
+/** The host the dialog imports into (main.ts sets it once started). */
+export const setImportHost = (h: Host) => { host = h; };
+export const pageDeps: ImportDeps = {
+  fetchJson: async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); },
+  importUrl: (url) => (host ? host.importUrl(url) : Promise.resolve({ ok: false })),
+};
 
 const esc = (s: unknown) => String(s).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
-function preview(m: Manifest, moduleUrl: string, provided: Record<string, string>) {
-  const shared = sharedReport(m, provided).map((r) => `<li>${r.ok ? '✓' : '⚠'} ${esc(r.specifier)} ${esc(r.range)} — the host has ${esc(r.provided ?? 'none')}</li>`).join('');
-  const comps = m.components.map((c) => `<li><b>${esc(c.title)}</b> <code>${esc(c.kind)}</code> · <code>${esc(c.id)}</code>${c.tag ? ` · <code>&lt;${esc(c.tag)}&gt;</code>` : ''}
-    ${c.ops?.length ? `<div class="ops">${c.ops.map((o) => `<code>${o.input ? 'in ' : ''}${esc(o.name)}${o.output ? ' out' : ''}</code>`).join(' ')}</div>` : ''}</li>`).join('');
-  return `<p><b>${esc(m.name)} ${esc(m.version)}</b><br><small>module: <code>${esc(moduleUrl)}</code></small></p>
-    <h3>Components</h3><ul>${comps}</ul>${shared ? `<h3>Shared libraries</h3><ul>${shared}</ul>` : ''}`;
+function preview(d: AppDeployment, url: string) {
+  const pods = Object.entries(d.pods).map(([name, p]) => `<li><b>${esc(name)}</b> <code>${esc(p.implementation)}</code>${p.isolation ? ` · ${esc(p.isolation)}` : ''}</li>`).join('');
+  const modules = Object.entries(d.modules ?? {}).map(([c, m]) => `<li><code>${esc(c)}</code> — <code>${esc(new URL(m, url).href)}</code></li>`).join('');
+  return `<p><b>${esc(url)}</b></p>
+    <h3>Pods</h3><ul>${pods}</ul>${modules ? `<h3>Modules</h3><ul>${modules}</ul>` : ''}`;
 }
 
 /** Opens the dialog. */
@@ -22,7 +33,7 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
   d.setAttribute('aria-label', 'Import components');
   d.className = 'import-dialog';
   d.innerHTML = `<h2>Import components</h2>
-    <form class="row"><input name="url" type="url" required placeholder="https://…/manifest.json" aria-label="Manifest URL"><button type="submit" data-fetch>Fetch</button></form>
+    <form class="row"><input name="url" type="url" required placeholder="https://…/nano.json" aria-label="nano.json URL"><button type="submit" data-fetch>Fetch</button></form>
     <fieldset class="trust"><legend>Trust</legend>
       <label><input type="radio" name="trust" value="sandboxed" checked> Sandboxed: runs in an isolated frame</label>
       <label><input type="radio" name="trust" value="trusted"> Trusted: runs in this page</label></fieldset>
@@ -30,27 +41,23 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
     <div class="actions"><button type="button" data-cancel>Cancel</button><button type="button" data-import disabled>Import</button></div>`;
   const $ = <T extends HTMLElement>(s: string) => d.querySelector(s) as T;
   const say = (text: string) => { $('[role="alert"]').textContent = text; };
-  const known = () => new Set(importsStore(localStorage).list().map((r) => r.url));
   let url = '';
   $<HTMLFormElement>('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     url = $<HTMLInputElement>('input[name="url"]').value.trim();
     $<HTMLButtonElement>('[data-import]').disabled = true; $('.preview').innerHTML = ''; say('');
-    const got = await fetchManifest(url, deps);
-    if ('error' in got) return say(got.error);
-    const provided = (await deps.fetchJson('./shared/versions.json').catch(() => ({}))) as Record<string, string>;
-    $('.preview').innerHTML = preview(got.manifest, new URL(got.manifest.module, url).href, provided);
-    if (got.clashes.length) return say(`${got.manifest.name} clashes with what is loaded: ${got.clashes.join(', ')}.${known().has(url) ? ' It is imported already: a newer version takes effect after a reload.' : ''}`);
+    let got: AppDeployment;
+    try { url = new URL(url, location.href).href; got = (await deps.fetchJson(url)) as AppDeployment; } catch (e) { return say(`Couldn't fetch ${url}: ${(e as Error).message}`); }
+    if (!got || typeof got !== 'object' || typeof got.pods !== 'object' || got.pods === null) return say(`${url} is not a nano.json: it has no pods.`);
+    $('.preview').innerHTML = preview(got, url);
     $<HTMLButtonElement>('[data-import]').disabled = false;
   });
   $('[data-fetch]').addEventListener('click', (e) => { e.preventDefault(); $<HTMLFormElement>('form').requestSubmit?.() ?? $<HTMLFormElement>('form').dispatchEvent(new Event('submit', { cancelable: true })); });
   $('[data-cancel]').addEventListener('click', () => d.close());
   $('[data-import]').addEventListener('click', async () => {
     $<HTMLButtonElement>('[data-import]').disabled = true;
-    const trust = $<HTMLInputElement>('input[value="trusted"]').checked ? 'trusted' : 'sandboxed';
-    const got = await loadPackage(url, deps, trust);
-    if ('error' in got) return say(got.error);
-    importsStore(localStorage).put({ url, name: got.manifest.name, version: got.manifest.version, trust });
+    const got = await deps.importUrl(url);   // a failure is a toast
+    if (!got.ok) { $<HTMLButtonElement>('[data-import]').disabled = false; return; }
     document.dispatchEvent(new CustomEvent('nano:changed'));
     d.close();
   });

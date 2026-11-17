@@ -2,7 +2,8 @@
  * Pure helpers for the golden-layout workspace: panel state, starting layouts and counting panels.
  * Layout objects here are plain JSON (golden-layout's LayoutConfig shape), so they can be saved and tested.
  */
-import type { Box } from '@pritzlaff/nano-app';
+/** A rectangle as fractions of the page, each in [0, 1] (was @pritzlaff/nano-app's Box). */
+type Box = { x: number; y: number; w: number; h: number };
 
 /** How the panels open at start are arranged. */
 export type Arrangement = 'row' | 'column' | 'stack' | 'grid';

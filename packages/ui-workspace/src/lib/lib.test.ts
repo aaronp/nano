@@ -4,7 +4,6 @@ import { createBus, matches } from './bus.ts';
 import { areaPath, changePct, linePath, parseValues, scalePoints } from './chart.ts';
 import { resolveRoute, isCurrent } from './routes.ts';
 import { gridTracks, normalise, parseSizes, pxToFraction, resizeAt } from './split.ts';
-import { nextName, optionsFor, unboundLabel } from '../boot-needs.ts';
 import { THEMES, THEME_IDS, TOKEN_NAMES, resolveScheme, schemesOf, themeVars } from './themes.ts';
 
 const close = (a: readonly number[], b: readonly number[]) => a.forEach((x, i) => assert.ok(Math.abs(x - (b[i] ?? NaN)) < 1e-9, `${a} vs ${b}`));
@@ -82,26 +81,4 @@ test('chart geometry spans the box and parses values strictly', () => {
   assert.equal(changePct([100, 125]), 25);
   assert.throws(() => scalePoints([1], 10, 10, 0), /at least two/);
 });
-
-test('a made instance takes the first free <kind>-<n>', () => {
-  assert.equal(nextName('people-db', new Set()), 'people-db-1');
-  assert.equal(nextName('people-db', new Set(['people-db-1', 'people-db-3'])), 'people-db-2');
-});
-
-test('a disabled panel says what it needs', () => {
-  assert.equal(unboundLabel(['db']), 'Needs db — Choose…');
-  assert.equal(unboundLabel(['bff', 'rules']), 'Needs bff, rules — Choose…');
-});
-
-test('the chooser offers fitting instances in every system, and kinds that implement the interface', () => {
-  const inst = (id: string, ops: string[]) => ({ id, component: 'x/y', ops: ops.map((k) => ({ ns: k.slice(0, k.lastIndexOf('/')), name: k.slice(k.lastIndexOf('/') + 1) })) as never });
-  const snaps = [
-    { id: 'app', instances: [inst('form', ['example/bff/save']), inst('half', ['example/bff/save'])], subscriptions: [], bindings: [] },
-    { id: 'bff', instances: [inst('bff', ['example/bff/save', 'example/bff/find']), inst('other', ['x/y'])], subscriptions: [], bindings: [] },
-  ];
-  const kinds = [{ kind: 'people-bff', implements: ['example/bff'] }, { kind: 'person-form' }];
-  assert.deepEqual(optionsFor({ id: 'example/bff', ops: ['example/bff/save', 'example/bff/find'] }, 'instance:app/form', snaps, kinds),
-    { candidates: ['instance:bff/bff'], kinds: ['people-bff'] });
-  // the requester itself is never offered
-  assert.deepEqual(optionsFor({ id: 'example/bff', ops: ['example/bff/save'] }, 'instance:app/form', snaps, kinds).candidates, ['instance:app/half', 'instance:bff/bff']);
-});
+// BACKLOG(9): the needs tests (nextName, unboundLabel, optionsFor) are in retired/test/needs-lib.test.ts.

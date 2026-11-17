@@ -29,10 +29,10 @@ test('use case 1: import, see, swap live, save', async ({ page }) => {
   await page.getByRole('combobox', { name: 'View' }).click()
   await page.getByRole('option', { name: 'nano-pod-view' }).click()
   // the pod view counts calls from when it opens, and the view area shows one pod: send another through the slice from the page
-  await page.evaluate(() => (document.querySelector('workspace-shell') as any).host.app.call('main', 'in').submit('again'))
+  await page.evaluate(() => (document.querySelector('workspace-dock') as any).host.app.call('main', 'in').submit('again'))
   await expect(page.locator('nano-pod-view tr[data-port="nano.ui.Log/log"]')).toContainText(/[1-9]\d* calls/, { timeout: 2000 })
 
-  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save' }).click()])
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'File', exact: true }).click().then(() => page.getByRole('button', { name: 'Save', exact: true }).click())])
   const saved = JSON.parse(readFileSync((await download.path())!, 'utf8'))
   expect(saved.pods.up.implementation).toBe('example.slice/shout')
   expect(saved.views.out).toBe('nano-pod-view')

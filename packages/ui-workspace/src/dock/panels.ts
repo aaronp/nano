@@ -39,3 +39,33 @@ export function fill(el: HTMLElement, id: string, h: Host): () => void {
   show()
   return h.app.listen(e => { if (e.type === 'applied') show() })
 }
+
+/** The config a built-in starts with, where it needs one. */
+const starts: Record<string, unknown> = { 'nano.ui/map': { code: 'return x' } }
+
+/**
+ * A palette template per implementation the host can make (what composable.ts's catalog was): `data-implementation`
+ * names it, `data-package` its provider unless it is nano.ui's. The dock makes a pod of it when such a panel opens.
+ */
+export function implementationTemplates(h: Host, doc: Document): HTMLTemplateElement[] {
+  return h.registry.manifest().providers.filter(p => p.coord !== 'workspace.host').flatMap(p => p.implementations.map(coord => {
+    const t = doc.createElement('template')
+    t.dataset['widget'] = coord.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    t.dataset['title'] = coord.slice(coord.indexOf('/') + 1)
+    t.dataset['catalog'] = ''
+    t.dataset['implementation'] = coord
+    if (p.coord !== 'nano.ui') { t.dataset['package'] = p.coord; t.dataset['packageUrl'] = h.data().modules?.[p.coord] ?? '' }
+    return t
+  }))
+}
+
+/** Adds a pod of `coord` to runtime main, named `<kind><n>` with the first free n; its name, once applied. */
+export async function addPod(h: Host, coord: string): Promise<string | undefined> {
+  const d = h.data(), kind = coord.slice(coord.indexOf('/') + 1)
+  let n = 1
+  while (`${kind}${n}` in d.pods) n++
+  const name = `${kind}${n}`, pod = { implementation: coord, eager: true, ...(starts[coord] !== undefined && { config: starts[coord] }) }
+  const main = d.runtimes['main'] ?? { pods: [], subscriptions: [] }
+  const r = await h.apply({ ...d, pods: { ...d.pods, [name]: pod }, runtimes: { ...d.runtimes, main: { ...main, pods: [...main.pods, name] } } })
+  return r.ok ? name : undefined
+}
