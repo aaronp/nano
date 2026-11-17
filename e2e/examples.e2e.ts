@@ -311,4 +311,8 @@ test('Connections draws the chat example\'s call edges: alice and bob to messagi
   await page.locator('c-wires').getByRole('button', { name: 'Back', exact: true }).click()
   await page.waitForTimeout(1200)
   await page.screenshot({ path: test.info().outputPath('calls.png') })
+  await page.locator('c-wires').getByLabel('Call edges').uncheck()
+  await expect(page.locator('c-wires [data-call]')).toHaveCount(0)
+  await page.locator('c-wires').getByLabel('Call edges').check()
+  await expect(page.locator('c-wires [data-call]')).toHaveCount(3)
 })

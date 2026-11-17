@@ -54,7 +54,7 @@ export function renderBack(el: Wires, d: Vals) {
     return { ...base, lx: p.x, ly: p.y + 21, anchor: 'middle' }
   })
 
-  const cords = wires.map(w => {
+  const cords = (s.showPipes ? wires : []).map(w => {
     const gm = cordGeo(P[w.from]!, P[w.to]!)
     return { id: w.id, gm, d: cordD(gm), color: routeById(w.route).color, op: opFor(w.route), sel: selId === w.route }
   })
@@ -129,10 +129,11 @@ export function renderBack(el: Wires, d: Vals) {
       <circle cx=${w.gm.a[0]} cy=${w.gm.a[1]} r="7" fill=${w.color} stroke="#0A0D11" stroke-width="2"></circle>
       <circle cx=${w.gm.b[0]} cy=${w.gm.b[1]} r="7" fill=${w.color} stroke="#0A0D11" stroke-width="2"></circle>
     </g>`)}
-    ${m.calls.map(c => { const g = cordGeo(c.a, c.b); return svg`<g data-call=${c.id} opacity=${selId === null ? 0.9 : 0.3}>
-      <path d=${cordD(g)} fill="none" stroke="#8B96A5" stroke-width="2" stroke-dasharray="6 5" stroke-linecap="round"></path>
-      <circle cx=${c.a.x} cy=${c.a.y} r="4" fill="#8B96A5"></circle><path d=${`M${c.b.x - 6} ${c.b.y - 9} L${c.b.x} ${c.b.y} L${c.b.x + 6} ${c.b.y - 9}`} fill="none" stroke="#8B96A5" stroke-width="2"></path>
-      <text x=${c.a.x + 8} y=${c.a.y + 16} font-family="JetBrains Mono, monospace" font-size="10" fill="#8B96A5">calls ${c.to}</text></g>` })}
+    ${s.showCalls ? m.calls.map(c => svg`<g data-call=${c.id} opacity=${selId === null ? 0.9 : 0.3}>
+      ${c.b.map(b => svg`<path d=${cordD(cordGeo(c.a, b))} fill="none" stroke="#8B96A5" stroke-width="1.5" stroke-dasharray="6 5" stroke-linecap="round"></path>
+      <circle cx=${b.x} cy=${b.y} r="4" fill="#8B96A5"></circle>`)}
+      <circle cx=${c.a.x} cy=${c.a.y} r="4" fill="#8B96A5"></circle>
+      <text x=${c.a.x + 8} y=${c.a.y + 16} font-family="JetBrains Mono, monospace" font-size="10" fill="#8B96A5">calls ${c.to}</text></g>`) : ''}
     ${relayPackets.map(k => packet(k, 6, 3, 10))}
   </svg>` : ''}
 
