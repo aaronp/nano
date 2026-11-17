@@ -84,14 +84,17 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
   const d = doc.createElement('dialog');
   d.setAttribute('aria-label', 'Import components');
   d.className = 'import-dialog';
-  d.innerHTML = `<h2>Import components</h2>
-    <form class="row"><input name="url" type="url" required placeholder="https://…/nano.json" aria-label="nano.json URL"><button type="submit" data-fetch>Fetch</button></form>
-    <label class="row">Or a file: <input name="file" type="file" accept=".json,application/json" aria-label="nano.json file"></label>
-    <fieldset class="trust"><legend>Trust</legend>
-      <label><input type="radio" name="trust" value="sandboxed" checked> Sandboxed: runs in an isolated frame</label>
-      <label><input type="radio" name="trust" value="trusted"> Trusted: runs in this page</label></fieldset>
+  d.innerHTML = `<div class="head"><h2>Import components</h2><button type="button" class="icon" data-close aria-label="Close">×</button></div>
+    <div class="drop"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7M5 3h14"/></svg>
+      <span>Drop a nano.json here, or</span><input name="file" type="file" accept=".json,application/json" aria-label="nano.json file" hidden>
+      <button type="button" data-choose>Choose file…</button></div>
+    <form><label class="field" for="import-url">Or import from a URL</label>
+      <div class="row"><input id="import-url" name="url" type="url" required placeholder="https://…/nano.json" aria-label="nano.json URL"><button type="submit" class="primary" data-fetch>Fetch</button></div></form>
+    <fieldset class="trust"><legend class="field">Trust</legend>
+      <label><input type="radio" name="trust" value="sandboxed" checked><span><b>Sandboxed</b><small>runs in an isolated frame</small></span></label>
+      <label><input type="radio" name="trust" value="trusted"><span><b>Trusted</b><small>runs in this page</small></span></label></fieldset>
     <div class="preview"></div><p role="alert"></p>
-    <div class="actions"><button type="button" data-cancel>Cancel</button><button type="button" data-import disabled>Import</button></div>`;
+    <div class="actions"><button type="button" data-cancel>Cancel</button><button type="button" class="primary" data-import disabled>Import</button></div>`;
   const $ = <T extends HTMLElement>(s: string) => d.querySelector(s) as T;
   const say = (text: string) => { $('[role="alert"]').textContent = text; };
   const button = () => $<HTMLButtonElement>('[data-import]');
@@ -133,8 +136,7 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
     if (!file || typeof file !== 'object' || typeof file.pods !== 'object' || file.pods === null) return say(`${url} is not a nano.json: it has no pods.`);
     show(file);
   });
-  $<HTMLInputElement>('input[name="file"]').addEventListener('change', async (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0];
+  const load = async (file: File | undefined) => {
     if (!file) return;
     button().disabled = true; $('.preview').replaceChildren(); say(''); shown = undefined; got = undefined;
     let read: AppDeployment;
@@ -143,7 +145,15 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
     if (url.startsWith('blob:')) URL.revokeObjectURL(url);
     url = URL.createObjectURL(file);   // imported like any URL
     show(read, file.name);
-  });
+  };
+  $<HTMLInputElement>('input[name="file"]').addEventListener('change', (e) => { const i = e.target as HTMLInputElement; void load(i.files?.[0]); });
+  $('[data-choose]').addEventListener('click', () => $<HTMLInputElement>('input[name="file"]').click());
+  const drop = $('.drop');
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('on'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('on'));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('on'); void load(e.dataTransfer?.files[0]); });
+  $('[data-close]').addEventListener('click', () => d.close());
+  d.addEventListener('click', (e) => { if (e.target === d) d.close(); });   // the backdrop
   $('[data-fetch]').addEventListener('click', (e) => { e.preventDefault(); $<HTMLFormElement>('form').requestSubmit?.() ?? $<HTMLFormElement>('form').dispatchEvent(new Event('submit', { cancelable: true })); });
   $('[data-cancel]').addEventListener('click', () => d.close());
   $('[data-import]').addEventListener('click', async () => {
