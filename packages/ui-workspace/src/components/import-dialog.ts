@@ -15,29 +15,32 @@ import { isolationUnder, renameRuntimes, suggestedName, trusted, validRuntimeId,
 
 type Chosen = { edit(d: AppDeployment): AppDeployment };
 /** How to reach the network and the host: the page's fetch and the host, or stand-ins in tests. */
-export type ImportDeps = { fetchJson(url: string): Promise<unknown>; importUrl(url: string, chosen?: Chosen): Promise<{ ok: boolean }> };
+export type ImportDeps = { fetchJson(url: string): Promise<unknown>; importUrl(url: string, chosen?: Chosen): Promise<{ ok: boolean }>;
+  /** Whether the workspace already has provider `coord` (its pods are not new code: Trust leaves them as the file says). */
+  known(coord: string): boolean };
 let host: Host | undefined;
 /** The host the dialog imports into (main.ts sets it once started). */
 export const setImportHost = (h: Host) => { host = h; };
 export const pageDeps: ImportDeps = {
   fetchJson: async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); },
   importUrl: (url, chosen) => (host ? host.importUrl(url, chosen) : Promise.resolve({ ok: false })),
+  known: (coord) => !!host?.registry.provider(coord),
 };
 
 const text = (s: string) => document.createTextNode(s);
 const list = (title: string, items: Node[]) => (items.length ? [el('h3', title), el('ul', '', ...items)] : []);
 
 /** The pods with their isolation under `trust`, and the providers from another origin (as text, never HTML). */
-function pods(d: AppDeployment, base: string, trust: Trust) {
+function pods(d: AppDeployment, base: string, trust: Trust, known: ImportDeps['known']) {
   const items = Object.entries(d.pods).map(([name, p]) => {
-    const li = el('li', '', el('b', name), text(' '), el('code', p.implementation), text(' · '), el('span', isolationUnder(p, trust)));
+    const li = el('li', '', el('b', name), text(' '), el('code', p.implementation), text(' · '), el('span', isolationUnder(p, trust, known)));
     li.dataset['pod'] = name; li.querySelector('span')!.dataset['isolation'] = '';
     return li;
   });
   const foreign: Foreign[] = Object.entries(d.modules ?? {}).flatMap(([coord, m]) => {
     const url = new URL(m, base).href, origin = foreignOrigin(url);
     return origin ? [{ coord, url, origin, pods: Object.entries(d.pods).filter(([, p]) => p.implementation.split('/')[0] === coord).map(([name, p]) => {
-      const isolation = isolationUnder(p, trust);
+      const isolation = isolationUnder(p, trust, known);
       return { name, isolation, fullAccess: isolation !== 'isolated-sandbox' };
     }) }] : [];
   });
@@ -49,17 +52,17 @@ function pods(d: AppDeployment, base: string, trust: Trust) {
   return [...list('Pods', items), notice];
 }
 
-function preview(d: AppDeployment, url: string, name: string) {
+function preview(d: AppDeployment, url: string, name: string, known: ImportDeps['known']) {
   const base = url.startsWith('blob:') ? location.href : url;   // a local file's modules resolve against the page
   const runtimes = Object.keys(d.runtimes).map(id => {
     const input = el('input');
-    input.value = suggestedName(d, id); input.dataset['runtime'] = id; input.setAttribute('aria-label', `Import runtime ${id} as`);
+    input.value = suggestedName(d, id, known); input.dataset['runtime'] = id; input.setAttribute('aria-label', `Import runtime ${id} as`);
     return el('li', '', el('code', id), text(' as '), input);
   });
   const modules = Object.entries(d.modules ?? {}).map(([c, m]) => el('li', '', el('code', c), text(' — '), el('code', new URL(m, base).href)));
   const pane = el('div'); pane.className = 'pods';
   return { nodes: [el('p', '', el('b', name)), ...list('Runtimes', runtimes), pane, ...list('Modules', modules)],
-    show: (trust: Trust) => pane.replaceChildren(...pods(d, base, trust)) };
+    show: (trust: Trust) => pane.replaceChildren(...pods(d, base, trust, known)) };
 }
 
 /** Opens the dialog. */
@@ -81,7 +84,7 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
   const trust = () => ([...d.querySelectorAll<HTMLInputElement>('input[name="trust"]')].find(r => r.checked)?.value ?? 'sandboxed') as Trust;
   let url = '', shown: ReturnType<typeof preview> | undefined;
   const show = (got: AppDeployment, name = url) => {
-    shown = preview(got, url, name);
+    shown = preview(got, url, name, deps.known);
     $('.preview').replaceChildren(...shown.nodes); shown.show(trust());
     button().disabled = false;
   };
@@ -118,7 +121,7 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
   $('[data-import]').addEventListener('click', async () => {
     button().disabled = true;
     const as = names(), t = trust();
-    const got = await deps.importUrl(url, { edit: f => trusted(renameRuntimes(f, as), t) });   // a failure is a toast
+    const got = await deps.importUrl(url, { edit: f => trusted(renameRuntimes(f, as), t, deps.known) });   // a failure is a toast
     if (!got.ok) { button().disabled = false; return; }
     document.dispatchEvent(new CustomEvent('nano:changed'));
     d.close();

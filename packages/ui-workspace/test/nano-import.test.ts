@@ -90,6 +90,12 @@ describe('own names', () => {
 })
 
 describe('merge', () => {
+  test('a runtime already there gains the incoming pods and subscriptions (the Import dialog named it)', () => {
+    const call = { kind: 'call' as const, from: 'b', to: 'a' }
+    const a = dep({ runtimes: { r: { pods: ['a'], subscriptions: [] } } }), b = dep({ runtimes: { r: { pods: ['b'], subscriptions: [call] } } })
+    expect(merge(a, b)).toMatchObject({ ok: true, value: { runtimes: { r: { pods: ['a', 'b'], subscriptions: [call] } } } })
+  })
+
   test('tags, modules and views are unioned; a provider under another URL is a clash', () => {
     const a = dep({ tags: { x: ['a'] }, modules: { p: '/p.js' }, views: { v: 'el-a' } })
     const b = dep({ tags: { y: ['b'] }, modules: { p: '/p.js', q: '/q.js' }, views: { w: 'el-b' } })

@@ -22,19 +22,27 @@ export function renameRuntimes(d: AppDeployment, names: Record<string, string>):
   return out
 }
 
-/** `<namespace>.<runtime>`: the provider of the runtime's pods, the first in `modules` order; the runtime alone if none. */
-export function suggestedName(d: AppDeployment, runtime: string): string {
-  const providers = new Set((d.runtimes[runtime]?.pods ?? []).map(p => d.pods[p]?.implementation.split('/')[0]))
-  const ns = Object.keys(d.modules ?? {}).find(c => providers.has(c))
+/** Whether the workspace already has provider `coord` loaded: its pods are not new code, so Trust leaves them be. */
+type Known = (coord: string) => boolean
+const none: Known = () => false
+const providerOf = (p: Pod) => p.implementation.slice(0, p.implementation.lastIndexOf('/'))
+
+/** `<namespace>.<runtime>`: the provider of the runtime's pods new to the workspace, the first in `modules` order; the
+ * runtime alone if none, or if its id is already dotted (namespaced). */
+export function suggestedName(d: AppDeployment, runtime: string, known: Known = none): string {
+  if (runtime.includes('.')) return runtime
+  const providers = new Set((d.runtimes[runtime]?.pods ?? []).flatMap(p => (d.pods[p] ? [providerOf(d.pods[p])] : [])))
+  const ns = Object.keys(d.modules ?? {}).find(c => providers.has(c) && !known(c))
   return ns ? `${ns}.${runtime}` : runtime
 }
 
-/** The isolation pod `p` gets under `trust`: Sandboxed always isolated-sandbox; Trusted host, unless the file sandboxes it. */
-export const isolationUnder = (p: Pod, trust: Trust): NonNullable<Pod['isolation']> =>
-  trust === 'sandboxed' ? 'isolated-sandbox' : p.isolation === 'sandbox' || p.isolation === 'isolated-sandbox' ? p.isolation : 'host'
+/** The isolation pod `p` gets under `trust`: Sandboxed always isolated-sandbox; Trusted host, unless the file sandboxes
+ * it; a pod of a provider the workspace has, the file's. */
+export const isolationUnder = (p: Pod, trust: Trust, known: Known = none): NonNullable<Pod['isolation']> =>
+  known(providerOf(p)) ? p.isolation ?? 'host' : trust === 'sandboxed' ? 'isolated-sandbox' : p.isolation === 'sandbox' || p.isolation === 'isolated-sandbox' ? p.isolation : 'host'
 
 /** `d` with each pod's isolation under `trust` (host left out, as `Pod` writes it). Pure. */
-export const trusted = (d: AppDeployment, trust: Trust): AppDeployment => ({ ...d, pods: Object.fromEntries(Object.entries(d.pods).map(([n, p]) => {
-  const { isolation: _, ...rest } = p, isolation = isolationUnder(p, trust)
+export const trusted = (d: AppDeployment, trust: Trust, known: Known = none): AppDeployment => ({ ...d, pods: Object.fromEntries(Object.entries(d.pods).map(([n, p]) => {
+  const { isolation: _, ...rest } = p, isolation = isolationUnder(p, trust, known)
   return [n, isolation === 'host' ? rest : { ...rest, isolation }]
 })) })

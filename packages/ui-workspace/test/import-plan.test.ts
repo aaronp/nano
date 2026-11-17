@@ -36,6 +36,8 @@ test('suggestedName is the provider namespace of the runtime’s first pod by mo
   const d = file(); d.runtimes.side!.pods = ['b', 'a']   // spans two: the first in modules order
   expect(suggestedName(d, 'side')).toBe('acme.template.side')
   expect(suggestedName({ ...file(), runtimes: { e: { pods: [], subscriptions: [] } } }, 'e')).toBe('e')
+  expect(suggestedName(file(), 'main', c => c === 'acme.template')).toBe('main')   // a provider the workspace has: not the file's own
+  expect(suggestedName({ ...file(), runtimes: { 'a.b': { pods: ['a'], subscriptions: [] } } }, 'a.b')).toBe('a.b')   // already namespaced
 })
 
 test('validRuntimeId: no /, whitespace or #, 1 to 64 chars', () => {
@@ -46,4 +48,8 @@ test('validRuntimeId: no /, whitespace or #, 1 to 64 chars', () => {
 test('trusted: sandboxed makes every pod isolated-sandbox; trusted makes host, but keeps a file’s sandbox or isolated-sandbox', () => {
   expect(Object.values(trusted(file(), 'sandboxed').pods).map(p => p.isolation)).toEqual(['isolated-sandbox', 'isolated-sandbox', 'isolated-sandbox'])
   expect(Object.values(trusted(file(), 'trusted').pods).map(p => p.isolation ?? 'host')).toEqual(['host', 'sandbox', 'isolated-sandbox'])
+})
+
+test('trusted leaves pods of a provider the workspace already has as the file says', () => {
+  expect(Object.values(trusted(file(), 'sandboxed', c => c === 'acme.template').pods).map(p => p.isolation ?? 'host')).toEqual(['host', 'isolated-sandbox', 'isolated-sandbox'])
 })

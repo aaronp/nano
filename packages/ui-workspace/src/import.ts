@@ -35,10 +35,10 @@ type Deps = {
 
 const clash = (what: string, name: string) => failure('invalid-input', `clash: ${what} ${name} is already loaded`)
 
-/** `current` and `incoming` unioned; a name already present is a clash. Pure. */
+/** `current` and `incoming` unioned; a pod or provider name already present is a clash, a runtime already present gains
+ * the incoming pods and subscriptions (its own policy kept). Pure. */
 export function merge(current: AppDeployment, incoming: AppDeployment): NanoResult<AppDeployment> {
   for (const k of Object.keys(incoming.pods)) if (Object.hasOwn(current.pods, k)) return clash('pod', k)
-  for (const k of Object.keys(incoming.runtimes)) if (Object.hasOwn(current.runtimes, k)) return clash('runtime', k)
   const modules: Record<string, string> = { ...current.modules }
   for (const [k, url] of Object.entries(incoming.modules ?? {})) {
     if (Object.hasOwn(modules, k) && modules[k] !== url) return clash('provider', k)
@@ -46,7 +46,10 @@ export function merge(current: AppDeployment, incoming: AppDeployment): NanoResu
   }
   return success({
     pods: { ...current.pods, ...incoming.pods },
-    runtimes: { ...current.runtimes, ...incoming.runtimes },
+    runtimes: { ...current.runtimes, ...Object.fromEntries(Object.entries(incoming.runtimes).map(([k, r]) => {
+      const was = Object.hasOwn(current.runtimes, k) ? current.runtimes[k] : undefined
+      return [k, was ? { ...was, pods: [...was.pods, ...r.pods], subscriptions: [...was.subscriptions, ...r.subscriptions] } : r]
+    })) },
     tags: { ...current.tags, ...incoming.tags },
     modules,
     views: { ...current.views, ...incoming.views },

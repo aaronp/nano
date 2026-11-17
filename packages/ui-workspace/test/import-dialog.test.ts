@@ -17,10 +17,10 @@ const template = (): AppDeployment => ({
 })
 
 type Chosen = { edit(d: AppDeployment): AppDeployment }
-function open(url: string) {
+function open(url: string, known = (_: string) => false) {
   const calls: { url: string; chosen?: Chosen }[] = []
   const d = openImportDialog(document, {
-    fetchJson: async () => template(),
+    fetchJson: async () => template(), known,
     importUrl: async (u: string, chosen?: Chosen) => { calls.push({ url: u, ...(chosen && { chosen }) }); return { ok: true } },
   })
   const q = <T extends Element>(s: string) => d.querySelector(s) as T
@@ -82,4 +82,11 @@ test('given an invalid runtime name, then Import is disabled with a message, and
   }
   name.value = 'mine'; name.dispatchEvent(new Event('input', { bubbles: true }))
   expect(t.importButton().disabled).toBe(false)
+})
+
+test('given a provider the workspace already has, then its pods keep the file\'s isolation and the runtime its name', async () => {
+  const t = open('http://host.test/t/nano.json', c => c === 'acme.template')
+  await t.fetched()
+  expect(t.q<HTMLInputElement>('input[data-runtime="main"]').value).toBe('main')
+  expect(t.isolations()).toEqual(['timer host', 'picker host', 'store isolated-sandbox'])
 })

@@ -84,9 +84,11 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
    ops and shared-library versions, choose Trust (sandboxed/trusted), remember imports, list failures in the drawer.
    Why: 0.4 imports a nano.json (deployment + `modules`); trust is a pod's `isolation` and a foreign-origin approval.
    Now: the same dialog fetches a nano.json and previews it: each runtime with the name it is imported as
-   (`<namespace>.<runtime>` suggested, e.g. `acme.template.main`; an existing name merges; `import-plan.ts`
+   (`<namespace>.<runtime>` suggested, e.g. `acme.template.main`, from providers new to the workspace; a dotted id
+   is kept; an existing name merges its pods and subscriptions in; `import-plan.ts`
    `renameRuntimes` renames the keys and `layout.slots[].runtime`), its pods with the isolation Trust gives them
-   (Sandboxed: `isolated-sandbox`; Trusted: `host`, never loosening a pod the file sandboxes), its modules, and which
+   (Sandboxed: `isolated-sandbox`; Trusted: `host`, never loosening a pod the file sandboxes; a pod of a provider
+   the workspace already has, e.g. nano.ui, keeps the file's), its modules, and which
    providers come from another origin, flagging full access. Its Import is the consent (one click); `confirmImports`
    still asks for a `?src=` boot import. Imports are not remembered. Imported providers' implementations appear
    under *Imported* in the drawer (their ✕ only fires `imports:remove`, nothing listens).
