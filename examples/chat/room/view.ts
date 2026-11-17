@@ -1,5 +1,5 @@
 // `<chat-room>`: one participant's view of the general room, a Lit element over an `example.chat/participant` pod.
-import { LitElement, html } from 'lit'
+import { LitElement, css, html } from 'lit'
 import { base, kit } from '@pritzlaff/nano-elements'
 import type { ViewTarget } from '@pritzlaff/nano-ui'
 import { MessagingDef } from '../messaging/contract.ts'
@@ -7,7 +7,7 @@ import { ChatDef } from './contract.ts'
 
 export class ChatRoomView extends LitElement {
   static properties = { target: { attribute: false }, lines: { state: true }, error: { state: true } }
-  static styles = [base, kit]
+  static styles = [base, kit, css`ul { list-style: none; margin: 0; padding: 0 } li > span { flex: 1 } [role='alert'] { margin: 0 }`]
   declare target?: ViewTarget
   declare lines: MessagingDef.Message[]
   declare error?: string
@@ -44,9 +44,9 @@ export class ChatRoomView extends LitElement {
   render() {
     const t = this.target
     if (!t) return html``
-    return html`${this.error ? html`<p role="alert">${this.error}</p>` : ''}<h3>${t.pod}</h3>
-      <ul>${this.lines.map(m => html`<li><b>${m.from}</b> ${m.text}</li>`)}</ul>
-      <form @submit=${(e: Event) => { e.preventDefault(); void this.send(t, this.renderRoot.querySelector('input')!) }}>
-        <input class="input" aria-label="Message" placeholder="Say something"><button class="btn" type="submit">Send</button></form>`
+    return html`<div class="col">${this.error ? html`<p class="alert bad" role="alert">${this.error}</p>` : ''}<h3 class="display-s">${t.pod}</h3>
+      <ul>${this.lines.map(m => html`<li class="list-row"><b>${m.from}</b> <span>${m.text}</span></li>`)}</ul>
+      <form class="row" @submit=${(e: Event) => { e.preventDefault(); void this.send(t, this.renderRoot.querySelector('input')!) }}>
+        <input class="input" aria-label="Message" placeholder="Say something"><button class="btn" type="submit">Send</button></form></div>`
   }
 }

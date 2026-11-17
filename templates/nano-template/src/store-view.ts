@@ -24,7 +24,7 @@ export class StoreView extends View {
     else if (e.type === 'delivered' && this.writes.delete(e.id)) void this.read(t)
   }
   protected face(t: ViewTarget) {
-    return html`<table><tbody>${Object.entries(this.entries).map(([k, v]) => html`<tr><td>${k}</td><td>${v}</td>
+    return html`<table class="table"><tbody>${Object.entries(this.entries).map(([k, v]) => html`<tr><td>${k}</td><td>${v}</td>
       <td><button class="btn small" aria-label="Remove ${k}" @click=${() => this.pod(t).remove(k)}>×</button></td></tr>`)}</tbody></table>`
   }
 }

@@ -37,9 +37,9 @@ export class AuthPasskeyView extends LitElement {
     const t = this.target
     if (!t) return html``
     const l = this.last
-    return html`${this.error ? html`<p role="alert">${this.error}</p>` : ''}
-      <button class="btn" @click=${() => this.run(this.pod(t).authenticate('sign in'))}>Passkey</button>
-      <button class="btn" @click=${() => this.run(register())}>Register</button>
-      <p role="status">${!l ? 'Not yet authenticated.' : l.ok ? `${l.purpose}: ok (${l.credentialId}) at ${l.at}` : `${l.purpose}: ${l.reason} at ${l.at}`}</p>`
+    return html`<div class="col">${this.error ? html`<p class="alert bad" role="alert">${this.error}</p>` : ''}
+      <div class="row"><button class="btn" @click=${() => this.run(this.pod(t).authenticate('sign in'))}>Passkey</button>
+      <button class="btn" @click=${() => this.run(register())}>Register</button></div>
+      <p class="muted" role="status">${!l ? 'Not yet authenticated.' : l.ok ? `${l.purpose}: ok (${l.credentialId}) at ${l.at}` : `${l.purpose}: ${l.reason} at ${l.at}`}</p></div>`
   }
 }
