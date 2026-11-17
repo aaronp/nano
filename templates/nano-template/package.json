@@ -3,16 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A package of components for nano hosts: build it, publish dist/ and import its manifest.json by URL.",
+  "description": "A starting point for components of a nano app: a provider module and a nano.json, imported into a host by URL.",
   "scripts": {
     "test": "bun test",
     "build": "bun scripts/build.ts",
-    "preview": "bun scripts/build.ts && bun scripts/serve.ts"
+    "serve": "bun run build && bun scripts/serve.ts"
   },
   "dependencies": {
-    "@pritzlaff/nano-core": "^0.2.0",
-    "@pritzlaff/nano-elements": "^0.2.0",
-    "@pritzlaff/nano-runes": "^0.2.0",
+    "@pritzlaff/nano-core": "^0.4.0",
+    "@pritzlaff/nano-elements": "^0.4.0",
+    "@pritzlaff/nano-ui": "^0.1.0",
     "lit": "^3.0.0",
     "typebox": "^1.4.0"
   },

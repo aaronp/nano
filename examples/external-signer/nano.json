@@ -1,0 +1,85 @@
+{
+  "pods": {
+    "vault": {
+      "implementation": "example.signer/vault",
+      "eager": false
+    },
+    "generator": {
+      "implementation": "example.signer/generator",
+      "eager": false
+    },
+    "signer": {
+      "implementation": "example.signer/signer",
+      "eager": false
+    },
+    "map": {
+      "implementation": "example.signer/map",
+      "eager": false
+    },
+    "tester": {
+      "implementation": "example.signer/tester",
+      "eager": false
+    },
+    "log": {
+      "implementation": "example.signer/log",
+      "eager": false
+    }
+  },
+  "runtimes": {
+    "signer": {
+      "pods": [
+        "vault",
+        "generator",
+        "signer",
+        "map"
+      ],
+      "subscriptions": [
+        {
+          "kind": "call",
+          "from": "generator",
+          "to": "vault"
+        },
+        {
+          "kind": "call",
+          "from": "signer",
+          "to": "vault"
+        },
+        {
+          "kind": "pipe",
+          "from": "vault",
+          "source": "example.signer.Vault/keys",
+          "to": "map",
+          "target": "example.signer.KeyFormatter/format"
+        }
+      ]
+    },
+    "signer-client": {
+      "pods": [
+        "generator",
+        "signer",
+        "map",
+        "tester",
+        "log"
+      ],
+      "subscriptions": [
+        {
+          "kind": "call",
+          "from": "tester",
+          "to": "signer"
+        },
+        {
+          "kind": "call",
+          "from": "tester",
+          "to": "generator"
+        },
+        {
+          "kind": "pipe",
+          "from": "map",
+          "source": "example.signer.KeyFormatter/line",
+          "to": "log",
+          "target": "example.signer.Log/append"
+        }
+      ]
+    }
+  }
+}

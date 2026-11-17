@@ -81,3 +81,4 @@ test('chart geometry spans the box and parses values strictly', () => {
   assert.equal(changePct([100, 125]), 25);
   assert.throws(() => scalePoints([1], 10, 10, 0), /at least two/);
 });
+// BACKLOG(9): the needs tests (nextName, unboundLabel, optionsFor) are in retired/test/needs-lib.test.ts.

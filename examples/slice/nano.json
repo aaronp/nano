@@ -1,0 +1,63 @@
+{
+  "pods": {
+    "in": {
+      "implementation": "nano.ui/input",
+      "eager": true
+    },
+    "wait": {
+      "implementation": "nano.ui/debounce",
+      "config": {
+        "quietMs": 10
+      },
+      "eager": true
+    },
+    "up": {
+      "implementation": "nano.ui/map",
+      "config": {
+        "code": "return String(x).toUpperCase()"
+      },
+      "eager": false
+    },
+    "out": {
+      "implementation": "nano.ui/log",
+      "eager": false
+    }
+  },
+  "runtimes": {
+    "main": {
+      "pods": [
+        "in",
+        "wait",
+        "up",
+        "out"
+      ],
+      "subscriptions": [
+        {
+          "kind": "pipe",
+          "from": "in",
+          "source": "nano.ui.Input/submit",
+          "to": "wait",
+          "target": "nano.ui.Debounce/push"
+        },
+        {
+          "kind": "pipe",
+          "from": "wait",
+          "source": "nano.ui.Debounce/flushed",
+          "to": "up",
+          "target": "nano.ui.Map/map"
+        },
+        {
+          "kind": "pipe",
+          "from": "up",
+          "source": "nano.ui.Map/map",
+          "to": "out",
+          "target": "nano.ui.Log/log"
+        }
+      ]
+    }
+  },
+  "modules": {
+    "nano.ui": "../../bundle/nano-ui.js",
+    "example.slice": "./shout.js"
+  }
+}

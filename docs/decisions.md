@@ -1,0 +1,809 @@
+# Decision log
+
+Append-only. One entry per decision: the question, the decision, why, and what it costs if wrong.
+
+## 1. Do op hashes count annotations?
+
+**Decision:** No. `description`, `title`, `examples` and `$comment` are stripped at every depth before hashing, except where a key is a property name (inside `properties`, `patternProperties`, `$defs`). `required` is hashed as a sorted set.
+**Why:** Rewording documentation must never break a wire. Kerits hashes the whole schema; we deliberately differ.
+**Cost if wrong:** Two ops that differ only in documentation share a coordinate; adding an annotation to the hash is a one-line change that re-keys every op.
+
+## 2. How does binary data travel?
+
+**Decision:** As base64 strings with a declared format, never as a refined `Uint8Array`. A schema holding a `Refine` or any function is rejected by `defineSchema` with `<type>: schema is not JSON`.
+**Why:** A refined `Uint8Array` can't be hashed or cross a frame (the `Bytes` finding).
+**Cost if wrong:** A second, in-process-only schema flavour for binary values.
+
+## 3. Do selectors create connections?
+
+**Decision:** Never. A selector only chooses among existing connections.
+**Why:** Keeps every reachable target visible as data in the subscriptions.
+**Cost if wrong:** An implicit-connection mode and a way to record what it made.
+
+## 4. What do selector tags match?
+
+**Decision:** The tags of the target instance, not the consumer's.
+**Why:** Per-consumer roles then need distinct, tagged instances, which stay visible as data.
+**Cost if wrong:** Per-subscription tags added to the document.
+
+## 5. In what order does provisioning resolve a dependency?
+
+**Decision:** For each unsatisfied dependency: exactly one matching existing instance, subscribe to it; otherwise exactly one matching implementation in the registry, create it (recursively, with a cycle check) and subscribe; otherwise leave it unsatisfied. Loading a document never provisions.
+**Why:** Mirrors the dependencies work's resolver; ambiguity is left for the host to offer a choice.
+**Cost if wrong:** A preference or priority rule for several candidates.
+**Superseded by 26:** there is no cycle check; a pass creates first, then wires, so mutual dependencies connect.
+
+## 6. Can a subscription cross runtimes?
+
+**Decision:** No. A subscription lives in one runtime and joins two members of it; to use something from elsewhere, the application places it into the consumer's runtime first. Each hop is policed by the runtime it happens in.
+**Why:** Keeps policy and bookkeeping local and every connection a plain pair in one graph.
+**Cost if wrong:** Cross-runtime coordinates in subscriptions and a joint policy.
+
+## 7. What is Eval?
+
+**Decision:** A code-taking component (its input is code, with the existing consent on load), not a new subsystem. Code snippets as a data dependency are config of that kind.
+**Why:** No new machinery; the component model already covers it.
+**Cost if wrong:** A dedicated code-execution subsystem later.
+
+## 8. Rewrite the old code in place, or build a fresh package?
+
+**Decision:** A fresh package (`packages/nano`) beside the old code.
+**Why:** A clean break without breaking the running host until plan 2 switches it.
+**Cost if wrong:** One package rename.
+
+## 9. Can an implementation have ops outside an interface?
+
+**Decision:** No. Every op belongs to an interface; an implementation provides whole interfaces, and `make` throws `<coord>: missing <iface>/<op>` for any action or sink left without a handler.
+**Why:** Keeps the manifest and selectors one shape: everything on offer is an interface coordinate.
+**Cost if wrong:** A "local interface" helper later.
+
+## 10. What keys an implementation's handlers?
+
+**Decision:** A port: `portKey(ifaceCoord, opCoord)` = `<iface coord>/<op coord>`. `make` returns handlers keyed by port; it throws when an interface is given twice, or given but not declared in `provides`, and checks for missing handlers per interface. `registry.op(coord)` stays keyed by op coord.
+**Why:** An op coord is content-only, so two interfaces with an identical op (`log.write`, `audit.write`) share it; keyed by op coord they would collide, and one interface's handler would satisfy the other's.
+**Cost if wrong:** Routing re-keyed by op coord, and a rule for which interface's handler wins.
+
+## 11. Where does an instance's outgoing call travel?
+
+**Decision:** Through its home runtime's subscriptions, wherever the instance is called from. A pod always hands its handlers the instance's own context (home runtime), never the caller's. So a call subscription whose `from` is a member placed into a runtime (its home is elsewhere) is `broken` there: it can never carry a call (`statusOf` takes the runtime id).
+**Why:** Matches the signer calling the vault at home and a client-side log listening where it was placed; policy for each hop stays in the runtime the hop happens in.
+**Cost if wrong:** A per-runtime context per member.
+
+## 12. Does replacing an instance ask the policy?
+
+**Decision:** Yes. `replace` rewrites every subscription naming the old coord to the new one and asks `policy.isAllowed(from, to, subscription)` for each rewritten subscription before creating anything; the first denial returns `denied` and nothing changes (the old member and its subscriptions stay).
+**Why:** The new coord is a different `dest` (or `src`) as far as a policy is concerned, and the spec says a rewire the policy denies changes nothing; replacing is a rewire of every subscription naming the instance.
+**Cost if wrong:** Drop the check in `replace`; one test changes.
+
+Superseded by 51: a swap keeps every coord, so nothing is rewritten and there is nothing to police.
+
+## 13. Which events do `replace` and `reorder` emit?
+
+**Decision:** `replace` emits `instance-replaced { from, to }`, then `subscription-set` for each rewritten subscription, then any `status` changes — not `instance-added` / `instance-removed`. `reorder` emits `subscription-set` for each subscription in the given list (in the new order); a listener reads the order from `subscriptions()`.
+**Why:** One event per user-visible change; a listener keeping a member list can apply `instance-replaced` directly.
+**Cost if wrong:** A listener that only handles added/removed misses replacements; emit both, or add an order event.
+
+Superseded in part by 51: `swap` emits `pod-swapped { pod, implementation }` (coords are kept, so no subscription is rewritten). The `reorder` part stands.
+
+Superseded in part by 53: the event is `pod-swapped { pod, from, to }`, on the stream of every runtime holding the pod.
+
+## 14. In what order does a runtime list its members?
+
+**Decision:** Create order (`add` order for placed members). `replace` keeps the replaced member's slot: `acme/db/mem#d` → `acme/db/file#d` stays where it was.
+**Why:** Saving relies on it: a saved document lists instances in the order they were made, and a replacement doesn't reshuffle the file.
+**Cost if wrong:** One sort in `members()`, and saved documents reorder.
+
+Superseded by 51: there are no member slots; pods keep create (or place) order and a swap keeps the pod and its coords.
+
+## 15. Can a runtime replace a member whose home is another runtime?
+
+**Decision:** No. `replace` fails `denied` with `<coord>: replace it at its home runtime <home>` and changes nothing.
+**Why:** The home runtime owns the pod and its outgoing calls (decision 11). A replacement made in a guest runtime would leave the home holding the old pod.
+**Cost if wrong:** A cross-runtime replace that goes through the application to the home runtime.
+
+Superseded by 51: `swap` acts only at the pod's home; elsewhere it is `denied` (`<pod>: swap it at its home runtime <home>`).
+
+## 16. Does a member remember its config?
+
+**Decision:** Yes, `Member.config` is the config the instance was created with. `replace` carries it over unless `opts.config` is given.
+**Why:** Saving writes it (Task 9), and a replacement of the same kind (a newer version) usually wants the same settings.
+**Cost if wrong:** Replacements that need a fresh config must pass one explicitly.
+
+Superseded by 51: config lives on the pod record; `swap` keeps it unless `opts.config` is given.
+
+## 17. Where does `ctx.publish` deliver?
+
+**Decision:** In every runtime the instance is a member of (home and every runtime it was `add`ed to), each runtime delivering to its own live event subscriptions under its own policy and books. Runtimes register with the pod on `create`/`add`/`replace` and leave on `remove`/`replace` (a runtime-layer `WeakMap<Pod, Set<Deliver>>`, so no application is needed). Once the instance is gone from its home runtime, its publishes go nowhere. `ctx.publish` awaits every delivery, so a slow listener holds the publisher up and can push the publishing handler toward its own timeout.
+**Why:** The ruling: an instance calls out at home but publishes into every runtime it belongs to — a client-side log listens where it was placed.
+**Cost if wrong:** Restrict delivery to the home runtime; one test changes.
+
+Superseded in part by 48: the publish registry is the pod record's `holders`, not a `WeakMap`; a runtime joins on `create`/`add` and leaves on `remove` (a swap keeps it).
+
+## 18. Which ports does `ctx.publish(op, data)` publish on?
+
+**Decision:** Every source port of the instance whose op coord equals `op.coord` (normally one). Data that fails the op's output schema, or an op that is none of the instance's sources, is dropped and observed as an `exception` (`op` = the op coord); `publish` never throws. It resolves once every delivery on every port has settled (decision 17).
+**Why:** Keeps the `publish(op)` signature while handlers and event ends are keyed by port; two interfaces offering the identical source both emit it.
+**Cost if wrong:** A `publish(iface, name)` form that names the port.
+
+Superseded in part by 53: a dropped publish is a `failure { coord, reason }` on the stream, not an `exception` observation.
+
+## 19. What do a subscription's books count?
+
+**Decision:** Messages actually delivered over it — client calls and event deliveries — with the last result. A message the policy denies is neither delivered nor counted. `books(id)` is `{ calls: 0 }` for a subscription with no traffic, `undefined` for an unknown id, and unsubscribing drops the books.
+**Why:** The runtime reports exactly the connections carrying traffic; a denial is not traffic.
+**Cost if wrong:** A `denied` counter beside `calls`.
+
+## 20. What if the `fn` given to a verb throws?
+
+**Decision:** That connection's result is `threw` with reason `<target coord>: <message>`; the verb applies its cardinality as for any fail (`all` lists it, `fallback` moves on). Verbs never reject.
+**Why:** Platform failures are NanoResult fails, never thrown; one bad call in a fan-out must not lose the others' results.
+**Cost if wrong:** Let it propagate; the handler's pod still turns it into `threw`.
+
+## 21. What client does a plain-data selector get?
+
+**Decision:** Built per target from the target's own interfaces whose coord is `implements` (every interface it provides when `implements` is absent; on a name clash the first wins). An interface or `sel(I, …)` selector always uses the caller's interface, so the client is typed and a missing op is `unknown-op`.
+**Why:** Plain data carries no ops; the target's interface is the only shape at hand.
+**Cost if wrong:** Look the interface up in the registry by `implements` instead.
+
+## 22. What if a policy throws while a message is checked?
+
+**Decision:** The message is denied (`denied`, reason `policy threw: <message>`) and observed as an `exception` from the sender, with `op` the port the message was going to. A verb gets that fail; `publish` still resolves.
+**Why:** Platform failures are fails, never thrown; one runtime's broken policy must not reject another runtime's publish.
+**Cost if wrong:** Treat a throwing policy as approving; one test changes.
+
+Superseded in part by 53: the message is `sent` then `denied`, and the throw is a `failure { coord: <sender>, reason }` on the stream.
+
+## 23. Which subscription does a call in flight get booked on?
+
+**Decision:** Only the exact subscription it went over, if that subscription is still there unchanged when the call settles. Unsubscribed, retargeted or rewritten by `replace` meanwhile, the call is not booked (a new subscription that reuses the id starts at `{ calls: 0 }`).
+**Why:** Books describe what each current connection carried; a call to the old target is not traffic on the new edge.
+**Cost if wrong:** Book on the id regardless; a retarget shows calls its new target never saw.
+
+## 24. Does `create` provision by default?
+
+**Decision:** No: only with `{ provision: true }`. Without it, `unsatisfied` lists every dependency with no live connection, each with reason `not provisioned`, and nothing is made or subscribed.
+**Why:** Loading a document never provisions, and a host that creates what a user picked should opt in to the runtime making more.
+**Cost if wrong:** Flip the default; hosts that want plain creates pass `provision: false`.
+
+## 25. Provisioning when several existing members match
+
+**Decision:** The dependency is left unsatisfied with `<n> match` (n members); no implementation is made even if exactly one matches.
+**Why:** Two candidates already present is a choice for the user (the host may offer it); making a third hides that choice.
+**Cost if wrong:** Fall through to the implementation rule; one test changes.
+
+## 26. Provisioning: create first, then wire; calls wait for the pass
+
+**Decision:** A provisioned create is one pass. Every instance the pass makes is instantiated and joins the runtime at once; then its unmet dependencies are settled by the usual rule (one matching member → subscribe; several → `<n> match`; none → exactly one matching implementation → make it, in the same pass, then subscribe; else unsatisfied). A new instance is made only when no member matches, and once made it matches, so a pass makes each implementation at most once and mutual dependencies connect both ways (A ↔ B, or R → A → B → C → B). Until the pass finishes, calls and deliveries into or out of its instances (from handlers, or from instances outside the pass) wait for it, then proceed normally. `make` is construction, not use: a verb or publish through `ctx` while that instance's `make` is still running fails at once with `missing-component` (`<instance>: dependencies are not available while it is being made`). `all`/`each` give `[]`, `optional` gives that fail rather than none, and a publish is dropped and observed. It never waits, so a `make` cannot deadlock on its own pass. A depth limit (the registry's implementation count) is a safety net with reason `provisioning too deep`; it should be unreachable. Generated ids are `<last coord segment>-<first free n>`, skipping ids held, reserved by creates in progress, or taken elsewhere (`idTaken`).
+**Why:** Calls are late-bound through the runtime, and an instance is never handed another instance, so a mutual dependency is legitimate. Wiring after everything exists is what makes it work, and waiting keeps the half-wired state invisible to callers.
+**Removed:** the earlier cycle detection (`cycle: a → b → a` reasons, cycle paths failing nested creates) and the `cycle` fail type.
+**Cost if wrong:** Reinstate the creation-stack cycle check; mutual dependencies then stop at a reported cycle.
+
+## 27. What if a policy throws while a subscription is checked?
+
+**Decision:** As decision 22 for messages: the rewire (`subscribe`, `retarget`, `reorder`, `replace`, or a subscription provisioning makes) is denied with reason `policy threw: <message>` and nothing changes; it is observed (if the runtime has an observer) as an `exception` from the subscription's `from`, with `op` the subscription id.
+**Why:** No runtime call rejects because of user code.
+**Cost if wrong:** Let it throw; callers must guard.
+
+Superseded in part by 53: the throw is a `failure { coord: <from>, reason }` on the stream.
+
+## 28. What does placing an instance check, and what does the receiving runtime hold?
+
+**Decision:** `place(instance, from, to)` fails `not-found` unless `from` holds the instance and `to` exists; then `to`'s policy approves `isAllowed(<from runtime id>, <to runtime id>, <instance coord>)` (a throw is `denied` with `policy threw: <message>`), and `to.add({ coord, pod, home })` with the instance's real home (so placing a placed instance keeps its home). `from` emits nothing; `to` emits `instance-added` with that home. The same pod serves both runtimes.
+**Why:** The runtime receiving something polices what enters it; one pod keeps one instance, and its calls out still go through its home (decision 11).
+**Cost if wrong:** A policy check on the sending side too; one more `isAllowed` call.
+
+Superseded in part by 51 and 53: `place(pod, from, to)` takes a pod id and adds the home's record itself, not a copy; the policy is asked with the pod id; the receiving runtime emits `pod-created` and each instance's state.
+
+## 29. What happens to placed copies when an instance leaves its home?
+
+**Decision:** Removing an instance at its home removes it from every runtime of the application it was placed into (each emits `instance-removed`, unregisters its publish delivery, and its subscriptions to it go `waiting`). Removing it from a runtime it was placed into touches only that runtime.
+**Why:** The home disposes the pod; a guest holding a disposed pod would show a live connection that can only fail.
+**Cost if wrong:** Guests keep a dead member; calls into it fail `not-found … is disposed`.
+**Superseded in part by 49:** its subscriptions are deleted, not left waiting.
+
+## 30. Does a call in another runtime wait for the home's provisioning pass?
+
+**Decision:** Yes. A runtime made by the application consults every runtime's own unfinished passes (`Runtime.settling(coord)`; instance ids are unique, so only the home can have one) through `RuntimeOpts.settling`, so a call routed in a guest into or out of a placed member mid-pass waits for that pass, as at home (decision 26).
+**Why:** The half-wired state of a pass must be invisible to callers wherever they call from.
+**Cost if wrong:** Guests see the half-wired instance; their calls may fail `missing-component` during a pass.
+**Updated by 48:** pod ids are unique across the application (instances are `<pod>#<n>`), so only the pod's home can have a pass for a coord.
+
+## 31. In what order is a defined runtime opened?
+
+**Decision:** `open(id)` returns an opened runtime as it is (a concurrent open gets the same promise). A defined one is built: its own instances first (`provision: false`, create order), then the runtimes its members come from are opened (one currently being opened is skipped), then its members are placed, then its subscriptions added (they may wait). A member whose home fails to open, or that cannot be placed (denied, or not held there), is skipped with the note `<runtime>: member <coord> skipped: <reason>` on `app.notes()` and the open goes on; subscriptions to it wait (decision 47). Any other failure is returned as the `NanoResult` fail; the runtime is taken down again (its members removed, it is no longer opened, its definition stays), while runtimes opened on the way stay open. An undefined, unopened id fails `not-found`.
+**Why:** Creating its own instances before opening others makes mutual placement work: when A's members come from B and B's from A, B (opened while A is opening) can already place A's instances. The plan's order (homes first) would fail that case with `not-found`.
+**Cost if wrong:** Swap two loops; mutually placing runtimes then fail to open.
+
+Superseded by 52: `open` is `start`, which always gives a runtime; only a throw takes it down.
+
+## 32. Which instance ids are taken in an application?
+
+**Decision:** Any id held by a member of the root or any child runtime, and any id a defined but unopened runtime declares among its instances. Applies to creates (and provisioning's generated ids) in runtimes the application makes.
+**Why:** Instance ids are unique across the application (ruling), including runtimes opened later on demand; otherwise opening a saved runtime could fail on an id created meanwhile.
+**Cost if wrong:** Opening a runtime can fail `exists`.
+
+Superseded in part by 48: pod ids, not instance ids, are unique across the application (an instance coord `<pod>#<n>` follows from its pod's).
+
+## 33. What does the application share with adopted children, and what does `runtimes()` list?
+
+**Decision:** `createRuntime` and `open` make children that share the application's registry, tags and id check; an adopted runtime (another application included) keeps its own registry, tags and ids, and only its id must be free. `place` works between the root and direct children (adopted ones included, as they are runtimes); runtimes inside an adopted application are out of reach (placing across nested applications is out of scope). `runtime(<application id>)` gives the root; `runtimes()` lists child ids, opened and defined, not the root. Defined runtimes always use the allow-all policy (the only saved policy). The id check and the pass wait (decision 30) cover the root and direct children only: the children of an adopted application are not consulted (out of scope with placing across nested applications).
+**Why:** Nesting is adoption only (ruling); the root is the application itself.
+**Cost if wrong:** A cross-application place that walks nested applications.
+
+Updated by 52: `open` is `start`.
+
+## 34. What happens to placed copies when an instance is replaced at its home?
+
+**Decision:** Every runtime it was placed into follows: on the home's `instance-replaced`, the application calls `rehome(from, newMember)` on each runtime whose member `from` has that home. The new coord and pod take the old member's slot (create order holds), publish delivery moves to the new pod, the runtime emits `instance-replaced`, and its subscriptions are rewritten from → to under its own policy. If that policy denies the rewrite, the member is still swapped but its subscriptions stay on the old coord (now `waiting`) and `rehome` returns the denial, which the application records on `app.notes()` as `<runtime>: following <from> -> <to>: <reason>`. Replacing with the same implementation keeps the coord: guests swap to the new pod (the `exists` check skips `next.coord === from`). `rehome` refuses a member whose home is this runtime (`denied`: replace it there). The instance's tags move to the new coord.
+**Why:** The home disposes the old pod; a guest must not keep it. Each runtime polices its own rewires (decision 27), so a guest can refuse the new implementation without the home being blocked.
+**Cost if wrong:** Guests drop the member instead and the person reconnects by hand.
+
+Superseded by 48: a placed pod is the home's record, so a replacement keeps every coord and there is nothing to rewrite or refuse.
+
+## 35. Opens that overlap
+
+**Decision:** Each open carries its chain (the runtimes it is opening, outermost first). Building a runtime, a home on this chain is skipped (it made its instances already, decision 31); a home being opened by another, independent open is waited for until its own instances exist (not until it is fully open: two overlapping opens of runtimes placing into each other would wait on each other forever); any other home is opened in full. `open` never rejects: a throw while building fails `threw` (`opening <id>: <message>`) and the runtime is taken down. Taking a failed runtime down removes everything placed into it.
+**Why:** Skipping every runtime being opened made `Promise.all([open('signer'), open('client')])` fail `not-found` for the client, whose members signer had not made yet.
+**Cost if wrong:** An open may resolve while a home another caller is opening is still adding its subscriptions; that caller's own `open` tells when it is done.
+
+Superseded by 52: the same rules under `start` (`starting <id>: <message>` for a throw).
+
+## 36. Definitions and tags keep ids and coords tidy
+
+**Decision:** `define` fails `exists` (`instance id <id> is taken`) when one of its instances' ids is already taken in the application (decision 32). An instance's tags are dropped once it is gone from every runtime (removed at home); removing it from a runtime it was placed into keeps them.
+**Why:** Ids are unique across the application, definitions included; tags keyed by a coord no runtime holds would reattach to an unrelated instance created later with that coord.
+**Cost if wrong:** A clash surfaces only at `open`; stale tags on reuse.
+
+Updated by 52 and 53: `define` fails `exists` with `pod id <id> is taken`; tags are dropped on an instance's `stopped` event once no runtime holds it.
+
+## 37. Does a round trip keep how a runtime's own instances and placed members interleave?
+
+**Decision:** No. The v2 document keeps a runtime's own instances in create order and its placed members in placing order, as two lists; on load its own instances come first (decision 31), then its members. Everything else round-trips: own instances with config, placed members with home, subscriptions (ids, order, status) and tags. Pinned by `document.test.ts` "a round trip gives the same runtimes, …".
+**Why:** The brief's `RuntimeDef` has separate `instances` and `members`; create order matters for creates and replacing, not for placed copies.
+**Cost if wrong:** An `order` list of coords per runtime in the document.
+
+Superseded by 52: the lists are `pods` (with indices and `next`) and `members` (pod ids); the interleaving is still not kept.
+
+## 38. How is the application's own root runtime saved and loaded?
+
+**Decision:** Saved as a runtime under the application's id, only when it holds members or subscriptions, and listed first in `open`. `loadDoc(doc, { registry, policy?, id? })` builds the application with `id` (default `app`); a saved runtime with that id is the root: its instances are created (`provision: false`), its members' homes opened and placed, its subscriptions added, before the rest of `open`. Saved under another id, the root loads as an ordinary child runtime (opened, since it is in `open`). Pinned by "the root is saved under the application id only when …" and "a root saved under another id loads as a child runtime, opened".
+**Why:** The document has no application id; a mismatch should lose nothing.
+**Cost if wrong:** An `application` id field in the document.
+
+Updated by 52: the root's own pods are created at their saved indices, members are pod ids, and the document's `open` is `start`.
+
+## 39. Which runtimes and policies does `saveDoc` write?
+
+**Decision:** Every child runtime, opened (read from live) or only defined (its definition, unchanged), in `runtimes()` order; adopted runtimes are skipped (`Application.adopted(id)`), and members placed from them then load with a `has no home` note. `open` lists the opened ones. `Policies.allowAll()` now returns one shared policy, so a runtime using it is saved with `policy: 'allow-all'`; a runtime with any other policy is saved without the field and loads with allow-all (known limitation: custom policies are not data yet). `providers` are the providers of the implementations of every saved instance, sorted; `tags` are the coords held by saved runtimes with at least one tag. Pinned by the `saving and loading` tests in `document.test.ts`.
+**Why:** Adopted runtimes keep their own registry and ids (decision 33); fine-grained policies are a non-goal.
+**Cost if wrong:** Saving adopted applications as nested documents; a policy schema.
+
+Updated by 52: `open` is `start`; `providers` are those of every saved pod; `tags` cover every instance of the saved pods (`#1` and up too).
+
+## 40. What does `loadDoc` do with a document that does not fully fit?
+
+**Decision:** It never throws or rejects. An invalid document (per `checkDoc`) gives an empty application and the reason as the only note. Otherwise each problem is skipped with a note and the rest loads: `provider <coord> is not registered` (note only); `<runtime>/<id>: no implementation <coord>` (instance dropped); `<runtime>: member <coord> has no home <runtime>` (member dropped: its home is not in the document, is the runtime itself, or does not hold that instance after the drops above); `<runtime>/<sub id>: <reason>` (subscription dropped: invalid shape or a repeated id); `<runtime>: <reason>` when a runtime cannot be defined (it is not opened either) or fails to open (it stays defined); `<runtime>: member <coord> skipped: <reason>` when a member's home fails to open while opening (from `app.notes()`, decision 31); `<runtime>: saved with a custom policy; loaded with allow-all` for every runtime saved without `policy` (the root only when no `policy` is given to `loadDoc`); `load: <message>` for anything thrown. Subscriptions whose ends were dropped stay, `waiting`. `checkDoc` answers `not a nano v2 document` unless `nano` is 2, else the first schema error as `<path>: <message>`. Pinned by the `loading what does not fit` and `checkDoc` tests.
+**Why:** A document written by another registry or an older build should open as far as it can, with each loss visible.
+**Cost if wrong:** Refuse the whole document on the first problem.
+
+Updated by 52: notes name pods, not coords: `<runtime>/<pod>: no implementation <coord>`, `<runtime>: member <pod> has no home <runtime>` (also when the home does not hold that pod), `<runtime>: member <pod> is repeated`, `<runtime>: member <pod> skipped: <reason>`. A start's own skips (`<runtime>/<pod>: <reason>`, `<runtime>/<sub id>: <reason>`) arrive through `app.notes()`.
+
+## 41. One id rule, enforced where things are made
+
+**Decision:**
+- One rule, `ID = /^[^/\s#\x00-\x1f\x7f]{1,64}$/`, exported from `runtime/members.ts`. It applies to runtime, instance and subscription ids.
+- Where it is enforced:
+  - `createRuntime` throws `bad runtime id` (it is a factory, like `iface`). This covers `createApplication`.
+  - `Application.createRuntime` fails `invalid-input`.
+  - `Runtime.create` fails `invalid-input`.
+  - `subscribe` fails `invalid-input` for a caller-chosen id.
+  - `parseInstance` accepts only coords whose id fits the rule, so subscription ends and placed members follow it.
+- Provisioning cuts a generated id's base to 50 characters.
+- `define` checks the definition against `RuntimeDefSchema`, the document's own runtime schema, which now lives in `application.ts`, and refuses a config that is not JSON.
+- `Runtime.create` and `replace` refuse a config that is not plain JSON (`isJson` in `schema.ts`).
+- The document schema reuses these constants.
+
+Pinned by the "only what the document can hold is made" tests in `document.test.ts`.
+**Why:** The application should only be able to hold what its document can hold, so `checkDoc(saveDoc(app))` cannot fail on ids or configs.
+**Cost if wrong:** Saving produces documents that refuse to load.
+
+Updated by 48 and 51: `ID` lives in `runtime/pods.ts` and covers pod ids; `swap` (not `replace`) refuses a config that is not JSON.
+
+## 42. Loading: repeated members, held tags, copied configs
+
+**Decision:**
+- A member repeated in one runtime is loaded once, with the note `<runtime>: member <coord> is repeated`.
+- `loadDoc` applies tags only to coords held after loading (by an opened runtime or declared by a defined one), so a dropped instance's tags are not kept.
+- `saveDoc` deep-copies configs from opened runtimes and from definitions, so changing the document never changes what runs.
+
+Pinned by the matching tests in `document.test.ts`.
+**Why:** A repeated member otherwise failed the whole runtime's open. Stale tags would attach to a later instance with that coord (decision 36). A shared config would let an edit to a saved document reach a running instance.
+**Cost if wrong:** Runtimes fail to open; tags appear on the wrong instance; configs change unseen.
+
+Limits: `define` enforces the per-runtime ones (500 instances or members, 2000 subscriptions) through `RuntimeDefSchema`; only live creation (`create`, `place`, `subscribe`, `createRuntime`) and the 50-runtime document limit are unenforced. An application past them saves a document that `checkDoc` refuses.
+
+Superseded in part by 53 and 54: live creation is capped at 500 instances per runtime and 5000 across the application; `place`, `subscribe`, `createRuntime` and the 50-runtime limit are still unenforced.
+
+## 43. External signer: where do the map and the log live?
+
+**Decision:** The vault and the map live in `signer`; the log lives in `signer-client`. `vault.keys → map.format` is an event subscription in `signer`; the map is placed into `signer-client`, where `map.line → log.append` is an event subscription. The vault is never placed anywhere.
+**Why:** Event subscriptions stay within one runtime (decision 6), and an instance publishes into every runtime it is a member of (decision 17). Placing the map, not the vault, keeps the vault private to `signer` while the client still sees a formatted view of what it stores; the log stays in the client, as in the spec's walkthrough.
+**Cost if wrong:** Place the vault into the client (exposing `create` and `sign-with` there) or move the log into `signer`; one example changes.
+
+## 44. Examples: how are the dependencies wired?
+
+**Decision:** The external signer uses provisioning (`create(…, { provision: true })`): the generator and signer find the one vault beside them, and in `signer-client` the tester finds the placed generator and signer, because they are placed before the tester is created. The messenger subscribes explicitly, with named ids (`inbox-store`, `composer-messaging`, `messages-inbox`), since plugging in and unplugging is what it demonstrates. Event subscriptions are always explicit (provisioning only makes call subscriptions).
+**Why:** One example of each: provisioning is what a host does when a person adds a widget; explicit subscriptions are what the person does when plugging in, and named ids read better in `nano.json` and in `unsubscribe`.
+**Cost if wrong:** None to the model; the examples change.
+
+Updated by 55: ends a person chooses are connected with selectors (`connect`); provisioning stays where it was.
+
+## 45. Examples: how does a test call into an instance from outside the graph?
+
+**Decision:** A known gap, test-only: the example tests call `rt.member(coord)!.pod.invoke(portKey(iface.coord, op.coord), input)` (their `press` helper). It skips the runtime's policy, its books and the provisioning-pass wait, so it is not how a host should call in. The planned fix (plan 2) is a host-side invoke through the runtime, policed and booked like any other message. To see what a source publishes, a test subscribes a probe sink whose input is `Type.Unknown()` (it fits any source, `fits`).
+**Why:** There is no caller instance outside the graph and no host-side invoke yet; calls between instances only travel through subscriptions.
+**Cost if wrong:** A host built on `pod.invoke` would let button presses past policy and leave them out of the books.
+
+Updated by 48: the helper is `rt.record(pod)!.instances.get(coord)!.host!.invoke(…)`; the gap stands.
+
+## 46. External signer: who makes the keys?
+
+**Decision:** The vault. `Vault.create({ count, purpose })` makes Ed25519 key pairs inside the vault (private keys non-extractable) and returns only the public keys; `KeyGenerator.create-keys` asks the vault to do it. The vault has no `store`.
+**Why:** Private keys must never travel in messages: messages are observed and visible to policy, and a `store` would let any caller inject keys. This is also the shape the passkey and other-origin variants need, where the keys never leave their holder.
+**Cost if wrong:** An import action on the vault, guarded by policy, for keys made elsewhere.
+
+## 47. Whole-branch review: what the application notes, and smaller rulings
+
+**Decision:**
+- The application keeps `notes()`: what it skipped or could not follow, oldest first: a member an open skipped (decision 31), and a guest whose `rehome` failed (decision 34). `open` keeps its `NanoResult<Runtime>` contract; `loadDoc` appends `app.notes()` to its own notes.
+- `createHostPod` gives `make` the handler timeout: a `make` that does not settle fails `timeout`; a late settle is ignored and its handlers never used.
+- `define` stores its own copy, and `definition()` returns a copy. It rejects an instance id repeated within the definition (`exists`, `instance id <id> is repeated`).
+- `saveDoc` writes an unopened definition with `policy: 'allow-all'`: it opens with allow-all whatever it says, so the custom-policy note on load (decision 40) is only for runtimes that really had one.
+- A message waiting for a provisioning pass whose subscription is gone when the pass ends fails `not-found` and is not delivered.
+
+Pinned by the matching tests in `application.test.ts`, `document.test.ts` and `pod.test.ts`.
+**Why:** Each was a silent loss: a guest kept a disposed pod (same-implementation replace), one bad home failed every runtime placing from it, a hung `make` hung its creator, an edit to a definition changed what opened later.
+**Cost if wrong:** Notes are unbounded (a drain or cap later); an open that should fail on a missing member needs a strict flag.
+
+Superseded in part by 52: `open` is `start`, and it fails only for an unknown id or a throw.
+
+## 48. Pods in the runtime (pods revision, task 1)
+
+**Decision:**
+- A runtime holds **pod records** `{ id, implementation, config, home, next, instances, holders }` (`runtime/pods.ts`, which replaces `members.ts`). Instance coords are `<pod>#<n>`; `parseInstance` gives `{ pod, index }` and accepts only a pod id under the id rule (decision 41) and an index without leading zeros. `create` fails `invalid-input` on a bad pod id or a `count` that is not a whole number from 1.
+- `create` holds the pod before it awaits anything: the id is taken and its instances are `starting`. A `make` that throws or times out leaves that instance `failed` and the create succeeds; only validation fails it (unknown implementation `not-found`, taken id `exists`, bad config `invalid-input`). This overturns two runtime tests: "a pod that cannot be made fails threw and adds nothing" (now: created, failed) and "an id taken elsewhere while the pod was being made fails exists" (the id is now held from the call, so that race cannot happen; the re-check after the await is gone, and the test pins that a second create of the id fails while the first is still making).
+- An end whose instance is not `running` makes a subscription `waiting`. Every runtime holding a pod is one of its `holders` (its publish delivery and a status refresh); an instance's state change refreshes them all.
+- Placing shares the record, not a copy. The publish registry is the record's `holders` (was a `WeakMap<Pod, Set<Deliver>>`, decision 17); a context publishes only while its own host is still the instance's. The pass wait stays keyed on instance coords, now `<pod>#<n>`.
+- `replace(pod, implementation, opts)` remakes every instance of the pod off to the side, then swaps them all at once; any make failing changes nothing. Coords are kept, so no subscription is rewritten or re-policed, tags stay, and guests see the new implementation through the shared record. `rehome` is gone (decision 34 superseded) and `instance-replaced` is now `pod-replaced { pod, implementation }`. The application tests on rewrites a guest's policy denies, and on `rehome` itself, are deleted; the rest are kept on the new coords.
+- `remove(pod)` takes a pod id: at home the instances are disposed and `stopped`; placed, only the membership goes. Subscriptions to it still wait (the cascade comes with removal in a later task). *Superseded in part by 49:* they are deleted.
+- `members()`/`member()` are replaced by `pods()`, `pod(id)` (a `PodInfo`), `instances()` and `record(id)` (the live record, for placing, and for the examples' test-only `press`, decision 45). `PodInfo` carries `home`, so the pods test "reports its implementation, config, count, state and instances" now expects `home: 'app'`.
+- Provisioning names a made pod `<last segment>-<first free n from 1>` and subscribes to its `#0`. It matches instances whatever their state, so a failed match still gets a subscription; when that subscription is not live the role is unsatisfied with `subscription <id> to <coord> is <status>` (Review Focus 5). With `count` above 1 every instance is provisioned. The old test "a nested create that fails leaves the role unsatisfied with its reason" became that case.
+- For the tests this task turns green: `addInstance(pod)` (the next index, home only) and a minimal `connect` (a `{ pod }` target, by `first` — the lowest running index — or `index`). The connecting task brings the other targets, tags and the `2 match` rule.
+- Until the application starts pods: `RuntimeDef` keeps its shape, each `instances` entry is a pod with one instance, `members` and subscriptions name `<pod>#<n>` coords, `place(coord, from, to)` places that coord's pod, and saving writes a placed pod by its first instance. A pod's count is not saved yet. Pod ids are unique across the application. A home whose pod's make fails now opens with that pod failed, so the member is placed and subscriptions to it wait (the application test changed accordingly).
+- Events keep today's channel (ruling): `instance-added`/`instance-removed` per instance, in the runtime that acted; no state-change events until the one stream.
+
+**Why:** The spec: a pod owns its instances, their states and their lifecycle; a failing make never fails its runtime; coords are deterministic and survive a swap. Sharing the record makes "placed without copying" literal and removes the follow-the-home machinery.
+**Cost if wrong:** Guests can no longer refuse a new implementation by policy; a guest that must would need a per-runtime veto on `pod-replaced`.
+
+Superseded in part by 51: `replace` is now `swap` and `pod-replaced` is `pod-swapped`.
+
+## 49. Removal cascades; unavailable waits (pods revision, task 2)
+
+**Decision:**
+- Removing an instance or pod **deletes** every subscription naming the removed coords, in every runtime holding the pod (each emits `instance-removed`, then `subscription-removed` per subscription). Removing at home also evicts the pod from guests; removing from a guest only drops that runtime's membership and its subscriptions to it. Supersedes decision 29's "its subscriptions to it go `waiting`".
+- An **unavailable** end (instance `failed`, `stopped` or `starting`) still makes the subscription `waiting`; it goes `live` when the instance runs again. Only removal (the end is gone) deletes.
+- `scale(pod, count)` (0 to 500: a pod with no instances is `stopped`, as after `removeInstance` of its last; `create` stays 1 to 500; the same cap on `create`, `invalid-input` above) removes the highest indices going down and adds at `next` going up; indices are never reused. `removeInstance` and `restart` act at home only (`denied` elsewhere; unknown `not-found`). `restart` remakes in place, only a `failed` or `stopped` instance (else `invalid-input`: a second start would leak the first host); a failing make returns `threw` and the instance stays `failed`.
+- A failed make keeps its reason on the instance (`PodInfo.instances[].reason`) and reports an `exception` observation (`op: 'make'`) through the existing `observe` option; Task 6 moves it to the event stream.
+
+- A pod removed during its provisioning pass stops being made and wired: nothing subscribes to its coords afterwards.
+- `addInstance`/`scale` up emit `instance-added` in every holder, like removal.
+
+**Why:** The spec: unavailable is temporary and a connection should wait for it; deleted is final, and a subscription to a coord that will never be reused only misleads.
+**Cost if wrong:** A caller wanting "reconnect on re-add" must resubscribe; scaling down silently deletes the subscriptions of the highest instances.
+
+Superseded in part by 53: removal and adds are `instance` state events (`stopped`; `starting`), a cascade is `subscription-removed { reason: 'cascade' }`, and a failed make is the `instance` event `failed` with its reason (no separate failure).
+
+## 50. Connect: end selectors resolved once (pods revision, task 3)
+
+**Decision:**
+- `resolveEnd` (`runtime/connect.ts`) is pure over the runtime's pods (own and placed) and `tagsOf`, and never throws: a non-object `target`/`instance`, an unknown target kind or `by`, or non-string tags are `invalid-input`. None matching is `not-found`, several `not-unique` (`<n> match`, listing the coords). Hits are counted across all matching pods: `first` yields the lowest running instance of each pod, `index` the coord index, `tags` every tagged instance. A guest runtime's `implements`/`implementation` targets consider placed pods as well as its own.
+- `subscribe` with a concrete end fails `not-found` when the end's pod is in this runtime, its index is below the pod's `next` and the instance is missing (definitely deleted: indices are never reused). A coord whose pod is absent, or whose index is at or above `next`, is still accepted and waits (loading and later creation rely on that), as do unavailable instances.
+
+**Why:** A selector means "pick one now"; a coord is a promise about the future.
+**Cost if wrong:** A pod removed and its id reused can pick up a hand-made subscription made while the pod was absent; closing that needs pod tombstones. A typo'd coord for an absent pod waits forever.
+
+## 51. Swap in place (pods revision, task 4)
+
+**Decision:**
+- `Runtime.swap(pod, implementation, opts?)` replaces `replace`, at home only (`denied` elsewhere, unknown `not-found`). Coords, tags and subscriptions are kept; config is replaced when `opts.config` is given, else kept. Every instance is made off to the side; the old instances serve until all are made, then all switch at once and every runtime holding the pod recomputes its statuses (a subscription whose port the new implementation lacks is `broken`). Any make failing changes nothing. The event is `pod-swapped { pod, implementation }` (Task 6 folds it into the one stream).
+- An instance added while a swap is pending is made with the new implementation too: the swap keeps making until every current instance has a new host, then switches. If the instance's own (old-implementation) start finishes after the switch, its host is dropped.
+- Calls already inside an old instance finish there with its result; calls after the switch reach the new one. Disposing a host only refuses new calls, so disposing it at the switch is "disposed once its in-flight calls settle"; no in-flight tracking is needed while dispose has no teardown of its own (a sandboxed host with one would have to wait).
+- `Application.place(pod, from, to)` takes a pod id and adds the same record to `to`. *(Until decision 52 an instance coord also stood for its pod; now only a pod id.)* Removing at home deletes the pod's subscriptions and membership in every runtime holding it (decision 49), now pinned with two guests.
+- *(Task 5 fold-ins.)* Concurrent swaps: the **last asked wins**. Each pod keeps a swap generation; a swap overtaken by a later one disposes what it made, changes nothing and fails `invalid-input` (`<pod>: superseded by a later swap`), whether it finishes before or after the later one.
+- A swap revives failed instances: each one is made again with the new implementation and is `running` after the switch (its reason cleared).
+- An old handler still in flight after the switch may publish, but those publishes are dropped: a context publishes only while its own host is still the instance's (decision 48).
+
+**Why:** The spec: a swap keeps coords and never makes a subscription wait; placed pods are swapped once, at home, and every runtime sees it through the shared record.
+**Cost if wrong:** A swap that should only reach some instances (a canary) needs a per-instance swap; a host with real teardown needs dispose to wait for in-flight calls.
+
+Superseded in part by 53: `pod-swapped { pod, from, to }`, told to every runtime holding the pod.
+
+## 52. Start, definitions of pods, and saving indices (pods revision, task 5)
+
+**Decision:**
+- `Application.start(id)` replaces `open` (removed). Starting always gives a runtime: its own pods are created first (`provision: false`, at their saved indices), a pod whose make fails is `failed` and subscriptions to it wait; a pod that cannot be made at all (unknown implementation, bad config, id taken) is skipped with the note `<runtime>/<pod>: <reason>`; a member whose home fails to start or cannot be placed is skipped (`<runtime>: member <pod> skipped: <reason>`); a subscription that cannot be added is skipped (`<runtime>/<sub id>: <reason>`). Notes go to `app.notes()`. `start` fails only for an id neither started nor defined (`not-found`) or a throw while building (`threw`, `starting <id>: <message>`; the runtime is taken down, runtimes started on the way stay). Ordering and overlap are decisions 31 and 35 under the new name.
+- `RuntimeDef = { id, policy?, pods: { id, implementation, config?, instances: number[], next }[], members: { pod, home }[], subscriptions }`. `RuntimeDefSchema` (and so the document) checks indices are whole numbers from 0 to 999 999 999 (at most 500) and `next` from 0 to 10⁹; `define` also refuses repeated indices or one not below `next` (`invalid-input`, via `badIndices`, shared with the runtime).
+- `Runtime.create` takes `instances` and `next` in place of `count`, to restore a saved pod exactly; an empty `instances` gives a `stopped` pod. `saveDoc` writes each pod's live indices and `next`, so a removed index is never reused across a save (Review Focus 4: remove `log#0`, save, load, add → `log#1`). Tags are saved for every instance of the saved pods.
+- The document field `open` is `start` (runtimes to start on load). Members are saved by pod id.
+- `place` takes only a pod id; the receiving runtime's policy is asked with the pod id.
+- Test changes: the two `start` todos in `pods.test.ts` defined pods with `count`; they now use `instances`/`next` (the brief's `RuntimeDef`). `pods.test.ts` placed `vault#0`; it now places `vault`. Removing `// @ts-nocheck` needed type-only edits (typed helpers, `as never` on deliberately malformed selectors). In `application.test.ts`, "a definition that cannot be built fails" and "placed members are removed when an open rolls back" became "is skipped with a note; the runtime starts" (the spec: starting never refuses a runtime).
+
+**Why:** The spec's failure boundaries: starting a runtime from its saved definition always gives a runtime; problems are notes and pod states. Indices are never reused within a pod, which must hold across a save too.
+**Cost if wrong:** A caller wanting all-or-nothing starts needs a strict flag; a document can carry gaps in indices forever (harmless, but visible).
+
+## 53. One observable stream per runtime (pods revision, task 6)
+
+**Decision:**
+- `rt.listen` is the only stream (`runtime/trace.ts`); the runtime's `pod.observe` option and the host pod's `Observation` are gone (`createHostPod` takes `onFailure(reason)`, called when a handler throws or times out). A throwing listener is swallowed; listeners see events in emit order.
+- Lifecycle. `pod-created { pod, implementation }` when a pod is created here **or placed here** (a guest learns of it the same way), followed by one `instance` event per instance with its current state (`starting` on create; whatever it is, with any reason, on place). Every later state change of an instance (`starting`, `running`, `failed` with `reason`, `stopped`) is told to **every runtime holding the pod**, since the record is shared. Removing an instance: `instance … stopped` (it is already gone from `instances()`), then each holder's `subscription-removed { reason: 'cascade' }`, then `status` changes. Removing a pod at home: `stopped` for each instance, then in each holder the cascade, then `pod-removed`. Removing a placed pod in a guest: the guest's cascade, then `pod-removed` (no `stopped`: the instances still run at home). `pod-swapped { pod, from, to }` goes to every holder (before, only the home emitted it), followed by `instance … running` for each instance the swap revived. A failed make is the `instance` event `failed` with its reason; it is not also a `failure`.
+- Wiring. `subscription-removed` carries `reason: 'unsubscribed' | 'cascade'`. `subscription-set` and `status` unchanged.
+- Messages. Ids are a per-runtime counter (`m1`, `m2`, …). `sent { id, subscription, from, to, port, kind }` is emitted once the subscription is found (after any provisioning wait; a message whose subscription went away while waiting is not sent at all), then exactly one of `denied { id, reason }` (policy refused or threw; not booked) or `delivered { id, result, ms }` (the invoke's result, whatever it is: a target not running is `delivered` with its `not-found` fail, 0-ish ms, and not booked). Each publish delivery is its own message, `kind: 'event'`, on the stream of the runtime delivering it. `subscription` is always set today (optional in the type for messages without one).
+- Problems. `failure { coord, reason }`: a handler threw or timed out (`coord` the instance, told to every holder of its pod; the reason is the `threw`/`timeout` fail's reason), a policy threw on a message or a rewire (`coord` the sender / the subscription's `from`), a publish dropped (`coord` the publisher). `warning { reason }`: every application note, **on the application's root stream** (`app.listen`), as it is noted; `app.notes()` stays the log. Every note today is made while a runtime is being started, before anyone can reach that runtime to listen, so the root is the one stream that can see them; the reason already names the runtime. `Runtime.warn(reason)` is how the application emits it.
+- The application no longer removes a pod from guests on its home's removal event (the shared record's holders already do it); it drops an instance's tags on `instance … stopped` once no runtime holds it.
+- Test changes: event assertions in `runtime.test.ts` and `application.test.ts` moved to the new shapes; the guest-swap test now expects `pod-swapped` (it expected no event). `pod.test.ts` lost "every invoke is observed once", "an unknown port still ends with one message observation" (message tracing is the runtime's now, pinned in `trace.test.ts`), and its failure tests assert reasons via `onFailure`.
+- *(Task 5 hardening.)* A runtime holds at most `MAX_INSTANCES` = 500 instances of its own pods (placed pods count at home): `create` (count or restored indices), `addInstance` and `scale` refuse beyond with `invalid-input` (`<pod>: <runtime> would hold more than 500 instances`); `define` refuses a definition whose pods sum to more (`<runtime>: <n> instances (at most 500)`); `checkDoc` refuses a document of more than 5000 instances across its runtimes (`<n> instances (at most 5000 in a document)`). `addInstance` (and `scale` up) refuse with `invalid-input` once the next index would pass 999 999 999, the last a coord can carry. Restored instances are **sorted** into index order on `create` (and so on start/load), rather than requiring ascending indices: a hand-edited file still loads. The rollback of placed members when a start throws is pinned again (a registry whose implementation throws once the member is placed).
+
+**Why:** The spec's Observability section: one stream a person, a test or the host watches; tests assert behaviour through it. Telling a shared pod's news to every holder keeps "placed pods share one record" true on the stream too. The caps bound what loading one file can make.
+**Cost if wrong:** A host wanting a note on the runtime it concerns filters root warnings by the runtime id prefix (or the note gets a `runtime` field); a guest wanting no echo of its home's state changes filters by `pod-created`'s home (`rt.pod(id).home`).
+**Updated by 54:** the application's 5000-instance cap is enforced live too; a failed swap make is a `failure` on the stream.
+
+## 54. The application's instance cap, swap failures on the stream, and what `listen` leaves out (pods revision, task 7)
+
+**Decision:**
+- The application holds at most `MAX_DOC_INSTANCES` = 5000 instances across its runtimes: every runtime's own pods (root and children, adopted ones too) plus the pods of runtimes only defined. `create`, `addInstance` and `scale` in any runtime it made refuse beyond with `invalid-input` (`<pod>: the application would hold more than 5000 instances`), through `RuntimeOpts.full`; `define` refuses a definition that would pass it (`<runtime>: the application would hold more than 5000 instances`). The constant now lives in `application.ts`, beside `RuntimeDefSchema`. One `MAX_INSTANCES` (500, `runtime/pods.ts`) bounds a runtime's own instances, `create`/`scale` counts, `badIndices` and the schema's `instances`, `pods` and `members` lists.
+- A swap whose new make fails is a `failure { coord, reason }` on the stream of every runtime holding the pod, one per failed instance, as well as the swap's `threw`/`timeout` fail. (A failed make on create or restart stays the `instance` event `failed`, decision 53: there the instance changes state; a failed swap changes nothing.)
+- `rt.listen` documents what is deliberately not on the stream: calls during a `make` (they fail at once), a message whose subscription vanished during a pass wait (never `sent`), and the verb results `missing-component`/`not-unique` (no message). A listener that acts on the runtime re-enters it, so later listeners see the events of that action before the event being handled.
+
+Pinned by "the application holds at most 5000 instances …" (`application.test.ts`) and "a swap whose make throws changes nothing, and the failure is on the stream" (`runtime.test.ts`).
+**Why:** Anything the application can save must load: `checkDoc` refuses more than 5000 instances (decision 53). A swap that failed silently left only the caller knowing.
+**Cost if wrong:** A long-lived application counts adopted runtimes it never saves, so it may refuse a little early; an exact count skips `adopted(id)`.
+**Updated by 56:** the instance cap alone did not make "what it saves loads" true; the other document limits are enforced live too.
+
+## 55. Examples on pods (pods revision, task 7)
+
+**Decision:**
+- Ends a person would choose are connected with `connect` and end selectors, keeping the subscription ids: the signer's `vault.keys → map.format` and `map.line → log.append` and the test probe pick pods by id, first running instance; the messenger picks its widgets by pod and the store and messaging by the interface they implement (`{ implements }`), showing both kinds. Provisioning stays for the signer's calls (decision 44).
+- The vault stays private to `signer` (decision 43). "Replace the vault" is `swap('vault', …)` at its home; the client sees it through the placed `signer` pod: the same coords (`signer#0`), the same subscriptions, all live, and a fresh vault (an old key is `unknown-key`). The test also shows the client cannot swap a pod it only holds (`denied`).
+- The tests assert through `rt.listen` where it reads better: one `pod-swapped` on the signer's stream; the messenger's `sent` subscriptions for one message (`composer-messaging`, `messages-inbox`, `inbox-store` ×2); `subscription-removed { reason: 'unsubscribed' }` when the store is unplugged. A probe still reads published data (the stream carries results, not inputs).
+- Both `nano.json` are unchanged by the regeneration: `connect` saves the same concrete coords and ids the hand-written subscriptions had.
+
+**Why:** The spec: every connection end has a selector, resolved once; the examples are the recipes.
+**Cost if wrong:** None to the model; the examples change.
+
+## 56. Every document limit is enforced where things are made (whole-branch review of the pods revision)
+
+**Decision:**
+- The document's limits are enforced live with `invalid-input`, so an application never builds what its saved `nano.json` could not load. The constants live in `runtime/pods.ts` beside `MAX_INSTANCES` and are shared by the runtime, `RuntimeDefSchema` and `NanoDocSchema`: `MAX_PODS` = 500 (a runtime's pods, own and placed: `create` and `add`/`place` refuse a 501st, `<pod>: <runtime> would hold more than 500 pods`; `define` refuses `pods` + `members` over 500), `MAX_SUBSCRIPTIONS` = 2000 (`subscribe` refuses a 2001st, `<runtime> would hold more than 2000 subscriptions`), `MAX_RUNTIMES` = 50 (`createRuntime` and `define` refuse once 49 children not adopted exist, `<id>: the application would hold more than 49 runtimes besides its root`; the root takes the 50th slot when saved, and adopted runtimes are never saved so are not counted).
+- What is guaranteed: a document saved from an application built through the public API passes `checkDoc` and loads without a note, with the exceptions that were already there (a member whose home is adopted, a custom policy).
+- A create racing a swap provisions, and reports `unsatisfied`, against the implementation the pod runs once its instances have started (re-read after the makes), not the one it was created with.
+- `addInstance` fails `not-found` (`<coord> was removed while it started`) when the instance was removed before its make finished; a failed make is still a success with the instance `failed`, as on create.
+- `restart` takes only a `failed` instance (a removed instance is gone, never `stopped` in place); `create` refuses `count` together with `instances`/`next`; an unknown instance selector names a non-string `by` by its type (no `JSON.stringify`, which throws on a bigint or a cycle).
+- `subscribe` computes only the new subscription's status (adding one changes no other's), so 2000 subscribes are linear, not quadratic.
+
+Pinned by "the document limits hold for what is built live" (`document.test.ts`), "races and guards (whole-branch review)" (`pods.test.ts`), "the application cap holds for addInstance and scale …" (`application.test.ts`) and "removing an instance frees a runtime's capacity …" (`runtime.test.ts`).
+**Why:** Decision 54's promise, "anything the application can save must load", was only true of instances: 51 runtimes, 2001 subscriptions or 501 pods each saved fine and loaded as an empty application.
+**Cost if wrong:** An application loaded under a different id than it was saved with turns the saved root into a child; a document of 50 runtimes then loses one to the 49-child limit, with a note.
+
+## 57. The pod is standalone, and the effect boundary (effect pods)
+
+**Decision:** `Pod.create(implementation, { config? })` (`pod.ts`) makes a pod around one instance of one implementation: `implementation` (coord string), `config`, `state` (`starting` | `running` | `failed` | `stopped`), `runtimes` (names), `invoke(ctx, port, input)`, `call.<op>(ctx, input)` (by op name), `swap({ config? })`, `dispose()`, `join(runtime, changed)` (returns the leave function). A runtime invokes a pod only through `send`; nothing is ever handed an instance. `createHostPod` and the pod record with homes, counts and holders are gone. Approved by the user (the effect-pods design).
+**Why:** One place turns throws, timeouts and bad output into `Fail`s, and the only way to code is a call a runtime polices and records.
+**Cost if wrong:** A host that wants a pod with no runtime has none to call it with (only a runtime makes a context).
+
+## 58. `make(config)` has no context; `ctx.config` is gone
+
+**Decision:** `Implementation.make(config)` takes no context; a handler closes over the config `make` got. `NanoContext` stays at 13 members: `config` goes, `runtimes` (every runtime the pod is in, by name) comes. Approved by the user.
+**Why:** A pod is made before it is registered anywhere, so there is no runtime to give a context at make time.
+**Cost if wrong:** An implementation that wants its config after a swap reads the one its handlers closed over; a swap makes a new instance, so it does.
+
+## 59. A starting pod is available; no provisioning gate
+
+**Decision:** `invoke` waits for the make in progress. A subscription is `waiting` only while an end is `failed`, `stopped` or not registered. The old provisioning pass-gate (calls into a pass's pods waiting for it) is gone. Approved by the user.
+**Why:** With a pod standalone and created before registering, waiting on the pod's own make says exactly what is true; a runtime-wide gate would be a second, wider wait for the same thing.
+**Cost if wrong:** A call during a long make waits up to the pod's timeout instead of failing at once.
+
+## 60. The runtime has 18 members, and one way to add an edge
+
+**Decision:** `id`, `policy`, `register(pod, coord?)`, `unregister(coord)`, `pod(coord)`, `pods()`, `next()`, `call(coord)`, `subscribe`, `unsubscribe`, `retarget`, `reorder`, `subscriptions()`, `status`, `books`, `listen`, `warn`, `provision(coord)`. Gone: `create`, `addInstance`, `add`, `scale`, `removeInstance`, `restart`, `remove`, `swap`, `record`, `instances`, `target`, `registry`, `connect`, `settling`. `subscribe` takes each end as a coord or an `EndSelector` (`{ coord } | { implements, tags? } | { implementation, tags? }`) matching exactly one registered pod, resolved once and saved as coords (D50). Approved by the user.
+**Why:** Pods have no lifecycle in a runtime, so there is nothing to scale or restart; two ways to add an edge (`connect`, `subscribe`) became one.
+**Cost if wrong:** A host that wants "make me one of these" calls `Pod.create` then `register`.
+
+## 61. Provisioning is synchronous
+
+**Decision:** `rt.provision(coord)` returns `NanoResult<Unsatisfied[]>` in one pass (`runtime/provision.ts`): one matching pod here, else one matching implementation made and registered, create first then wire (D24-D26). Approved by the user.
+**Why:** Registering is synchronous and a starting pod is available (D59), so nothing in a pass needs to await.
+**Cost if wrong:** A provision that must wait for makes to settle needs an async variant.
+
+## 62. The stream follows pods
+
+**Decision:** `pod-created { coord, implementation }`, `pod-removed { coord }`, `pod-swapped { coord }`, `pod-state { coord, state, reason? }` (replacing `instance`). A host's calls are `sent` with `from: 'host'`, and `isAllowed` sees `'host'` as the source. Approved by the user.
+**Why:** The event names what happened to the coord a runtime knows; there is no instance apart from the pod.
+**Cost if wrong:** A listener that wants to tell a swap from a first start reads `pod-swapped` (a swap landing during the first make shows as `pod-state` alone).
+
+## 63. Sharing is registering; the application keeps one pods table
+
+**Decision:** `place` is gone: register `a.pod(c)` in `b` (a pod's wiring in its own runtime stays private). `define({ pods, runtimes })` takes one pods table and runtimes that refer to it by key; starting makes each key once application-wide and registers it at its saved coord; `RuntimeOpts.next` restores counters. Approved by the user.
+**Why:** One pod object in two runtimes is the whole of sharing, so a document is one entry referred to twice (spec: Saved form).
+**Cost if wrong:** None to the model; a document with the same pod twice under two keys loads as two pods.
+
+## 64. An op name offered by two interfaces is `not-unique`
+
+**Decision:** `rt.call(coord).<op>` and `pod.call.<op>` fail `not-unique` when two of the pod's interfaces offer the op name; the caller invokes the port. Approved by the user.
+**Why:** `call` is sugar by name; guessing which interface would be a silent choice.
+**Cost if wrong:** A pod with two interfaces sharing an op name is reached only by port key from a test.
+
+## 65. Failure rulings (controller ruling, surfaced to the user)
+
+**Decision:** A call to a failed or disposed pod is `missing-component` (there is no `missing` `FailType`). A config that does not fit the implementation's schema leaves the pod `failed`, and calls to it are `missing-component` with that cause in the reason (D69); a swap to one fails `invalid-input` and changes nothing. A swap whose make fails leaves a running pod on its old instance (a failed pod stays failed, with the new reason). A match in two runtimes is `not-unique` for `one`; a selector's `runtime` narrows it.
+**Why:** No new failure types; a swap must never make a working pod worse.
+**Cost if wrong:** A caller cannot tell "never made" from "disposed" except by the reason text.
+
+## 66. Registering twice and unknown implementations (controller ruling, surfaced to the user)
+
+**Decision:** Registering a pod twice in one runtime, or in another runtime with the same id, fails `exists`. `register` fails `not-found` when the runtime's registry lacks the implementation, and `invalid-input` for a coord not of that implementation or past the pod limit.
+**Why:** `runtimes` names must stay unique per pod, and a pod the runtime cannot describe could not be wired or saved.
+**Cost if wrong:** Two runtimes with the same id cannot share a pod; ids must differ (they already must be unique in an application).
+
+## 67. Application details and internal exports (controller ruling, surfaced to the user)
+
+**Decision:** `createApplication` takes `next` (the root's counters, restored on load); `definition(id)` returns define's shape `{ pods, runtimes }`; `define` accepts the root's id while the root is empty, so a document's root loads like any runtime. Module-internal, not re-exported by the package: `podTable`, `subscriptionTable`, `send`, `hostCall`, `wirings`, `podsTable`.
+**Why:** Saving then loading gives the same root; the internals are what the guardrail's "new export" rule should not count as model.
+**Cost if wrong:** A host wanting the internals imports the module file directly.
+
+## 68. A document holds what live building permits: 25000 pods (controller ruling, surfaced to the user)
+
+**Decision:** `MAX_DOC_PODS` (`document.ts`) is `MAX_RUNTIMES * MAX_PODS` = 50 × 500 = 25000, computed from those constants, so anything an application can build live saves and loads. Supersedes the 5000 cap of D54 and D56: with pods standalone there is no live application-wide count, and 50 runtimes of 500 distinct pods each were buildable but would not have loaded.
+**Why:** D56's promise, "what it saves loads", must hold for pods too; the per-runtime and runtime limits already bound what one file can make.
+**Cost if wrong:** If 25000 pods is too many to make on one load, a 5000 cap needs a live application-wide check (every register, in every runtime, counting distinct pods across the application).
+
+## 69. Final whole-branch review rulings (controller ruling, surfaced to the user)
+
+**Decision:**
+- Starting a runtime no longer starts others on demand for a subscription end: with no homes, an end not registered (yet) leaves the subscription `waiting`. A coord is "gone" (subscribing to it is `not-found`) only when it was held in that runtime and unregistered, not because it is below a restored counter; so loading without an end's provider keeps the subscription, waiting, and saving again keeps it.
+- The root is saved whenever it holds pods, subscriptions or counters (`next`), so a root that registered then unregistered everything still never reuses a coord after loading.
+- A call to any failed pod is `missing-component`, the cause in the reason (e.g. `<impl>: config does not fit <Type>`); this refines D65, where a pod failed by an unfit config answered `invalid-input`. A swap to an unfit config still fails `invalid-input` (it changes nothing).
+- A superseded swap resolves `invalid-input`; the latest asked wins even if its make fails (the earlier successful make is discarded; the pod keeps what it was serving).
+- Pods made but never registered are disposed: one provisioning made whose register failed, and those a start made before it threw (dropped from the pods table's made pods too).
+- `PodDef` (a pod as saved, in the pods table) and `Pod.create`'s `timeoutMs` option (make and call timeout, default 30 s) are recorded as controller rulings.
+- `Pod.join` is for runtimes (`register` calls it); calling it by hand adds a name to `pod.runtimes` and `ctx.runtimes`.
+
+**Why:** The spec: an end not registered (yet) leaves the subscription waiting; a coord is never reused; a pod made for nothing must not be left running.
+**Cost if wrong:** A subscription naming a coord that was unregistered in an earlier session (before saving) can be added again after loading; it waits rather than failing `not-found`.
+
+## 70. Values, then one live thing (decided with the user, 2026-11-14)
+
+**Decision:** Everything is a plain, synchronous value except the `Application`, the only thing that runs effects. You get one from `Application.create(deployment, opts)` or you have only values; there is no `start()` and no type that behaves differently by mode. Supersedes the runtime-as-object model of D48–D69 (pods in the runtime, `start`/`define`/`definition`, the pods table, adoption, `Pod.create`/`join`/`swap`/`dispose`, the effect boundary of D57–D63), the provisioning of D24–D26, and the documents (`saveDoc`/`loadDoc`) of D37–D42, D52, D56 and D68.
+**Why:** The last two revisions spent most of their machinery and bugs on counters, lazy starting and pod lifecycles; fewer moving parts is easier to reason about.
+**Cost if wrong:** Anything wanting a runtime with methods builds it over `Application` and a deployment value.
+
+## 71. State is a closure (decided with the user, 2026-11-14)
+
+**Decision:** A component's state is whatever its factory closes over. Nano holds only routing data. Restarting a pod gives a fresh closure. Supersedes D57 and D58 (pod state, `make(config)` without context) and the instance and swap rulings of D51, D65 and D69.
+**Why:** Few foot-guns around state; nothing for nano to save, migrate or swap.
+**Cost if wrong:** State that must survive a restart is a storage component (D73), not nano's.
+
+## 72. Lazy by default, like `IO` (decided with the user, 2026-11-14)
+
+**Decision:** `Pod.lazy` is built on first need, once (concurrent first calls share the build; a failed build caches nothing); `Pod.eager` is built at `create` and when `apply` adds it. The factory is the mount. Supersedes D59 (a starting pod is available), D52 (start) and D69's starting rules.
+**Why:** Describing a pod costs nanoseconds; eager is for pods whose `make` does work.
+**Cost if wrong:** A lazy pod's first caller pays the build time and its failure.
+
+## 73. Storage and messaging are components (decided with the user, 2026-11-14)
+
+**Decision:** Key-value stores, CRUD APIs, queues and REST bridges are pods behind interfaces, chosen per environment; flows between them are compute pods. Nano implements none of them: it routes, polices and records.
+**Why:** Keeps the core small and lets environments choose.
+**Cost if wrong:** A needed built-in is a pod in a provider, not core.
+
+## 74. The data is the truth (decided with the user, 2026-11-14)
+
+**Decision:** A `Deployment` describes the whole system; the application reconciles to it, `deployment()` returns what runs, saving is its JSON, and every message and change is on one stream. Supersedes saved coords, `next` counters and notes (D37–D42, D52, D63, D67–D69).
+**Why:** A value that round-trips exactly leaves nothing to restore.
+**Cost if wrong:** Custom policies and the registry are not in it (D80).
+
+## 75. Pods, runtimes and subscriptions are data (decided with the user, 2026-11-14)
+
+**Decision:** A pod name is unique in a deployment and the same in every runtime it is placed in; a runtime is a named section (pods placed, ordered subscriptions, policy), not an object. A subscription's ends must be placed in its runtime; it has no id and no duplicates. A shared pod has one instance. Supersedes coords `<impl>#<n>` and their counters (D36, D41), registering and placing (D28–D35, D63, D66), subscription status and `EndSelector` connect (D50, D60) and the `exists` rulings of D66.
+**Why:** Names chosen by the deployment's author remove counters and never-reuse bookkeeping; removing a pod removes the subscriptions naming it.
+**Cost if wrong:** Reusing a name for a different pod is allowed and harmless but invisible in history.
+
+## 76. A message is policed, checked, recorded, in one runtime (decided with the user, 2026-11-14)
+
+**Decision:** The context belongs to the pod, not a call, and handlers close over it. Every message travels in the runtime of the subscription it uses (or the one named in `app.call`): policed, input checked, run under the timeout, output checked, recorded `sent` then `delivered` or `denied`. A handler's throw, timeout or bad input/output is a `Fail`. `one`/`all` replace `optional`, `any`, `first`, `fallback`, `each`, `hasDependencies` and `listDependencies`. Supersedes D3, D11, D17–D23, D62 and D64 where they differ, and the books of D19.
+**Why:** One place each message is judged and seen.
+**Cost if wrong:** Fan-out and fallback are ordinary code over `all`.
+
+## 77. `apply` is all or nothing; `restart` forgets (decided with the user, 2026-11-14)
+
+**Decision:** `apply(next)` validates, asks each runtime's policy about each added subscription (`isAllowed(from, to, 'subscribe')`), then applies everything or nothing; changes are one `applied` event. `restart(pod)` forgets the instance (an eager pod rebuilds now); calls in flight finish on the old one; an unknown pod is `not-found`. `Application` has exactly five members. Supersedes D12, D13, D15, D16, D35 and D51 (replace, reorder, swap in place).
+**Why:** A refusal must never leave half a deployment.
+**Cost if wrong:** A host wanting a partial apply splits the deployment.
+
+## 78. Deployment limits (decided with the user, 2026-11-14)
+
+**Decision:** At most 50 runtimes, 5000 pods and 2000 subscriptions per runtime. Supersedes D54, D56 and D68 (25000 pods).
+**Why:** Bounds what one file can make.
+**Cost if wrong:** One constant in `deployment.ts`.
+
+## 79. The one stream (decided with the user, 2026-11-14)
+
+**Decision:** `built`, `restarted`, `applied`, `sent`, `delivered`, `denied`, `failure`, `warning`, in order and synchronously; a throwing listener is swallowed. Supersedes D53, D54, D62 (per-runtime streams and their lifecycle events).
+**Why:** One stream is easy to observe and query.
+**Cost if wrong:** Per-runtime views are a filter on `runtime`.
+
+## 80. Host policies win over a deployment's (controller ruling, surfaced to the user)
+
+**Decision:** A host's `opts.policies[runtime]` wins over the deployment runtime's `policy` field (which can only be `'allow-all'`); otherwise allow-all. Supersedes D39 (which policies are saved).
+**Why:** A deployment is data and cannot carry code.
+**Cost if wrong:** A deployment cannot override a host's policy.
+
+## 81. A registry clash is `invalid-input` (controller ruling, surfaced to the user)
+
+**Decision:** `registry.add` of a provider already present or an interface that differs fails `invalid-input`; `exists` is no longer a `FailType`. Supersedes D66's `exists`.
+**Why:** No new failure type for one case.
+**Cost if wrong:** A caller cannot tell a clash from other bad input except by the reason.
+
+## 82. A policy with no verdict denies (controller ruling, surfaced to the user)
+
+**Decision:** A policy that returns no `Verdict` (undefined, a Promise) denies with `policy gave no verdict`; a throwing policy denies too. Supersedes D22 and D27 on what a bad policy does.
+**Why:** Fail closed; policies are synchronous.
+**Cost if wrong:** An async policy denies everything until it is made synchronous.
+
+## 83. Strict validation (controller ruling, surfaced to the user)
+
+**Decision:** An invalid deployment, including an unknown implementation, fails as a whole instead of loading what it can with notes. Supersedes D40 and D42.
+**Why:** Simpler; nothing half-runs.
+**Cost if wrong:** A document with a missing provider does not load until the provider is added.
+
+## 84. Builds that call each other end by timeout (controller ruling, surfaced to the user)
+
+**Decision:** A factory may call out while building. If two factories call each other while both build, both wait and fail by timeout; factories should call during `make` only to start work that does not wait on the answer. Supersedes D26 and D61 (mutual dependencies by provisioning).
+**Why:** Detecting cycles needs machinery for a case that should not occur.
+**Cost if wrong:** Cycle detection, in `instances`.
+
+## 85. Pods hold the implementation's coordinate (controller ruling, surfaced to the user)
+
+**Decision:** A pod's `implementation` is a coordinate string, resolved through the registry at `create` and `apply`, so a pod value is plain JSON. Supersedes D16 (a member remembers its config) and D48's pod-as-object.
+**Why:** Values must serialise.
+**Cost if wrong:** A pod cannot be created without a registry in sight.
+
+## 86. `all` order across runtimes (controller ruling, surfaced to the user)
+
+**Decision:** `ctx.all` lists matches by runtimes in deployment order, then subscriptions in order. Supersedes D14 (member order).
+**Why:** The simplest stable order.
+**Cost if wrong:** Callers relying on order across runtimes depend on the deployment's runtime order.
+
+## 87. The call-target check counts only interface dependencies (controller ruling, surfaced to the user)
+
+**Decision:** A call subscription must reach a pod providing an interface the caller declares as a dependency, when it declares any naming an interface; tag-only dependencies are not checked. Supersedes D5 and D25 on dependency matching.
+**Why:** Tags are narrowing, not a type; checking them would reject valid wiring.
+**Cost if wrong:** A tag-only dependency can be wired to anything.
+
+## 88. Applies in order, one id rule (controller ruling, surfaced to the user)
+
+**Decision:** Moved out of D77 and D78, which were decided with the user without these parts. Applies run in call order, each after the one before settles. Pod names and runtime ids follow one rule, `/^[^/\s#\x00-\x1f\x7f]{1,64}$/`: 1 to 64 characters, no `/`, `#`, whitespace or control characters.
+**Why:** Two applies at once must not interleave; one rule for every name is the least to learn.
+**Cost if wrong:** One queue in `application/index.ts`; one constant in `deployment.ts`.
+
+## 89. Final review rulings for values and the live application (controller ruling, surfaced to the user)
+
+**Decision:**
+- The `applied` event's `rewired` field (the runtime ids whose placing or subscriptions changed) is the spec's "and subscriptions" part of what an apply changes.
+- The application keeps its own copy of the deployment: `create` and `apply` clone the value they are given (`structuredClone`) before checking it, and `deployment()` returns a fresh clone. Mutating either object changes nothing; only `apply` does, through validation, policy and the diff. A value that cannot be cloned fails `invalid-input`.
+- Names are looked up as own properties only: the application's copy holds pods, runtimes and tags in prototype-less maps and host policies are read with `Object.hasOwn`, so `constructor`, `toString` or `__proto__` are ordinary names.
+- One internal check (`refusal`) reads a policy's verdict for messages and for added subscriptions: a throw, a Promise (its rejection swallowed) or a verdict whose fields throw refuses.
+- A call waiting on a build uses the op as the build's implementation knows it.
+
+**Why:** A live application must never be changed behind its back, and a public call must never reject.
+**Cost if wrong:** A clone per `apply` and `deployment()`; at 5000 pods it is still small.
+
+## 90. Each level has its own deployment and `create` (decided with the user, 2026-11-14)
+
+**Decision:** `PodDeployment` → `Pods.create(d, { registry, tags? })`, `RuntimeDeployment` → `Runtime.create(id, d, pods)`, `AppDeployment` → `Application.create(runtimes, opts)`; `assemble(appDeployment, registry)` goes from the whole data to the `Runtime`s. `Pods` and `Runtime` are cheap, inert, immutable values: assembling builds nothing and sends nothing. `Application.create` is the one step that makes it live. Each level checks what it owns (pods: names, implementations, configs, 5000; runtime: placed pods within scope, ends, ports, 2000; application: 50 runtimes, ids, one `Pods`). `Application` has six members (`close` added). Supersedes D70's `Application.create(deployment, opts)`, D74's `Deployment` (now `AppDeployment`), D77's "exactly five members" and D78's single place for the limits.
+**Why:** Each object owns the data for what it owns; no `start()` and no type that changes mode.
+**Cost if wrong:** One validator per level to keep in step; collapsing back means `assemble` alone.
+
+## 91. Call edges and pipes (decided with the user, 2026-11-14)
+
+**Decision:** A subscription is a call edge `{ kind: 'call', from, to }` (which pods a pod's code may reach) or a pipe `{ kind: 'pipe', from, source, to, target }` (an output into an action's input, outside any component's code). A pipe's source is an event or an action of `from` (its successful results); its target is an action of `to` whose input fits the source's data. Supersedes the event subscription of D75 and the earlier spec.
+**Why:** Edges are the swap point for dependencies; pipes let a packaged application expose its pieces.
+**Cost if wrong:** Renaming `'pipe'` back and a second source kind, in data and in `nano.json`.
+
+## 92. Selections and `on` in code (decided with the user, 2026-11-14)
+
+**Decision:** `ctx.one` returns a `Selection` and `ctx.all` a list of them. A `Selection` is its own result (`ok`, `fail`, `pod`, `runtime`), with `call` through its edge (policed and recorded there) and `on(op, fn)` to hear that pod's event or action results for as long as the subscribing instance lives. On a failed selection every call resolves to its `Fail` and `on` does nothing; nothing is thrown. An `on` subscription is not part of any deployment, and stops when its instance closes, when it is unsubscribed, or when `apply` removes its edge. Replaces the earlier spec's `one` returning `NanoResult<Client>` (`2026-11-14-values-and-application-design.md`), so `ctx.one(DB).call.save(x)` needs no `.value`.
+**Why:** One fluent shape that a call site can check or not.
+**Cost if wrong:** Selections stay values; a throwing `one` would be a new context.
+
+## 93. Chains, and pipe cycles are allowed (decided with the user, 2026-11-14)
+
+**Decision:** `sent` gains `kind` (`call`, `pipe`, `on`), `correlation` (the id of a chain's first message) and `cause` (the message that led to this one). A host call starts a chain; a delivery of an action's result is caused by that call; an event published from code starts a new chain for now (async context is a later spec). Pipes may form cycles: the runtime records the chain and refuses nothing; a cycle stops when a step fails, as failed results are not piped. Supersedes D79's `sent` shape.
+**Why:** A later monitor (hops per chain, calls per window) needs the chain recorded now.
+**Cost if wrong:** A cycle that never fails runs until the host closes the application.
+
+## 94. Tags are an option on `Pods.create` (decided with the user, 2026-11-14)
+
+**Decision:** `Pods.create(podDeployment, { registry, tags? })` takes tags by pod name (`invalid-input` for a name it does not hold); `select` keeps the selected pods' tags; `assemble` passes `AppDeployment.tags` through it. Tags are not a field of `Pod`.
+**Why:** Tags drive live selectors, so they must survive assembly; this places them with the pod table without changing `Pod`.
+**Cost if wrong:** Moving tags onto `Pod` changes its shape and every saved `nano.json`.
+
+## 95. `select` with a duplicate name is `invalid-input` (decided with the user, 2026-11-14)
+
+**Decision:** `pods.select(['a', 'a'])` fails `invalid-input`; an unknown name is `not-found`.
+**Why:** A scope is a set; a duplicate is a mistake worth naming.
+**Cost if wrong:** A caller building names by concatenation dedupes first.
+
+## 96. `close()` lets deliveries finish (decided with the user, 2026-11-14)
+
+**Decision:** After `app.close()`, emissions already being delivered finish; nothing new is delivered. Every instance closes (its close listeners run within the timeout, then `closed`), then host calls are `not-found` and `apply`/`restart` are refused.
+**Why:** Work accepted must not be dropped silently; nothing may start once closing has.
+**Cost if wrong:** A host wanting a hard stop cancels its own handlers.
+
+## 97. Internal names are fine (decided with the user, 2026-11-14)
+
+**Decision:** The user approved `compose`, `RuntimeIds`, `originOf`, `tag` and `isRuntime` by name, and said internal names (not exported from the package) are fine. They are listed in `design.md`, not subject to the "new export" rule of CLAUDE.md.
+**Why:** CLAUDE.md governs the public surface.
+**Cost if wrong:** Renaming them.
+
+## 98. No live runtime object (controller ruling, surfaced to the user)
+
+**Decision:** The live system is the `Application`. Host calls are `app.call(runtime, pod)`; a runtime's slice of the stream is `listen` filtered by `e.runtime`. The assembled `Runtime` is a value. Supersedes the earlier spec's `app.runtime(id)` view.
+**Why:** A second runtime type that changes mode is what D70 removed.
+**Cost if wrong:** A view over `Application` and the stream.
+
+## 99. Pods learn their runtimes from the data (controller ruling, surfaced to the user)
+
+**Decision:** `Runtime.create` does not write into `Pods`. At `Application.create` a pod's runtimes are worked out from the runtimes that place it; a pod placed in none is never built, and `deployment()` omits it. A runtime's own `id` must equal its key in the table (`invalid-input` otherwise). Runtimes from different `Pods` holding one name are `invalid-input`. An application created from no runtimes has an empty registry, so `apply` naming an implementation is `not-found`. Refines D89's "the application keeps its own copy of the deployment" (it is derived from the runtimes).
+**Why:** One source of truth; an unplaced pod cannot affect the application.
+**Cost if wrong:** A saved `nano.json` loses unplaced descriptions; restoring them is via the shared root `Pods`.
+
+## 100. `assemble` is the one-step path from data (controller ruling, surfaced to the user)
+
+**Decision:** `assemble(appDeployment, registry)` is pure: `Pods.create` of the pods and tags, then `Runtime.create(id, def, pods.select(def.pods))` per runtime; the first failure is returned, and a `select` failure is `invalid-input`.
+**Why:** Loading `nano.json` is one call.
+**Cost if wrong:** Callers compose the levels themselves.
+
+## 101. Emissions reach every runtime; the caller does not wait (controller ruling, surfaced to the user)
+
+**Decision:** An emission is an event a pod publishes, or the successful result of one of its actions, whoever called it. It is delivered along every pipe from that pod and operation, and to every `on` subscription to it, in every runtime the pod is placed in, each delivery a message policed and recorded there. Order: runtimes in order then pipes in order, then `on` subscriptions in the order made. Failed results are not emitted. The deliveries of one published event share one new chain. An action's caller gets its result and does not wait for deliveries. An `on` for an op the pod lacks is a `warning` and does nothing. Supersedes the earlier spec's event delivery for `'event'` subscriptions.
+**Why:** The simplest reading of "the pod's output".
+**Cost if wrong:** A pod placed in two runtimes sends twice where one was wanted.
+
+## 102. `close` and change are ordered (controller ruling, surfaced to the user)
+
+**Decision:** A forgotten instance's close listeners finish before its replacement is built ("close before rebuild"), chained when closes follow one another. A second `close()` returns the first's promise. `apply` and `restart` called before `close()` complete ahead of it and are serial with it; later calls are refused, and host calls are `not-found` from the moment `close()` is called. `restart` queues with `apply`. A build in flight is not waited for when forgotten; a failed build emits `closed` with no listeners; a listener calling its own closing pod waits until the timeout.
+**Why:** "Closed" means closed; accepted work is not dropped.
+**Cost if wrong:** A call waits up to `timeoutMs` during `apply`; `close` waits for queued changes.
+
+## 103. A policy with no verdict denies subscriptions too (controller ruling, surfaced to the user)
+
+**Decision:** `refusal` reads a policy's answer for messages and for added subscriptions: a throw, a Promise or a verdict whose fields throw refuses. Extends D82 and D89.
+**Why:** One reading of a policy, fail closed.
+**Cost if wrong:** One function to split.
+
+## 104. Does `publish` wait for its pipe deliveries? (open, not decided)
+
+**Decision:** Not decided. Today `publish` awaits its pipe deliveries (not its `on` subscriptions), keeping the earlier spec's tested contract; the new spec frees only the callers of actions. Whether `publish` should stop waiting like action callers is the user's call.
+**Why:** The two kinds of emitter are inconsistent; a slow pipe target slows a publisher.
+**Cost if wrong:** Changing it is one await in `emit` and a test.
+
+## 105. The subscription kind `'event'` is renamed `'pipe'` (controller call, accepted with the spec)
+
+**Decision:** The kind `'event'` is `'pipe'`, as it now carries action results as well as events. It was listed under "Open" in the spec; the user approved the spec and plan without objecting. Supersedes the `'event'` kind of D75 and the earlier spec.
+**Why:** The name no longer fits what it connects.
+**Cost if wrong:** Renaming back, in data and in `nano.json`.
+
+## 106. Internal names beyond those approved by name (controller ruling, surfaced to the user)
+
+**Decision:** Under D97, `instances`, `send`, `emit`, `refusal`, `within`, `attempt`, `contextFor`, `diff` and `On` are internal to `application/`, named by the controller and listed in `design.md`.
+**Why:** The user's approval covers internal names generally; these are the ones the work added.
+**Cost if wrong:** Renaming them.

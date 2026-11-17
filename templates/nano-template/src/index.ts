@@ -1,31 +1,16 @@
-// The package's entry: what a host imports. `catalog` lists its kinds of component; `define()` defines their elements.
-import type { Catalog } from '@pritzlaff/nano-elements'
-export { Timer } from './timer'
-export { Picker } from './picker'
-export { Store } from './store'
-import { Timer } from './timer'
-import { Picker } from './picker'
-import { Store } from './store'
-import { TimerEl } from './timer-el'
-import { PickerEl } from './picker-el'
-import { StoreEl } from './store-el'
-export { TimerEl, PickerEl, StoreEl }
+// The module a host imports: the `acme.template` provider (default export) and its views, by implementation.
+import { Coord } from '@pritzlaff/nano-core'
+import { picker } from './picker.ts'
+import { PickerView } from './picker-view.ts'
+import { store } from './store.ts'
+import { StoreView } from './store-view.ts'
+import { timer } from './timer.ts'
+import { TimerView } from './timer-view.ts'
 
-/** This package's kinds of component, each with a title and its element's tag. */
-export const catalog = {
-  timer: { component: Timer, title: 'Timer', tag: 'nano-timer' },
-  picker: { component: Picker, title: 'Picker', tag: 'nano-picker' },
-  store: { component: Store, title: 'Store', tag: 'nano-store' },
-} satisfies Catalog
+const ns = Coord.namespace('acme.template')
 
-/** The elements to define, by tag. */
-const ELEMENTS: [string, CustomElementConstructor][] = [
-  [catalog.timer.tag, TimerEl as unknown as CustomElementConstructor],
-  [catalog.picker.tag, PickerEl as unknown as CustomElementConstructor],
-  [catalog.store.tag, StoreEl as unknown as CustomElementConstructor],
-]
+export default ns.provider([timer, picker, store])
+export const views = { 'acme.template/timer': 'nano-timer', 'acme.template/picker': 'nano-picker', 'acme.template/store': 'nano-store' }
 
-/** Defines every element of this package, once (a tag already defined is left alone). */
-export function define() {
-  for (const [tag, el] of ELEMENTS) if (!customElements.get(tag)) customElements.define(tag, el)
-}
+for (const [tag, el] of [['nano-timer', TimerView], ['nano-picker', PickerView], ['nano-store', StoreView]] as const)
+  if (!customElements.get(tag)) customElements.define(tag, el)

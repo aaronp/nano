@@ -1,25 +1,44 @@
-// The iframe's entry (built to public/sandbox/boot.js, its shared imports left bare for the page's import map): waits for the host's port, then serves or probes the package.
-import type { Catalog } from '@pritzlaff/nano-elements'
-import { provide } from '@pritzlaff/nano-elements'
-import { probe, serve } from './serve'
+/**
+ * The frame's entry (built to public/sandbox/boot.js, its shared imports bare for the frame's import map): takes the
+ * port the host hands over on load, then serves its pod and renders the pod's view (the module's `views` default for
+ * the implementation, else `nano-pod-view`), or answers a `probe` with the module described.
+ */
+import { Registry, type Provider } from '@pritzlaff/nano-core'
+import { defineViews, viewFor, type ViewMap } from '@pritzlaff/nano-ui'
+import { describeProvider } from './protocol.ts'
+import { serve } from './serve.ts'
 
-const once = async (e: MessageEvent) => {
-  if (e.source !== window.parent || !e.ports[0]) return
-  removeEventListener('message', once)
-  const port = e.ports[0], d = e.data as { url?: string; kind?: string; render?: boolean; probe?: boolean }
-  try {
-    if (typeof d?.url !== 'string') throw new Error('no url')
-    const mod = await import(/* @vite-ignore */ d.url)
-    const catalog = mod.catalog as Catalog | undefined
-    if (!catalog || typeof catalog !== 'object') throw new Error('the module exports no catalog')
-    if (d.probe) return probe(port, catalog)
-    if (typeof mod.define === 'function') mod.define()
-    serve(port, catalog, String(d.kind), {
-      render: d.render ? (tag, registry, name) => {
-        const el = document.createElement(tag); el.setAttribute('name', name)
-        provide(document, registry); document.body.append(el)
-      } : undefined,
-    })
-  } catch (err) { port.postMessage({ type: 'failed', error: err instanceof Error ? err.message : String(err) }) }
+type Mod = { default: Provider; views: ViewMap; built?: Record<string, string> }
+
+const mods = new Map<string, Promise<Mod>>()
+/** The provider module at `url`, imported once. */
+function mod(url: string): Promise<Mod> {
+  if (!mods.has(url)) mods.set(url, import(url).then((m: { default?: unknown; views?: ViewMap; built?: Record<string, string> }) => {
+    const p = m.default as Provider | undefined
+    if (!p || typeof p.coord !== 'string' || !(p.implementations instanceof Map)) throw new Error(`${url} has no default Provider`)
+    return { default: p, views: { ...m.views }, ...(m.built && { built: { ...m.built } }) }
+  }))
+  return mods.get(url)!
 }
-addEventListener('message', once)
+
+addEventListener('message', function once(e: MessageEvent) {
+  if (e.source !== parent || !e.ports[0]) return
+  removeEventListener('message', once)
+  let built: Mod | undefined
+  serve(e.ports[0], async (u, coord) => {
+    const i = (built = await mod(u)).default.implementations.get(coord)
+    if (!i) throw new Error(`${u} has no implementation ${coord}`)
+    return i
+  }, {
+    probe: async u => { const m = await mod(u); return [{ ...describeProvider(m.default, m.views), ...(m.built && { built: m.built }) }] },
+    render(coord, target) {
+      const m = built!, registry = Registry.create()
+      registry.add(m.default)
+      defineViews()
+      const tag = viewFor(target.pod, { pods: { [target.pod]: { implementation: coord, eager: true } }, runtimes: {} }, m.views)
+      const el = document.createElement(tag) as HTMLElement & { target?: unknown }
+      el.target = { ...target, registry }
+      document.body.append(el)
+    },
+  })
+})

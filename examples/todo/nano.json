@@ -1,0 +1,72 @@
+{
+  "pods": {
+    "store": {
+      "implementation": "example.kv/memory",
+      "eager": false
+    },
+    "todos": {
+      "implementation": "example.todo/kv",
+      "eager": false
+    }
+  },
+  "runtimes": {
+    "example.todo.frontend": {
+      "pods": [
+        "todos"
+      ],
+      "subscriptions": []
+    },
+    "example.todo.backend": {
+      "pods": [
+        "store"
+      ],
+      "subscriptions": [
+        {
+          "kind": "call",
+          "from": "todos",
+          "to": "store"
+        }
+      ],
+      "policy": {
+        "kind": "rules",
+        "rules": [
+          {
+            "allow": [
+              "call",
+              "subscribe"
+            ],
+            "from": "todos",
+            "outside": true,
+            "toInterface": "example.kv.KeyValueStore"
+          },
+          {
+            "allow": "subscribe",
+            "from": "host",
+            "outside": true,
+            "toInterface": "example.kv.KeyValueStore"
+          },
+          {
+            "allow": "*",
+            "outside": false
+          },
+          {
+            "deny": "*"
+          }
+        ]
+      }
+    }
+  },
+  "modules": {
+    "example.kv": "../kv/memory.js",
+    "example.todo": "./todo/kv.js"
+  },
+  "layout": {
+    "slots": [
+      {
+        "id": "todos",
+        "runtime": "example.todo.frontend",
+        "pod": "todos"
+      }
+    ]
+  }
+}

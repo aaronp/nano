@@ -1,0 +1,1 @@
+{ "pods": { "again": { "implementation": "example.fx/echo", "eager": false } }, "runtimes": {}, "modules": { "example.fx": "./missing.ts" } }

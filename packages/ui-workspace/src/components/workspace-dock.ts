@@ -21,11 +21,14 @@
  * bubbling, composed `dock:focus` DOM event {system, instance, widget}, or null when the focused panel shows no
  * instance or nothing is focused (empty space clicked, the panel closed, the page changed: `route:changed` on the bus).
  * Light DOM, because golden-layout positions its drag proxy in document.body.
+ *
+ * On nano-core 0.4: `host` is the page's Host. A `pod` panel (addWidget('pod', name), as a click in the explorer
+ * does) shows that pod's view (dock/panels.ts); <nano-explorer> and <nano-wiring> in a panel get the host's app.
  */
-import { GoldenLayout, LayoutConfig, ResolvedComponentItemConfig, type ComponentContainer, type ContentItem, type Stack, type ComponentItem, type JsonValue, type ResolvedLayoutConfig } from 'golden-layout';
+import { GoldenLayout, LayoutConfig, ResolvedComponentItemConfig, type ComponentContainer, type ContentItem, type Stack, type ComponentItem, type JsonValue, type ResolvedLayoutConfig } from 'golden-layout/dist/esm/index.js';   // its ES build (src/dock/golden-layout.d.ts)
 import baseCss from 'golden-layout/dist/css/goldenlayout-base.css';
-import type { Registry } from '@pritzlaff/nano-core';
-import { providedRegistry } from '@pritzlaff/nano-elements';
+import type { Host } from '../host.ts';
+import { addPod, fill } from '../dock/panels.ts';
 import { provideBus, requestBus, type Bus } from '../lib/bus.ts';
 import { panelContent, withMode } from '../lib/panel-content.ts';
 import { ARRANGEMENTS, PALETTE_ID, windowStyle, type WindowStyle, shownInstance, initialLayout, panelIds, readWidgetId, readWidgetName, readWidgetMode, panelState, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
@@ -73,6 +76,12 @@ workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_head
 workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_header .lm_controls { top: 6px; right: 6px; padding: 5px 7px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line); }
 workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_items,
 workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_items > .lm_item { height: 100% !important; }
+/* needs (boot-needs.ts): Dependencies shows for a visible panel whose instance declares needs; an unbound one is dimmed */
+.lm_controls > .dock-deps { width: auto; height: auto; opacity: 1; padding: 0 6px; font: 11px var(--font); color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.lm_controls > .dock-deps:hover { color: var(--fg); }
+.lm_stack:not(:has(> .lm_items > :not([style*="none"]) [data-needs])) > .lm_header .dock-deps { display: none; }
+[data-unbound] { opacity: .35; filter: grayscale(1); pointer-events: none; }
+.needs-choose { position: sticky; bottom: 0; z-index: 1; display: block; margin: 8px auto 0; padding: 6px 12px; font: 13px var(--font); color: var(--fg); background: var(--surface-2); border: 1px solid var(--accent); border-radius: 6px; cursor: pointer; }
 `;
 
 const icon = (path: string) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="none" stroke="#7a808c" stroke-width="1.6">${path}</svg>`)}")`;
@@ -102,6 +111,8 @@ export class WorkspaceDock extends HTMLElement {
   /** The system (registry) the panels' components live in; unset, they use the page's provided registry. Declared,
    * not a class field: a field would wipe a value set before the element upgrades (saved workspaces set it at start). */
   declare registry?: unknown;
+  /** The page's host (main.ts sets it): pod panels and the nano-ui elements in panels show its app. */
+  declare host?: Host;
   private bus: Bus | null = null;
   private layout: GoldenLayout | null = null;
   private defs = new Map<string, Def>();
@@ -118,6 +129,8 @@ export class WorkspaceDock extends HTMLElement {
     }
     if (!this.id) throw new Error('<workspace-dock> needs an id so drawer items can target it');
     this.defs = this.readPalette();
+    this.defs.set('pod', { id: 'pod', title: 'Pod', template: this.ownerDocument.createElement('template') });   // not in the drawer: the explorer opens it
+    this.addEventListener('nano-open', (e) => this.openPod((e as CustomEvent<{ pod: string }>).detail.pod));
 
     this.setAttribute('chrome', this.windowStyle);
     const area = this.el('div', 'dock-area');
@@ -128,6 +141,7 @@ export class WorkspaceDock extends HTMLElement {
     layout.registerComponentFactoryFunction('widget', (container, state) => this.mount(container, state));
     layout.on('stateChanged', () => this.send('dock:layout', { panels: this.openIds().length }));
     layout.on('focus', () => this.reportFocus());
+    layout.on('itemCreated', (e) => { const item = (e as unknown as { target: ContentItem }).target; if (item.isStack) this.addDependencies(item as Stack); });
     /* switching panels blurs the old one first: wait for the new focus, so only the change is sent */
     layout.on('blur', () => queueMicrotask(() => this.reportFocus()));
     /* empty space (not a panel, its tabs or a splitter being dragged) clears the focus */
@@ -223,8 +237,36 @@ export class WorkspaceDock extends HTMLElement {
     const item = this.layout?.focusedComponentItem;
     if (item === this.focused) return;
     this.focused = item;
-    const instance = item && shownInstance(item.container.element.firstElementChild as never);
+    const instance = item && (this.podOf(item) ?? shownInstance(item.container.element.firstElementChild as never));
     this.dispatchEvent(new CustomEvent('dock:focus', { bubbles: true, composed: true, detail: instance ? { system: this.system, instance, widget: this.id } : null }));
+  }
+
+  /** Shows a pod: the panel already showing it, made active and focused; else a new `pod` panel. */
+  openPod(pod: string) {
+    const find = (item: ContentItem | undefined): ComponentItem | undefined => !item ? undefined
+      : item.isComponent ? (this.podOf(item as ComponentItem) === pod ? item as ComponentItem : undefined)
+      : item.contentItems.map(find).find(Boolean);
+    const found = find(this.layout?.rootItem);
+    if (!found) return this.addWidget('pod', pod);
+    (found.parentItem as Stack).setActiveComponentItem(found, true);
+  }
+
+  /** The pod a `pod` panel, or an implementation's, shows. */
+  private podOf(item: ComponentItem): string | undefined {
+    const state = item.container.stateRequestEvent?.() ?? item.container.initialState, def = this.defs.get(readWidgetId(state));
+    return def && (def.id === 'pod' || def.template.dataset['implementation']) ? readWidgetName(state) : undefined;
+  }
+
+  /** A Dependencies button in a stack's header: it fires a bubbling `dock:dependencies` {system, instance} for the active
+   * panel's instance. CSS shows it only when that panel's element is marked `data-needs`. */
+  private addDependencies(stack: Stack) {
+    const b = this.el('button', 'dock-deps', 'Dependencies');
+    b.type = 'button';
+    b.addEventListener('click', () => {
+      const instance = shownInstance(stack.getActiveComponentItem()?.container.element.firstElementChild as never);
+      if (instance) this.dispatchEvent(new CustomEvent('dock:dependencies', { bubbles: true, composed: true, detail: { system: this.system, instance } }));
+    });
+    stack.header.controlsContainerElement.prepend(b);
   }
 
   private readPalette(): Map<string, Def> {
@@ -279,13 +321,26 @@ export class WorkspaceDock extends HTMLElement {
     provideBus(container.element, this.bus);
     // upgraded at once, with placed elements in the dock's system (if it has one)
     const name = readWidgetName(state);
-    const reg = (this.registry ?? providedRegistry(this.ownerDocument)) as Registry | undefined;
-    // the saved mode, else the instance's own; a template that is already <c-sandboxed> carries the kind's first mode
-    const mode = readWidgetMode(state) ?? (name ? reg?.labels(name)['nano/deploy'] : undefined);
+    // the saved mode (BACKLOG(2): an instance's own `nano/deploy` label is gone with the registry)
+    const mode = readWidgetMode(state);
     const content = withMode(panelContent(this.ownerDocument, def.template, this.registry), id, mode, name);
-    const shown = content.firstElementChild as (Element & { model?: unknown }) | null;
-    if (name) shown?.setAttribute('name', name);   // before it connects, so it attaches to that instance
+    const shown = (id === 'pod' ? { name } : content.firstElementChild) as (Element & { model?: unknown }) | null;
+    if (name && id !== 'pod') (shown as Element | null)?.setAttribute('name', name);   // before it connects, so it attaches to that instance
     container.element.append(content);
+    const h = this.host;
+    if (h) for (const el of container.element.querySelectorAll<HTMLElement & { target?: unknown }>('nano-explorer, nano-wiring')) el.target = { app: h.app, registry: h.registry };
+    if (h && id === 'pod' && name) container.on('destroy', fill(container.element, `pod:${name}`, h));
+    // an implementation's panel makes a pod of it (or shows the one it made), as a catalog kind's placed a new instance
+    const impl = def.template.dataset['implementation'];
+    if (h && impl) {
+      let stop = () => {}, gone = false, pod = name;
+      const show = (p: string) => { pod = p; if (!gone) stop = fill(container.element, `pod:${p}`, h); };
+      if (name) show(name); else void addPod(h, impl).then((p) => { if (p) show(p); });
+      container.stateRequestEvent = () => ({ widget: id, ...(pod && { name: pod }) });
+      container.on('destroy', () => { gone = true; stop(); });
+      this.send('dock:opened', { widget: id });
+      return undefined;
+    }
     for (const type of ['pointerdown', 'focusin']) container.element.addEventListener(type, () => container.focus());
     // saved layouts name the instance each panel shows, so Reset and Restore reattach instead of making new ones
     container.stateRequestEvent = () => panelState(id, shown);
@@ -323,6 +378,7 @@ export class WorkspaceDock extends HTMLElement {
       return;
     }
     this.say('Layout saved.');
+    // BACKLOG(3): its route's screen got the layout too (setLayout on the Application's screens); 0.4 has no screens.
     this.ownerDocument.dispatchEvent(new CustomEvent('nano:changed'));   // the working copy follows
     this.send('dock:saved', { panels: this.openIds().length });
   }

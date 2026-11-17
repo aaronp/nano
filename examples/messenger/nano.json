@@ -1,0 +1,61 @@
+{
+  "pods": {
+    "inbox": {
+      "implementation": "example.messenger/inbox",
+      "eager": false
+    },
+    "composer": {
+      "implementation": "example.messenger/composer",
+      "eager": false
+    },
+    "store": {
+      "implementation": "example.messenger/memory-store",
+      "eager": false
+    },
+    "messaging": {
+      "implementation": "example.messenger/messaging",
+      "eager": false
+    }
+  },
+  "runtimes": {
+    "messenger": {
+      "pods": [
+        "inbox",
+        "composer",
+        "store",
+        "messaging"
+      ],
+      "subscriptions": [
+        {
+          "kind": "call",
+          "from": "inbox",
+          "to": "store"
+        },
+        {
+          "kind": "call",
+          "from": "composer",
+          "to": "messaging"
+        },
+        {
+          "kind": "pipe",
+          "from": "messaging",
+          "source": "example.messenger.Messaging/messages",
+          "to": "inbox",
+          "target": "example.messenger.Inbox/receive"
+        }
+      ]
+    },
+    "persistence": {
+      "pods": [
+        "store"
+      ],
+      "subscriptions": []
+    },
+    "messaging": {
+      "pods": [
+        "messaging"
+      ],
+      "subscriptions": []
+    }
+  }
+}

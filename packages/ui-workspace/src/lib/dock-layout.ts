@@ -2,6 +2,8 @@
  * Pure helpers for the golden-layout workspace: panel state, starting layouts and counting panels.
  * Layout objects here are plain JSON (golden-layout's LayoutConfig shape), so they can be saved and tested.
  */
+/** A rectangle as fractions of the page, each in [0, 1] (was @pritzlaff/nano-app's Box). */
+type Box = { x: number; y: number; w: number; h: number };
 
 /** How the panels open at start are arranged. */
 export type Arrangement = 'row' | 'column' | 'stack' | 'grid';
@@ -37,6 +39,51 @@ export const readWidgetId = (state: unknown): string => {
 export const readWidgetName = (state: unknown): string | undefined => {
   const n = typeof state === 'object' && state !== null ? (state as Record<string, unknown>)['name'] : undefined;
   return typeof n === 'string' && n ? n : undefined;
+};
+
+/** Which instance each panel of a saved layout shows (panels with no instance are skipped), with the page box it fills
+ * (fractions of the page, from the saved sizes) and, in a stack, its tab. A panel is named by its id, else its title and
+ * index path; anything that isn't a layout gives []. */
+export const placementsOf = (layout: unknown): { panel: string; instance: string; box: Box; tab?: { group: string; active: boolean } }[] => {
+  type Item = { type?: unknown; content?: unknown; id?: unknown; title?: unknown; componentState?: unknown; size?: unknown; sizeUnit?: unknown; activeItemIndex?: unknown };
+  const obj = (x: unknown): Item | undefined => (typeof x === 'object' && x !== null ? (x as Item) : undefined);
+  const kids = (it: Item): unknown[] => (Array.isArray(it.content) ? it.content : []);
+  /** Each child's share of the parent's extent: '%' as a percentage, 'fr' as a fraction of the total fr, unsized equal
+   * shares of the remainder; normalised to sum to 1. */
+  const shares = (cs: unknown[]): number[] => {
+    const sized = cs.map((c) => { const o = obj(c); return o && typeof o.size === 'number' && o.size > 0 ? { size: o.size, fr: o.sizeUnit === 'fr' } : undefined });
+    const pctSum = sized.reduce((n: number, r) => n + (r && !r.fr ? r.size / 100 : 0), 0);
+    const frSum = sized.reduce((n: number, r) => n + (r?.fr ? r.size : 0), 0);
+    const unsized = sized.filter((r) => !r).length;
+    const left = Math.max(0, 1 - pctSum);
+    const w = sized.map((r) => (!r ? (unsized ? left / unsized : 0) : r.fr ? (left * r.size) / frSum : r.size / 100));
+    const total = w.reduce((n: number, x) => n + x, 0);
+    return total > 0 ? w.map((x) => x / total) : cs.map(() => 1 / cs.length);
+  };
+  const walk = (item: unknown, path: number[], box: Box, group?: { id: string; active: number }, index = 0): ReturnType<typeof placementsOf> => {
+    const it = obj(item);
+    if (!it) return [];
+    if (it.type === 'component') {
+      const instance = readWidgetName(it.componentState);
+      if (!instance) return [];
+      return [{ panel: (typeof it.id === 'string' && it.id) || `${typeof it.title === 'string' ? it.title : ''}@${path.join('.')}`, instance, box,
+        ...(group && { tab: { group: group.id, active: index === group.active } }) }];
+    }
+    const cs = kids(it);
+    if (it.type === 'stack') {
+      const active = typeof it.activeItemIndex === 'number' ? it.activeItemIndex : 0;
+      return cs.flatMap((c, i) => walk(c, [...path, i], box, { id: path.join('.'), active }, i));
+    }
+    if (it.type !== 'row' && it.type !== 'column') return cs.flatMap((c, i) => walk(c, [...path, i], box));
+    const horizontal = it.type === 'row';
+    let at = horizontal ? box.x : box.y;
+    return cs.flatMap((c, i) => {
+      const s = shares(cs)[i] ?? 0, len = (horizontal ? box.w : box.h) * s, start = at;
+      at += len;
+      return walk(c, [...path, i], horizontal ? { ...box, x: start, w: len } : { ...box, y: start, h: len });
+    });
+  };
+  return walk((layout as { root?: unknown } | null)?.root, [0], { x: 0, y: 0, w: 1, h: 1 });
 };
 
 /** The deploy mode a panel was saved with, if it has one (missing: the panel shows the host's element as before). */

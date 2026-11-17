@@ -1,0 +1,117 @@
+{
+  "pods": {
+    "storeA": {
+      "implementation": "example.kv/memory",
+      "eager": false
+    },
+    "storeB": {
+      "implementation": "example.kv/memory",
+      "eager": false
+    },
+    "listA": {
+      "implementation": "example.todo/kv",
+      "eager": false
+    },
+    "listB": {
+      "implementation": "example.todo/kv",
+      "eager": false
+    }
+  },
+  "runtimes": {
+    "example.todo.frontend": {
+      "pods": [
+        "listA",
+        "listB"
+      ],
+      "subscriptions": [
+        {
+          "kind": "pipe",
+          "from": "listA",
+          "source": "example.todo.TodoList/items",
+          "to": "listB",
+          "target": "example.todo.TodoList/put"
+        }
+      ]
+    },
+    "example.todo.backend": {
+      "pods": [
+        "storeA",
+        "storeB"
+      ],
+      "subscriptions": [
+        {
+          "kind": "call",
+          "from": "listA",
+          "to": "storeA"
+        },
+        {
+          "kind": "call",
+          "from": "listB",
+          "to": "storeB"
+        }
+      ],
+      "policy": {
+        "kind": "rules",
+        "rules": [
+          {
+            "allow": [
+              "call",
+              "subscribe"
+            ],
+            "from": "listA",
+            "outside": true,
+            "toInterface": "example.kv.KeyValueStore"
+          },
+          {
+            "allow": [
+              "call",
+              "subscribe"
+            ],
+            "from": "listB",
+            "outside": true,
+            "toInterface": "example.kv.KeyValueStore"
+          },
+          {
+            "allow": "*",
+            "outside": false
+          },
+          {
+            "deny": "*"
+          }
+        ]
+      }
+    }
+  },
+  "modules": {
+    "example.kv": "../kv/memory.js",
+    "example.todo": "./todo/kv.js"
+  },
+  "layout": {
+    "slots": [
+      {
+        "id": "a",
+        "runtime": "example.todo.frontend",
+        "pod": "listA"
+      },
+      {
+        "id": "b",
+        "runtime": "example.todo.frontend",
+        "pod": "listB"
+      }
+    ],
+    "geometry": {
+      "a": {
+        "x": 0,
+        "y": 0,
+        "w": 0.5,
+        "h": 1
+      },
+      "b": {
+        "x": 0.5,
+        "y": 0,
+        "w": 0.5,
+        "h": 1
+      }
+    }
+  }
+}

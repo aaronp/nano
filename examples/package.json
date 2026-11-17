@@ -1,0 +1,12 @@
+{
+  "name": "@composable/examples",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@pritzlaff/nano-core": "workspace:*",
+    "@pritzlaff/nano-elements": "workspace:*",
+    "@pritzlaff/nano-ui": "workspace:*",
+    "lit": "^3.0.0",
+    "typebox": "^1.4.0"
+  }
+}

@@ -1,11 +1,9 @@
-// WorkspaceControls: the component drives its dock by id; the element shows View Tabs | Clear and the dock's commands.
+// <nano-workspace-controls dock>: drives its dock by id; the element shows View Tabs | Clear and the dock's commands.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { afterEach, expect, test } from 'bun:test'
 // lit picks its DOM build when first imported, so these come after the DOM exists
-const { Components, Ops, Registries, Runtimes } = await import('@pritzlaff/nano-core')
-const { provide } = await import('@pritzlaff/nano-elements')
-const { controlsId, defineWorkspaceControls, WorkspaceControls, WorkspaceControlsEl } = await import('../src/components/workspace-controls.ts')
+const { defineWorkspaceControls, WorkspaceControlsEl } = await import('../src/components/workspace-controls.ts')
 
 defineWorkspaceControls()
 const tick = () => new Promise(r => setTimeout(r, 0))
@@ -26,30 +24,14 @@ const stubDock = () => {
 const mount = async (narrow = false) => {
   ;(globalThis as any).matchMedia = () => ({ matches: narrow, addEventListener() {}, removeEventListener() {} })
   const calls = stubDock()
-  const rt = Runtimes.create(Registries.create('page')), reg = rt.registry
-  provide(document, reg)
-  const id = controlsId('d1')
-  reg.add(id, Components.instantiate(WorkspaceControls))
-  await rt.call({ registry: 'page', instance: 't' }, id, Ops.key(WorkspaceControls.ops.attach), 'd1')
   const el = new WorkspaceControlsEl() as unknown as El
-  el.setAttribute('name', id)
+  el.setAttribute('dock', 'd1')
   document.body.append(el); await settle(el)
-  return { el, calls, reg }
+  return { el, calls }
 }
 afterEach(() => { document.body.innerHTML = '' })
 
-test('the controls drive their dock', () => {
-  const calls = stubDock()
-  const c = Components.instantiate(WorkspaceControls).value as any
-  expect(() => c.save()).toThrow('no dock ')
-  c.attach('d1')
-  expect(c.dock).toBe('d1'); expect(c.style).toBe('tabs')
-  for (const m of ['connections', 'saveAs', 'save', 'restore', 'reset']) c[m]()
-  expect(calls).toEqual([['connections'], ['saveAs'], ['save'], ['restore'], ['reset']])
-  c.setStyle('focus')
-  expect(calls.at(-1)).toEqual(['setWindowStyle', 'focus']); expect(c.style).toBe('focus')
-  expect(controlsId('d1')).toBe('ws-controls-d1')
-})
+// BACKLOG(5): 'the controls drive their dock' tested the nano-runes component (retired/test/workspace-controls.test.ts).
 
 test('the element shows View Tabs | Clear and five labelled icon buttons', async () => {
   const { el } = await mount()

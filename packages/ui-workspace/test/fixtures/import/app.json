@@ -1,0 +1,4 @@
+{ "pods": { "in": { "implementation": "example.fx/echo", "eager": false } },
+  "runtimes": { "main": { "pods": ["in"], "subscriptions": [] } },
+  "tags": { "t": ["in"] },
+  "modules": { "example.fx": "./good.ts" } }

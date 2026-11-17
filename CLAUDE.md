@@ -1,0 +1,19 @@
+# Working in this repo
+
+- **No concept drift.** A new domain concept, exported name, public method or option is a question for the user, not
+  a ruling. Never redefine what an existing concept is while implementing. Reviewers report any new export as a
+  finding.
+- **Build on what exists; never restate it.** Before designing or building anything, read `design.md` and the
+  spec, and name the existing concepts that carry the need (Implementation, Interface, Op, Pod, Runtime,
+  Subscription: call edge or pipe, `on`, coordinates, the `AppEvent` stream). A new type, field or mechanism that
+  restates one of them (stringified coordinates, an event type beside pipes, a second way to deliver data) is concept
+  drift. If the model can't express the need, say exactly what is missing and ask the user. Don't work around it.
+- **Keep it small.** `packages/nano/test/structure.test.ts` fails the build when a source file passes 150 lines, an
+  exported interface or object type passes 10 members, or an export is missing from `design.md`. Its baseline
+  (`packages/nano/structure-baseline.json`) may only shrink; regenerate it only with the user's agreement.
+- **The model** is in `docs/superpowers/specs/2026-11-14-pods-runtimes-application-design.md` (the spec; the previous
+  `2026-11-14-values-and-application-design.md` stands where it is not revised) and `design.md` (the map).
+  Pods and deployments are values; the `Application` is the one live thing.
+- Tests: `cd packages/nano && bun test --isolate`; `cd packages/ui && bun test --isolate`; `cd packages/ui-workspace && bun test --isolate`;
+  `cd examples && bun test --isolate`; types: `bunx tsc --noEmit` at
+  the root. Don't run a bare `bun test` at the root (it picks up unrelated untracked folders).

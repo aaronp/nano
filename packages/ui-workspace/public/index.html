@@ -13,7 +13,6 @@
   {
     "imports": {
       "@pritzlaff/nano-core": "./shared/nano-core.js",
-      "@pritzlaff/nano-runes": "./shared/nano-runes.js",
       "@pritzlaff/nano-elements": "./shared/nano-elements.js",
       "lit": "./shared/lit.js",
       "lit/decorators.js": "./shared/lit-decorators.js",
@@ -21,6 +20,8 @@
       "lit/directives/class-map.js": "./shared/lit-class-map.js",
       "lit/directives/style-map.js": "./shared/lit-style-map.js",
       "lit/directives/repeat.js": "./shared/lit-repeat.js",
+      "lit/directives/ref.js": "./shared/lit-ref.js",
+      "@pritzlaff/nano-ui": "./bundle/nano-ui.js",
       "lit/directives/if-defined.js": "./shared/lit-if-defined.js",
       "typebox": "./shared/typebox.js",
       "typebox/value": "./shared/typebox-value.js"
@@ -34,6 +35,7 @@
   <span slot="title">Nano</span>
   <nano-file-menu slot="title-actions"></nano-file-menu>
   <nano-app-bar name="app" slot="title-actions"></nano-app-bar>
+  <!-- BACKLOG(4): <nano-profile> was @composable/shell's Profile component; nothing defines it now. -->
   <nano-profile name="profile" slot="actions"></nano-profile>
 
   <!-- Navigation: one link per <app-route> below, in order. -->
@@ -48,16 +50,15 @@
     <div class="ws-page">
     <component-drawer for="workspace"></component-drawer>
     <c-wires>
-      <workspace-dock id="workspace" storage-key="workspace-starter.layout" open="" arrangement="grid">
+      <workspace-dock id="workspace" storage-key="workspace-starter.layout" open="nano-explorer" arrangement="grid">
         <template data-widget="notes" data-title="Notes"><notes-panel></notes-panel></template>
         <template data-widget="chart" data-title="Chart" data-flush><line-chart style="border:0;border-radius:0;box-shadow:none"></line-chart></template>
         <template data-widget="metrics" data-title="Metrics"><div class="cards"><stat-card index="0"></stat-card><stat-card index="1"></stat-card><stat-card index="2"></stat-card><stat-card index="3"></stat-card></div></template>
         <template data-widget="activity" data-title="Activity"><bus-log limit="40"></bus-log></template>
-        <!-- @composable components, added at runtime: each panel places a new instance and removes it on close.
-             composable.ts adds one per catalog kind that has an element, before these. -->
-        <template data-widget="c-platform" data-title="Systems"><c-platform></c-platform></template>
-        <template data-widget="c-platform-table" data-title="Instances"><c-platform-table></c-platform-table></template>
-        <template data-widget="c-editor" data-title="Puzzle editor"><editor-page></editor-page></template>
+        <!-- The app on nano-core: its pods (nano-ui's explorer; clicking one opens a `pod` panel showing its view),
+             and its wiring. A pod's own panel (`pod`) is the dock's, filled with the pod's view. BACKLOG(1): Instances and the Puzzle editor are gone. -->
+        <template data-widget="nano-explorer" data-title="Systems"><nano-explorer></nano-explorer></template>
+        <template data-widget="nano-wiring" data-title="Connections"><nano-wiring></nano-wiring></template>
         <template data-widget="nano-gallery" data-title="Components gallery"><nano-gallery></nano-gallery></template>
       </workspace-dock>
     </c-wires>
@@ -71,9 +72,9 @@
       <h1>Systems</h1>
       <p>Move the range: its values queue in the debounce and land in the log as a batch. Type a number into the input and press Enter: the map doubles it into the log. Select an action in the tree, then connect it to one that fits.</p>
     </header>
-    <section class="panel"><c-platform></c-platform></section>
-    <section class="panel"><h2>Instances</h2><c-platform-table></c-platform-table></section>
-    <div class="cards composable-row">
+    <section class="panel"><nano-explorer></nano-explorer></section>
+    <!-- BACKLOG(1): the Instances table and the worked example (range → debounce → log, input → map → log) were @composable components. -->
+    <div class="cards composable-row" hidden>
       <section class="panel"><h2>Range</h2><c-range name="ex-range"></c-range></section>
       <section class="panel"><h2>Debounce</h2><c-debounce name="ex-debounce"></c-debounce></section>
       <section class="panel"><h2>Input</h2><c-input name="ex-input"></c-input></section>
@@ -96,6 +97,14 @@
       <h2>Theme</h2>
       <theme-picker layout="cards"></theme-picker>
     </section>
+  </app-route>
+
+  <!-- Wiring: the whole app as page layers of wired boards (read-only); Connections flips the last workspace's dock. -->
+  <app-route path="/wiring" bleed>
+    <div class="wiring-page">
+      <nav class="wiring-views" aria-label="Wiring view"><a href="#/wiring" aria-current="page">Circuit</a><a href="#/workspace" data-connections hidden>Connections</a></nav>
+      <c-circuit></c-circuit>
+    </div>
   </app-route>
 
   <app-route path="/settings">

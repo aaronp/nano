@@ -1,0 +1,17 @@
+{
+  "pods": {
+    "timer": { "implementation": "acme.template/timer", "eager": false },
+    "picker": { "implementation": "acme.template/picker", "eager": false },
+    "store": { "implementation": "acme.template/store", "eager": false }
+  },
+  "runtimes": {
+    "main": {
+      "pods": ["timer", "picker", "store"],
+      "subscriptions": [
+        { "kind": "pipe", "from": "picker", "source": "acme.template.Picker/changed", "to": "store", "target": "acme.template.Store/set" },
+        { "kind": "pipe", "from": "timer", "source": "acme.template.Timer/tick", "to": "store", "target": "acme.template.Store/set" }
+      ]
+    }
+  },
+  "modules": { "acme.template": "./index.js" }
+}
