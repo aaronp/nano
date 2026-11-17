@@ -134,6 +134,20 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
     (git-ops/Argo-like) watches the Runtime and subscribes once both ends exist. Today selective import drops such
     subscriptions with a warning. Its own design, later.
 
+14. **Settings: the decisions made so far, visible and editable, per runtime or per pod.** A Settings page in the
+    workspace that shows and changes the choices currently hard-coded or implicit, at workspace, runtime and pod
+    granularity. Candidates, all decided along the way without a place to see them:
+    - a frame's sandbox permissions (today a fixed `allow-scripts` / `allow-same-origin` per isolation mode; e.g.
+      `allow-forms` was refused rather than chosen) — a frame **strategy/policy component**, as `PolicyRules` sits
+      behind `Policy` for calls;
+    - Trust at import (Sandboxed by default), and that imported sandboxed pods are eager;
+    - which providers count as the workspace's own (same-origin), and the foreign-origin consent;
+    - approve-once memory for pods with page access;
+    - the runtime policy (`PolicyRules`) of each runtime, readable and editable;
+    - merge rules on import (a runtime with a policy refuses another policy).
+    Its own design: where these settings live (the deployment, so they travel in `nano.json`, vs the host), and which
+    are the host's versus the deployer's.
+
 ## Current-rewrite files kept (0.4 plumbing, behind the old UI)
 
 - `src/host.ts`, `src/host-ui.ts` (setAppBar now sets the app shell's title), `src/import.ts`, `src/import-confirm.ts`,
