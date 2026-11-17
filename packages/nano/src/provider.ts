@@ -39,8 +39,10 @@ function namespace(name: string) {
   // Its coordinates point back at this namespace, not layer 1's.
   const ns = Object.freeze({
     ...pure,
-    interfaceId: (n: string) => Object.freeze({ ...pure.interfaceId(n), ns }),
-    implementationId: (n: string) => Object.freeze({ ...pure.implementationId(n), ns }),
+    // Typed as layer 1's coordinates: their `ns` is this namespace at runtime, but a self-referencing type would be
+    // elided to `any` in the emitted .d.ts (and the published types would break).
+    interfaceId: (n: string): ReturnType<typeof pure.interfaceId> => Object.freeze({ ...pure.interfaceId(n), ns }),
+    implementationId: (n: string): ReturnType<typeof pure.implementationId> => Object.freeze({ ...pure.implementationId(n), ns }),
     interface: <U extends Ops>(n: string, ops: U) => Interface.define<U>(ns.interfaceId(n), ops),
     provider: (implementations: Implementation[], meta?: Record<string, string>) => define(ns, implementations, meta),
   })
