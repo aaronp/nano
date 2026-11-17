@@ -46,7 +46,7 @@ export class ChatRoomView extends LitElement {
     if (!t) return html``
     return html`<div class="col">${this.error ? html`<p class="alert bad" role="alert">${this.error}</p>` : ''}<h3 class="display-s">${t.pod}</h3>
       <ul>${this.lines.map(m => html`<li class="list-row"><b>${m.from}</b> <span>${m.text}</span></li>`)}</ul>
-      <form class="row" @submit=${(e: Event) => { e.preventDefault(); void this.send(t, this.renderRoot.querySelector('input')!) }}>
-        <input class="input" aria-label="Message" placeholder="Say something"><button class="btn" type="submit">Send</button></form></div>`
+      <div class="row">
+        <input class="input" aria-label="Message" placeholder="Say something" @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' && !e.isComposing) void this.send(t, e.target as HTMLInputElement) }}><button class="btn" type="button" @click=${() => void this.send(t, this.renderRoot.querySelector('input')!)}>Send</button></div></div>`
   }
 }

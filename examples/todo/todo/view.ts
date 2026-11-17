@@ -48,8 +48,8 @@ export class TodoListView extends LitElement {
     const t = this.target
     if (!t) return html``
     const list = this.pod(t)
-    return html`<div class="col">${this.error ? html`<p class="alert bad" role="alert">${this.error}</p>` : ''}<form class="row" @submit=${(e: Event) => { e.preventDefault(); void this.add(t, this.renderRoot.querySelector('input')!) }}>
-        <input class="input" aria-label="New todo" placeholder="What needs doing?"><button class="btn" type="submit">Add</button></form>
+    return html`<div class="col">${this.error ? html`<p class="alert bad" role="alert">${this.error}</p>` : ''}<div class="row">
+        <input class="input" aria-label="New todo" placeholder="What needs doing?" @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' && !e.isComposing) void this.add(t, e.target as HTMLInputElement) }}><button class="btn" type="button" @click=${() => void this.add(t, this.renderRoot.querySelector('input')!)}>Add</button></div>
       <ul>${this.todos.map(d => html`<li class="list-row">
         <input type="checkbox" aria-label="Done: ${d.title}" .checked=${d.done} @change=${(e: Event) => this.run(list.update({ id: d.id, done: (e.target as HTMLInputElement).checked }))}>
         <span>${d.title}</span>

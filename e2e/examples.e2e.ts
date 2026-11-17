@@ -221,9 +221,6 @@ async function openSandboxed(page: Page, want: RegExp) {
   await d.getByRole('button', { name: 'Import', exact: true }).click()
   await expect(d).toHaveCount(0)
 }
-/** `op(input)` on `pod` through the page's application (the frame's own form cannot submit: its sandbox has no allow-forms). */
-const call = (page: Page, runtime: string, pod: string, op: string, input: unknown) => page.evaluate(([r, p, o, i]) =>
-  ((document.querySelector('workspace-dock') as any).host.app.call(r, p)[o](i)).then((x: { ok: boolean }) => x.ok), [runtime, pod, op, input] as const)
 /** The first frame holding `css` (a heading `name` inside it, if given). */
 async function frameWith(page: Page, css: string, name?: string) {
   for (const f of page.frames()) {
@@ -237,7 +234,9 @@ test("imported Sandboxed, alice says something and bob's frame shows it live", a
   await openSandboxed(page, /example\.chat\./)
   await expect.poll(async () => !!(await frameWith(page, 'chat-room', 'bob')), { timeout: 10_000 }).toBe(true)
   const bob = (await frameWith(page, 'chat-room', 'bob'))!
-  expect(await call(page, 'example.chat.room', 'alice', 'say', 'hi from a frame')).toBe(true)
+  const alice = (await frameWith(page, 'chat-room', 'alice'))!
+  await alice.getByRole('textbox', { name: 'Message' }).fill('hi from a frame')
+  await alice.getByRole('button', { name: 'Send' }).click()
   await expect(bob.locator('li')).toHaveText([/alice.*hi from a frame/])
 })
 
@@ -246,6 +245,10 @@ test('imported Sandboxed, todos: an add puts the item in the list in its frame',
   await openSandboxed(page, /example\.todo\./)
   await expect.poll(async () => !!(await frameWith(page, 'todo-list')), { timeout: 10_000 }).toBe(true)
   const list = (await frameWith(page, 'todo-list'))!
-  expect(await call(page, 'example.todo.frontend', 'todos', 'add', 'milk')).toBe(true)
+  await list.getByRole('textbox', { name: 'New todo' }).fill('milk')
+  await list.getByRole('button', { name: 'Add' }).click()
   await expect(list.locator('li')).toHaveText([/milk/])
+  await list.getByRole('textbox', { name: 'New todo' }).fill('eggs')
+  await list.getByRole('textbox', { name: 'New todo' }).press('Enter')
+  await expect(list.locator('li')).toHaveText([/milk/, /eggs/])
 })
