@@ -29,6 +29,13 @@ const providerOf = (p: Pod) => p.implementation.slice(0, p.implementation.lastIn
 
 /** `<namespace>.<runtime>`: the provider of the runtime's pods new to the workspace, the first in `modules` order; the
  * runtime alone if none, or if its id is already dotted (namespaced). */
+/** Whether a provider is the workspace's own (Trust leaves its pods as the file has them): loaded here, from this
+ * page's origin. A foreign provider imported before is not: a file naming it again still gets the user's Trust. */
+export const ownProvider = (loaded: boolean, stored: string | undefined): boolean => {
+  const at = stored && /^https?:\/\//i.test(stored) ? new URL(stored).origin : undefined   // stored whole only when foreign
+  return loaded && (at === undefined || at === globalThis.location?.origin)
+}
+
 export function suggestedName(d: AppDeployment, runtime: string, known: Known = none): string {
   if (runtime.includes('.')) return runtime
   const providers = new Set((d.runtimes[runtime]?.pods ?? []).flatMap(p => (d.pods[p] ? [providerOf(d.pods[p])] : [])))

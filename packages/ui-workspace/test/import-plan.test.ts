@@ -1,7 +1,7 @@
 // The Import dialog's choices, as pure edits of the fetched nano.json: its runtimes renamed, its pods' isolation by Trust.
 import { expect, test } from 'bun:test'
 import type { AppDeployment } from '@pritzlaff/nano-core'
-import { renameRuntimes, selectPods, suggestedName, trusted, validRuntimeId } from '../src/import-plan.ts'
+import { ownProvider, renameRuntimes, selectPods, suggestedName, trusted, validRuntimeId } from '../src/import-plan.ts'
 
 const file = (): AppDeployment => ({
   pods: {
@@ -104,4 +104,10 @@ test('selectPods leaves policy rules naming unticked pods as they are; a runtime
   const rules = app().runtimes['back']!.policy
   expect(selectPods(app(), new Set(['todoStore'])).deployment.runtimes['back']!.policy).toEqual(rules)
   expect(selectPods(app(), new Set(['todos'])).deployment.runtimes['back']).toBeUndefined()
+})
+
+test("only a provider the workspace loaded from its own origin counts as its own: a foreign one imported before still gets Trust", () => {
+  expect(ownProvider(true, '/bundle/nano-ui.js')).toBe(true)
+  expect(ownProvider(true, 'https://other.test/index.js')).toBe(false)
+  expect(ownProvider(false, '/bundle/nano-ui.js')).toBe(false)
 })

@@ -12,7 +12,7 @@ import type { AppDeployment } from '@pritzlaff/nano-core';
 import type { Host } from '../host.ts';
 import { foreignOrigin, type Foreign } from '../import.ts';
 import { el, row } from '../import-confirm.ts';
-import { isolationUnder, renameRuntimes, selectPods, suggestedName, trusted, validRuntimeId, type Trust } from '../import-plan.ts';
+import { isolationUnder, ownProvider, renameRuntimes, selectPods, suggestedName, trusted, validRuntimeId, type Trust } from '../import-plan.ts';
 
 type Chosen = { edit(d: AppDeployment): AppDeployment };
 /** How to reach the network and the host: the page's fetch and the host, or stand-ins in tests. */
@@ -25,7 +25,7 @@ export const setImportHost = (h: Host) => { host = h; };
 export const pageDeps: ImportDeps = {
   fetchJson: async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); },
   importUrl: (url, chosen) => (host ? host.importUrl(url, chosen) : Promise.resolve({ ok: false })),
-  known: (coord) => !!host?.registry.provider(coord),
+  known: (coord) => ownProvider(!!host?.registry.provider(coord), host?.data().modules?.[coord]),
 };
 
 const text = (s: string) => document.createTextNode(s);
