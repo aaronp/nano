@@ -11,12 +11,12 @@
 - `PUBLIC_URL` (set by both Pages workflows from the Pages URL) makes a built nano.json's `modules` absolute:
   template `${PUBLIC_URL}index.js`; examples `${PUBLIC_URL}examples/<name>/<key>.js` (shared kv: `examples/kv/`).
 
-## Blocker
+## Fixed: the emitted types
 
-`make smoke` and `make template-check` fail building nano-ui's types: nano-core's emitted `provider.d.ts` types
-`Coord.namespace(...)` with `ns: Readonly<any>` (declaration emit elides the recursive type), so
-`ns.implementationId('x')` is not an `ImplCoord`. Fix in `packages/nano/src/provider.ts`: give `namespace()` an
-explicit return type (a named type for the building namespace). Then re-run both.
+`make smoke` and `make template-check` failed: nano-core's emitted `.d.ts` typed `Coord.namespace(...)`'s
+coordinates with `ns: Readonly<any>` (a self-referencing type, elided), so nano-ui's `ns.implementationId('x')` was not
+an `ImplCoord`. `packages/nano/src/provider.ts` now types `interfaceId`/`implementationId` as layer 1's coordinates
+(no new export). Both pass (2026-11-17; smoke needs network, so run it outside a sandbox).
 
 ## Publish
 
