@@ -1,10 +1,10 @@
 /**
  * The host's build, into public/ (after prebuild.ts): main.js (CSS imported as text: the dock's golden-layout styles); sandbox/boot.js (a sandboxed pod's frame); the shared libraries in shared/ (one copy, named in index.html's import map);
- * bundle/nano-ui.js (packages/ui, itself shared); the slice example in examples/slice/, and the template in examples/template/ (index.js, nano.json). Every output imports
+ * bundle/nano-ui.js (packages/ui, itself shared); the slice example in examples/slice/, and the template in examples/template/ (index.js, nano.json); todo and chat from examples/dist in examples/<name>/. Every output imports
  * @pritzlaff/nano-core, nano-elements, nano-ui, lit and typebox through the import map, so a module loaded later shares them.
  * With --watch, it builds again on every source change.
  */
-import { copyFileSync, rmSync, watch } from 'node:fs'
+import { cpSync, copyFileSync, rmSync, watch } from 'node:fs'
 import { join } from 'node:path'
 import { SHARED } from '../src/shared/specifiers.ts'
 
@@ -27,12 +27,14 @@ async function all() {
   copyFileSync(join(repo, 'examples/slice/nano.json'), join(pub, 'examples/slice/nano.json'))
   await build([join(repo, 'templates/nano-template/src/index.ts')], join(pub, 'examples/template'))
   copyFileSync(join(repo, 'templates/nano-template/nano.json'), join(pub, 'examples/template/nano.json'))
+  if (Bun.spawnSync(['bun', 'scripts/build.ts'], { cwd: join(repo, 'examples') }).exitCode) throw new Error('examples build failed')
+  for (const name of ['todo', 'chat']) cpSync(join(repo, 'examples/dist', name), join(pub, 'examples', name), { recursive: true })
 }
 
 await all()
 if (watching) {
   let timer: ReturnType<typeof setTimeout> | undefined
   const again = () => { clearTimeout(timer); timer = setTimeout(() => void all().catch(e => console.error(e)), 100) }
-  for (const d of ['packages/ui-workspace/src', 'packages/ui/src', 'packages/nano/src', 'packages/elements/src', 'examples/slice', 'templates/nano-template/src'])
+  for (const d of ['packages/ui-workspace/src', 'packages/ui/src', 'packages/nano/src', 'packages/elements/src', 'examples/slice', 'examples/todo', 'examples/chat', 'examples/kv', 'templates/nano-template/src'])
     watch(join(repo, d), { recursive: true }, again)
 }

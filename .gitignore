@@ -1,5 +1,6 @@
 node_modules
 dist*
+!examples/dist.test.ts
 packages/ui-workspace/public/main.js*
 .DS_Store
 packages/ui-workspace/public/chunks

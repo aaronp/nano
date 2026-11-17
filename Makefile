@@ -1,4 +1,4 @@
-.PHONY: test test-ui install ui dev serve-template link-templates packages smoke publish template-check template-export
+.PHONY: test test-ui install ui dev serve-template serve-examples link-templates packages smoke publish template-check template-export
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
@@ -31,6 +31,10 @@ dev:
 TEMPLATE_PORT ?= 5174
 serve-template:
 	$(MAKE) -C templates/nano-template serve PORT=$(TEMPLATE_PORT)
+
+EXAMPLES_PORT ?= 5175
+serve-examples:
+	cd examples && bun scripts/build.ts && bun scripts/serve.ts $(EXAMPLES_PORT)
 
 # Point the templates' @pritzlaff/nano-* at this repo's packages (after a `bun install` in each).
 link-templates:
