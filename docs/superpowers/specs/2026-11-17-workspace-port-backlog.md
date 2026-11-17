@@ -133,6 +133,10 @@ Old files that could not be ported are kept verbatim under `packages/ui-workspac
 13. **Auto-connect.** A subscription whose pod(s) are absent stays pending; an orthogonal listener deployed with the app
     (git-ops/Argo-like) watches the Runtime and subscribes once both ends exist. Today selective import drops such
     subscriptions with a warning. Its own design, later.
+    Done (the small part): the workspace auto-connects a pod it places (drawer add, implementation change, import):
+    each unmet dependency with exactly one matching pod gets a call edge in that pod's runtime, plus the rule letting it
+    in when that runtime's policy is `rules` (as `AppDeployment.edit`'s `create`); none or several is a warning toast.
+    `src/auto-connect.ts`. The listener above is still to design.
 
 14. **Settings: the decisions made so far, visible and editable, per runtime or per pod.** A Settings page in the
     workspace that shows and changes the choices currently hard-coded or implicit, at workspace, runtime and pod

@@ -8,6 +8,7 @@
  */
 import { html, render } from 'lit'
 import type { Host } from './host.ts'
+import { connected } from './auto-connect.ts'
 import { defineAppBar, type AppBarEl } from './components/app-bar.ts'
 import { defineWorkspaceControls } from './components/workspace-controls.ts'
 import { chosen, viewTags } from './dock/panels.ts'
@@ -31,7 +32,7 @@ function podControls(h: Host, pod: string): Element {
   el.style.cssText = 'display:flex;align-items:center;gap:8px;padding-left:12px;border-left:1px solid color-mix(in srgb, currentColor 25%, transparent)'
   const swap = (coord: string) => {
     const d = h.data(), p = d.pods[pod]!, keeps = h.registry.implementation(coord)?.config?.check(p.config)
-    return h.apply({ ...d, pods: { ...d.pods, [pod]: { implementation: coord, eager: p.eager, ...(keeps && { config: p.config }) } } })
+    return h.apply(connected({ ...d, pods: { ...d.pods, [pod]: { implementation: coord, eager: p.eager, ...(keeps && { config: p.config }) } } }, h.registry, [pod]))
   }
   const draw = () => {
     const d = h.data(), p = d.pods[pod]

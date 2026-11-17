@@ -16,6 +16,7 @@ import { probe } from './described.ts'
 import { hostProvider, hostUi } from './host-ui.ts'
 import { edgesFor } from './sandbox/edges.ts'
 import { openFrame } from './sandbox/frames.ts'
+import { connected } from './auto-connect.ts'
 import { framesOf } from './sandbox/sandboxed-view.ts'
 import { standIn, type Frame } from './sandbox/stand-in.ts'
 
@@ -133,7 +134,8 @@ export async function start(): Promise<NanoResult<Host>> {
       }))
       if (!imported.ok) return imported
       // ponytail: an apply that fails now leaves the new providers registered (a Registry has no remove); harmless, unused.
-      return apply(placed(imported.value.deployment), imported.value.views)
+      const next = placed(imported.value.deployment), before = data().pods
+      return apply(connected(next, registry, Object.keys(next.pods).filter(p => !(p in before))), imported.value.views)
     },
   })
 }
