@@ -54,11 +54,16 @@ export function pair(entries: Entry[]): Message[] {
   return out
 }
 
-/** Seqs are contiguous (one writer assigns them; a store drops only from the oldest end); after `flush()`, `size`/`oldest`/`range` include every appended entry. */
+/**
+ * Seqs are contiguous (one writer per store assigns them: two tabs on one store is out of scope; a store drops only from
+ * the oldest end). After `flush()`, `size`/`oldest`/`range` include every appended entry; `flush()` rejects when
+ * buffered writes failed. `range(from, to, limit)` is inclusive and keeps at most `limit`, from the `from` end.
+ * `search` matches the entry's JSON text, deployment entries too, and keeps the newest `limit` matches, oldest first.
+ */
 export interface MessageStore {
   append(e: Entry): void
   flush(): Promise<void>
-  range(from?: number, to?: number): Promise<Entry[]>
+  range(from?: number, to?: number, limit?: number): Promise<Entry[]>
   search(text: string, limit?: number): Promise<Entry[]>
   oldest(): Promise<number | undefined>
   size(): Promise<number>

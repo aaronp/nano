@@ -7,7 +7,8 @@ export function memoryStore(opts: { max?: number } = {}): MessageStore {
   return {
     append(e) { all.push(e); if (all.length > max) all.shift() },
     flush: async () => {},
-    range: async (from = -Infinity, to = Infinity) => all.filter(e => e.seq >= from && e.seq <= to),
+    range: async (from = -Infinity, to = Infinity, limit = Infinity) =>
+      limit <= 0 ? [] : all.filter(e => e.seq >= from && e.seq <= to).slice(0, limit),
     search: async (text, limit = Infinity) => {
       const t = text.toLowerCase()
       return limit <= 0 ? [] : all.filter(e => JSON.stringify(e.event).toLowerCase().includes(t)).slice(-limit)

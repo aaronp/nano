@@ -44,11 +44,14 @@ project.
   ring (phase 1), IndexedDB, and a batching remote store (later).
 - **Asynchronous from the start:**
   - `append(item)` doesn't wait for durable storage. A batching store may buffer, and `flush()` awaits what is
-    buffered.
-  - `range(from, to)` returns the items in time order.
-  - `search(text, limit?)`, `size()` and `clear()` cover the rest.
+    buffered. `flush()` rejects when buffered writes failed.
+  - `range(from?, to?, limit?)` returns the items in seq order, inclusive, at most `limit` of them counted from the
+    `from` end.
+  - `search(text, limit?)` matches the item's JSON text (deployment items too) and returns at most the newest `limit`
+    matches, oldest first. `oldest()`, `size()` and `clear()` cover the rest.
   - Items carry a monotonically increasing sequence number `seq`, so ranges and cursors don't depend on clock
     resolution.
+  - **One writer per store:** the recorder assigns seqs, so two tabs writing one store is out of scope.
 - **Phase 1 ships `memoryStore({ max })`:** 10,000 by default, dropping the oldest when full.
 - **A shared contract test** (`storeContract(make)`) exercises the interface: ordering, range, search, clear, the cap,
   and flush. Every future store must pass it, which is what makes storage swappable in practice.
