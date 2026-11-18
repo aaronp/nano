@@ -6,6 +6,7 @@
  *   diverge(pair(await store.range(r.from, r.to)), pair(await second.range()))   // null: the same messages came out
  */
 import { failure, success, type Application, type NanoResult } from '@pritzlaff/nano-core'
+import { restartOrder } from './restart-order.ts'
 import { pair, truncated, type Message, type MessageStore } from './entry.ts'
 
 /**
@@ -52,7 +53,7 @@ type Opts = { to?: number; now?: () => number; sleep?: (ms: number) => Promise<v
 
 /**
  * Rebuilds the app's state as of `to` (default: the newest entry). It starts from the store's oldest entry, which must
- * be a clean start, applies its deployment and restarts every pod (calls in flight finish on the old instances). Then
+ * be a clean start, applies its deployment and restarts every pod, call-edge targets before their callers (calls in flight finish on the old instances). Then
  * every host input recorded after it, up to `to`, happens again at its offset from the start, measured from the reset:
  * each root is re-sent (reads too), each later deployment is applied and each `restarted` pod is restarted. Roots are
  * not awaited one by one: an input waits only for the roots whose outcome was recorded before it, as the host did.
@@ -75,7 +76,7 @@ export async function replay(app: Application, store: MessageStore, opts: Opts =
   try {
     const reset = await app.apply(start.event.deployment)
     if (!reset.ok) return reset
-    for (const pod of Object.keys(start.event.deployment.pods)) { const r = await app.restart(pod); if (!r.ok) return r }
+    for (const pod of restartOrder(start.event.deployment)) { const r = await app.restart(pod); if (!r.ok) return r }
 
     const now = opts.now ?? Date.now, sleep = opts.sleep ?? wait, began = now()
     const n = { sent: 0, failed: 0, applied: 0, restarted: 0, from: start.seq, to: entries.at(-1)!.seq }
