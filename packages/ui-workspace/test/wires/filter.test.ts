@@ -43,3 +43,19 @@ test('a runtime pill keeps that runtime\'s cords and modules', () => {
   const v = view({ show: 'all', pills: { ...none, runtimes: ['side'] } })
   expect([v.wires, v.calls, v.rack.map(r => r.id)]).toEqual([[], [], ['m']])
 })
+
+test('laid out with only a Connected view, the rack packs to the jacks it shows', async () => {
+  const { buildModel, snapshotOf } = await import('../../src/wires/model.ts'), { panels, registry } = await import('./setup.ts')
+  const d = deployment(); d.runtimes['main']!.subscriptions.push({ kind: 'call', from: 'r', to: 'd' })
+  const input = { snapshot: snapshotOf(d, registry()), panels, W: 1200, H: 600, application: 'ui' }
+  const full = buildModel(input), v = viewOf(full, { show: 'connected', pills: none }), packed = buildModel({ ...input, only: v })
+  expect(Object.keys(packed.P).sort()).toEqual(Object.keys(v.P).sort())
+  expect(packed.rack.map(r => r.id)).toEqual(['d'])
+  expect(packed.rack[0]!.w).toBeLessThanOrEqual(full.rack[0]!.w)
+})
+
+test('a module action\'s in and out jacks are twins; a chassis jack has none', async () => {
+  const { twin } = await import('../../src/wires/jacks.ts'), all = view({ show: 'all' })
+  expect(twin(all.P, all.P[k('d', Debounce, 'push', 'in')]!)?.key).toBe(k('d', Debounce, 'push', 'out'))
+  expect(twin(all.P, all.P[k('r', Input, 'submit', 'in')]!)).toBeUndefined()
+})

@@ -1,6 +1,6 @@
 // What a view shows of the model: Show Connected (only jacks a cord touches, only modules with one) or All, narrowed by
 // pills. Selected pills narrow; none selected in a group means all of it. Pure; shared by the views that draw jacks.
-import type { Model } from './model'
+import { buildModel, type Model } from './model'
 import type { Wires } from './wires'
 
 /** The selected pills: runtimes and pods (the Pipes / Call edges boxes pick the kinds of cord). */
@@ -27,5 +27,16 @@ export function viewOf(m: Model, { show, pills }: ViewSettings): Model {
 
 /** What the stage shows: while editing, everything (to patch any jack); else the viewer's settings over the cords their
  * Pipes / Call edges boxes leave. */
-export const onStage = (el: Wires): Model => el.s.editing ? el.model
-  : viewOf({ ...el.model, wires: el.s.showPipes ? el.model.wires : [], calls: el.s.showCalls ? el.model.calls : [] }, el.s)
+export function onStage(el: Wires): Model {
+  const { s } = el, kinds = (m: Model) => ({ ...m, wires: s.showPipes ? m.wires : [], calls: s.showCalls ? m.calls : [] })
+  if (s.editing) return el.model
+  const v = viewOf(kinds(el.model), s), input = el.input
+  if (s.show === 'all' || !input) return v
+  // Connected: lay the rack out again with only what it shows, so it packs tight
+  const key = JSON.stringify([s.pills, s.showPipes, s.showCalls]), hit = packed.get(el.model)
+  if (hit?.key === key) return hit.m
+  const m = viewOf(kinds(buildModel({ ...input, only: v })), s)
+  packed.set(el.model, { key, m })
+  return m
+}
+const packed = new WeakMap<Model, { key: string; m: Model }>()

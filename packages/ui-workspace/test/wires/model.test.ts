@@ -10,8 +10,8 @@ test('panels become mirrored chassis with jacks: outs along the top, ins along t
   const m = model(deployment())
   expect(m.chassis.map(c => [c.label, c.x, c.instance])).toEqual([['r', 800, 'r'], ['l', 400, 'l'], ['textarea', 0, null]])
   const out = m.P[k('r', Input, 'submit', 'out')]!, inn = m.P[k('r', Input, 'submit', 'in')]!
-  expect([out.dir, out.kind, out.y]).toEqual(['out', 'chassis', 56])
-  expect([inn.dir, inn.y]).toEqual(['in', 244])
+  expect([out.dir, out.kind, out.y]).toEqual(['out', 'chassis', 70])
+  expect([inn.dir, inn.y]).toEqual(['in', 220])
   // an action is an in jack and, for its result, an out jack
   expect(Object.values(m.P).filter(p => p.owner === 'l').map(p => [p.label, p.dir])).toEqual([['log', 'out'], ['entries', 'out'], ['clear', 'out'], ['log', 'in'], ['entries', 'in'], ['clear', 'in']])
 })

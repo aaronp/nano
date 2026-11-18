@@ -26,6 +26,8 @@ export type Model = { W: number; H: number; chassis: Chassis[]; rack: RackItem[]
 export type ModelInput = {
   snapshot: Snapshot; panels: Panel[]; W: number; H: number; application: string
   kinds?: Record<string, string>; titles?: Record<string, string>
+  /** Lay out only this view's jacks and rack modules (Show: Connected packs the rack with what it shows). */
+  only?: Model
 }
 
 /** A jack of an implementation: an op at its port (`<interface>/<op>`), as an input or an output (nano-ui's pads). */
@@ -62,8 +64,9 @@ export const dirOf = (j: Jack): 'in' | 'out' => j.dir
 export const hidden = (id: string, application: string) => id === application
 
 /** Builds the model. Panels are given in front coordinates; the back face mirrors x. */
-export function buildModel({ snapshot, panels, W, H, application, kinds = {}, titles = {} }: ModelInput): Model {
-  const opsOf = new Map(snapshot.instances.map(i => [i.id, i.ops])), deployOf = new Map(snapshot.instances.map(i => [i.id, i.labels?.['nano/deploy'] ?? 'host']))
+export function buildModel({ snapshot, panels, W, H, application, kinds = {}, titles = {}, only }: ModelInput): Model {
+  const keep = (id: string, ops: Jack[]) => only ? ops.filter(j => only.P[portKey(id, j.port + ':' + j.dir)]) : ops
+  const opsOf = new Map(snapshot.instances.map(i => [i.id, keep(i.id, i.ops)])), deployOf = new Map(snapshot.instances.map(i => [i.id, i.labels?.['nano/deploy'] ?? 'host']))
   const P: Record<string, Port> = {}
   const chassis: Chassis[] = []
   const placed = new Set<string>()
@@ -79,9 +82,9 @@ export function buildModel({ snapshot, panels, W, H, application, kinds = {}, ti
   const rack: RackItem[] = []
   let x = 20, row = 0
   for (const inst of snapshot.instances) {
-    if (placed.has(inst.id) || hidden(inst.id, application)) continue
-    const jacks = inst.ops
-    const block = !jacks.some(o => dirOf(o) === 'out')
+    if (placed.has(inst.id) || hidden(inst.id, application) || (only && !only.rack.some(r => r.id === inst.id))) continue
+    const jacks = opsOf.get(inst.id)!
+    const block = !inst.ops.some(o => dirOf(o) === 'out')
     const kind = kinds[inst.id]
     const sub = kind ? (titles[kind] ?? kind) : (inst.ops[0]?.port.replace(/\.[^.]*$/, '') ?? '')
     const w = moduleW(inst.id, jacks)

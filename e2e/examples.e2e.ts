@@ -398,9 +398,13 @@ test('Connections, the chat after a message: messaging post\'s output jack is co
   await expect(w).toHaveAttribute('flipped', '')
   for (const k of [post, put]) await expect(w.locator(`[data-jack="${k}"]`)).toHaveCount(1)
   // the cord runs from post's output jack to put's input jack: seen, declared, dashed
-  const [a, b] = await page.evaluate(ks => ks.map(k => { const p = (document.querySelector('c-wires') as any).model.P[k]; return `${p.x} ${p.y}` }), [post, put])
+  const at = async (k: string) => { const c = w.locator(`[data-jack="${k}"] circle`).first(); return `${await c.getAttribute('cx')} ${await c.getAttribute('cy')}` }
+  const [a, b] = [await at(post), await at(put)]
   const cord = w.locator(`[data-call="example.chat.backend|messaging|chatStore"] [data-op-call="seen"][d^="M${a} C"][d$=" ${b}"]`)
-  await expect(cord).toHaveAttribute('stroke-dasharray', '6 5')
+  await expect(cord).toHaveAttribute('stroke-dasharray', '10 6')
+  // the output end is a filled socket, the input end a hollow one
+  await expect(w.locator(`[data-jack="${post}"] [data-dir="out"]`)).toHaveAttribute('fill', '#E6EDF3')
+  await expect(w.locator(`[data-jack="${put}"] [data-dir="in"]`)).toHaveAttribute('fill', '#0A0D11')
   // Show: Connected (the default) leaves out a jack no cord touches; All shows it
   await expect(w.locator(`[data-jack="${idle}"]`)).toHaveCount(0)
   await w.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'All' }).click()
@@ -410,5 +414,6 @@ test('Connections, the chat after a message: messaging post\'s output jack is co
   await page.waitForTimeout(1200)
   await page.screenshot({ path: test.info().outputPath('rack.png') })
   await w.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'All' }).click()
+  await page.waitForTimeout(1200)
   await page.screenshot({ path: test.info().outputPath('rack-all.png') })
 })

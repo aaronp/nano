@@ -1,10 +1,10 @@
 // The back plate: panel chassis, the service rack and its modules, jacks, cords, packets, the live cord, and (in
 // puzzle mode) the dashed leaders and their packets.
 import { html, nothing, svg } from 'lit'
-import { ERR_COLOR, OK_COLOR } from './constants'
+import { CALL_COLOR, ERR_COLOR, OK_COLOR } from './constants'
 import { bezierAt, cordD, cordGeo, polylineAt } from './geometry'
 import { opCord } from './calls'
-import { jackLabel } from './jacks'
+import { jackLabel, twin } from './jacks'
 import { checkConnect } from './model'
 import { inFlight, packet } from './packets'
 import { visibleKeys } from './pointer'
@@ -33,12 +33,14 @@ export function renderBack(el: Wires, d: Vals) {
     const isHover = cord !== null && k === cord.hover
     const isAnchor = cord !== null && k === cord.anchor
     const ring = isHover ? (cord.err ? ERR_COLOR : OK_COLOR) : isAnchor ? '#E6EDF3' : lit(k) ? OK_COLOR : '#4A5564'
-    const base = {
-      key: k, x: p.x, y: p.y, label: jackLabel(p), ring, ringR: isHover ? 17 : 14,
-      core: p.dir === 'out' ? '#E6EDF3' : '#4A5564', coreR: p.dir === 'in' ? 5 : 7,
+    // an input is a hollow socket, an output a filled one; on a module an action's pair shares one label, over both
+    const t = twin(P, p), pair = t && p.dir === 'in'
+    return {
+      key: k, x: p.x, y: p.y, ring, ringR: isHover ? 22 : 18, out: p.dir === 'out',
+      label: t && !pair ? '' : jackLabel(p, pair ? 2 * p.slot : p.slot), lx: pair ? Math.round((p.x + t.x) / 2) : p.x,
+      ly: p.kind === 'chassis' ? p.y + 42 : p.y - 26,
       op: cord !== null ? (isAnchor || lit(k) ? 1 : 0.3) : selId === null || jackRoute[k] === selId ? 1 : 0.3,
     }
-    return { ...base, lx: p.x, ly: p.kind === 'block' ? p.y - 22 : p.y + 34, anchor: 'middle' }
   })
 
   const cords = (s.showPipes ? wires : []).map(w => {
@@ -92,18 +94,18 @@ export function renderBack(el: Wires, d: Vals) {
   </div>
 
   ${isRelay ? modules.map(r => html`<div data-module=${r.id} data-deploy=${r.deploy} data-mark=${r.mark ? '' : nothing} style="position:absolute; left:${r.x}px; top:${r.y}px; width:${r.w}px; height:${r.h}px; box-sizing:border-box; border-radius:6px; background:#1B212A; border:${r.border}; ${r.mark ? 'outline:2px solid #F5A524; outline-offset:2px; ' : ''}opacity:${r.op}">
-    <div style="position:absolute; left:0; right:0; bottom:7px; display:flex; flex-direction:column; align-items:center; gap:1px">
-      <span style="font-size:11px; font-weight:600; color:#E6EDF3">${r.title}</span>
-      <span class="mono" style="font-size:10px; color:#8B96A5">${r.sub}</span>
-      <span class="mono" style="font-size:9.5px; color:#7EE787">${r.stat}</span>
+    <div style="position:absolute; left:10px; right:10px; top:6px; display:flex; align-items:baseline; gap:10px; white-space:nowrap; overflow:hidden">
+      <span style="font-size:18px; font-weight:600; color:#E6EDF3">${r.title}</span>
+      <span class="mono" style="font-size:12px; color:#8B96A5">${r.sub}</span>
+      <span class="mono" style="font-size:12px; color:#7EE787">${r.stat}</span>
     </div>
   </div>`) : ''}
 
   <svg width=${W} height=${H} style="position:absolute; left:0; top:0; overflow:visible; pointer-events:none" aria-hidden="true">
     ${jacks.map(j => svg`<g data-jack=${j.key} opacity=${j.op}>
-      <circle cx=${j.x} cy=${j.y} r=${j.ringR} fill="#0A0D11" stroke=${j.ring} stroke-width="2"></circle>
-      <circle cx=${j.x} cy=${j.y} r=${j.coreR} fill=${j.core} stroke="none" stroke-width="1.5"></circle>
-      <text x=${j.lx} y=${j.ly} text-anchor=${j.anchor} font-family="JetBrains Mono, monospace" font-size="16" fill="#C9D1D9">${j.label}</text>
+      <circle cx=${j.x} cy=${j.y} r=${j.ringR} fill="#0A0D11" stroke=${j.ring} stroke-width="3"></circle>
+      <circle data-dir=${j.out ? 'out' : 'in'} cx=${j.x} cy=${j.y} r="9" fill=${j.out ? '#E6EDF3' : '#0A0D11'} stroke=${j.out ? 'none' : '#8B96A5'} stroke-width="2"></circle>
+      <text x=${j.lx} y=${j.ly} text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="20" fill="#C9D1D9">${j.label}</text>
     </g>`)}
   </svg>
 
@@ -117,10 +119,10 @@ export function renderBack(el: Wires, d: Vals) {
       <circle cx=${w.gm.b[0]} cy=${w.gm.b[1]} r="7" fill=${w.color} stroke="#0A0D11" stroke-width="2"></circle>
     </g>`)}
     ${s.showCalls ? m.calls.map(c => svg`<g data-call=${c.id} opacity=${selId === null ? 0.9 : 0.3}>
-      ${c.b.map(b => svg`<path d=${cordD(cordGeo(c.a, b))} fill="none" stroke="#8B96A5" stroke-width="1.5" stroke-dasharray="6 5" stroke-linecap="round"></path>
-      <circle cx=${b.x} cy=${b.y} r="4" fill="#8B96A5"></circle>`)}
-      ${c.b.length ? svg`<circle cx=${c.a.x} cy=${c.a.y} r="4" fill="#8B96A5"></circle>
-      <text x=${c.a.x + 8} y=${c.a.y + 16} font-family="JetBrains Mono, monospace" font-size="10" fill="#8B96A5">calls ${c.to}</text>` : ''}
+      ${c.b.map(b => svg`<path d=${cordD(cordGeo(c.a, b))} fill="none" stroke=${CALL_COLOR} stroke-opacity="0.6" stroke-width="2.5" stroke-dasharray="10 6" stroke-linecap="round"></path>
+      <circle cx=${b.x} cy=${b.y} r="5" fill=${CALL_COLOR}></circle>`)}
+      ${c.b.length ? svg`<circle cx=${c.a.x} cy=${c.a.y} r="5" fill=${CALL_COLOR}></circle>
+      <text x=${c.a.x + 8} y=${c.a.y + 20} font-family="JetBrains Mono, monospace" font-size="16" fill=${CALL_COLOR}>calls ${c.to}</text>` : ''}
       ${(c.ops ?? []).map(opCord)}</g>`) : ''}
     ${relayPackets.map(k => packet(k, 6, 3, 10))}
   </svg>` : ''}

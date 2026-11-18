@@ -6,7 +6,7 @@ import type { Host } from '../host.ts'
 import { FLASH_MS, FRAME_MS, TURN_MS, VIEWS, type View } from './constants'
 import { onWheel, zoomBy } from './camera'
 import { catalogOf, change, connect, create, disconnect, openPanel, removeComponent } from './edit'
-import { buildModel, snapshotOf, type Model, type Panel } from './model'
+import { buildModel, snapshotOf, type Model, type ModelInput, type Panel } from './model'
 import { loadFonts, panelsOf, styles } from './page'
 import { landPackets, tracePacket } from './packets'
 import { buildPuzzle } from './puzzle'
@@ -27,13 +27,11 @@ export class Wires extends LitElement {
   declare flipped: boolean
   s: State = initial()
   model: Model = empty()
+  input?: ModelInput   // what the model was last built from
   puzzle = buildPuzzle(this.model)
-  stage = { w: 0, h: 0 }
-  drag: { x: number; y: number; ry: number; rx: number } | null = null
+  stage = { w: 0, h: 0 }; drag: { x: number; y: number; ry: number; rx: number } | null = null
   #off: (() => void)[] = []
-  #timer?: ReturnType<typeof setInterval>
-  #layout = ''
-  #pending = false
+  #timer?: ReturnType<typeof setInterval>; #layout = ''; #pending = false
 
   constructor() {
     super()
@@ -85,7 +83,8 @@ export class Wires extends LitElement {
     for (const i of snapshot.instances) { const k = this.kindOf(i.id); if (k) kinds[i.id] = k }
     const titles = Object.fromEntries(Object.entries(this.catalog).map(([k, e]) => [k, e.title]))
     this.#layout = JSON.stringify(panels)
-    this.model = buildModel({ snapshot, panels, W: this.model.W, H: this.model.H, application: this.application, kinds, titles })
+    this.input = { snapshot, panels, W: this.model.W, H: this.model.H, application: this.application, kinds, titles }
+    this.model = buildModel(this.input)
     this.puzzle = buildPuzzle(this.model)
     this.requestUpdate()
   }

@@ -2,6 +2,7 @@
 // or pairs naming no jack here) the pod-level cord from the bottom of the caller's box to the callee's jacks or box.
 import type { AppDeployment, Registry } from '@pritzlaff/nano-core'
 import { svg } from 'lit'
+import { CALL_COLOR } from './constants'
 import { cordD, cordGeo } from './geometry'
 import { portKey, type Chassis, type Port, type RackItem, type Snapshot } from './model'
 
@@ -43,10 +44,10 @@ export function callCords(calls: Snapshot['calls'] = [], box: (id: string) => Bo
   })
 }
 
-/** One op-level call cord, dashed: seen and declared bright, declared dim, not declared amber with a visible label. */
+/** One op-level call cord, dashed in the call colour: seen bright, declared but unseen dim, not declared amber with a visible label. */
 export const opCord = (o: OpCord) => {
-  const col = !o.declared ? '#F5A524' : o.seen ? '#E6EDF3' : '#8B96A5'
-  return svg`<path data-op-call=${o.declared ? (o.seen ? 'seen' : 'declared') : 'not-declared'} d=${cordD(cordGeo(o.a, o.b))} fill="none" stroke=${col} stroke-width=${o.seen && o.declared ? 2.5 : 1.5} stroke-dasharray="6 5" stroke-linecap="round"></path>
-    <circle cx=${o.a.x} cy=${o.a.y} r="4" fill=${col}></circle><circle cx=${o.b.x} cy=${o.b.y} r="4" fill=${col}></circle>
-    ${o.declared ? '' : svg`<text data-not-declared x=${Math.round((o.a.x + o.b.x) / 2) + 6} y=${Math.round((o.a.y + o.b.y) / 2)} font-family="JetBrains Mono, monospace" font-size="10" fill=${col}>not declared</text>`}`
+  const col = !o.declared ? '#F5A524' : CALL_COLOR
+  return svg`<path data-op-call=${o.declared ? (o.seen ? 'seen' : 'declared') : 'not-declared'} d=${cordD(cordGeo(o.a, o.b))} fill="none" stroke=${col} stroke-opacity=${o.seen || !o.declared ? 1 : 0.5} stroke-width=${o.seen && o.declared ? 4 : 2.5} stroke-dasharray="10 6" stroke-linecap="round"></path>
+    <circle cx=${o.a.x} cy=${o.a.y} r="5" fill=${col}></circle><circle cx=${o.b.x} cy=${o.b.y} r="5" fill=${col}></circle>
+    ${o.declared ? '' : svg`<text data-not-declared x=${Math.round((o.a.x + o.b.x) / 2) + 6} y=${Math.round((o.a.y + o.b.y) / 2)} font-family="JetBrains Mono, monospace" font-size="16" fill=${col}>not declared</text>`}`
 }

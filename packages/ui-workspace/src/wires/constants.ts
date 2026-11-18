@@ -3,24 +3,28 @@
 /** Rack and piece geometry, relative to the pane's height H where the prototype had fixed rows below its 560px pane. */
 export const RACK_TOP = 32          // the rack starts this far below the pane (592 - 560)
 export const ROW_Y = 60             // first rack row below the pane (620 - 560)
-export const ROW_STEP = 150         // between rack rows: a module and the labels of the row below
+export const ROW_STEP = 150         // between rack rows
 export const BLOCK_DY = -2          // a block's top vs its row (618 - 620)
 export const BLOCK_JACK_DY = -14    // a block's jacks vs its row (606 - 620)
-export const MOD_H = 116
+export const MOD_H = 112
+/** A module's title band, above its jacks. */
+export const MOD_JACK_Y = 82
 export const BLOCK_H = 82
-export const JACK_W = 110           // per-jack slot width of a rack module: room for the jack and its label
+export const JACK_W = 70            // per-jack slot width of a rack module: an action's pair shares one label
 export const PIECE_H = 40
 export const ROW_H = 46
 export const PUZ_Y0 = 40
 export const TAB_R = 7
 export const FORK_W = 64
-export const HIT_R = 20
+export const HIT_R = 22
 /** The pane's share of the stage when it eases back. */
 export const SCALE = 0.9
 
 /** Route colours, in the order routes get them: the prototype's four sample routes, then its extra colours. */
 export const PALETTE = ['#7EE787', '#F5A524', '#4CC2FF', '#FF7AB6', '#D2A8FF', '#FFA657', '#79C0FF', '#F2CC60', '#56D4DD']
 export const OK_COLOR = '#7EE787'
+/** Call cords (dashed), apart from pipes (solid, in their route's colour). */
+export const CALL_COLOR = '#4CC2FF'
 export const ERR_COLOR = '#FF7B72'
 
 export const TRAVEL_MS = 900
