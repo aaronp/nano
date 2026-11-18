@@ -50,8 +50,8 @@ export class Desk extends LitElement {
   /** The current arrangement, for Save. */
   layout(): DeskLayout { return this.#l }
 
-  connectedCallback() { super.connectedCallback(); window.addEventListener('keydown', this.#key); if (this.hasUpdated) this.#attach() }
-  disconnectedCallback() { super.disconnectedCallback(); window.removeEventListener('keydown', this.#key); this.#detach() }
+  connectedCallback() { super.connectedCallback(); if (this.hasUpdated) this.#attach() }
+  disconnectedCallback() { super.disconnectedCallback(); this.#detach() }
   willUpdate(changed: Map<string, unknown>) { if (changed.has('host')) { this.#detach(); this.#read = false; this.#attach() } }
   #attach() {
     const h = this.host
@@ -91,20 +91,23 @@ export class Desk extends LitElement {
   }
 
   #select(sel: Sel, toast = '') { this.sel = sel; this.#toast = toast; this.requestUpdate() }
-  #remove() { const h = this.host, s = this.sel; if (h && s && 'pipe' in s) unplug(h, s.pipe).then(e => this.#select(e ? s : null, e ?? '')) }
-  #key = (e: KeyboardEvent) => {
-    if (!this.editing) return
+  #done(s: Sel, err?: string) { if (this.sel === s && this.editing) this.#select(err ? s : null, err ?? '') }
+  #remove() { const h = this.host, s = this.sel; if (h && s && 'pipe' in s) unplug(h, s.pipe).then(e => this.#done(s, e)) }
+  #key(e: KeyboardEvent) {
+    const t = e.composedPath()[0] as Element | undefined
+    if (!this.editing || t?.closest?.('input,textarea,select,[contenteditable]')) return
     if (e.key === 'Escape') this.#select(null)
-    else if (e.key === 'Delete' || e.key === 'Backspace') this.#remove()
+    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); this.#remove() }
   }
   #click(e: MouseEvent) {
     if (!this.editing) return
+    ;(e.currentTarget as HTMLElement).focus()
     const t = e.target as Element, j = t.closest?.('[data-jack]')?.getAttribute('data-jack'), w = t.closest?.('[data-pipe]')?.getAttribute('data-pipe')
     if (w) return this.#select({ pipe: w })
     if (!j) return this.#select(null)
     const s = this.sel, h = this.host
     if (!s || !('jack' in s) || !h) return this.#select({ jack: j })
-    patch(h, this.#m.wires, s.jack, j).then(err => this.#select(err ? s : null, err ?? ''))
+    patch(h, this.#m.wires, s.jack, j).then(err => this.#done(s, err))
   }
 
   render() {
@@ -119,7 +122,7 @@ export class Desk extends LitElement {
       <button data-edit aria-label="Edit" aria-pressed=${this.editing} @click=${() => { this.editing = !this.editing; this.#select(null) }}>&#9998;</button>
       ${this.sel && 'pipe' in this.sel ? html`<button data-remove @click=${() => this.#remove()}>Remove</button>` : ''}
     </div>
-    <div class="stage" @click=${(e: MouseEvent) => this.#click(e)}>${l.snap ? html`<div data-snap></div>` : ''}${renderRuntimes(this.#m, this.#a, l, this.#down, { sel: this.sel && 'jack' in this.sel ? this.sel.jack : undefined, fits: this.sel && 'jack' in this.sel ? fitting(this.#m.wires, keyOf(this.sel.jack)) : new Set() })}
+    <div class="stage" tabindex="0" @keydown=${(e: KeyboardEvent) => this.#key(e)} @click=${(e: MouseEvent) => this.#click(e)}>${l.snap ? html`<div data-snap></div>` : ''}${renderRuntimes(this.#m, this.#a, l, this.#down, { sel: this.sel && 'jack' in this.sel ? this.sel.jack : undefined, fits: this.sel && 'jack' in this.sel ? fitting(this.#m.wires, keyOf(this.sel.jack)) : new Set() })}
       <svg width=${W} height=${H}>${renderCords(this.#m, this.#a, l)}</svg>${this.#toast ? html`<div data-toast>${this.#toast}</div>` : ''}</div>`
   }
 }

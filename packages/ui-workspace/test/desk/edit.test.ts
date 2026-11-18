@@ -19,7 +19,7 @@ async function mount(edit = true) {
   const jack = (key: string) => root.querySelector<HTMLElement>(`[data-jack="main ${key}"]`)!
   const cord = (id: string) => root.querySelector<SVGElement>(`path[data-pipe="${id}"]`)!
   const subs = () => JSON.stringify(s.app.deployment().runtimes.main!.subscriptions)
-  const key = (name: string) => window.dispatchEvent(new KeyboardEvent('keydown', { key: name }))
+  const key = (name: string, from: EventTarget = root.querySelector('.stage')!) => from.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, composed: true, cancelable: true }))
   return { ...s, el, root, settle, jack, cord, subs, key }
 }
 const logOut = k('l', Log, 'log', 'out'), mapIn = k('m', MapIface, 'map', 'in')
@@ -79,4 +79,13 @@ test('Esc clears the selection', async () => {
   t.key('Escape'); await t.settle()
   expect(t.el.sel).toBeNull()
   expect(t.root.querySelector('[data-fits]')).toBeNull()
+})
+
+test('Backspace typed in an input elsewhere does not unplug', async () => {
+  const t = await mount()
+  t.cord(t.s1.id).dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true })); await t.settle()
+  const before = t.subs(), input = document.createElement('input')
+  document.body.append(input)
+  t.key('Backspace', input); await t.settle()
+  expect(t.subs()).toBe(before)
 })
