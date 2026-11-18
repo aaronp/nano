@@ -19,11 +19,11 @@ registry.add(Provider.define('acme', [
 ]))
 const tick = () => new Promise(r => setTimeout(r, 1))
 
-async function make(front = 'acme/front') {
+async function make(front = 'acme/front', policy?: object) {
   const d = AppDeployment.assemble({
     pods: { front: { implementation: front, eager: false }, store: { implementation: 'acme/store', eager: false } },
-    runtimes: { r: { pods: ['front', 'store'], subscriptions: [{ kind: 'call', from: 'front', to: 'store' }] } },
-  }, registry)
+    runtimes: { r: { pods: ['front', 'store'], subscriptions: [{ kind: 'call', from: 'front', to: 'store' }], ...(policy && { policy }) } },
+  } as AppDeployment, registry)
   if (!d.ok) throw new Error(d.fail.reason)
   const a = await Application.create(d.value)
   if (!a.ok) throw new Error(a.fail.reason)
@@ -61,7 +61,7 @@ test('host calls are listed, never reconciled', async () => {
   const { app, obs } = await make()
   await app.call('r', 'store').drop('a')
   expect(obs.calls()).toContainEqual({ runtime: 'r', from: 'host', to: 'store', source: null, target: 'acme.Store/drop', declared: false, seen: true })
-  expect(obs.reconciled().runtimes.r!.subscriptions[0]).toEqual({ kind: 'call', from: 'front', to: 'store', ops: [{ source: 'acme.Front/send', target: 'acme.Store/save' }] })
+  expect(obs.reconciled()).toEqual(app.deployment())
 })
 
 test('no ops and no calls: nothing until a call is seen', async () => {
@@ -69,4 +69,16 @@ test('no ops and no calls: nothing until a call is seen', async () => {
   expect(obs.calls()).toEqual([])
   await app.call('r', 'front').send('a')
   expect(fromPods(obs)).toEqual([{ ...save, declared: false, seen: true }])
+})
+
+test('nothing seen: reconciled is the deployment as it is', async () => {
+  const { app, obs } = await make()
+  expect(obs.reconciled()).toEqual(app.deployment())
+})
+
+test('a denied call is listed, not seen, never reconciled', async () => {
+  const { app, obs } = await make('acme/plain', { kind: 'rules', rules: [{ allow: ['call'], from: 'host' }] })
+  await app.call('r', 'front').send('a')
+  expect(fromPods(obs)).toEqual([{ ...save, declared: false, seen: false }])
+  expect(obs.reconciled()).toEqual(app.deployment())
 })

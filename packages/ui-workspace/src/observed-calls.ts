@@ -57,17 +57,19 @@ export function observeCalls(app: Application, registry: Registry) {
     for (const [k, s] of seen) {
       const d = have.get(k)
       if (d) d.seen ||= s.ok > 0
-      else out.push({ ...s.call })
+      else out.push({ ...s.call, seen: s.ok > 0 })
     }
     return out
   }
   const reconciled = (): AppDeployment => {
     const d = structuredClone(app.deployment())
-    const keep = declaredOps(d, registry).concat([...seen.values()].filter(s => s.ok > 0 && s.call.source !== null && s.call.from !== 'host').map(s => s.call))
+    const declared = declaredOps(d, registry), have = new Set(declared.map(key))
+    const extra = [...seen.values()].filter(s => s.ok > 0 && s.call.source !== null && s.call.from !== 'host' && !have.has(key(s.call))).map(s => s.call)
     for (const [runtime, rt] of Object.entries(d.runtimes)) for (const e of rt.subscriptions) {
       if (e.kind !== 'call') continue
-      const ops = new Map(keep.filter(c => c.runtime === runtime && c.from === e.from && c.to === e.to).map(c => [key(c), { source: c.source!, target: c.target }]))
-      if (ops.size) e.ops = [...ops.values()]
+      const mine = (c: OpCall) => c.runtime === runtime && c.from === e.from && c.to === e.to
+      // only an edge that gains an undeclared pair gets `ops`; the rest keep following their implementation's `calls`
+      if (extra.some(mine)) e.ops = [...declared, ...extra].filter(mine).map(c => ({ source: c.source!, target: c.target }))
     }
     return d
   }
