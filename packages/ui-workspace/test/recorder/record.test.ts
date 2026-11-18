@@ -1,0 +1,66 @@
+import { expect, test } from 'bun:test'
+import { Application, AppDeployment, Registry, type NanoResult } from '@pritzlaff/nano-core'
+import uiProvider from '@pritzlaff/nano-ui'
+import { pair } from '../../src/recorder/entry.ts'
+import { memoryStore } from '../../src/recorder/memory-store.ts'
+import { record } from '../../src/recorder/record.ts'
+
+const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+async function typing() {
+  const file: AppDeployment = await Bun.file(new URL('../../../../examples/typing/nano.json', import.meta.url)).json()
+  const registry = Registry.create()
+  must(registry.add(uiProvider))
+  const quick = { ...file, pods: { ...file.pods, debounce: { ...file.pods['debounce']!, config: { quietMs: 20, maxWaitMs: 200 } } } }
+  const app = must(await Application.create(must(AppDeployment.assemble(quick, registry)), {}))
+  return { app, store: memoryStore() }
+}
+
+test('the first entry is the deployment in force', async () => {
+  const { app, store } = await typing()
+  await record(app, store)
+  const [first] = await store.range()
+  expect(first!.event.type).toBe('deployment')
+})
+
+test('typing h then hi records two root sends with their input, and the flush they caused', async () => {
+  const { app, store } = await typing()
+  await record(app, store)
+  await app.call('main', 'input').change('h')
+  await app.call('main', 'input').change('hi')
+  await sleep(80)
+  const msgs = pair(await store.range())
+  const roots = msgs.filter(m => m.sent.from === 'host' && m.sent.to === 'input')
+  expect(roots.map(m => m.sent.input)).toEqual(['"h"', '"hi"'])
+  // the debounce's flush is a send of its own (no cause); what it triggers is caused by it
+  const flush = msgs.find(m => m.sent.kind === 'pipe' && m.sent.from === 'debounce')!
+  expect(flush.sent.input).toBe('"hi"')
+  expect(msgs.some(m => m.sent.cause === flush.sent.id && m.sent.to === 'log')).toBe(true)
+  expect(msgs.every(m => m.outcome?.type === 'delivered')).toBe(true)
+})
+
+test('an apply adds a deployment entry after the applied event', async () => {
+  const { app, store } = await typing()
+  await record(app, store)
+  await app.apply(app.deployment())
+  const types = (await store.range()).map(e => e.event.type)
+  expect(types[0]).toBe('deployment')
+  const i = types.indexOf('applied')
+  expect(i).toBeGreaterThan(0)
+  expect(types[i + 1]).toBe('deployment')
+})
+
+test('seq continues after the store, and after stop nothing more is recorded', async () => {
+  const { app, store } = await typing()
+  const stop = await record(app, store)
+  await app.call('main', 'input').change('h')
+  const n = await store.size()
+  stop()
+  await app.call('main', 'input').change('hi')
+  await sleep(60)
+  expect(await store.size()).toBe(n)
+  await record(app, store)
+  const seqs = (await store.range()).map(e => e.seq)
+  expect(seqs).toEqual(seqs.map((_, i) => i + 1))
+})
