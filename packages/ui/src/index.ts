@@ -6,7 +6,9 @@
  */
 import { uiProvider } from './provider.ts'
 
-export { Any, Debounce, HostUI, Input, Log, MapIface, Nothing } from './interfaces.ts'
+export { Any, Clock, ClockControl, Debounce, HostUI, Input, Log, MapIface, Nothing } from './interfaces.ts'
+export { clock } from './pods/clock.ts'
+export { simClock } from './pods/sim-clock.ts'
 export { debounce } from './pods/debounce.ts'
 export { input } from './pods/input.ts'
 export { log } from './pods/log.ts'
