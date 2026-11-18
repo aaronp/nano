@@ -47,7 +47,7 @@ test('seeded randomness on a sim clock replays exactly, fast', async () => {
   const stop = await record(app, first, { clean: true })
   for (let i = 0; i < 5; i++) { await app.call('main', 'sim').advance(100); await settle() }
   const drawn = await log(app)
-  expect(drawn.ok && drawn.value.length).toBeGreaterThan(0)
+  expect(drawn.ok && (drawn.value as unknown[]).length).toBeGreaterThan(0)
   stop()
   const second = memoryStore()
   const stop2 = await record(app, second)
