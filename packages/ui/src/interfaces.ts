@@ -40,6 +40,6 @@ export const Clock = ns.interface('Clock', {
   now: Op.action(Nothing, Num), after: Op.action(After, TimerId), cancel: Op.action(TimerId, Nothing), fired: Op.event(Fired),
 })
 /** Moves a simulated clock; `set` may not go back. */
+export const ClockControl = ns.interface('ClockControl', { advance: Op.action(Num, Nothing), set: Op.action(Num, Nothing) })
 /** A float in [0, 1); pods scale it themselves. */
 export const Random = ns.interface('Random', { next: Op.action(Nothing, Num) })
-export const ClockControl = ns.interface('ClockControl', { advance: Op.action(Num, Nothing), set: Op.action(Num, Nothing) })
