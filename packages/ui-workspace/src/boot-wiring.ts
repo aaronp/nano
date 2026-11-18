@@ -1,21 +1,18 @@
 /**
- * The Wiring page (#/wiring): <c-circuit> over the Application, and a switcher to the dock's own Connections view.
- * It remembers the last route shown that is a screen, so Wiring opens on that page, and Connections goes back to it.
+ * The Desk page (#/desk) and its switcher to the dock's own Connections view: it remembers the last route shown that is
+ * a screen, so Connections goes back to it and flips that dock.
  */
 import { requestBus } from './lib/bus.ts'
 
 type Dock = HTMLElement & { connections?(): void }
-type Circuit = HTMLElement & { page: string | null }
 
 /** `screens` says which routes are screens (the Application's `screens` ids). */
 export function bootWiring(doc: Document, screens: () => Promise<{ id: string }[]>) {
-  const circuit = doc.querySelector<Circuit>('c-circuit')
   const links = [...doc.querySelectorAll<HTMLAnchorElement>('a[data-connections]')]
-  if (!circuit || !links.length) return
+  if (!links.length) return
   let last: string | null = null, seq = 0, armed: string | null = null
   const arrive = async (path: string) => {
-    if (path === '/wiring' || path === '/desk') {   // the Desk is the Wiring page's third view, not a screen
-      if (path === '/wiring') circuit.page = last
+    if (path === '/desk') {   // the Desk is not a screen
       for (const link of links) { link.hidden = last === null; if (last) link.href = `#${last}` }
       return
     }
@@ -23,7 +20,7 @@ export function bootWiring(doc: Document, screens: () => Promise<{ id: string }[
     const ids = await screens().catch(() => [])
     if (mine === seq && ids.some(s => s.id === path)) last = path   // a later arrival wins
   }
-  requestBus(circuit).subscribe('route:changed', m => {
+  requestBus(links[0]!).subscribe('route:changed', m => {
     const path = (m.payload as { path: string }).path
     const flip = armed === path ? path : null
     armed = null   // any route change spends the arm

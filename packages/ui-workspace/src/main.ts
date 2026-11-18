@@ -26,7 +26,6 @@ import { defineSettings, type SettingsView } from './components/settings-view.ts
 import { showStatus } from './lib/status.ts';
 import type { WorkspaceDock } from './components/workspace-dock.ts';
 import { defineWires, type Wires } from './wires/index.ts';
-import { defineCircuit, dockPlacements, type Circuit } from './circuit/index.ts';
 import { defineDesk, type Desk } from './desk/index.ts';
 import { bootWiring } from './boot-wiring.ts';   // after the shell (its bus)
 import { savedLayout, slotsToOpen } from './layout-data.ts';
@@ -84,6 +83,8 @@ if (host) {
     },
   };
   for (const [c, run] of Object.entries(commands)) document.addEventListener(`file:${c}`, () => void run());
+  // File › Examples: an example shipped with the workspace (examples/<name>/nano.json, on this origin), imported as Open does
+  document.addEventListener('file:example', e => { const { name } = (e as CustomEvent<{ name: string }>).detail; void shown(h.importUrl(new URL(`examples/${name}/nano.json`, location.href).href), layoutNow()); });
 
   // Connections: <c-wires> around the dock hears its `dock:connections` and tilts the dock to show the cables behind it.
   defineWires();
@@ -97,18 +98,10 @@ if (host) {
   document.addEventListener('dock:save-as', () => showStatus(document, 'Saved workspaces are not available yet.'));
   document.querySelector('[data-new-workspace]')?.addEventListener('click', () => showStatus(document, 'Saved workspaces are not available yet.'));
 
-  // The Wiring page: <c-circuit> over the app; the one page is the Workspace, its footprints the pods its dock shows.
-  defineCircuit();
-  for (const c of document.querySelectorAll<Circuit>('c-circuit')) {
-    c.screens = () => [{ id: '/workspace', title: 'Main' }];
-    c.placements = () => dockPlacements('/workspace', arrangement()?.root as never);
-    c.host = host;
-  }
+  // The Desk page: <c-desk> over the app, and a link to the last workspace's Connections.
   defineDesk();
   for (const d of document.querySelectorAll<Desk>('c-desk')) d.host = host;
   bootWiring(document, async () => [{ id: '/workspace' }]);
-  // the dock's arrangement is not an apply: the circuit reads it again whenever the Wiring page is shown
-  addEventListener('hashchange', () => { if (location.hash === '#/wiring') for (const c of document.querySelectorAll<Circuit>('c-circuit')) c.schedule(); });
 
   const src = new URL(location.href).searchParams.get('src');
   // Only a URL on this page's origin: a crafted link must not open the import prompt on load.

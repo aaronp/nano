@@ -1,8 +1,11 @@
 // <nano-file-menu>: a "File" button opening a list of commands; each click dispatches `file:<command>` and closes.
+// An example dispatches `file:example` with `{ name }`: the example shipped with the workspace at examples/<name>/nano.json.
 import { css, html, LitElement, svg } from 'lit'
 import { base } from '@pritzlaff/nano-elements'
 
 export const COMMANDS = [['new', 'New'], ['open', 'Open…'], ['import', 'Import…'], ['save', 'Save'], ['reconcile', 'Reconcile and save'], ['save-as', 'Save As…'], ['download', 'Download']] as const
+/** The examples shipped with the workspace, one click to import: [name, label]. */
+export const EXAMPLES = [['slice', 'Slice: input → debounce → map → log'], ['chat', 'Chat: a room and its backend'], ['todo', 'Todo']] as const
 
 // 24×24 stroke paths, the nav's icon style
 const ICONS: Record<string, ReturnType<typeof svg>> = {
@@ -28,6 +31,7 @@ export class FileMenuEl extends LitElement {
     .panel[hidden] { display: none }
     .panel button { justify-content: flex-start; gap: 8px; border: 0; color: var(--nano-fg, #E6EAF0) }
     .panel button:hover:not(:disabled) { background: var(--nano-surface-2, #222933) }
+    .panel small { padding: 6px 10px 2px; font-size: 11px; opacity: .7; border-top: 1px solid var(--nano-border, #2A303C); margin-top: 4px }
     .panel svg { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }`]
   declare open: boolean
   declare dirty: boolean
@@ -42,11 +46,12 @@ export class FileMenuEl extends LitElement {
   disconnectedCallback() { super.disconnectedCallback(); document.removeEventListener('click', this.#outside) }
 
   #close(refocus: boolean) { this.open = false; if (refocus) void this.updateComplete.then(() => this.renderRoot.querySelector<HTMLElement>('button')?.focus()) }
-  #run(cmd: string) { this.#close(true); this.dispatchEvent(new CustomEvent(`file:${cmd}`, { bubbles: true, composed: true })) }
+  #run(cmd: string, detail?: unknown) { this.#close(true); this.dispatchEvent(new CustomEvent(`file:${cmd}`, { bubbles: true, composed: true, detail })) }
 
   render() {
     return html`<button aria-controls="panel" aria-expanded=${this.open ? 'true' : 'false'} @click=${() => { this.open = !this.open }}>File</button>
       <div id="panel" class="panel" role="group" aria-label="File" ?hidden=${!this.open}>${COMMANDS.map(([c, label]) =>
-        html`<button data-cmd=${c} ?disabled=${c === 'save' && !this.dirty} @click=${() => this.#run(c)}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[c]}</svg>${label}</button>`)}</div>`
+        html`<button data-cmd=${c} ?disabled=${c === 'save' && !this.dirty} @click=${() => this.#run(c)}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[c]}</svg>${label}</button>`)}
+        <small>Examples</small>${EXAMPLES.map(([name, label]) => html`<button data-example=${name} @click=${() => this.#run('example', { name })}>${label}</button>`)}</div>`
   }
 }

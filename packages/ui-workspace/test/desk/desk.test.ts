@@ -1,4 +1,4 @@
-import '../circuit/dom.ts'
+import '../wires/dom.ts'
 import { expect, test } from 'bun:test'
 import { defineDesk, type Desk } from '../../src/desk'
 import { setup } from '../wires/setup'

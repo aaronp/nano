@@ -1,4 +1,4 @@
-import '../circuit/dom.ts'
+import '../wires/dom.ts'
 import { expect, test } from 'bun:test'
 import { Application, AppDeployment, Pod, port, type NanoResult } from '@pritzlaff/nano-core'
 import { input, Input, log, Log } from '@pritzlaff/nano-ui'
