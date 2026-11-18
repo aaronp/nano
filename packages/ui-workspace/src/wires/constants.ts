@@ -11,11 +11,6 @@ export const MOD_H = 112
 export const MOD_JACK_Y = 82
 export const BLOCK_H = 82
 export const JACK_W = 70            // per-jack slot width of a rack module: an action's pair shares one label
-export const PIECE_H = 40
-export const ROW_H = 46
-export const PUZ_Y0 = 40
-export const TAB_R = 7
-export const FORK_W = 64
 export const HIT_R = 22
 /** The pane's share of the stage when it eases back. */
 export const SCALE = 0.9

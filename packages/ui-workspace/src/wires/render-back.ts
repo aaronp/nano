@@ -1,8 +1,7 @@
-// The back plate: panel chassis, the service rack and its modules, jacks, cords, packets, the live cord, and (in
-// puzzle mode) the dashed leaders and their packets.
+// The back plate: panel chassis, the service rack and its modules, jacks, cords, packets and the live cord.
 import { html, nothing, svg } from 'lit'
 import { CALL_COLOR, ERR_COLOR, OK_COLOR } from './constants'
-import { bezierAt, cordD, cordGeo, polylineAt } from './geometry'
+import { bezierAt, cordD, cordGeo } from './geometry'
 import { opCord } from './calls'
 import { jackLabel, twin } from './jacks'
 import { checkConnect } from './model'
@@ -12,7 +11,7 @@ import type { Vals } from './render-root'
 import type { Wires } from './wires'
 
 export function renderBack(el: Wires, d: Vals) {
-  const { s, m, isRelay, selId, selRoute, opFor, routeById, routeOfOwner } = d
+  const { s, m, selId, selRoute, opFor, routeById, routeOfOwner } = d
   const { W, H, P } = m
   const cord = s.cord
   // a cord being moved is drawn live, not in its old place, and doesn't count when checking a drop
@@ -48,17 +47,12 @@ export function renderBack(el: Wires, d: Vals) {
     return { id: w.id, gm, d: cordD(gm), color: routeById(w.route).color, op: opFor(w.route), sel: selId === w.route }
   })
   const flying = inFlight(el, d)
-  const relayPackets = isRelay ? flying.flatMap(p => {
+  const relayPackets = flying.flatMap(p => {
     const c = cords.find(x => x.id === p.wire)
     if (!c) return []
     const [x, y] = bezierAt(c.gm, p.f)
     return [{ ...p, x, y }]
-  }) : []
-  const platePackets = isRelay ? [] : flying.filter(p => el.puzzle.segs[p.wire]?.layer === 'plate').map(p => {
-    const [x, y] = polylineAt(el.puzzle.segs[p.wire]!.pts, p.f)
-    return { ...p, x: x!, y: y! }
   })
-
   const live = cord ? (() => {
     const a = P[cord.anchor]!
     const picked = m.wires.find(w => w.id === cord.picked)
@@ -76,13 +70,6 @@ export function renderBack(el: Wires, d: Vals) {
     }
   })
 
-  const leaders: { d: string; color: string; cx: number; cy: number; op: number }[] = []
-  if (!isRelay) el.puzzle.pieces.forEach(p => {
-    const color = routeById(p.route).color, op = opFor(p.route)
-    const cx = Math.round(p.x + p.w / 2), cy = Math.round(p.y + 20)
-    p.anchors.forEach(k => { const a = P[k]!; leaders.push({ d: 'M' + a.x + ' ' + a.y + ' L' + cx + ' ' + cy, color, cx, cy, op: op === 1 ? 0.85 : 0.1 }) })
-  })
-
   return html`<div class="plate-bg" style="position:absolute; left:0; top:0; width:${W}px; height:${H}px; overflow:visible; backface-visibility:hidden; -webkit-backface-visibility:hidden">
   ${chassis.map(c => html`<div data-chassis=${c.id} data-deploy=${c.deploy ?? nothing} data-mark=${c.mark ? '' : nothing} style="position:absolute; left:${c.x}px; top:${c.y}px; width:${c.w}px; height:${c.h}px; box-sizing:border-box; border:1px dashed ${c.border}; ${c.mark ? 'outline:2px solid #F5A524; outline-offset:2px; ' : ''}border-radius:4px; background:rgba(22,27,34,0.72); padding:10px 12px; display:flex; flex-direction:column; gap:2px">
     <span style="font-size:12px; font-weight:600; color:#C9D1D9">${c.label}</span>
@@ -93,13 +80,13 @@ export function renderBack(el: Wires, d: Vals) {
     <span class="mono" style="position:absolute; left:14px; bottom:8px; font-size:10px; color:#6E7987; letter-spacing:0.08em">SERVICE RACK</span>
   </div>
 
-  ${isRelay ? modules.map(r => html`<div data-module=${r.id} data-deploy=${r.deploy} data-mark=${r.mark ? '' : nothing} style="position:absolute; left:${r.x}px; top:${r.y}px; width:${r.w}px; height:${r.h}px; box-sizing:border-box; border-radius:6px; background:#1B212A; border:${r.border}; ${r.mark ? 'outline:2px solid #F5A524; outline-offset:2px; ' : ''}opacity:${r.op}">
+  ${modules.map(r => html`<div data-module=${r.id} data-deploy=${r.deploy} data-mark=${r.mark ? '' : nothing} style="position:absolute; left:${r.x}px; top:${r.y}px; width:${r.w}px; height:${r.h}px; box-sizing:border-box; border-radius:6px; background:#1B212A; border:${r.border}; ${r.mark ? 'outline:2px solid #F5A524; outline-offset:2px; ' : ''}opacity:${r.op}">
     <div style="position:absolute; left:10px; right:10px; top:6px; display:flex; align-items:baseline; gap:10px; white-space:nowrap; overflow:hidden">
       <span style="font-size:18px; font-weight:600; color:#E6EDF3">${r.title}</span>
       <span class="mono" style="font-size:12px; color:#8B96A5">${r.sub}</span>
       <span class="mono" style="font-size:12px; color:#7EE787">${r.stat}</span>
     </div>
-  </div>`) : ''}
+  </div>`)}
 
   <svg width=${W} height=${H} style="position:absolute; left:0; top:0; overflow:visible; pointer-events:none" aria-hidden="true">
     ${jacks.map(j => svg`<g data-jack=${j.key} opacity=${j.op}>
@@ -109,7 +96,7 @@ export function renderBack(el: Wires, d: Vals) {
     </g>`)}
   </svg>
 
-  ${isRelay ? html`<svg width=${W} height=${H} style="position:absolute; left:0; top:0; overflow:visible; pointer-events:none" aria-hidden="true">
+  <svg width=${W} height=${H} style="position:absolute; left:0; top:0; overflow:visible; pointer-events:none" aria-hidden="true">
     ${cords.map(w => svg`<g data-wire=${w.id} opacity=${w.op}>
       <path class="glow" d=${w.d} fill="none" stroke=${w.color} stroke-opacity="0.3" stroke-width="16" stroke-linecap="round"></path>
       <path d=${w.d} fill="none" stroke="#000000" stroke-opacity="0.6" stroke-width="9" stroke-linecap="round"></path>
@@ -125,7 +112,7 @@ export function renderBack(el: Wires, d: Vals) {
       <text x=${c.a.x + 8} y=${c.a.y + 20} font-family="JetBrains Mono, monospace" font-size="16" fill=${CALL_COLOR}>calls ${c.to}</text>` : ''}
       ${(c.ops ?? []).map(opCord)}</g>`) : ''}
     ${relayPackets.map(k => packet(k, 6, 3, 10))}
-  </svg>` : ''}
+  </svg>
 
   ${live ? html`<svg width=${W} height=${H} style="position:absolute; left:0; top:0; overflow:visible; pointer-events:none" aria-hidden="true">
     <path d=${live.d} fill="none" stroke="#000000" stroke-opacity="0.5" stroke-width="7" stroke-linecap="round"></path>
@@ -133,13 +120,5 @@ export function renderBack(el: Wires, d: Vals) {
     <circle cx=${live.ax} cy=${live.ay} r="6" fill=${live.color} stroke="#0A0D11" stroke-width="1.5"></circle>
     <circle cx=${live.bx} cy=${live.by} r="7" fill=${live.color} stroke="#0A0D11" stroke-width="2"></circle>
   </svg>` : ''}
-
-  ${isRelay ? '' : html`<svg width=${W} height=${H} style="position:absolute; left:0; top:0; overflow:visible; pointer-events:none" aria-hidden="true">
-    ${leaders.map(l => svg`<g opacity=${l.op}>
-      <path d=${l.d} fill="none" stroke=${l.color} stroke-width="1.5" stroke-dasharray="4 5"></path>
-      <circle cx=${l.cx} cy=${l.cy} r="3.5" fill=${l.color}></circle>
-    </g>`)}
-    ${platePackets.map(k => packet(k, 5, 2.5, 9))}
-  </svg>`}
 </div>`
 }

@@ -3,7 +3,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { defineWires, type Wires } from '../../src/wires'
 import { onDown, onMove, onUp, removeSel, toggleEdit } from '../../src/wires/pointer'
 import { connectPipe, disconnectPipe } from '../../src/wires/edit'
-import { Debounce, Input, k, Log, MapIface, model, p1, p2, setup, tick } from './setup.ts'
+import { Debounce, Input, k, Log, MapIface, model, p2, setup, tick } from './setup.ts'
 
 defineWires()
 afterEach(() => { document.body.innerHTML = '' })
@@ -50,7 +50,7 @@ test('unflipped it is just the dock; dock:connections flips it to the 3D view an
   expect(el.flipped).toBe(true)
   expect(el.hasAttribute('flipped')).toBe(true)
   expect(root.querySelector('.front slot')).not.toBeNull()
-  expect(root.querySelector('aside')!.textContent).toContain('Relay wires')
+  expect(root.querySelector('aside')!.textContent).toContain('Behind the pane')
   expect(root.querySelectorAll('[data-wire]').length).toBe(2)
   expect(root.querySelector('[data-module="d"]')).not.toBeNull()
   expect(root.textContent).toContain('r → l')
@@ -141,32 +141,10 @@ test('dragging a rack module onto the pane asks the workspace to open it', async
   expect(opened).toEqual([{ kind: 'nano.ui/debounce', name: 'd' }])
 })
 
-test('puzzle mode draws the same connections as pieces, and a joint unplugs one', async () => {
-  const { el, pipes, root, flip, settle } = await mount()
+test('the Routes list shows each route as its chain', async () => {
+  const { root, flip } = await mount()
   await flip()
-  el.setState({ mode: 'puzzle' })
-  await settle()
-  expect([...root.querySelectorAll('[data-piece]')].map(p => p.getAttribute('data-piece'))).toEqual(['r.submit', 'd', 'l.log'])
   expect(root.querySelector('aside')!.textContent).toContain('r.submit → d → l.log')
-  toggleEdit(el)
-  await settle()
-  ;(root.querySelector('[aria-label="Unplug the cord into l"]') as HTMLButtonElement).click()
-  await settle(); await settle()
-  expect(pipes().some(s => s.from === 'd' && s.to === 'l')).toBe(false)
-})
-
-test('puzzle mode: an armed operator is spliced into a chain at a joint', async () => {
-  const { el, root, flip, settle } = await mount()
-  await flip()
-  el.setState({ mode: 'puzzle' })
-  toggleEdit(el)
-  await settle()
-  ;(root.querySelector('[data-kind="nano.ui/map"]') as HTMLButtonElement).click()
-  await settle()
-  ;(root.querySelector('[aria-label="Insert map before l"]') as HTMLButtonElement).click()
-  for (let i = 0; i < 4; i++) await settle()
-  expect(Object.values(el.puzzle.descs)).toEqual(['r.submit → d → map1 → l.log'])
-  expect(el.model.wires.map(w => w.to.split(' ')[1])).toEqual(['nano.ui.Debounce/push:in', 'nano.ui.Map/map:in', 'nano.ui.Log/log:in'])
 })
 
 test('removed from the page, it stops listening', async () => {
@@ -184,21 +162,6 @@ test('while flat it does no work: no packets pile up, and none fly in when it fl
   expect(el.s.packets).toEqual([])
   await flip()
   expect(el.s.packets).toEqual([])
-})
-
-test('a splice that fails partway puts the chain back as it was', async () => {
-  const { el, host, pipes, flip, settle, s1, root } = await mount()
-  await flip()
-  toggleEdit(el); el.setState({ mode: 'puzzle' }); await settle()
-  el.setState({ armed: 'nano.ui/map' })
-  const real = el.connect.bind(el)
-  let n = 0
-  el.connect = async (a: string, b: string) => (++n === 2 ? { error: 'refused for the test' } : real(a, b))   // the second patch fails
-  const { joint } = await import('../../src/wires/pointer')
-  await joint(el, s1.id); await settle()
-  expect(pipes().some(s => s.from === 'r' && s.to === 'd')).toBe(true)   // the original wire is back
-  expect(Object.keys(host.data().pods).some(p => p.startsWith('map') && p !== 'm')).toBe(false)   // no orphan
-  expect(root.textContent).toContain('refused for the test')
 })
 
 test('opening eases the pane straight back from full size to 90% of the stage, with no turn', async () => {
@@ -383,7 +346,6 @@ test('disconnectPipe removes it', async () => {
   const { host, app, s1 } = await setup()
   expect(await disconnectPipe(host, s1.id)).toEqual({})
   expect(app.deployment().runtimes.main!.subscriptions).toEqual([p2])
-  expect(p1).toBeDefined()
 })
 test('a refusal is returned, not thrown', async () => {
   const { host, app } = await setup()

@@ -9,7 +9,6 @@ import { catalogOf, change, connectPipe, create, disconnectPipe, openPanel, remo
 import { buildModel, snapshotOf, type Model, type ModelInput, type Panel } from './model'
 import { loadFonts, panelsOf, styles } from './page'
 import { landPackets, tracePacket } from './packets'
-import { buildPuzzle } from './puzzle'
 import { renderRoot } from './render-root'
 import { empty, initial, type Catalog, type Result, type Selection, type State } from './state'
 
@@ -28,7 +27,6 @@ export class Wires extends LitElement {
   s: State = initial()
   model: Model = empty()
   input?: ModelInput   // what the model was last built from
-  puzzle = buildPuzzle(this.model)
   stage = { w: 0, h: 0 }; drag: { x: number; y: number; ry: number; rx: number } | null = null
   #off: (() => void)[] = []
   #timer?: ReturnType<typeof setInterval>; #layout = ''; #pending = false
@@ -85,7 +83,6 @@ export class Wires extends LitElement {
     this.#layout = JSON.stringify(panels)
     this.input = { snapshot, panels, W: this.model.W, H: this.model.H, application: this.application, kinds, titles }
     this.model = buildModel(this.input)
-    this.puzzle = buildPuzzle(this.model)
     this.requestUpdate()
   }
   /** The kind an instance was made from: its pod's implementation. */
@@ -113,13 +110,13 @@ export class Wires extends LitElement {
     this.#timer = setInterval(() => this.frame(), FRAME_MS)
     setTimeout(() => { this.measure(); this.setState({ entering: false }) }, 60)   // starts at full size, then eases back
   }
-  #close() { this.#stop(); this.s = { ...this.s, editing: false, cord: null, armed: null, selMod: null, lift: null, toast: null, dragging: false, leaving: false } }
+  #close() { this.#stop(); this.s = { ...this.s, editing: false, cord: null, selMod: null, lift: null, toast: null, dragging: false, leaving: false } }
   #stop() { clearInterval(this.#timer); this.#timer = undefined }
 
   /** Done: the drawer fades out and the pane eases forward to full size, then the plain dock is back. */
   close() {
     if (!this.flipped || this.s.leaving) return
-    this.setState({ leaving: true, editing: false, cord: null, armed: null, selMod: null, lift: null, toast: null, dragging: false, ry: 360 * Math.round(this.s.ry / 360), rx: 0 })
+    this.setState({ leaving: true, editing: false, cord: null, selMod: null, lift: null, toast: null, dragging: false, ry: 360 * Math.round(this.s.ry / 360), rx: 0 })
     setTimeout(() => { if (this.s.leaving) this.flipped = false }, TURN_MS)
   }
   /** The stage's size, which the pane is fitted to; a change re-renders. */
@@ -130,7 +127,7 @@ export class Wires extends LitElement {
   goTo(name: View) {
     const v = VIEWS[name]
     const target = v.ry + 360 * Math.round((this.s.ry - v.ry) / 360)
-    this.setState({ ry: target, rx: v.rx, dragging: false, editing: false, cord: null, armed: null, selMod: null })
+    this.setState({ ry: target, rx: v.rx, dragging: false, editing: false, cord: null, selMod: null })
   }
   change(edit: (d: AppDeployment) => AppDeployment | string, value?: unknown) { return change(this, edit, value) }
   connect(from: string, to: string) { return this.#shown(this.host ? connectPipe(this.host, this.model, from, to) : { error: 'no host' }) }

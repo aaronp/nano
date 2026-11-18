@@ -1,6 +1,7 @@
 import './dom.ts'
 import { expect, test } from 'bun:test'
-import { buildPuzzle, checkConnect } from '../../src/wires'
+import { checkConnect } from '../../src/wires'
+import { routeChains } from '../../src/wires/routes.ts'
 import { Debounce, deployment, Input, k, Log, MapIface, model, p1, p2, panels, registry } from './setup.ts'
 import { buildModel, snapshotOf, wireId } from '../../src/wires/model.ts'
 import { Pod } from '@pritzlaff/nano-core'
@@ -46,15 +47,11 @@ test('checkConnect: out into in, not into itself, not twice', () => {
   expect(checkConnect(m, k('r', Input, 'submit', 'out'), k('d', Debounce, 'push', 'in'))).toEqual({ error: 'Those jacks are already connected' })
 })
 
-test('the puzzle lays a route out as a chain, and a fork where one output feeds two inputs', () => {
+test('routeChains matches the chain the puzzle gave, with a fork where one output feeds two inputs', () => {
   const d = deployment()
-  let pz = buildPuzzle(model(d))
-  expect(pz.pieces.map(p => [p.kind, p.label])).toEqual([['port', 'r.submit'], ['op', 'd'], ['port', 'l.log']])
-  expect(Object.values(pz.descs)).toEqual(['r.submit → d → l.log'])
+  expect(Object.values(routeChains(model(d)))).toEqual(['r.submit → d → l.log'])   // values buildPuzzle(...).descs gave at 3739c79
   d.runtimes['main']!.subscriptions.push({ kind: 'pipe', from: 'd', source: p2.source, to: 'm', target: 'nano.ui.Map/map' })
-  pz = buildPuzzle(model(d))
-  expect(Object.values(pz.descs)).toEqual(['r.submit → d → fork(l.log | m)'])
-  expect(pz.pieces.find(p => p.kind === 'fork')!.tabs).toEqual([20, 66])
+  expect(Object.values(routeChains(model(d)))).toEqual(['r.submit → d → fork(l.log | m)'])
 })
 
 test('a call edge goes from the bottom of the caller\'s box to each Op jack of the callee it may call, apart from the wires', () => {

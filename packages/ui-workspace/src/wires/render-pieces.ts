@@ -1,65 +1,7 @@
-// Puzzle mode's floating layer (stalks, interlocking pieces, joints, packets) and the rack's 3D store blocks.
-import { html, svg } from 'lit'
-import { PIECE_H, TAB_R, clamp } from './constants'
-import { piecePath, polylineAt } from './geometry'
-import { joint } from './pointer'
-import { pieceColors } from './puzzle'
-import { inFlight } from './packets'
+// The rack's 3D store blocks.
+import { html } from 'lit'
+import { clamp } from './constants'
 import type { Vals } from './render-root'
-import type { Wires } from './wires'
-
-export function renderPuzzle(el: Wires, d: Vals) {
-  const { s, m, opFor, routeById } = d
-  const { W, H } = m
-  const armed = s.armed ? el.catalog[s.armed]?.title ?? s.armed : null
-  const pieces = el.puzzle.pieces.map(p => {
-    const c = pieceColors(p.kind, routeById(p.route).color)
-    const isSel = p.moduleId !== null && p.moduleId === s.selMod
-    const hot = p.owner !== null && (el.recent(s.hits[p.owner]) || (p.kind === 'port' && el.recent(s.flashes[p.owner])))
-    const st = p.moduleId ? s.stats[p.moduleId] ?? { in: 0, out: 0 } : null
-    return {
-      ...c, p, svgW: p.w + TAB_R + 2, d: piecePath(p.w, p.h, p.tabs, p.notch), padL: p.notch ? 16 : 12, op: opFor(p.route),
-      stroke: isSel || hot ? '#FFFFFF' : c.stroke, strokeW: isSel ? 3 : hot ? 2.5 : 1.5,
-      stat: st ? st.in + '→' + st.out : '', statOp: st ? 1 : 0,
-      selectable: s.editing && p.moduleId !== null, pressed: isSel ? 'true' : 'false',
-      pick: () => el.setState({ selMod: isSel ? null : p.moduleId }),
-      hasJoint: s.editing && p.inWire !== null,
-      jointLabel: armed !== null ? 'Insert ' + armed + ' before ' + p.title : 'Unplug the cord into ' + p.title,
-    }
-  })
-  const stalks = el.puzzle.pieces.filter(p => p.anchors.length).map(p => {
-    const op = opFor(p.route)
-    return { x: Math.round(p.x + p.w / 2), y: Math.round(p.y + PIECE_H / 2) - 1, color: routeById(p.route).color, op: op === 1 ? 0.9 : 0.1 }
-  })
-  const piecePackets = inFlight(el, d).filter(p => el.puzzle.segs[p.wire]?.layer === 'piece').map(p => {
-    const [x, y] = polylineAt(el.puzzle.segs[p.wire]!.pts, p.f)
-    return { ...p, x: x!, y: y! }
-  })
-  return html`<div style="position:absolute; left:0; top:0; width:${W}px; height:${H}px; transform-style:preserve-3d; pointer-events:none">
-  ${stalks.map(t => html`<div style="position:absolute; left:${t.x}px; top:${t.y}px; width:${s.depth}px; height:2px; background:${t.color}; opacity:${t.op}; transform-origin:0 50%; transform:rotateY(-90deg)"></div>`)}
-</div>
-<div style="position:absolute; left:0; top:0; width:${W}px; height:${H}px; transform:translateZ(${s.depth}px); backface-visibility:hidden; -webkit-backface-visibility:hidden; pointer-events:${s.editing ? 'auto' : 'none'}">
-  ${pieces.map(x => html`<div data-piece=${x.p.label} style="position:absolute; left:${x.p.x}px; top:${x.p.y}px; width:${x.p.w}px; height:${x.p.h}px; opacity:${x.op}">
-    <svg width=${x.svgW} height=${x.p.h} style="position:absolute; left:0; top:0; overflow:visible" aria-hidden="true">
-      <path d=${x.d} fill=${x.fill} stroke=${x.stroke} stroke-width=${x.strokeW} stroke-linejoin="round"></path>
-    </svg>
-    <div style="position:absolute; left:${x.padL}px; top:0; height:40px; display:flex; flex-direction:column; justify-content:center; gap:1px; pointer-events:none">
-      <span style="font-size:11.5px; font-weight:700; color:${x.titleColor}; white-space:nowrap">${x.p.title}</span>
-      <span class="mono" style="font-size:10px; color:${x.subColor}; white-space:nowrap">${x.p.sub}</span>
-    </div>
-    <span class="mono" style="position:absolute; left:10px; top:-17px; font-size:9.5px; padding:1px 5px; border-radius:3px; background:#0A0D11; color:#7EE787; white-space:nowrap; opacity:${x.statOp}; pointer-events:none">${x.stat}</span>
-    ${x.selectable ? html`<button type="button" class="piecebtn" aria-label=${'Select ' + x.p.title} aria-pressed=${x.pressed} @click=${x.pick} style="position:absolute; left:0; top:0; width:100%; height:40px; padding:0; border:0; background:transparent; cursor:pointer"></button>` : ''}
-    ${x.hasJoint ? html`<button type="button" class="joint" aria-label=${x.jointLabel} @click=${() => joint(el, x.p.inWire!)} style="position:absolute; left:-12px; top:8px; width:24px; height:24px; padding:0; border-radius:50%; border:2px solid #0A0D11; background:#E6EDF3; color:#12161C; font:700 16px/1 Inter, sans-serif; cursor:pointer; display:flex; align-items:center; justify-content:center">${armed !== null ? '+' : '×'}</button>` : ''}
-  </div>`)}
-  <svg width=${W} height=${H} style="position:absolute; left:0; top:0; overflow:visible; pointer-events:none" aria-hidden="true">
-    ${piecePackets.map(k => svg`<g opacity=${k.op}>
-      <circle cx=${k.x.toFixed(1)} cy=${k.y.toFixed(1)} r="6" fill="#FFFFFF" stroke="#0A0D11" stroke-width="2"></circle>
-      <circle cx=${k.x.toFixed(1)} cy=${k.y.toFixed(1)} r="2.5" fill=${k.color}></circle>
-      <text class="pkt-label" x=${(k.x + 9).toFixed(1)} y=${(k.y - 9).toFixed(1)} font-family="JetBrains Mono, monospace" font-size="10" font-weight="600" fill="#FFFFFF">${k.label}</text>
-    </g>`)}
-  </svg>
-</div>`
-}
 
 /** Rack components with no out jack, as the prototype's 3D store boxes; they show more the further the pane turns. */
 export function renderBlocks(d: Vals) {
