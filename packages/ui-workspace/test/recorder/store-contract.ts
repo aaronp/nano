@@ -25,6 +25,12 @@ export function storeContract(make: (max: number) => MessageStore): void {
     expect((await s.search('CART')).map(e => e.seq)).toEqual([1])
     expect((await s.search('banana')).map(e => e.seq)).toEqual([2])
   })
+  test('search with limit 0 or below finds nothing', async () => {
+    const s = make(100)
+    s.append(sent(1))
+    expect(await s.search('a.b', 0)).toEqual([])
+    expect(await s.search('a.b', -1)).toEqual([])
+  })
   test('when full, the oldest is dropped and oldest() moves on', async () => {
     const s = make(3)
     for (let n = 1; n <= 5; n++) s.append(sent(n))

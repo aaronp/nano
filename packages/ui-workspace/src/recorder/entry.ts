@@ -21,13 +21,17 @@ const MARK = '…truncated'
 
 /** Safe JSON text of any value: never throws, cycles, BigInts and functions are marked, capped at CAP. */
 export function snap(v: unknown): string {
-  const seen = new WeakSet<object>() // ponytail: a repeated (non-cyclic) object also reads [cycle]; track ancestors if that matters
+  const stack: unknown[] = []
   let text: string
   try {
-    text = String(JSON.stringify(v, (_k, x) => {
+    text = String(JSON.stringify(v, function (this: unknown, _k, x) {
       if (typeof x === 'bigint') return `${x}n`
       if (typeof x === 'function') return '[function]'
-      if (x !== null && typeof x === 'object') { if (seen.has(x)) return '[cycle]'; seen.add(x) }
+      if (x !== null && typeof x === 'object') {
+        while (stack.length && stack[stack.length - 1] !== this) stack.pop() // back up to the holder: only ancestors count
+        if (stack.includes(x)) return '[cycle]'
+        stack.push(x)
+      }
       return x
     }))
   } catch { text = '"[unserializable]"' }

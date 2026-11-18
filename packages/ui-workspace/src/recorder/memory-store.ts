@@ -10,7 +10,7 @@ export function memoryStore(opts: { max?: number } = {}): MessageStore {
     range: async (from = -Infinity, to = Infinity) => all.filter(e => e.seq >= from && e.seq <= to),
     search: async (text, limit = Infinity) => {
       const t = text.toLowerCase()
-      return all.filter(e => JSON.stringify(e.event).toLowerCase().includes(t)).slice(-limit)
+      return limit <= 0 ? [] : all.filter(e => JSON.stringify(e.event).toLowerCase().includes(t)).slice(-limit)
     },
     oldest: async () => all[0]?.seq,
     size: async () => all.length,

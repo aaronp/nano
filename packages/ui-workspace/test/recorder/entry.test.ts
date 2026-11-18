@@ -31,3 +31,11 @@ test('pair joins sent with delivered or denied, keeps in-flight, skips orphans',
   expect(ms[1]!.outcome).toBeUndefined()
   expect(ms[2]!.outcome?.type).toBe('denied')
 })
+
+test('snap keeps shared references and marks only true cycles', () => {
+  const x = { n: 1 }
+  expect(snap({ a: x, b: x })).toBe(JSON.stringify({ a: x, b: x }))
+  expect(snap([x, x])).toBe(JSON.stringify([x, x]))
+  const c: Record<string, unknown> = { k: x }; c.self = { deep: c }
+  expect(snap(c)).toBe('{"k":{"n":1},"self":{"deep":"[cycle]"}}')
+})
