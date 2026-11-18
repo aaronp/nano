@@ -1,0 +1,31 @@
+{
+  "pods": {
+    "input": { "implementation": "nano.ui/input", "config": { "kind": "text" }, "eager": true },
+    "debounce": { "implementation": "nano.ui/debounce", "config": { "quietMs": 1000, "maxWaitMs": 4000 }, "eager": true },
+    "map": { "implementation": "nano.ui/map", "config": { "code": "return String(x).toUpperCase()" }, "eager": true },
+    "log": { "implementation": "nano.ui/log", "eager": true }
+  },
+  "runtimes": {
+    "main": {
+      "pods": ["input", "debounce", "map", "log"],
+      "subscriptions": [
+        { "kind": "pipe", "from": "input", "source": "nano.ui.Input/change", "to": "debounce", "target": "nano.ui.Debounce/push" },
+        { "kind": "pipe", "from": "debounce", "source": "nano.ui.Debounce/flushed", "to": "map", "target": "nano.ui.Map/map" },
+        { "kind": "pipe", "from": "map", "source": "nano.ui.Map/map", "to": "log", "target": "nano.ui.Log/log" }
+      ]
+    }
+  },
+  "modules": { "nano.ui": "../../bundle/nano-ui.js" },
+  "layout": {
+    "slots": [
+      { "id": "input", "runtime": "main", "pod": "input" },
+      { "id": "debounce", "runtime": "main", "pod": "debounce" },
+      { "id": "log", "runtime": "main", "pod": "log" }
+    ],
+    "geometry": {
+      "input": { "x": 0, "y": 0, "w": 1, "h": 0.2 },
+      "debounce": { "x": 0, "y": 0.2, "w": 1, "h": 0.5 },
+      "log": { "x": 0, "y": 0.7, "w": 1, "h": 0.3 }
+    }
+  }
+}

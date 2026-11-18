@@ -5,7 +5,7 @@ import { base } from '@pritzlaff/nano-elements'
 
 export const COMMANDS = [['new', 'New'], ['open', 'Open…'], ['import', 'Import…'], ['save', 'Save'], ['reconcile', 'Reconcile and save'], ['save-as', 'Save As…'], ['download', 'Download']] as const
 /** The examples shipped with the workspace, one click to import: [name, label]. */
-export const EXAMPLES = [['slice', 'Slice: input → debounce → map → log'], ['chat', 'Chat: a room and its backend'], ['todo', 'Todo']] as const
+export const EXAMPLES = [['typing', 'Typing: input → debounce → map → log'], ['chat', 'Chat: a room and its backend'], ['todo', 'Todo']] as const
 
 // 24×24 stroke paths, the nav's icon style
 const ICONS: Record<string, ReturnType<typeof svg>> = {

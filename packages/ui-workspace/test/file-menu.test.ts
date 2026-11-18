@@ -5,7 +5,7 @@ import { EXAMPLES, FileMenuEl } from '../src/components/file-menu.ts'
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl)
 
-test('the File menu lists the shipped examples, slice first, and a click asks for that example', async () => {
+test('the File menu lists the shipped examples, Typing first, and a click asks for that example', async () => {
   const el = document.createElement('nano-file-menu') as FileMenuEl
   document.body.append(el)
   await el.updateComplete
@@ -15,6 +15,6 @@ test('the File menu lists the shipped examples, slice first, and a click asks fo
   let asked: unknown
   document.addEventListener('file:example', e => { asked = (e as CustomEvent).detail }, { once: true })
   buttons[0]!.click()
-  expect(asked).toEqual({ name: 'slice' })
+  expect(asked).toEqual({ name: 'typing' })
   el.remove()
 })
