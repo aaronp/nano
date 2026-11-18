@@ -58,10 +58,10 @@ async function mount() {
   return { host: r.value, el }
 }
 
-test('given a fresh host, then the built-ins input, debounce, map, log and the clocks are listed and main holds only ui', async () => {
+test('given a fresh host, then the built-ins input, debounce, map, log, the clocks and the randoms are listed and main holds only ui', async () => {
   const { host, el } = await mount()
   const builtins = [...el.querySelectorAll<HTMLTemplateElement>(':scope > template[data-implementation]')]
-  expect(builtins.map(t => t.dataset['title']).sort()).toEqual(['clock', 'debounce', 'input', 'log', 'map', 'sim-clock'])
+  expect(builtins.map(t => t.dataset['title']).sort()).toEqual(['clock', 'debounce', 'input', 'log', 'map', 'random', 'seeded-random', 'sim-clock'])
   expect(host.app.deployment().runtimes).toEqual({ main: { pods: ['ui'], subscriptions: [] } })
   el.addWidget('nano-ui-map')
   await tick(10)
