@@ -4,6 +4,7 @@
  *
  *   const m = messaging(inMemory()); await m.post({ room: 'general', from: 'alice', text: 'hi' })
  */
+import { Implementation } from '@pritzlaff/nano-core'
 import { KeyValueStoreDef } from '../../kv/contract.ts'
 import { MessagingDef } from './contract.ts'
 
@@ -20,16 +21,25 @@ export function messaging(store: KeyValueStoreDef.KeyValueStore, newId = counter
   }
 }
 
-const kv = MessagingDef.api.impl(MessagingDef.ns.implementationId('kv'))
-  .description('Rooms of messages kept in whichever KeyValueStore its call edge reaches.')
-  .needs({ store: KeyValueStoreDef.api })
-  .make(ctx => ({
-    ...messaging(ctx.deps.store),
-    async *messages() {
-      const s = ctx.one(KeyValueStoreDef.api)
-      if (s.ok) for await (const { input } of s.value.on(KeyValueStoreDef.api.ops.put)) if (input.key[0] === 'rooms') yield input.value as Message
-    },
-  }))
+// `Implementation.define`, not the builder: it declares `calls`. Each call builds `messaging` over its invocation's
+// store, so the store call continues the chain of the op that made it.
+const kv = Implementation.define(MessagingDef.ns.implementationId('kv'), {
+  provides: [MessagingDef.api],
+  description: 'Rooms of messages kept in whichever KeyValueStore its call edge reaches.',
+  dependencies: { store: KeyValueStoreDef.api },
+  calls: { post: ['store.put'], history: ['store.list'] },
+  make: ctx => {
+    const newId = counter()
+    return {
+      post: (input, c) => messaging((c ?? ctx).deps.store, newId).post(input),
+      history: (input, c) => messaging((c ?? ctx).deps.store, newId).history(input),
+      async *messages() {
+        const s = ctx.one(KeyValueStoreDef.api)
+        if (s.ok) for await (const { input } of s.value.on(KeyValueStoreDef.api.ops.put)) if (input.key[0] === 'rooms') yield input.value as Message
+      },
+    }
+  },
+})
 
 export const impls = { kv }
 export default MessagingDef.ns.provider([kv])

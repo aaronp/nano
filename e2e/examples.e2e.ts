@@ -358,17 +358,9 @@ test('Settings shows each runtime\'s policy rules in order, the frame permission
   await page.screenshot({ path: test.info().outputPath('settings.png'), fullPage: true })
 })
 
-test('the chat with messaging.post → chatStore.put on its edge, a message sent: Connections draws it op to op, and Systems lists it under messaging', async ({ page }) => {
+test('the chat, a message sent: its declared, observed messaging.post → chatStore.put is drawn op to op in Connections and listed under messaging in Systems', async ({ page }) => {
   await start(page)
   await open(page, '/examples/chat/nano.json')
-  // BACKLOG(Task 7): the chat declares its calls itself; until then the edge records the pair (the observed call has no source yet)
-  const applied = await page.evaluate(async () => {
-    const h = (document.querySelector('workspace-dock') as any).host, d = h.data()
-    const e = d.runtimes['example.chat.backend'].subscriptions.find((s: any) => s.kind === 'call' && s.from === 'messaging' && s.to === 'chatStore')
-    e.ops = [{ source: 'example.messaging.Messaging/post', target: 'example.kv.KeyValueStore/put' }]
-    return (await h.apply(d)).ok
-  })
-  expect(applied).toBe(true)
   await say(room(page, 'alice'), 'hi bob')
   await expect(room(page, 'bob').locator('li')).toHaveText([/hi bob/])
   await page.getByRole('button', { name: 'Connections' }).first().click()
@@ -379,9 +371,9 @@ test('the chat with messaging.post → chatStore.put on its edge, a message sent
   const ends = await page.evaluate(() => {
     const m = (document.querySelector('c-wires') as any).model, c = m.calls.find((x: any) => x.id === 'example.chat.backend|messaging|chatStore')
     const at = (o: { x: number; y: number }) => Object.values(m.P).find((p: any) => p.x === o.x && p.y === o.y) as any
-    return c.ops.map((o: any) => [at(o.a)?.owner, at(o.a)?.label, at(o.b)?.owner])
+    return c.ops.map((o: any) => [at(o.a)?.owner, at(o.a)?.label, at(o.b)?.owner, o.declared, o.seen])
   })
-  expect(ends).toEqual([['messaging', 'post', 'chatStore']])
+  expect(ends).toContainEqual(['messaging', 'post', 'chatStore', true, true])   // declared and seen: the message just sent
   await page.locator('c-wires').getByRole('button', { name: 'Back', exact: true }).click()
   await page.waitForTimeout(1200)
   await page.screenshot({ path: test.info().outputPath('op-calls.png') })

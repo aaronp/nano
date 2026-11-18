@@ -8,6 +8,7 @@ import { KeyValueStoreDef } from '../kv/contract.ts'
 import kv, { impls, inMemory } from '../kv/memory.ts'
 import { TodoListDef } from './todo/contract.ts'
 import todo, { todoList } from './todo/kv.ts'
+import { observeCalls } from '../../packages/ui-workspace/src/observed-calls.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const saved = async (): Promise<AppDeployment> => Bun.file(new URL('./nano.json', import.meta.url)).json()
@@ -148,4 +149,17 @@ test('the list keeps the order todos were added in, however fast they come', asy
   const todos = todoList(inMemory())
   for (const t of ['c', 'a', 'b', 'd', 'e', 'f', 'g', 'h']) await todos.add(t)
   expect((await todos.list()).map(t => t.title)).toEqual(['c', 'a', 'b', 'd', 'e', 'f', 'g', 'h'])
+})
+
+test('todos declares its calls; the refresh timer\'s store.list comes from the pod, not from an op', async () => {
+  const registry = Registry.create()
+  for (const p of [kv, todo]) must(registry.add(p))
+  const app = must(await Application.create(must(AppDeployment.assemble(await saved(), registry))))
+  const o = observeCalls(app, registry)
+  await app.runtime('example.todo.frontend').get(TodoListDef.api).add('milk')
+  await new Promise(r => setTimeout(r, 1100))
+  const calls = o.calls()
+  expect(calls).toContainEqual(expect.objectContaining({ source: 'example.todo.TodoList/add', target: 'example.kv.KeyValueStore/put', declared: true, seen: true }))
+  expect(calls).toContainEqual(expect.objectContaining({ from: 'todos', source: null, target: 'example.kv.KeyValueStore/list', declared: false, seen: true }))
+  await app.close()
 })

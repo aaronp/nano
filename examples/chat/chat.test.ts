@@ -75,3 +75,15 @@ test('swapping the store behind the gateway: the participants don\'t change, and
   await alice.say('after')
   expect((await alice.transcript()).map(m => m.text)).toEqual(['after'])   // a fresh store: only what came after
 })
+
+test('declared op to op: alice.say → messaging.post → chatStore.put, one correlation, each call caused by the one before', async () => {
+  const app = await open(), calls: Extract<AppEvent, { type: 'sent' }>[] = []
+  app.listen(e => { if (e.type === 'sent' && e.kind === 'call') calls.push(e) })
+  await app.runtime('example.chat.room').get(ChatDef.api, { pod: 'alice' }).say('hello')
+  const say = calls.find(c => c.port === 'example.chat.Chat/say')!, post = calls.find(c => c.port === 'example.messaging.Messaging/post')!
+  const put = calls.find(c => c.port === 'example.kv.KeyValueStore/put')!
+  expect(post.cause).toBe(say.id)
+  expect(put.cause).toBe(post.id)
+  expect(new Set([say, post, put].map(c => c.correlation)).size).toBe(1)
+  expect(messaging.implementations.get('example.messaging/kv')!.calls).toEqual({ post: ['store.put'], history: ['store.list'] })
+})

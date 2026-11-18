@@ -13,7 +13,7 @@ const dist = join(import.meta.dir, 'dist')
 beforeAll(() => { if (!Bun.spawnSync(['bun', 'scripts/build.ts'], { cwd: import.meta.dir }).success) throw new Error('build failed') })
 
 test('each built nano.json names module files in its own folder or the shared kv, and they exist', async () => {
-  for (const name of ['todo', 'chat', 'auth']) {
+  for (const name of ['todo', 'chat', 'auth', 'drift']) {
     const { modules } = await Bun.file(join(dist, name, 'nano.json')).json() as { modules: Record<string, string> }
     for (const file of Object.values(modules)) {
       expect(file).toMatch(/^(\.\/[^/]+|\.\.\/kv\/example\.kv)\.js$/)
@@ -36,7 +36,7 @@ test('the built chat nano.json loads and runs', async () => {
 })
 
 test('every module a source nano.json names is in its built nano.json', async () => {
-  for (const name of ['todo', 'chat', 'auth']) {
+  for (const name of ['todo', 'chat', 'auth', 'drift']) {
     const src = await Bun.file(join(import.meta.dir, name, 'nano.json')).json() as { modules?: Record<string, string> }
     const { modules } = await Bun.file(join(dist, name, 'nano.json')).json() as { modules: Record<string, string> }
     for (const key of Object.keys(src.modules ?? {})) expect(modules[key]).toBeString()

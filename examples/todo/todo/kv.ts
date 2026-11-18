@@ -4,6 +4,7 @@
  *
  *   const todos = todoList(inMemory()); const t = await todos.add('milk')
  */
+import { Implementation } from '@pritzlaff/nano-core'
 import { KeyValueStoreDef } from '../../kv/contract.ts'
 import { TodoListDef } from './contract.ts'
 
@@ -36,15 +37,29 @@ export function todoList(store: KeyValueStoreDef.KeyValueStore, newId: () => str
   }
 }
 
-const todos = TodoListDef.api.impl(TodoListDef.ns.implementationId('kv'))
-  .description('Todos kept in whichever KeyValueStore its call edge reaches.')
-  .needs({ store: KeyValueStoreDef.api })
-  .make(ctx => ({
-    ...todoList(ctx.deps.store),
-    async *items() {
-      const s = ctx.one(KeyValueStoreDef.api)
-      if (s.ok) for await (const { input } of s.value.on(KeyValueStoreDef.api.ops.put)) if (input.key[0] === 'todos') yield input.value as Todo
-    },
-  }))
+// `Implementation.define`, not the builder: it declares `calls`. Each call builds `todoList` over its invocation's store.
+// The refresh timer lists through the factory's ctx: a call from the pod, not from an op (undeclared, `source: null`).
+const todos = Implementation.define(TodoListDef.ns.implementationId('kv'), {
+  provides: [TodoListDef.api],
+  description: 'Todos kept in whichever KeyValueStore its call edge reaches.',
+  dependencies: { store: KeyValueStoreDef.api },
+  calls: { add: ['store.put'], list: ['store.list'], put: ['store.put'], update: ['store.get', 'store.put'], remove: ['store.get', 'store.delete'] },
+  make: ctx => {
+    const timer = setInterval(() => { ctx.deps.store.list({ prefix: ['todos'] }).catch(() => {}) }, 1000)
+    ctx.addOnCloseListener(() => clearInterval(timer))
+    const over = (c?: typeof ctx) => todoList((c ?? ctx).deps.store)
+    return {
+      add: (title, c) => over(c).add(title),
+      list: (_, c) => over(c).list(),
+      put: (t, c) => over(c).put(t),
+      update: (ch, c) => over(c).update(ch),
+      remove: (id, c) => over(c).remove(id),
+      async *items() {
+        const s = ctx.one(KeyValueStoreDef.api)
+        if (s.ok) for await (const { input } of s.value.on(KeyValueStoreDef.api.ops.put)) if (input.key[0] === 'todos') yield input.value as Todo
+      },
+    }
+  },
+})
 
 export default TodoListDef.ns.provider([todos])

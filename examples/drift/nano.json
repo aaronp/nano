@@ -1,0 +1,31 @@
+{
+  "pods": {
+    "driftStore": {
+      "implementation": "example.kv/memory",
+      "eager": false
+    },
+    "form": {
+      "implementation": "example.drift/form",
+      "eager": false
+    }
+  },
+  "runtimes": {
+    "example.drift.main": {
+      "pods": [
+        "driftStore",
+        "form"
+      ],
+      "subscriptions": [
+        {
+          "kind": "call",
+          "from": "form",
+          "to": "driftStore"
+        }
+      ]
+    }
+  },
+  "modules": {
+    "example.kv": "../kv/memory.js",
+    "example.drift": "./index.js"
+  }
+}
