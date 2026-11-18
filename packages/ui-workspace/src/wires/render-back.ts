@@ -34,11 +34,11 @@ export function renderBack(el: Wires, d: Vals) {
     const isAnchor = cord !== null && k === cord.anchor
     const ring = isHover ? (cord.err ? ERR_COLOR : OK_COLOR) : isAnchor ? '#E6EDF3' : lit(k) ? OK_COLOR : '#4A5564'
     const base = {
-      key: k, x: p.x, y: p.y, label: jackLabel(p), ring, ringR: isHover ? 15 : 12,
-      core: p.dir === 'out' ? '#E6EDF3' : '#4A5564', coreR: p.dir === 'in' ? 4 : 6,
+      key: k, x: p.x, y: p.y, label: jackLabel(p), ring, ringR: isHover ? 17 : 14,
+      core: p.dir === 'out' ? '#E6EDF3' : '#4A5564', coreR: p.dir === 'in' ? 5 : 7,
       op: cord !== null ? (isAnchor || lit(k) ? 1 : 0.3) : selId === null || jackRoute[k] === selId ? 1 : 0.3,
     }
-    return { ...base, lx: p.x, ly: p.kind === 'block' ? p.y - 18 : p.y + 27, anchor: 'middle' }
+    return { ...base, lx: p.x, ly: p.kind === 'block' ? p.y - 22 : p.y + 34, anchor: 'middle' }
   })
 
   const cords = (s.showPipes ? wires : []).map(w => {
@@ -91,7 +91,7 @@ export function renderBack(el: Wires, d: Vals) {
     <span class="mono" style="position:absolute; left:14px; bottom:8px; font-size:10px; color:#6E7987; letter-spacing:0.08em">SERVICE RACK</span>
   </div>
 
-  ${isRelay ? modules.map(r => html`<div data-module=${r.id} data-deploy=${r.deploy} data-mark=${r.mark ? '' : nothing} style="position:absolute; left:${r.x}px; top:${r.y}px; width:${r.w}px; height:92px; box-sizing:border-box; border-radius:6px; background:#1B212A; border:${r.border}; ${r.mark ? 'outline:2px solid #F5A524; outline-offset:2px; ' : ''}opacity:${r.op}">
+  ${isRelay ? modules.map(r => html`<div data-module=${r.id} data-deploy=${r.deploy} data-mark=${r.mark ? '' : nothing} style="position:absolute; left:${r.x}px; top:${r.y}px; width:${r.w}px; height:${r.h}px; box-sizing:border-box; border-radius:6px; background:#1B212A; border:${r.border}; ${r.mark ? 'outline:2px solid #F5A524; outline-offset:2px; ' : ''}opacity:${r.op}">
     <div style="position:absolute; left:0; right:0; bottom:7px; display:flex; flex-direction:column; align-items:center; gap:1px">
       <span style="font-size:11px; font-weight:600; color:#E6EDF3">${r.title}</span>
       <span class="mono" style="font-size:10px; color:#8B96A5">${r.sub}</span>
@@ -103,7 +103,7 @@ export function renderBack(el: Wires, d: Vals) {
     ${jacks.map(j => svg`<g data-jack=${j.key} opacity=${j.op}>
       <circle cx=${j.x} cy=${j.y} r=${j.ringR} fill="#0A0D11" stroke=${j.ring} stroke-width="2"></circle>
       <circle cx=${j.x} cy=${j.y} r=${j.coreR} fill=${j.core} stroke="none" stroke-width="1.5"></circle>
-      <text x=${j.lx} y=${j.ly} text-anchor=${j.anchor} font-family="JetBrains Mono, monospace" font-size="10" fill="#A3AEBC">${j.label}</text>
+      <text x=${j.lx} y=${j.ly} text-anchor=${j.anchor} font-family="JetBrains Mono, monospace" font-size="16" fill="#C9D1D9">${j.label}</text>
     </g>`)}
   </svg>
 

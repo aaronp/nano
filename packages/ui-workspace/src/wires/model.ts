@@ -3,7 +3,7 @@
 import { fits, type AppDeployment, type Implementation, type Op, type Registry } from '@pritzlaff/nano-core'
 import { calledOps, callCords, type Call, type OpPair } from './calls'
 import { BLOCK_DY, BLOCK_H, MOD_H, PALETTE, ROW_STEP, ROW_Y } from './constants'
-import { chassisJacks, moduleJacks, moduleW, ordered } from './jacks'
+import { chassisJacks, moduleJacks, moduleW } from './jacks'
 
 /** A rectangle in the dock's (front) coordinates. */
 export type Rect = { x: number; y: number; w: number; h: number }
@@ -80,7 +80,7 @@ export function buildModel({ snapshot, panels, W, H, application, kinds = {}, ti
   let x = 20, row = 0
   for (const inst of snapshot.instances) {
     if (placed.has(inst.id) || hidden(inst.id, application)) continue
-    const jacks = ordered(inst.ops)
+    const jacks = inst.ops
     const block = !jacks.some(o => dirOf(o) === 'out')
     const kind = kinds[inst.id]
     const sub = kind ? (titles[kind] ?? kind) : (inst.ops[0]?.port.replace(/\.[^.]*$/, '') ?? '')
@@ -99,7 +99,7 @@ export function buildModel({ snapshot, panels, W, H, application, kinds = {}, ti
   // a call edge leaves the bottom of the caller's box and enters the top of the callee's (calls.ts)
   const calls = callCords(snapshot.calls, id => chassis.find(c => c.instance === id) ?? rack.find(r => r.id === id), P)
   const runtimes = Object.fromEntries(snapshot.instances.map(i => [i.id, i.runtimes ?? []]))
-  return { W, H, chassis, rack, P, wires, routes, rackH: 128 + row * 132, calls, runtimes }
+  return { W, H, chassis, rack, P, wires, routes, rackH: 152 + row * ROW_STEP, calls, runtimes }
 }
 
 /** Routes: the weakly connected groups of components, named `<first source> → <last sink>`, coloured in order. */

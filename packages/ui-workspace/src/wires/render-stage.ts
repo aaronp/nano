@@ -14,8 +14,10 @@ export function renderStage(el: Wires, d: Vals) {
   // At full size (opening, and after Done) it sits exactly where the flat dock does.
   const fit = (h: number) => (el.stage.w ? Math.min((el.stage.w - ASIDE_W) / W, (el.stage.h - HEADER_H) / h) : 1) * SCALE
   const t = (1 + d.backness) / 2
-  const scale = d.shown ? fit(H) + (fit(H + m.rackH) - fit(H)) * t : 1
-  const dx = (d.shown ? -ASIDE_W / 2 : 0) + s.panX, dy = (d.shown ? HEADER_H / 2 - m.rackH / 2 * t * scale : 0) + s.panY
+  // the rack plate sits 32px below the pane; leave room under it for the hint
+  const below = 32 + m.rackH + 40
+  const scale = d.shown ? fit(H) + (fit(H + below) - fit(H)) * t : 1
+  const dx = (d.shown ? -ASIDE_W / 2 : 0) + s.panX, dy = (d.shown ? HEADER_H / 2 - below / 2 * t * scale : 0) + s.panY
   const worldT = 'translate(' + dx + 'px, ' + dy.toFixed(1) + 'px) scale(' + +(scale * (d.shown ? s.zoom : 1)).toFixed(4) + ') rotateX(' + s.rx.toFixed(2) + 'deg) rotateY(' + s.ry.toFixed(2) + 'deg)'
   const worldTr = s.dragging ? 'none' : s.zooming ? 'transform 80ms linear' : 'transform ' + TURN_MS + 'ms cubic-bezier(0.65, 0, 0.35, 1)'
   const cursor = s.editing ? (s.cord || s.lift ? 'grabbing' : 'crosshair') : s.dragging ? 'grabbing' : 'grab'

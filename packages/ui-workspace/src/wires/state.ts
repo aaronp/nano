@@ -26,6 +26,6 @@ export interface State {
 }
 
 /** The state a view starts in. */
-export const initial = (): State => ({ ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, showCalls: true, showPipes: true, show: 'connected', pills: { runtimes: [], pods: [], kinds: [] }, editing: false, entering: false, leaving: false, hl: false, zoom: 1, panX: 0, panY: 0, zooming: false, tab: 'view', picked: null, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} })
+export const initial = (): State => ({ ry: 0, rx: 0, dragging: false, mode: 'relay', sel: null, depth: 64, showCalls: true, showPipes: true, show: 'connected', pills: { runtimes: [], pods: [] }, editing: false, entering: false, leaving: false, hl: false, zoom: 1, panX: 0, panY: 0, zooming: false, tab: 'view', picked: null, cord: null, armed: null, selMod: null, lift: null, toast: null, packets: [], hits: {}, flashes: {}, stats: {} })
 /** The model before the first build. */
-export const empty = (): Model => ({ W: 1340, H: 560, chassis: [], rack: [], P: {}, wires: [], routes: [], calls: [], rackH: 128, runtimes: {} })
+export const empty = (): Model => ({ W: 1340, H: 560, chassis: [], rack: [], P: {}, wires: [], routes: [], calls: [], rackH: 152, runtimes: {} })

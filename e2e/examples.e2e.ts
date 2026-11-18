@@ -409,4 +409,6 @@ test('Connections, the chat after a message: messaging post\'s output jack is co
   await w.getByRole('button', { name: 'Back', exact: true }).click()
   await page.waitForTimeout(1200)
   await page.screenshot({ path: test.info().outputPath('rack.png') })
+  await w.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'All' }).click()
+  await page.screenshot({ path: test.info().outputPath('rack-all.png') })
 })

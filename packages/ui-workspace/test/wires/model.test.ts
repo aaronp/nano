@@ -11,7 +11,7 @@ test('panels become mirrored chassis with jacks: outs along the top, ins along t
   expect(m.chassis.map(c => [c.label, c.x, c.instance])).toEqual([['r', 800, 'r'], ['l', 400, 'l'], ['textarea', 0, null]])
   const out = m.P[k('r', Input, 'submit', 'out')]!, inn = m.P[k('r', Input, 'submit', 'in')]!
   expect([out.dir, out.kind, out.y]).toEqual(['out', 'chassis', 56])
-  expect([inn.dir, inn.y]).toEqual(['in', 248])
+  expect([inn.dir, inn.y]).toEqual(['in', 244])
   // an action is an in jack and, for its result, an out jack
   expect(Object.values(m.P).filter(p => p.owner === 'l').map(p => [p.label, p.dir])).toEqual([['log', 'out'], ['entries', 'out'], ['clear', 'out'], ['log', 'in'], ['entries', 'in'], ['clear', 'in']])
 })
@@ -72,6 +72,9 @@ test('every action is an input jack and an output jack; every event is an output
   const dirs = (owner: string, op: string) => Object.values(m.P).filter(p => p.owner === owner && p.label === op).map(p => p.dir).sort()
   expect([dirs('r', 'submit'), dirs('d', 'push'), dirs('d', 'flushed')]).toEqual([['in', 'out'], ['in', 'out'], ['out']])
   expect([m.P[k('r', Input, 'submit', 'in')]!.kind, m.P[k('d', Debounce, 'push', 'in')]!.kind]).toEqual(['chassis', 'module'])
+  // on a module an action's two jacks sit side by side
+  const pin = m.P[k('d', Debounce, 'push', 'in')]!, pout = m.P[k('d', Debounce, 'push', 'out')]!
+  expect(pout.x - pin.x).toBe(Math.round(pin.slot))
 })
 
 test('an op-level call draws from the caller\'s op to the callee\'s; seen but not declared is marked so; old edges are as before', () => {

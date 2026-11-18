@@ -3,8 +3,8 @@
 import type { Model } from './model'
 import type { Wires } from './wires'
 
-/** The selected pills: runtimes, pods, and the kinds of cord. */
-export type Pills = { runtimes: string[]; pods: string[]; kinds: ('calls' | 'pipes')[] }
+/** The selected pills: runtimes and pods (the Pipes / Call edges boxes pick the kinds of cord). */
+export type Pills = { runtimes: string[]; pods: string[] }
 export type ViewSettings = { show: 'connected' | 'all'; pills: Pills }
 
 const pick = <A>(sel: A[], a: A) => sel.length === 0 || sel.includes(a)
@@ -14,8 +14,8 @@ export const toggle = <A>(sel: A[], a: A) => sel.includes(a) ? sel.filter(x => x
 export function viewOf(m: Model, { show, pills }: ViewSettings): Model {
   const touches = (from: string, to: string) => pills.pods.length === 0 || pills.pods.includes(from) || pills.pods.includes(to)
   const owner = (k: string) => m.P[k]!.owner
-  const wires = m.wires.filter(w => pick(pills.kinds, 'pipes') && pick(pills.runtimes, w.runtime) && touches(owner(w.from), owner(w.to)))
-  const calls = m.calls.filter(c => pick(pills.kinds, 'calls') && pick(pills.runtimes, c.runtime) && touches(c.from, c.to))
+  const wires = m.wires.filter(w => pick(pills.runtimes, w.runtime) && touches(owner(w.from), owner(w.to)))
+  const calls = m.calls.filter(c => pick(pills.runtimes, c.runtime) && touches(c.from, c.to))
   const corded = new Set([...wires.flatMap(w => [w.from, w.to]), ...calls.flatMap(c => c.jacks)])
   const ends = new Set([...wires.flatMap(w => [owner(w.from), owner(w.to)]), ...calls.flatMap(c => [c.from, c.to])])
   const inRuntime = (id: string) => pills.runtimes.length === 0 || (m.runtimes[id] ?? []).some(r => pills.runtimes.includes(r))

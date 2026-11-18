@@ -3,18 +3,18 @@
 /** Rack and piece geometry, relative to the pane's height H where the prototype had fixed rows below its 560px pane. */
 export const RACK_TOP = 32          // the rack starts this far below the pane (592 - 560)
 export const ROW_Y = 60             // first rack row below the pane (620 - 560)
-export const ROW_STEP = 120         // between rack rows (740 - 620)
+export const ROW_STEP = 150         // between rack rows: a module and the labels of the row below
 export const BLOCK_DY = -2          // a block's top vs its row (618 - 620)
 export const BLOCK_JACK_DY = -14    // a block's jacks vs its row (606 - 620)
-export const MOD_H = 92
+export const MOD_H = 116
 export const BLOCK_H = 82
-export const JACK_W = 84            // per-jack slot width of a rack module: room for the jack and its label
+export const JACK_W = 110           // per-jack slot width of a rack module: room for the jack and its label
 export const PIECE_H = 40
 export const ROW_H = 46
 export const PUZ_Y0 = 40
 export const TAB_R = 7
 export const FORK_W = 64
-export const HIT_R = 18
+export const HIT_R = 20
 /** The pane's share of the stage when it eases back. */
 export const SCALE = 0.9
 

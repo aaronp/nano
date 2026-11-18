@@ -1,4 +1,4 @@
-// The Connections view settings: Show Connected | All, and the runtime, pod and kind pills.
+// The Connections view settings: Show Connected | All, and the runtime and pod pills.
 import './dom.ts'
 import { expect, test } from 'bun:test'
 import { viewOf, type ViewSettings } from '../../src/wires/filter.ts'
@@ -11,7 +11,7 @@ const m = (() => {
   d.runtimes['side'] = { pods: ['m'], subscriptions: [] }
   return model(d)
 })()
-const none = { runtimes: [], pods: [], kinds: [] }
+const none = { runtimes: [], pods: [] }
 const view = (s: Partial<ViewSettings> = {}) => viewOf(m, { show: 'connected', pills: none, ...s })
 
 test('Connected shows only the jacks a cord touches, and only the modules with one', () => {
@@ -28,12 +28,6 @@ test('All shows every jack and module', () => {
   const v = view({ show: 'all' })
   expect(v.rack.map(r => r.id)).toEqual(['d', 'm'])
   expect(Object.keys(v.P)).toEqual(Object.keys(m.P))
-})
-
-test('kind pills narrow to calls or pipes', () => {
-  expect([view({ pills: { ...none, kinds: ['calls'] } }).wires.length, view({ pills: { ...none, kinds: ['calls'] } }).calls.length]).toEqual([0, 1])
-  expect([view({ pills: { ...none, kinds: ['pipes'] } }).wires.length, view({ pills: { ...none, kinds: ['pipes'] } }).calls.length]).toEqual([2, 0])
-  expect(view({ pills: { ...none, kinds: ['pipes'] } }).P[k('d', Debounce, 'flushed', 'out')]).toBeDefined()
 })
 
 test('a pod pill keeps the cords touching that pod, and the modules at their other ends', () => {
