@@ -25,13 +25,16 @@ export function readLayout(raw: unknown): DeskLayout {
 }
 
 // Labels come from the jack key (`pod port:dir`): the op is the port's last `/` segment. ~7px a character (6 compact).
-const label = (key: string) => key.slice(key.indexOf(' ') + 1).replace(/:(in|out)$/, '').split('/').pop()!
+export const jackLabel = (key: string) => key.slice(key.indexOf(' ') + 1).replace(/:(in|out)$/, '').split('/').pop()!
 /** Wide enough for the longest in label plus the longest out label; tall enough for the jack rows under the header. */
+/** A column's header height and a jack row's: the one source for sizing, drawing and cords. */
+export const COL_HEAD = 44
+export const rowH = (compact: boolean) => compact ? 20 : 26
 export function columnSize(c: Column, compact: boolean): { w: number; h: number } {
-  const ch = compact ? 6 : 7, jh = compact ? 20 : 26
-  const widest = (ks: string[]) => Math.max(0, ...ks.map(k => label(k).length * ch))
+  const ch = compact ? 6 : 7, jh = rowH(compact)
+  const widest = (ks: string[]) => Math.max(0, ...ks.map(k => jackLabel(k).length * ch))
   const w = Math.max(compact ? 150 : 190, widest(c.ins) + widest(c.outs) + 48)
-  return { w, h: 44 + (Math.max(c.ins.length, c.outs.length) + 1) * jh }
+  return { w, h: COL_HEAD + (Math.max(c.ins.length, c.outs.length) + 1) * jh }
 }
 
 /** Saved positions kept and clamped, stale ones pruned; new columns go right of the rightmost, runtimes by rank. */

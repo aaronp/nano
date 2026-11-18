@@ -2,7 +2,7 @@ import '../circuit/dom.ts'
 import { expect, test } from 'bun:test'
 import { defineDesk, type Desk } from '../../src/desk'
 import { setup } from '../wires/setup'
-import { MapIface, p2 } from '../wires/setup'
+import { Debounce, MapIface, k, p2 } from '../wires/setup'
 import { port } from '@pritzlaff/nano-core'
 
 defineDesk()
@@ -75,4 +75,11 @@ test('snap toggle keeps positions', async () => {
   root.querySelector<HTMLElement>('[data-snap-toggle]')!.click()
   await settle()
   expect(el.layout().pods.main!.r).toEqual({ x: Math.round(p.x / 20) * 20, y: Math.round(p.y / 20) * 20 })
+})
+
+test('an event out jack is marked, an action in jack is not', async () => {
+  const { root } = await mount()
+  const j = (key: string) => root.querySelector(`[data-jack="main ${key}"]`)!
+  expect(j(k('d', Debounce, 'flushed', 'out')).hasAttribute('data-event')).toBe(true)
+  expect(j(k('d', Debounce, 'push', 'in')).hasAttribute('data-event')).toBe(false)
 })

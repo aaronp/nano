@@ -2,13 +2,14 @@
 // held here (`layout()` for Save). Drag a runtime by its header or a column by its body; on release, push the siblings.
 import { LitElement, css, html } from 'lit'
 import type { Host } from '../host.ts'
+import { empty as emptyWires } from '../wires/state'
 import { toggle, type ViewSettings } from '../wires/filter'
 import { align, arrange, GRID, push, readLayout, setSnap, type DeskLayout, type XY } from './arrange'
 import { renderCords } from './cords'
 import { deskModel, type DeskModel } from './model'
 import { renderRuntimes } from './render'
 
-const empty: DeskModel = { runtimes: [], pipes: [], calls: [], rank: {}, wires: {} as never }
+const empty: DeskModel = { runtimes: [], pipes: [], calls: [], rank: {}, wires: emptyWires() }
 
 export class Desk extends LitElement {
   static properties = { host: { attribute: false }, application: {} }
@@ -25,6 +26,7 @@ export class Desk extends LitElement {
     h4 { margin: 0; padding: 6px 8px 2px; font-size: 13px } small { display: block; padding: 0 8px 6px; color: #94a3b8; font-size: 11px; border-bottom: 1px solid #2A323D; height: 14px }
     .row { display: flex; justify-content: space-between; align-items: center; padding: 0 8px }
     .jack { display: flex; gap: 6px; align-items: center } .jack.out { flex-direction: row-reverse }
+    .jack[data-event] { font-style: italic; color: #94a3b8 }
     .jack i { width: 8px; height: 8px; border-radius: 50%; background: #4CC2FF }
     svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none }`
   declare host?: Host

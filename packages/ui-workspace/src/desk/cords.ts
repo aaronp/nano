@@ -4,8 +4,7 @@ import { svg } from 'lit'
 import { OK_COLOR } from '../wires/constants'
 import { opCord } from '../wires/calls'
 import { cordD, cordGeo } from '../wires/geometry'
-import type { DeskLayout, Sized } from './arrange'
-import { headH, rowH } from './render'
+import { COL_HEAD, rowH, type DeskLayout, type Sized } from './arrange'
 import type { DeskModel } from './model'
 
 type XY = { x: number; y: number }
@@ -18,7 +17,7 @@ export function jackAt(m: DeskModel, a: Arranged, l: DeskLayout, runtime: string
   if (!c || !box || !rt) return
   const out = key.endsWith(':out'), i = (out ? c.outs : c.ins).indexOf(key)
   if (i < 0) return
-  return { x: rt.x + box.x + (out ? box.w - 8 : 8), y: rt.y + box.y + headH + i * rowH(l.compact) + rowH(l.compact) / 2 }
+  return { x: rt.x + box.x + (out ? box.w - 8 : 8), y: rt.y + box.y + COL_HEAD + i * rowH(l.compact) + rowH(l.compact) / 2 }
 }
 
 export function renderCords(m: DeskModel, a: Arranged, l: DeskLayout) {
