@@ -10,6 +10,8 @@ export const simClock = Implementation.define(ns.implementationId('sim-clock'), 
   config: Schema.define(Type.Union([Type.Object({ start: Type.Optional(Type.Number()) }), Type.Undefined()]), 'SimClockConfig'),
   make: (ctx, config?: { start?: number }) => {
     let time = config?.start ?? 0, next = 0
+    let queue: Promise<unknown> = Promise.resolve()   // control calls run one at a time, so time never moves back mid-publish
+    const run = <T>(f: () => Promise<T>) => (queue = queue.then(f, f)) as Promise<T>
     let timers: { id: number; due: number; tag?: string }[] = []   // ids rise with start order, so (due, id) is the firing order
     const moveTo = async (t: number) => {
       for (;;) {
@@ -23,7 +25,7 @@ export const simClock = Implementation.define(ns.implementationId('sim-clock'), 
       time = t
       return success(null)
     }
-    const set = (t: number) => t < time ? Promise.resolve(failure('invalid-input', `the clock is at ${time}; it cannot go back to ${t}`)) : moveTo(t)
+    const set = (t: number) => run(async () => t < time ? failure('invalid-input', `the clock is at ${time}; it cannot go back to ${t}`) : await moveTo(t))
     return [
       provide(Clock, {
         now: async () => success(time),
@@ -31,7 +33,7 @@ export const simClock = Implementation.define(ns.implementationId('sim-clock'), 
         cancel: async id => { timers = timers.filter(x => x.id !== id); return success(null) },
       }),
       provide(ClockControl, {
-        advance: ms => set(time + ms),
+        advance: ms => run(async () => ms < 0 ? failure('invalid-input', `cannot advance by ${ms}`) : moveTo(time + ms)),
         set,
       }),
     ]
