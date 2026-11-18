@@ -52,6 +52,8 @@ describe('the explorer', () => {
     await settle(el)
     const t = text(el)
     for (const s of ['main', 'in', 'wait', 'up', 'out']) expect(t).toContain(s)
+    for (const p of ['in', 'wait', 'up', 'out']) (tree(el) as unknown as { reveal(id: string): void }).reveal(`s:main:${p}:0`)
+    await settle(el)
     const under = (pod: string) => tree(el).shadowRoot.querySelector(`li[data-id="p:main:${pod}"]`)!.textContent!
     expect(under('in')).toContain('submit → wait.push')
     expect(under('wait')).toContain('flushed → up.map')
@@ -61,6 +63,9 @@ describe('the explorer', () => {
 
   const pane = (el: El) => el.shadowRoot!.querySelector('.details')!
   const choose = async (el: El, label: string) => {
+    const rts = (el.target as { app: { deployment(): AppDeployment } }).app.deployment().runtimes
+    for (const r of Object.keys(rts)) for (const p of rts[r]!.pods) (tree(el) as unknown as { reveal(id: string, o: object): void }).reveal(`s:${r}:${p}:0`, { focus: false })
+    await settle(el);
     ([...tree(el).shadowRoot.querySelectorAll('.line')].find(l => l.textContent?.includes(label)) as HTMLElement).click()
     await settle(el)
   }
@@ -117,6 +122,29 @@ describe('the explorer', () => {
     ;([...pane(el).querySelectorAll('a')].find(a => a.textContent === 'nano.ui.Debounce') as HTMLElement).click()
     await settle(el)
     expect(pane(el).textContent).toContain('interface nano.ui.Debounce')
+  })
+
+  test('a runtime lists its implementations, interfaces and operations; an operation lists its interface, implementations and pods; each links to its primary place', async () => {
+    const el = await mount(await open(edge))
+    await settle(el)
+    const ids = () => [...tree(el).shadowRoot.querySelectorAll('li[data-id]')].map(l => l.getAttribute('data-id'))
+    expect(ids()).toEqual(expect.arrayContaining(['r:r/pods', 'r:r/impls', 'r:r/ifaces', 'r:r/ops', 'g:actions', 'g:events', 'i:acme.Store', 'm:acme/db']))
+    ;(tree(el) as unknown as { reveal(id: string): void }).reveal('o:acme.Store/save|p:r:db'); await settle(el)
+    ;(tree(el).shadowRoot.querySelector('li[data-id="o:acme.Store/save|p:r:db"] > .line') as HTMLElement).click(); await settle(el)
+    expect(pane(el).textContent).toContain('pod db')
+    ;(tree(el).shadowRoot.querySelector('li[data-id="o:acme.Store/save"] > .line') as HTMLElement).click(); await settle(el)
+    const t = pane(el).textContent!.replace(/\s+/g, ' ')
+    for (const x of ['action save', 'interfaceacme.Store', 'takesStr', 'returnsStr', 'podsdb']) expect(t).toContain(x)
+  })
+
+  test('the filters keep the chosen kinds in the chosen namespace, and the way to them', async () => {
+    const { filter, namespaces } = await import('../src/explorer-nodes.ts')
+    const n = (id: string, kind: string | undefined, ns: string, children?: never[]) => ({ id, label: id, ...(kind && { kind }), data: { ns }, ...(children && { children }) })
+    const list = [n('r:a', 'runtime', 'x', [n('p:a', 'pod', 'y'), n('p:b', 'pod', 'x')] as never[]), n('o:q', 'action', 'y')]
+    expect(namespaces(list as never)).toEqual(['x', 'y'])
+    const ids = (l: { id: string; children?: unknown[] }[]): unknown[] => l.map(x => [x.id, ...ids((x.children ?? []) as never)])
+    expect(ids(filter(list as never, new Set(['pod']), 'y'))).toEqual([['r:a', ['p:a']]])
+    expect(ids(filter(list as never, new Set(['operation']), ''))).toEqual([['o:q']])
   })
 
   test('typeName: a label, else a short shape', async () => {

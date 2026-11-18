@@ -1,22 +1,26 @@
 /**
- * `<nano-explorer>`: the application → its runtimes → their pods (implementation, config, state) → the subscriptions
- * there; then the registry's interfaces and implementations. Choosing a node shows its details beside the tree
+ * `<nano-explorer>`: the system as a tree (explorer-nodes.ts): by runtime, by operation, by interface, by
+ * implementation; a search and a namespace and kind filter. Choosing a node shows its details beside the tree
  * (explorer-details.ts); a pod's "Open view" (or a double-click on a pod) fires `nano-open` with `{ runtime, pod }`.
  */
 import { LitElement, css, html } from 'lit'
 import { details, type Where } from './explorer-details.ts'
+import { filter, namespaces, nodes, primary } from './explorer-nodes.ts'
 import type { Application, Registry } from '@pritzlaff/nano-core'
-import { base, type TreeNode } from '@pritzlaff/nano-elements'
+import { base } from '@pritzlaff/nano-elements'
 import '@pritzlaff/nano-elements'
 
 type ExplorerTarget = { app: Application; registry: Registry }
 
-const op = (port: string) => port.slice(port.lastIndexOf('/') + 1)
+const KINDS = ['runtime', 'pod', 'interface', 'implementation', 'operation']
 
 export class NanoExplorer extends LitElement {
-  static properties = { target: { attribute: false }, states: { state: true }, selected: { state: true } }
+  static properties = { target: { attribute: false }, states: { state: true }, selected: { state: true }, query: { state: true }, ns: { state: true }, kinds: { state: true } }
   static styles = [base, css`
     :host { display: block; height: 100%; container-type: inline-size }
+    .pane { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0 }
+    .filters { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 0 0 6px; font-size: 12px } .filters input[type=search] { flex: 1 1 140px; min-width: 0 }
+    .filters details { width: 100% } .filters summary { cursor: pointer; opacity: .7 } .filters label { margin-right: 8px; white-space: nowrap }
     .split { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 12px; height: 100% }
     .details { overflow: auto; padding: 0 8px; border-left: 1px solid var(--nano-line, rgba(128,128,128,.3)) }
     nano-tree { overflow: auto; min-height: 0 }
@@ -26,10 +30,13 @@ export class NanoExplorer extends LitElement {
   declare target?: ExplorerTarget
   declare states: Record<string, string>
   declare selected: string | null
+  declare query: string
+  declare ns: string
+  declare kinds: Set<string>
   private off?: () => void
   private watching?: ExplorerTarget
 
-  constructor() { super(); this.states = {}; this.selected = null }
+  constructor() { super(); this.states = {}; this.selected = null; this.query = ''; this.ns = ''; this.kinds = new Set(KINDS) }
   connectedCallback() { super.connectedCallback(); this.watch() }
   disconnectedCallback() { super.disconnectedCallback(); this.stop() }
   willUpdate(changed: Map<string, unknown>) { if (changed.has('target')) this.watch() }
@@ -49,27 +56,6 @@ export class NanoExplorer extends LitElement {
   }
   private stop() { this.off?.(); this.off = undefined; this.watching = undefined }
 
-  private nodes(t: ExplorerTarget): TreeNode[] {
-    const d = t.app.deployment()
-    const m = t.registry.manifest()
-    const runtimes: TreeNode[] = Object.entries(d.runtimes).map(([runtime, r]) => ({
-      id: `r:${runtime}`, label: runtime, kind: 'runtime', count: r.pods.length,
-      children: r.pods.map(pod => {
-        const p = d.pods[pod], id = `p:${runtime}:${pod}`
-        const subs: TreeNode[] = r.subscriptions.filter(s => s.from === pod).map((s, i) => {
-          const sid = `s:${runtime}:${pod}:${i}`
-          if (s.kind === 'call') return { id: sid, label: `built on → ${s.to}` }
-          return { id: sid, label: `${op(s.source)} → ${s.to}.${op(s.target)}` }
-        })
-        return { id, label: pod, kind: 'pod', badge: this.states[pod], terms: [p?.implementation ?? ''],
-          body: html`${p?.implementation} ${p?.config === undefined ? '' : JSON.stringify(p.config)}`, children: subs }
-      }),
-    }))
-    return [...runtimes,
-      { id: 'g:interfaces', label: 'Interfaces', count: m.interfaces.length, children: m.interfaces.map(i => ({ id: `i:${i.coord}`, label: i.coord, kind: 'interface' })) },
-      { id: 'g:implementations', label: 'Implementations', count: m.implementations.length, children: m.implementations.map(i => ({ id: `m:${i.coord}`, label: i.coord, kind: 'implementation' })) }]
-  }
-
   private open(w: Where) { this.dispatchEvent(new CustomEvent('nano-open', { detail: w, bubbles: true, composed: true })) }
   /** A double-click on a pod opens its view. */
   private dbl() { const [k, r, ...p] = (this.selected ?? '').split(':'); if (k === 'p') this.open({ runtime: r!, pod: p.join(':') }) }
@@ -78,8 +64,18 @@ export class NanoExplorer extends LitElement {
     if (!this.target) return html``
     const t = this.target
     const c = { d: t.app.deployment(), registry: t.registry, states: this.states, go: (id: string) => { this.selected = id }, open: (w: Where) => this.open(w) }
-    return html`<div class="split"><nano-tree .nodes=${this.nodes(t)} .selected=${this.selected} open-depth="2" @dblclick=${() => this.dbl()}
-      @select=${(e: CustomEvent<{ id: string }>) => { this.selected = e.detail.id.startsWith('g:') ? this.selected : e.detail.id }}></nano-tree>
+    const all = nodes(c.d, t.registry, this.states)
+    const shown = this.ns || this.kinds.size < KINDS.length ? filter(all, this.kinds, this.ns) : all
+    const kind = (k: string) => { const s = new Set(this.kinds); s.has(k) ? s.delete(k) : s.add(k); this.kinds = s }
+    return html`<div class="split"><div class="pane"><div class="filters">
+        <input type="search" placeholder="Search" aria-label="Search" .value=${this.query} @input=${(e: Event) => { this.query = (e.target as HTMLInputElement).value }}>
+        <details><summary>Filters</summary>
+          <label>Namespace <select aria-label="Namespace" @change=${(e: Event) => { this.ns = (e.target as HTMLSelectElement).value }}>
+            <option value="">any</option>${namespaces(all).map(n => html`<option ?selected=${n === this.ns}>${n}</option>`)}</select></label>
+          ${KINDS.map(k => html`<label><input type="checkbox" .checked=${this.kinds.has(k)} @change=${() => kind(k)}> ${k}s</label>`)}
+        </details></div>
+      <nano-tree .nodes=${shown} .query=${this.query} .selected=${this.selected} open-depth="2" @dblclick=${() => this.dbl()}
+        @select=${(e: CustomEvent<{ id: string }>) => { e.preventDefault(); const id = primary(e.detail.id); if (!/^g:|\/(pods|impls|ifaces|ops)$/.test(id)) this.selected = id }}></nano-tree></div>
       <section class="details" aria-label="Details">${details(c, this.selected)}</section></div>`
   }
 }

@@ -1,7 +1,7 @@
 /**
  * The explorer's details pane: what one selected node is, from the live deployment and the registry. Ids name the
  * node: `r:<runtime>`, `p:<runtime>:<pod>`, `s:<runtime>:<pod>:<i>` (that pod's i-th subscription), `i:<interface>`,
- * `m:<implementation>`. `go(id)` selects another node (a link); `open(where)` asks the host for a pod's view.
+ * `m:<implementation>`, `o:<interface>/<op>`. `go(id)` selects another node (a link); `open(where)` asks the host for a pod's view.
  */
 import { html, nothing, type TemplateResult } from 'lit'
 import type { AppDeployment, Registry } from '@pritzlaff/nano-core'
@@ -83,7 +83,7 @@ function iface(c: Ctx, coord: string) {
   const i = c.registry.manifest().interfaces.find(x => x.coord === coord)
   if (!i) return html`<p class="muted">${coord} is not registered.</p>`
   return html`<h3>interface ${coord}</h3><dl>
-    ${row('ops', list(i.ops.map(o => { const op = Object.values(c.registry.interface(coord)?.ops ?? {}).find(x => x.name === o.name); return html`<code>${o.name}</code> ${o.kind} <span class="muted">${o.kind === 'event' ? html`emits <code>${typeName(op?.output as Shape)}</code>` : html`<code>${typeName(op?.input as Shape)}</code> → <code>${typeName(op?.output as Shape)}</code>`}</span>` })))}
+    ${row('ops', list(i.ops.map(o => { const op = Object.values(c.registry.interface(coord)?.ops ?? {}).find(x => x.name === o.name); return html`${link(c, `o:${coord}/${o.name}`, o.name)} ${o.kind} <span class="muted">${o.kind === 'event' ? html`emits <code>${typeName(op?.output as Shape)}</code>` : html`<code>${typeName(op?.input as Shape)}</code> → <code>${typeName(op?.output as Shape)}</code>`}</span>` })))}
     ${row('implementations', list(c.registry.implementationsOf(coord).map(m => link(c, `m:${m.coord}`, m.coord))))}
   </dl>`
 }
@@ -99,14 +99,31 @@ function implementation(c: Ctx, coord: string) {
   </dl>`
 }
 
+function operation(c: Ctx, port: string) {
+  const at = port.lastIndexOf('/'), coord = port.slice(0, at), name = port.slice(at + 1)
+  const o = Object.values(c.registry.interface(coord)?.ops ?? {}).find(x => x.name === name)
+  if (!o) return html`<p class="muted">${port} is not registered.</p>`
+  const impls = c.registry.implementationsOf(coord).map(m => m.coord)
+  const subs = Object.values(c.d.runtimes).flatMap(r => r.subscriptions)
+  const pipes = subs.flatMap(s => s.kind === 'pipe' && (s.source === port || s.target === port) ? [html`${podLink(c, s.from)}.${op(s.source)} → ${podLink(c, s.to)}.${op(s.target)}`] : [])
+  return html`<h3>${o.kind} ${name}</h3>${o.description ? html`<p>${o.description}</p>` : nothing}<dl>
+    ${row('interface', link(c, `i:${coord}`, coord))}
+    ${o.kind === 'event' ? row('emits', html`<code>${typeName(o.output as Shape)}</code>`) : html`${row('takes', html`<code>${typeName(o.input as Shape)}</code>`)}${row('returns', html`<code>${typeName(o.output as Shape)}</code>`)}`}
+    ${row('implementations', list(impls.map(m => link(c, `m:${m}`, m))))}
+    ${row('pods', list(Object.keys(c.d.pods).filter(p => impls.includes(c.d.pods[p]!.implementation)).map(p => podLink(c, p))))}
+    ${row('pipes', list(pipes))}
+  </dl>`
+}
+
 /** The details of node `id`, or a hint when nothing is selected. */
 export function details(c: Ctx, id: string | null): TemplateResult {
-  if (!id) return html`<p class="muted">Select a runtime, pod, subscription, interface or implementation.</p>`
+  if (!id) return html`<p class="muted">Select a runtime, pod, subscription, interface, implementation or operation.</p>`
   const [kind, ...rest] = id.split(':'), at = rest.join(':')
   if (kind === 'r') return runtime(c, at)
   if (kind === 'p') return pod(c, rest[0]!, rest.slice(1).join(':'))
   if (kind === 's') return subscription(c, rest[0]!, rest[1]!, Number(rest[2]))
   if (kind === 'i') return iface(c, at)
   if (kind === 'm') return implementation(c, at)
+  if (kind === 'o') return operation(c, at)
   return html``
 }
