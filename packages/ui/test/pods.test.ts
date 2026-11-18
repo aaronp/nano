@@ -3,7 +3,7 @@
  */
 import { expect, test } from 'bun:test'
 import { Application, AppDeployment, Registry, Pod, port, success, type NanoResult } from '@pritzlaff/nano-core'
-import uiProvider, { Debounce, debounce, input, Input, Log, log } from '../src/index.ts'
+import uiProvider, { Debounce, debounce, input, Input, Log, log, simClock, ClockControl } from '../src/index.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
@@ -76,4 +76,35 @@ test('input: change returns its input, so each edit can be piped, and kind is a 
 test('input: an unknown kind is refused', async () => {
   const r = Registry.create(); r.add(uiProvider)
   expect(AppDeployment.assemble({ pods: { i: Pod.eager(input, { config: { kind: 'date' } }) }, runtimes: { main: { pods: ['i'], subscriptions: [] } } }, r).ok).toBe(false)
+})
+
+const onSim = async () => {
+  const r = Registry.create(); r.add(uiProvider)
+  const app = must(await Application.create(must(AppDeployment.assemble({
+    pods: { wait: Pod.eager(debounce, { config: { quietMs: 100, maxWaitMs: 500 } }), sim: Pod.eager(simClock), all: Pod.lazy(log) },
+    runtimes: { main: { pods: ['wait', 'sim', 'all'], subscriptions: [
+      { kind: 'call', from: 'wait', to: 'sim' },
+      { kind: 'pipe', from: 'wait', source: port(Debounce, Debounce.ops.batch), to: 'all', target: port(Log, Log.ops.log) },
+    ] } },
+  }, r)), {}))
+  const advance = async (ms: number) => { await (app.call('main', 'sim') as any).advance(ms); await sleep(10) }
+  return { app, advance, all: async () => must(await app.call('main', 'all').entries(null)) }
+}
+
+test('on a sim clock, nothing flushes until the clock is advanced', async () => {
+  const { app, advance, all } = await onSim()
+  await app.call('main', 'wait').push('a'); await app.call('main', 'wait').push('b')
+  await sleep(150)
+  expect(await all()).toEqual([])
+  await advance(100)
+  expect(await all()).toEqual([['a', 'b']])
+})
+
+test('on a sim clock, pushes keep resetting quiet; max wait still flushes', async () => {
+  const { app, advance, all } = await onSim()
+  for (let i = 0; i < 10; i++) { await app.call('main', 'wait').push(i); await advance(60) }
+  const batches = (await all()) as number[][]
+  expect(batches.length).toBeGreaterThanOrEqual(1)
+  expect(batches[0]![0]).toBe(0)
+  expect(batches[0]!.length).toBeLessThanOrEqual(9)   // flushed at 500 of sim time, not at the end
 })

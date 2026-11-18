@@ -1,4 +1,4 @@
-/** The Typing example, its debounce quickened, for the recorder's tests. */
+/** The Typing example, its debounce quickened and left on real time (no call edge to its clock pod), for the recorder's tests. */
 import { Application, AppDeployment, Registry, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider from '@pritzlaff/nano-ui'
 
@@ -11,7 +11,8 @@ export async function typing(): Promise<Application> {
   const file: AppDeployment = await Bun.file(new URL('../../../../examples/typing/nano.json', import.meta.url)).json()
   const registry = Registry.create()
   must(registry.add(uiProvider))
-  const quick = { ...file, pods: { ...file.pods, debounce: { ...file.pods['debounce']!, config: { quietMs: 20, maxWaitMs: 200 } } } }
+  const main = file.runtimes['main']!
+  const quick = { ...file, runtimes: { main: { ...main, subscriptions: main.subscriptions.filter(s => s.kind !== 'call') } }, pods: { ...file.pods, debounce: { ...file.pods['debounce']!, config: { quietMs: 20, maxWaitMs: 200 } } } }
   return must(await Application.create(must(AppDeployment.assemble(quick, registry)), {}))
 }
 

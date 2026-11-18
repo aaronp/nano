@@ -55,7 +55,7 @@ describe('the nano.ui slice', () => {
   test('given a debounce, when it is closed before it flushes, then nothing is published, even by a later push', async () => {
     const published: unknown[] = []
     const closers: (() => void)[] = []
-    const ctx = { publish: async (_op: unknown, v: unknown) => { published.push(v); return success(null) }, addOnCloseListener: (f: () => void) => { closers.push(f) } }
+    const ctx = { one: () => ({ ok: false }), publish: async (_op: unknown, v: unknown) => { published.push(v); return success(null) }, addOnCloseListener: (f: () => void) => { closers.push(f) } }
     const { handlers } = await debounce.make(ctx as never, { quietMs: 10 })
     const push = handlers.get(port(Debounce, Debounce.ops.push))!
     await push('late', ctx as never)
