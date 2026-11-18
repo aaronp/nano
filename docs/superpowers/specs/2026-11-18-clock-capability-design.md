@@ -34,7 +34,7 @@ step, and scrub with exact replay at any speed.
   - **`nano.ui/clock` (real):** provides `Clock` from `Date.now` and `setTimeout`. This is the default when a pod needs
     time.
   - **`nano.ui/sim-clock` (simulated):** provides `Clock` and `ClockControl`. Its time starts at 0 (or its config's
-    `start`) and moves only on `advance`/`set`. It never uses a real timer.
+    `start`) and moves only on `advance`/`set`. It never takes time from a real timer; it yields one macrotask between firings so reactions can re-arm.
 - **Pause and speed belong to whoever drives `advance`.** In the workspace that is the timeline (phase 2 of the
   recorder): playing at 1/30× means advancing by `real elapsed / 30` each frame, and paused means not advancing.
   - Because the driver is the host, every `advance` is a recorded root.
@@ -102,7 +102,12 @@ step, and scrub with exact replay at any speed.
      not replay exactly at the original pace.
 2. **The sim clock fires in order and waits for each `publish`.** It fires timers one at a time in due order within an
    `advance`. The `on` listeners (`fired` reaching the debounce) aren't awaited by core, so fast replay relies on
-   quiet (1) for them.
+   quiet (1) for them. After each firing it yields one macrotask so a reaction can re-arm; one that needs more than one
+   macrotask is missed (the same ceiling as quiet).
+   - **Fast replay's assumptions:** (a) no pod uses its own time, randomness or real I/O, and no real `nano.ui/clock` is
+     mixed with a sim clock (its `fired.at` is wall time): `diverge` is the only signal. (b) All follow-on work starts
+     within one macrotask of the last delivery, which isn't true across sandboxed or worker pods. (d) No host `subscribe`
+     callback calls back into the app: such calls are roots and would happen twice.
 3. **The `clock` dependency is optional.** An unwired declared dependency doesn't fail `assemble` or `apply`; only call
    edges are checked. The debounce declares `clock: Clock`. Without a clock, `ctx.one(Clock)` isn't ok and it uses
    real time. Its edge to a clock is a plain call edge `debounce → clock`, with no pipe needed.
@@ -114,6 +119,8 @@ step, and scrub with exact replay at any speed.
    - **`after`:** `ms` is an integer ≥ 0. `after(0)` is due at the next `advance`, including `advance(0)`, which is
      allowed: it fires whatever is due now.
    - **`cancel`:** cancelling an unknown or fired id succeeds and does nothing.
+   - **Known limit:** a debounce whose `after` call fails keeps its value until the next push. Falling back to
+     `setTimeout` would be hidden time, so it doesn't.
 
 ## Left to the builder
 

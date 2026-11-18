@@ -117,3 +117,26 @@ test('overlapping advances are serialized: time never moves back and both count'
   expect(await sim.now(null)).toEqual(success(20))
   expect((await fired()).map(x => x.tag)).toEqual(['a', 'b'])
 })
+
+test('one advance equals many small ones for a pod that re-arms on fired', async () => {
+  const ticker = Implementation.define(Coord.namespace('test').implementationId('ticker'), {
+    provides: [Log],
+    dependencies: { clock: Clock },
+    make: ctx => {
+      const seen: unknown[] = []
+      const c = ctx.one(Clock)
+      if (c.ok) { c.value.on(Clock.ops.fired, ({ output }) => { seen.push(output.at); void c.value.call.after({ ms: 10 }) }); void c.value.call.after({ ms: 10 }) }
+      return [provide(Log, { log: async () => success(null), entries: async () => success(seen), clear: async () => success(null) })]
+    },
+  })
+  const run = async (steps: number[]) => {
+    const r = Registry.create(); r.add(uiProvider); r.add(Coord.namespace('test').provider([ticker]))
+    const d: AppDeployment = { pods: { sim: Pod.eager(simClock), t: Pod.eager(ticker) }, runtimes: { main: { pods: ['sim', 't'], subscriptions: [{ kind: 'call', from: 't', to: 'sim' }] } } }
+    const app = must(await Application.create(must(AppDeployment.assemble(d, r)), {}))
+    for (const s of steps) { await (app.call('main', 'sim') as any).advance(s); await sleep(5) }
+    return must(await (app.call('main', 't') as any).entries(null))
+  }
+  const ten = await run(Array(10).fill(10))
+  expect(ten).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+  expect(await run([100])).toEqual(ten)
+})

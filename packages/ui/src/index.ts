@@ -1,5 +1,5 @@
 /**
- * The `nano.ui` provider: input, debounce, map and log pods, and the HostUI interface a host implements.
+ * The `nano.ui` provider: input, debounce, map and log pods, the real and simulated clocks, and the HostUI interface a host implements.
  *
  *   registry.add(uiProvider)   // then Pod.lazy(log), Pod.eager(debounce, { config: { quietMs: 200 } })
  *   defineViews()              // the default `views`, and nano-pod-view for any pod

@@ -21,6 +21,7 @@ export const simClock = Implementation.define(ns.implementationId('sim-clock'), 
         time = due.due
         const { id, tag } = due
         await ctx.publish(Clock.ops.fired, { id, ...(tag === undefined ? {} : { tag }), at: time })
+        await new Promise(r => setTimeout(r, 0))   // a scheduling yield, not a time source: reactions to `fired` can re-arm before the next due timer is chosen
       }
       time = t
       return success(null)

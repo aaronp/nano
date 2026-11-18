@@ -51,7 +51,7 @@ test('fast replay is quick', async () => {
   const first = await recordTyping(app)
   await sleep(300)   // the recording spans real time too: fast replay must not keep to it
   const { ms } = await replayInto(app, first, 'fast')
-  expect(ms).toBeLessThan(200)
+  expect(ms).toBeLessThan(150)   // under half the 300 ms the recording spans
 })
 
 test('the same recording replayed at original pace is exact too', async () => {

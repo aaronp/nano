@@ -15,7 +15,7 @@ const Text = Schema.define(Type.String(), 'Text')
 const Approval = Schema.define(Type.Object({ title: Type.String(), detail: Type.Optional(Type.String()) }), 'Approval')
 const Num = Schema.define(Type.Number(), 'Num')
 const TimerId = Schema.define(Type.Integer({ minimum: 1 }), 'TimerId')
-const After = Schema.define(Type.Object({ ms: Type.Integer({ minimum: 0 }), tag: Type.Optional(Type.String()) }), 'After')
+const After = Schema.define(Type.Object({ ms: Type.Integer({ minimum: 0, maximum: 2147483647 }), tag: Type.Optional(Type.String()) }), 'After')
 const Fired = Schema.define(Type.Object({ id: Type.Integer({ minimum: 1 }), tag: Type.Optional(Type.String()), at: Type.Number() }), 'Fired')
 const Approved = Schema.define(Type.Boolean(), 'Approved')
 
