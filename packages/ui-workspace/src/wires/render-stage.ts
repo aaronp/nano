@@ -3,7 +3,7 @@ import { html } from 'lit'
 import { ASIDE_W, ERR_COLOR, HEADER_H, OK_COLOR, SCALE, TURN_MS, fade } from './constants'
 import { onCancel, onDbl, onDown, onMove, onUp } from './pointer'
 import { renderBack } from './render-back'
-import { renderBlocks } from './render-pieces'
+import { renderBlocks } from './render-blocks'
 import type { Vals } from './render-root'
 import type { Wires } from './wires'
 

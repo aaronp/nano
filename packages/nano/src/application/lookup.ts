@@ -1,7 +1,7 @@
 /**
  * What a message needs to know about a deployment, found once per deployment object rather than scanned per message:
  * where each pod is placed, the call edges and pipes from each pod, and each runtime's compiled policy. `apply` makes a
- * new deployment object, so the cache follows it.
+ * new deployment object, so the cache follows it. It caches by object identity: treat `d` as immutable once looked up.
  *
  *   lookup(d).placed.get('backend')?.has('store')   // placed there?
  *   lookup(d).pipes.get(`${pod} ${port}`)            // the pipes carrying that emission, runtimes then subscriptions in order

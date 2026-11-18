@@ -62,7 +62,8 @@ if (host) {
     const a = document.createElement('a');
     const saved = h.saved(reconcile), l = arrangement();
     const runtimeOf = (pod: string) => Object.entries(saved.runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
-    const file = l && dock ? { ...saved, layout: savedLayout(saved, dock.id, l, runtimeOf, document.querySelector<Desk>('c-desk')?.layout()) } : saved;
+    const desk = document.querySelector<Desk>('c-desk')?.layout();
+    const file = l && dock ? { ...saved, layout: savedLayout(saved, dock.id, l, runtimeOf, desk) } : desk ? { ...saved, layout: { ...saved.layout, desk } } : saved;
     a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' }));
     a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
