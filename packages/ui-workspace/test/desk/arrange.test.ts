@@ -84,3 +84,35 @@ test('compact columns are narrower', () => {
   const c = col('r', 'p')
   expect(columnSize(c, true).w).toBeLessThan(columnSize(c, false).w)
 })
+
+const settle = (boxes: Record<string, Sized>, placed: string, snap: boolean) => {
+  const moved = push(boxes, placed, snap)
+  return Object.entries(boxes).map(([k, b]) => ({ ...b, ...moved[k] }))
+}
+
+test('push never lands a box on the placed one', () => {
+  // fuzz-found: b2 is pushed onto b1's way and the cascade lands a box back on the placed one
+  const all = settle({ b0: { x: 60, y: 0, w: 80, h: 80 }, b1: { x: 0, y: 40, w: 40, h: 80 }, b2: { x: 40, y: 0, w: 40, h: 40 } }, 'b0', false)
+  expect(noOverlap(all)).toBe(true)
+})
+
+test('push leaves no overlap on seeded random sets', () => {
+  let s = 7
+  const rnd = (n: number) => (s = (s * 1103515245 + 12345) % 2147483648) % n
+  for (let i = 0; i < 1000; i++) {
+    const boxes: Record<string, Sized> = {}
+    boxes.b0 = box(rnd(300), rnd(300), 40 + rnd(100), 40 + rnd(100)) // dropped anywhere
+    for (let j = 1, n = 1 + rnd(5); j <= n; j++) boxes['b' + j] = box((j % 3) * 160, Math.floor(j / 3) * 160, 40 + rnd(100), 40 + rnd(100)) // others start apart
+    const snap = i % 2 === 0
+    expect(noOverlap(settle(boxes, 'b0', snap))).toBe(true)
+  }
+})
+
+test('a new runtime is not placed on a dragged saved one', () => {
+  const m = model({ a: ['p'], b: ['q'] }, { a: 0, b: 0 })
+  const free = arrange(m, base()).runtimes
+  const l = { ...base(), runtimes: { a: { x: free.b!.x, y: free.b!.y } } }
+  const { runtimes } = arrange(m, l)
+  expect(noOverlap([runtimes.a!, runtimes.b!])).toBe(true)
+  expect(runtimes.a).toMatchObject(l.runtimes.a)
+})

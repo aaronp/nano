@@ -58,26 +58,37 @@ export function arrange(m: DeskModel, l: DeskLayout) {
   const colX: number[] = [], colY: number[] = []
   const ranked = [...m.runtimes].sort((a, b) => (m.rank[a.id] ?? 0) - (m.rank[b.id] ?? 0))
   for (const { id } of ranked) { const d = m.rank[id] ?? 0; colX[d + 1] = Math.max(colX[d + 1] ?? 0, (colX[d] ?? PAD) + fitted[id]!.w + RANK_GAP) }
-  for (const { id } of ranked) {
-    const d = m.rank[id] ?? 0, s = l.runtimes[id]
-    const p = s ? { x: Math.max(0, s.x), y: Math.max(0, s.y) } : { x: snapTo(colX[d] ?? PAD, l.snap), y: snapTo(colY[d] ?? PAD, l.snap) }
-    layout.runtimes[id] = p; runtimes[id] = { ...p, ...fitted[id]! }
-    colY[d] = (colY[d] ?? PAD) + fitted[id]!.h + STACK_GAP
+  const put = (id: string, p: XY) => { layout.runtimes[id] = p; runtimes[id] = { ...p, ...fitted[id]! } }
+  for (const { id } of ranked) if (l.runtimes[id]) put(id, { x: Math.max(0, l.runtimes[id]!.x), y: Math.max(0, l.runtimes[id]!.y) })
+  for (const { id } of ranked) if (!l.runtimes[id]) {
+    const d = m.rank[id] ?? 0, f = fitted[id]!, x = snapTo(colX[d] ?? PAD, l.snap)
+    let y = snapTo(colY[d] ?? PAD, l.snap), hit: Sized | undefined
+    // a free slot: slide down past any runtime (saved or already placed) in the way
+    while ((hit = Object.values(runtimes).find(o => x < o.x + o.w && o.x < x + f.w && y < o.y + o.h && o.y < y + f.h)))
+      y = snapTo(hit.y + hit.h + STACK_GAP, l.snap)
+    put(id, { x, y })
+    colY[d] = y + f.h + STACK_GAP
   }
   return { layout, runtimes, columns }
 }
 
-/** New positions of the boxes `placed` pushed aside: each moves +x or +y, whichever is shorter, and cascades. */
+/** New positions of the boxes `placed` pushed aside: each moves +x or +y, whichever is shorter, and cascades.
+ *  A pushed box is also pushed clear of `placed`, which never moves. */
 export function push(boxes: Record<string, Sized>, placed: string, snap: boolean): Record<string, XY> {
   const at: Record<string, Sized> = { ...boxes }, moved: Record<string, XY> = {}, queue = [placed]
+  const away = (a: Sized, b: Sized): XY | undefined => {
+    const dx = a.x + a.w + GRID - b.x, dy = a.y + a.h + GRID - b.y
+    if (dx <= 0 || dy <= 0 || a.x >= b.x + b.w + GRID || a.y >= b.y + b.h + GRID) return
+    return dx <= dy ? { x: snapTo(b.x + dx, snap), y: b.y } : { x: b.x, y: snapTo(b.y + dy, snap) }
+  }
   while (queue.length) {
-    const cur = queue.shift()!, a = at[cur]!
+    const cur = queue.shift()!
     for (const id of Object.keys(at)) {
       if (id === placed || id === cur) continue
-      const b = at[id]!, dx = a.x + a.w + GRID - b.x, dy = a.y + a.h + GRID - b.y
-      if (dx <= 0 || dy <= 0 || b.x >= a.x + a.w + GRID || a.x >= b.x + b.w + GRID || b.y >= a.y + a.h + GRID || a.y >= b.y + b.h + GRID) continue
-      const p = dx <= dy ? { x: snapTo(b.x + dx, snap), y: b.y } : { x: b.x, y: snapTo(b.y + dy, snap) }
-      at[id] = { ...b, ...p }; moved[id] = p; queue.push(id)
+      let p = away(at[cur]!, at[id]!)
+      if (!p) continue
+      p = away(at[placed]!, { ...at[id]!, ...p }) ?? p
+      at[id] = { ...at[id]!, ...p }; moved[id] = p; queue.push(id)
     }
   }
   return moved
