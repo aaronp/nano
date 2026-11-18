@@ -60,7 +60,7 @@ test('kind, count, badge, end and body are shown', async () => {
   expect($('.sig')).toBeNull()   // a body shows only while open
 })
 
-test('clicking a row selects it (cancelable) and opens or closes it; clicking a button in it does neither', async () => {
+test('clicking a row selects it (cancelable) but leaves it open or closed (the chevron toggles); clicking a button in it does neither', async () => {
   const { t, $, item, visible } = await tree('open-depth="1"')
   const seen: string[] = []
   t.addEventListener('select', e => seen.push((e as CustomEvent).detail.id))
@@ -68,6 +68,8 @@ test('clicking a row selects it (cancelable) and opens or closes it; clicking a 
   expect(seen).toEqual(['commerce/payments'])
   expect(t.selected).toBe('commerce/payments')
   expect(item('commerce/payments')!.getAttribute('aria-selected')).toBe('true')
+  expect(visible()).not.toContain('commerce/payments/refund')
+  ;($('[data-toggle="commerce/payments"]') as HTMLElement).click(); await settle(t)
   expect(visible()).toContain('commerce/payments/refund')
   ;($('.go') as HTMLElement).click(); await settle(t)
   expect(seen).toEqual(['commerce/payments'])

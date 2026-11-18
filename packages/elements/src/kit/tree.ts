@@ -44,7 +44,7 @@ export class NanoTree extends LitElement {
     li[role='treeitem'] { outline: 0 } li[role='treeitem']:focus-visible > .line { outline: 2px solid ${t('focus')}; outline-offset: -2px }
     .line { display: flex; align-items: center; gap: 6px; padding: 5px 8px; margin: 1px 0; border-radius: ${t('radius-s')}; cursor: pointer; min-width: 0 }
     .line:hover { background: ${t('surface-2')} } li[aria-selected='true'] > .line { background: ${t('accent-soft')} }
-    .chev { flex: none; width: 16px; text-align: center; color: ${t('muted')}; transition: transform .15s; user-select: none }
+    .chev { flex: none; width: 16px; cursor: pointer; text-align: center; color: ${t('muted')}; transition: transform .15s; user-select: none }
     li[data-mark] > .line { background: ${t('warn-bg')}; box-shadow: inset 3px 0 ${t('warn')} } li[data-mark][aria-selected='true'] > .line { background: ${t('accent-soft')} }
     li[aria-expanded='true'] > .line .chev { transform: rotate(90deg) }
     .label { overflow-wrap: anywhere } .kind { color: ${t('muted')}; font-size: 11px; letter-spacing: .06em; text-transform: uppercase }
@@ -89,7 +89,7 @@ export class NanoTree extends LitElement {
     const el = e.target as Element
     if (el.closest('.chev')) { this.#setOpen(row, !row.open); return }
     if (el.closest('button, a, input, select, textarea, label')) return   // the row's own controls
-    this.#choose(row.id); this.#setOpen(row, !row.open); void this.#focus(row.id)
+    this.#choose(row.id); void this.#focus(row.id)   // only the chevron opens and closes
   }
 
   #key(e: KeyboardEvent) {

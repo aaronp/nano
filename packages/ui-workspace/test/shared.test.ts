@@ -22,7 +22,7 @@ test('the build writes a module per shared specifier, the import map names each,
   expect(html.indexOf('type="importmap"')).toBeLessThan(html.indexOf('type="module"'))   // the map comes first
   const versions = await Bun.file(join(pub, 'shared', 'versions.json')).json()
   for (const p of ['@pritzlaff/nano-core', '@pritzlaff/nano-elements', 'lit', 'typebox']) expect(versions[p]).toMatch(/^\d+\.\d+\.\d+/)
-  const js = [...readdirSync(pub, { recursive: true })].map(String).filter(f => f.endsWith('.js'))
+  const js = [...readdirSync(pub, { recursive: true })].map(String).filter(f => f.endsWith('.js') && !f.includes('/_nano/'))   // a home-origin frame page vendors its own runtime
   const defining = []
   for (const f of js) if ((await Bun.file(join(pub, f)).text()).includes('litHtmlVersions')) defining.push(f)   // lit-html records itself in this global, once per copy
   expect(defining.length).toBe(1)
