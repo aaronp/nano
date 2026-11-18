@@ -17,7 +17,7 @@ export class NanoExplorer extends LitElement {
   static properties = { target: { attribute: false }, states: { state: true }, selected: { state: true } }
   static styles = [base, css`
     :host { display: block; height: 100%; container-type: inline-size }
-    .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; height: 100% }
+    .split { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 12px; height: 100% }
     .details { overflow: auto; padding: 0 8px; border-left: 1px solid var(--nano-line, rgba(128,128,128,.3)) }
     nano-tree { overflow: auto; min-height: 0 }
     @container (max-width: 520px) { .split { grid-template-columns: 1fr; grid-template-rows: minmax(0, 3fr) minmax(0, 2fr) } .details { border-left: 0; border-top: 1px solid var(--nano-line, rgba(128,128,128,.3)); padding-top: 8px } }
