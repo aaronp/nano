@@ -98,13 +98,34 @@ describe('the explorer', () => {
     const el = await mount(await open(edge))
     await settle(el)
     await choose(el, 'acme.Store')
-    expect(pane(el).textContent).toContain('save action')
+    expect(pane(el).textContent!.replace(/\s+/g, ' ')).toContain('save action Str → Str')
     expect(pane(el).textContent).toContain('acme/db')
     await choose(el, 'acme/api')
     expect(pane(el).textContent).toContain('implementation acme/api')
     ;([...pane(el).querySelectorAll('a')].find(a => a.textContent === 'acme.Store') as HTMLElement).click()   // a link selects
     await settle(el)
     expect(pane(el).textContent).toContain('interface acme.Store')
+  })
+
+  test('a pipe shows its source and target as links to their interfaces, with what one emits and the other takes', async () => {
+    const el = await mount(await open(slice))
+    await settle(el)
+    await choose(el, 'submit → wait.push')
+    const t = pane(el).textContent!.replace(/\s+/g, ' ')
+    expect(t).toContain('nano.ui.Input/submit action, emits Any')
+    expect(t).toContain('nano.ui.Debounce/push action, takes Any')
+    ;([...pane(el).querySelectorAll('a')].find(a => a.textContent === 'nano.ui.Debounce') as HTMLElement).click()
+    await settle(el)
+    expect(pane(el).textContent).toContain('interface nano.ui.Debounce')
+  })
+
+  test('typeName: a label, else a short shape', async () => {
+    const { typeName } = await import('../src/explorer-details.ts')
+    expect(typeName(Str as never)).toBe('Str')
+    expect(typeName({ type: 'object', properties: { a: 1, b: 1 } })).toBe('{ a, b }')
+    expect(typeName({ type: 'array', items: { type: 'string' } })).toBe('string[]')
+    expect(typeName({ anyOf: [{ type: 'string' }, { type: 'null' }] })).toBe('string | null')
+    expect(typeName(undefined)).toBe('nothing')
   })
 
   test('choosing a runtime lists its pods, edges and policy', async () => {
