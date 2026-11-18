@@ -57,7 +57,7 @@ export function standIn(real: Implementation, deps: Deps): Implementation {
   const ms = deps.readyMs ?? READY_MS
   const events = real.provides.flatMap(i => Object.values(i.ops).filter(o => o.kind === 'event'))
   return {
-    coord: real.coord, provider: real.provider, provides: real.provides, dependencies: real.dependencies,
+    coord: real.coord, provider: real.provider, provides: real.provides, dependencies: real.dependencies, calls: real.calls,
     ...(real.config && { config: real.config }), ...(real.description !== undefined && { description: real.description }),
     async make(ctx, config) {
       const self = ctx.self, frame = deps.open(self), pending = new Map<number, (r: NanoResult<unknown>) => void>()

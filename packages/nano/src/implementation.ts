@@ -50,6 +50,8 @@ export type Implementation = {
   readonly dependencies: Readonly<Record<string, SelectorData>>
   readonly config?: SchemaDef
   readonly description?: string
+  /** Declared calls: an op of a provided interface, by name, to the `'role.op'` dependency ops it may call. */
+  readonly calls: Readonly<Record<string, readonly string[]>>
   /** `ctx` without `deps`: they are made here from `dependencies`. It gives the build's handlers (by port) and its
    *  sources (by port), which the application starts, publishes, stops at close, and traces when they throw. */
   make(ctx: Omit<NanoContext, 'deps'>, config: unknown): Promise<{ handlers: ReadonlyMap<string, Handler>; sources: ReadonlyMap<string, Source> }>
@@ -69,6 +71,7 @@ type Spec<P extends readonly Interface[], D extends Record<string, Selector>> = 
   dependencies?: D
   config?: SchemaDef
   description?: string
+  calls?: { [op: string]: string[] }
   make(ctx: NanoContext<D>, config: any): Made<P, D> | Promise<Made<P, D>>
 }
 
@@ -76,8 +79,20 @@ function define<const P extends readonly Interface[], D extends Record<string, S
   const coord = String(at)
   const slash = coord.lastIndexOf('/')
   if (!COORD.test(coord) || slash < 0) throw new Error(`bad implementation coordinate ${coord}`)
+  const calls = spec.calls ?? {}
+  for (const [op, targets] of Object.entries(calls)) {
+    if (!spec.provides.some(i => op in i.ops)) throw new Error(`${coord}: ${op} is not an op this implementation provides`)
+    for (const t of targets) {
+      const [role = '', name = ''] = t.split('.')
+      const dep = (spec.dependencies as Record<string, Selector> | undefined)?.[role]
+      if (!dep) throw new Error(`${coord}: ${role} is not a dependency`)
+      const iface = isInterface(dep)
+      if (iface && !(name in iface.ops)) throw new Error(`${coord}: ${iface.coord} has no op ${name}`)
+    }
+  }
   return {
     coord,
+    calls,
     provider: coord.slice(0, slash),
     provides: spec.provides,
     dependencies: Object.fromEntries(Object.entries(spec.dependencies ?? {}).map(([role, s]) => [role, selectorData(s)])),
