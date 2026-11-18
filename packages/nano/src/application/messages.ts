@@ -112,7 +112,7 @@ async function deliver(live: Live, to: string, p: string, input: unknown, m: { i
  */
 export async function send(live: Live, runtime: string, from: string, to: string, p: string, input: unknown, how: How = { kind: 'call' }): Promise<NanoResult<unknown>> {
   const { trace } = live, { kind, id = trace.id(), cause, work } = how, correlation = how.correlation ?? id
-  trace.emit({ type: 'sent', id, runtime, kind, from, to, port: p, correlation, ...(cause !== undefined && { cause }) })
+  trace.emit({ type: 'sent', id, runtime, kind, from, to, port: p, correlation, ...(cause !== undefined && { cause }), ...(input !== undefined && { input }) })
   const reason = refusal(live, { runtime, kind, from, to, port: p, data: input })
   if (reason !== undefined) { trace.emit({ type: 'denied', id, reason }); return failure('denied', reason) }
   const t0 = performance.now()

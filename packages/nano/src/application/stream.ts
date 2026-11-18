@@ -17,7 +17,7 @@ export type AppEvent =
   | { type: 'closed'; pod: string; reason: Reason }
   | { type: 'restarted'; pod: string }
   | { type: 'applied'; added: string[]; removed: string[]; changed: string[]; rewired: string[] }
-  | { type: 'sent'; id: string; runtime: string; kind: 'call' | 'pipe' | 'on' | 'subscribe' | 'unsubscribe'; from: string; to: string; port: string; correlation: string; cause?: string }
+  | { type: 'sent'; id: string; runtime: string; kind: 'call' | 'pipe' | 'on' | 'subscribe' | 'unsubscribe'; from: string; to: string; port: string; correlation: string; cause?: string; input?: unknown }
   | { type: 'delivered'; id: string; result: NanoResult<unknown>; ms: number }
   | { type: 'denied'; id: string; reason: string }
   | { type: 'failure'; pod?: string; reason: string }

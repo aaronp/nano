@@ -102,7 +102,7 @@ most 50). Inside `runtime.ts`: `isRuntime(r)` is whether `Runtime.create` made `
    deployment now, across every runtime holding a call edge from the pod, and a selector's `runtime` narrows them. Each message
    travels in exactly one runtime, that of the edge it uses: policed (a throw, or no `Verdict`, denies, D82), input
    checked, run under the timeout, output checked, and recorded: `sent` (its `kind`, `correlation` the id of its
-   chain's first message, `cause` the message that led to it), then `delivered` or `denied`. A handler never throws
+   chain's first message, `cause` the message that led to it, `input` the input it was sent with, for `call`, `pipe` and `on` messages; subscribe and unsubscribe carry none), then `delivered` or `denied`. A handler never throws
    across this boundary: a throw, timeout, bad input or bad output is a `Fail` (D76).
 7. **Emissions.** An emission is `ctx.publish(op, data)`, or an action's successful result, whoever called it. It is
    delivered along every pipe from the pod with that source, in every runtime the pod is placed in, then to `on`
