@@ -78,3 +78,20 @@ test('an op-level call draws from the caller\'s op to the callee\'s; seen but no
   expect(m.calls[0]!.b).toEqual([])   // no pod-level line once every pair has a source
   expect(model(d).calls[0]!.ops).toBeUndefined()
 })
+
+test('an edge whose pairs name no jack here keeps the pod-level cord', () => {
+  const d = deployment()
+  d.runtimes['main']!.subscriptions.push({ kind: 'call', from: 'r', to: 'd' })
+  const call = { runtime: 'main', from: 'r', to: 'd', source: 'acme.Gone/op', target: 'acme.Gone/other', declared: true, seen: false }
+  const m = buildModel({ snapshot: snapshotOf(d, registry(), [call]), panels, W: 1200, H: 600, application: 'ui' })
+  expect(m.calls).toEqual(model(d).calls)
+  expect(m.calls[0]!.b.length).toBeGreaterThan(0)
+})
+
+test('a not-declared op cord carries a visible "not declared" label; a declared one does not', async () => {
+  const { render } = await import('lit'), { opCord } = await import('../../src/wires/calls.ts')
+  const draw = (declared: boolean) => { const el = document.createElementNS('http://www.w3.org/2000/svg', 'svg') as unknown as HTMLElement
+    render(opCord({ a: { x: 0, y: 0 }, b: { x: 100, y: 40 }, declared, seen: true }), el); return el }
+  expect(draw(false).querySelector('[data-not-declared]')?.textContent).toBe('not declared')
+  expect(draw(true).querySelector('[data-not-declared]')).toBeNull()
+})

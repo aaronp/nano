@@ -3,6 +3,7 @@
 import { html, nothing, svg } from 'lit'
 import { ERR_COLOR, OK_COLOR, TRAVEL_MS, clamp } from './constants'
 import { bezierAt, cordD, cordGeo, polylineAt } from './geometry'
+import { opCord } from './calls'
 import { checkConnect } from './model'
 import { visibleKeys } from './pointer'
 import type { Vals } from './render-root'
@@ -134,9 +135,7 @@ export function renderBack(el: Wires, d: Vals) {
       <circle cx=${b.x} cy=${b.y} r="4" fill="#8B96A5"></circle>`)}
       ${c.b.length ? svg`<circle cx=${c.a.x} cy=${c.a.y} r="4" fill="#8B96A5"></circle>
       <text x=${c.a.x + 8} y=${c.a.y + 16} font-family="JetBrains Mono, monospace" font-size="10" fill="#8B96A5">calls ${c.to}</text>` : ''}
-      ${(c.ops ?? []).map(o => { const col = !o.declared ? '#F5A524' : o.seen ? '#E6EDF3' : '#8B96A5'
-        return svg`<path data-op-call=${o.declared ? (o.seen ? 'seen' : 'declared') : 'not-declared'} d=${cordD(cordGeo(o.a, o.b))} fill="none" stroke=${col} stroke-width=${o.seen && o.declared ? 2.5 : 1.5} stroke-dasharray=${o.declared ? 'none' : '6 5'} stroke-linecap="round">${o.declared ? '' : svg`<title>not declared</title>`}</path>
-        <circle cx=${o.a.x} cy=${o.a.y} r="4" fill=${col}></circle><circle cx=${o.b.x} cy=${o.b.y} r="4" fill=${col}></circle>` })}</g>`) : ''}
+      ${(c.ops ?? []).map(opCord)}</g>`) : ''}
     ${relayPackets.map(k => packet(k, 6, 3, 10))}
   </svg>` : ''}
 

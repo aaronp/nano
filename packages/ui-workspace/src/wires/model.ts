@@ -1,6 +1,7 @@
 // The view model, as pure functions: from a snapshot of the app's deployment, the dock's panel geometry and the
 // catalog, the prototype's chassis, jacks (ports), rack modules and blocks, wires and routes.
 import { fits, type AppDeployment, type Implementation, type Op, type Registry } from '@pritzlaff/nano-core'
+import { calledOps, callCords, type Call, type OpPair } from './calls'
 import { BLOCK_DY, BLOCK_H, BLOCK_JACK_DY, JACK_W, MOD_H, PALETTE, ROW_STEP, ROW_Y } from './constants'
 
 /** A rectangle in the dock's (front) coordinates. */
@@ -17,9 +18,6 @@ export type RackItem = { id: string; title: string; sub: string; kind?: string; 
 export type Wire = { id: string; route: string; from: string; to: string }
 /** A connected group of components, with its generated name and colour. */
 export type Route = { id: string; name: string; color: string }
-/** A call edge, drawn from the caller's box to the callee's (a pod as a whole: it has no Op of its own to plug into). */
-export type Call = { id: string; from: string; to: string; a: XY; b: XY[]; ops?: { a: XY; b: XY; declared: boolean; seen: boolean }[] }
-type XY = { x: number; y: number }
 /** Everything the stage draws. */
 export type Model = { W: number; H: number; chassis: Chassis[]; rack: RackItem[]; P: Record<string, Port>; wires: Wire[]; routes: Route[]; rackH: number; calls: Call[] }
 
@@ -39,8 +37,6 @@ export type Snapshot = {
    * action's in jack, each event's out jack, as `<port>:<dir>`). */
   calls?: { id: string; from: string; to: string; ops: string[]; pairs?: OpPair[] }[]
 }
-/** An op-level call on an edge (observed-calls.ts's OpCall, structurally): `source` null when the caller's op is unknown. */
-type OpPair = { runtime: string; from: string; to: string; source: string | null; target: string; declared: boolean; seen: boolean }
 /** An action is an in jack and, for its result, an out jack; an event is an out jack (as nano-ui's wiring reads them). */
 export const jacksOfImpl = (impl: Implementation | undefined): Jack[] => (impl?.provides ?? []).flatMap(i => Object.values(i.ops).flatMap(op => {
   const port = `${i.coord}/${op.name}`
@@ -56,15 +52,6 @@ export function snapshotOf(d: AppDeployment, registry: Registry, opCalls: OpPair
   const subscriptions = Object.entries(d.runtimes).flatMap(([rt, r]) => r.subscriptions.flatMap(s => s.kind === 'pipe'
     ? [{ id: wireId(rt, s), source: s.from, op: s.source + ':out', listener: s.to, target: s.target + ':in' }] : []))
   return { instances, subscriptions, calls }
-}
-
-/** The jacks of `to` that `from` may call: the ops of the interfaces its dependencies name that `to` provides (all of
- * `to`'s when none names one). */
-function calledOps(d: AppDeployment, registry: Registry, from: string, to: string): string[] {
-  const provides = registry.implementation(d.pods[to]?.implementation ?? '')?.provides ?? []
-  const named = new Set(Object.values(registry.implementation(d.pods[from]?.implementation ?? '')?.dependencies ?? {}).flatMap(s => s.implements ?? []))
-  const used = provides.some(i => named.has(i.coord)) ? provides.filter(i => named.has(i.coord)) : provides
-  return used.flatMap(i => Object.values(i.ops).map(op => `${i.coord}/${op.name}:${op.kind === 'action' ? 'in' : 'out'}`))
 }
 
 /** A jack's key: the instance, and the port with its direction. */
@@ -120,19 +107,8 @@ export function buildModel({ snapshot, panels, W, H, application, kinds = {}, ti
   const subs = snapshot.subscriptions.filter(s => P[portKey(s.source, s.op)] && P[portKey(s.listener, s.target)])
   const { routeOf, routes } = routesOf(subs, chassis)
   const wires = subs.map(s => ({ id: s.id, route: routeOf.get(s.id)!, from: portKey(s.source, s.op), to: portKey(s.listener, s.target) }))
-  // a call edge leaves the bottom of the caller's box and enters the top of the callee's
-  const box = (id: string) => chassis.find(c => c.instance === id) ?? rack.find(r => r.id === id)
-  const calls = (snapshot.calls ?? []).flatMap(c => {
-    const f = box(c.from), t = box(c.to)
-    if (!f || !t) return []
-    const jack = (pod: string, op: string) => P[portKey(pod, op + ':in')] ?? P[portKey(pod, op + ':out')]
-    const pairs = c.pairs ?? [], known = pairs.flatMap(p => { const a = p.source === null ? undefined : jack(c.from, p.source), b = jack(c.to, p.target)
-      return a && b ? [{ a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y }, declared: p.declared, seen: p.seen }] : [] })
-    // the callee's jacks (only those called from an unknown op, once pairs are known), else the top of its box
-    const ends = pairs.length ? pairs.filter(p => p.source === null).flatMap(p => jack(c.to, p.target) ?? []) : (c.ops ?? []).flatMap(o => P[portKey(c.to, o)] ?? [])
-    const b = ends.length ? ends.map(j => ({ x: j.x, y: j.y })) : pairs.length ? [] : [{ x: Math.round(t.x + t.w / 2), y: t.y }]
-    return [{ id: c.id, from: c.from, to: c.to, a: { x: Math.round(f.x + f.w / 2), y: f.y + f.h }, b, ...(pairs.length && { ops: known }) }]
-  })
+  // a call edge leaves the bottom of the caller's box and enters the top of the callee's (calls.ts)
+  const calls = callCords(snapshot.calls, id => chassis.find(c => c.instance === id) ?? rack.find(r => r.id === id), P)
   return { W, H, chassis, rack, P, wires, routes, rackH: 128 + row * 132, calls }
 }
 
