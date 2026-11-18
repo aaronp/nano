@@ -1,8 +1,8 @@
 // Edits: each applies the app's deployment with a pod or pipe added or removed; a refusal is shown, and returned.
-import type { AppDeployment } from '@pritzlaff/nano-core'
+import { AppDeployment, lookup } from '@pritzlaff/nano-core'
 import { addPod } from '../dock/panels.ts'
 import type { Host } from '../host.ts'
-import { jacksOfImpl, wireId } from './model'
+import { jacksOfImpl, wireId, type Model } from './model'
 import type { Catalog, Result } from './state'
 import type { Wires } from './wires'
 
@@ -15,20 +15,31 @@ export async function change(el: Wires, edit: (d: AppDeployment) => AppDeploymen
   if (!r.ok) { el.fail(r.fail.reason); return { error: r.fail.reason } }
   return { value }
 }
-/** Adds a pipe from an out jack to an in jack, in a runtime both pods are placed in; its value is `{ id }`. */
-export function connect(el: Wires, from: string, to: string) {
-  const a = el.model.P[from]!, b = el.model.P[to]!, pipe = { kind: 'pipe' as const, from: a.owner, source: a.port, to: b.owner, target: b.port }
-  const rt = Object.keys(el.host?.data().runtimes ?? {}).find(r => [a.owner, b.owner].every(p => el.host!.data().runtimes[r]!.pods.includes(p)))
-  return change(el, d => rt ? (d.runtimes[rt]!.subscriptions.push(pipe), d) : a.owner + ' and ' + b.owner + ' are not in one runtime', rt && { id: wireId(rt, pipe) })
+/** Builds a deployment with `edit` over core's AppDeployment.edit and applies it; a thrown fail or a refusal comes back as `{ error }`. */
+async function patch(h: Host, edit: (e: ReturnType<typeof AppDeployment.edit>) => void): Promise<Result> {
+  try {
+    const e = AppDeployment.edit(h.data(), h.registry)
+    edit(e)
+    const r = await h.apply(e.deployment())
+    return r.ok ? {} : { error: r.fail.reason }
+  } catch (x) {
+    const f = (x as { fail?: { reason: string } }).fail
+    if (f) return { error: f.reason }
+    throw x
+  }
 }
-/** Removes the pipe a wire id names. */
-export function disconnect(el: Wires, id: string) {
-  const [rt, from, to, target, source] = id.split('|')
-  return change(el, d => {
-    const r = d.runtimes[rt!]
-    if (r) r.subscriptions = r.subscriptions.filter(s => !(s.kind === 'pipe' && s.from === from && s.to === to && s.target === target && s.source === source))
-    return d
-  })
+/** Adds a pipe from out jack `from` to in jack `to` (keys `pod port:dir`) in the first runtime (lookup order) holding both pods. */
+export async function connectPipe(h: Host, model: Model, from: string, to: string): Promise<Result & { id?: string }> {
+  const a = model.P[from]!, b = model.P[to]!, pipe = { from: a.owner, source: a.port, to: b.owner, target: b.port }
+  const rt = [...lookup(h.data()).placed].find(([, pods]) => pods.has(a.owner) && pods.has(b.owner))?.[0]
+  if (!rt) return { error: a.owner + ' and ' + b.owner + ' are not in one runtime' }
+  const r = await patch(h, e => e.pipe(rt, pipe))
+  return 'error' in r ? r : { value: { id: wireId(rt, pipe) } }
+}
+/** Removes the pipe a wire id (`runtime|from|to|target|source`) names. */
+export function disconnectPipe(h: Host, id: string): Promise<Result> {
+  const [rt, from, to, target, source] = id.split('|') as [string, string, string, string, string]
+  return patch(h, e => e.unpipe(rt, { from, source, to, target }))
 }
 /** Removes a pod, from every runtime, with its pipes and edges. */
 export function removeComponent(el: Wires, instance: string) {

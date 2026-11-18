@@ -2,7 +2,8 @@ import './dom.ts'
 import { afterEach, expect, test } from 'bun:test'
 import { defineWires, type Wires } from '../../src/wires'
 import { onDown, onMove, onUp, removeSel, toggleEdit } from '../../src/wires/pointer'
-import { Debounce, Input, k, Log, MapIface, setup, tick } from './setup.ts'
+import { connectPipe, disconnectPipe } from '../../src/wires/edit'
+import { Debounce, Input, k, Log, MapIface, model, p1, p2, setup, tick } from './setup.ts'
 
 defineWires()
 afterEach(() => { document.body.innerHTML = '' })
@@ -370,4 +371,23 @@ test('a docked panel\'s chassis carries data-deploy and is marked by the toggle'
   expect(root.querySelectorAll('[data-chassis][data-mark]').length).toBe(0)
   ;(root.querySelector('button.highlight') as HTMLElement).click(); await settle()
   expect([...root.querySelectorAll('[data-chassis][data-mark]')].map(e => e.getAttribute('data-chassis'))).toEqual(['panel-0'])
+})
+
+test('connectPipe adds the pipe through core', async () => {
+  const { host, app } = await setup()
+  const r = await connectPipe(host, model(app.deployment()), k('l', Log, 'log', 'out'), k('m', MapIface, 'map', 'in'))
+  expect(r).toEqual({ value: { id: expect.any(String) } })
+  expect(app.deployment().runtimes.main!.subscriptions.some(s => s.kind === 'pipe' && s.from === 'l' && s.to === 'm')).toBe(true)
+})
+test('disconnectPipe removes it', async () => {
+  const { host, app, s1 } = await setup()
+  expect(await disconnectPipe(host, s1.id)).toEqual({})
+  expect(app.deployment().runtimes.main!.subscriptions).toEqual([p2])
+  expect(p1).toBeDefined()
+})
+test('a refusal is returned, not thrown', async () => {
+  const { host, app } = await setup()
+  const before = app.deployment()
+  expect(await disconnectPipe(host, 'main|x|y|a|b')).toEqual({ error: expect.any(String) })
+  expect(app.deployment()).toEqual(before)
 })

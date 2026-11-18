@@ -1,6 +1,6 @@
 // The view model, as pure functions: from a snapshot of the app's deployment, the dock's panel geometry and the
 // catalog, the prototype's chassis, jacks (ports), rack modules and blocks, wires and routes.
-import { fits, type AppDeployment, type Implementation, type Op, type Registry } from '@pritzlaff/nano-core'
+import { fits, lookup, type AppDeployment, type Implementation, type Op, type Registry } from '@pritzlaff/nano-core'
 import { calledOps, callCords, type Call, type OpPair } from './calls'
 import { BLOCK_DY, BLOCK_H, MOD_H, PALETTE, ROW_STEP, ROW_Y } from './constants'
 import { chassisJacks, moduleJacks, moduleW } from './jacks'
@@ -49,7 +49,7 @@ export const jacksOfImpl = (impl: Implementation | undefined): Jack[] => (impl?.
 export const wireId = (runtime: string, s: { from: string; source: string; to: string; target: string }) => `${runtime}|${s.from}|${s.to}|${s.target}|${s.source}`
 /** The snapshot of a deployment: each pod with its implementation's jacks and its isolation as `nano/deploy`, each pipe. */
 export function snapshotOf(d: AppDeployment, registry: Registry, opCalls: OpPair[] = []): Snapshot {
-  const instances = Object.entries(d.pods).map(([id, p]) => ({ id, ops: jacksOfImpl(registry.implementation(p.implementation)), labels: { 'nano/deploy': p.isolation ?? 'host' }, runtimes: Object.keys(d.runtimes).filter(rt => d.runtimes[rt]!.pods.includes(id)) }))
+  const instances = Object.entries(d.pods).map(([id, p]) => ({ id, ops: jacksOfImpl(registry.implementation(p.implementation)), labels: { 'nano/deploy': p.isolation ?? 'host' }, runtimes: [...lookup(d).placedIn.get(id) ?? []] }))
   const calls = Object.entries(d.runtimes).flatMap(([rt, r]) => r.subscriptions.flatMap(s => s.kind === 'call'
     ? [{ id: `${rt}|${s.from}|${s.to}`, runtime: rt, from: s.from, to: s.to, ops: calledOps(d, registry, s.from, s.to), pairs: opCalls.filter(c => c.runtime === rt && c.from === s.from && c.to === s.to) }] : []))
   const subscriptions = Object.entries(d.runtimes).flatMap(([rt, r]) => r.subscriptions.flatMap(s => s.kind === 'pipe'

@@ -5,13 +5,13 @@ import type { AppDeployment, AppEvent } from '@pritzlaff/nano-core'
 import type { Host } from '../host.ts'
 import { FLASH_MS, FRAME_MS, TURN_MS, VIEWS, type View } from './constants'
 import { onWheel, zoomBy } from './camera'
-import { catalogOf, change, connect, create, disconnect, openPanel, removeComponent } from './edit'
+import { catalogOf, change, connectPipe, create, disconnectPipe, openPanel, removeComponent } from './edit'
 import { buildModel, snapshotOf, type Model, type ModelInput, type Panel } from './model'
 import { loadFonts, panelsOf, styles } from './page'
 import { landPackets, tracePacket } from './packets'
 import { buildPuzzle } from './puzzle'
 import { renderRoot } from './render-root'
-import { empty, initial, type Catalog, type Selection, type State } from './state'
+import { empty, initial, type Catalog, type Result, type Selection, type State } from './state'
 
 export type { Catalog, Cord, Packet, Result, Selection, State } from './state'
 
@@ -133,8 +133,9 @@ export class Wires extends LitElement {
     this.setState({ ry: target, rx: v.rx, dragging: false, editing: false, cord: null, armed: null, selMod: null })
   }
   change(edit: (d: AppDeployment) => AppDeployment | string, value?: unknown) { return change(this, edit, value) }
-  connect(from: string, to: string) { return connect(this, from, to) }
-  disconnect(id: string) { return disconnect(this, id) }
+  connect(from: string, to: string) { return this.#shown(this.host ? connectPipe(this.host, this.model, from, to) : { error: 'no host' }) }
+  disconnect(id: string) { return this.#shown(this.host ? disconnectPipe(this.host, id) : { error: 'no host' }) }
+  async #shown<R extends Result>(r: R | Promise<R>) { const x = await r; if ('error' in x) this.fail(x.error); return x }
   removeComponent(instance: string) { return removeComponent(this, instance) }
   create(kind: string) { return create(this, kind) }
   openPanel(name: string) { return openPanel(this, name) }
