@@ -1,15 +1,15 @@
 import { expect, test } from 'bun:test'
 import { success, type Application } from '@pritzlaff/nano-core'
-import { CAP, pair, snap } from '../../src/recorder/entry.ts'
-import { memoryStore } from '../../src/recorder/memory-store.ts'
-import { record } from '../../src/recorder/record.ts'
-import { diverge, replay, roots } from '../../src/recorder/replay.ts'
+import { CAP, pair, snap } from '../../src/observe/entry.ts'
+import { memoryStore } from '../../src/observe/memory-store.ts'
+import { record } from '../../src/observe/record.ts'
+import { diverge, replay, roots } from '../../src/observe/replay.ts'
 import { log, must, sleep, typing } from './typing.ts'
 
 /** h, hi, pause, hey, pause: the log is HI, HEY. Stopped before the log is read, so the recording holds only typing. */
 async function recordTyping(app: Application) {
   const store = memoryStore()
-  const stop = await record(app, store, { clean: true })
+  const { stop } = await record(app, store, { clean: true })
   await app.call('main', 'input').change('h')
   await app.call('main', 'input').change('hi')
   await sleep(60)
@@ -30,7 +30,7 @@ test('replaying a recording rebuilds the log and the same messages come out', as
   const first = await recordTyping(app)
   expect(await log(app)).toEqual(success(['HI', 'HEY']))
   const second = memoryStore()
-  const stop = await record(app, second)
+  const { stop } = await record(app, second)
   const r = must(await replay(app, first))
   expect(r).toMatchObject({ sent: 3, failed: 0, applied: 0, restarted: 0, from: 1 })
   await sleep(80)
@@ -43,7 +43,7 @@ test('replay too fast diverges, and diverge says where', async () => {
   const app = await typing()
   const first = await recordTyping(app)
   const second = memoryStore()
-  const stop = await record(app, second)
+  const { stop } = await record(app, second)
   must(await replay(app, first, { sleep: async () => {} }))
   await sleep(80)
   stop()
@@ -57,7 +57,7 @@ test('replay too fast diverges, and diverge says where', async () => {
 test('replay refuses when the store dropped the clean start', async () => {
   const app = await typing()
   const store = memoryStore({ max: 3 })
-  const stop = await record(app, store, { clean: true })
+  const { stop } = await record(app, store, { clean: true })
   await app.call('main', 'input').change('h')
   await sleep(60)
   stop()
@@ -69,7 +69,7 @@ test('replay refuses when the store dropped the clean start', async () => {
 test('replay refuses a recording whose oldest entry is not a clean start', async () => {
   const app = await typing()
   const store = memoryStore()
-  const stop = await record(app, store)
+  const { stop } = await record(app, store)
   await app.call('main', 'map').map('a')
   stop()
   const r = await replay(app, store, { sleep: async () => {} })

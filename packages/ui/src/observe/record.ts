@@ -11,14 +11,15 @@ const recorded = (e: AppEvent): Recorded => {
  * Records `app` into `store` from now: first a deployment entry (the app's current deployment, `clean: true` when
  * `opts.clean` says its pods hold no state yet), then every event, snapshotted, with another deployment entry after each
  * `applied`. It listens before reading the store's last seq and holds what arrives meanwhile, so nothing is missed.
- * seq starts after the store's last entry; `at` is `opts.now()` (`Date.now`).
+ * seq starts after the store's last entry; resolves to `stop` and `listen(fn)`, which hears each entry once appended, in order, and returns its unsubscribe; `at` is `opts.now()` (`Date.now`).
  */
-export async function record(app: Application, store: MessageStore, opts: { clean?: boolean; now?: () => number } = {}): Promise<() => void> {
+export async function record(app: Application, store: MessageStore, opts: { clean?: boolean; now?: () => number } = {}): Promise<{ stop: () => void; listen: (fn: (e: Entry) => void) => () => void }> {
   const now = opts.now ?? Date.now
   let seq = 0
+  const heard = new Set<(e: Entry) => void>()
   let held: { at: number; event: Recorded }[] | undefined = []
   const add = (event: Recorded, at = now()) => {
-    try { if (held) held.push({ at, event }); else store.append({ seq: ++seq, at, event } satisfies Entry) } catch { /* never throws into the app */ }
+    try { if (held) held.push({ at, event }); else { const entry: Entry = { seq: ++seq, at, event }; store.append(entry); for (const fn of heard) try { fn(entry) } catch { /* a listener never breaks recording */ } } } catch { /* never throws into the app */ }
   }
   const deployment = (clean?: boolean) => add({ type: 'deployment', deployment: app.deployment(), ...(clean ? { clean: true as const } : {}) })
   deployment(opts.clean)
@@ -32,5 +33,5 @@ export async function record(app: Application, store: MessageStore, opts: { clea
   } catch (e) { stop(); throw e }   // a store that can't be read records nothing
   const waiting = held; held = undefined
   for (const { at, event } of waiting) add(event, at)
-  return stop
+  return { stop, listen: fn => { heard.add(fn); return () => { heard.delete(fn) } } }
 }

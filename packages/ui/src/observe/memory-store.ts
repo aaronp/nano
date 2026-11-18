@@ -1,8 +1,8 @@
 import type { Entry, MessageStore } from './entry.ts'
 
-/** An in-memory MessageStore; past `max` (10000) the oldest entry is dropped. */
+/** An in-memory MessageStore; past `max` (100000) the oldest entry is dropped. */
 export function memoryStore(opts: { max?: number } = {}): MessageStore {
-  const max = opts.max ?? 10000
+  const max = opts.max ?? 100000
   let all: Entry[] = []
   return {
     append(e) { all.push(e); if (all.length > max) all.shift() },

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import type { Entry, MessageStore } from '../../src/recorder/entry.ts'
+import type { Entry, MessageStore } from '../../src/observe/entry.ts'
 
 const sent = (seq: number, to = 'a.b', input = 'x'): Entry => ({
   seq, at: seq,

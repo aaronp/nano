@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
-import { pair } from '../../src/recorder/entry.ts'
-import { memoryStore } from '../../src/recorder/memory-store.ts'
-import { record } from '../../src/recorder/record.ts'
+import { pair } from '../../src/observe/entry.ts'
+import { memoryStore } from '../../src/observe/memory-store.ts'
+import { record } from '../../src/observe/record.ts'
 import { sleep, typing as app } from './typing.ts'
 
 const typing = async () => ({ app: await app(), store: memoryStore() })
@@ -42,7 +42,7 @@ test('an apply adds a deployment entry after the applied event', async () => {
 
 test('seq continues after the store, and after stop nothing more is recorded', async () => {
   const { app, store } = await typing()
-  const stop = await record(app, store)
+  const { stop } = await record(app, store)
   await app.call('main', 'input').change('h')
   const n = await store.size()
   stop()
@@ -84,4 +84,20 @@ test('events during record\'s own awaits are kept, after the deployment, in orde
   expect(entries[0]!.event.type).toBe('deployment')
   expect(pair(entries).map(m => m.sent.input)).toContain('"a"')
   expect(entries.map(e => e.seq)).toEqual(entries.map((_, i) => i + 1))
+})
+
+test('listen hears each appended entry, in order', async () => {
+  const { app, store } = await typing()
+  const { listen, stop } = await record(app, store)
+  const heard: number[] = []
+  const off = listen(e => heard.push(e.seq))
+  await app.call('main', 'input').change('h')
+  await sleep(60)
+  off()
+  const n = heard.length
+  await app.call('main', 'input').change('hi')
+  stop()
+  expect(n).toBeGreaterThan(0)
+  expect(heard).toEqual((await store.range()).map(e => e.seq).filter(s => s >= heard[0]!).slice(0, n))
+  expect(heard.length).toBe(n)
 })

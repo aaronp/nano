@@ -20,3 +20,7 @@ export type { LayoutBox, LayoutData, LayoutSlot } from './layout.ts'
 export { viewFor, type ViewMap, type ViewTarget } from './views/view.ts'
 export { uiProvider }
 export default uiProvider
+export { record } from './observe/record.ts'
+export { replay, diverge, roots } from './observe/replay.ts'
+export { pair, snap, truncated, type Entry, type Recorded, type Message, type MessageStore } from './observe/entry.ts'
+export { memoryStore } from './observe/memory-store.ts'

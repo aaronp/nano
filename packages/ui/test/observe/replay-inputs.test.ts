@@ -1,10 +1,10 @@
 /** Replay re-sends every host input after the clean start, at its offset from the reset. No real waiting: map is synchronous. */
 import { expect, test } from 'bun:test'
 import { success, type Application } from '@pritzlaff/nano-core'
-import { pair, type Entry, type MessageStore } from '../../src/recorder/entry.ts'
-import { memoryStore } from '../../src/recorder/memory-store.ts'
-import { record } from '../../src/recorder/record.ts'
-import { replay } from '../../src/recorder/replay.ts'
+import { pair, type Entry, type MessageStore } from '../../src/observe/entry.ts'
+import { memoryStore } from '../../src/observe/memory-store.ts'
+import { record } from '../../src/observe/record.ts'
+import { replay } from '../../src/observe/replay.ts'
 import { log, must, settle, typing } from './typing.ts'
 
 const fast = { sleep: async () => {} }
@@ -16,7 +16,7 @@ const logAt = async (store: MessageStore, to: number) => pair(await store.range(
 
 async function recorded(steps: (app: Application) => Promise<void>) {
   const app = await typing(), store = memoryStore()
-  const stop = await record(app, store, { clean: true })
+  const { stop } = await record(app, store, { clean: true })
   await steps(app)
   stop()
   return { app, store }

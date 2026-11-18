@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test'
 import { Application, AppDeployment, Coord, Implementation, Op, Registry, Schema, provide, success } from '@pritzlaff/nano-core'
-import uiProvider, { Clock, Random } from '@pritzlaff/nano-ui'
+import uiProvider, { Clock, Random } from '../../src/index.ts'
 import { Type } from 'typebox'
-import { pair } from '../../src/recorder/entry.ts'
-import { memoryStore } from '../../src/recorder/memory-store.ts'
-import { record } from '../../src/recorder/record.ts'
-import { diverge, replay } from '../../src/recorder/replay.ts'
+import { pair } from '../../src/observe/entry.ts'
+import { memoryStore } from '../../src/observe/memory-store.ts'
+import { record } from '../../src/observe/record.ts'
+import { diverge, replay } from '../../src/observe/replay.ts'
 import { log, must, settle } from './typing.ts'
 
 const ns = Coord.namespace('test')
@@ -46,14 +46,14 @@ async function jitterApp(order = ['sim', 'rng', 'jitter', 'log']): Promise<Appli
 test.each([['providers first', ['sim', 'rng', 'jitter', 'log']], ['dependent listed first', ['jitter', 'rng', 'sim', 'log']]])('seeded randomness on a sim clock replays exactly, fast (%s)', async (_, order) => {
   const app = await jitterApp(order)
   const first = memoryStore()
-  const stop = await record(app, first, { clean: true })
+  const { stop } = await record(app, first, { clean: true })
   await settle()   // the startup `after` has answered, so jitter holds its timer id
   for (let i = 0; i < 5; i++) { await app.call('main', 'sim').advance(100); await settle() }
   const drawn = await log(app)
   expect(drawn.ok && (drawn.value as unknown[]).length).toBeGreaterThan(0)
   stop()
   const second = memoryStore()
-  const stop2 = await record(app, second)
+  const { stop: stop2 } = await record(app, second)
   const r = must(await replay(app, first, { pace: 'fast' }))
   await settle()
   stop2()

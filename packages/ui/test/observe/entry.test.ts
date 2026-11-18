@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { CAP, pair, snap, truncated, type Entry, type Recorded } from '../../src/recorder/entry.ts'
+import { CAP, pair, snap, truncated, type Entry, type Recorded } from '../../src/observe/entry.ts'
 
 test('snap never throws and marks what JSON cannot carry', () => {
   expect(snap(undefined)).toBe('undefined')

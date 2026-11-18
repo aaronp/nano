@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test'
 import { Coord, Implementation, provide, success, type Application } from '@pritzlaff/nano-core'
-import { Log } from '@pritzlaff/nano-ui'
-import { pair } from '../../src/recorder/entry.ts'
-import { memoryStore } from '../../src/recorder/memory-store.ts'
-import { record } from '../../src/recorder/record.ts'
-import { diverge, replay } from '../../src/recorder/replay.ts'
+import { Log } from '../../src/index.ts'
+import { pair } from '../../src/observe/entry.ts'
+import { memoryStore } from '../../src/observe/memory-store.ts'
+import { record } from '../../src/observe/record.ts'
+import { diverge, replay } from '../../src/observe/replay.ts'
 import { log, must, settle, sleep, typingSim } from './typing.ts'
 
 /**
@@ -13,7 +13,7 @@ import { log, must, settle, sleep, typingSim } from './typing.ts'
  */
 async function recordTyping(app: Application, ms = 0) {
   const store = memoryStore()
-  const stop = await record(app, store, { clean: true })
+  const { stop } = await record(app, store, { clean: true })
   const input = app.call('main', 'input'), clock = app.call('main', 'clock')
   for (const step of [() => input.change('h'), () => input.change('hi'), () => clock.advance(1000), () => input.change('hey'), () => clock.advance(1000)]) {
     await step()
@@ -27,7 +27,7 @@ async function recordTyping(app: Application, ms = 0) {
 /** Replays `first` into a new store, settling before it stops recording; the replay's result and how long it took. */
 async function replayInto(app: Application, first: ReturnType<typeof memoryStore>, pace: 'original' | 'fast') {
   const second = memoryStore()
-  const stop = await record(app, second)
+  const { stop } = await record(app, second)
   const t0 = performance.now()
   const r = must(await replay(app, first, { pace }))
   const ms = performance.now() - t0

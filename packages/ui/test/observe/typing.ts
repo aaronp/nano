@@ -1,6 +1,6 @@
 /** The Typing example, its debounce quickened and left on real time (no call edge to its clock pod), for the recorder's tests. */
 import { Application, AppDeployment, Registry, type NanoResult, type Provider } from '@pritzlaff/nano-core'
-import uiProvider from '@pritzlaff/nano-ui'
+import uiProvider from '../../src/index.ts'
 
 export const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 export const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
