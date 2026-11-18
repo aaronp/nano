@@ -27,8 +27,9 @@ import { showStatus } from './lib/status.ts';
 import type { WorkspaceDock } from './components/workspace-dock.ts';
 import { defineWires, type Wires } from './wires/index.ts';
 import { defineCircuit, dockPlacements, type Circuit } from './circuit/index.ts';
+import { defineDesk, type Desk } from './desk/index.ts';
 import { bootWiring } from './boot-wiring.ts';   // after the shell (its bus)
-import { layoutFromDock, slotsToOpen } from './layout-data.ts';
+import { savedLayout, slotsToOpen } from './layout-data.ts';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
 if (host) {
@@ -61,7 +62,7 @@ if (host) {
     const a = document.createElement('a');
     const saved = h.saved(reconcile), l = arrangement();
     const runtimeOf = (pod: string) => Object.entries(saved.runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
-    const file = l && dock ? { ...saved, layout: { ...saved.layout, [dock.id]: l, ...layoutFromDock(l.root as never, runtimeOf) } } : saved;
+    const file = l && dock ? { ...saved, layout: savedLayout(saved, dock.id, l, runtimeOf, document.querySelector<Desk>('c-desk')?.layout()) } : saved;
     a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' }));
     a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -102,6 +103,8 @@ if (host) {
     c.placements = () => dockPlacements('/workspace', arrangement()?.root as never);
     c.host = host;
   }
+  defineDesk();
+  for (const d of document.querySelectorAll<Desk>('c-desk')) d.host = host;
   bootWiring(document, async () => [{ id: '/workspace' }]);
   // the dock's arrangement is not an apply: the circuit reads it again whenever the Wiring page is shown
   addEventListener('hashchange', () => { if (location.hash === '#/wiring') for (const c of document.querySelectorAll<Circuit>('c-circuit')) c.schedule(); });

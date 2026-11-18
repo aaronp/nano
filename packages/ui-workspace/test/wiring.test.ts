@@ -9,7 +9,7 @@ import { HOST_ENTRIES } from '../src/components/profile-menu.ts'
 const tick = () => new Promise(r => setTimeout(r, 5))
 const setup = () => {
   document.body.innerHTML = `<div id="shell"><app-route path="/workspace"><workspace-dock></workspace-dock></app-route>
-    <app-route path="/wiring"><a href="#/wiring">Circuit</a><a href="#/workspace" data-connections hidden>Connections</a><c-circuit></c-circuit></app-route></div>`
+    <app-route path="/wiring"><a href="#/wiring">Circuit</a><a href="#/workspace" data-connections hidden>Connections</a><a href="#/workspace" data-connections hidden>Connections</a><c-circuit></c-circuit></app-route></div>`
   const bus = createBus()
   provideBus(document.getElementById('shell')!, bus)
   let flips = 0
@@ -72,4 +72,22 @@ test('opening Wiring first focuses the first page and hides Connections', async 
   await t.go('/settings'); await t.go('/wiring')
   expect(t.circuit.page).toBeNull()
   expect(t.link.hidden).toBe(true)
+})
+
+test('the Desk tab sits on both wiring navs', async () => {
+  document.body.innerHTML = (await Bun.file(new URL('../public/index.html', import.meta.url)).text()).replace(/<script[\s\S]*?<\/script>/g, '')
+  const navs = [...document.querySelectorAll('nav.wiring-views')]
+  expect(navs.length).toBe(2)
+  for (const n of navs) {
+    expect([...n.querySelectorAll('a')].map(a => a.textContent)).toEqual(['Circuit', 'Connections', 'Desk'])
+    expect(n.querySelector('a:last-child')!.getAttribute('href')).toBe('#/desk')
+  }
+})
+
+test('arriving at /desk keeps the Connections link', async () => {
+  const t = setup()
+  await t.go('/workspace'); await t.go('/desk')
+  const links = [...document.querySelectorAll<HTMLAnchorElement>('a[data-connections]')]
+  expect(links.length).toBe(2)
+  for (const l of links) { expect(l.hidden).toBe(false); expect(l.getAttribute('href')).toBe('#/workspace') }
 })

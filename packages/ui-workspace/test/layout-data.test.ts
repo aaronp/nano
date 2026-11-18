@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { layoutFromDock, slotsToOpen } from '../src/layout-data.ts'
+import { layoutFromDock, savedLayout, slotsToOpen } from '../src/layout-data.ts'
 
 const panel = (name: string) => ({ type: 'stack', content: [{ type: 'component', componentState: { widget: 'pod', name } }] })
 const main = () => 'main'
@@ -24,4 +24,14 @@ test('opening: slots for placed pods, in order, only when the file has no worksp
   expect(slotsToOpen(d, 'workspace')).toEqual(['b', 'a'])
   expect(slotsToOpen({ ...d, layout: { ...d.layout, workspace: {} } }, 'workspace')).toEqual([])
   expect(slotsToOpen({ pods: {} }, 'workspace')).toEqual([])
+})
+
+test('savedLayout keeps the saved layout, the dock, its slots and the desk', () => {
+  const desk = { boxes: {} } as never
+  const out = savedLayout({ layout: { other: 1 } }, 'dock', { root: undefined }, main, desk) as any
+  expect(out.other).toBe(1)
+  expect(out.dock).toEqual({ root: undefined })
+  expect(out.slots).toEqual([])
+  expect(out.desk).toBe(desk)
+  expect('desk' in (savedLayout({}, 'dock', { root: undefined }, main) as object)).toBe(false)
 })

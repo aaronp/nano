@@ -101,8 +101,15 @@
   <!-- Wiring: the whole app as page layers of wired boards (read-only); Connections flips the last workspace's dock. -->
   <app-route path="/wiring" bleed>
     <div class="wiring-page">
-      <nav class="wiring-views" aria-label="Wiring view"><a href="#/wiring" aria-current="page">Circuit</a><a href="#/workspace" data-connections hidden>Connections</a></nav>
+      <nav class="wiring-views" aria-label="Wiring view"><a href="#/wiring" aria-current="page">Circuit</a><a href="#/workspace" data-connections hidden>Connections</a><a href="#/desk">Desk</a></nav>
       <c-circuit></c-circuit>
+    </div>
+  </app-route>
+
+  <app-route path="/desk" bleed>
+    <div class="wiring-page">
+      <nav class="wiring-views" aria-label="Wiring view"><a href="#/wiring">Circuit</a><a href="#/workspace" data-connections hidden>Connections</a><a href="#/desk" aria-current="page">Desk</a></nav>
+      <c-desk></c-desk>
     </div>
   </app-route>
 
