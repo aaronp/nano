@@ -1,0 +1,51 @@
+// The Connections view settings: Show Connected | All, and the runtime, pod and kind pills.
+import './dom.ts'
+import { expect, test } from 'bun:test'
+import { viewOf, type ViewSettings } from '../../src/wires/filter.ts'
+import { Debounce, deployment, Input, k, Log, MapIface, model } from './setup.ts'
+
+// r → d → l piped in main, r calls d in main; m sits unwired in main and in `side`
+const m = (() => {
+  const d = deployment()
+  d.runtimes['main']!.subscriptions.push({ kind: 'call', from: 'r', to: 'd' })
+  d.runtimes['side'] = { pods: ['m'], subscriptions: [] }
+  return model(d)
+})()
+const none = { runtimes: [], pods: [], kinds: [] }
+const view = (s: Partial<ViewSettings> = {}) => viewOf(m, { show: 'connected', pills: none, ...s })
+
+test('Connected shows only the jacks a cord touches, and only the modules with one', () => {
+  const v = view()
+  expect(v.rack.map(r => r.id)).toEqual(['d'])
+  expect(v.P[k('r', Input, 'submit', 'out')]).toBeDefined()
+  expect(v.P[k('d', Debounce, 'push', 'in')]).toBeDefined()
+  expect(v.P[k('l', Log, 'clear', 'in')]).toBeUndefined()
+  expect(v.P[k('m', MapIface, 'map', 'in')]).toBeUndefined()
+  expect([v.wires.length, v.calls.length]).toEqual([2, 1])
+})
+
+test('All shows every jack and module', () => {
+  const v = view({ show: 'all' })
+  expect(v.rack.map(r => r.id)).toEqual(['d', 'm'])
+  expect(Object.keys(v.P)).toEqual(Object.keys(m.P))
+})
+
+test('kind pills narrow to calls or pipes', () => {
+  expect([view({ pills: { ...none, kinds: ['calls'] } }).wires.length, view({ pills: { ...none, kinds: ['calls'] } }).calls.length]).toEqual([0, 1])
+  expect([view({ pills: { ...none, kinds: ['pipes'] } }).wires.length, view({ pills: { ...none, kinds: ['pipes'] } }).calls.length]).toEqual([2, 0])
+  expect(view({ pills: { ...none, kinds: ['pipes'] } }).P[k('d', Debounce, 'flushed', 'out')]).toBeDefined()
+})
+
+test('a pod pill keeps the cords touching that pod, and the modules at their other ends', () => {
+  const v = view({ pills: { ...none, pods: ['l'] } })
+  expect(v.wires.map(w => [v.P[w.from]!.owner, v.P[w.to]!.owner])).toEqual([['d', 'l']])
+  expect(v.calls).toEqual([])
+  expect(v.rack.map(r => r.id)).toEqual(['d'])
+  expect(v.P[k('r', Input, 'submit', 'out')]).toBeUndefined()
+})
+
+test('a runtime pill keeps that runtime\'s cords and modules', () => {
+  expect(view({ pills: { ...none, runtimes: ['main'] } }).wires.length).toBe(2)
+  const v = view({ show: 'all', pills: { ...none, runtimes: ['side'] } })
+  expect([v.wires, v.calls, v.rack.map(r => r.id)]).toEqual([[], [], ['m']])
+})

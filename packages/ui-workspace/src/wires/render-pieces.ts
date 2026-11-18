@@ -4,7 +4,7 @@ import { PIECE_H, TAB_R, clamp } from './constants'
 import { piecePath, polylineAt } from './geometry'
 import { joint } from './pointer'
 import { pieceColors } from './puzzle'
-import { inFlight } from './render-back'
+import { inFlight } from './packets'
 import type { Vals } from './render-root'
 import type { Wires } from './wires'
 

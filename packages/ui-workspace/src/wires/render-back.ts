@@ -1,27 +1,15 @@
 // The back plate: panel chassis, the service rack and its modules, jacks, cords, packets, the live cord, and (in
 // puzzle mode) the dashed leaders and their packets.
 import { html, nothing, svg } from 'lit'
-import { ERR_COLOR, OK_COLOR, TRAVEL_MS, clamp } from './constants'
+import { ERR_COLOR, OK_COLOR } from './constants'
 import { bezierAt, cordD, cordGeo, polylineAt } from './geometry'
 import { opCord } from './calls'
+import { jackLabel } from './jacks'
 import { checkConnect } from './model'
+import { inFlight, packet } from './packets'
 import { visibleKeys } from './pointer'
 import type { Vals } from './render-root'
 import type { Wires } from './wires'
-
-/** Packets in flight on drawn wires, with how far along they are. */
-export const inFlight = (el: Wires, d: Vals) => d.s.packets
-  .filter(p => d.m.wires.some(w => w.id === p.wire))
-  .map(p => {
-    const w = d.m.wires.find(x => x.id === p.wire)!
-    return { ...p, w, f: clamp((d.now - p.born) / TRAVEL_MS, 0, 1), color: d.routeById(w.route).color, op: d.opFor(w.route) }
-  })
-
-/** A packet dot with its value. */
-export const packet = (k: { x: number; y: number; color: string; op: number; label: string }, r: number, sw: number, dx: number) => svg`<g opacity=${k.op}>
-  <circle cx=${k.x.toFixed(1)} cy=${k.y.toFixed(1)} r=${r} fill="#FFFFFF" stroke=${k.color} stroke-width=${sw}></circle>
-  <text class="pkt-label" x=${(k.x + dx).toFixed(1)} y=${(k.y - 9).toFixed(1)} font-family="JetBrains Mono, monospace" font-size="10.5" font-weight="600" fill="#FFFFFF">${k.label}</text>
-</g>`
 
 export function renderBack(el: Wires, d: Vals) {
   const { s, m, isRelay, selId, selRoute, opFor, routeById, routeOfOwner } = d
@@ -40,19 +28,17 @@ export function renderBack(el: Wires, d: Vals) {
 
   const jackRoute: Record<string, string> = {}
   wires.forEach(w => { jackRoute[w.from] ??= w.route; jackRoute[w.to] ??= w.route })
-  const jacks = visibleKeys(el).map(k => {
+  const jacks = visibleKeys(el, m).map(k => {
     const p = P[k]!
     const isHover = cord !== null && k === cord.hover
     const isAnchor = cord !== null && k === cord.anchor
     const ring = isHover ? (cord.err ? ERR_COLOR : OK_COLOR) : isAnchor ? '#E6EDF3' : lit(k) ? OK_COLOR : '#4A5564'
     const base = {
-      x: p.x, y: p.y, label: p.label, ring, ringR: isHover ? 12 : 9,
-      core: p.dir === 'out' ? '#E6EDF3' : '#4A5564', coreR: p.dir === 'in' ? 3 : 4.5,
+      key: k, x: p.x, y: p.y, label: jackLabel(p), ring, ringR: isHover ? 15 : 12,
+      core: p.dir === 'out' ? '#E6EDF3' : '#4A5564', coreR: p.dir === 'in' ? 4 : 6,
       op: cord !== null ? (isAnchor || lit(k) ? 1 : 0.3) : selId === null || jackRoute[k] === selId ? 1 : 0.3,
     }
-    if (p.kind === 'chassis') return { ...base, lx: p.x + 14, ly: p.y + 4, anchor: 'start' }
-    if (p.kind === 'block') return { ...base, lx: p.x, ly: p.y - 14, anchor: 'middle' }
-    return { ...base, lx: p.x, ly: p.y + 21, anchor: 'middle' }
+    return { ...base, lx: p.x, ly: p.kind === 'block' ? p.y - 18 : p.y + 27, anchor: 'middle' }
   })
 
   const cords = (s.showPipes ? wires : []).map(w => {
@@ -114,7 +100,7 @@ export function renderBack(el: Wires, d: Vals) {
   </div>`) : ''}
 
   <svg width=${W} height=${H} style="position:absolute; left:0; top:0; overflow:visible; pointer-events:none" aria-hidden="true">
-    ${jacks.map(j => svg`<g opacity=${j.op}>
+    ${jacks.map(j => svg`<g data-jack=${j.key} opacity=${j.op}>
       <circle cx=${j.x} cy=${j.y} r=${j.ringR} fill="#0A0D11" stroke=${j.ring} stroke-width="2"></circle>
       <circle cx=${j.x} cy=${j.y} r=${j.coreR} fill=${j.core} stroke="none" stroke-width="1.5"></circle>
       <text x=${j.lx} y=${j.ly} text-anchor=${j.anchor} font-family="JetBrains Mono, monospace" font-size="10" fill="#A3AEBC">${j.label}</text>

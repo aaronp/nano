@@ -346,6 +346,8 @@ test('modules carry data-deploy; the toggle marks exactly the non-host ones, and
   const { host, root, flip, settle } = await mount()
   isolate(host, 'd', 'sandbox')
   await flip()
+  expect(root.querySelector('[data-module="m"]')).toBeNull()   // Show: Connected hides the unwired m
+  ;[...root.querySelectorAll<HTMLElement>('[aria-label="Show"] button')].find(b => b.textContent === 'All')!.click(); await settle()
   expect(root.querySelector('[data-module="d"]')!.getAttribute('data-deploy')).toBe('sandbox')
   expect(root.querySelector('[data-module="m"]')!.getAttribute('data-deploy')).toBe('host')
   const toggle = () => root.querySelector('button.highlight') as HTMLElement

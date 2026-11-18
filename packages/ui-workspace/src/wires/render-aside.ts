@@ -1,9 +1,10 @@
 // The right-hand panel: View, the mode toggle and wiring edit, the Operators palette (the host's catalog), Routes
 // and the Legend.
 import { html } from 'lit'
-import { ASIDE_W, HEADER_H, OK_COLOR, fade } from './constants'
+import { ASIDE_W, HEADER_H, OK_COLOR, fade, uniq } from './constants'
+import { toggle, type Pills } from './filter'
 import { pickOperator, removeSel, toggleEdit } from './pointer'
-import { inFlight } from './render-back'
+import { inFlight } from './packets'
 import { renderDetail } from './render-detail'
 import type { Vals } from './render-root'
 import type { Wires } from './wires'
@@ -12,6 +13,10 @@ const h2 = (text: string) => html`<h2 style="margin:0; font-size:11px; font-weig
 const viewBtn = (label: string, go: () => void) => html`<button type="button" class="sidebtn" @click=${go} style="height:44px; border-radius:6px; border:1px solid #2F3845; background:#161B22; color:#E6EDF3; font:inherit; font-size:12px; cursor:pointer">${label}</button>`
 const zoomBtn = (label: string, name: string, go: () => void) => html`<button type="button" class="sidebtn" aria-label=${name} @click=${go} style="height:32px; min-width:36px; padding:0 8px; border-radius:6px; border:1px solid #2F3845; background:#161B22; color:#E6EDF3; font:inherit; font-size:12px; cursor:pointer">${label}</button>`
 const tab = (label: string, on: boolean, pick: () => void) => html`<button type="button" role="tab" aria-selected=${on ? 'true' : 'false'} @click=${pick} style="height:34px; border-radius:5px; border:0; background:${on ? '#E6EDF3' : 'transparent'}; color:${on ? '#12161C' : '#C9D1D9'}; font:inherit; font-size:12px; font-weight:600; cursor:pointer">${label}</button>`
+const pill = (label: string, on: boolean, pick: () => void) => html`<button type="button" class="sidebtn" aria-pressed=${on ? 'true' : 'false'} @click=${pick} style="min-height:28px; padding:2px 10px; border-radius:999px; border:1px solid ${on ? '#E6EDF3' : '#2F3845'}; background:${on ? '#E6EDF3' : '#161B22'}; color:${on ? '#12161C' : '#C9D1D9'}; font:inherit; font-size:11px; cursor:pointer">${label}</button>`
+/** A row of filter pills: selected ones narrow the view; none selected shows all. */
+const pills = <K extends keyof Pills>(el: Wires, name: string, key: K, all: Pills[K]) => html`<div role="group" aria-label=${name} style="display:flex; flex-wrap:wrap; gap:4px; align-items:center"><span style="font-size:11px; color:#8B96A5; margin-right:4px">${name}</span>
+  ${all.map(x => pill(x, (el.s.pills[key] as string[]).includes(x), () => el.setState({ pills: { ...el.s.pills, [key]: toggle(el.s.pills[key] as string[], x) } })))}</div>`
 const seg = (label: string, on: boolean, pick: () => void) => html`<button type="button" class="seg" aria-pressed=${on ? 'true' : 'false'} @click=${pick} style="height:40px; border-radius:5px; border:0; background:${on ? '#E6EDF3' : 'transparent'}; color:${on ? '#12161C' : '#C9D1D9'}; font:inherit; font-size:12px; font-weight:600; cursor:pointer">${label}</button>`
 
 export function renderAside(el: Wires, d: Vals) {
@@ -56,6 +61,12 @@ export function renderAside(el: Wires, d: Vals) {
       <label style="display:flex; gap:6px; align-items:center"><input type="checkbox" .checked=${s.showPipes} @change=${(e: Event) => el.setState({ showPipes: (e.target as HTMLInputElement).checked })} style="accent-color:#E6EDF3"> Pipes</label>
       <label style="display:flex; gap:6px; align-items:center"><input type="checkbox" .checked=${s.showCalls} @change=${(e: Event) => el.setState({ showCalls: (e.target as HTMLInputElement).checked })} style="accent-color:#E6EDF3"> Call edges</label>
     </div>
+    <div role="group" aria-label="Show" style="display:grid; grid-template-columns:auto 1fr 1fr; align-items:center; gap:4px; font-size:12px; color:#C9D1D9"><span style="margin-right:6px">Show</span>
+      ${seg('Connected', s.show === 'connected', () => el.setState({ show: 'connected' }))}${seg('All', s.show === 'all', () => el.setState({ show: 'all' }))}
+    </div>
+    ${pills(el, 'Runtimes', 'runtimes', uniq(Object.values(el.model.runtimes).flat()).sort())}
+    ${pills(el, 'Components', 'pods', uniq([...el.model.chassis.flatMap(c => c.instance ?? []), ...el.model.rack.map(r => r.id)]))}
+    ${pills(el, 'Kinds', 'kinds', ['calls', 'pipes'])}
     <button type="button" class="sidebtn" aria-pressed=${editing ? 'true' : 'false'} @click=${() => toggleEdit(el)} style="height:44px; border-radius:6px; border:1px solid ${editing ? OK_COLOR : '#2F3845'}; background:${editing ? OK_COLOR : '#161B22'}; color:${editFg}; font:inherit; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke=${editFg} stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v5M17 3v5M5 8h14v3a7 7 0 0 1-14 0z"></path><path d="M12 18v3"></path></svg>
       ${editing ? 'Done editing' : 'Edit wiring'}

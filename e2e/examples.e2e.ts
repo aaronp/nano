@@ -3,6 +3,9 @@ import { spawnSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { port } from '../packages/nano/src/index.ts'
+import { MessagingDef } from '../examples/chat/messaging/contract.ts'
+import { KeyValueStoreDef } from '../examples/kv/contract.ts'
 
 const dock = (page: Page) => page.locator('workspace-dock#workspace')
 /** The participant's window, by its heading (its text would also match a line mentioning the name). */
@@ -381,4 +384,29 @@ test('the chat, a message sent: its declared, observed messaging.post → chatSt
   await expect(page.locator('c-wires')).not.toHaveAttribute('flipped', '')
   await dock(page).locator('nano-explorer li[data-id="p:example.chat.backend:messaging"] > .line').click()
   await expect(dock(page).locator('nano-explorer .details')).toContainText('post → chatStore.put')
+})
+
+test('Connections, the chat after a message: messaging post\'s output jack is corded, dashed, to chatStore put\'s input jack; Show Connected hides a jack no cord touches', async ({ page }) => {
+  const { api: M } = MessagingDef, { api: KV } = KeyValueStoreDef
+  const post = `messaging ${port(M, M.ops.post)}:out`, put = `chatStore ${port(KV, KV.ops.put)}:in`, idle = `chatStore ${port(KV, KV.ops.list)}:out`
+  await start(page)
+  await open(page, '/examples/chat/nano.json')
+  await say(room(page, 'alice'), 'hi bob')
+  await expect(room(page, 'bob').locator('li')).toHaveText([/hi bob/])
+  await page.getByRole('button', { name: 'Connections' }).first().click()
+  const w = page.locator('c-wires')
+  await expect(w).toHaveAttribute('flipped', '')
+  for (const k of [post, put]) await expect(w.locator(`[data-jack="${k}"]`)).toHaveCount(1)
+  // the cord runs from post's output jack to put's input jack: seen, declared, dashed
+  const [a, b] = await page.evaluate(ks => ks.map(k => { const p = (document.querySelector('c-wires') as any).model.P[k]; return `${p.x} ${p.y}` }), [post, put])
+  const cord = w.locator(`[data-call="example.chat.backend|messaging|chatStore"] [data-op-call="seen"][d^="M${a} C"][d$=" ${b}"]`)
+  await expect(cord).toHaveAttribute('stroke-dasharray', '6 5')
+  // Show: Connected (the default) leaves out a jack no cord touches; All shows it
+  await expect(w.locator(`[data-jack="${idle}"]`)).toHaveCount(0)
+  await w.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'All' }).click()
+  await expect(w.locator(`[data-jack="${idle}"]`)).toHaveCount(1)
+  await w.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Connected' }).click()
+  await w.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.waitForTimeout(1200)
+  await page.screenshot({ path: test.info().outputPath('rack.png') })
 })

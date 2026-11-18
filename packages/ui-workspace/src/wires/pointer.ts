@@ -3,7 +3,8 @@
 import { fits } from '@pritzlaff/nano-core'
 import { clamp } from './constants'
 import { nearestPort } from './geometry'
-import { checkConnect, dirOf, portKey, portName } from './model'
+import { onStage } from './filter'
+import { checkConnect, dirOf, portKey, portName, type Model } from './model'
 import type { Wires } from './wires'
 
 type Ptr = { clientX: number; clientY: number; pointerId?: number; currentTarget?: EventTarget | null }
@@ -17,7 +18,7 @@ export function toLocal(el: Wires, e: Ptr) {
   return { x: (e.clientX - r.left) / r.width * el.model.W, y: (e.clientY - r.top) / r.height * el.model.H }
 }
 /** The jacks that can be grabbed: all in relay mode, the panels' and blocks' in puzzle mode. */
-export const visibleKeys = (el: Wires) => Object.keys(el.model.P).filter(k => el.s.mode === 'relay' || el.model.P[k]!.kind !== 'module')
+export const visibleKeys = (el: Wires, m: Model = el.model) => Object.keys(m.P).filter(k => el.s.mode === 'relay' || m.P[k]!.kind !== 'module')
 const capture = (e: Ptr) => { const t = e.currentTarget as Element | null | undefined; if (t?.setPointerCapture && e.pointerId !== undefined) t.setPointerCapture(e.pointerId) }
 
 export function onDown(el: Wires, e: Ptr) {
@@ -64,8 +65,7 @@ export async function onUp(el: Wires, e: Ptr) {
   const { s, model: m } = el
   if (s.editing) {
     if (s.lift) {
-      const id = s.lift
-      el.setState({ lift: null })
+      const id = s.lift; el.setState({ lift: null })
       if (toLocal(el, e).y < m.H) el.openPanel(id)   // dropped onto the pane: open it as a panel
       return
     }
@@ -81,19 +81,17 @@ export async function onUp(el: Wires, e: Ptr) {
       return
     }
     if (c.picked) { if (!('error' in await el.disconnect(c.picked))) el.ok('Unplugged a cord'); return }
-    el.setState({ cord: null })
-    return
+    el.setState({ cord: null }); return
   }
   if (!el.drag) return
   const still = Math.hypot(e.clientX - el.drag.x, e.clientY - el.drag.y) < 4
-  el.drag = null
-  el.setState({ dragging: false })
+  el.drag = null; el.setState({ dragging: false })
   if (still) pickAt(el, e)   // a click, not a turn
 }
 
 /** Selects what is under the pointer on the back: a jack's action, or a panel's or rack module's component. */
 function pickAt(el: Wires, e: Ptr) {
-  const m = el.model, pt = toLocal(el, e), hit = nearestPort(m.P, visibleKeys(el), pt, null)
+  const m = onStage(el), pt = toLocal(el, e), hit = nearestPort(m.P, visibleKeys(el, m), pt, null)
   const inside = (r: { x: number; y: number; w: number; h: number }) => pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h
   const instance = hit !== null ? m.P[hit]!.owner : m.chassis.find(c => c.instance && inside(c))?.instance ?? m.rack.find(inside)?.id
   if (instance) el.pick({ system: el.sys, instance, ...(hit !== null ? { op: m.P[hit]!.port } : {}) })

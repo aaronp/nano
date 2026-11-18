@@ -11,7 +11,7 @@ test('panels become mirrored chassis with jacks: outs along the top, ins along t
   expect(m.chassis.map(c => [c.label, c.x, c.instance])).toEqual([['r', 800, 'r'], ['l', 400, 'l'], ['textarea', 0, null]])
   const out = m.P[k('r', Input, 'submit', 'out')]!, inn = m.P[k('r', Input, 'submit', 'in')]!
   expect([out.dir, out.kind, out.y]).toEqual(['out', 'chassis', 56])
-  expect([inn.dir, inn.y]).toEqual(['in', 260])
+  expect([inn.dir, inn.y]).toEqual(['in', 248])
   // an action is an in jack and, for its result, an out jack
   expect(Object.values(m.P).filter(p => p.owner === 'l').map(p => [p.label, p.dir])).toEqual([['log', 'out'], ['entries', 'out'], ['clear', 'out'], ['log', 'in'], ['entries', 'in'], ['clear', 'in']])
 })
@@ -28,8 +28,8 @@ test('the rack holds pods with no panel, but not the host\'s own pod', () => {
 test('pipes are wires, grouped into named, coloured routes', () => {
   const d = deployment()
   expect(model(d).wires).toEqual([
-    { id: wireId('main', p1), route: wireId('main', p1), from: k('r', Input, 'submit', 'out'), to: k('d', Debounce, 'push', 'in') },
-    { id: wireId('main', p2), route: wireId('main', p1), from: k('d', Debounce, 'flushed', 'out'), to: k('l', Log, 'log', 'in') },
+    { id: wireId('main', p1), runtime: 'main', route: wireId('main', p1), from: k('r', Input, 'submit', 'out'), to: k('d', Debounce, 'push', 'in') },
+    { id: wireId('main', p2), runtime: 'main', route: wireId('main', p1), from: k('d', Debounce, 'flushed', 'out'), to: k('l', Log, 'log', 'in') },
   ])
   expect(model(d).routes).toEqual([{ id: wireId('main', p1), name: 'r → l', color: '#7EE787' }])
   d.pods['i'] = Pod.eager(input); d.runtimes['main']!.pods.push('i')
@@ -61,10 +61,17 @@ test('a call edge goes from the bottom of the caller\'s box to each Op jack of t
   const d = deployment()
   d.runtimes['main']!.subscriptions.push({ kind: 'call', from: 'r', to: 'd' })   // r needs nothing named: every op of d
   const m = model(d), r = m.chassis.find(c => c.instance === 'r')!
-  const ends = Object.values(m.P).filter(p => p.owner === 'd' && (p.op.kind === 'action' ? p.dir === 'in' : p.dir === 'out')).map(p => ({ x: p.x, y: p.y }))
+  const jacks = Object.values(m.P).filter(p => p.owner === 'd' && (p.op.kind === 'action' ? p.dir === 'in' : p.dir === 'out')), ends = jacks.map(p => ({ x: p.x, y: p.y }))
   expect(ends.length).toBeGreaterThan(0)
-  expect(m.calls).toEqual([{ id: 'main|r|d', from: 'r', to: 'd', a: { x: r.x + r.w / 2, y: r.y + r.h }, b: ends }])
+  expect(m.calls).toEqual([{ id: 'main|r|d', runtime: 'main', from: 'r', to: 'd', jacks: jacks.map(p => p.key), a: { x: r.x + r.w / 2, y: r.y + r.h }, b: ends }])
   expect(m.wires.length).toBe(2)
+})
+
+test('every action is an input jack and an output jack; every event is an output jack only, on panel backs and rack modules alike', () => {
+  const m = model(deployment(), { d: 'nano.ui/debounce' })
+  const dirs = (owner: string, op: string) => Object.values(m.P).filter(p => p.owner === owner && p.label === op).map(p => p.dir).sort()
+  expect([dirs('r', 'submit'), dirs('d', 'push'), dirs('d', 'flushed')]).toEqual([['in', 'out'], ['in', 'out'], ['out']])
+  expect([m.P[k('r', Input, 'submit', 'in')]!.kind, m.P[k('d', Debounce, 'push', 'in')]!.kind]).toEqual(['chassis', 'module'])
 })
 
 test('an op-level call draws from the caller\'s op to the callee\'s; seen but not declared is marked so; old edges are as before', () => {
@@ -73,7 +80,7 @@ test('an op-level call draws from the caller\'s op to the callee\'s; seen but no
   const source = k('r', Input, 'submit', 'out').slice(2, -4), target = k('d', Debounce, 'push', 'in').slice(2, -3)
   const call = { runtime: 'main', from: 'r', to: 'd', source, target, declared: false, seen: true }
   const m = buildModel({ snapshot: snapshotOf(d, registry(), [call]), panels, W: 1200, H: 600, application: 'ui' })
-  const a = m.P[k('r', Input, 'submit', 'in')]!, b = m.P[k('d', Debounce, 'push', 'in')]!
+  const a = m.P[k('r', Input, 'submit', 'out')]!, b = m.P[k('d', Debounce, 'push', 'in')]!   // the caller's output, the callee's input
   expect(m.calls[0]!.ops).toEqual([{ a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y }, declared: false, seen: true }])
   expect(m.calls[0]!.b).toEqual([])   // no pod-level line once every pair has a source
   expect(model(d).calls[0]!.ops).toBeUndefined()

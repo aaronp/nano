@@ -8,13 +8,13 @@ export const BLOCK_DY = -2          // a block's top vs its row (618 - 620)
 export const BLOCK_JACK_DY = -14    // a block's jacks vs its row (606 - 620)
 export const MOD_H = 92
 export const BLOCK_H = 82
-export const JACK_W = 56            // per-jack width of a rack module (the prototype's modules had two or three jacks)
+export const JACK_W = 84            // per-jack slot width of a rack module: room for the jack and its label
 export const PIECE_H = 40
 export const ROW_H = 46
 export const PUZ_Y0 = 40
 export const TAB_R = 7
 export const FORK_W = 64
-export const HIT_R = 16
+export const HIT_R = 18
 /** The pane's share of the stage when it eases back. */
 export const SCALE = 0.9
 
