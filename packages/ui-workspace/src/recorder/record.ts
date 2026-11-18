@@ -12,8 +12,10 @@ const recorded = (e: AppEvent): Recorded => {
  * snapshotted, with another deployment entry after each `applied`. seq starts after the store's last entry.
  */
 export async function record(app: Application, store: MessageStore, now: () => number = Date.now): Promise<() => void> {
-  // seqs are contiguous, so the last is oldest + size - 1 (works for a store that dropped its oldest entries)
-  let seq = (await store.size()) ? (await store.oldest())! + (await store.size()) - 1 : 0
+  await store.flush()
+  const n = await store.size()
+  const last = n ? (await store.range((await store.oldest())! + n - 1)).at(-1) : undefined   // read, not trusted
+  let seq = last?.seq ?? 0
   const add = (event: Recorded) => { try { store.append({ seq: ++seq, at: now(), event } satisfies Entry) } catch { /* never throws into the app */ } }
   const deployment = () => add({ type: 'deployment', deployment: app.deployment() })
   deployment()

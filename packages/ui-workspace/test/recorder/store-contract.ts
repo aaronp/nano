@@ -44,6 +44,12 @@ export function storeContract(make: (max: number) => MessageStore): void {
     expect(await s.size()).toBe(0)
     expect(await s.oldest()).toBeUndefined()
   })
+  test('after flush, size, oldest and range include every append', async () => {
+    const s = make(100)
+    for (const n of [1, 2, 3]) s.append(sent(n))
+    await s.flush()
+    expect([await s.size(), await s.oldest(), (await s.range()).length]).toEqual([3, 1, 3])
+  })
   test('flush resolves', async () => {
     await make(100).flush()
   })

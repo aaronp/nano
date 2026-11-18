@@ -54,6 +54,7 @@ export function pair(entries: Entry[]): Message[] {
   return out
 }
 
+/** Seqs are contiguous (one writer assigns them; a store drops only from the oldest end); after `flush()`, `size`/`oldest`/`range` include every appended entry. */
 export interface MessageStore {
   append(e: Entry): void
   flush(): Promise<void>

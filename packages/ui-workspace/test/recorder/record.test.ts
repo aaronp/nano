@@ -64,3 +64,11 @@ test('seq continues after the store, and after stop nothing more is recorded', a
   const seqs = (await store.range()).map(e => e.seq)
   expect(seqs).toEqual(seqs.map((_, i) => i + 1))
 })
+
+test('a store that already dropped its oldest continues from the last seq', async () => {
+  const { app } = await typing()
+  const store = memoryStore({ max: 3 })
+  for (let n = 1; n <= 5; n++) store.append({ seq: n, at: n, event: { type: 'warning', reason: 'x' } })
+  await record(app, store)
+  expect((await store.range()).map(e => e.seq)).toEqual([4, 5, 6])
+})
