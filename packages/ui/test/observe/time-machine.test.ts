@@ -6,8 +6,8 @@ import { timeMachine, type Frame, type Ticker } from '../../src/observe/time-mac
 import { settle, typingSim } from './typing.ts'
 
 /** A ticker run by hand: `run(ms)` moves its clock on and runs the frame waiting, if any. */
-function fakeTicker() {
-  let now = 0
+function fakeTicker(start = 0) {
+  let now = start
   let waiting: (() => void) | undefined
   const ticker: Ticker = { now: () => now, frame: fn => { waiting = fn; return () => { if (waiting === fn) waiting = undefined } } }
   return { ticker, waiting: () => waiting !== undefined, run(ms: number) { now += ms; const fn = waiting; waiting = undefined; fn?.() } }
@@ -58,9 +58,8 @@ test('seek(t) gives the messages in flight with progress', async () => {
   expect(ids(f)).toEqual(['a', 'b'])
   expect(f.recent.map(m => m.sent.id)).toEqual(['a', 'b'])
   expect(f.recent[1]!.outcome?.type).toBe('delivered')
-  tm.setSpeed(2)   // the window halves: 300 ms
-  expect(ids(f)).toEqual(['b'])
-  expect(f.inFlight[0]!.progress).toBeCloseTo(50 / 300)
+  tm.setSpeed(1 / 30); tm.seek(1300)   // speed moves the cursor, never the window
+  expect(f.inFlight).toEqual([{ message: f.recent[0]!, progress: 0.5 }])
   tm.close()
 })
 
@@ -91,7 +90,7 @@ test('playing moves at speed × real time and jumps idle gaps over 1 s', async (
   expect(tm.cursor).toBe(1050)
   k.run(200)
   expect(tm.cursor).toBe(1150)
-  k.run(1000)   // to 1650: b's window (1200 to 2400 at half speed) still covers it
+  k.run(1000)   // to 1650: b's window (1200 to 1800) still covers it
   expect(tm.cursor).toBe(1650)
   k.run(1600)   // to 2450: nothing in flight, c is 2550 ms away: jump to c
   expect(tm.cursor).toBe(5000)
@@ -109,7 +108,6 @@ test('playing catches up and becomes live', async () => {
   k.run(200)
   expect(tm.mode).toBe('live')
   expect(tm.cursor).toBe(1300)
-  expect(k.waiting()).toBe(false)
   s.push(1400, sent('c'))
   expect(tm.cursor).toBe(1400)
   tm.close()
@@ -149,4 +147,36 @@ test('close stops listening and ticking', async () => {
   expect(k.waiting()).toBe(false)
   s.push(6000, sent('c')); k.run(100)
   expect(frames).toBe(0)
+})
+
+test('live ticks while a message is in flight, at now', async () => {
+  const s = source()
+  const k = fakeTicker(10000)
+  const tm = await timeMachine(s, { ticker: k.ticker })
+  const frames: Frame[] = []
+  tm.subscribe(f => frames.push(f))
+  s.push(9700, sent('a'))   // stamped 300 ms ago
+  k.run(0)
+  expect(frames.at(-1)!.t).toBe(10000)
+  expect(frames.at(-1)!.inFlight.map(x => x.progress)).toEqual([0.5])
+  k.run(200)
+  expect(frames.at(-1)!.inFlight[0]!.progress).toBeCloseTo(500 / 600)
+  k.run(200)   // landed: one last frame, empty, and no more ticking
+  expect(frames.at(-1)!.inFlight).toEqual([])
+  expect(k.waiting()).toBe(false)
+  const n = frames.length
+  k.run(100)
+  expect(frames.length).toBe(n)
+  tm.close()
+})
+
+test('setSpeed accepts only the known speeds', async () => {
+  const tm = await timeMachine(source(), { ticker: fakeTicker().ticker })
+  for (const s of [1 / 30, 1 / 10, 1 / 4, 1 / 2, 1, 2]) { tm.setSpeed(s); expect(tm.speed).toBe(s) }
+  tm.setSpeed(0.0333333333333)
+  expect(tm.speed).toBe(1 / 30)
+  expect(() => tm.setSpeed(3)).toThrow(RangeError)
+  expect(() => tm.setSpeed(0)).toThrow(RangeError)
+  expect(tm.speed).toBe(1 / 30)
+  tm.close()
 })

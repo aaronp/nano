@@ -18,11 +18,14 @@ export interface TimeMachine {
 }
 
 const IDLE = 1000
-const raf: Ticker = { now: () => performance.now(), frame: fn => { const id = requestAnimationFrame(fn); return () => cancelAnimationFrame(id) } }
+const SPEEDS = [1 / 30, 1 / 10, 1 / 4, 1 / 2, 1, 2]
+/** `now` is `Date.now`: recordings stamp `at` with it, and live frames put the cursor at `now()`. */
+const raf: Ticker = { now: () => Date.now(), frame: fn => { const id = requestAnimationFrame(fn); return () => cancelAnimationFrame(id) } }
 
 /**
  * Catches up with `store.range()` and then hears `listen`, missing nothing. A message's window is
- * `[at, at + travelMs / speed]` (`travelMs` 600); `recent` keeps the last `recent` (200) messages with `at ≤ t`.
+ * `[at, at + travelMs]` (`travelMs` 600) at any speed: speed scales only how fast the cursor moves. Live, while
+ * anything is in flight, a frame is emitted each ticker frame with `t = now()`. `recent` keeps the last `recent` (200) messages with `at ≤ t`.
  * Messages are ordered by `at`, ties by seq; a step moves to the next or previous one.
  */
 export async function timeMachine(
@@ -41,10 +44,9 @@ export async function timeMachine(
 
   /** How many messages have `at ≤ t`. */
   const upTo = (t: number) => { let lo = 0, hi = msgs.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (msgs[mid]!.at <= t) lo = mid + 1; else hi = mid } return lo }
-  const travel = () => travelMs / speed
   const inFlightAt = (t: number) => {
     const out: Frame['inFlight'] = []
-    for (let i = upTo(t) - 1; i >= 0 && msgs[i]!.at >= t - travel(); i--) out.unshift({ message: msgs[i]!, progress: (t - msgs[i]!.at) / travel() })
+    for (let i = upTo(t) - 1; i >= 0 && msgs[i]!.at >= t - travelMs; i--) out.unshift({ message: msgs[i]!, progress: (t - msgs[i]!.at) / travelMs })
     return out
   }
   const frame = (): Frame => {
@@ -66,11 +68,14 @@ export async function timeMachine(
     } else if (ev.type === 'delivered' || ev.type === 'denied') { const m = byId.get(ev.id); if (m) m.outcome = ev }
   }
   const stopTicking = () => { cancel?.(); cancel = undefined }
-  const goLive = () => { stopTicking(); mode = 'live'; pinned = undefined; cursor = span.to; emit() }
+  /** Live: emit, and keep ticking while anything is in flight. */
+  const liveFrame = () => { emit(); if (!cancel && inFlightAt(cursor).length) cancel = ticker.frame(tick) }
+  const goLive = () => { stopTicking(); mode = 'live'; pinned = undefined; cursor = span.to; liveFrame() }
 
   const tick = () => {
     cancel = undefined
     const now = ticker.now()
+    if (mode === 'live') { cursor = Math.max(now, span.to); return liveFrame() }
     let c = cursor + (now - last) * speed
     last = now
     const target = msgs[upTo(cursor)]?.at ?? span.to   // the next message, or the newest entry
@@ -86,12 +91,13 @@ export async function timeMachine(
   const unlisten = source.listen(e => {
     if (held) { held.push(e); return }
     add(e)
-    if (mode === 'live') { cursor = span.to; emit() }
+    if (mode === 'live') { cursor = Math.max(cursor, span.to); liveFrame() }
   })
   try { for (const e of await source.store.range()) add(e) } catch (err) { unlisten(); throw err }
   for (const e of held) add(e)
   held = undefined
   cursor = span.to
+  liveFrame()
 
   return {
     get cursor() { return cursor }, get mode() { return mode }, get speed() { return speed }, get span() { return { ...span } },
@@ -109,7 +115,11 @@ export async function timeMachine(
     },
     pause() { stopTicking(); mode = 'paused'; emit() },
     live: goLive,
-    setSpeed(s) { speed = s; emit() },
+    setSpeed(s) {
+      const known = SPEEDS.find(x => Math.abs(x - s) < 1e-9)
+      if (known === undefined) throw new RangeError(`speed ${s} is not one of 1/30, 1/10, 1/4, 1/2, 1, 2`)
+      speed = known; emit()
+    },
     subscribe(fn) { subs.add(fn); return () => { subs.delete(fn) } },
     close() { stopTicking(); unlisten(); subs.clear() },
   }
