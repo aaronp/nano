@@ -85,10 +85,15 @@ The system passes events and the starting state is known, so state can be rebuil
 
 ## The recorder (workspace, pure)
 
-- **`src/recorder/`:** `record(app, store)` listens to `app.listen`, writes to the store, and returns a stop function.
+- **`src/recorder/`:** `record(app, store, { clean?, now? })` listens to `app.listen`, writes to the store, and returns
+  a stop function.
+  - It listens first, then reads the store's last seq, holding what arrives meanwhile, so nothing is missed.
+  - Its first entry is the deployment in force, marked `clean: true` only when `clean` says the app's pods hold no
+    state yet (the host starts the recorder at app creation with `clean: true`). That entry is a **clean start**, the
+    only point replay starts from.
 - **Each recorded message** pairs its `sent` with its outcome by `id`:
-  - from the `sent`: `id`, `at` (`performance.now()` when sent), `runtime`, `kind`, `from`, `to`, `port`, `correlation`,
-    `cause?`, `input?`;
+  - from the `sent`: `id`, `at` (`Date.now()` when recorded, or the injected `now`; wall-clock time survives reloads,
+    unlike `performance.now()`), `runtime`, `kind`, `from`, `to`, `port`, `correlation`, `cause?`, `input?`;
   - from the outcome: `{ result, ms }` when delivered, `{ denied: reason }` when denied, or nothing while it is in flight.
 - **Lifecycle events** (`built`, `closed`, `restarted`, `applied`, `failure`, `warning`) are recorded too, as markers on
   the timeline. They are not messages.

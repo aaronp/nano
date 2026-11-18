@@ -72,3 +72,27 @@ test('a store that already dropped its oldest continues from the last seq', asyn
   await record(app, store)
   expect((await store.range()).map(e => e.seq)).toEqual([4, 5, 6])
 })
+
+test('a clean start is marked only when asked, and at comes from the injected now', async () => {
+  const { app, store } = await typing()
+  await record(app, store, { clean: true, now: () => 42 })
+  const [first] = await store.range()
+  expect(first).toMatchObject({ at: 42, event: { type: 'deployment', clean: true } })
+  const plain = memoryStore()
+  await record(app, plain)
+  expect((await plain.range())[0]!.event).not.toHaveProperty('clean')
+})
+
+test('events during record\'s own awaits are kept, after the deployment, in order', async () => {
+  const { app } = await typing()
+  const inner = memoryStore()
+  const slow = { ...inner, flush: () => new Promise<void>(r => setTimeout(r, 5)) }
+  const started = record(app, slow)
+  const call = app.call('main', 'map').map('a')
+  await started
+  await call
+  const entries = await inner.range()
+  expect(entries[0]!.event.type).toBe('deployment')
+  expect(pair(entries).map(m => m.sent.input)).toContain('"a"')
+  expect(entries.map(e => e.seq)).toEqual(entries.map((_, i) => i + 1))
+})

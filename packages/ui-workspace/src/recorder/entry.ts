@@ -7,12 +7,12 @@
  */
 import type { AppDeployment, AppEvent } from '@pritzlaff/nano-core'
 
-/** A recorded thing: an app event (values snapshotted as JSON text), or the deployment in force from here on. */
+/** A recorded thing: an app event (values snapshotted as JSON text), or the deployment in force from here on (`clean`: its pods held no state). */
 export type Recorded =
   | (Exclude<AppEvent, { type: 'sent' | 'delivered' }>)
   | (Omit<Extract<AppEvent, { type: 'sent' }>, 'input'> & { input?: string })
   | { type: 'delivered'; id: string; ok: boolean; result: string; ms: number }
-  | { type: 'deployment'; deployment: AppDeployment }
+  | { type: 'deployment'; deployment: AppDeployment; clean?: true }
 
 export type Entry = { seq: number; at: number; event: Recorded }
 
