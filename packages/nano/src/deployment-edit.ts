@@ -8,6 +8,9 @@
  *   kvs.create(todosKv, { pod: 'todos', in: 'frontend' })         // pod; edge todos→store in backend; a rule letting it in
  *   await app.apply(d.deployment())
  *
+ * `pipe(runtime, { from, source, to, target })` appends that pipe to the runtime (both pods placed there; an equal pipe
+ * is `invalid-input`); `unpipe(runtime, same)` removes it (`not-found` when there is none).
+ *
  * `create` records a call edge in the resolved pod's runtime and, when that runtime's policy is `rules`, prepends
  * `{ allow: ['call', 'subscribe'], from, outside, toInterface }` (the first match wins: the operator asked for this edge).
  */
@@ -18,6 +21,7 @@ import { thrown } from './plain.ts'
 import type { Registry } from './registry.ts'
 
 type Where = { pod: string; in: string; eager?: boolean }
+type PipeEnds = { from: string; source: string; to: string; target: string }
 type Handle = { readonly runtime: string; readonly pod: string; readonly implementation: string; create(impl: Implementation, where: Where): Handle }
 
 export function edit(base: AppDeployment, registry: Registry) {
@@ -50,5 +54,21 @@ export function edit(base: AppDeployment, registry: Registry) {
     return handle(at, found[0]!, api)
   }
 
-  return { place, resolve, deployment: (): AppDeployment => structuredClone(d) }
+  const same = (a: PipeEnds, s: { kind: string } & Partial<PipeEnds>) => s.kind === 'pipe' && s.from === a.from && s.source === a.source && s.to === a.to && s.target === a.target
+
+  function pipe(at: string, p: PipeEnds) {
+    const r = d.runtimes[at]
+    if (!r) return fail('not-found', `no runtime ${at}`)
+    for (const pod of [p.from, p.to]) if (!r.pods.includes(pod)) fail('not-found', `${pod} is not placed in ${at}`)
+    if (r.subscriptions.some(s => same(p, s))) fail('invalid-input', `${p.from} ${p.source} is already piped to ${p.to} ${p.target} in ${at}`)
+    r.subscriptions.push({ kind: 'pipe', ...p })
+  }
+
+  function unpipe(at: string, p: PipeEnds) {
+    const r = d.runtimes[at], i = r ? r.subscriptions.findIndex(s => same(p, s)) : -1
+    if (!r || i < 0) return fail('not-found', `no such pipe in ${at}`)
+    r.subscriptions.splice(i, 1)
+  }
+
+  return { place, resolve, pipe, unpipe, deployment: (): AppDeployment => structuredClone(d) }
 }

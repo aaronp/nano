@@ -29,6 +29,7 @@ import { stream, type AppEvent } from './stream.ts'
 
 export type { AppEvent } from './stream.ts'
 export type { Resolution } from './resolve.ts'
+export { lookup, type Lookup } from './lookup.ts'
 
 export type Application = {
   /** The runtime `id` as the host sees it; `resolve`, `get`, `call` and `subscribe` below are those of the one runtime (else `not-unique`). */
