@@ -72,7 +72,7 @@ export function instances(live: Live) {
     if (!r.ok) await c.close('closed')
     if (!r.ok) return r
     start(live, name, ctx, r.value.sources, c.add)   // sources run as handlers do: from here until the build closes
-    return success({ implementation: impl, handlers: r.value.handlers })
+    return success({ implementation: impl, handlers: r.value.handlers, onClose: c.add })
   }
 
   async function forget(name: string, why: Reason) {

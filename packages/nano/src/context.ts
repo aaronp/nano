@@ -1,5 +1,5 @@
 /**
- * The context a pod's factory gets. It belongs to the pod, not to a call: `one` and `all` read the deployment as it is
+ * The context a pod's factory gets, and (with `callingOp`) each handler invocation gets: `one` and `all` read the deployment as it is
  * now, over the call subscriptions from `self` in every runtime the pod is placed in, each a `Selection`.
  *
  *   const kv = ctx.one(KeyValueStore)            // NanoResult<Selection>: a Fail (not-found, not-unique) unless exactly one is wired
@@ -45,6 +45,8 @@ export type Selection<I extends Interface> = {
 
 export type NanoContext<D extends Record<string, Selector> = Record<string, Selector>> = {
   readonly self: string
+  /** In a handler's context, the port it is handling (its calls and publishes continue that message's chain); absent in the factory's. */
+  readonly callingOp?: string
   readonly runtimes: readonly string[]
   /** One plain object per declared dependency role, typed from its interface. */
   readonly deps: { readonly [K in keyof D]: D[K] extends Interface ? Interface.Type<D[K]> : Record<string, (input?: any) => Promise<any>> }
