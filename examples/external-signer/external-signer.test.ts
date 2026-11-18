@@ -25,8 +25,9 @@ import {
   type Application as App,
   type NanoResult,
 } from '@pritzlaff/nano-core'
-import { KeyFormatter, Log, TestRequest, TestResult, Vault } from './interfaces.ts'
+import { KeyFormatter, KeyGenerator, Log, Signer, Tester, TestRequest, TestResult, Vault } from './interfaces.ts'
 import { signerProvider } from './providers.ts'
+import { observeCalls } from '../../packages/ui-workspace/src/observed-calls.ts'
 
 const ns = Coord.namespace('example.probe')
 
@@ -160,5 +161,18 @@ describe('the external signer', () => {
     const { publicKey, result } = r.value
     if (result.status !== 'signed') throw new Error(result.status)
     expect(await verify(publicKey, result.signature, payload)).toBe(true)
+  })
+
+  test('sign is caused by the tester\'s test, sign-with by sign; every call in the flow is declared', async () => {
+    const reg = registry(), app = await build(reg), o = observeCalls(app, reg), sent: Extract<AppEvent, { type: 'sent' }>[] = []
+    app.listen(e => { if (e.type === 'sent') sent.push(e) })
+    must(await runTest(app, { purpose: 'login', payload }))
+    const at = (p: string) => sent.find(e => e.port === p)!
+    expect(at(port(Signer, Signer.ops.sign)).cause).toBe(at(port(Tester, Tester.ops.test)).id)
+    expect(at(port(Vault, Vault.ops['sign-with'])).cause).toBe(at(port(Signer, Signer.ops.sign)).id)
+    expect(at(port(Vault, Vault.ops.create)).cause).toBe(at(port(KeyGenerator, KeyGenerator.ops['create-keys'])).id)
+    const made = o.calls().filter(c => c.seen && c.source !== null)
+    expect(made.length).toBe(4)
+    expect(made.filter(c => !c.declared)).toEqual([])
   })
 })

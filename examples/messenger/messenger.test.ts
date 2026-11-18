@@ -9,8 +9,9 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { Application, AppDeployment, Registry, Pod, port, success, type AppEvent, type Application as App, type NanoResult } from '@pritzlaff/nano-core'
-import { Inbox, Messaging } from './interfaces.ts'
+import { Composer, Inbox, Messaging } from './interfaces.ts'
 import { messengerProvider } from './providers.ts'
+import { observeCalls } from '../../packages/ui-workspace/src/observed-calls.ts'
 
 const DOC = new URL('./nano.json', import.meta.url)
 
@@ -56,7 +57,7 @@ function registry() {
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
 /** `d` assembled with a fresh registry and made live. */
-const open = async (d: unknown) => must(await Application.create(must(AppDeployment.assemble(d, registry())), {}))
+const open = async (d: unknown, r = registry()) => must(await Application.create(must(AppDeployment.assemble(d, r)), {}))
 const openAlone = () => open(ALONE)
 /** Opened alone, then plugged in: the store and messaging are added and wired by one `apply`. */
 async function stitched() {
@@ -118,5 +119,18 @@ describe('the messenger, stitched', () => {
     const app = await open(committed)
     expect(await send(app, 'hi')).toMatchObject({ ok: true, value: { status: 'sent' } })
     expect(await stored(app)).toMatchObject([{ text: 'hi' }])
+  })
+
+  test('the post is caused by the composer\'s send, the store calls by the piped receive; every call in the flow is declared', async () => {
+    const reg = registry(), app = await open(STITCHED, reg), o = observeCalls(app, reg), sent: Extract<AppEvent, { type: 'sent' }>[] = []
+    app.listen(e => { if (e.type === 'sent') sent.push(e) })
+    must(await send(app, 'hi'))
+    const at = (p: string) => sent.filter(e => e.port === p)
+    expect(at(port(Messaging, Messaging.ops.post))[0]!.cause).toBe(at(port(Composer, Composer.ops.send))[0]!.id)
+    const receive = at(port(Inbox, Inbox.ops.receive))[0]!
+    expect(sent.filter(e => e.to === 'store').map(e => e.cause)).toEqual([receive.id, receive.id])
+    const made = o.calls().filter(c => c.seen && c.source !== null)
+    expect(made.length).toBe(3)
+    expect(made.filter(c => !c.declared)).toEqual([])
   })
 })

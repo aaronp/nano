@@ -17,8 +17,9 @@ export const db = Implementation.define(ns.implementationId('db'), { provides: [
 export const migrate = Implementation.define(ns.implementationId('migrate'), {
   provides: [Migrate],
   dependencies: { db: DB },
-  make: (ctx, config: { from: string; to: string }) => [provide(Migrate, { run: async () => {
-    const from = ctx.one(Selector.of(DB, { runtime: config.from })), to = ctx.one(Selector.of(DB, { runtime: config.to }))
+  calls: { run: { db: [DB.ops.all, DB.ops.insert] } },
+  make: (_ctx, config: { from: string; to: string }) => [provide(Migrate, { run: async (_, c) => {
+    const from = c.one(Selector.of(DB, { runtime: config.from })), to = c.one(Selector.of(DB, { runtime: config.to }))
     if (!to.ok) return to
     if (!from.ok) return from
     const rows = await from.value.call.all({})
@@ -31,8 +32,9 @@ export const migrate = Implementation.define(ns.implementationId('migrate'), {
 export const careless = Implementation.define(ns.implementationId('careless'), {
   provides: [Migrate],
   dependencies: { db: DB },
-  make: ctx => [provide(Migrate, { run: async () => {
-    const db = ctx.one(DB)
+  calls: { run: { db: [DB.ops.all] } },
+  make: () => [provide(Migrate, { run: async (_, c) => {
+    const db = c.one(DB)
     if (!db.ok) return db
     const rows = await db.value.call.all({})
     return rows.ok ? success(rows.value.length) : rows

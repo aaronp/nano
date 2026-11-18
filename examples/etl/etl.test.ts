@@ -8,6 +8,7 @@
 import { describe, expect, test } from 'bun:test'
 import { Application, AppDeployment, Registry, Pod, success, type AppEvent } from '@pritzlaff/nano-core'
 import { etl, etlProvider, sink, source, written } from './providers.ts'
+import { observeCalls } from '../../packages/ui-workspace/src/observed-calls.ts'
 
 async function live(d: AppDeployment) {
   const registry = Registry.create()
@@ -16,9 +17,9 @@ async function live(d: AppDeployment) {
   if (!runtimes.ok) throw new Error(runtimes.fail.reason)
   const r = await Application.create(runtimes.value, {})
   if (!r.ok) throw new Error(r.fail.reason)
-  const events: AppEvent[] = []
+  const events: AppEvent[] = [], observed = observeCalls(r.value, registry)
   r.value.listen(e => events.push(e))
-  return { app: r.value, events }
+  return { app: r.value, events, observed }
 }
 /** `from->to` of each message recorded in `runtime`. */
 const sent = (events: AppEvent[], runtime: string) => events.flatMap(e => (e.type === 'sent' && e.runtime === runtime ? [`${e.from}->${e.to}`] : []))
@@ -26,7 +27,7 @@ const placedIn = (d: AppDeployment, pod: string) => Object.entries(d.runtimes).f
 
 describe('etl', () => {
   test('given etl wired to a source in foo and a sink in bar, when run through foo, then it reads in foo, writes in bar, and each call is on its own runtime’s stream only', async () => {
-    const { app, events } = await live({
+    const { app, events, observed } = await live({
       pods: { etl: Pod.lazy(etl), source: Pod.lazy(source, { config: ['a', 'b'] }), sink: Pod.lazy(sink) },
       runtimes: {
         foo: { pods: ['etl', 'source'], subscriptions: [{ kind: 'call', from: 'etl', to: 'source' }] },
@@ -38,6 +39,12 @@ describe('etl', () => {
     expect(sent(events, 'foo')).toEqual(['host->etl', 'etl->source'])
     expect(sent(events, 'bar')).toEqual(['etl->sink'])
     expect(placedIn(app.deployment(), 'etl')).toEqual(['foo', 'bar'])
+    // each call is caused by the run that made it, and declared
+    const calls = events.flatMap(e => (e.type === 'sent' ? [e] : [])), run = calls.find(e => e.from === 'host')!
+    expect(calls.filter(e => e.from === 'etl').map(e => e.cause)).toEqual([run.id, run.id])
+    const made = observed.calls().filter(c => c.seen && c.source !== null)
+    expect(made.length).toBe(2)
+    expect(made.filter(c => !c.declared)).toEqual([])
   })
   test('given etl with no sink wired anywhere, when run, then it fails not-found and nothing is written', async () => {
     written.rows = []
