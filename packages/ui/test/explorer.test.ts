@@ -59,15 +59,59 @@ describe('the explorer', () => {
     expect(under('out')).not.toContain('→')
   })
 
-  test('given an edge api → db, when "built on → db" is chosen, then nano-open fires with { runtime, pod: "db" }', async () => {
-    const d: AppDeployment = { pods: { api: Pod.lazy(api), db: Pod.lazy(db) }, runtimes: { r: { pods: ['api', 'db'], subscriptions: [{ kind: 'call', from: 'api', to: 'db' }] } } }
-    const el = await mount(await open(d))
+  const pane = (el: El) => el.shadowRoot!.querySelector('.details')!
+  const choose = async (el: El, label: string) => {
+    ([...tree(el).shadowRoot.querySelectorAll('.line')].find(l => l.textContent?.includes(label)) as HTMLElement).click()
+    await settle(el)
+  }
+  const edge: AppDeployment = { pods: { api: Pod.lazy(api), db: Pod.lazy(db) }, runtimes: { r: { pods: ['api', 'db'], subscriptions: [{ kind: 'call', from: 'api', to: 'db' }] } } }
+
+  test('choosing a pod shows its details and opens nothing; its Open view fires nano-open with { runtime, pod }', async () => {
+    const el = await mount(await open(edge))
     await settle(el)
     const opened: unknown[] = []
     el.addEventListener('nano-open', e => opened.push((e as CustomEvent).detail))
-    const row = [...tree(el).shadowRoot.querySelectorAll('.line')].find(l => l.textContent?.includes('built on → db')) as HTMLElement
-    row.click()
+    await choose(el, 'api')
+    expect(opened).toEqual([])
+    const t = pane(el).textContent!
+    for (const s of ['pod api', 'acme/api', 'host', 'lazy', 'store (acme.Store) → db']) expect(t).toContain(s)
+    ;(pane(el).querySelector('button') as HTMLButtonElement).click()
+    expect(opened).toEqual([{ runtime: 'r', pod: 'api' }])
+  })
+
+  test('an unconnected need is flagged; "built on → db" shows the call edge, with Open db', async () => {
+    const el = await mount(await open({ ...edge, runtimes: { r: { pods: ['api', 'db'], subscriptions: [] } } }))
+    await settle(el)
+    await choose(el, 'api')
+    expect(pane(el).querySelector('.warn')?.textContent).toBe('not connected')
+    const el2 = await mount(await open(edge))
+    await settle(el2)
+    await choose(el2, 'built on → db')
+    expect(pane(el2).textContent).toContain('call edge')
+    const opened: unknown[] = []
+    el2.addEventListener('nano-open', e => opened.push((e as CustomEvent).detail))
+    ;(pane(el2).querySelector('button') as HTMLButtonElement).click()
     expect(opened).toEqual([{ runtime: 'r', pod: 'db' }])
+  })
+
+  test('interfaces and implementations are listed; choosing one shows its ops or what it provides and needs, with links', async () => {
+    const el = await mount(await open(edge))
+    await settle(el)
+    await choose(el, 'acme.Store')
+    expect(pane(el).textContent).toContain('save action')
+    expect(pane(el).textContent).toContain('acme/db')
+    await choose(el, 'acme/api')
+    expect(pane(el).textContent).toContain('implementation acme/api')
+    ;([...pane(el).querySelectorAll('a')].find(a => a.textContent === 'acme.Store') as HTMLElement).click()   // a link selects
+    await settle(el)
+    expect(pane(el).textContent).toContain('interface acme.Store')
+  })
+
+  test('choosing a runtime lists its pods, edges and policy', async () => {
+    const el = await mount(await open(edge))
+    await settle(el)
+    await choose(el, 'r')
+    for (const s of ['runtime r', 'api → db', 'none (everything allowed)']) expect(pane(el).textContent).toContain(s)
   })
 
   test('given apply adds a pod, then the explorer shows it without being remounted', async () => {

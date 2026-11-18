@@ -65,7 +65,9 @@ test('todo and chat import side by side: no runtime clash', async ({ page }) => 
   await expect(dock(page).locator('chat-room')).toHaveCount(2)
   const node = dock(page).locator('nano-explorer').getByText('todos', { exact: true })   // the dock's Systems panel
   await expect(node).toHaveCount(1)
-  await node.click()
+  await node.click()   // selects: its details, with Open view
+  await page.screenshot({ path: test.info().outputPath('details.png') })
+  await dock(page).locator('nano-explorer').getByRole('button', { name: 'Open view' }).click()
   const list = dock(page).locator('todo-list')
   await list.getByRole('textbox', { name: 'New todo' }).fill('eggs')
   await list.getByRole('button', { name: 'Add' }).click()
@@ -338,4 +340,20 @@ test('origin-key runs home-origin: its frame is its own page, and Register / Pas
   await key.getByRole('button', { name: 'Passkey' }).click()
   await frame.getByRole('button', { name: 'Approve' }).click()
   await expect(key.getByRole('status')).toContainText('sign in: ok', { timeout: 10_000 })
+})
+
+test('Settings shows each runtime\'s policy rules in order, the frame permissions, and where providers come from', async ({ page }) => {
+  await start(page)
+  await open(page, '/examples/chat/nano.json')
+  await page.goto('/#/settings')
+  const s = page.locator('nano-settings')
+  await expect(s.getByRole('heading', { name: 'example.chat.backend' })).toBeVisible()
+  const rows = s.locator('h3:text("example.chat.backend") + p + table tbody tr')
+  await expect(rows).toHaveCount(5)
+  await expect(rows.first()).toContainText('allow')
+  await expect(rows.first()).toContainText('bob')
+  await expect(rows.last()).toContainText('deny')
+  await expect(s.getByRole('row', { name: /home-origin/ })).toContainText('publickey-credentials-get')
+  await expect(s.getByRole('row', { name: /example\.chat / })).toContainText('this origin')
+  await page.screenshot({ path: test.info().outputPath('settings.png'), fullPage: true })
 })

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 
 test('use case 1: import, see, swap live, save', async ({ page }) => {
   await page.goto('/?src=/examples/slice/nano.json')
-  const open = (pod: string) => page.locator('nano-explorer').getByText(pod, { exact: true }).first().click()
+  const open = (pod: string) => page.locator('nano-explorer').getByText(pod, { exact: true }).first().dblclick()
   const log = page.locator('nano-log')
 
   for (const pod of ['in', 'wait', 'up', 'out']) await expect(page.locator('nano-explorer').getByText(pod, { exact: true }).first()).toBeVisible()
@@ -41,7 +41,7 @@ test('use case 1: import, see, swap live, save', async ({ page }) => {
 
 test('the template: import its nano.json, open the timer, see it tick', async ({ page }) => {
   await page.goto('/?src=/examples/template/nano.json')
-  await page.locator('nano-explorer').getByText('timer', { exact: true }).first().click()
+  await page.locator('nano-explorer').getByText('timer', { exact: true }).first().dblclick()
   const timer = page.locator('nano-timer')
   await expect(timer).toBeVisible()
   await timer.getByRole('button', { name: 'Start' }).click()

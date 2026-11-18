@@ -22,6 +22,7 @@ import './widgets/widgets.ts';
 import './widgets/notes-panel.ts';
 import './components/workspace-dock.ts';
 import { bootAppBar } from './boot-app-bar.ts';   // after the shell (its bus) and the dock: the app bar follows the page and panel focus
+import { defineSettings, type SettingsView } from './components/settings-view.ts';
 import { showStatus } from './lib/status.ts';
 import type { WorkspaceDock } from './components/workspace-dock.ts';
 import { defineWires, type Wires } from './wires/index.ts';
@@ -50,6 +51,8 @@ if (host) {
   for (const dock of document.querySelectorAll<WorkspaceDock>('workspace-dock')) dock.host = host;
   for (const el of document.querySelectorAll<HTMLElement & { target?: unknown }>('nano-explorer, nano-wiring')) el.target ??= target;
   bootAppBar(host);
+  defineSettings();
+  for (const el of document.querySelectorAll<SettingsView>('nano-settings')) el.host = host;
 
   // The File menu: Save and Download write the app's nano.json (without the host's own pod), with the dock's
   // arrangement as its `layout` under the dock's id; Open and Import import one (and show its layout); New empties it.

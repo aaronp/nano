@@ -38,14 +38,22 @@ function layer(): HTMLElement {
 
 /** An iframe running sandbox/boot.js, hidden until a `<nano-sandboxed>` places it. Its `ready` resolves once it has
  * loaded and holds the port (the boot answers on it), and rejects if it fails to load. */
+/** Each isolation mode's iframe `sandbox` flags and `allow` permissions: what a pod's frame may do (shown on Settings). */
+export const FRAME_POLICY = {
+  sandbox: { sandbox: 'allow-scripts allow-same-origin', allow: '' },
+  'isolated-sandbox': { sandbox: 'allow-scripts', allow: '' },
+  'home-origin': { sandbox: 'allow-scripts allow-same-origin', allow: 'publickey-credentials-get *; publickey-credentials-create *' },
+} as const
+
 export function openFrame(mode: 'sandbox' | 'isolated-sandbox'): Frame
 /** A `home-origin` frame: the provider's own `page`, so it runs as that origin (its passkeys, its storage); `allow-same-origin`
  * is its own origin, never this page's. It may use WebAuthn. */
 export function openFrame(mode: 'home-origin', page: string): Frame
 export function openFrame(mode: 'sandbox' | 'isolated-sandbox' | 'home-origin', page?: string): Frame {
   const ch = new MessageChannel(), f = document.createElement('iframe')
-  f.setAttribute('sandbox', mode === 'isolated-sandbox' ? 'allow-scripts' : 'allow-scripts allow-same-origin')
-  if (mode === 'home-origin') { f.allow = 'publickey-credentials-get *; publickey-credentials-create *'; f.src = page! }
+  f.setAttribute('sandbox', FRAME_POLICY[mode].sandbox)
+  if (FRAME_POLICY[mode].allow) f.allow = FRAME_POLICY[mode].allow
+  if (mode === 'home-origin') f.src = page!
   else f.srcdoc = srcdoc(hostMap(), './sandbox/boot.js', document.baseURI)
   f.style.cssText = 'position:fixed;border:0;display:none;pointer-events:auto;background:transparent'
   // The host's theme choice, now and on each change (the frame applies it to its own <html>; only an id crosses).
