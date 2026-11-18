@@ -35,18 +35,18 @@ export class Desk extends LitElement {
     svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none }`
   declare host?: Host
   declare application: string
+  declare editing: boolean
+  declare sel: Sel
   view: ViewSettings = { show: 'connected', pills: { runtimes: [], pods: [] } }
   #m = empty
   #l: DeskLayout = readLayout(undefined)
   #a = arrange(empty, this.#l)
   #off: (() => void)[] = []
-  editing = false
-  sel: Sel = null
   #toast = ''
   #pending = false
   #read = false
 
-  constructor() { super(); this.application = 'ui' }
+  constructor() { super(); this.application = 'ui'; this.editing = false; this.sel = null }
   /** The current arrangement, for Save. */
   layout(): DeskLayout { return this.#l }
 

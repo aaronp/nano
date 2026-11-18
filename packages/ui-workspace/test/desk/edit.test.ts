@@ -89,3 +89,10 @@ test('Backspace typed in an input elsewhere does not unplug', async () => {
   t.key('Backspace', input); await t.settle()
   expect(t.subs()).toBe(before)
 })
+
+test('reactive properties are not shadowed by class fields, and editing re-renders', async () => {
+  const t = await mount(false)
+  for (const p of ['host', 'application', 'editing', 'sel']) expect(Object.hasOwn(t.el, p)).toBe(false)
+  t.el.editing = true; await t.settle()
+  expect(t.root.querySelector('[data-edit][aria-pressed="true"]')).not.toBeNull()
+})
