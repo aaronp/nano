@@ -16,9 +16,38 @@ export const roots = (messages: Message[]): Message[] =>
   messages.filter(m => m.sent.from === 'host' && m.sent.kind === 'call' && m.sent.cause === undefined)
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+/** Core's default call timeout plus 1 s. ponytail: fixed, as the app doesn't say its `timeoutMs`; read it if it ever does. */
+const QUIET_MS = 31_000
+
+/**
+ * Counts `app`'s messages in flight: each `sent` heard until its `delivered` or `denied`. `quiet()` resolves once none
+ * is, one macrotask later and still none (true), or after `QUIET_MS` (false). `stop()` stops listening.
+ */
+function inFlight(app: Application) {
+  const open = new Set<string>()
+  let wake = () => {}
+  const stop = app.listen(e => {
+    if (e.type === 'sent') open.add(e.id)
+    else if ((e.type === 'delivered' || e.type === 'denied') && open.delete(e.id) && !open.size) wake()
+  })
+  const quiet = async () => {
+    const end = Date.now() + QUIET_MS
+    for (;;) {
+      while (open.size) {
+        if (Date.now() >= end) return false
+        let timer: ReturnType<typeof setTimeout> | undefined
+        await new Promise<void>(r => { wake = r; timer = setTimeout(r, end - Date.now()) })
+        clearTimeout(timer)
+      }
+      await wait(0)
+      if (!open.size) return true
+    }
+  }
+  return { quiet, stop }
+}
 
 type Replayed = { sent: number; failed: number; applied: number; restarted: number; from: number; to: number }
-type Opts = { to?: number; now?: () => number; sleep?: (ms: number) => Promise<void> }
+type Opts = { to?: number; now?: () => number; sleep?: (ms: number) => Promise<void>; pace?: 'original' | 'fast' }
 
 /**
  * Rebuilds the app's state as of `to` (default: the newest entry). It starts from the store's oldest entry, which must
@@ -27,6 +56,8 @@ type Opts = { to?: number; now?: () => number; sleep?: (ms: number) => Promise<v
  * each root is re-sent (reads too), each later deployment is applied and each `restarted` pod is restarted. Roots are
  * not awaited one by one: an input waits only for the roots whose outcome was recorded before it, as the host did.
  * Returns the counts and the seq range covered; a re-sent root that fails counts in `failed`.
+ * `pace: 'fast'` (for an app on a simulated clock) doesn't keep to the offsets: before each input, and before it
+ * returns, it waits until no message is in flight; an input whose wait for quiet runs out counts in `failed`.
  */
 export async function replay(app: Application, store: MessageStore, opts: Opts = {}): Promise<NanoResult<Replayed>> {
   await store.flush()
@@ -47,26 +78,30 @@ export async function replay(app: Application, store: MessageStore, opts: Opts =
   const n = { sent: 0, failed: 0, applied: 0, restarted: 0, from: start.seq, to: entries.at(-1)!.seq }
   const settled = new Map(entries.flatMap(e => e.event.type === 'delivered' || e.event.type === 'denied' ? [[e.event.id, e.seq]] : []))
   const calls: { settled: number; done: Promise<void> }[] = []
-  for (const { seq, at, event } of inputs) {
-    const due = at - start.at - (now() - began)
-    if (due > 0) await sleep(due)
-    await Promise.all(calls.filter(c => c.settled < seq).map(c => c.done))   // what the host waited for, it waits for again
-    if (event.type === 'deployment' || event.type === 'restarted') {
-      const r = event.type === 'deployment' ? await app.apply(event.deployment) : await app.restart(event.pod)
-      if (!r.ok) { await Promise.all(calls.map(c => c.done)); return r }
-      n[event.type === 'deployment' ? 'applied' : 'restarted']++
-      continue
+  const flight = opts.pace === 'fast' ? inFlight(app) : undefined
+  try {
+    for (const { seq, at, event } of inputs) {
+      if (flight) { if (!(await flight.quiet())) n.failed++ }
+      else await sleep(Math.max(at - start.at - (now() - began), 0))   // at least a macrotask: the host's pipes landed
+      await Promise.all(calls.filter(c => c.settled < seq).map(c => c.done))   // what the host waited for, it waits for again
+      if (event.type === 'deployment' || event.type === 'restarted') {
+        const r = event.type === 'deployment' ? await app.apply(event.deployment) : await app.restart(event.pod)
+        if (!r.ok) { await Promise.all(calls.map(c => c.done)); return r }
+        n[event.type === 'deployment' ? 'applied' : 'restarted']++
+        continue
+      }
+      const { sent } = sends.get(seq)!
+      const input = sent.input === undefined || sent.input === 'undefined' ? undefined : JSON.parse(sent.input)
+      const op = sent.port.slice(sent.port.lastIndexOf('/') + 1)
+      n.sent++
+      const done = Promise.resolve().then(() => app.runtime(sent.runtime).call(sent.to)[op]!(input))
+        .then(r => { if (!r.ok) n.failed++ }, () => { n.failed++ })
+      calls.push({ settled: settled.get(sent.id) ?? Infinity, done })
     }
-    const { sent } = sends.get(seq)!
-    const input = sent.input === undefined || sent.input === 'undefined' ? undefined : JSON.parse(sent.input)
-    const op = sent.port.slice(sent.port.lastIndexOf('/') + 1)
-    n.sent++
-    const done = Promise.resolve().then(() => app.runtime(sent.runtime).call(sent.to)[op]!(input))
-      .then(r => { if (!r.ok) n.failed++ }, () => { n.failed++ })
-    calls.push({ settled: settled.get(sent.id) ?? Infinity, done })
-  }
-  await Promise.all(calls.map(c => c.done))
-  return success(n)
+    await Promise.all(calls.map(c => c.done))
+    if (flight && !(await flight.quiet())) n.failed++
+    return success(n)
+  } finally { flight?.stop() }
 }
 
 const same = (m: Message) => JSON.stringify([m.sent.kind, m.sent.from, m.sent.to, m.sent.port, m.sent.input,
