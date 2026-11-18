@@ -66,12 +66,16 @@ type Plain<I extends Interface, D extends Record<string, Selector>, T = Interfac
 /** `provide(...)` parts, or for a single interface its plain object (lifted by `handlers`; sources published). */
 type Made<P, D extends Record<string, Selector>> = Provided[] | (P extends readonly [infer One extends Interface] ? Plain<One, D> : never)
 
+type OpName<I> = I extends Interface ? keyof I['ops'] & string : never
+/** A role's ops: its interface's, or any `Op` when the role is selector data. */
+type OpOf<S> = S extends Interface ? S['ops'][keyof S['ops']] : Op
+
 type Spec<P extends readonly Interface[], D extends Record<string, Selector>> = {
   provides: [...P]
   dependencies?: D
   config?: SchemaDef
   description?: string
-  calls?: { [op: string]: string[] }
+  calls?: { [K in OpName<P[number]>]?: { [R in keyof D]?: OpOf<D[R]>[] } }
   make(ctx: NanoContext<D>, config: any): Made<P, D> | Promise<Made<P, D>>
 }
 
@@ -79,16 +83,18 @@ function define<const P extends readonly Interface[], D extends Record<string, S
   const coord = String(at)
   const slash = coord.lastIndexOf('/')
   if (!COORD.test(coord) || slash < 0) throw new Error(`bad implementation coordinate ${coord}`)
-  const calls = spec.calls ?? {}
-  for (const [op, targets] of Object.entries(calls)) {
+  const calls: Record<string, string[]> = {}
+  for (const [op, byRole] of Object.entries(spec.calls ?? {}) as [string, Record<string, Op[]>][]) {
     if (!spec.provides.some(i => op in i.ops)) throw new Error(`${coord}: ${op} is not an op this implementation provides`)
-    for (const t of targets) {
-      const [role = '', name = ''] = t.split('.')
+    calls[op] = Object.entries(byRole).flatMap(([role, ops]) => {
       const dep = (spec.dependencies as Record<string, Selector> | undefined)?.[role]
       if (!dep) throw new Error(`${coord}: ${role} is not a dependency`)
       const iface = isInterface(dep)
-      if (iface && !(name in iface.ops)) throw new Error(`${coord}: ${iface.coord} has no op ${name}`)
-    }
+      return ops.map(o => {
+        if (iface && !iface.byCoord.has(o.coord)) throw new Error(`${coord}: ${iface.coord} has no op ${o.name}`)
+        return `${role}.${o.name}`
+      })
+    })
   }
   return {
     coord,

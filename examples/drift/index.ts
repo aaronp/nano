@@ -17,7 +17,7 @@ const form = Implementation.define(FormDef.ns.implementationId('form'), {
   provides: [FormDef.api],
   description: 'Saves what is submitted; declares only the save, but also clears the draft.',
   dependencies: { store: KeyValueStoreDef.api },
-  calls: { submit: ['store.put'] },
+  calls: { submit: { store: [KeyValueStoreDef.api.ops.put] } },
   make: () => ({
     async submit(text, c) {
       await c!.deps.store.put({ key: ['submitted', crypto.randomUUID()], value: text })

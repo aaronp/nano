@@ -27,7 +27,7 @@ const kv = Implementation.define(MessagingDef.ns.implementationId('kv'), {
   provides: [MessagingDef.api],
   description: 'Rooms of messages kept in whichever KeyValueStore its call edge reaches.',
   dependencies: { store: KeyValueStoreDef.api },
-  calls: { post: ['store.put'], history: ['store.list'] },
+  calls: { post: { store: [KeyValueStoreDef.api.ops.put] }, history: { store: [KeyValueStoreDef.api.ops.list] } },
   make: ctx => {
     const newId = counter()
     return {

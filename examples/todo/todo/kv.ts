@@ -9,6 +9,7 @@ import { KeyValueStoreDef } from '../../kv/contract.ts'
 import { TodoListDef } from './contract.ts'
 
 type Todo = TodoListDef.Todo
+const KV = KeyValueStoreDef.api.ops
 const at = (id: string) => ['todos', id]
 
 /** Ids that sort in the order they were made (the store lists by key): the time, a counter for the same millisecond,
@@ -43,7 +44,10 @@ const todos = Implementation.define(TodoListDef.ns.implementationId('kv'), {
   provides: [TodoListDef.api],
   description: 'Todos kept in whichever KeyValueStore its call edge reaches.',
   dependencies: { store: KeyValueStoreDef.api },
-  calls: { add: ['store.put'], list: ['store.list'], put: ['store.put'], update: ['store.get', 'store.put'], remove: ['store.get', 'store.delete'] },
+  calls: {
+    add: { store: [KV.put] }, list: { store: [KV.list] }, put: { store: [KV.put] },
+    update: { store: [KV.get, KV.put] }, remove: { store: [KV.get, KV.delete] },
+  },
   make: ctx => {
     const timer = setInterval(() => { ctx.deps.store.list({ prefix: ['todos'] }).catch(() => {}) }, 1000)
     ctx.addOnCloseListener(() => clearInterval(timer))

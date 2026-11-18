@@ -3,13 +3,14 @@
  * lets others hear what happens; and the whole configuration is data (`nano.json`).
  */
 import { expect, test } from 'bun:test'
-import { Application, AppDeployment, Registry, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, Registry, port, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
 import { KeyValueStoreDef } from '../kv/contract.ts'
 import kv, { impls, inMemory } from '../kv/memory.ts'
 import { TodoListDef } from './todo/contract.ts'
 import todo, { todoList } from './todo/kv.ts'
 import { observeCalls } from '../../packages/ui-workspace/src/observed-calls.ts'
 
+const KV = KeyValueStoreDef.api
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const saved = async (): Promise<AppDeployment> => Bun.file(new URL('./nano.json', import.meta.url)).json()
 
@@ -40,7 +41,7 @@ test('2. the runtime: the stream shows every todos → store call with its timin
   app.listen(e => events.push(e))
   await app.runtime('example.todo.frontend').get(TodoListDef.api).add('milk')
   const call = events.find(e => e.type === 'sent' && e.kind === 'call' && e.from === 'todos' && e.to === 'todoStore')
-  expect(call).toMatchObject({ kind: 'call', port: 'example.kv.KeyValueStore/put' })
+  expect(call).toMatchObject({ kind: 'call', port: port(KV, KV.ops.put) })
   const done = events.find(e => e.type === 'delivered' && call?.type === 'sent' && e.id === call.id)
   expect(done).toMatchObject({ result: { ok: true } })
   expect(typeof (done as { ms: number }).ms).toBe('number')
@@ -157,13 +158,13 @@ test('todos declares its calls; the refresh timer\'s store.list comes from the p
   const app = must(await Application.create(must(AppDeployment.assemble(await saved(), registry))))
   const o = observeCalls(app, registry)
   await app.runtime('example.todo.frontend').get(TodoListDef.api).add('milk')
-  const timerList = (c: ReturnType<typeof o.calls>[number]) => c.from === 'todos' && c.source === null && c.target === 'example.kv.KeyValueStore/list'
+  const timerList = (c: ReturnType<typeof o.calls>[number]) => c.from === 'todos' && c.source === null && c.target === port(KV, KV.ops.list)
   for (const end = Date.now() + 3000; !o.calls().some(timerList);) {
     if (Date.now() > end) throw new Error('no store.list from the refresh timer within 3s')
     await new Promise(r => setTimeout(r, 20))
   }
   const calls = o.calls()
-  expect(calls).toContainEqual(expect.objectContaining({ source: 'example.todo.TodoList/add', target: 'example.kv.KeyValueStore/put', declared: true, seen: true }))
-  expect(calls).toContainEqual(expect.objectContaining({ from: 'todos', source: null, target: 'example.kv.KeyValueStore/list', declared: false, seen: true }))
+  expect(calls).toContainEqual(expect.objectContaining({ source: port(TodoListDef.api, TodoListDef.api.ops.add), target: port(KV, KV.ops.put), declared: true, seen: true }))
+  expect(calls).toContainEqual(expect.objectContaining({ from: 'todos', source: null, target: port(KV, KV.ops.list), declared: false, seen: true }))
   await app.close()
 })

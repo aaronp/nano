@@ -12,7 +12,7 @@ const participant = Implementation.define(ChatDef.ns.implementationId('participa
   provides: [ChatDef.api],
   description: 'One participant in the general room, named by its pod.',
   dependencies: { messaging: MessagingDef.api },
-  calls: { say: ['messaging.post'], transcript: ['messaging.history'] },
+  calls: { say: { messaging: [MessagingDef.api.ops.post] }, transcript: { messaging: [MessagingDef.api.ops.history] } },
   make: ctx => ({
     async say(text, c) { return (c ?? ctx).deps.messaging.post({ room: ROOM, from: ctx.self, text }) },
     async transcript(_, c) { return (c ?? ctx).deps.messaging.history({ room: ROOM }) },
