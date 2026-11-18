@@ -64,6 +64,7 @@ The system passes events and the starting state is known, so state can be rebuil
   their own (`kind: 'deployment'`). Only a **clean start** (a deployment item marked `clean: true`, written when the app's
   pods held no state) is a state replay can rebuild from; a deployment item after an apply is not, because the pods
   kept their state across it.
+  A clean start is the state just after the pods were built: replay's reset rebuilds it by restarting every pod, so messages the pods send while building (an eager pod arming a timer) appear in the replay but not in a recording begun after startup; compare from the first host input.
 - **Roots:** the messages nothing in the app caused, meaning `sent` with `from: 'host'`, `kind: 'call'` and no `cause`.
   Typing into the input is one of these.
   - Everything they caused (pipes, calls, flushes) happens again by itself.

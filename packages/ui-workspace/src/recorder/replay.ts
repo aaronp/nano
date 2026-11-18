@@ -111,6 +111,7 @@ const same = (m: Message) => JSON.stringify([m.sent.kind, m.sent.from, m.sent.to
 /**
  * The first message that differs between two runs (kind, from, to, port, input, outcome ok and result; ids, times and
  * causes ignored), or null. Pass the recording's replayed range, `store.range(r.from, r.to)`, not the whole store.
+ * The replay also holds what restarted pods sent while building (a recording begun after startup lacks it): compare from the first host input.
  */
 export function diverge(recorded: Message[], replayed: Message[]): { index: number; recorded?: Message; replayed?: Message } | null {
   const msgs = (ms: Message[]) => ms.filter(m => m.sent.kind !== 'subscribe' && m.sent.kind !== 'unsubscribe')
