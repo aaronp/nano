@@ -49,3 +49,14 @@ test("a call cycle doesn't hang", () => {
   const r = rankOf(d)
   expect(Number.isFinite(r.room) && Number.isFinite(r.backend)).toBe(true)
 })
+
+test('a runtime with no pods to show (only the host pod) is still a box in All, and hidden in Connected', () => {
+  const d: AppDeployment = { pods: { ui: Pod.eager(log) }, runtimes: { main: { pods: ['ui'], subscriptions: [] } } }
+  expect(desk(d).runtimes).toEqual([{ id: 'main', columns: [] }])
+  expect(desk(d, 'connected').runtimes).toEqual([])
+})
+
+test('an empty runtime not picked by the runtime pills is hidden', () => {
+  const d: AppDeployment = { pods: {}, runtimes: { main: { pods: [], subscriptions: [] }, side: { pods: [], subscriptions: [] } } }
+  expect(deskModel(d, registry(), [], { show: 'all', pills: { runtimes: ['side'], pods: [] } }, 'ui').runtimes.map(r => r.id)).toEqual(['side'])
+})

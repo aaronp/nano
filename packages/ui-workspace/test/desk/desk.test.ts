@@ -101,3 +101,18 @@ test('a hidden pod keeps its saved position across view changes; a removed pod l
   await app.apply(next); await settle()
   expect(el.layout().pods.main!.m).toBeUndefined()
 })
+
+test('a workspace with only the host pod shows its runtime, with a hint to add pods', async () => {
+  const { host, app } = await setup()
+  const r = await app.apply({ ...app.deployment(), pods: {}, runtimes: { main: { pods: [], subscriptions: [] } } })
+  expect(r.ok).toBe(true)
+  const el = document.createElement('c-desk') as Desk
+  el.host = host; document.body.append(el)
+  for (let i = 0; i < 4; i++) { await tick(); await el.updateComplete }
+  const root = el.shadowRoot!
+  root.querySelector<HTMLElement>('[data-show="all"]')?.click()
+  for (let i = 0; i < 4; i++) { await tick(); await el.updateComplete }
+  expect(root.querySelector('[data-runtime="main"]')).not.toBeNull()
+  expect(root.querySelector('[data-runtime="main"] [data-empty]')!.textContent).toContain('File › Examples')
+  el.remove()
+})

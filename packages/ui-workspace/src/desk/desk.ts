@@ -23,6 +23,7 @@ export class Desk extends LitElement {
     .bar small { color: #94a3b8; margin-left: 6px }
     .stage { position: relative; overflow: auto; height: calc(100% - 44px) }
     .stage.snap { background: radial-gradient(#1C222B 1px, transparent 1px) 0 0 / 20px 20px local }
+    .rt [data-empty] { margin: 0; padding: 4px 20px; color: #94a3b8; font-size: 11px }
     .rt { position: absolute; box-sizing: border-box; border: 2px solid var(--c); border-radius: 10px; background: color-mix(in srgb, var(--c) 7%, #0B0E12) }
     .rt > h3 { margin: 0; padding: 6px 10px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--c); cursor: grab; user-select: none; touch-action: none }
     .col { position: absolute; box-sizing: border-box; border: 1px solid #2A323D; border-radius: 8px; background: #181E26; cursor: grab; user-select: none; touch-action: none; overflow: hidden }

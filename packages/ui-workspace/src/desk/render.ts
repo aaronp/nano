@@ -23,6 +23,6 @@ export const renderRuntimes = (m: DeskModel, a: Arranged, l: DeskLayout, down: D
   const b = a.runtimes[r.id]!
   return html`<div class="rt" data-runtime=${r.id} style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px;--c:${PALETTE[i % PALETTE.length]}">
     <h3 @pointerdown=${(e: PointerEvent) => down(e, r.id)}>${r.id}</h3>
-    ${r.columns.map(c => column(m, c, a.columns[r.id]![c.pod]!, l.compact, down, k))}
+    ${r.columns.length ? r.columns.map(c => column(m, c, a.columns[r.id]![c.pod]!, l.compact, down, k)) : html`<p data-empty>No pods yet: add one from the workspace, or File › Examples</p>`}
   </div>`
 })

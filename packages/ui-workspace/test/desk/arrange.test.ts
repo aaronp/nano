@@ -120,3 +120,9 @@ test('a new runtime is not placed on a dragged saved one', () => {
   expect(noOverlap([runtimes.a!, runtimes.b!])).toBe(true)
   expect(runtimes.a).toMatchObject(l.runtimes.a)
 })
+
+test('an empty runtime gets a box tall enough for its header and a hint', () => {
+  const r = arrange(model({ main: [] }, { main: 0 }), base()).runtimes.main!
+  expect(r.w).toBeGreaterThanOrEqual(160)
+  expect(r.h).toBeGreaterThanOrEqual(80)
+})

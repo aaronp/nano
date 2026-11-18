@@ -63,7 +63,7 @@ export function arrange(m: DeskModel, l: DeskLayout) {
   }
   const fitted = Object.fromEntries(m.runtimes.map(rt => {
     const cs = Object.values(columns[rt.id]!)
-    return [rt.id, { w: snapTo(Math.max(160, ...cs.map(c => c.x + c.w)) + PAD, l.snap), h: snapTo(Math.max(0, ...cs.map(c => c.y + c.h)) + PAD, l.snap) }]
+    return [rt.id, { w: snapTo(Math.max(160, ...cs.map(c => c.x + c.w)) + PAD, l.snap), h: snapTo(Math.max(HEAD + 40, ...cs.map(c => c.y + c.h)) + PAD, l.snap) }]   // an empty runtime: room for its header and hint
   }))
   const colX: number[] = [], colY: number[] = []
   const ranked = [...m.runtimes].sort((a, b) => (m.rank[a.id] ?? 0) - (m.rank[b.id] ?? 0))

@@ -36,7 +36,8 @@ export function deskModel(d: AppDeployment, registry: Registry, opCalls: OpPair[
   const runtimes = Object.entries(d.runtimes).map(([id, r]) => ({
     id,
     columns: r.pods.filter(pod => shown.has(pod)).map(pod => ({ runtime: id, pod, implementation: d.pods[pod]!.implementation, ins: jacks(pod, 'in'), outs: jacks(pod, 'out') })),
-  })).filter(r => r.columns.length > 0)
+  // a runtime with nothing to show (e.g. only the host's own pod) is still a box in All, unless the runtime pills leave it out
+  })).filter(r => r.columns.length > 0 || (view.show === 'all' && (view.pills.runtimes.length === 0 || view.pills.runtimes.includes(r.id))))
   const calls = v.calls.map(c => ({ id: c.id, runtime: c.runtime, from: c.from, to: c.to, jacks: c.jacks, pairs: opCalls.filter(o => o.runtime === c.runtime && o.from === c.from && o.to === c.to) }))
   return { runtimes, pipes: v.wires, calls, rank: rankOf(d), wires }
 }
