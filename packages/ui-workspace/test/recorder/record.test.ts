@@ -1,21 +1,10 @@
 import { expect, test } from 'bun:test'
-import { Application, AppDeployment, Registry, type NanoResult } from '@pritzlaff/nano-core'
-import uiProvider from '@pritzlaff/nano-ui'
 import { pair } from '../../src/recorder/entry.ts'
 import { memoryStore } from '../../src/recorder/memory-store.ts'
 import { record } from '../../src/recorder/record.ts'
+import { sleep, typing as app } from './typing.ts'
 
-const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-
-async function typing() {
-  const file: AppDeployment = await Bun.file(new URL('../../../../examples/typing/nano.json', import.meta.url)).json()
-  const registry = Registry.create()
-  must(registry.add(uiProvider))
-  const quick = { ...file, pods: { ...file.pods, debounce: { ...file.pods['debounce']!, config: { quietMs: 20, maxWaitMs: 200 } } } }
-  const app = must(await Application.create(must(AppDeployment.assemble(quick, registry)), {}))
-  return { app, store: memoryStore() }
-}
+const typing = async () => ({ app: await app(), store: memoryStore() })
 
 test('the first entry is the deployment in force', async () => {
   const { app, store } = await typing()

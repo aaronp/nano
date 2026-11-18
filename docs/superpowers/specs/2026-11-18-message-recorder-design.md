@@ -61,21 +61,32 @@ project.
 The system passes events and the starting state is known, so state can be rebuilt by replaying.
 
 - **Starting state:** the recording holds the deployment at the start, and again after every `applied`, as items of
-  their own (`kind: 'deployment'`).
+  their own (`kind: 'deployment'`). Only a **clean start** (a deployment item marked `clean: true`, written when the app's
+  pods held no state) is a state replay can rebuild from; a deployment item after an apply is not, because the pods
+  kept their state across it.
 - **Roots:** the messages nothing in the app caused, meaning `sent` with `from: 'host'`, `kind: 'call'` and no `cause`.
   Typing into the input is one of these.
-  - Only roots are re-sent.
   - Everything they caused (pipes, calls, flushes) happens again by itself.
   - Re-sending the caused messages too would duplicate them.
-- **`replay(app, recording, { from?, to? })`:**
-  1. **Reset:** apply the deployment in force at `from` (the starting one by default) and restart every pod, so each
-     gets a fresh closure.
-  2. **Re-send:** send each root in the range again, through `app.runtime(runtime).call(to)` with its recorded input,
-     at its original relative time.
-  3. **Result:** what came back. When the store no longer holds the start of the range, replay refuses and says so,
-     rather than rebuilding a wrong state.
+  - Inputs are snapshots: a Map, Set, Date or BigInt comes back as its JSON text, and an undefined field is gone.
+- **Host inputs** are every host action recorded after the start: roots, each later deployment item (applied again)
+  and each `restarted` event (`app.restart(pod)` again). Reproducing them also reproduces an earlier replay's reset.
+- **`replay(app, recording, { to?, now?, sleep? })`** rebuilds the state as of `to` (the newest item by default):
+  1. **Start:** the store's oldest item, which must be a clean start. Otherwise replay refuses with `not-found` ("the
+     recording no longer holds a clean start") rather than rebuilding a wrong state. Scrubbing means "rebuild up to
+     here"; there is no `from`.
+  2. **Reset:** apply the start's deployment and restart every pod, so each gets a fresh closure (calls in flight
+     finish on the old instances).
+  3. **Re-run the host inputs** up to `to`, in order, each at its offset from the start (`at - start.at`), measured
+     from the reset with the injected `now` and `sleep` (`Date.now` and a timer by default). Roots go through
+     `app.runtime(runtime).call(to)` with their recorded input, every one in range, reads too. They are not awaited one
+     by one: an input waits only for the roots whose outcome was recorded before it, as the host did; all are awaited at
+     the end.
+  4. **Result:** `{ sent, failed, applied, restarted, from, to }`: the counts (a re-sent root that fails counts in
+     `failed`) and the seq range covered, so a caller can `pair(await store.range(from, to))` for `diverge`.
 - **Divergence check:** `diverge(recorded, replayed)` compares the messages of the two runs and reports the first one
   that differs. "Differs" means kind, from, to, port, or input or outcome as JSON text; ids and times are ignored.
+  Callers pass the replayed range of the recording, not the whole store.
 - **Faithful only at the original pace (user accepted, 2026-11-18):** pods that act on their own clock (the debounce's
   timer, random numbers, the network) reproduce their behaviour only when the roots arrive at their original times.
   Faster replay becomes exact with the controlled clock in the Raft project. This design's store and roots don't change
