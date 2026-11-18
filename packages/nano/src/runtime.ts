@@ -16,7 +16,7 @@ import { originOf, shapeError, type Pods } from './pods.ts'
 import { failure, success, type NanoResult } from './result.ts'
 
 export type Subscription =
-  | { kind: 'call'; from: string; to: string }
+  | { kind: 'call'; from: string; to: string; ops?: { source: string; target: string }[] }
   | { kind: 'pipe'; from: string; source: string; to: string; target: string }
 
 export type RuntimeDeployment = { pods: string[]; subscriptions: Subscription[]; policy?: { kind: 'allow-all' } | { kind: 'rules'; rules: Rule[] } }
@@ -27,7 +27,8 @@ const strict = { additionalProperties: false } as const
 const Shape = Type.Object({
   pods: Type.Array(Type.String()),
   subscriptions: Type.Array(Type.Union([
-    Type.Object({ kind: Type.Literal('call'), from: Type.String(), to: Type.String() }, strict),
+    Type.Object({ kind: Type.Literal('call'), from: Type.String(), to: Type.String(),
+      ops: Type.Optional(Type.Array(Type.Object({ source: Type.String(), target: Type.String() }, strict), { maxItems: 2000 })) }, strict),
     Type.Object({ kind: Type.Literal('pipe'), from: Type.String(), source: Type.String(), to: Type.String(), target: Type.String() }, strict),
   ]), { maxItems: 2000 }),
   policy: Type.Optional(Type.Union([
@@ -50,7 +51,14 @@ export const opAt = (impl: Implementation, p: string): Op | undefined => {
 function unfit(s: Subscription, from: Implementation, to: Implementation): string | undefined {
   if (s.kind === 'call') {
     const deps = Object.values(from.dependencies).flatMap(d => (d.implements === undefined ? [] : [d.implements]))
-    return deps.length && !to.provides.some(i => deps.includes(i.coord)) ? `${s.to} provides none of ${s.from}'s dependencies` : undefined
+    if (deps.length && !to.provides.some(i => deps.includes(i.coord))) return `${s.to} provides none of ${s.from}'s dependencies`
+    const pairs = new Set<string>()
+    for (const o of s.ops ?? []) {
+      if (!opAt(from, o.source)) return `${o.source} is not an op of ${s.from}`
+      if (opAt(to, o.target)?.kind !== 'action') return `${o.target} is not an action of ${s.to}`
+      if (pairs.size === pairs.add(JSON.stringify([o.source, o.target])).size) return `${o.source} to ${o.target} is there twice`
+    }
+    return undefined
   }
   const source = opAt(from, s.source), target = opAt(to, s.target)
   if (!source) return `${s.source} is not an event or action of ${s.from}`

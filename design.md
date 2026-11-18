@@ -80,7 +80,7 @@ most 50). Inside `runtime.ts`: `isRuntime(r)` is whether `Runtime.create` made `
    provider groups implementations; the registry holds providers (`examples/*/interfaces.ts`, `providers.ts`).
 2. **Deployments, per level.** `Pod.lazy(impl, { config })` or `Pod.eager(impl)` is a value holding the
    implementation's coordinate (D85). A `PodDeployment` names pods; a `RuntimeDeployment` places some of them and lists
-   its subscriptions, in order: a call edge `{ kind: 'call', from, to }` (which pods `from`'s code may reach) or a pipe
+   its subscriptions, in order: a call edge `{ kind: 'call', from, to, ops? }` (which pods `from`'s code may reach; `ops` optionally records op pairs `{ source, target }`, ports `<interface coord>/<op name>` like a pipe's: `source` a port of `from`, `target` an action of `to`, no duplicates) or a pipe
    `{ kind: 'pipe', from, source, to, target }` (source an event or an action's results of `from`, target an action of
    `to` that fits it; pipes may form cycles, D91, D93); an `AppDeployment` holds both and the tags. Each level checks
    its own part: `Pods.create` names, implementations (in the registry), configs, tags (by its pod names) and 5000
