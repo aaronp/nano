@@ -157,7 +157,11 @@ test('todos declares its calls; the refresh timer\'s store.list comes from the p
   const app = must(await Application.create(must(AppDeployment.assemble(await saved(), registry))))
   const o = observeCalls(app, registry)
   await app.runtime('example.todo.frontend').get(TodoListDef.api).add('milk')
-  await new Promise(r => setTimeout(r, 1100))
+  const timerList = (c: ReturnType<typeof o.calls>[number]) => c.from === 'todos' && c.source === null && c.target === 'example.kv.KeyValueStore/list'
+  for (const end = Date.now() + 3000; !o.calls().some(timerList);) {
+    if (Date.now() > end) throw new Error('no store.list from the refresh timer within 3s')
+    await new Promise(r => setTimeout(r, 20))
+  }
   const calls = o.calls()
   expect(calls).toContainEqual(expect.objectContaining({ source: 'example.todo.TodoList/add', target: 'example.kv.KeyValueStore/put', declared: true, seen: true }))
   expect(calls).toContainEqual(expect.objectContaining({ from: 'todos', source: null, target: 'example.kv.KeyValueStore/list', declared: false, seen: true }))
