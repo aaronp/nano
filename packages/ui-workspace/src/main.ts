@@ -32,7 +32,7 @@ import { layoutFromDock, slotsToOpen } from './layout-data.ts';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
 if (host) {
-  const h = host, target = { app: h.app, registry: h.registry };
+  const h = host, target = { app: h.app, registry: h.registry, get calls() { return h.calls(); } };
   const dock = document.querySelector<WorkspaceDock>('workspace-dock#workspace');
   // The dock's arrangement (golden-layout's resolved config). ponytail: reads the dock's private layout; a public
   // accessor on <workspace-dock> is a new method (a question for the user).
@@ -54,12 +54,12 @@ if (host) {
   defineSettings();
   for (const el of document.querySelectorAll<SettingsView>('nano-settings')) el.host = host;
 
-  // The File menu: Save and Download write the app's nano.json (without the host's own pod), with the dock's
+  // The File menu: Save and Download (Reconcile and save: with the calls seen, host.saved(true)) write the app's nano.json (without the host's own pod), with the dock's
   // arrangement as its `layout` under the dock's id; Open and Import import one (and show its layout); New empties it.
   const menu = document.querySelector<FileMenuEl>('nano-file-menu');
-  const download = (name: string) => {
+  const download = (name: string, reconcile = false) => {
     const a = document.createElement('a');
-    const saved = h.saved(), l = arrangement();
+    const saved = h.saved(reconcile), l = arrangement();
     const runtimeOf = (pod: string) => Object.entries(saved.runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
     const file = l && dock ? { ...saved, layout: { ...saved.layout, [dock.id]: l, ...layoutFromDock(l.root as never, runtimeOf) } } : saved;
     a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' }));
@@ -69,7 +69,7 @@ if (host) {
   };
   host.app.listen(e => { if (e.type === 'applied' && menu) menu.dirty = true; });
   const commands: Record<string, () => unknown> = {
-    save: () => download('nano.json'), download: () => download('nano.json'),
+    save: () => download('nano.json'), reconcile: () => download('nano.json', true), download: () => download('nano.json'),
     'save-as': async () => { const name = await askName(document, 'nano'); if (name) download(`${name}.json`); },
     open: () => openImportDialog(document), import: () => openImportDialog(document),
     // New: an apply of an empty deployment (the host's own pod `ui` stays; providers stay loaded), and the dock's

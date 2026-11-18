@@ -2,7 +2,7 @@
 import { css, html, LitElement, svg } from 'lit'
 import { base } from '@pritzlaff/nano-elements'
 
-export const COMMANDS = [['new', 'New'], ['open', 'Open…'], ['import', 'Import…'], ['save', 'Save'], ['save-as', 'Save As…'], ['download', 'Download']] as const
+export const COMMANDS = [['new', 'New'], ['open', 'Open…'], ['import', 'Import…'], ['save', 'Save'], ['reconcile', 'Reconcile and save'], ['save-as', 'Save As…'], ['download', 'Download']] as const
 
 // 24×24 stroke paths, the nav's icon style
 const ICONS: Record<string, ReturnType<typeof svg>> = {
@@ -11,6 +11,7 @@ const ICONS: Record<string, ReturnType<typeof svg>> = {
   import: svg`<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>`,
   save: svg`<path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8M7 21v-7h10v7"/>`,
   'save-as': svg`<path d="M12 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v4"/><path d="M7 3v5h8M18 15l3 3-5 5h-3v-3z"/>`,
+  reconcile: svg`<path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M8 13l3 3 5-6"/>`,
   download: svg`<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>`,
 }
 

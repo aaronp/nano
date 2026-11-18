@@ -132,8 +132,11 @@ export function renderBack(el: Wires, d: Vals) {
     ${s.showCalls ? m.calls.map(c => svg`<g data-call=${c.id} opacity=${selId === null ? 0.9 : 0.3}>
       ${c.b.map(b => svg`<path d=${cordD(cordGeo(c.a, b))} fill="none" stroke="#8B96A5" stroke-width="1.5" stroke-dasharray="6 5" stroke-linecap="round"></path>
       <circle cx=${b.x} cy=${b.y} r="4" fill="#8B96A5"></circle>`)}
-      <circle cx=${c.a.x} cy=${c.a.y} r="4" fill="#8B96A5"></circle>
-      <text x=${c.a.x + 8} y=${c.a.y + 16} font-family="JetBrains Mono, monospace" font-size="10" fill="#8B96A5">calls ${c.to}</text></g>`) : ''}
+      ${c.b.length ? svg`<circle cx=${c.a.x} cy=${c.a.y} r="4" fill="#8B96A5"></circle>
+      <text x=${c.a.x + 8} y=${c.a.y + 16} font-family="JetBrains Mono, monospace" font-size="10" fill="#8B96A5">calls ${c.to}</text>` : ''}
+      ${(c.ops ?? []).map(o => { const col = !o.declared ? '#F5A524' : o.seen ? '#E6EDF3' : '#8B96A5'
+        return svg`<path data-op-call=${o.declared ? (o.seen ? 'seen' : 'declared') : 'not-declared'} d=${cordD(cordGeo(o.a, o.b))} fill="none" stroke=${col} stroke-width=${o.seen && o.declared ? 2.5 : 1.5} stroke-dasharray=${o.declared ? 'none' : '6 5'} stroke-linecap="round">${o.declared ? '' : svg`<title>not declared</title>`}</path>
+        <circle cx=${o.a.x} cy=${o.a.y} r="4" fill=${col}></circle><circle cx=${o.b.x} cy=${o.b.y} r="4" fill=${col}></circle>` })}</g>`) : ''}
     ${relayPackets.map(k => packet(k, 6, 3, 10))}
   </svg>` : ''}
 

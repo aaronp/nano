@@ -85,6 +85,7 @@ test('given the slice imported, then the explorer lists in, wait, up, out and Sa
   expect(saved.views).toEqual({ up: 'nano-pod-view' })
   expect(saved.pods).toEqual(file.pods)
   expect(saved.runtimes).toEqual(file.runtimes)
+  expect(host.saved(true)).toEqual(saved)   // Reconcile and save: no call seen, nothing to add
 
   const again = new URL('./saves/nano.json', import.meta.url).href   // another directory than the slice's
   json.set(again, saved)

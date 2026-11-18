@@ -7,7 +7,9 @@ import { html, nothing, type TemplateResult } from 'lit'
 import type { AppDeployment, Registry } from '@pritzlaff/nano-core'
 
 export type Where = { runtime: string; pod: string }
-type Ctx = { d: AppDeployment; registry: Registry; states: Record<string, string>; go(id: string): void; open(w: Where): void }
+/** An op-level call (ui-workspace's OpCall, structurally): `from`'s op `source` (null: unknown) calls `to`'s `target`. */
+export type Called = { runtime: string; from: string; to: string; source: string | null; target: string; declared: boolean; seen: boolean }
+type Ctx = { d: AppDeployment; registry: Registry; states: Record<string, string>; calls?: Called[]; go(id: string): void; open(w: Where): void }
 
 const op = (port: string) => port.slice(port.lastIndexOf('/') + 1)
 const row = (k: string, v: unknown) => html`<dt>${k}</dt><dd>${v}</dd>`
@@ -16,6 +18,8 @@ const list = (items: unknown[]) => items.length ? html`<ul>${items.map(i => html
 /** The runtimes `pod` is placed in. */
 const placed = (d: AppDeployment, pod: string) => Object.keys(d.runtimes).filter(r => d.runtimes[r]!.pods.includes(pod))
 const podLink = (c: Ctx, pod: string) => { const r = placed(c.d, pod)[0]; return r ? link(c, `p:${r}:${pod}`, pod) : pod }
+/** One call, as `[from.]source → [to.]target`, flagged when not declared. */
+const callRow = (c: Ctx, x: Called, from: boolean, to: boolean) => html`${from ? html`${podLink(c, x.from)}.` : nothing}${x.source === null ? '?' : op(x.source)} → ${to ? html`${podLink(c, x.to)}.` : nothing}${op(x.target)}${x.declared ? nothing : html` <span class="warn">not declared</span>`}`
 
 function pod(c: Ctx, runtime: string, name: string) {
   const p = c.d.pods[name]
@@ -33,7 +37,9 @@ function pod(c: Ctx, runtime: string, name: string) {
     ${row('isolation', p.isolation ?? 'host')}${row('starts', p.eager ? 'eager' : 'lazy')}${row('state', c.states[name] ?? 'not built')}
     ${row('config', p.config === undefined ? html`<span class="muted">none</span>` : html`<code>${JSON.stringify(p.config)}</code>`)}
     ${row('needs', list(needs))}
-    ${row('called by', list(subs.filter(({ s }) => s.kind === 'call' && s.to === name).map(({ s }) => podLink(c, s.from))))}
+    ${c.calls ? row('calls', list(c.calls.filter(x => x.from === name).map(x => callRow(c, x, false, true)))) : nothing}
+    ${row('called by', c.calls?.some(x => x.to === name) ? list(c.calls.filter(x => x.to === name).map(x => callRow(c, x, true, false)))
+      : list(subs.filter(({ s }) => s.kind === 'call' && s.to === name).map(({ s }) => podLink(c, s.from))))}
     ${row('pipes', list(subs.filter(({ s }) => s.kind === 'pipe' && (s.from === name || s.to === name)).map(({ s }) => s.kind === 'pipe' ? `${s.from}.${op(s.source)} → ${s.to}.${op(s.target)}` : '')))}
   </dl><button class="btn" @click=${() => c.open({ runtime, pod: name })}>Open view</button>`
 }
@@ -112,6 +118,7 @@ function operation(c: Ctx, port: string) {
     ${row('implementations', list(impls.map(m => link(c, `m:${m}`, m))))}
     ${row('pods', list(Object.keys(c.d.pods).filter(p => impls.includes(c.d.pods[p]!.implementation)).map(p => podLink(c, p))))}
     ${row('pipes', list(pipes))}
+    ${c.calls ? html`${row('called by', list(c.calls.filter(x => x.target === port).map(x => callRow(c, x, true, true))))}${row('calls', list(c.calls.filter(x => x.source === port).map(x => callRow(c, x, true, true))))}` : nothing}
   </dl>`
 }
 

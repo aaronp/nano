@@ -128,7 +128,7 @@ export class Wires extends LitElement {
   #attach() {
     const h = this.host
     if (!h || !this.isConnected || this.#off.length) return
-    this.#off = [h.app.listen(e => { if (e.type === 'applied') this.schedule(); else this.trace(e) })]
+    this.#off = [h.app.listen(e => { if (e.type === 'applied' || (e.type === 'sent' && e.kind === 'call')) this.schedule(); else this.trace(e) })]
     this.rebuild()
   }
   #detach() { this.#off.forEach(f => f()); this.#off = [] }
@@ -147,7 +147,7 @@ export class Wires extends LitElement {
   rebuild() {
     const h = this.host
     if (!h) return
-    const snapshot = snapshotOf(h.data(), h.registry), panels = this.panels(), kinds: Record<string, string> = {}
+    const snapshot = snapshotOf(h.data(), h.registry, h.calls?.()), panels = this.panels(), kinds: Record<string, string> = {}
     for (const i of snapshot.instances) { const k = this.kindOf(i.id); if (k) kinds[i.id] = k }
     const titles = Object.fromEntries(Object.entries(this.catalog).map(([k, e]) => [k, e.title]))
     this.#layout = JSON.stringify(panels)

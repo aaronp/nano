@@ -137,6 +137,22 @@ describe('the explorer', () => {
     for (const x of ['action save', 'interfaceacme.Store', 'takesStr', 'returnsStr', 'podsdb']) expect(t).toContain(x)
   })
 
+  test('given calls, a pod lists what it calls and is called by, op to op, and an operation its callers; a call not declared is flagged', async () => {
+    const call = (target: string, declared: boolean) => ({ runtime: 'r', from: 'api', to: 'db', source: 'acme.App/save', target, declared, seen: true })
+    const el = await mount({ ...await open(edge), calls: [call('acme.Store/save', true), call('acme.Store/drop', false)] })
+    await settle(el)
+    await choose(el, 'api')
+    const t = pane(el).textContent!.replace(/\s+/g, ' ')
+    expect(t).toContain('save → db.save')
+    expect(t).toContain('save → db.drop not declared')
+    expect(pane(el).querySelector('.warn')?.textContent).toBe('not declared')
+    ;(tree(el).shadowRoot.querySelector('li[data-id="p:r:db"] > .line') as HTMLElement).click(); await settle(el)
+    expect(pane(el).textContent!.replace(/\s+/g, ' ')).toContain('api.save → save')
+    ;(tree(el) as unknown as { reveal(id: string): void }).reveal('o:acme.Store/save'); await settle(el)
+    ;(tree(el).shadowRoot.querySelector('li[data-id="o:acme.Store/save"] > .line') as HTMLElement).click(); await settle(el)
+    expect(pane(el).textContent!.replace(/\s+/g, ' ')).toContain('called byapi.save → db.save')
+  })
+
   test('the filters keep the chosen kinds in the chosen namespace, and the way to them', async () => {
     const { filter, namespaces } = await import('../src/explorer-nodes.ts')
     const n = (id: string, kind: string | undefined, ns: string, children?: never[]) => ({ id, label: id, ...(kind && { kind }), data: { ns }, ...(children && { children }) })

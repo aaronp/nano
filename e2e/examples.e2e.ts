@@ -357,3 +357,36 @@ test('Settings shows each runtime\'s policy rules in order, the frame permission
   await expect(s.getByRole('row', { name: /example\.chat / })).toContainText('this origin')
   await page.screenshot({ path: test.info().outputPath('settings.png'), fullPage: true })
 })
+
+test('the chat with messaging.post → chatStore.put on its edge, a message sent: Connections draws it op to op, and Systems lists it under messaging', async ({ page }) => {
+  await start(page)
+  await open(page, '/examples/chat/nano.json')
+  // BACKLOG(Task 7): the chat declares its calls itself; until then the edge records the pair (the observed call has no source yet)
+  const applied = await page.evaluate(async () => {
+    const h = (document.querySelector('workspace-dock') as any).host, d = h.data()
+    const e = d.runtimes['example.chat.backend'].subscriptions.find((s: any) => s.kind === 'call' && s.from === 'messaging' && s.to === 'chatStore')
+    e.ops = [{ source: 'example.messaging.Messaging/post', target: 'example.kv.KeyValueStore/put' }]
+    return (await h.apply(d)).ok
+  })
+  expect(applied).toBe(true)
+  await say(room(page, 'alice'), 'hi bob')
+  await expect(room(page, 'bob').locator('li')).toHaveText([/hi bob/])
+  await page.getByRole('button', { name: 'Connections' }).first().click()
+  await expect(page.locator('c-wires')).toHaveAttribute('flipped', '')
+  const edge = page.locator('c-wires [data-call="example.chat.backend|messaging|chatStore"] [data-op-call]')
+  await expect(edge.first()).toBeVisible()
+  // the cord's ends are messaging's post jack and one of chatStore's jacks
+  const ends = await page.evaluate(() => {
+    const m = (document.querySelector('c-wires') as any).model, c = m.calls.find((x: any) => x.id === 'example.chat.backend|messaging|chatStore')
+    const at = (o: { x: number; y: number }) => Object.values(m.P).find((p: any) => p.x === o.x && p.y === o.y) as any
+    return c.ops.map((o: any) => [at(o.a)?.owner, at(o.a)?.label, at(o.b)?.owner])
+  })
+  expect(ends).toEqual([['messaging', 'post', 'chatStore']])
+  await page.locator('c-wires').getByRole('button', { name: 'Back', exact: true }).click()
+  await page.waitForTimeout(1200)
+  await page.screenshot({ path: test.info().outputPath('op-calls.png') })
+  await page.locator('c-wires').getByRole('button', { name: 'Back to the workspace' }).click()
+  await expect(page.locator('c-wires')).not.toHaveAttribute('flipped', '')
+  await dock(page).locator('nano-explorer li[data-id="p:example.chat.backend:messaging"] > .line').click()
+  await expect(dock(page).locator('nano-explorer .details')).toContainText('post → chatStore.put')
+})

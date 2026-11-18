@@ -4,13 +4,14 @@
  * (explorer-details.ts); a pod's "Open view" (or a double-click on a pod) fires `nano-open` with `{ runtime, pod }`.
  */
 import { LitElement, css, html } from 'lit'
-import { details, type Where } from './explorer-details.ts'
+import { details, type Called, type Where } from './explorer-details.ts'
 import { filter, namespaces, nodes, primary } from './explorer-nodes.ts'
 import type { Application, Registry } from '@pritzlaff/nano-core'
 import { base } from '@pritzlaff/nano-elements'
 import '@pritzlaff/nano-elements'
 
-type ExplorerTarget = { app: Application; registry: Registry }
+/** `calls`: the op-level calls to show (optional; read on each render). */
+type ExplorerTarget = { app: Application; registry: Registry; calls?: Called[] }
 
 const KINDS = ['runtime', 'pod', 'interface', 'implementation', 'operation']
 
@@ -51,7 +52,7 @@ export class NanoExplorer extends LitElement {
       else if (e.type === 'applied') {
         const live = t.app.deployment().pods   // built/closed events already keep changed and removed pods right
         this.states = Object.fromEntries(Object.entries(this.states).filter(([pod]) => Object.hasOwn(live, pod)))
-      }
+      } else if (e.type === 'sent' && e.kind === 'call' && t.calls) queueMicrotask(() => this.requestUpdate())   // a call seen
     })
   }
   private stop() { this.off?.(); this.off = undefined; this.watching = undefined }
@@ -63,7 +64,7 @@ export class NanoExplorer extends LitElement {
   render() {
     if (!this.target) return html``
     const t = this.target
-    const c = { d: t.app.deployment(), registry: t.registry, states: this.states, go: (id: string) => { this.selected = id }, open: (w: Where) => this.open(w) }
+    const c = { d: t.app.deployment(), registry: t.registry, states: this.states, calls: t.calls, go: (id: string) => { this.selected = id }, open: (w: Where) => this.open(w) }
     const all = nodes(c.d, t.registry, this.states)
     const shown = this.ns || this.kinds.size < KINDS.length ? filter(all, this.kinds, this.ns) : all
     const kind = (k: string) => { const s = new Set(this.kinds); s.has(k) ? s.delete(k) : s.add(k); this.kinds = s }

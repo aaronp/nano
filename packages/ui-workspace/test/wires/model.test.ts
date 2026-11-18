@@ -1,8 +1,8 @@
 import './dom.ts'
 import { expect, test } from 'bun:test'
 import { buildPuzzle, checkConnect } from '../../src/wires'
-import { Debounce, deployment, Input, k, Log, MapIface, model, p1, p2 } from './setup.ts'
-import { wireId } from '../../src/wires/model.ts'
+import { Debounce, deployment, Input, k, Log, MapIface, model, p1, p2, panels, registry } from './setup.ts'
+import { buildModel, snapshotOf, wireId } from '../../src/wires/model.ts'
 import { Pod } from '@pritzlaff/nano-core'
 import { input } from '@pritzlaff/nano-ui'
 
@@ -65,4 +65,16 @@ test('a call edge goes from the bottom of the caller\'s box to each Op jack of t
   expect(ends.length).toBeGreaterThan(0)
   expect(m.calls).toEqual([{ id: 'main|r|d', from: 'r', to: 'd', a: { x: r.x + r.w / 2, y: r.y + r.h }, b: ends }])
   expect(m.wires.length).toBe(2)
+})
+
+test('an op-level call draws from the caller\'s op to the callee\'s; seen but not declared is marked so; old edges are as before', () => {
+  const d = deployment()
+  d.runtimes['main']!.subscriptions.push({ kind: 'call', from: 'r', to: 'd' })
+  const source = k('r', Input, 'submit', 'out').slice(2, -4), target = k('d', Debounce, 'push', 'in').slice(2, -3)
+  const call = { runtime: 'main', from: 'r', to: 'd', source, target, declared: false, seen: true }
+  const m = buildModel({ snapshot: snapshotOf(d, registry(), [call]), panels, W: 1200, H: 600, application: 'ui' })
+  const a = m.P[k('r', Input, 'submit', 'in')]!, b = m.P[k('d', Debounce, 'push', 'in')]!
+  expect(m.calls[0]!.ops).toEqual([{ a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y }, declared: false, seen: true }])
+  expect(m.calls[0]!.b).toEqual([])   // no pod-level line once every pair has a source
+  expect(model(d).calls[0]!.ops).toBeUndefined()
 })

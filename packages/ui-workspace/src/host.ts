@@ -6,6 +6,7 @@
  *   const host = (await start()).value
  *   await host.importUrl('/examples/slice/nano.json')   // importApp, then apply
  *   host.saved()                                         // { ...app.deployment(), modules, views, layout }, without ui
+ *   host.saved(true)                                     // the same, reconciled with the calls seen (host.calls())
  */
 import { Application, AppDeployment, Registry, Pod, success, type NanoResult, type Pod as PodData } from '@pritzlaff/nano-core'
 import uiProvider, { views as uiViews, type ViewMap } from '@pritzlaff/nano-ui'
@@ -19,6 +20,7 @@ import { openFrame } from './sandbox/frames.ts'
 import { connected } from './auto-connect.ts'
 import { framesOf } from './sandbox/sandboxed-view.ts'
 import { standIn, type Frame } from './sandbox/stand-in.ts'
+import { observeCalls, type OpCall } from './observed-calls.ts'
 
 export type Host = {
   readonly app: Application
@@ -33,8 +35,11 @@ export type Host = {
   importUrl(url: string, chosen?: { edit(d: AppDeployment): AppDeployment }): Promise<NanoResult<void>>
   /** Whether the provider `coord` is loaded from another origin than this page (so imported only once approved). */
   foreign(coord: string): boolean
-  /** What Save writes: `data()` without the host pod `ui`, and without `main` once nothing else is in it. */
-  saved(): AppDeployment
+  /** What Save writes: `data()` without the host pod `ui`, and without `main` once nothing else is in it; with
+   * `reconcile`, the call edges that gained a seen, undeclared op pair carry their `ops` (observed-calls.ts). */
+  saved(reconcile?: boolean): AppDeployment
+  /** The op-level calls declared and seen so far (one observer for the app's life). */
+  calls(): OpCall[]
 }
 
 const HOST = 'ui', MAIN = 'main'
@@ -112,6 +117,7 @@ export async function start(): Promise<NanoResult<Host>> {
   if (!created.ok) return created
   const app = made = created.value
   framesOf.set(app, frames)
+  const observed = observeCalls(app, registry)
 
   const kept = (d: AppDeployment) => ({ modules: { ...d.modules }, ...(d.frames && { frames: { ...d.frames } }), views: { ...d.views }, ...(d.layout && { layout: structuredClone(d.layout) }) })
   const data = (): AppDeployment => ({ ...app.deployment(), ...kept(loaded.deployment) })
@@ -128,7 +134,8 @@ export async function start(): Promise<NanoResult<Host>> {
     app, registry, data, apply: next => apply(next),
     defaults: () => ({ ...loaded.views }),
     foreign: coord => !!foreignOrigin(loaded.deployment.modules?.[coord]),
-    saved: () => withoutHost(data()),
+    saved: reconcile => withoutHost(reconcile ? { ...observed.reconciled(), ...kept(loaded.deployment) } : data()),
+    calls: () => observed.calls(),
     async importUrl(url, chosen) {
       // With the pod ui still in it, so merge refuses an app naming a pod ui before any provider is registered.
       const imported = shown(await importApp(url, { ...loaded, deployment: unplaced(data()) }, {

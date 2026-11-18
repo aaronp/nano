@@ -328,7 +328,7 @@ export class WorkspaceDock extends HTMLElement {
     if (name && id !== 'pod') (shown as Element | null)?.setAttribute('name', name);   // before it connects, so it attaches to that instance
     container.element.append(content);
     const h = this.host;
-    if (h) for (const el of container.element.querySelectorAll<HTMLElement & { target?: unknown }>('nano-explorer, nano-wiring')) el.target = { app: h.app, registry: h.registry };
+    if (h) for (const el of container.element.querySelectorAll<HTMLElement & { target?: unknown }>('nano-explorer, nano-wiring')) el.target = { app: h.app, registry: h.registry, get calls() { return h.calls(); } };
     if (h && id === 'pod' && name) container.on('destroy', fill(container.element, `pod:${name}`, h));
     // an implementation's panel makes a pod of it (or shows the one it made), as a catalog kind's placed a new instance
     const impl = def.template.dataset['implementation'];
