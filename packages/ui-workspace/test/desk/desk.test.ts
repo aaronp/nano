@@ -83,3 +83,21 @@ test('an event out jack is marked, an action in jack is not', async () => {
   expect(j(k('d', Debounce, 'flushed', 'out')).hasAttribute('data-event')).toBe(true)
   expect(j(k('d', Debounce, 'push', 'in')).hasAttribute('data-event')).toBe(false)
 })
+
+test('a hidden pod keeps its saved position across view changes; a removed pod loses it', async () => {
+  const { root, el, app, host, settle } = await mount()
+  const show = async (s: string) => { root.querySelector<HTMLElement>(`[data-show="${s}"]`)!.click(); await settle() }
+  await show('all')
+  drag(root.querySelector('[data-pod="m"]')!, 0, 200)
+  await settle()
+  const saved = { ...el.layout().pods.main!.m! }
+  await show('connected')
+  expect(root.querySelector('[data-pod="m"]')).toBeNull()
+  expect(el.layout().pods.main!.m).toEqual(saved)
+  await show('all')
+  expect(el.layout().pods.main!.m).toEqual(saved)
+  const next = structuredClone(host.data())
+  delete next.pods.m; next.runtimes.main!.pods = next.runtimes.main!.pods.filter(p => p !== 'm')
+  await app.apply(next); await settle()
+  expect(el.layout().pods.main!.m).toBeUndefined()
+})

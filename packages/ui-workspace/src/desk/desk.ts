@@ -1,10 +1,11 @@
 // <c-desk>: the app as runtime boxes of pod columns with cords between jacks. Rebuilds on an `applied`; the layout is
 // held here (`layout()` for Save). Drag a runtime by its header or a column by its body; on release, push the siblings.
+import { lookup } from '@pritzlaff/nano-core'
 import { LitElement, css, html } from 'lit'
 import type { Host } from '../host.ts'
 import { empty as emptyWires } from '../wires/state'
 import { toggle, type ViewSettings } from '../wires/filter'
-import { align, arrange, GRID, push, readLayout, setSnap, type DeskLayout, type XY } from './arrange'
+import { align, arrange, GRID, prune, push, readLayout, setSnap, type DeskLayout, type XY } from './arrange'
 import { renderCords } from './cords'
 import { deskModel, type DeskModel } from './model'
 import { fitting, keyOf, patch, unplug, type Sel } from './edit'
@@ -69,6 +70,7 @@ export class Desk extends LitElement {
     if (!h || !this.#off.length) return
     const d = h.data()
     if (!this.#read) { this.#read = true; this.#l = readLayout((d as any).layout?.desk) }
+    this.#l = prune(this.#l, lookup(d).placed)
     this.#m = deskModel(d, h.registry, h.calls?.() ?? [], this.view, this.application)
     this.#fit()
   }

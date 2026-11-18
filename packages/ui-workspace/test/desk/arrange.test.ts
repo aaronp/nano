@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { align, arrange, columnSize, GRID, push, readLayout, setSnap, type DeskLayout, type Sized } from '../../src/desk/arrange.ts'
+import { align, arrange, columnSize, GRID, prune, push, readLayout, setSnap, type DeskLayout, type Sized } from '../../src/desk/arrange.ts'
 import type { Column, DeskModel } from '../../src/desk/model.ts'
 
 const col = (runtime: string, pod: string, ins = ['p a/go:in'], outs = ['p a/done:out']): Column => ({ runtime, pod, implementation: 'I', ins, outs })
@@ -36,11 +36,15 @@ test('a runtime holds its columns', () => {
   }
 })
 
-test('saved positions are kept and stale ones pruned', () => {
-  const l = { ...base(), pods: { main: { r: { x: 400, y: 40 }, gone: { x: 20, y: 40 } } } }
+test('saved positions are kept, hidden ones too; prune drops only what is no longer placed', () => {
+  const l = { ...base(), runtimes: { main: { x: 0, y: 0 }, old: { x: 9, y: 9 } }, pods: { main: { r: { x: 400, y: 40 }, hidden: { x: 600, y: 40 }, gone: { x: 20, y: 40 } }, old: { q: { x: 1, y: 1 } } } }
   const { layout, columns } = arrange(model({ main: ['r', 'd'] }, { main: 0 }), l)
   expect(columns.main!.r).toMatchObject({ x: 400, y: 40 })
-  expect(layout.pods.main!.gone).toBeUndefined()
+  expect(layout.pods.main!.hidden).toEqual({ x: 600, y: 40 })
+  const p = prune(layout, new Map([['main', new Set(['r', 'd', 'hidden'])]]))
+  expect(Object.keys(p.pods.main!).sort()).toEqual(['d', 'hidden', 'r'])
+  expect(p.pods.old).toBeUndefined()
+  expect(p.runtimes.old).toBeUndefined()
 })
 
 test("a new pod doesn't overlap saved ones", () => {

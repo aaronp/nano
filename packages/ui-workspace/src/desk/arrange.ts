@@ -37,13 +37,20 @@ export function columnSize(c: Column, compact: boolean): { w: number; h: number 
   return { w, h: colHead(compact) + (Math.max(c.ins.length, c.outs.length) + 1) * jh }
 }
 
-/** Saved positions kept and clamped, stale ones pruned; new columns go right of the rightmost, runtimes by rank. */
+/** Positions of runtimes, and pods in them, that are no longer placed (`lookup(d).placed`) dropped; hidden ones kept. */
+export function prune(l: DeskLayout, placed: ReadonlyMap<string, ReadonlySet<string>>): DeskLayout {
+  const runtimes = Object.fromEntries(Object.entries(l.runtimes).filter(([rt]) => placed.has(rt)))
+  const pods = Object.fromEntries(Object.entries(l.pods).filter(([rt]) => placed.has(rt)).map(([rt, ps]) => [rt, Object.fromEntries(Object.entries(ps).filter(([p]) => placed.get(rt)!.has(p)))]))
+  return { ...l, runtimes, pods }
+}
+
+/** Saved positions kept and clamped (those of hidden pods and runtimes too); new columns go right of the rightmost, runtimes by rank. */
 export function arrange(m: DeskModel, l: DeskLayout) {
   const gap = l.compact ? 12 : 36
-  const layout: DeskLayout = { ...l, runtimes: {}, pods: {} }
+  const layout: DeskLayout = { ...l, runtimes: { ...l.runtimes }, pods: { ...l.pods } }
   const runtimes: Record<string, Sized> = {}, columns: Record<string, Record<string, Sized>> = {}
   for (const rt of m.runtimes) {
-    const saved = l.pods[rt.id] ?? {}, at = layout.pods[rt.id] = {} as Record<string, XY>, cols = columns[rt.id] = {} as Record<string, Sized>
+    const saved = l.pods[rt.id] ?? {}, at = layout.pods[rt.id] = { ...saved }, cols = columns[rt.id] = {} as Record<string, Sized>
     let edge = PAD - gap
     for (const c of rt.columns) if (saved[c.pod]) {
       const p = { x: Math.max(PAD, saved[c.pod]!.x), y: Math.max(HEAD, saved[c.pod]!.y) }
@@ -84,7 +91,7 @@ export function push(boxes: Record<string, Sized>, placed: string, snap: boolean
     if (dx <= 0 || dy <= 0 || a.x >= b.x + b.w + GRID || a.y >= b.y + b.h + GRID) return
     return dx <= dy ? { x: snapTo(b.x + dx, snap), y: b.y } : { x: b.x, y: snapTo(b.y + dy, snap) }
   }
-  while (queue.length) {
+  for (let n = 0; queue.length && n < 1000; n++) { // a generous cap: it settles in a few rounds
     const cur = queue.shift()!
     for (const id of Object.keys(at)) {
       if (id === placed || id === cur) continue
