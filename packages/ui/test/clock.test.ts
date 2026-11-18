@@ -133,7 +133,7 @@ test('one advance equals many small ones for a pod that re-arms on fired', async
     const r = Registry.create(); r.add(uiProvider); r.add(Coord.namespace('test').provider([ticker]))
     const d: AppDeployment = { pods: { sim: Pod.eager(simClock), t: Pod.eager(ticker) }, runtimes: { main: { pods: ['sim', 't'], subscriptions: [{ kind: 'call', from: 't', to: 'sim' }] } } }
     const app = must(await Application.create(must(AppDeployment.assemble(d, r)), {}))
-    for (const s of steps) { await (app.call('main', 'sim') as any).advance(s); await sleep(5) }
+    for (const s of steps) { await (app.call('main', 'sim') as any).advance(s) }
     return must(await (app.call('main', 't') as any).entries(null))
   }
   const ten = await run(Array(10).fill(10))
