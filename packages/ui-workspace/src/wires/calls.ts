@@ -3,7 +3,7 @@
 import type { AppDeployment, Registry } from '@pritzlaff/nano-core'
 import { svg } from 'lit'
 import { CALL_COLOR } from './constants'
-import { cordD, cordGeo } from './geometry'
+import { cordD, cordGeo, type Cord } from './geometry'
 import { portKey, type Chassis, type Port, type RackItem, type Snapshot } from './model'
 
 /** A call edge, drawn from the caller's box to the callee's (a pod as a whole: it has no Op of its own to plug into). */
@@ -44,10 +44,11 @@ export function callCords(calls: Snapshot['calls'] = [], box: (id: string) => Bo
   })
 }
 
-/** One op-level call cord, dashed in the call colour: seen bright, declared but unseen dim, not declared amber with a visible label. */
-export const opCord = (o: OpCord) => {
+/** One op-level call cord, dashed in the call colour: seen bright, declared but unseen dim, not declared amber with a visible label.
+ * `geo` shapes it (Connections' hanging cord by default). */
+export const opCord = (o: OpCord, geo: (a: XY, b: XY) => Cord = cordGeo) => {
   const col = !o.declared ? '#F5A524' : CALL_COLOR
-  return svg`<path data-op-call=${o.declared ? (o.seen ? 'seen' : 'declared') : 'not-declared'} d=${cordD(cordGeo(o.a, o.b))} fill="none" stroke=${col} stroke-opacity=${o.seen || !o.declared ? 1 : 0.5} stroke-width=${o.seen && o.declared ? 4 : 2.5} stroke-dasharray="10 6" stroke-linecap="round"></path>
+  return svg`<path data-op-call=${o.declared ? (o.seen ? 'seen' : 'declared') : 'not-declared'} d=${cordD(geo(o.a, o.b))} fill="none" stroke=${col} stroke-opacity=${o.seen || !o.declared ? 1 : 0.5} stroke-width=${o.seen && o.declared ? 4 : 2.5} stroke-dasharray="10 6" stroke-linecap="round"></path>
     <circle cx=${o.a.x} cy=${o.a.y} r="5" fill=${col}></circle><circle cx=${o.b.x} cy=${o.b.y} r="5" fill=${col}></circle>
     ${o.declared ? '' : svg`<text data-not-declared x=${Math.round((o.a.x + o.b.x) / 2) + 6} y=${Math.round((o.a.y + o.b.y) / 2)} font-family="JetBrains Mono, monospace" font-size="16" fill=${col}>not declared</text>`}`
 }

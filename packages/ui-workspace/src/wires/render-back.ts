@@ -110,7 +110,7 @@ export function renderBack(el: Wires, d: Vals) {
       <circle cx=${b.x} cy=${b.y} r="5" fill=${CALL_COLOR}></circle>`)}
       ${c.b.length ? svg`<circle cx=${c.a.x} cy=${c.a.y} r="5" fill=${CALL_COLOR}></circle>
       <text x=${c.a.x + 8} y=${c.a.y + 20} font-family="JetBrains Mono, monospace" font-size="16" fill=${CALL_COLOR}>calls ${c.to}</text>` : ''}
-      ${(c.ops ?? []).map(opCord)}</g>`) : ''}
+      ${(c.ops ?? []).map(o => opCord(o))}</g>`) : ''}
     ${relayPackets.map(k => packet(k, 6, 3, 10))}
   </svg>
 

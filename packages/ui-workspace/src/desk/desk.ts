@@ -19,17 +19,20 @@ export class Desk extends LitElement {
     .bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; align-items: center }
     button { padding: 4px 10px; border: 1px solid #2A323D; border-radius: 999px; background: #12161C; color: inherit; font: inherit; cursor: pointer }
     button[aria-pressed="true"] { border-color: #4CC2FF; color: #4CC2FF }
+    .bar small { color: #94a3b8; margin-left: 6px }
     .stage { position: relative; overflow: auto; height: calc(100% - 44px) }
-    [data-snap] { position: absolute; inset: 0; background: radial-gradient(#1C222B 1px, transparent 1px) 0 0 / 20px 20px; pointer-events: none }
+    .stage.snap { background: radial-gradient(#1C222B 1px, transparent 1px) 0 0 / 20px 20px local }
     .rt { position: absolute; box-sizing: border-box; border: 2px solid var(--c); border-radius: 10px; background: color-mix(in srgb, var(--c) 7%, #0B0E12) }
     .rt > h3 { margin: 0; padding: 6px 10px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--c); cursor: grab; user-select: none; touch-action: none }
     .col { position: absolute; box-sizing: border-box; border: 1px solid #2A323D; border-radius: 8px; background: #181E26; cursor: grab; user-select: none; touch-action: none; overflow: hidden }
-    h4 { margin: 0; padding: 6px 8px 2px; font-size: 13px } small { display: block; padding: 0 8px 6px; color: #94a3b8; font-size: 11px; border-bottom: 1px solid #2A323D; height: 14px }
+    .col header { box-sizing: border-box; border-bottom: 1px solid #2A323D; overflow: hidden }
+    h4 { margin: 0; padding: 6px 8px 2px; font-size: 13px } .col small { display: block; padding: 0 8px; color: #94a3b8; font-size: 11px }
     .row { display: flex; justify-content: space-between; align-items: center; padding: 0 8px }
     .jack { display: flex; gap: 6px; align-items: center } .jack.out { flex-direction: row-reverse }
     .jack[data-event] { font-style: italic; color: #94a3b8 }
-    .jack i { width: 8px; height: 8px; border-radius: 50%; background: #4CC2FF }
-    [data-fits] i { box-shadow: 0 0 0 3px #4CC2FF88 } [data-selected] i { background: #fff }
+    .jack i { box-sizing: border-box; width: 14px; height: 14px; flex: none; border-radius: 50%; border: 2px solid #4CC2FF }
+    .jack.out i { background: #4CC2FF }
+    [data-fits] i { box-shadow: 0 0 0 3px #4CC2FF88 } .jack[data-selected] i { border-color: #fff; background: #fff }
     [data-toast] { position: absolute; right: 8px; bottom: 8px; padding: 6px 10px; border-radius: 6px; background: #3b1219; color: #fecaca }
     path[data-pipe] { pointer-events: stroke; cursor: pointer }
     svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none }`
@@ -115,15 +118,16 @@ export class Desk extends LitElement {
     const l = this.#l, W = Math.max(0, ...Object.values(this.#a.runtimes).map(r => r.x + r.w)), H = Math.max(0, ...Object.values(this.#a.runtimes).map(r => r.y + r.h))
     return html`<div class="bar">
       ${(['connected', 'all'] as const).map(s => html`<button data-show=${s} aria-pressed=${show === s} @click=${() => this.#view({ show: s, pills })}>${s === 'all' ? 'All' : 'Connected'}</button>`)}
-      ${Object.keys(d?.runtimes ?? {}).map(id => pill('runtimes', id))}${Object.keys(d?.pods ?? {}).filter(p => p !== this.application).map(id => pill('pods', id))}
+      <small>Runtimes</small>${Object.keys(d?.runtimes ?? {}).map(id => pill('runtimes', id))}
+      <small>Components</small>${Object.keys(d?.pods ?? {}).filter(p => p !== this.application).map(id => pill('pods', id))}
       <button data-snap-toggle aria-pressed=${l.snap} @click=${() => this.#set(setSnap(l, !l.snap))}>Snap</button>
       <button data-compact aria-pressed=${l.compact} @click=${() => this.#set({ ...l, compact: !l.compact })}>Compact</button>
       <button data-align @click=${() => this.#set(align(this.#m, l))}>Align</button>
       <button data-edit aria-label="Edit" aria-pressed=${this.editing} @click=${() => { this.editing = !this.editing; this.#select(null) }}>&#9998;</button>
       ${this.sel && 'pipe' in this.sel ? html`<button data-remove @click=${() => this.#remove()}>Remove</button>` : ''}
     </div>
-    <div class="stage" tabindex="0" @keydown=${(e: KeyboardEvent) => this.#key(e)} @click=${(e: MouseEvent) => this.#click(e)}>${l.snap ? html`<div data-snap></div>` : ''}${renderRuntimes(this.#m, this.#a, l, this.#down, { sel: this.sel && 'jack' in this.sel ? this.sel.jack : undefined, fits: this.sel && 'jack' in this.sel ? fitting(this.#m.wires, keyOf(this.sel.jack)) : new Set() })}
-      <svg width=${W} height=${H}>${renderCords(this.#m, this.#a, l)}</svg>${this.#toast ? html`<div data-toast>${this.#toast}</div>` : ''}</div>`
+    <div class="stage ${l.snap ? 'snap' : ''}" tabindex="0" @keydown=${(e: KeyboardEvent) => this.#key(e)} @click=${(e: MouseEvent) => this.#click(e)}>${renderRuntimes(this.#m, this.#a, l, this.#down, { sel: this.sel && 'jack' in this.sel ? this.sel.jack : undefined, fits: this.sel && 'jack' in this.sel ? fitting(this.#m.wires, keyOf(this.sel.jack)) : new Set() })}
+      <svg width=${W} height=${H}>${renderCords(this.#m, this.#a, l, this.sel && 'pipe' in this.sel ? this.sel.pipe : undefined)}</svg>${this.#toast ? html`<div data-toast>${this.#toast}</div>` : ''}</div>`
   }
 }
 

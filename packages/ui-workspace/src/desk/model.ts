@@ -10,7 +10,7 @@ export type Column = { runtime: string; pod: string; implementation: string; ins
 export type DeskModel = {
   runtimes: { id: string; columns: Column[] }[]
   pipes: Wire[]
-  calls: { id: string; runtime: string; pairs: OpPair[]; jacks: string[] }[]
+  calls: { id: string; runtime: string; from: string; to: string; pairs: OpPair[]; jacks: string[] }[]
   rank: Record<string, number>
   /** The unfiltered wires model: what `checkConnect` runs against. */
   wires: Model
@@ -37,6 +37,6 @@ export function deskModel(d: AppDeployment, registry: Registry, opCalls: OpPair[
     id,
     columns: r.pods.filter(pod => shown.has(pod)).map(pod => ({ runtime: id, pod, implementation: d.pods[pod]!.implementation, ins: jacks(pod, 'in'), outs: jacks(pod, 'out') })),
   })).filter(r => r.columns.length > 0)
-  const calls = v.calls.map(c => ({ id: c.id, runtime: c.runtime, jacks: c.jacks, pairs: opCalls.filter(o => o.runtime === c.runtime && o.from === c.from && o.to === c.to) }))
+  const calls = v.calls.map(c => ({ id: c.id, runtime: c.runtime, from: c.from, to: c.to, jacks: c.jacks, pairs: opCalls.filter(o => o.runtime === c.runtime && o.from === c.from && o.to === c.to) }))
   return { runtimes, pipes: v.wires, calls, rank: rankOf(d), wires }
 }
