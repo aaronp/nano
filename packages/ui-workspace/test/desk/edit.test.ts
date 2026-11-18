@@ -96,3 +96,32 @@ test('reactive properties are not shadowed by class fields, and editing re-rende
   t.el.editing = true; await t.settle()
   expect(t.root.querySelector('[data-edit][aria-pressed="true"]')).not.toBeNull()
 })
+
+// l and m are in main and in side
+async function twoRuntimes() {
+  const t = await mount()
+  const next = structuredClone(t.host.data())
+  next.runtimes.side = { pods: ['l', 'm'], subscriptions: [] }
+  await t.app.apply(next); await t.settle()
+  const at = (rt: string, key: string) => t.root.querySelector<HTMLElement>(`[data-jack="${rt} ${key}"]`)!
+  return { ...t, at }
+}
+
+test('a patch lands in the runtime the jacks were clicked in', async () => {
+  const t = await twoRuntimes()
+  t.at('side', logOut).click(); await t.settle()
+  t.at('side', mapIn).click(); await t.settle()
+  expect(t.app.deployment().runtimes.side!.subscriptions.map(s => s.from + '>' + s.to)).toEqual(['l>m'])
+  expect(t.app.deployment().runtimes.main!.subscriptions.length).toBe(2)
+})
+
+test('jacks in two runtimes are refused, and fits are marked only in the selected jack\'s runtime', async () => {
+  const t = await twoRuntimes()
+  t.at('side', logOut).click(); await t.settle()
+  expect(t.at('side', mapIn).hasAttribute('data-fits')).toBe(true)
+  expect(t.at('main', mapIn).hasAttribute('data-fits')).toBe(false)
+  const before = JSON.stringify(t.app.deployment().runtimes)
+  t.at('main', mapIn).click(); await t.settle()
+  expect(t.root.querySelector('[data-toast]')).not.toBeNull()
+  expect(JSON.stringify(t.app.deployment().runtimes)).toBe(before)
+})

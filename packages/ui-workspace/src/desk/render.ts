@@ -7,9 +7,10 @@ import type { Column, DeskModel } from './model'
 export type Down = (e: PointerEvent, runtime: string, pod?: string) => void
 type Arranged = { runtimes: Record<string, Sized>; columns: Record<string, Record<string, Sized>> }
 
-// the jack's key carries the runtime in the attribute: the same pod in two runtimes has the same keys in both.
+// the jack's key carries the runtime in the attribute: the same pod in two runtimes has the same keys in both. Fits are
+// marked only in the selected jack's runtime (a pipe joins two pods in one runtime).
 export type Marks = { sel?: string; fits: Set<string> }
-const jack = (m: DeskModel, rt: string, key: string, side: 'in' | 'out', k: Marks) => html`<span class="jack ${side}" data-jack="${rt} ${key}" ?data-selected=${k.sel === rt + ' ' + key} ?data-fits=${k.fits.has(key)} ?data-event=${m.wires.P[key]?.op.kind === 'event'}><i></i>${jackLabel(key)}</span>`
+const jack = (m: DeskModel, rt: string, key: string, side: 'in' | 'out', k: Marks) => html`<span class="jack ${side}" data-jack="${rt} ${key}" ?data-selected=${k.sel === rt + ' ' + key} ?data-fits=${k.fits.has(key) && k.sel?.startsWith(rt + ' ')} ?data-event=${m.wires.P[key]?.op.kind === 'event'}><i></i>${jackLabel(key)}</span>`
 
 const column = (m: DeskModel, c: Column, box: Sized, compact: boolean, down: Down, k: Marks) => html`
   <div class="col" data-pod=${c.pod} style="left:${box.x}px;top:${box.y}px;width:${box.w}px;height:${box.h}px" @pointerdown=${(e: PointerEvent) => down(e, c.runtime, c.pod)}>

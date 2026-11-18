@@ -28,10 +28,11 @@ async function patch(h: Host, edit: (e: ReturnType<typeof AppDeployment.edit>) =
     throw x
   }
 }
-/** Adds a pipe from out jack `from` to in jack `to` (keys `pod port:dir`) in the first runtime (lookup order) holding both pods. */
-export async function connectPipe(h: Host, model: Model, from: string, to: string): Promise<Result & { id?: string }> {
+/** Adds a pipe from out jack `from` to in jack `to` (keys `pod port:dir`) in `runtime`, else in the first runtime (lookup
+ * order) holding both pods. */
+export async function connectPipe(h: Host, model: Model, from: string, to: string, runtime?: string): Promise<Result & { id?: string }> {
   const a = model.P[from]!, b = model.P[to]!, pipe = { from: a.owner, source: a.port, to: b.owner, target: b.port }
-  const rt = [...lookup(h.data()).placed].find(([, pods]) => pods.has(a.owner) && pods.has(b.owner))?.[0]
+  const rt = runtime ?? [...lookup(h.data()).placed].find(([, pods]) => pods.has(a.owner) && pods.has(b.owner))?.[0]
   if (!rt) return { error: a.owner + ' and ' + b.owner + ' are not in one runtime' }
   const r = await patch(h, e => e.pipe(rt, pipe))
   return 'error' in r ? r : { value: { id: wireId(rt, pipe) } }
