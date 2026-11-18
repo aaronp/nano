@@ -22,10 +22,10 @@ import { lift, plain } from './plain.ts'
 import { selectorData, type Selector, type SelectorData } from './selector.ts'
 
 /** A handler: its input, and the invocation's context (`callingOp`; its calls continue the invoking message's chain). */
-export type Handler = (input: unknown, ctx?: Omit<NanoContext, 'deps'>) => Promise<NanoResult<unknown>>
+export type Handler = (input: unknown, ctx: Omit<NanoContext, 'deps'>) => Promise<NanoResult<unknown>>
 
 /** One handler per action, typed as the Client's call, with the invocation's context. Events have none: they are published. */
-export type Handlers<I extends Interface> = { [K in keyof Client<I>]: (input: Parameters<Client<I>[K]>[0], ctx?: NanoContext) => ReturnType<Client<I>[K]> }
+export type Handlers<I extends Interface> = { [K in keyof Client<I>]: (input: Parameters<Client<I>[K]>[0], ctx: NanoContext) => ReturnType<Client<I>[K]> }
 
 /** A source: an event's method on a plain object, which the application runs once per build (`application/sources.ts`). */
 export type Source = { readonly op: Op; run(): AsyncIterable<unknown> }
@@ -34,7 +34,7 @@ export type Source = { readonly op: Op; run(): AsyncIterable<unknown> }
 export type Provided = { readonly iface: Interface; readonly handlers: ReadonlyMap<string, Handler>; readonly sources?: ReadonlyMap<string, Source> }
 
 export function provide<I extends Interface>(i: I, handlers: Handlers<I>): Provided {
-  const byName = handlers as Record<string, Handler | undefined>
+  const byName = handlers as unknown as Record<string, Handler | undefined>
   const out = new Map<string, Handler>()
   for (const o of Object.values(i.ops)) {
     const h = o.kind === 'event' ? undefined : byName[o.name]
@@ -60,7 +60,7 @@ export type Implementation = {
 /** A plain object for `I`: its event (source) methods are optional, as an event may be published through `ctx`. */
 type Plain<I extends Interface, D extends Record<string, Selector>, T = Interface.Type<I>> =
   { [K in keyof T as I['ops'][K & string]['kind'] extends 'event' ? never : K]:
-    T[K] extends (...a: infer A) => infer R ? (input: A extends [infer X] ? X : null, ctx?: NanoContext<D>) => R : never } &
+    T[K] extends (...a: infer A) => infer R ? (input: A extends [infer X] ? X : null, ctx: NanoContext<D>) => R : never } &
   { [K in keyof T as I['ops'][K & string]['kind'] extends 'event' ? K : never]?: T[K] }
 
 /** `provide(...)` parts, or for a single interface its plain object (lifted by `handlers`; sources published). */
@@ -120,7 +120,7 @@ function define<const P extends readonly Interface[], D extends Record<string, S
         if (!declared.has(ic)) throw new Error(`${coord}: ${ic} is not provided`)
         if (given.has(ic)) throw new Error(`${coord}: ${ic} is provided twice`)
         given.add(ic)
-        for (const [p, h] of part.handlers) out.set(p, (input, inv) => h(input, inv && withDeps(inv)))
+        for (const [p, h] of part.handlers) out.set(p, (input, inv) => h(input, withDeps(inv)))
         for (const [p, src] of part.sources ?? []) sources.set(p, src)
       }
       for (const i of spec.provides)

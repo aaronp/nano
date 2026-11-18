@@ -11,11 +11,11 @@ const registry = Registry.create()
 registry.add(Provider.define('acme', [
   Implementation.define('acme/store', { provides: [Store], make: () => ({ async save(x: string) { return x }, async drop(x: string) { return x } }) }),
   Implementation.define('acme/front', { provides: [Front], dependencies: { store: Store }, calls: { send: { store: [Store.ops.save] } }, make: ({ deps }) => ({
-    async send(x: string, c) { await c!.deps.store.save(x); return c!.deps.store.drop(x) },
+    async send(x: string, c) { await c.deps.store.save(x); return c.deps.store.drop(x) },
     async later(x: string) { return deps.store.save(x) }, // the factory's deps, as a timer would: no cause
   }) }),
   Implementation.define('acme/plain', { provides: [Front], dependencies: { store: Store }, make: () => ({
-    async send(x: string, c) { return c!.deps.store.save(x) }, async later(x: string) { return x } }) }),
+    async send(x: string, c) { return c.deps.store.save(x) }, async later(x: string) { return x } }) }),
 ]))
 const tick = () => new Promise(r => setTimeout(r, 1))
 

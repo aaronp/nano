@@ -20,8 +20,8 @@ const form = Implementation.define(FormDef.ns.implementationId('form'), {
   calls: { submit: { store: [KeyValueStoreDef.api.ops.put] } },
   make: () => ({
     async submit(text, c) {
-      await c!.deps.store.put({ key: ['submitted', crypto.randomUUID()], value: text })
-      await c!.deps.store.delete(['draft'])   // the drift: not in `calls`
+      await c.deps.store.put({ key: ['submitted', crypto.randomUUID()], value: text })
+      await c.deps.store.delete(['draft'])   // the drift: not in `calls`
     },
   }),
 })

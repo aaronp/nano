@@ -31,8 +31,8 @@ const kv = Implementation.define(MessagingDef.ns.implementationId('kv'), {
   make: ctx => {
     const newId = counter()
     return {
-      post: (input, c) => messaging((c ?? ctx).deps.store, newId).post(input),
-      history: (input, c) => messaging((c ?? ctx).deps.store, newId).history(input),
+      post: (input, c) => messaging(c.deps.store, newId).post(input),
+      history: (input, c) => messaging(c.deps.store, newId).history(input),
       async *messages() {
         const s = ctx.one(KeyValueStoreDef.api)
         if (s.ok) for await (const { input } of s.value.on(KeyValueStoreDef.api.ops.put)) if (input.key[0] === 'rooms') yield input.value as Message

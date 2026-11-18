@@ -51,7 +51,7 @@ const todos = Implementation.define(TodoListDef.ns.implementationId('kv'), {
   make: ctx => {
     const timer = setInterval(() => { ctx.deps.store.list({ prefix: ['todos'] }).catch(() => {}) }, 1000)
     ctx.addOnCloseListener(() => clearInterval(timer))
-    const over = (c?: typeof ctx) => todoList((c ?? ctx).deps.store)
+    const over = (c: typeof ctx) => todoList(c.deps.store)
     return {
       add: (title, c) => over(c).add(title),
       list: (_, c) => over(c).list(),

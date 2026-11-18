@@ -58,9 +58,9 @@ describe('the nano.ui slice', () => {
     const ctx = { publish: async (_op: unknown, v: unknown) => { published.push(v); return success(null) }, addOnCloseListener: (f: () => void) => { closers.push(f) } }
     const { handlers } = await debounce.make(ctx as never, { quietMs: 10 })
     const push = handlers.get(port(Debounce, Debounce.ops.push))!
-    await push('late')
+    await push('late', ctx as never)
     closers.forEach(f => f())
-    await push('later')
+    await push('later', ctx as never)
     await sleep(40)
     expect(published).toEqual([])
   })

@@ -17,11 +17,11 @@ registry.add(Provider.define('acme', [
   Implementation.define('acme/src', { provides: [Go], make: () => ({ async go(x: string) { return x } }) }),
   Implementation.define('acme/front', { provides: [Front], dependencies: { store: Store }, make: ctx => {
     factoryOp = ctx.callingOp
-    return { async send(x: string, c) { await tick(); await gate; return c!.deps.store.save(x) } }
+    return { async send(x: string, c) { await tick(); await gate; return c.deps.store.save(x) } }
   } }),
   Implementation.define('acme/lazy', { provides: [Front], dependencies: { store: Store }, make: ({ deps }) => ({
     async send(x: string) { return deps.store.save(x) } }) }),
-  Implementation.define('acme/op', { provides: [Front], make: () => [provide(Front, { send: async (_, c) => success(c!.callingOp!) })] }),
+  Implementation.define('acme/op', { provides: [Front], make: () => [provide(Front, { send: async (_, c) => success(c.callingOp!) })] }),
 ]))
 
 const deployment = (front: string, edge = true): AppDeployment => ({
@@ -94,4 +94,11 @@ test('gone: a removed edge while the handler awaits is not-found', async () => {
   gate = Promise.resolve()
   expect(r.ok).toBe(false)
   if (!r.ok) expect(r.fail.type).toBe('not-found')
+})
+
+test('a handler is given its context: `ctx` is a NanoContext, never undefined (tsc checks it)', () => {
+  type Ctx<H> = H extends (i: never, c: infer C) => unknown ? C : never
+  const exact: [undefined] extends [Ctx<Parameters<typeof provide<typeof Front>>[1]['send']>] ? false : true = true
+  provide(Front, { send: async (_, c) => success(c.callingOp ?? "") })   // no `c!`
+  expect(exact).toBe(true)
 })

@@ -13,8 +13,8 @@ const tick = () => new Promise(r => setTimeout(r, 1))
 const registry = Registry.create()
 registry.add(Provider.define('acme', [
   Implementation.define('acme/store', { provides: [Store], make: () => ({ async save(x: string) { return x } }) }),
-  Implementation.define('acme/front', { provides: [Front], dependencies: { store: Store }, make: ({ deps }) => ({
-    async send(x: string, c) { await tick(); return (c?.deps ?? deps).store.save(x) } }) }),
+  Implementation.define('acme/front', { provides: [Front], dependencies: { store: Store }, make: () => ({
+    async send(x: string, c) { await tick(); return c.deps.store.save(x) } }) }),
 ]))
 const sent = (events: AppEvent[], port: string) => events.filter((e): e is Extract<AppEvent, { type: 'sent' }> => e.type === 'sent' && e.port === port)
 
