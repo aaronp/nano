@@ -100,11 +100,33 @@ test('on a sim clock, nothing flushes until the clock is advanced', async () => 
   expect(await all()).toEqual([['a', 'b']])
 })
 
-test('on a sim clock, pushes keep resetting quiet; max wait still flushes', async () => {
+test('on a sim clock, pushes keep resetting quiet; the max wait flushes at 500 of sim time, from the first push', async () => {
   const { app, advance, all } = await onSim()
-  for (let i = 0; i < 10; i++) { await app.call('main', 'wait').push(i); await advance(60) }
-  const batches = (await all()) as number[][]
-  expect(batches.length).toBeGreaterThanOrEqual(1)
-  expect(batches[0]![0]).toBe(0)
-  expect(batches[0]!.length).toBeLessThanOrEqual(9)   // flushed at 500 of sim time, not at the end
+  for (let i = 0; i < 8; i++) { await app.call('main', 'wait').push(i); await advance(60) }   // pushes at 0..420; sim time 480
+  expect(await all()).toEqual([])
+  await advance(19)
+  expect(await all()).toEqual([])
+  await advance(1)   // 500
+  expect(await all()).toEqual([[0, 1, 2, 3, 4, 5, 6, 7]])
+})
+
+test('on a sim clock, overlapping pushes leave one quiet timer and one max timer', async () => {
+  const { app, advance, all } = await onSim()
+  const w = app.call('main', 'wait')
+  await Promise.all([w.push('a'), w.push('b'), w.push('c')])
+  await advance(100)
+  expect(await all()).toEqual([['a', 'b', 'c']])
+  await w.push('d'); await advance(100)   // a leaked max timer from the first batch would have flushed d early or twice
+  expect(await all()).toEqual([['a', 'b', 'c'], ['d']])
+  await advance(1000)
+  expect(await all()).toEqual([['a', 'b', 'c'], ['d']])
+})
+
+test('on a sim clock, closing cancels the pending quiet and max timers', async () => {
+  const { app } = await onSim()
+  const sent: string[] = []
+  app.listen(e => { if (e.type === 'sent' && e.from === 'wait') sent.push(e.port) })
+  await app.call('main', 'wait').push('a')
+  await app.close()
+  expect(sent.filter(p => p.endsWith('/cancel')).length).toBe(2)
 })

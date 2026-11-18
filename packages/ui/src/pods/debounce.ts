@@ -17,17 +17,19 @@ export const debounce = Implementation.define(ns.implementationId('debounce'), {
     const quietMs = config?.quietMs ?? 300, maxWaitMs = config?.maxWaitMs
     let queue: unknown[] = [], closed = false
     // Two timers, 'quiet' and 'max', on the wired clock when exactly one is wired (chosen once, here), else on real time.
-    const slots: Record<string, any> = {}
+    const slots: Record<string, number | ReturnType<typeof setTimeout>> = {}
+    let pushes: Promise<unknown> = Promise.resolve()   // on the clock, pushes run one at a time: no overlapping after/cancel
     const wired = ctx.one(Clock)
     const clear = (tag: string) => {
       const s = slots[tag]; delete slots[tag]
       if (s === undefined) return
-      if (wired.ok) void wired.value.call.cancel(s); else clearTimeout(s)
+      if (wired.ok) void wired.value.call.cancel(s as number); else clearTimeout(s as ReturnType<typeof setTimeout>)
     }
     const start = async (tag: string, ms: number) => {
       if (!wired.ok) { slots[tag] = setTimeout(flush, ms); return }
       const r = await wired.value.call.after({ ms, tag })
-      if (r.ok) slots[tag] = r.value
+      if (!r.ok) return
+      if (closed) void wired.value.call.cancel(r.value); else slots[tag] = r.value
     }
     const flush = () => {
       clear('quiet'); clear('max')
@@ -41,12 +43,15 @@ export const debounce = Implementation.define(ns.implementationId('debounce'), {
     })
     ctx.addOnCloseListener(() => { closed = true; clear('quiet'); clear('max') })
     return [provide(Debounce, {
-      push: async value => {
-        if (closed) return success(null)
-        queue.push(value)
-        clear('quiet'); await start('quiet', quietMs)
-        if (maxWaitMs !== undefined && slots.max === undefined) await start('max', maxWaitMs)
-        return success(null)
+      push: value => {
+        const run = async () => {
+          if (closed) return success(null)
+          queue.push(value)
+          clear('quiet'); await start('quiet', quietMs)
+          if (maxWaitMs !== undefined && slots.max === undefined) await start('max', maxWaitMs)
+          return success(null)
+        }
+        return wired.ok ? (pushes = pushes.then(run, run)) as ReturnType<typeof run> : run()
       },
     })]
   },
