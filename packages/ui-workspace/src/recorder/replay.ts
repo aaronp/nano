@@ -16,12 +16,13 @@ export const roots = (messages: Message[]): Message[] =>
   messages.filter(m => m.sent.from === 'host' && m.sent.kind === 'call' && m.sent.cause === undefined)
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
-/** Core's default call timeout plus 1 s. ponytail: fixed, as the app doesn't say its `timeoutMs`; read it if it ever does. */
+/** How long one wait for quiet may take: core's default call timeout plus 1 s. ponytail: fixed, as the app doesn't say its `timeoutMs`; read it if it ever does. */
 const QUIET_MS = 31_000
 
 /**
- * Counts `app`'s messages in flight: each `sent` heard until its `delivered` or `denied`. `quiet()` resolves once none
- * is, one macrotask later and still none (true), or after `QUIET_MS` (false). `stop()` stops listening.
+ * Counts `app`'s messages in flight: each `sent` heard until its `delivered` or `denied` (an outcome of a message sent
+ * before it listened is ignored: nothing waits on it). `quiet()` resolves once none is, one macrotask later and still
+ * none (true), or after `QUIET_MS` from that call (false). `stop()` stops listening.
  */
 function inFlight(app: Application) {
   const open = new Set<string>()
@@ -56,8 +57,8 @@ type Opts = { to?: number; now?: () => number; sleep?: (ms: number) => Promise<v
  * each root is re-sent (reads too), each later deployment is applied and each `restarted` pod is restarted. Roots are
  * not awaited one by one: an input waits only for the roots whose outcome was recorded before it, as the host did.
  * Returns the counts and the seq range covered; a re-sent root that fails counts in `failed`.
- * `pace: 'fast'` (for an app on a simulated clock) doesn't keep to the offsets: before each input, and before it
- * returns, it waits until no message is in flight; an input whose wait for quiet runs out counts in `failed`.
+ * `pace: 'fast'` (for an app on a simulated clock) doesn't keep to the offsets: after the reset, before each input and
+ * before it returns, it waits until no message is in flight; an input whose wait for quiet runs out counts in `failed`.
  */
 export async function replay(app: Application, store: MessageStore, opts: Opts = {}): Promise<NanoResult<Replayed>> {
   await store.flush()
@@ -70,16 +71,16 @@ export async function replay(app: Application, store: MessageStore, opts: Opts =
   if (cut) return failure('invalid-input', `message ${cut.seq}: its input was truncated when recorded`)
   const inputs = entries.filter(e => sends.has(e.seq) || e.event.type === 'restarted' || (e.event.type === 'deployment' && e !== start))
 
-  const reset = await app.apply(start.event.deployment)
-  if (!reset.ok) return reset
-  for (const pod of Object.keys(start.event.deployment.pods)) { const r = await app.restart(pod); if (!r.ok) return r }
-
-  const now = opts.now ?? Date.now, sleep = opts.sleep ?? wait, began = now()
-  const n = { sent: 0, failed: 0, applied: 0, restarted: 0, from: start.seq, to: entries.at(-1)!.seq }
-  const settled = new Map(entries.flatMap(e => e.event.type === 'delivered' || e.event.type === 'denied' ? [[e.event.id, e.seq]] : []))
-  const calls: { settled: number; done: Promise<void> }[] = []
-  const flight = opts.pace === 'fast' ? inFlight(app) : undefined
+  const flight = opts.pace === 'fast' ? inFlight(app) : undefined   // before the reset, so the first input waits for its traffic too
   try {
+    const reset = await app.apply(start.event.deployment)
+    if (!reset.ok) return reset
+    for (const pod of Object.keys(start.event.deployment.pods)) { const r = await app.restart(pod); if (!r.ok) return r }
+
+    const now = opts.now ?? Date.now, sleep = opts.sleep ?? wait, began = now()
+    const n = { sent: 0, failed: 0, applied: 0, restarted: 0, from: start.seq, to: entries.at(-1)!.seq }
+    const settled = new Map(entries.flatMap(e => e.event.type === 'delivered' || e.event.type === 'denied' ? [[e.event.id, e.seq]] : []))
+    const calls: { settled: number; done: Promise<void> }[] = []
     for (const { seq, at, event } of inputs) {
       if (flight) { if (!(await flight.quiet())) n.failed++ }
       else await sleep(Math.max(at - start.at - (now() - began), 0))   // at least a macrotask: the host's pipes landed

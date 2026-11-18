@@ -86,9 +86,20 @@ step, and scrub with exact replay at any speed.
 
 1. **Fast replay waits for quiet.** Core doesn't wait end to end: an action's caller doesn't wait for its pipes, and
    `publish` waits for pipes but not for `on` listeners (D104, still open).
-   - `replay(…, { pace: 'fast' })` therefore waits, before each next host input, until no recorded message is in
-     flight. It counts `sent` against `delivered`/`denied` on `app.listen`, then yields one macrotask.
-   - Original-pace replay is unchanged.
+   - `replay(…, { pace: 'fast' })` therefore waits, before each next host input and before it returns, until no
+     message is in flight. It counts `sent` against `delivered`/`denied` on `app.listen`, then yields one macrotask.
+     It listens from before the reset, so the reset's own traffic counts too, and stops listening when it returns.
+     An outcome of a message sent before it listened is ignored.
+   - **It reproduces a host that let each input settle (controller ruling, Task 3).** Core doesn't await whole chains
+     (D104), so a host that sends inputs back to back races its own pipes. Fast replay can't reproduce that: such a
+     recording is exact only at the original pace, and only by luck.
+   - **The wait is bounded per input by a fixed 31 s** (core's default call timeout plus 1 s) until core exposes its
+     `timeoutMs`. An input whose wait runs out counts in `failed` and the replay goes on.
+   - **A hung pod is bounded by core's call timeout.** Its deliveries come out as timeouts, quiet follows and the
+     replay reproduces those timeouts. `failed` counts host inputs that failed, not failed pipes.
+   - **Original pace waits at least one macrotask between inputs** (`sleep(max(due, 0))`). Timestamps are whole
+     milliseconds, so inputs recorded under 1 ms apart would otherwise get no yield, and a sim-clock recording would
+     not replay exactly at the original pace.
 2. **The sim clock fires in order and waits for each `publish`.** It fires timers one at a time in due order within an
    `advance`. The `on` listeners (`fired` reaching the debounce) aren't awaited by core, so fast replay relies on
    quiet (1) for them.

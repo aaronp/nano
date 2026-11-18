@@ -78,7 +78,8 @@ The system passes events and the starting state is known, so state can be rebuil
   2. **Reset:** apply the start's deployment and restart every pod, so each gets a fresh closure (calls in flight
      finish on the old instances).
   3. **Re-run the host inputs** up to `to`, in order, each at its offset from the start (`at - start.at`), measured
-     from the reset with the injected `now` and `sleep` (`Date.now` and a timer by default). Roots go through
+     from the reset with the injected `now` and `sleep` (`Date.now` and a timer by default), waiting at least one
+     macrotask between inputs (`at` is whole milliseconds; see the clock-capability spec). Roots go through
      `app.runtime(runtime).call(to)` with their recorded input, every one in range, reads too. They are not awaited one
      by one: an input waits only for the roots whose outcome was recorded before it, as the host did; all are awaited at
      the end.
@@ -90,7 +91,8 @@ The system passes events and the starting state is known, so state can be rebuil
 - **Faithful only at the original pace (user accepted, 2026-11-18):** pods that act on their own clock (the debounce's
   timer, random numbers, the network) reproduce their behaviour only when the roots arrive at their original times.
   Faster replay becomes exact with the controlled clock in the Raft project. This design's store and roots don't change
-  for it.
+  for it. `pace: 'fast'` (2026-11-18-clock-capability-design.md) does this for a sim-clock app that let each input
+  settle: it waits for quiet instead of keeping to the offsets.
 - **Pod-originated roots are not re-sent:** a pod's own timer or source, with no cause and not from the host, is left to
   regenerate itself.
 
