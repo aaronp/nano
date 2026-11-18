@@ -10,7 +10,7 @@ export const slider = (name: string, aria: string, min: number, max: number, ste
   drag: (v: number) => void, set: (v: number) => void, off?: { on: boolean; toggle: (on: boolean) => void }) => html`
   <label style="display:flex; flex-direction:column; gap:6px; width:180px">
     <span style="display:flex; justify-content:space-between"><span>${off ? html`<input type="checkbox" aria-label=${'Use ' + name} .checked=${off.on} @change=${(e: Event) => off.toggle((e.target as HTMLInputElement).checked)}> ` : ''}${name}</span><span style="color:var(--nano-fg, #E6EAF0)">${off && !off.on ? 'off' : `${Math.round(Math.min(elapsed, value))} / ${value} ms`}</span></span>
-    <span style="display:block; height:6px; border-radius:3px; background:var(--nano-surface-2, #222933); overflow:hidden"><span style="display:block; height:6px; width:${off && !off.on ? 0 : Math.round(clamp01(elapsed / value) * 100)}%; background:${color}"></span></span>
+    <span style="display:block; height:6px; border-radius:3px; background:var(--nano-surface-2, #222933); overflow:hidden"><span style="display:block; height:6px; width:${off && !off.on ? 0 : Math.round(clamp01(elapsed / (value || 1)) * 100)}%; background:${color}"></span></span>
     <input type="range" min=${min} max=${max} step=${step} .value=${String(value)} ?disabled=${off && !off.on} aria-label=${aria} style="width:180px; margin:0; accent-color:${color}"
       @input=${(e: Event) => drag(Number((e.target as HTMLInputElement).value))} @change=${(e: Event) => set(Number((e.target as HTMLInputElement).value))}>
   </label>`

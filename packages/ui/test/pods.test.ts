@@ -37,11 +37,22 @@ test('with maxWaitMs, pushes that never go quiet still flush by the max wait', a
   expect(r[0]![0]).toBe(0)
 })
 
-test('without maxWaitMs, the default config still flushes only when quiet', async () => {
-  const app = await waits(undefined)
-  await app.call('main', 'wait').push('x')
-  await sleep(50)
+test('without maxWaitMs, pushes that never go quiet do not flush until they stop', async () => {
+  const app = await waits({ quietMs: 30 })
+  for (let i = 0; i < 8; i++) { await app.call('main', 'wait').push(i); await sleep(15) }
   expect(await app.call('main', 'all').entries(null)).toEqual(success([]))
+  await sleep(60)
+  expect(await app.call('main', 'all').entries(null)).toEqual(success([[0, 1, 2, 3, 4, 5, 6, 7]]))
+})
+
+test('a closed debounce publishes nothing, even with a batch pending', async () => {
+  const app = await waits({ quietMs: 20 })
+  await app.call('main', 'wait').push('x')
+  let sent = 0
+  app.listen(e => { if (e.type === 'sent' && e.from === 'wait') sent++ })
+  await app.close()
+  await sleep(50)
+  expect(sent).toBe(0)
 })
 
 test('a config out of range is refused', async () => {

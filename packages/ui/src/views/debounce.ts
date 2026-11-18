@@ -42,6 +42,8 @@ export class NanoDebounce extends ViewElement {
     catch { this.unsub = undefined; this.valued = false }
   }
   protected hear(e: AppEvent, tg: ViewTarget) {
+    // a new config rebuilds the pod: its queue is gone, and so is the subscription to its pushes
+    if (e.type === 'applied' && (e.changed.includes(tg.pod) || e.added.includes(tg.pod))) { this.pending = []; this.started(tg); return }
     if (e.type !== 'sent' || e.kind === 'subscribe' || e.kind === 'unsubscribe') return   // a subscribe is no value travelling
     if (!this.valued && e.to === tg.pod && e.port === PUSH) this.arrive('•')
     // what it sends is its flushes (a pipe names the target's port), except a subscriber's copy of a push (an `on` at push)
@@ -78,6 +80,7 @@ export class NanoDebounce extends ViewElement {
     this.ro = new ResizeObserver(() => { this.fit = { w: box.clientWidth, h: box.clientHeight }; this.requestUpdate() })
     this.ro.observe(box)
   }
+  connectedCallback() { super.connectedCallback(); const box = this.renderRoot?.querySelector?.('.fit'); if (box) this.ro?.observe(box) }   // re-attached: fit again
   disconnectedCallback() { super.disconnectedCallback(); this.unsub?.(); this.unsub = undefined; this.ro?.disconnect(); cancelAnimationFrame(this.raf); this.raf = 0 }
   willUpdate(changed: Map<string, unknown>) {
     super.willUpdate(changed)

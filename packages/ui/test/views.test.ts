@@ -110,6 +110,12 @@ describe('pod views', () => {
     el.shadowRoot!.querySelector<HTMLInputElement>('input[aria-label="Use max wait"]')!.click()
     await sleep(10)
     expect(app.deployment().pods['wait']!.config).toEqual({ quietMs: 450, maxWaitMs: 1000 })
+    await app.call('main', 'wait').push('after')   // the pod restarted with its new config: the view still hears it
+    await el.updateComplete
+    expect([...el.shadowRoot!.querySelectorAll('.item')].map(i => i.textContent)).toEqual(['aft…'])
+    el.shadowRoot!.querySelector<HTMLInputElement>('input[aria-label="Use max wait"]')!.click()
+    await sleep(10)
+    expect(app.deployment().pods['wait']!.config).toEqual({ quietMs: 450 })
   })
 
   test('given nano-input, every edit calls change and the kind picker makes it a number field sending numbers', async () => {

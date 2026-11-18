@@ -24,7 +24,7 @@ export class NanoInput extends ViewElement {
 
   protected face(tg: ViewTarget) {
     const kind = this.kind(tg), box = (e: Event) => e.target as HTMLInputElement
-    const parse = (el: HTMLInputElement) => (kind === 'number' ? Number(el.value) : kind === 'boolean' ? el.checked : el.value)
+    const parse = (el: HTMLInputElement) => (kind === 'number' ? (el.value === '' ? null : Number(el.value)) : kind === 'boolean' ? el.checked : el.value)
     const key = (e: KeyboardEvent) => {
       if (e.key !== 'Enter' || (kind === 'textarea' && !e.ctrlKey && !e.metaKey)) return
       e.preventDefault(); this.value = parse(box(e)); void this.send(tg)
