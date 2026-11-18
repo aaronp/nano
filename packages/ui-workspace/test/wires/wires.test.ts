@@ -2,6 +2,7 @@ import './dom.ts'
 import { afterEach, expect, test } from 'bun:test'
 import { defineWires, type Wires } from '../../src/wires'
 import { onDown, onMove, onUp, removeSel, toggleEdit } from '../../src/wires/pointer'
+import { onStage } from '../../src/wires/filter'
 import { connectPipe, disconnectPipe } from '../../src/wires/edit'
 import { Debounce, Input, k, Log, MapIface, model, p2, setup, tick } from './setup.ts'
 
@@ -36,7 +37,8 @@ async function mount() {
     const plate = root.querySelector('.plate-bg')
     if (plate) plate.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1200, height: 600 }) as DOMRect
   }
-  const at = (key: string) => ({ clientX: el.model.P[key]!.x, clientY: el.model.P[key]!.y })
+  // where the jack is drawn: Show Connected lays out only what it shows
+  const at = (key: string) => { const p = onStage(el).P[key] ?? el.model.P[key]!; return { clientX: p.x, clientY: p.y } }
   const pipes = () => t.host.data().runtimes['main']!.subscriptions
   const submit = (v: unknown) => (t.app.call('main', 'r') as unknown as { submit(v: unknown): Promise<unknown> }).submit(v)
   return { ...t, el, dock, root, settle, flip, at, pipes, submit }

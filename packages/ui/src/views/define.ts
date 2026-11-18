@@ -3,7 +3,9 @@
  *
  *   defineViews(); viewFor(pod, { ...app.deployment(), views: selectors }, views)
  */
-import { NanoDebounce, NanoInput, NanoLog, NanoMap } from './faces.ts'
+import { NanoLog, NanoMap } from './faces.ts'
+import { NanoDebounce } from './debounce.ts'
+import { NanoInput } from './input.ts'
 import { NanoExplorer } from '../explorer.ts'
 import { NanoWiring } from '../wiring/wiring.ts'
 import { NanoPodView } from './pod-view.ts'

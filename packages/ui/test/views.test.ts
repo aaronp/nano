@@ -83,19 +83,53 @@ describe('pod views', () => {
     expect(text(el)).toContain('"HI"')
   })
 
-  test('given nano-debounce on wait, when pushed, then pending; after flushed, it flashes, then idle', async () => {
+  test('given nano-debounce on wait, when values are pushed, then they wait in the queue with their values, and drop as one batch', async () => {
     const { app, registry } = await open()
+    must(await app.apply({ ...slice, pods: { ...slice.pods, wait: Pod.eager(debounce, { config: { quietMs: 60 } }) } }))
     const el = await mount('nano-debounce', { app, registry, runtime: 'main', pod: 'wait' })
     expect(text(el)).toContain('idle')
-    await app.call('main', 'wait').push('x')
+    await app.call('main', 'wait').push('ab')
+    await app.call('main', 'wait').push('cd')
     await el.updateComplete
-    expect(text(el)).toContain('pending')
-    await sleep(30)
+    expect(text(el)).toContain('collecting 2')
+    expect([...el.shadowRoot!.querySelectorAll('.item')].map(i => i.textContent)).toEqual(['ab', 'cd'])
+    await sleep(100)
     await el.updateComplete
-    expect(text(el)).toContain('flushed')
-    await sleep(320)
-    await el.updateComplete
-    expect(text(el)).toContain('idle')
+    expect(el.shadowRoot!.querySelector('.ratio')!.textContent).toBe('2 → 1 batches')
+    expect(text(el)).toContain('dropping 2')
+  })
+
+  test('given nano-debounce, when the quiet slider is released, then the pod is applied with that quiet period', async () => {
+    const { app, registry } = await open()
+    const el = await mount('nano-debounce', { app, registry, runtime: 'main', pod: 'wait' })
+    const quiet = el.shadowRoot!.querySelector<HTMLInputElement>('input[aria-label="Quiet period in milliseconds"]')!
+    quiet.value = '450'
+    quiet.dispatchEvent(new Event('change'))
+    await sleep(10)
+    expect(app.deployment().pods['wait']!.config).toEqual({ quietMs: 450 })
+    el.shadowRoot!.querySelector<HTMLInputElement>('input[aria-label="Use max wait"]')!.click()
+    await sleep(10)
+    expect(app.deployment().pods['wait']!.config).toEqual({ quietMs: 450, maxWaitMs: 1000 })
+  })
+
+  test('given nano-input, every edit calls change and the kind picker makes it a number field sending numbers', async () => {
+    const { app, registry } = await open()
+    const field = await mount('nano-input', { app, registry, runtime: 'main', pod: 'in' })
+    const changes: unknown[] = []
+    app.runtime('main').subscribe(Input.ops.change, ({ input }) => { changes.push(input) })
+    const box = () => field.shadowRoot!.querySelector('input')!
+    box().value = 'h'; box().dispatchEvent(new Event('input'))
+    box().value = 'hi'; box().dispatchEvent(new Event('input'))
+    await sleep(5)
+    expect(changes).toEqual(['h', 'hi'])
+    const pick = field.shadowRoot!.querySelector('select')!
+    pick.value = 'number'; pick.dispatchEvent(new Event('change'))
+    await sleep(10); await field.updateComplete
+    expect(app.deployment().pods['in']!.config).toEqual({ kind: 'number' })
+    expect(box().type).toBe('number')
+    box().value = '42'; box().dispatchEvent(new Event('input'))
+    await sleep(5)
+    expect(changes.at(-1)).toBe(42)
   })
 
   test('given nano-pod-view on up, when apply changes its config, then it shows the new config', async () => {

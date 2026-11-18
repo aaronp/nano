@@ -15,9 +15,10 @@ const Text = Schema.define(Type.String(), 'Text')
 const Approval = Schema.define(Type.Object({ title: Type.String(), detail: Type.Optional(Type.String()) }), 'Approval')
 const Approved = Schema.define(Type.Boolean(), 'Approved')
 
-/** Returns its input, so its result can be piped. */
-export const Input = ns.interface('Input', { submit: Op.action(Any, Any) })
-export const Debounce = ns.interface('Debounce', { push: Op.action(Any, Nothing), flushed: Op.event(Any) })
+/** Each returns its input, so its result can be piped: `submit` when the user submits, `change` on every edit. */
+export const Input = ns.interface('Input', { submit: Op.action(Any, Any), change: Op.action(Any, Any) })
+/** A flush publishes the newest value as `flushed` and everything queued since the last flush, oldest first, as `batch`. */
+export const Debounce = ns.interface('Debounce', { push: Op.action(Any, Nothing), flushed: Op.event(Any), batch: Op.event(Entries) })
 export const MapIface = ns.interface('Map', { map: Op.action(Any, Any) })
 export const Log = ns.interface('Log', {
   log: Op.action(Any, Nothing),
