@@ -8,7 +8,7 @@
  *   f.value = emptyFilter(); f.addEventListener('change', e => { f.value = e.detail })
  */
 import { LitElement, css, html } from 'lit'
-import { base, kit } from '@pritzlaff/nano-elements'
+import { base, kit, t } from '@pritzlaff/nano-elements'
 import { emptyFilter, type FilterValue, type PodStatus } from './model.ts'
 
 type Groups = { kinds?: string[]; namespaces?: string[]; statuses?: PodStatus[] }
@@ -20,7 +20,8 @@ export class NanoFilter extends LitElement {
     :host { position: relative; display: flex; gap: 6px; align-items: center }
     input { flex: 1 1 auto; min-width: 0 }
     .pop { box-sizing: border-box; padding: 8px } .pop:popover-open { display: grid; gap: 8px }
-    .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center } .row > span { width: 100%; font-size: 11px; opacity: .7 }`]
+    .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center } .row > span { width: 100%; font-size: 11px; color: ${t('muted')} }
+    .n { margin-left: 4px; padding: 0 6px; border-radius: 999px; background: ${t('accent-soft')}; color: ${t('fg')}; font-weight: 600; font-variant-numeric: tabular-nums }`]
   declare groups: Groups
   declare value: FilterValue
   declare open: boolean
@@ -52,7 +53,7 @@ export class NanoFilter extends LitElement {
       <input type="search" placeholder="Search" aria-label="Search" .value=${v.text} @input=${(e: Event) => this.emit({ ...v, text: (e.target as HTMLInputElement).value })}>
       <button class="toggle" popovertarget="panel" aria-haspopup="true" aria-controls="panel" aria-expanded=${this.open}>Filter${count ? ` (${count} active)` : ''}</button>
       <div class="pop" id="panel" popover="auto" role="group" aria-label="Filters" @toggle=${this.toggled}>${rows.map(g => html`
-        <div class="row" role="group" aria-labelledby="h-${g}"><span id="h-${g}">${names[g]}</span>${(this.groups[g] as string[]).map(o => html`
+        <div class="row" role="group" aria-labelledby="h-${g}"><span id="h-${g}">${names[g]}${v[g].size ? html` <b class="n" aria-label="${v[g].size} chosen">${v[g].size}</b>` : ''}</span>${(this.groups[g] as string[]).map(o => html`
           <button aria-pressed=${(v[g] as Set<string>).has(o)} @click=${() => this.flip(g, o)}>${o}</button>`)}</div>`)}</div>`
   }
 }

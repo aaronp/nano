@@ -53,6 +53,13 @@ test('the button counts active chips', async () => {
   expect($$(el, 'button.toggle')[0]!.textContent).toBe('Filter (2 active)')
 })
 
+test('each group heading counts its chosen chips, and shows nothing at zero', async () => {
+  const f = emptyFilter(); f.kinds.add('pod'); f.kinds.add('action')
+  const el = await mount({ kinds: ['pod', 'action'], namespaces: ['nano.ui'] }, f)
+  expect($$(el, '#h-kinds .n').map(b => b.textContent)).toEqual(['2'])
+  expect($$(el, '#h-namespaces .n')).toHaveLength(0)
+})
+
 test('the button names the popover it controls; with nothing active its name is plain', async () => {
   const el = await mount({ kinds: ['pod'] })
   const b = $$(el, 'button.toggle')[0]!
