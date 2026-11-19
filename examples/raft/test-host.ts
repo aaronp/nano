@@ -8,12 +8,12 @@
  *   await shadowAt(store, t, createRaft)   // the app as of t, its `deploy` bound to the shadow
  */
 import { Application, AppDeployment, Coord, DeploymentPolicies, Implementation, Pod, Registry, failure, provide, success, type NanoResult } from '@pritzlaff/nano-core'
-import uiProvider, { HostDeploy, memoryStore, record } from '@pritzlaff/nano-ui'
+import uiProvider, { ClockControl, HostDeploy, memoryStore, record } from '@pritzlaff/nano-ui'
 import type { Node } from './core/types.ts'
 import raft from './index.ts'
 
 const ns = Coord.namespace('example.raft.test')
-const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
+export const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
 /** Adds pods and runtimes (a name already there is invalid-input); removes runtimes (an unknown one is not-found) and the pods placed nowhere else. */
 function testDeploy(app: () => Application) {
@@ -65,8 +65,17 @@ export async function openRaft(): Promise<Application> {
   return must(await createRaft(d))
 }
 
-const settle = () => new Promise(r => setTimeout(r, 0))
+export const settle = () => new Promise(r => setTimeout(r, 0))
 export const ids = ['example-1', 'example-2', 'example-3']
+export const node = (app: Application, id: string) => app.call(id, `${id}-raft`)
+export const status = async (app: Application, id: string) => must(await node(app, id).status(null)) as Node
+export const statuses = (app: Application) => Promise.all(ids.map(id => status(app, id)))
+export const leaders = async (app: Application) => (await statuses(app)).filter(n => n.role === 'leader' && !n.stopped)
+const tick = (app: Application, ms: number) => app.call('raft', 'raft-clock')[ClockControl.ops.advance.name]!(ms)
+/** Moves the sim clock `ms` on, 10 ms at a time, letting the pods react in between. */
+export async function advance(app: Application, ms: number) {
+  for (let t = 0; t < ms; t += 10) { must(await tick(app, 10)); await settle() }
+}
 
 /**
  * The case study's recorded run, from a clean start: create `example` with `seed`; advance until a leader; two
@@ -79,22 +88,21 @@ export async function recordedRun(seed: number) {
   let now = 0
   const { stop } = await record(app, store, { clean: true, now: () => now })
   const input = async <T>(f: () => Promise<NanoResult<T>>) => { now += 10; const r = must(await f()); await settle(); return r }
-  const node = (id: string) => app.call(id, `${id}-raft`)
-  const statuses = async () => Promise.all(ids.map(async id => must(await node(id).status(null)) as Node))
-  const leader = async () => (await statuses()).find(n => n.role === 'leader' && !n.stopped)?.id
-  const advance = async (ms: number) => { for (let t = 0; t < ms; t += 100) { await input(() => app.call('raft', 'raft-clock').advance(100)); await statuses() } }
-  const until = async () => { for (let i = 0; i < 30; i++) { const l = await leader(); if (l) return l; await advance(100) } throw new Error('no leader') }
+  const nodeOf = (id: string) => node(app, id), read = () => statuses(app)
+  const leader = async () => (await leaders(app))[0]?.id
+  const advanceBy = async (ms: number) => { for (let t = 0; t < ms; t += 100) { await input(() => tick(app, 100)); await read() } }
+  const until = async () => { for (let i = 0; i < 30; i++) { const l = await leader(); if (l) return l; await advanceBy(100) } throw new Error('no leader') }
 
   await input(() => app.call('raft', 'cluster').create({ name: 'example', size: 3, seed }))
-  await statuses()
+  await read()
   const first = await until()
-  for (const value of ['a', 'b']) { await input(() => node(first).request(value)); await advance(200) }
-  await input(() => node(first).stop(null)); await advance(1000)
+  for (const value of ['a', 'b']) { await input(() => nodeOf(first).request(value)); await advanceBy(200) }
+  await input(() => nodeOf(first).stop(null)); await advanceBy(1000)
   const second = await until()
-  await input(() => node(first).resume(null)); await advance(200)
-  await input(() => node(ids.find(id => id !== second && id !== first)!).restart(null)); await advance(200)
+  await input(() => nodeOf(first).resume(null)); await advanceBy(200)
+  await input(() => nodeOf(ids.find(id => id !== second && id !== first)!).restart(null)); await advanceBy(200)
   const third = await until()
-  await input(() => node(third).request('c')); await advance(200)
+  await input(() => nodeOf(third).request('c')); await advanceBy(200)
   stop()
-  return { app, store, statuses }
+  return { app, store, statuses: read }
 }

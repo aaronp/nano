@@ -3,27 +3,16 @@
  * cluster `example` of 3 nodes created through it, as the management view does.
  */
 import { afterEach, describe, expect, test } from 'bun:test'
-import { Application, AppDeployment, Coord, Implementation, Registry, failure, provide, success, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, Coord, Implementation, Registry, failure, provide, success, type AppEvent } from '@pritzlaff/nano-core'
 import uiProvider, { foldAt, memoryStore, record } from '@pritzlaff/nano-ui'
 import type { Node, Persistent } from './core/types.ts'
 import { clusterDeployment } from './deployment.ts'
 import { ledgerStep } from './fold.ts'
 import raft from './index.ts'
 import { Ledger } from './interfaces.ts'
-import { openRaft } from './test-host.ts'
+import { advance, ids, leaders, must, node, openRaft, settle, status, statuses } from './test-host.ts'
 
-const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
-const settle = () => new Promise(r => setTimeout(r, 0))
-const ids = ['example-1', 'example-2', 'example-3']
-const node = (app: Application, id: string) => app.call(id, `${id}-raft`)
 const read = async (app: Application, id: string) => must(await app.call(id, `${id}-ledger`).read(null)) as Persistent
-const status = async (app: Application, id: string) => must(await node(app, id).status(null)) as Node
-const statuses = (app: Application) => Promise.all(ids.map(id => status(app, id)))
-/** Moves the sim clock `ms` on, 10 ms at a time, letting the pods react in between. */
-async function advance(app: Application, ms: number) {
-  for (let t = 0; t < ms; t += 10) { must(await app.call('raft', 'raft-clock').advance(10)); await settle() }
-}
-const leaders = async (app: Application) => (await statuses(app)).filter(n => n.role === 'leader' && !n.stopped)
 
 let app: Application
 afterEach(async () => { await app?.close() })

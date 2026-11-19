@@ -4,12 +4,10 @@
  * host's `cluster.create` and lets it deploy again, rather than also applying the entry.
  */
 import { expect, test } from 'bun:test'
-import { port, type NanoResult } from '@pritzlaff/nano-core'
+import { port } from '@pritzlaff/nano-core'
 import { HostDeploy, diverge, memoryStore, pair, record, replay } from '@pritzlaff/nano-ui'
-import { ids, recordedRun } from './test-host.ts'
+import { ids, must, recordedRun, settle } from './test-host.ts'
 
-const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
-const settle = () => new Promise(r => setTimeout(r, 0))
 const DEPLOY = port(HostDeploy, HostDeploy.ops.deploy)
 
 const cases = [1, 2, 3, 4, 5].flatMap(seed => (['fast', 'original'] as const).map(pace => [seed, pace] as const))

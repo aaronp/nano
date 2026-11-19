@@ -1,11 +1,11 @@
 /** `clusterDeployment`, headless: the runtimes, pods and edges a cluster is, and that it assembles beside nano.json. */
 import { describe, expect, test } from 'bun:test'
-import { AppDeployment, Registry, type NanoResult } from '@pritzlaff/nano-core'
+import { AppDeployment, Registry } from '@pritzlaff/nano-core'
 import uiProvider from '@pritzlaff/nano-ui'
 import raft from './index.ts'
 import { clusterDeployment, timingFor } from './deployment.ts'
+import { must } from './test-host.ts'
 
-const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
 describe('clusterDeployment', () => {
   test('3 nodes: a runtime each, placing the shared messaging and clock beside its raft, ledger and random', () => {

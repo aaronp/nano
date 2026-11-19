@@ -5,14 +5,13 @@
  * Raft's safety properties.
  */
 import { expect, test } from 'bun:test'
-import { port, type NanoResult } from '@pritzlaff/nano-core'
+import { port } from '@pritzlaff/nano-core'
 import { foldAt, pair, shadowAt } from '@pritzlaff/nano-ui'
 import type { LogEntry, Node } from './core/types.ts'
 import { ledgerStep } from './fold.ts'
 import { RaftNode } from './interfaces.ts'
-import { createRaft, ids, recordedRun } from './test-host.ts'
+import { createRaft, ids, must, recordedRun } from './test-host.ts'
 
-const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const STATUS = port(RaftNode, RaftNode.ops.status), RESTART = port(RaftNode, RaftNode.ops.restart)
 
 test.each([1, 2, 3, 4, 5])('foldAt(ledgerStep) equals shadowAt\'s Ledger.read for every node at every quiet boundary (seed %d)', async seed => {

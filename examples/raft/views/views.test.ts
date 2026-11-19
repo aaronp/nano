@@ -2,21 +2,16 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { afterEach, expect, test } from 'bun:test'
-import { Registry, type Application, type NanoResult } from '@pritzlaff/nano-core'
+import { Registry, type Application } from '@pritzlaff/nano-core'
 import type { Node, Persistent } from '../core/types.ts'
 
 // after the DOM is registered, so lit takes its browser build
 const { ClockControl } = await import('@pritzlaff/nano-ui')
 const { Cluster, Ledger, RaftNode } = await import('../interfaces.ts')
-const { openRaft } = await import('../test-host.ts')
+const { advance, must, openRaft, settle } = await import('../test-host.ts')
 const { glyphModel, ledgerModel } = await import('./model.ts')
 await import('../index.ts')
-const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
-const settle = () => new Promise(r => setTimeout(r, 0))
 const wait = async () => { for (let i = 0; i < 5; i++) await settle() }
-const advance = async (app: Application, ms: number) => {
-  for (let t = 0; t < ms; t += 10) { must(await app.call('raft', 'raft-clock')[ClockControl.ops.advance.name]!(10)); await settle() }
-}
 const mount = async <E extends HTMLElement>(tag: string, app: Application, runtime: string, pod: string) => {
   const el = document.createElement(tag) as E & { target?: unknown; updateComplete: Promise<boolean> }
   el.target = { app, registry: Registry.create(), runtime, pod }
