@@ -70,7 +70,7 @@ template-check:
 template-export:
 	scripts/template-export.sh https://github.com/aaronp/nano-template.git
 
-# The decision ledger (adr/decisions.md) and the task board (docs/board/board.md), each served in the browser.
+# The decision ledger (docs/adr/decisions.md) and the task board (docs/board/board.md), each served in the browser.
 # Edits made in the viewer are not written back: download and save over the file, then commit it.
 adr:
 	bun run adr

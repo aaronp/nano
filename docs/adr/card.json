@@ -3,11 +3,12 @@
   "title": "Decisions",
   "subtitle": "ADR log",
   "status": {
-    "label": "Up to date",
-    "tone": "good"
+    "label": "1 due",
+    "tone": "bad",
+    "url": "https://aaronp.github.io/adr/?src=docs/adr/decisions.md&status=revisit"
   },
   "heading": {
-    "primary": "0",
+    "primary": "10",
     "label": "decision records"
   },
   "legend": [
@@ -15,43 +16,43 @@
       "id": "proposed",
       "label": "Proposed",
       "color": "#1F45B0",
-      "url": "https://aaronp.github.io/adr/?src=https://aaronp.github.io/nano/docs/adr/decisions.md&status=proposed"
+      "url": "https://aaronp.github.io/adr/?src=docs/adr/decisions.md&status=proposed"
     },
     {
       "id": "accepted",
       "label": "Accepted",
       "color": "#0B6B5F",
-      "url": "https://aaronp.github.io/adr/?src=https://aaronp.github.io/nano/docs/adr/decisions.md&status=accepted"
+      "url": "https://aaronp.github.io/adr/?src=docs/adr/decisions.md&status=accepted"
     },
     {
       "id": "superseded",
       "label": "Superseded",
       "color": "#6B7280",
-      "url": "https://aaronp.github.io/adr/?src=https://aaronp.github.io/nano/docs/adr/decisions.md&status=superseded"
+      "url": "https://aaronp.github.io/adr/?src=docs/adr/decisions.md&status=superseded"
     },
     {
       "id": "deprecated",
       "label": "Deprecated",
       "color": "#B26B00",
-      "url": "https://aaronp.github.io/adr/?src=https://aaronp.github.io/nano/docs/adr/decisions.md&status=deprecated"
+      "url": "https://aaronp.github.io/adr/?src=docs/adr/decisions.md&status=deprecated"
     },
     {
       "id": "rejected",
       "label": "Rejected",
       "color": "#A3283C",
-      "url": "https://aaronp.github.io/adr/?src=https://aaronp.github.io/nano/docs/adr/decisions.md&status=rejected"
+      "url": "https://aaronp.github.io/adr/?src=docs/adr/decisions.md&status=rejected"
     }
   ],
   "report": {
-    "proposed": 0,
-    "accepted": 0,
+    "proposed": 5,
+    "accepted": 5,
     "superseded": 0,
     "deprecated": 0,
     "rejected": 0
   },
   "source": {
     "label": "docs/adr/decisions.md",
-    "url": "https://aaronp.github.io/adr/?src=https://aaronp.github.io/nano/docs/adr/decisions.md"
+    "url": "https://aaronp.github.io/adr/?src=docs/adr/decisions.md"
   },
   "updated": "2026-11-19"
 }

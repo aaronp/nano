@@ -12,7 +12,7 @@
     "typescript": "^7.0.2"
   },
   "scripts": {
-    "adr": "adr adr/decisions.md",
+    "adr": "adr docs/adr/decisions.md",
     "agile": "agile docs/board/board.md"
   }
 }

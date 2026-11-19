@@ -16,7 +16,7 @@ and that the time machine and a new generic Ring view can pause, slow and scrub,
 
 **Tech Stack:** TypeScript, bun test (`--isolate`), happy-dom, Lit, TypeBox, nano-core, nano-ui, ui-workspace.
 
-**Spec:** `docs/superpowers/specs/2026-11-19-raft-case-study-design.md`. Decisions: `adr/decisions.md`
+**Spec:** `docs/superpowers/specs/2026-11-19-raft-case-study-design.md`. Decisions: `docs/adr/decisions.md`
 (ADR-0010, ADR-0015).
 
 ## Global Constraints

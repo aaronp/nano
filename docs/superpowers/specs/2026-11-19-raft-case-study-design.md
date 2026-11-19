@@ -1,7 +1,7 @@
 # The Raft case study — design
 
 Date: 2026-11-19. Builds on the time machine (`2026-11-18-time-machine-design.md`), the clock and random
-capabilities, and ADR-0015 (`adr/decisions.md`). Branch: `dev-raft`.
+capabilities, and ADR-0015 (`docs/adr/decisions.md`). Branch: `dev-raft`.
 
 ## Intent
 
@@ -265,7 +265,7 @@ All headless on the sim clock, driven by `advance`.
 - **Constants, not strings:** ops are named by their constants and `port(...)`, never by duplicated coordinate strings.
 - **No hidden time:** Raft pods use only the wired clock and random.
 
-## Depends on open decisions (`adr/decisions.md`)
+## Depends on open decisions (`docs/adr/decisions.md`)
 
 - **ADR-0010 (settled):** clock and random stay capability pods; an `env` on `NanoContext` is deferred, so the
   scrubbing application is today's `shadowAt`, replaying from the start (no snapshots).
