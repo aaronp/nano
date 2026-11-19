@@ -1,48 +1,26 @@
 // The Raft elements over a real 3-node cluster on the sim clock: each renders its model, each button calls its op.
-import { GlobalRegistrator } from '@happy-dom/global-registrator'
-if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { afterEach, expect, test } from 'bun:test'
-import { Registry, type Application } from '@pritzlaff/nano-core'
-import type { Node, Persistent } from '../core/types.ts'
-
-// after the DOM is registered, so lit takes its browser build
-const { ClockControl } = await import('@pritzlaff/nano-ui')
-const { Cluster, Ledger, RaftNode } = await import('../interfaces.ts')
-const { advance, must, openRaft, settle } = await import('../test-host.ts')
-const { glyphModel, ledgerModel } = await import('./model.ts')
-await import('../index.ts')
-const wait = async () => { for (let i = 0; i < 5; i++) await settle() }
-const mount = async <E extends HTMLElement>(tag: string, app: Application, runtime: string, pod: string) => {
-  const el = document.createElement(tag) as E & { target?: unknown; updateComplete: Promise<boolean> }
-  el.target = { app, registry: Registry.create(), runtime, pod }
-  document.body.append(el); await wait(); await el.updateComplete
-  return el
-}
+import { type Application } from '@pritzlaff/nano-core'
+import type { Persistent } from '../core/types.ts'
+import { ClockControl, Cluster, Ledger, RaftNode, advance, must, openRaft, glyphModel, ledgerModel, wait, mount, cluster, status } from './views-setup.ts'
 
 let app: Application
 afterEach(async () => { document.body.innerHTML = ''; await app?.close() })
-async function cluster() {
-  app = await openRaft()
-  must(await app.call('raft', 'cluster')[Cluster.ops.create.name]!({ name: 'example', size: 3, seed: 1 }))
-  await advance(app, 1000)
-}
-const status = async (id: string) => must(await app.call(id, `${id}-raft`)[RaftNode.ops.status.name]!(null)) as Node
 
 test('raft-node renders its glyph from the model and follows the node', async () => {
-  await cluster()
+  app = await cluster()
   const el = await mount('raft-node', app, 'example-1', 'example-1-raft')
-  const s = await status('example-1'), m = glyphModel(s, 1000)
+  const s = await status(app, 'example-1'), m = glyphModel(s, 1000)
   expect(el.shadowRoot!.querySelector('text')!.textContent).toBe(String(m.term))
   expect(el.shadowRoot!.querySelectorAll('.dot')).toHaveLength(2)
   const before = el.shadowRoot!.querySelector('text')!.textContent
   await app.call('example-1', 'example-1-raft')[RaftNode.ops.timeOut.name]!(null)
   await wait(); await el.updateComplete
-  expect(el.shadowRoot!.querySelector('text')!.textContent).toBe(String((await status('example-1')).p.currentTerm))
+  expect(el.shadowRoot!.querySelector('text')!.textContent).toBe(String((await status(app, 'example-1')).p.currentTerm))
   expect(Number(el.shadowRoot!.querySelector('text')!.textContent)).toBeGreaterThan(Number(before))
 })
-
 test('a click opens the detail panel; its buttons call the node ops', async () => {
-  await cluster()
+  app = await cluster()
   const el = await mount('raft-node', app, 'example-1', 'example-1-raft')
   el.shadowRoot!.querySelector('svg')!.dispatchEvent(new Event('click'))
   await el.updateComplete; await wait()
@@ -51,26 +29,25 @@ test('a click opens the detail panel; its buttons call the node ops', async () =
   expect([...detail.shadowRoot!.querySelectorAll('.rows th')].map(x => x.textContent)).toEqual(['state', 'currentTerm', 'votedFor', 'commitIndex', 'election alarm'])
   expect(detail.shadowRoot!.querySelectorAll('.peers tr')).toHaveLength(3)   // header + 2 peers
   const press = async (label: string) => { [...detail.shadowRoot!.querySelectorAll('button')].find(b => b.textContent === label)!.click(); await wait() }
-  await press('stop'); expect((await status('example-1')).stopped).toBe(true)
-  await press('resume'); expect((await status('example-1')).stopped).toBe(false)
-  const term = (await status('example-1')).p.currentTerm
-  await press('time out'); expect((await status('example-1')).p.currentTerm).toBe(term + 1)
-  await press('restart'); expect((await status('example-1')).role).toBe('follower')
+  await press('stop'); expect((await status(app, 'example-1')).stopped).toBe(true)
+  await press('resume'); expect((await status(app, 'example-1')).stopped).toBe(false)
+  const term = (await status(app, 'example-1')).p.currentTerm
+  await press('time out'); expect((await status(app, 'example-1')).p.currentTerm).toBe(term + 1)
+  await press('restart'); expect((await status(app, 'example-1')).role).toBe('follower')
   await press('request')   // a follower refuses: the panel says why
   await detail.updateComplete
   expect(detail.shadowRoot!.querySelector('[role=alert]')).not.toBeNull()
 })
-
 test('raft-ledger follows the ledger as the leader takes a request', async () => {
-  await cluster()
-  const ids = ['example-1', 'example-2', 'example-3'], all = await Promise.all(ids.map(status))
+  app = await cluster()
+  const ids = ['example-1', 'example-2', 'example-3'], all = await Promise.all(ids.map(id => status(app, id)))
   const leader = all.find(n => n.role === 'leader')!.id
   const el = await mount('raft-ledger', app, leader, `${leader}-ledger`)
   expect(el.shadowRoot!.querySelectorAll('tr')).toHaveLength(1)
   must(await app.call(leader, `${leader}-raft`)[RaftNode.ops.request.name]!('hello'))
   await advance(app, 300); await wait(); await el.updateComplete
   const p = must(await app.call(leader, `${leader}-ledger`)[Ledger.ops.read.name]!(null)) as Persistent
-  const m = ledgerModel(p, (await status(leader)).commitIndex)
+  const m = ledgerModel(p, (await status(app, leader)).commitIndex)
   expect(m.rows).toHaveLength(1)
   expect(el.shadowRoot!.querySelector('.head')!.textContent).toBe(`currentTerm ${m.currentTerm} · votedFor ${m.votedFor ?? '—'}`)
   const tr = el.shadowRoot!.querySelectorAll('tr')
@@ -78,7 +55,6 @@ test('raft-ledger follows the ledger as the leader takes a request', async () =>
   expect(tr[1]!.textContent).toContain('hello')
   expect(tr[1]!.className).toBe('committed')
 })
-
 test('raft-cluster creates, lists and removes a cluster through the cluster pod', async () => {
   app = await openRaft()
   const el = await mount('raft-cluster', app, 'raft', 'cluster')
@@ -93,7 +69,6 @@ test('raft-cluster creates, lists and removes a cluster through the cluster pod'
   expect(root.querySelectorAll('li')).toHaveLength(0)
   expect(Object.keys(app.deployment().runtimes)).not.toContain('demo-1')
 })
-
 test('mounted views add only their mount reads to the recording, a small fraction of the Raft traffic', async () => {
   app = await openRaft()
   must(await app.call('raft', 'cluster')[Cluster.ops.create.name]!({ name: 'example', size: 3, seed: 1 }))
@@ -109,71 +84,10 @@ test('mounted views add only their mount reads to the recording, a small fractio
   expect(roots.length).toBeLessThanOrEqual(4 * 6)   // each view reads at most twice at mount, then hears; none per advance
   expect(roots.length * 10).toBeLessThan(raft.length)
 })
-
 test('an idle peer dot is faint, a pending one hollow and bright, a granted one filled', async () => {
-  await cluster()
+  app = await cluster()
   const el = await mount('raft-node', app, 'example-1', 'example-1-raft')
   const dot = el.shadowRoot!.querySelector('.dot')!
   expect(dot.getAttribute('stroke-opacity')).toBe(dot.classList.contains('idle') ? '0.2' : '1')
   expect(dot.getAttribute('fill')).toBe(dot.classList.contains('granted') ? dot.getAttribute('stroke') : 'none')
-})
-
-test('swapping the target to a second app shows that app, not the first', async () => {
-  await cluster()
-  const first = app, leader = (await Promise.all(['example-1', 'example-2', 'example-3'].map(status))).find(n => n.role === 'leader')!.id
-  must(await first.call(leader, `${leader}-raft`)[RaftNode.ops.request.name]!('hello'))
-  await advance(first, 300)
-  const el = await mount('raft-node', first, leader, `${leader}-raft`)
-  const ledger = await mount('raft-ledger', first, leader, `${leader}-ledger`)
-  expect(Number(el.shadowRoot!.querySelector('text')!.textContent)).toBeGreaterThan(0)
-  expect(ledger.shadowRoot!.querySelectorAll('tr')).toHaveLength(2)   // the first app's ledger is not empty
-  app = await openRaft()   // a second app with a fresh cluster at time 0: every node at term 0, no log
-  must(await app.call('raft', 'cluster')[Cluster.ops.create.name]!({ name: 'example', size: 3, seed: 1 }))
-  for (const e of [el, ledger]) { e.target = { app, registry: Registry.create(), runtime: leader, pod: e === el ? `${leader}-raft` : `${leader}-ledger` }; await wait(); await e.updateComplete }
-  expect(el.shadowRoot!.querySelector('text')!.textContent).toBe('0')
-  expect(ledger.shadowRoot!.querySelectorAll('tr')).toHaveLength(1)
-  expect(ledger.shadowRoot!.textContent).not.toContain('hello')
-  await first.close()
-})
-
-test('a read from the old target that resolves after the swap is ignored', async () => {
-  await cluster()
-  const real = await status('example-1')
-  const late: Record<string, (v: unknown) => void> = {}
-  const stub = { runtime: () => ({ subscribe: () => () => {}, get: () => ({
-    status: () => new Promise(r => { late.status = r }), now: () => new Promise(r => { late.now = r }), read: () => new Promise(r => { late.read = r }) }) }) } as unknown as Application
-  const el = await mount('raft-node', stub, 'r', 'p'), ledger = await mount('raft-ledger', stub, 'r', 'p')
-  el.target = { app, registry: Registry.create(), runtime: 'example-1', pod: 'example-1-raft' }   // swap while the stub's reads are pending
-  ledger.target = { app, registry: Registry.create(), runtime: 'example-1', pod: 'example-1-ledger' }
-  await wait(); await el.updateComplete; await ledger.updateComplete
-  const shown = () => [el.shadowRoot!.querySelector('text')!.textContent, ledger.shadowRoot!.querySelectorAll('tr').length]
-  const before = shown()
-  late.status!({ ...real, p: { ...real.p, currentTerm: 99 } }); late.now!(5); late.read!({ currentTerm: 99, votedFor: null, log: [{ index: 1, term: 99, value: 'stale', at: 0 }] })
-  await wait(); await el.updateComplete; await ledger.updateComplete
-  expect(shown()).toEqual(before)
-  expect(el.shadowRoot!.querySelector('text')!.textContent).not.toBe('99')
-  expect(ledger.shadowRoot!.textContent).not.toContain('stale')
-})
-
-test('after a swap, nothing of the old target shows while the new target has not answered', async () => {
-  await cluster()
-  const el = await mount('raft-node', app, 'example-1', 'example-1-raft'), ledger = await mount('raft-ledger', app, 'example-1', 'example-1-ledger')
-  expect(el.shadowRoot!.querySelector('text')).not.toBeNull()
-  const never = new Promise(() => {})
-  const stub = { runtime: () => ({ subscribe: () => () => {}, get: () => ({ status: () => never, now: () => never, read: () => never }) }) } as unknown as Application
-  for (const e of [el, ledger]) { e.target = { app: stub, registry: Registry.create(), runtime: 'r', pod: 'p' }; await wait(); await e.updateComplete }
-  expect(el.shadowRoot!.querySelector('text')).toBeNull()
-  expect(ledger.shadowRoot!.querySelector('table')).toBeNull()
-})
-
-test('a target whose app has no such runtime or pod (a shadow from before the cluster) renders empty, no throw', async () => {
-  app = await openRaft()
-  const empty = (el: HTMLElement) => expect(el.shadowRoot!.innerHTML.replace(/<!--[^]*?-->/g, '').trim()).toBe('')
-  for (const [tag, pod] of [['raft-node', 'example-1-raft'], ['raft-ledger', 'example-1-ledger']] as const) {
-    const el = await mount(tag, app, 'example-1', pod)   // no runtime example-1: mount awaits updateComplete, which a throw rejects
-    empty(el)
-    el.target = { app, registry: Registry.create(), runtime: 'raft', pod }   // the runtime is there, the pod isn't
-    await wait(); await el.updateComplete
-    empty(el)
-  }
 })
