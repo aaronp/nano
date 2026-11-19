@@ -77,27 +77,45 @@ export const ICONS: Record<string, string> = {
   gift: 'M3 8h18v4H3zM5 12v9h14v-9M12 8v13M12 8S10 3 7.5 4 9 8 12 8zM12 8s2-5 4.5-4S15 8 12 8z',
 };
 
-/** A saved workspace: where it lives, how the nav shows it, and the system (registry) its components run in. */
-export interface SavedWorkspace { readonly path: string; readonly title: string; readonly icon: string; readonly system?: string }
-/** A system's name, as a registry id. */
-export const SYSTEM = /^[a-z0-9][a-z0-9-]*$/;
+/** A saved workspace: where it lives and how the nav shows it. */
+export interface SavedWorkspace { readonly path: string; readonly title: string; readonly icon: string }
 
 export const KEY = 'workspace-starter.saved-workspaces';
 export const PATH = /^\/[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)*$/;
 
-/** The saved workspaces in storage (written by screens.ts): list them, or check a new one (a refusal is a sentence). */
-export const savedWorkspaces = (storage: Pick<Storage, 'getItem' | 'setItem'>) => {
+/** Where a saved workspace's dock keeps its layout. */
+export const layoutKey = (mainKey: string, path: string) => `${mainKey}.saved.${path}`;
+/** The suffixes of a dock's other keys under its layout key. */
+const SUFFIXES = ['', '.template', '.window-style'];
+
+/** The saved workspaces in storage: list them, check a new one (a refusal is a sentence), add one, or update one. */
+export const savedWorkspaces = (storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>) => {
   const list = (): SavedWorkspace[] => {
     try { const v = JSON.parse(storage.getItem(KEY) ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
   };
-  const refusal = (ws: SavedWorkspace, taken: readonly string[]): string | null => {
+  /** `own` is a page's current path when it is being edited: it is not taken by itself. */
+  const refusal = (ws: SavedWorkspace, taken: readonly string[], own?: string): string | null => {
     if (!PATH.test(ws.path)) return 'The route must look like /my-workspace: lower-case letters, digits and dashes after a /.';
-    if (taken.includes(ws.path) || list().some((w) => w.path === ws.path)) return `${ws.path} is already a page.`;
+    if (ws.path !== own && (taken.includes(ws.path) || list().some((w) => w.path === ws.path))) return `${ws.path} is already a page.`;
     if (!ws.title.trim()) return 'Give it a title for the nav.';
     if (!(ws.icon in ICONS)) return `There is no icon called ${ws.icon}.`;
-    const system = ws.system ?? 'host';
-    if (!SYSTEM.test(system)) return 'A system name is lower-case letters, digits and dashes.';
     return null;
   };
-  return { list, refusal };
+  const add = (ws: SavedWorkspace, taken: readonly string[]): string | null => {
+    const r = refusal(ws, taken);
+    if (!r) storage.setItem(KEY, JSON.stringify([...list(), ws]));
+    return r;
+  };
+  /** Replace the page at `path`; a new route carries its dock's keys (under `mainKey`) with it. */
+  const update = (path: string, ws: SavedWorkspace, taken: readonly string[], mainKey: string): string | null => {
+    const r = refusal(ws, taken, path);
+    if (r) return r;
+    if (ws.path !== path) for (const x of SUFFIXES) {
+      const from = layoutKey(mainKey, path) + x, v = storage.getItem(from);
+      if (v !== null) { storage.setItem(layoutKey(mainKey, ws.path) + x, v); storage.removeItem(from); }
+    }
+    storage.setItem(KEY, JSON.stringify(list().map((w) => (w.path === path ? ws : w))));
+    return null;
+  };
+  return { list, refusal, add, update };
 };
