@@ -15,10 +15,10 @@
  * The dock has no toolbar: its commands are public, for controls elsewhere (the app bar) to call.
  *   windowStyle / setWindowStyle(s): tabs or clear (remembered per dock).
  *   save() / restore() / reset(): the layout. saveAs() fires a bubbling `dock:save-as` {layout, system} event, for the
- *   page to save it as a workspace of its own (saved-workspaces.ts). connections() fires a bubbling
+ *   page to save it as a workspace of its own (workspace-pages.ts). connections() fires a bubbling
  *   `dock:connections` DOM event; whatever wraps the dock (the wiring view) decides what it means.
- * template / setTemplate(id): the panels in a fixed layout (dock/template-view.ts), or back in the kept dock ('dock').
- * arrangement(): the layout to save, golden-layout's config plus `template` when one shows.
+ * template / setTemplate(id): panels in a fixed layout (layout-templates.ts) if the count fits, else false; 'dock' undoes it.
+ * arrangement(): the layout to save: golden-layout's config plus `template` when one shows.
  * Clicking into a panel focuses it (golden-layout marks its header lm_focused); a change of focused panel fires a
  * bubbling, composed `dock:focus` DOM event {system, instance, widget}, or null when the focused panel shows no
  * instance or nothing is focused (empty space clicked, the panel closed, the page changed: `route:changed` on the bus).
