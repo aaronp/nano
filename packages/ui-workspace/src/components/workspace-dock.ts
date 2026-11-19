@@ -215,11 +215,9 @@ export class WorkspaceDock extends HTMLElement {
   }
 
   restore() {
-    const saved = this.readSaved();
-    if (!saved) return this.say('No saved layout yet.');
-    const t = templateState(localStorage, this.storageKey).get();   // load() clears it: an imported template re-enters after
-    this.load(saved); this.say('Layout restored.');
-    if (t?.order.every((s) => this.defs.has(s.widget))) this.show(t);
+    const saved = this.readSaved(); if (!saved) return this.say('No saved layout yet.');
+    const t = templateState(localStorage, this.storageKey).get();   // load() clears it; re-enter after
+    this.load(saved); this.say('Layout restored.'); if (t?.order.every((s) => this.defs.has(s.widget))) this.show(t);
   }
 
   reset() { this.load(initial(this, this.defs)); this.say('Back to the starting layout.'); }
