@@ -54,7 +54,7 @@ In `public/index.html`:
 - **Save layout** remembers the arrangement in this browser and it opens automatically next time; **Restore** goes back to it and **Reset** to the starting layout. A saved layout that names widgets you have since removed is ignored, with a message.
 - `data-flush` on a template removes the panel padding (for charts and lists that draw their own edges).
 
-Everything else (themes, `<split-pane>`, the event bus, adding pages) works as in the app starter; see its README.
+Everything else (themes, the event bus, adding pages) works as in the app starter; see its README.
 
 ## Files
 
