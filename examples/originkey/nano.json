@@ -1,0 +1,20 @@
+{
+  "pods": {
+    "originKey": { "implementation": "example.originkey/passkey", "eager": true, "isolation": "home-origin" },
+    "keyLog": { "implementation": "nano.ui/log", "eager": false }
+  },
+  "runtimes": {
+    "example.originkey.main": {
+      "pods": ["originKey", "keyLog"],
+      "subscriptions": [
+        { "kind": "pipe", "from": "originKey", "source": "example.auth.Auth/authenticated", "to": "keyLog", "target": "nano.ui.Log/log" }
+      ]
+    }
+  },
+  "modules": { "example.originkey": "./index.js" },
+  "frames": { "example.originkey": "./frame.html" },
+  "layout": { "slots": [
+    { "id": "originKey", "runtime": "example.originkey.main", "pod": "originKey" },
+    { "id": "keyLog", "runtime": "example.originkey.main", "pod": "keyLog" }
+  ] }
+}

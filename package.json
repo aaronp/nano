@@ -4,7 +4,15 @@
   "workspaces": ["packages/*", "examples"],
   "devDependencies": {
     "@playwright/test": "^1.65.0",
+    "@pritzlaff/adr": "^1.2.0",
+    "@pritzlaff/agile": "^1.1.0",
+    "@pritzlaff/project": "^0.1.1",
+    "@pritzlaff/risk-register": "^0.2.0",
     "@types/bun": "^1.4.4",
     "typescript": "^7.0.2"
+  },
+  "scripts": {
+    "adr": "adr docs/adr/decisions.md",
+    "agile": "agile docs/board/board.md"
   }
 }

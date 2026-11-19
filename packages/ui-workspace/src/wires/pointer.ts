@@ -1,9 +1,9 @@
 // The prototype's stage handlers (onDown, onMove, onUp, …) and edit actions, over the live system: cords connect
 // and disconnect by applying the app's deployment, the palette creates components, and a rack module dropped on the pane opens it.
-import { fits } from '@pritzlaff/nano-core'
 import { clamp } from './constants'
 import { nearestPort } from './geometry'
-import { checkConnect, dirOf, portKey, portName } from './model'
+import { onStage } from './filter'
+import { checkConnect, portName, type Model } from './model'
 import type { Wires } from './wires'
 
 type Ptr = { clientX: number; clientY: number; pointerId?: number; currentTarget?: EventTarget | null }
@@ -16,14 +16,13 @@ export function toLocal(el: Wires, e: Ptr) {
   if (r.width === 0) throw new Error('bug: back plate has no size')
   return { x: (e.clientX - r.left) / r.width * el.model.W, y: (e.clientY - r.top) / r.height * el.model.H }
 }
-/** The jacks that can be grabbed: all in relay mode, the panels' and blocks' in puzzle mode. */
-export const visibleKeys = (el: Wires) => Object.keys(el.model.P).filter(k => el.s.mode === 'relay' || el.model.P[k]!.kind !== 'module')
+/** The jacks that can be grabbed: all of them. */
+export const visibleKeys = (el: Wires, m: Model = el.model) => Object.keys(m.P)
 const capture = (e: Ptr) => { const t = e.currentTarget as Element | null | undefined; if (t?.setPointerCapture && e.pointerId !== undefined) t.setPointerCapture(e.pointerId) }
 
 export function onDown(el: Wires, e: Ptr) {
   const { s, model: m } = el
   if (s.editing) {
-    if (s.mode === 'puzzle') return   // puzzle mode edits through its pieces and joints
     const pt = toLocal(el, e)
     const hit = nearestPort(m.P, visibleKeys(el), pt, null)
     if (hit !== null) {
@@ -64,8 +63,7 @@ export async function onUp(el: Wires, e: Ptr) {
   const { s, model: m } = el
   if (s.editing) {
     if (s.lift) {
-      const id = s.lift
-      el.setState({ lift: null })
+      const id = s.lift; el.setState({ lift: null })
       if (toLocal(el, e).y < m.H) el.openPanel(id)   // dropped onto the pane: open it as a panel
       return
     }
@@ -81,19 +79,17 @@ export async function onUp(el: Wires, e: Ptr) {
       return
     }
     if (c.picked) { if (!('error' in await el.disconnect(c.picked))) el.ok('Unplugged a cord'); return }
-    el.setState({ cord: null })
-    return
+    el.setState({ cord: null }); return
   }
   if (!el.drag) return
   const still = Math.hypot(e.clientX - el.drag.x, e.clientY - el.drag.y) < 4
-  el.drag = null
-  el.setState({ dragging: false })
+  el.drag = null; el.setState({ dragging: false })
   if (still) pickAt(el, e)   // a click, not a turn
 }
 
 /** Selects what is under the pointer on the back: a jack's action, or a panel's or rack module's component. */
 function pickAt(el: Wires, e: Ptr) {
-  const m = el.model, pt = toLocal(el, e), hit = nearestPort(m.P, visibleKeys(el), pt, null)
+  const m = onStage(el), pt = toLocal(el, e), hit = nearestPort(m.P, visibleKeys(el, m), pt, null)
   const inside = (r: { x: number; y: number; w: number; h: number }) => pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h
   const instance = hit !== null ? m.P[hit]!.owner : m.chassis.find(c => c.instance && inside(c))?.instance ?? m.rack.find(inside)?.id
   if (instance) el.pick({ system: el.sys, instance, ...(hit !== null ? { op: m.P[hit]!.port } : {}) })
@@ -104,13 +100,12 @@ export function onDbl(el: Wires) { if (!el.s.editing) el.setState({ ry: el.s.ry 
 
 export function toggleEdit(el: Wires) {
   const { ry, editing } = el.s
-  if (editing) { el.setState({ editing: false, cord: null, armed: null, selMod: null, toast: null }); return }
+  if (editing) { el.setState({ editing: false, cord: null, selMod: null, toast: null }); return }
   el.setState({ editing: true, ry: 180 + 360 * Math.round((ry - 180) / 360), rx: 0, dragging: false, toast: null })
 }
 
-/** A palette pick: relay mode adds it to the rack; puzzle mode arms it for a joint. */
+/** A palette pick adds it to the rack. */
 export async function pickOperator(el: Wires, kind: string) {
-  if (el.s.mode === 'puzzle') { el.setState({ armed: el.s.armed === kind ? null : kind, selMod: null }); return }
   const name = await el.create(kind)
   if (name) { el.ok('Added ' + (el.catalog[kind]?.title ?? kind) + ' to the rack — patch it in'); el.setState({ selMod: name }) }
 }
@@ -120,33 +115,4 @@ export async function removeSel(el: Wires) {
   const id = el.s.selMod
   if (id === null) throw new Error('bug: remove with nothing selected')
   if (!('error' in await el.removeComponent(id))) { el.ok('Removed ' + id + ' and its cords'); el.setState({ selMod: null }) }
-}
-
-/** A joint: with an operator armed, splice a new one into the wire (its fitting in and out); otherwise unplug it. */
-export async function joint(el: Wires, wireId: string) {
-  const w = el.model.wires.find(x => x.id === wireId)
-  if (!w) return
-  const armed = el.s.armed
-  if (armed === null) { if (!('error' in await el.disconnect(wireId))) el.ok('Unplugged ' + portName(el.model, w.from) + ' → ' + portName(el.model, w.to)); return }
-  const from = el.model.P[w.from]!, to = el.model.P[w.to]!
-  const ops = el.catalog[armed]?.jacks ?? []
-  // ponytail: the last fitting jacks, as components declare settings first and their main action and event last
-  const inOp = ops.findLast(o => dirOf(o) === 'in' && fits(from.op, o.op)), outOp = ops.findLast(o => dirOf(o) === 'out' && fits(o.op, to.op))
-  if (!inOp || !outOp) { el.fail((el.catalog[armed]?.title ?? armed) + " doesn't fit between " + portName(el.model, w.from) + ' and ' + portName(el.model, w.to)); return }
-  const name = await el.create(armed)
-  if (!name) return
-  // all or nothing: if a step is refused, undo the ones before it, so the chain is as it was
-  const undo: (() => Promise<unknown>)[] = [() => el.removeComponent(name)]
-  const step = async (r: Promise<{ value?: unknown } | { error: string }>, back?: (v: any) => () => Promise<unknown>) => {
-    const res = await r
-    if ('error' in res) { for (const u of undo.reverse()) await u(); el.rebuild(); el.fail(res.error); return false }
-    if (back) undo.push(back(res.value))
-    return true
-  }
-  if (!await step(el.disconnect(wireId), () => () => el.connect(w.from, w.to))) return
-  el.rebuild()   // the new component's jacks, before patching them
-  if (!await step(el.connect(w.from, portKey(name, inOp.port + ':in')), sub => () => el.disconnect(sub.id))) return
-  if (!await step(el.connect(portKey(name, outOp.port + ':out'), w.to))) return
-  el.ok('Inserted ' + (el.catalog[armed]?.title ?? armed))
-  el.setState({ armed: null })
 }

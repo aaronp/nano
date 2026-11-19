@@ -30,7 +30,7 @@ export type Msg =
   | { type: 'failed'; error: string }
   | { type: 'result'; id: number; result: R }
   | { type: 'publish'; op: string; data: unknown }
-  | { type: 'outcall'; id: number; pod: string; runtime: string; op: string; input: unknown }
+  | { type: 'outcall'; id: number; pod: string; runtime: string; op: string; input: unknown; via?: number }   // via: the host `call` id it is made under
   | { type: 'view-call'; id: number; op: string; input: unknown }
   | { type: 'on'; id: number; pod: string; runtime: string; op: string }   // the pod's `on` through its edge: subscribed as the pod
   | { type: 'view-on'; id: number; op: string }                            // the view's own pod's event: subscribed as the page's view is
@@ -67,7 +67,7 @@ const MAX = 1024 * 1024
 type Check = (v: unknown) => boolean
 const obj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
 const str: Check = v => typeof v === 'string', num: Check = v => typeof v === 'number', any: Check = () => true
-const optStr: Check = v => v === undefined || str(v)
+const optStr: Check = v => v === undefined || str(v), optNum: Check = v => v === undefined || num(v)
 const strs: Check = v => Array.isArray(v) && v.every(str)
 const arrOf = (c: (v: unknown) => string | undefined) => (v: unknown) => Array.isArray(v) && v.every(x => c(x) === undefined)
 const edge = (v: unknown) => obj(v) && ['pod', 'runtime', 'implementation', 'provider'].every(k => str(v[k])) && strs(v.provides) && strs(v.tags)
@@ -117,7 +117,7 @@ const FIELDS: Record<Msg['type'], Record<string, Check>> = {
   'view-result': { id: num, result }, stream: { event: obj }, probe: { url: str },
   theme: { theme: v => str(v) && isThemeId(v as string), mode: v => str(v) && isMode(v as string) },
   ready: {}, closed: {}, failed: { error: str }, result: { id: num, result }, publish: { op: str, data: any },
-  outcall: { id: num, pod: str, runtime: str, op: str, input: any }, 'view-call': { id: num, op: str, input: any },
+  outcall: { id: num, pod: str, runtime: str, op: str, input: any, via: optNum }, 'view-call': { id: num, op: str, input: any },
   described: { providers: Array.isArray }, warn: { reason: str },
   emission: { id: num, event: any }, ended: { id: num, result },
   on: { id: num, pod: str, runtime: str, op: str }, 'view-on': { id: num, op: str }, off: { id: num },

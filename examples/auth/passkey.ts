@@ -40,9 +40,9 @@ const challenge = () => crypto.getRandomValues(new Uint8Array(32))
 const SANDBOX = 'passkeys are not available in a sandbox'
 
 /** Runs one ceremony; only ok, purpose, at, credentialId and reason leave it. */
-async function ceremony(purpose: string, run: (c: CredentialsContainer) => Promise<Credential | null>): Promise<Result> {
+async function ceremony(purpose: string, run: (c: CredentialsContainer) => Promise<Credential | null>, sandboxed = env.sandboxed): Promise<Result> {
   const at = () => new Date().toISOString()
-  if (env.sandboxed || !env.credentials) return { ok: false, purpose, at: at(), reason: SANDBOX }
+  if (sandboxed || !env.credentials) return { ok: false, purpose, at: at(), reason: SANDBOX }
   try {
     const c = await run(env.credentials) as PublicKeyCredential | null
     return c ? { ok: true, purpose, at: at(), credentialId: b64url(c.rawId) } : { ok: false, purpose, at: at(), reason: 'no credential' }
@@ -50,27 +50,29 @@ async function ceremony(purpose: string, run: (c: CredentialsContainer) => Promi
 }
 
 /** Example-only: the view's Register button, a new passkey (no modal: the click is the user's). */
-export const register = (rpName = 'nano examples') => ceremony('register', c => c.create({ publicKey: {
+export const register = (rpName = 'nano examples', sandboxed = () => env.sandboxed) => ceremony('register', c => c.create({ publicKey: {
   challenge: challenge(), rp: { name: rpName }, user: { id: challenge(), name: 'nano', displayName: 'nano' },
   pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }], authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },   // discoverable: Passkey's get names no credential
-} }))
+} }), sandboxed())
 
-const passkey = AuthDef.api.impl(AuthDef.ns.implementationId('passkey'))
-  .description('Asks the user, in a modal, for a passkey; refuses in a sandbox.')
+/** Example-only: a passkey implementation of Auth at `id`; `sandboxed` says when passkeys can't be used (origin-key
+ * reuses it in a frame on its own origin, where they can). */
+export const passkeyImpl = (id: Parameters<typeof AuthDef.api.impl>[0], description: string, sandboxed = () => env.sandboxed) => AuthDef.api.impl(id)
+  .description(description)
   .make(() => {
     const listeners = new Set<(r: Result) => void>()
     let pending = false
     return {
       async authenticate(purpose) {
         if (pending) return { ok: false, purpose, at: new Date().toISOString(), reason: 'busy' }
-        if (env.sandboxed) return ceremony(purpose, async () => null)
+        if (sandboxed()) return ceremony(purpose, async () => null, true)
         pending = true
         try {
           // ponytail: the caller's pod is not visible to an action handler, so the modal names no one in particular
           let approved: boolean
           try { approved = await env.confirm(purpose, 'A pod') } catch (e) { return { ok: false, purpose, at: new Date().toISOString(), reason: (e as Error)?.name ?? 'Error' } }
           if (!approved) return { ok: false, purpose, at: new Date().toISOString(), reason: 'cancelled' }
-          const r = await ceremony(purpose, c => c.get({ publicKey: { challenge: challenge(), userVerification: 'preferred' } }))
+          const r = await ceremony(purpose, c => c.get({ publicKey: { challenge: challenge(), userVerification: 'preferred' } }), sandboxed())
           if (r.ok) for (const l of listeners) l(r)
           return r
         } finally { pending = false }
@@ -90,4 +92,5 @@ const passkey = AuthDef.api.impl(AuthDef.ns.implementationId('passkey'))
     }
   })
 
+const passkey = passkeyImpl(AuthDef.ns.implementationId('passkey'), 'Asks the user, in a modal, for a passkey; refuses in a sandbox.')
 export default AuthDef.ns.provider([passkey])

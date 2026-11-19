@@ -3,7 +3,7 @@
 import { css, html, LitElement } from 'lit'
 import { base } from '@pritzlaff/nano-elements'
 
-export const HOST_ENTRIES = [{ label: 'Components', href: '#/components' }, { label: 'Settings', href: '#/settings' }, { label: 'Systems', href: '#/systems' }, { label: 'Themes', href: '#/themes' }, { label: 'Wiring', href: '#/wiring' }]
+export const HOST_ENTRIES = [{ label: 'Components', href: '#/components' }, { label: 'Settings', href: '#/settings' }, { label: 'Systems', href: '#/systems' }, { label: 'Themes', href: '#/themes' }, { label: 'Desk', href: '#/desk' }]
 const USER = 'You'
 
 /** Up to two capital letters from the name's words ('Ada Lovelace' is 'AL'); '?' for no name. */

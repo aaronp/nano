@@ -2,7 +2,8 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { Registry, type AppDeployment } from '@pritzlaff/nano-core'
-import { importApp, merge, type Loaded } from '../src/import.ts'
+import { importApp, type Loaded } from '../src/import.ts'
+import { merge } from '../src/import-plan.ts'
 
 const fx = (name: string) => new URL(`./fixtures/import/${name}`, import.meta.url).href
 // Same-origin only (the page is not http, so the nano.json's origin is home): cross-origin is test/cross-origin.test.ts.
@@ -90,6 +91,12 @@ describe('own names', () => {
 })
 
 describe('merge', () => {
+  test('frames are unioned like modules: the same page again is fine, another page for the provider is a clash', () => {
+    const a = dep({ frames: { 'x.y': 'https://x.test/f.html' } })
+    expect(merge(dep({}), a)).toMatchObject({ ok: true, value: { frames: { 'x.y': 'https://x.test/f.html' } } })
+    expect(merge(a, a).ok).toBe(true)
+    expect(merge(a, dep({ frames: { 'x.y': 'https://evil.test/f.html' } }))).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+  })
   test('merging into a runtime: both with a policy is refused; one policy is kept, never dropped', () => {
     const rules = (from: string) => ({ kind: 'rules' as const, rules: [{ allow: '*' as const, from }] })
     const has = (p?: ReturnType<typeof rules>) => ({ pods: [], subscriptions: [], ...(p && { policy: p }) })

@@ -9,8 +9,8 @@
 import './boot-theme.ts';
 import { host } from './boot-host.ts';   // before the elements are defined: the docks' palettes list what the host can make
 import { toast } from '@pritzlaff/nano-elements';
+import { clockDriver, timeMachine, type NanoTimeMachine } from '@pritzlaff/nano-ui';
 import './components/app-shell.ts';
-import './components/split-pane.ts';
 import './components/component-drawer.ts';
 import { openImportDialog, setImportHost } from './components/import-dialog.ts';
 import './components/gallery.ts';
@@ -22,16 +22,20 @@ import './widgets/widgets.ts';
 import './widgets/notes-panel.ts';
 import './components/workspace-dock.ts';
 import { bootAppBar } from './boot-app-bar.ts';   // after the shell (its bus) and the dock: the app bar follows the page and panel focus
+import { defineSettings, type SettingsView } from './components/settings-view.ts';
 import { showStatus } from './lib/status.ts';
 import type { WorkspaceDock } from './components/workspace-dock.ts';
 import { defineWires, type Wires } from './wires/index.ts';
-import { defineCircuit, dockPlacements, type Circuit } from './circuit/index.ts';
-import { bootWiring } from './boot-wiring.ts';   // after the shell (its bus)
-import { layoutFromDock, slotsToOpen } from './layout-data.ts';
+import { defineDesk, type Desk } from './desk/index.ts';
+import { defineMessages } from './messages/index.ts';
+import { bootWiring, hand as handTo } from './boot-wiring.ts';   // after the shell (its bus)
+import { shadowCreate } from './history.ts';
+import { savedLayout, slotsToOpen } from './layout-data.ts';
+import { icon } from './icons.ts';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
 if (host) {
-  const h = host, target = { app: h.app, registry: h.registry };
+  const h = host, target = { app: h.app, registry: h.registry, get calls() { return h.calls(); } };
   const dock = document.querySelector<WorkspaceDock>('workspace-dock#workspace');
   // The dock's arrangement (golden-layout's resolved config). ponytail: reads the dock's private layout; a public
   // accessor on <workspace-dock> is a new method (a question for the user).
@@ -48,17 +52,20 @@ if (host) {
   const layoutNow = () => JSON.stringify(dock && h.data().layout?.[dock.id]);
   setImportHost({ ...host, importUrl: (url, chosen) => { const before = layoutNow(); return shown(host!.importUrl(url, chosen), before) as ReturnType<typeof h.importUrl>; } });
   for (const dock of document.querySelectorAll<WorkspaceDock>('workspace-dock')) dock.host = host;
-  for (const el of document.querySelectorAll<HTMLElement & { target?: unknown }>('nano-explorer, nano-wiring')) el.target ??= target;
+  for (const el of document.querySelectorAll<HTMLElement & { target?: unknown; icon?: unknown }>('nano-explorer, nano-wiring')) { el.target ??= target; if (el.localName === 'nano-explorer') el.icon = icon; }
   bootAppBar(host);
+  defineSettings();
+  for (const el of document.querySelectorAll<SettingsView>('nano-settings')) el.host = host;
 
-  // The File menu: Save and Download write the app's nano.json (without the host's own pod), with the dock's
+  // The File menu: Save and Download (Reconcile and save: with the calls seen, host.saved(true)) write the app's nano.json (without the host's own pod), with the dock's
   // arrangement as its `layout` under the dock's id; Open and Import import one (and show its layout); New empties it.
   const menu = document.querySelector<FileMenuEl>('nano-file-menu');
-  const download = (name: string) => {
+  const download = (name: string, reconcile = false) => {
     const a = document.createElement('a');
-    const saved = h.saved(), l = arrangement();
+    const saved = h.saved(reconcile), l = arrangement();
     const runtimeOf = (pod: string) => Object.entries(saved.runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
-    const file = l && dock ? { ...saved, layout: { ...saved.layout, [dock.id]: l, ...layoutFromDock(l.root as never, runtimeOf) } } : saved;
+    const desk = document.querySelector<Desk>('c-desk')?.layout();
+    const file = l && dock ? { ...saved, layout: savedLayout(saved, dock.id, l, runtimeOf, desk) } : desk ? { ...saved, layout: { ...saved.layout, desk } } : saved;
     a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' }));
     a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -66,7 +73,7 @@ if (host) {
   };
   host.app.listen(e => { if (e.type === 'applied' && menu) menu.dirty = true; });
   const commands: Record<string, () => unknown> = {
-    save: () => download('nano.json'), download: () => download('nano.json'),
+    save: () => download('nano.json'), reconcile: () => download('nano.json', true), download: () => download('nano.json'),
     'save-as': async () => { const name = await askName(document, 'nano'); if (name) download(`${name}.json`); },
     open: () => openImportDialog(document), import: () => openImportDialog(document),
     // New: an apply of an empty deployment (the host's own pod `ui` stays; providers stay loaded), and the dock's
@@ -79,6 +86,8 @@ if (host) {
     },
   };
   for (const [c, run] of Object.entries(commands)) document.addEventListener(`file:${c}`, () => void run());
+  // File › Examples: an example shipped with the workspace (examples/<name>/nano.json, on this origin), imported as Open does
+  document.addEventListener('file:example', e => { const { name } = (e as CustomEvent<{ name: string }>).detail; void shown(h.importUrl(new URL(`examples/${name}/nano.json`, location.href).href), layoutNow()); });
 
   // Connections: <c-wires> around the dock hears its `dock:connections` and tilts the dock to show the cables behind it.
   defineWires();
@@ -92,16 +101,31 @@ if (host) {
   document.addEventListener('dock:save-as', () => showStatus(document, 'Saved workspaces are not available yet.'));
   document.querySelector('[data-new-workspace]')?.addEventListener('click', () => showStatus(document, 'Saved workspaces are not available yet.'));
 
-  // The Wiring page: <c-circuit> over the app; the one page is the Workspace, its footprints the pods its dock shows.
-  defineCircuit();
-  for (const c of document.querySelectorAll<Circuit>('c-circuit')) {
-    c.screens = () => [{ id: '/workspace', title: 'Main' }];
-    c.placements = () => dockPlacements('/workspace', arrangement()?.root as never);
-    c.host = host;
-  }
+  // The Desk page: <c-desk> over the app, and a link to the last workspace's Connections.
+  defineDesk();
+  for (const d of document.querySelectorAll<Desk>('c-desk')) d.host = host;
   bootWiring(document, async () => [{ id: '/workspace' }]);
-  // the dock's arrangement is not an apply: the circuit reads it again whenever the Wiring page is shown
-  addEventListener('hashchange', () => { if (location.hash === '#/wiring') for (const c of document.querySelectorAll<Circuit>('c-circuit')) c.schedule(); });
+
+  // The page's one time machine over host.history, and its clock driver, handed to every <nano-time-machine>. Reset
+  // makes both afresh: a time machine's index does not survive the history being cleared.
+  let tm = await timeMachine(h.history), driver = clockDriver(h.app, h.registry, tm);
+  const bars = document.querySelectorAll<NanoTimeMachine>('nano-time-machine');
+  defineMessages();
+  // The Ring's filter: the implementations in the deployment's `layout.ring.show`, read when drawn (absent: every pod).
+  const show = (_pod: string, impl: string) => { const s = (h.data().layout?.ring as { show?: unknown } | undefined)?.show; return !Array.isArray(s) || s.includes(impl); };
+  const ring = { app: h.app, registry: h.registry, create: shadowCreate(h.registry), show };
+  // the host's view map (as the dock's panels use), handed again on each apply: an import brings its modules' views
+  const hand = () => handTo(document, { tm, store: h.history.store, driver }, { ...ring, views: h.defaults() });
+  hand();
+  h.app.listen(e => { if (e.type === 'applied') hand(); });
+  let resetting: Promise<void> | undefined;   // one Reset at a time: a second click while one runs joins it
+  for (const b of bars) b.addEventListener('reset', () => resetting ??= (async () => {
+    driver.close(); tm.close();   // first: a live driver would advance the restarted clock unrecorded
+    const r = await h.history.reset();
+    if (!r.ok) toast(r.fail.reason, { variant: 'bad' });
+    tm = await timeMachine(h.history); driver = clockDriver(h.app, h.registry, tm);
+    hand();
+  })().finally(() => { resetting = undefined; }));
 
   const src = new URL(location.href).searchParams.get('src');
   // Only a URL on this page's origin: a crafted link must not open the import prompt on load.

@@ -1,6 +1,7 @@
 // The root: unflipped, just the slotted dock; flipped, the prototype's header, stage and aside around it.
 import { html } from 'lit'
 import { HEADER_H, OK_COLOR, fade } from './constants'
+import { onStage } from './filter'
 import type { Route } from './model'
 import { renderAside } from './render-aside'
 import { renderStage } from './render-stage'
@@ -8,8 +9,7 @@ import type { Wires } from './wires'
 
 /** What every part of the template reads: the prototype's shared renderVals locals. */
 export function derive(el: Wires) {
-  const { s, model: m, puzzle } = el
-  const isRelay = s.mode === 'relay'
+  const { s } = el, m = onStage(el)
   const rad = Math.PI / 180
   const backness = -Math.cos(s.ry * rad) * Math.cos(s.rx * rad)
   const selRoute = m.routes.find(r => r.id === s.sel) ?? null
@@ -19,7 +19,7 @@ export function derive(el: Wires) {
   /** The route a component is on, if any. */
   const routeOfOwner = (id: string) => m.wires.find(w => m.P[w.from]!.owner === id || m.P[w.to]!.owner === id)?.route ?? null
   const shown = !s.entering && !s.leaving
-  return { s, m, puzzle, isRelay, shown, backness, selRoute, selId, opFor, routeById, routeOfOwner, now: el.now() }
+  return { s, m, shown, backness, selRoute, selId, opFor, routeById, routeOfOwner, now: el.now() }
 }
 export type Vals = ReturnType<typeof derive>
 

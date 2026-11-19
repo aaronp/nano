@@ -14,8 +14,9 @@ import { edit } from './deployment-edit.ts'
 
 export type AppDeployment = {
   pods: PodDeployment; runtimes: Record<string, RuntimeDeployment>; tags?: Record<string, string[]>
-  /** Host-owned: nano shape-checks these and otherwise ignores them. */
-  modules?: Record<string, string>; views?: Record<string, string>
+  /** Host-owned: nano shape-checks these and otherwise ignores them. `frames`: each provider's own page, for its
+   *  `home-origin` pods. */
+  modules?: Record<string, string>; views?: Record<string, string>; frames?: Record<string, string>
   /** The deployer's choice, a plain object: nano shape-checks it and otherwise ignores it; `deployment()` omits it. */
   layout?: Record<string, unknown>
 }
@@ -29,6 +30,7 @@ const Shape = Type.Object({
   tags: Type.Optional(Type.Record(Id, Type.Array(Type.String()), strict)),
   modules: Type.Optional(Type.Record(Id, Type.String({ minLength: 1 }), strict)),
   views: Type.Optional(Type.Record(Id, Type.String({ minLength: 1 }), strict)),
+  frames: Type.Optional(Type.Record(Id, Type.String({ minLength: 1 }), strict)),
   layout: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
 }, strict)
 

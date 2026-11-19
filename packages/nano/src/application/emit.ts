@@ -50,9 +50,9 @@ export function emit(live: Live, from: string, port: string, e: Parameters<On['f
 
 /**
  * A client by op name from `from` to `to` in `runtime`. `gone()` is asked at each call, before anything is sent: a
- * Fail it gives is the call's result.
+ * Fail it gives is the call's result. With `chain` each call continues it (its `correlation`, `cause`).
  */
-export function client(live: Live, runtime: string, from: string, to: string, gone: () => NanoResult<never> | undefined): Record<string, (input: unknown) => Promise<NanoResult<unknown>>> {
+export function client(live: Live, runtime: string, from: string, to: string, gone: () => NanoResult<never> | undefined, chain?: Chain): Record<string, (input: unknown) => Promise<NanoResult<unknown>>> {
   const call = async (name: string, input: unknown): Promise<NanoResult<unknown>> => {
     const why = gone()
     if (why) return why
@@ -60,7 +60,7 @@ export function client(live: Live, runtime: string, from: string, to: string, go
     const ports = provides.map(i => port(i, i.ops[name]!))
     if (ports.length === 0) return failure('unknown-op', `${to} has no action ${name}`)
     if (ports.length > 1) return failure('not-unique', `${to}: ${name} is an action of more than one interface`)
-    return act(live, runtime, from, to, ports[0]!, input, 'call')
+    return act(live, runtime, from, to, ports[0]!, input, 'call', chain)
   }
   // ponytail: any name reads as an op (a Proxy) except `then`, so awaiting a client is harmless; an op named `then` is unreachable.
   return new Proxy({}, { get: (_, name) => (typeof name === 'string' && name !== 'then' ? (input: unknown) => call(name, input) : undefined) })

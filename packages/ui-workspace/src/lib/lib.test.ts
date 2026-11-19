@@ -3,10 +3,8 @@ import assert from 'node:assert/strict';
 import { createBus, matches } from './bus.ts';
 import { areaPath, changePct, linePath, parseValues, scalePoints } from './chart.ts';
 import { resolveRoute, isCurrent } from './routes.ts';
-import { gridTracks, normalise, parseSizes, pxToFraction, resizeAt } from './split.ts';
 import { THEMES, THEME_IDS, TOKEN_NAMES, resolveScheme, schemesOf, themeVars } from './themes.ts';
 
-const close = (a: readonly number[], b: readonly number[]) => a.forEach((x, i) => assert.ok(Math.abs(x - (b[i] ?? NaN)) < 1e-9, `${a} vs ${b}`));
 
 test('every theme scheme defines every token', () => {
   for (const id of THEME_IDS) {
@@ -26,27 +24,6 @@ test('scheme resolution honours the choice, then the OS, then the only scheme', 
   assert.equal(resolveScheme('sketch', 'dark', true), 'light');
   assert.throws(() => themeVars('terminal', 'light'), /no light scheme/);
   assert.ok(THEMES.enterprise.fonts.length > 0);
-});
-
-test('split sizes normalise, parse and reject bad input', () => {
-  close(normalise([1, 3]), [0.25, 0.75]);
-  close(parseSizes('30,70', 2), [0.3, 0.7]);
-  close(parseSizes(null, 4), [0.25, 0.25, 0.25, 0.25]);
-  assert.throws(() => parseSizes('1,2,3', 2), /lists 3 panes/);
-  assert.throws(() => normalise([1]), /at least two/);
-  assert.throws(() => normalise([1, -1]), /positive/);
-});
-
-test('resizing moves only the two neighbours and respects the minimum', () => {
-  close(resizeAt([0.25, 0.25, 0.5], 1, 0.1, 0.1), [0.25, 0.35, 0.4]);
-  close(resizeAt([0.5, 0.5], 0, 0.9, 0.1), [0.9, 0.1]);
-  close(resizeAt([0.5, 0.5], 0, -0.9, 0.1), [0.1, 0.9]);
-  close(resizeAt([0.05, 0.95], 0, -0.1, 0.1), [0.05, 0.95]);
-  const r = resizeAt([0.2, 0.3, 0.5], 0, 0.05, 0.1);
-  assert.ok(Math.abs(r.reduce((a, b) => a + b, 0) - 1) < 1e-9);
-  assert.throws(() => resizeAt([0.5, 0.5], 1, 0.1, 0.1), /no divider/);
-  assert.equal(pxToFraction(100, 1008, 1, 8), 0.1);
-  assert.equal(gridTracks([0.5, 0.5], 8), 'minmax(0, 50.0000fr) 8px minmax(0, 50.0000fr)');
 });
 
 test('routes: empty hash shows the first route, unknown goes to *', () => {

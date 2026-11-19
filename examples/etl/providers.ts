@@ -18,8 +18,9 @@ export const sink = Implementation.define(ns.implementationId('sink'), { provide
 export const etl = Implementation.define(ns.implementationId('etl'), {
   provides: [Pipeline],
   dependencies: { from: Source, to: Sink },
-  make: ctx => [provide(Pipeline, { run: async () => {
-    const from = ctx.one(Source), to = ctx.one(Sink)
+  calls: { run: { from: [Source.ops.read], to: [Sink.ops.write] } },
+  make: () => [provide(Pipeline, { run: async (_, c) => {
+    const from = c.one(Source), to = c.one(Sink)
     if (!to.ok) return to
     if (!from.ok) return from
     const rows = await from.value.call.read({})

@@ -33,12 +33,12 @@ afterEach(() => { document.body.innerHTML = '' })
 
 // BACKLOG(5): 'the controls drive their dock' tested the nano-runes component (retired/test/workspace-controls.test.ts).
 
-test('the element shows View Tabs | Clear and five labelled icon buttons', async () => {
+test('the element shows View Tabs | Clear and six labelled icon buttons', async () => {
   const { el } = await mount()
   const view = qa(el, '.view button')
   expect(view.map(b => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([['Tabs', 'true'], ['Clear', 'false']])
   const icons = qa(el, 'button[aria-label]')
-  expect(icons.map(b => b.getAttribute('aria-label'))).toEqual(['Connections', 'Save as workspace…', 'Save layout', 'Restore', 'Reset'])
+  expect(icons.map(b => b.getAttribute('aria-label'))).toEqual(['Connections', 'Desk', 'Save as workspace…', 'Save layout', 'Restore', 'Reset'])
   for (const b of icons) { expect(b.getAttribute('title')).toBe(b.getAttribute('aria-label')); expect(b.querySelector('svg')).not.toBeNull() }
 })
 
@@ -51,6 +51,14 @@ test('clicking Clear calls setStyle', async () => {
   expect(calls.at(-1)).toEqual(['reset'])
 })
 
+test('Desk opens the Desk page, beside Connections', async () => {
+  const { el, calls } = await mount()
+  location.hash = '#/workspace'
+  q(el, 'button[aria-label="Desk"]').click(); await settle(el)
+  expect(location.hash).toBe('#/desk')
+  expect(calls).toEqual([])
+})
+
 test('takes the app bar colour', () => {
   const text = (WorkspaceControlsEl.styles as any[]).at(-1).cssText
   expect(text).toContain('color: inherit')
@@ -61,12 +69,12 @@ test('narrow: the buttons fold into a ⋯ menu', async () => {
   const { el, calls } = await mount(true)
   expect(qa(el, '.view button')).toHaveLength(2)
   const more = q(el, 'button[aria-label="More workspace actions"]')
-  expect(qa(el, 'button')).toHaveLength(2 + 1 + 5)   // the five sit hidden in the panel
+  expect(qa(el, 'button')).toHaveLength(2 + 1 + 6)   // the six sit hidden in the panel
   expect(q(el, '.panel').hasAttribute('hidden')).toBe(true)
   more.click(); await settle(el)
   expect(more.getAttribute('aria-expanded')).toBe('true')
-  expect(qa(el, '.panel button').map(b => b.textContent!.trim())).toEqual(['Connections', 'Save as workspace…', 'Save layout', 'Restore', 'Reset'])
-  qa(el, '.panel button')[3]!.click(); await settle(el)
+  expect(qa(el, '.panel button').map(b => b.textContent!.trim())).toEqual(['Connections', 'Desk', 'Save as workspace…', 'Save layout', 'Restore', 'Reset'])
+  qa(el, '.panel button')[4]!.click(); await settle(el)
   expect(calls).toEqual([['restore']]); expect(more.getAttribute('aria-expanded')).toBe('false')
   more.click(); await settle(el)
   el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await settle(el)

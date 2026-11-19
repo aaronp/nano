@@ -3,30 +3,27 @@ import { html } from 'lit'
 import { ASIDE_W, ERR_COLOR, HEADER_H, OK_COLOR, SCALE, TURN_MS, fade } from './constants'
 import { onCancel, onDbl, onDown, onMove, onUp } from './pointer'
 import { renderBack } from './render-back'
-import { renderBlocks, renderPuzzle } from './render-pieces'
+import { renderBlocks } from './render-blocks'
 import type { Vals } from './render-root'
 import type { Wires } from './wires'
 
 export function renderStage(el: Wires, d: Vals) {
-  const { s, m, isRelay } = d
+  const { s, m } = d
   const { W, H } = m
   // Facing front, the pane fills SCALE of the stage; turning to the back eases out to fit the rack below it too.
   // At full size (opening, and after Done) it sits exactly where the flat dock does.
   const fit = (h: number) => (el.stage.w ? Math.min((el.stage.w - ASIDE_W) / W, (el.stage.h - HEADER_H) / h) : 1) * SCALE
   const t = (1 + d.backness) / 2
-  const scale = d.shown ? fit(H) + (fit(H + m.rackH) - fit(H)) * t : 1
-  const dx = (d.shown ? -ASIDE_W / 2 : 0) + s.panX, dy = (d.shown ? HEADER_H / 2 - m.rackH / 2 * t * scale : 0) + s.panY
+  // the rack plate sits 32px below the pane; leave room under it for the hint
+  const below = 32 + m.rackH + 40
+  const scale = d.shown ? fit(H) + (fit(H + below) - fit(H)) * t : 1
+  const dx = (d.shown ? -ASIDE_W / 2 : 0) + s.panX, dy = (d.shown ? HEADER_H / 2 - below / 2 * t * scale : 0) + s.panY
   const worldT = 'translate(' + dx + 'px, ' + dy.toFixed(1) + 'px) scale(' + +(scale * (d.shown ? s.zoom : 1)).toFixed(4) + ') rotateX(' + s.rx.toFixed(2) + 'deg) rotateY(' + s.ry.toFixed(2) + 'deg)'
   const worldTr = s.dragging ? 'none' : s.zooming ? 'transform 80ms linear' : 'transform ' + TURN_MS + 'ms cubic-bezier(0.65, 0, 0.35, 1)'
   const cursor = s.editing ? (s.cord || s.lift ? 'grabbing' : 'crosshair') : s.dragging ? 'grabbing' : 'grab'
-  const armed = s.armed ? el.catalog[s.armed]?.title ?? s.armed : null
   const hint = !s.editing
     ? 'Drag the pane to rotate · double-click to flip'
-    : isRelay
-      ? 'Drag from a jack to patch · drag a plugged input to move it, drop it in space to unplug · click a module to select it, drag it onto the pane to open it'
-      : armed !== null
-        ? 'Click a + to insert ' + armed + ' there'
-        : 'Pick an operator, then click a + between pieces · click × to unplug · click an operator piece to select it'
+    : 'Drag from a jack to patch · drag a plugged input to move it, drop it in space to unplug · click a module to select it, drag it onto the pane to open it'
   const toast = s.cord && s.cord.err ? { kind: 'err', text: s.cord.err } : s.toast
   return html`<div class="stage-bg" @wheel=${(e: WheelEvent) => el.onWheel(e)} @pointerdown=${(e: PointerEvent) => onDown(el, e)} @pointermove=${(e: PointerEvent) => onMove(el, e)} @pointerup=${(e: PointerEvent) => onUp(el, e)} @pointercancel=${() => onCancel(el)} @dblclick=${() => onDbl(el)} style="position:absolute; inset:0; overflow:hidden; perspective:2400px; perspective-origin:50% 40%; cursor:${cursor}; touch-action:none; user-select:none">
 
@@ -41,7 +38,6 @@ export function renderStage(el: Wires, d: Vals) {
 
     <div style="position:absolute; left:0; top:0; width:${W}px; height:${H}px; transform-style:preserve-3d; transform:translateZ(-6px) rotateY(180deg)">
       ${renderBack(el, d)}
-      ${isRelay ? '' : renderPuzzle(el, d)}
       ${renderBlocks(d)}
     </div>
   </div>

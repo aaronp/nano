@@ -1,0 +1,87 @@
+/** The contract surface (spec: docs/superpowers/specs/2026-11-16-contract-surface-design.md); fixtures in fixtures/acme-kv.ts. */
+import { expect, test } from 'bun:test'
+import { AppDeployment, Application, Selector, type Ask, type RuntimeDeployment, type NanoContext } from '../src/index.ts'
+import { KV, Notes, must, heard, notes, mem, other, registry, deployment, open, thrownBy } from './fixtures/acme-kv.ts'
+
+test('rules in place of exports: what the host may not reach is denied at resolve and at the call, yet its pods still reach it', async () => {
+  const d = deployment('acme/mem')
+  const only = (to: string): RuntimeDeployment['policy'] => ({ kind: 'rules', rules: [{ allow: ['call', 'subscribe'], outside: true, toInterface: to }, { allow: '*', outside: false }, { deny: '*' }] })
+  d.runtimes.main!.policy = only('acme.Notes')
+  const app = must(await Application.create(must(AppDeployment.assemble(d, registry))))
+  expect(app.resolve(KV)).toMatchObject({ ok: false, reason: 'denied' })   // nothing learned of where KV is placed
+  expect(() => app.get(KV)).toThrow('denied')
+  expect(await app.call('store').size(null)).toMatchObject({ ok: false, fail: { type: 'denied' } })
+  expect(await app.get(Notes).note('milk')).toBe(1)   // notes -> store, inside the runtime
+  d.runtimes.main!.policy = only('acme.Nothing')
+  must(await app.apply(d))
+  expect(await app.call('notes').note('x')).toMatchObject({ ok: false, fail: { type: 'denied' } })
+})
+
+test('two pods providing it in one runtime are not-unique, unless where.pod names one', async () => {
+  const app = await open()
+  const two = deployment('acme/mem')
+  two.pods.spare = { implementation: 'acme/other', eager: false }
+  two.runtimes.main!.pods.push('spare')
+  must(await app.apply(two))
+  expect(app.runtime('main').resolve(KV)).toMatchObject({ ok: false, reason: 'not-unique' })
+  expect(app.runtime('main').resolve(KV, { pod: 'spare' })).toMatchObject({ ok: true, pod: 'spare', runtime: 'main' })
+})
+
+test('app.resolve says what it found (pod, runtime, implementation) or why not; app.get is its getOrThrow', async () => {
+  const app = await open()
+  const r = app.resolve(KV)
+  expect(r).toMatchObject({ ok: true, pod: 'store', runtime: 'main', implementation: 'acme/mem' })
+  await r.getOrThrow().put({ k: 'a', v: 'b' })
+  expect(r.ok && await r.value.size()).toBe(1)
+  expect(await app.get(KV).size()).toBe(1)
+  const none = app.resolve(KV, { pod: 'notes' })
+  expect(none).toMatchObject({ ok: false, reason: 'not-found', fail: { type: 'not-found' } })
+  expect('pod' in none).toBe(false)
+  if (!none.ok) expect(thrownBy(() => none.getOrThrow())?.fail).toEqual(none.fail)
+})
+
+test('the plain proxy: an unknown method throws an Error carrying unknown-op, not a TypeError', async () => {
+  const app = await open()
+  const e = await (app.get(KV) as unknown as Record<string, () => Promise<never>>).nope!().catch((x: Error & { fail: { type: string } }) => x)
+  expect(e).toBeInstanceOf(Error)
+  expect(e.fail.type).toBe('unknown-op')
+})
+
+test('a deps role narrowed by Selector.of keeps its interface type', () => {
+  type Ctx = NanoContext<{ store: ReturnType<typeof Selector.of<typeof KV>> }>
+  const deps = {} as Ctx['deps']
+  void (() => deps.store.size() satisfies Promise<number>)
+})
+
+test('app.subscribe hears each successful call of an action as { input, output }; refused, it throws denied at the call', async () => {
+  const d = deployment('acme/mem')
+  const deny = { isAllowed: (ask: Ask) => ask.from === 'host' && ask.kind === 'subscribe' ? { approved: false, reason: 'no' } : { approved: true } }
+  const notes: RuntimeDeployment['policy'] = { kind: 'rules', rules: [{ allow: ['call', 'subscribe'], outside: true, toInterface: 'acme.Notes' }, { allow: '*', outside: false }, { deny: '*' }] }
+  for (const [policies, policy, want] of [[{}, undefined, 1], [{ main: deny }, undefined, 0], [{}, notes, 0]] as const) {
+    const app = must(await Application.create(must(AppDeployment.assemble({ ...d, runtimes: { main: { ...d.runtimes.main!, ...(policy && { policy }) } } }, registry)), { policies: policies as never }))
+    const heard: unknown[] = []
+    if (!want) { expect(thrownBy(() => app.subscribe(KV.ops.put, () => {}))?.fail.type).toBe('denied'); continue }   // refused: throws at the call
+    app.subscribe(KV.ops.put, call => { heard.push(call) })
+    await app.get(Notes).note('milk')
+    await Bun.sleep(0)
+    expect(heard).toEqual(want ? [{ input: { k: '1', v: 'milk' }, output: null }] : [])
+  }
+})
+
+test('app.runtime of a runtime that does not exist is not-found at each use, and works once apply adds it', async () => {
+  const app = await open()
+  const side = app.runtime('side')
+  expect(side.resolve(KV)).toMatchObject({ ok: false, reason: 'not-found', fail: { type: 'not-found' } })
+  expect(thrownBy(() => side.get(KV))?.fail.type).toBe('not-found')
+  expect(await side.call('store').size(null)).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+  expect(thrownBy(() => side.subscribe(KV.ops.put, () => {}))?.fail.type).toBe('not-found')
+  const d = deployment('acme/mem')
+  d.runtimes.side = { pods: ['store'], subscriptions: [] }
+  must(await app.apply(d))
+  const heard: unknown[] = []
+  side.subscribe(KV.ops.put, call => { heard.push(call.input) })
+  await side.get(KV).put({ k: 'a', v: 'b' })
+  expect(await side.call('store').size(null)).toMatchObject({ ok: true, value: 1 })
+  await Bun.sleep(0)
+  expect(heard).toEqual([{ k: 'a', v: 'b' }])
+})

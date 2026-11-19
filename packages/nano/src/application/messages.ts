@@ -14,6 +14,7 @@ import type { Registry } from '../registry.ts'
 import type { NanoContext } from '../context.ts'
 import { opAt } from '../runtime.ts'
 import { lookup } from './lookup.ts'
+import { contextFor } from './context.ts'
 import { failure, isNanoResult, success, type Fail, type NanoResult } from '../result.ts'
 import type { stream } from './stream.ts'
 
@@ -24,8 +25,8 @@ export type Live = {
   readonly policies: Record<string, Policy>
   readonly timeoutMs: number
   readonly trace: ReturnType<typeof stream>
-  /** A build: the handlers by port, and the implementation they were made from. */
-  instance(pod: string): Promise<NanoResult<{ implementation: Implementation; handlers: ReadonlyMap<string, Handler> }>>
+  /** A build: the handlers by port, the implementation they were made from, and its `addOnCloseListener`. */
+  instance(pod: string): Promise<NanoResult<{ implementation: Implementation; handlers: ReadonlyMap<string, Handler>; onClose: NanoContext['addOnCloseListener'] }>>
   /** The live listeners, in the order made: `on` subscriptions (a pod's, or the host's; `heard` the same by `${from} ${port}`, what `emit` reads) and pod-change listeners (`ctx.addOnPodChangeListener`). */
   readonly listeners: { ons: Set<On>; heard: Map<string, Set<On>>; podChanges: Set<{ pod: string; fn: Parameters<NanoContext['addOnPodChangeListener']>[0] }> }
   /** Deliveries under way, so `close()` can let them settle. */
@@ -86,7 +87,7 @@ export function refusal(live: Live, ask: Omit<Ask, 'outside'>, d = live.now()): 
   }
 }
 
-async function deliver(live: Live, to: string, p: string, input: unknown): Promise<NanoResult<unknown>> {
+async function deliver(live: Live, to: string, p: string, input: unknown, m: { id: string; correlation: string }): Promise<NanoResult<unknown>> {
   const asked = action(impl(live, to), p)
   if (!asked) return failure('unknown-op', `${to} has no action ${p}`)
   if (asked.input && !asked.input.check(input)) return failure('invalid-input', `${p}: input does not fit ${asked.input.label ?? 'its schema'}`)
@@ -96,7 +97,7 @@ async function deliver(live: Live, to: string, p: string, input: unknown): Promi
   const o = action(made.value.implementation, p), h = made.value.handlers.get(p)
   if (!o || !h) return failure('unknown-op', `${to} has no action ${p}`)
   if (o.input && !o.input.check(input)) return failure('invalid-input', `${p}: input does not fit ${o.input.label ?? 'its schema'}`)
-  const ran = await attempt(live, to, `${to} ${p}`, () => h(input))
+  const ran = await attempt(live, to, `${to} ${p}`, () => h(input, contextFor(live, to, made.value.onClose, { ...m, port: p })))
   if (!ran.ok) return ran
   const r = ran.value
   if (!isNanoResult(r)) return failure('invalid-output', `${p}: returned something other than a NanoResult`)
@@ -111,11 +112,11 @@ async function deliver(live: Live, to: string, p: string, input: unknown): Promi
  */
 export async function send(live: Live, runtime: string, from: string, to: string, p: string, input: unknown, how: How = { kind: 'call' }): Promise<NanoResult<unknown>> {
   const { trace } = live, { kind, id = trace.id(), cause, work } = how, correlation = how.correlation ?? id
-  trace.emit({ type: 'sent', id, runtime, kind, from, to, port: p, correlation, ...(cause !== undefined && { cause }) })
+  trace.emit({ type: 'sent', id, runtime, kind, from, to, port: p, correlation, ...(cause !== undefined && { cause }), ...(input !== undefined && { input }) })
   const reason = refusal(live, { runtime, kind, from, to, port: p, data: input })
   if (reason !== undefined) { trace.emit({ type: 'denied', id, reason }); return failure('denied', reason) }
   const t0 = performance.now()
-  const r = await (work ? work() : deliver(live, to, p, input)).catch(e => failure('invalid-input', `${p}: unreadable input: ${msg(e)}`))
+  const r = await (work ? work() : deliver(live, to, p, input, { id, correlation })).catch(e => failure('invalid-input', `${p}: unreadable input: ${msg(e)}`))
   trace.emit({ type: 'delivered', id, result: r, ms: performance.now() - t0 })
   return r
 }

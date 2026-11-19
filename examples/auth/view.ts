@@ -32,6 +32,8 @@ export class AuthPasskeyView extends LitElement {
       for (let n = await it.next(); !n.done && this.iter === it; n = await it.next()) this.last = n.value
     } catch (e) { if (this.iter === it) this.error = String(e) }
   }
+  /** The Register button's ceremony (origin-key registers for its own origin). */
+  protected register() { return register() }
   private run(p: Promise<AuthDef.Result>) { p.then(r => { this.last = r }, e => { this.error = String(e) }) }
   render() {
     const t = this.target
@@ -39,7 +41,7 @@ export class AuthPasskeyView extends LitElement {
     const l = this.last
     return html`<div class="col">${this.error ? html`<p class="alert bad" role="alert">${this.error}</p>` : ''}
       <div class="row"><button class="btn" @click=${() => this.run(this.pod(t).authenticate('sign in'))}>Passkey</button>
-      <button class="btn" @click=${() => this.run(register())}>Register</button></div>
+      <button class="btn" @click=${() => this.run(this.register())}>Register</button></div>
       <p class="muted" role="status">${!l ? 'Not yet authenticated.' : l.ok ? `${l.purpose}: ok (${l.credentialId}) at ${l.at}` : `${l.purpose}: ${l.reason} at ${l.at}`}</p></div>`
   }
 }

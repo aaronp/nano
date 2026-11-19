@@ -1,5 +1,5 @@
-// <nano-workspace-controls dock="<id>">: the controls of one workspace dock (window style, connections, save, restore,
-// reset), the element the app bar shows while that dock's page is shown. It drives the dock by id; nothing here is persisted.
+// <nano-workspace-controls dock="<id>">: the controls of one workspace dock (window style, connections, the Desk page,
+// save, restore, reset), the element the app bar shows while that dock's page is shown. It drives the dock by id; nothing here is persisted.
 // BACKLOG(5): it was also a nano-runes component (WorkspaceControls) in the host registry; now only the element.
 import { LitElement, css, html, svg } from 'lit'
 import { base } from '@pritzlaff/nano-elements'
@@ -7,18 +7,19 @@ import { WINDOW_STYLES, type WindowStyle } from '../lib/dock-layout.ts'
 
 
 type Dock = HTMLElement & { windowStyle: WindowStyle; setWindowStyle(s: WindowStyle): void; connections(): void; saveAs(): void; save(): void; restore(): void; reset(): void }
-type Command = 'connections' | 'saveAs' | 'save' | 'restore' | 'reset'
+type Command = 'connections' | 'desk' | 'saveAs' | 'save' | 'restore' | 'reset'
 
 // 24×24 stroke paths, the File menu's icon style
 const ICONS: Record<Command | 'more', ReturnType<typeof svg>> = {
   connections: svg`<circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.7 10.5l6.6-3M8.7 13.5l6.6 3"/>`,
+  desk: svg`<path d="M6 3v18M12 3v18M18 3v18"/><rect x="4" y="6" width="4" height="3" rx="1"/><rect x="10" y="13" width="4" height="3" rx="1"/><rect x="16" y="9" width="4" height="3" rx="1"/>`,
   saveAs: svg`<path d="M12 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v4"/><path d="M7 3v5h8M18 15l3 3-5 5h-3v-3z"/>`,
   save: svg`<path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8M7 21v-7h10v7"/>`,
   restore: svg`<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>`,
   reset: svg`<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>`,
   more: svg`<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`,
 }
-const COMMANDS: [Command, string][] = [['connections', 'Connections'], ['saveAs', 'Save as workspace…'], ['save', 'Save layout'], ['restore', 'Restore'], ['reset', 'Reset']]
+const COMMANDS: [Command, string][] = [['connections', 'Connections'], ['desk', 'Desk'], ['saveAs', 'Save as workspace…'], ['save', 'Save layout'], ['restore', 'Restore'], ['reset', 'Reset']]
 const NARROW = '(max-width: 840px)'
 
 export class WorkspaceControlsEl extends LitElement {
@@ -66,7 +67,8 @@ export class WorkspaceControlsEl extends LitElement {
   }
 
   #close(refocus: boolean) { this.open = false; if (refocus) void this.updateComplete.then(() => this.renderRoot.querySelector<HTMLElement>('.more')?.focus()) }
-  #run(c: Command) { this.#dock()[c]() }
+  // the Desk is a page of its own, not a dock command
+  #run(c: Command) { if (c === 'desk') location.hash = '#/desk'; else this.#dock()[c]() }
   #cmd = (c: Command, label: string, text: boolean) => html`<button aria-label=${label} title=${label} @click=${() => { this.#close(false); this.#run(c) }}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[c]}</svg>${text ? label : ''}</button>`
 
   render() {

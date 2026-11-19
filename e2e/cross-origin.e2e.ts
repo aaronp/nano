@@ -30,7 +30,7 @@ test('the template from another origin, Sandboxed: its pods isolated-sandbox in 
   const got = await importTemplate(page, 'Sandboxed')
   for (const p of ['timer', 'picker', 'store']) expect(got.pods[p].isolation).toBe('isolated-sandbox')
   const dock = page.locator('workspace-dock#workspace')
-  await dock.locator('nano-explorer').getByText('timer', { exact: true }).first().click()
+  await dock.locator('nano-explorer').getByText('timer', { exact: true }).first().dblclick()
   // its provider is never loaded into this page, so its view tag is not defined here: the panel is the sandboxed view
   await expect(dock.locator('nano-sandboxed').first()).toBeVisible()
   expect(await page.evaluate(() => !!customElements.get('nano-timer'))).toBe(false)
@@ -43,7 +43,7 @@ test('the template from another origin, Trusted: host pods, its view before anyt
   const dock = page.locator('workspace-dock#workspace')
 
   // (a) the imported timer's panel is its own view, not the generic one, before any of its pods built
-  await dock.locator('nano-explorer').getByText('timer', { exact: true }).first().click()
+  await dock.locator('nano-explorer').getByText('timer', { exact: true }).first().dblclick()
   await expect(dock.locator('nano-timer').first()).toBeVisible()
   await expect(page.locator('dialog[open]')).toHaveCount(0)   // nothing asked to run yet
 

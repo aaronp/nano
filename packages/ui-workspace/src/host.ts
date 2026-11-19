@@ -1,28 +1,33 @@
 /**
  * The host: the one `Application`, what is loaded (`Loaded`: the deployment with its modules and view selectors, the
- * registry, the default views), and import, apply and save over them. Its own pod is `ui` (HostUI) in runtime `main`,
- * and it is never saved. A failure is shown with `toast()` and changes nothing.
+ * registry, the default views), and import, apply and save over them. Its own pods are `ui` (HostUI) and `deploy`
+ * (HostDeploy, host-deploy.ts) in runtime `main`, never saved. A failure is shown with `toast()` and changes nothing.
  *
  *   const host = (await start()).value
  *   await host.importUrl('/examples/slice/nano.json')   // importApp, then apply
  *   host.saved()                                         // { ...app.deployment(), modules, views, layout }, without ui
+ *   host.saved(true)                                     // the same, reconciled with the calls seen (host.calls())
  */
 import { Application, AppDeployment, Registry, Pod, success, type NanoResult, type Pod as PodData } from '@pritzlaff/nano-core'
 import uiProvider, { views as uiViews, type ViewMap } from '@pritzlaff/nano-ui'
 import { toast } from '@pritzlaff/nano-elements'
-import { foreignOrigin, importApp, isolated, remembered, type Loaded } from './import.ts'
+import { foreignOrigin, importApp, type Loaded } from './import.ts'
+import { isolated, remembered } from './import-gate.ts'
 import { confirmImports } from './import-confirm.ts'
 import { probe } from './described.ts'
-import { hostProvider, hostUi } from './host-ui.ts'
+import { hostUi } from './host-ui.ts'
+import { approvalPolicy, deployPod, hostProvider, HOST_PODS } from './host-deploy.ts'
 import { edgesFor } from './sandbox/edges.ts'
 import { openFrame } from './sandbox/frames.ts'
 import { connected } from './auto-connect.ts'
 import { framesOf } from './sandbox/sandboxed-view.ts'
 import { standIn, type Frame } from './sandbox/stand-in.ts'
+import { recording, type History } from './history.ts'
+import { observeCalls, type OpCall } from './observed-calls.ts'
 
 export type Host = {
-  readonly app: Application
-  readonly registry: Registry
+  readonly app: Application; readonly registry: Registry
+  readonly history: History   // the app recorded from creation, before any import; and Reset (history.ts)
   /** The live deployment with the modules, view selectors and dock layout the host keeps. */
   data(): AppDeployment
   /** Implementation → its default view tag, from nano.ui and every loaded module. */
@@ -33,36 +38,36 @@ export type Host = {
   importUrl(url: string, chosen?: { edit(d: AppDeployment): AppDeployment }): Promise<NanoResult<void>>
   /** Whether the provider `coord` is loaded from another origin than this page (so imported only once approved). */
   foreign(coord: string): boolean
-  /** What Save writes: `data()` without the host pod `ui`, and without `main` once nothing else is in it. */
-  saved(): AppDeployment
+  /** What Save writes: `data()` without the host pods `ui` and `deploy`, and without `main` once nothing else is in it; with
+   * `reconcile`, the call edges that gained a seen, undeclared op pair carry their `ops` (observed-calls.ts). */
+  saved(reconcile?: boolean): AppDeployment
+  /** The op-level calls declared and seen so far (one observer for the app's life). */
+  calls(): OpCall[]
 }
 
-const HOST = 'ui', MAIN = 'main'
-
-/** `d` with the host pod taken out of `main` (and `main` dropped once nothing else is in it), still among the pods. Pure. */
-function unplaced(d: AppDeployment): AppDeployment {
+const [HOST, DEPLOY] = HOST_PODS, MAIN = 'main'
+/** `d` with `own` taken out of `main` (dropped once empty), still among the pods. Pure. (Import keeps `deploy`'s edges.) */
+function unplaced(d: AppDeployment, own = [HOST]): AppDeployment {
   const out = structuredClone(d), main = out.runtimes[MAIN]
   if (main) {
-    main.pods = main.pods.filter(p => p !== HOST)
-    main.subscriptions = main.subscriptions.filter(s => s.from !== HOST && s.to !== HOST)
+    main.pods = main.pods.filter(p => !own.includes(p))
+    main.subscriptions = main.subscriptions.filter(s => !own.includes(s.from) && !own.includes(s.to))
     if (!main.pods.length && !main.subscriptions.length) delete out.runtimes[MAIN]
   }
   return out
 }
 
-/** `d` without the host's own pod. Pure. */
+/** `d` without the host's own pods. Pure. */
 function withoutHost(d: AppDeployment): AppDeployment {
-  const out = unplaced(d)
-  delete out.pods[HOST]
-  delete out.tags?.[HOST]
-  delete out.views?.[HOST]
+  const out = unplaced(d, [HOST, DEPLOY])
+  for (const p of [HOST, DEPLOY]) { delete out.pods[p]; delete out.tags?.[p]; delete out.views?.[p] }
   return out
 }
 
-/** `d` with the host pod, first in `main`. Pure. */
+/** `d` with the host pods first in `main` (`deploy` unless it is there). Pure. */
 function placed(d: AppDeployment): AppDeployment {
-  const main = d.runtimes[MAIN] ?? { pods: [], subscriptions: [] }
-  return { ...d, pods: { [HOST]: Pod.eager(hostUi), ...d.pods }, runtimes: { ...d.runtimes, [MAIN]: { ...main, pods: [HOST, ...main.pods] } } }
+  const main = d.runtimes[MAIN] ?? { pods: [], subscriptions: [] }, deploy = main.pods.includes(DEPLOY) ? [] : [DEPLOY]
+  return { ...d, pods: { [HOST]: Pod.eager(hostUi), [DEPLOY]: deployPod, ...d.pods }, runtimes: { ...d.runtimes, [MAIN]: { ...main, pods: [HOST, ...deploy, ...main.pods] } } }
 }
 
 /** nano.ui's URL as importApp stores a provider: its path on http(s), else whole (a file: page, in tests). Relative to
@@ -78,7 +83,7 @@ const shown = <T>(r: NanoResult<T>): NanoResult<T> => {
 export async function start(): Promise<NanoResult<Host>> {
   // nano.ui is bundle/nano-ui.js under the page: through the import map, the module this file imports.
   const registry = Registry.create()
-  for (const p of [uiProvider, hostProvider]) { const added = registry.add(p); if (!added.ok) return added }
+  for (const p of [uiProvider, hostProvider(() => live())]) { const added = registry.add(p); if (!added.ok) return added }
   const first = placed({ pods: {}, runtimes: {}, modules: { "nano.ui": nanoUi }, views: {} })
   const runtimes = AppDeployment.assemble(first, registry)
   if (!runtimes.ok) return runtimes
@@ -94,7 +99,9 @@ export async function start(): Promise<NanoResult<Host>> {
       url: new URL(at, document.baseURI).href, edges: p => edgesFor(live().deployment(), registry, p), app: live, implementation: c => registry.implementation(c),
       onApplied: fn => live().listen(e => { if (e.type === 'applied') fn() }), warn: reason => void toast(reason, { variant: 'warn' }),
       open(p) {
-        const f = openFrame(pod.isolation === 'sandbox' ? 'sandbox' : 'isolated-sandbox')
+        const page = pod.isolation === 'home-origin' ? loaded.deployment.frames?.[real.provider] : undefined
+        if (pod.isolation === 'home-origin' && !page) throw new Error(`${name}: no frame page for ${real.provider} (home-origin needs frames.${real.provider})`)
+        const f = page ? openFrame('home-origin', page) : openFrame(pod.isolation === 'sandbox' ? 'sandbox' : 'isolated-sandbox')
         frames.set(p, f)
         return { ...f, dispose() { if (frames.get(p) === f) frames.delete(p); f.dispose() } }
       },
@@ -102,16 +109,18 @@ export async function start(): Promise<NanoResult<Host>> {
   }
   // HostUI.approve through the app, so it is on the stream like any call; anything but a yes is a no (a late yes too,
   // after the call's timeout). Remembered per title (provider and origin): one dialog at a time, a yes for good.
-  const approve = remembered(async title => {
+  const ask = async (title: string) => {
     const r = await (live().call(MAIN, HOST) as { approve(a: { title: string }): Promise<NanoResult<unknown>> }).approve({ title })
     return r.ok && r.value === true
-  })
-  const created = await Application.create(runtimes.value, { isolate })
+  }, approve = remembered(ask)
+  // A pod's apply asks every time (not remembered). Shadow and replay apps take DeploymentPolicies.allowAll(): it was decided live.
+  const created = await Application.create(runtimes.value, { isolate, deploymentPolicy: approvalPolicy(ask, () => live().deployment()) })
   if (!created.ok) return created
   const app = made = created.value
   framesOf.set(app, frames)
+  const observed = observeCalls(app, registry)
 
-  const kept = (d: AppDeployment) => ({ modules: { ...d.modules }, views: { ...d.views }, ...(d.layout && { layout: structuredClone(d.layout) }) })
+  const kept = (d: AppDeployment) => ({ modules: { ...d.modules }, ...(d.frames && { frames: { ...d.frames } }), views: { ...d.views }, ...(d.layout && { layout: structuredClone(d.layout) }) })
   const data = (): AppDeployment => ({ ...app.deployment(), ...kept(loaded.deployment) })
   async function apply(next: AppDeployment, views = loaded.views): Promise<NanoResult<void>> {
     // The modules, views and layout are kept before the apply, so listeners of its `applied` event already read them from data().
@@ -123,10 +132,11 @@ export async function start(): Promise<NanoResult<Host>> {
   }
 
   return success({
-    app, registry, data, apply: next => apply(next),
+    app, registry, data, apply: next => apply(next), history: await recording(app),
     defaults: () => ({ ...loaded.views }),
     foreign: coord => !!foreignOrigin(loaded.deployment.modules?.[coord]),
-    saved: () => withoutHost(data()),
+    saved: reconcile => withoutHost(reconcile ? { ...observed.reconciled(), ...kept(loaded.deployment) } : data()),
+    calls: () => observed.calls(),
     async importUrl(url, chosen) {
       // With the pod ui still in it, so merge refuses an app naming a pod ui before any provider is registered.
       const imported = shown(await importApp(url, { ...loaded, deployment: unplaced(data()) }, {

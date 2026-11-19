@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "title": "Risks",
+  "subtitle": "Project",
+  "status": {
+    "label": "None open",
+    "tone": "good"
+  },
+  "heading": {
+    "primary": "0",
+    "label": "open risks"
+  },
+  "legend": [
+    {
+      "id": "low",
+      "label": "Low",
+      "color": "#4D7C3A"
+    },
+    {
+      "id": "medium",
+      "label": "Medium",
+      "color": "#B7791F"
+    },
+    {
+      "id": "high",
+      "label": "High",
+      "color": "#C2410C"
+    },
+    {
+      "id": "critical",
+      "label": "Critical",
+      "color": "#9E2F27"
+    }
+  ],
+  "report": {
+    "low": 0,
+    "medium": 0,
+    "high": 0,
+    "critical": 0
+  },
+  "source": {
+    "label": "docs/risks/risks.md",
+    "url": "https://aaronp.github.io/risk-register/?src=https://aaronp.github.io/nano/docs/risks/risks.md"
+  },
+  "updated": "2026-11-19"
+}

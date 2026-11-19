@@ -5,7 +5,7 @@
  *   registry.add(messengerProvider)
  *   { pods: { inbox: Pod.lazy(inbox) }, runtimes: { messenger: { pods: ['inbox'], subscriptions: [] } } }   // works alone, on its fallback
  */
-import { Coord, Implementation, provide, success } from '@pritzlaff/nano-core'
+import { Coord, Implementation, provide, success, type NanoContext } from '@pritzlaff/nano-core'
 import { Composer, Inbox, KeyValueStore, Messaging, Send } from './interfaces.ts'
 
 const ns = Coord.namespace('example.messenger')
@@ -38,24 +38,25 @@ const messaging = Implementation.define(ns.implementationId('messaging'), {
 const inbox = Implementation.define(ns.implementationId('inbox'), {
   provides: [Inbox],
   dependencies: { store: KeyValueStore },
-  make: ctx => {
+  calls: { receive: { store: [KeyValueStore.ops.get, KeyValueStore.ops.put] }, list: { store: [KeyValueStore.ops.get] } },
+  make: () => {
     const local = new Map<string, Message>()
-    const unplugged = () => ctx.all(KeyValueStore).length === 0
-    const stored = async () => {
-      const kv = ctx.one(KeyValueStore)
+    const unplugged = (c: NanoContext) => c.all(KeyValueStore).length === 0
+    const stored = async (c: NanoContext) => {
+      const kv = c.one(KeyValueStore)
       if (!kv.ok) return kv
       const r = await kv.value.call.get('inbox')
       return r.ok ? success<Message[]>(r.value ? JSON.parse(r.value) : []) : r
     }
     return [provide(Inbox, {
-      async receive(message) {
-        if (unplugged()) { local.set(message.id, message); return success(null) }
-        const all = await stored()
+      async receive(message, c) {
+        if (unplugged(c)) { local.set(message.id, message); return success(null) }
+        const all = await stored(c)
         if (!all.ok) return all
-        const kv = ctx.one(KeyValueStore)
+        const kv = c.one(KeyValueStore)
         return kv.ok ? kv.value.call.put({ key: 'inbox', value: JSON.stringify([...all.value, message]) }) : kv
       },
-      list: async () => (unplugged() ? success([...local.values()]) : stored()),
+      list: async (_, c) => (unplugged(c) ? success([...local.values()]) : stored(c)),
     })]
   },
 })
@@ -63,11 +64,12 @@ const inbox = Implementation.define(ns.implementationId('inbox'), {
 const composer = Implementation.define(ns.implementationId('composer'), {
   provides: [Composer],
   dependencies: { messaging: Messaging },
-  make: ctx => [provide(Composer, {
-    async send({ text }) {
-      if (ctx.all(Messaging).length === 0) return success({ status: 'disabled' as const })
+  calls: { send: { messaging: [Messaging.ops.post] } },
+  make: () => [provide(Composer, {
+    async send({ text }, c) {
+      if (c.all(Messaging).length === 0) return success({ status: 'disabled' as const })
       const id = crypto.randomUUID()
-      const m = ctx.one(Messaging)
+      const m = c.one(Messaging)
       if (!m.ok) return m
       const r = await m.value.call.post({ id, text })
       return r.ok ? success({ status: 'sent' as const, id }) : r
@@ -79,8 +81,9 @@ const composer = Implementation.define(ns.implementationId('composer'), {
 export const send = Implementation.define(ns.implementationId('send'), {
   provides: [Send],
   dependencies: { db: KeyValueStore },
-  make: ctx => [provide(Send, { send: async ({ contact, message }) => {
-    const kv = ctx.one(KeyValueStore)
+  calls: { send: { db: [KeyValueStore.ops.put] } },
+  make: () => [provide(Send, { send: async ({ contact, message }, c) => {
+    const kv = c.one(KeyValueStore)
     return kv.ok ? kv.value.call.put({ key: contact, value: message }) : kv
   } })],
 })

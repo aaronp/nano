@@ -5,7 +5,7 @@
  *
  *   trusted(renameRuntimes(d, { main: suggestedName(d, 'main') }), 'sandboxed')
  */
-import type { AppDeployment, Pod, Subscription } from '@pritzlaff/nano-core'
+import { failure, success, type AppDeployment, type NanoResult, type Pod, type Subscription } from '@pritzlaff/nano-core'
 import type { LayoutData } from '@pritzlaff/nano-ui'
 
 export type Trust = 'sandboxed' | 'trusted'
@@ -27,8 +27,14 @@ type Known = (coord: string) => boolean
 const none: Known = () => false
 const providerOf = (p: Pod) => p.implementation.slice(0, p.implementation.lastIndexOf('/'))
 
-/** `<namespace>.<runtime>`: the provider of the runtime's pods new to the workspace, the first in `modules` order; the
- * runtime alone if none, or if its id is already dotted (namespaced). */
+/** The pods of provider `coord` in `d`, each with its isolation and whether it runs with this page's full access (a
+ * home-origin frame is its provider's own origin): what an import gates, and so what the Import dialog warns of. */
+export const podsOf = (d: AppDeployment, coord: string, isolationOf: (p: Pod) => NonNullable<Pod['isolation']>) =>
+  Object.entries(d.pods).filter(([, p]) => providerOf(p) === coord).map(([name, p]) => {
+    const isolation = isolationOf(p)
+    return { name, isolation, fullAccess: isolation !== 'isolated-sandbox' && isolation !== 'home-origin' }
+  })
+
 /** Whether a provider is the workspace's own (Trust leaves its pods as the file has them): loaded here, from this
  * page's origin. A foreign provider imported before is not: a file naming it again still gets the user's Trust. */
 export const ownProvider = (loaded: boolean, stored: string | undefined): boolean => {
@@ -44,9 +50,9 @@ export function suggestedName(d: AppDeployment, runtime: string, known: Known = 
 }
 
 /** The isolation pod `p` gets under `trust`: Sandboxed always isolated-sandbox; Trusted host, unless the file sandboxes
- * it; a pod of a provider the workspace has, the file's. */
+ * it; a pod of a provider the workspace has, the file's; a home-origin pod stays one (it runs as its provider's origin, apart from this page). */
 export const isolationUnder = (p: Pod, trust: Trust, known: Known = none): NonNullable<Pod['isolation']> =>
-  known(providerOf(p)) ? p.isolation ?? 'host' : trust === 'sandboxed' ? 'isolated-sandbox' : p.isolation === 'sandbox' || p.isolation === 'isolated-sandbox' ? p.isolation : 'host'
+  known(providerOf(p)) || p.isolation === 'home-origin' ? p.isolation ?? 'host' : trust === 'sandboxed' ? 'isolated-sandbox' : p.isolation === 'sandbox' || p.isolation === 'isolated-sandbox' ? p.isolation : 'host'
 
 /** `d` with each pod's isolation under `trust` (host left out, as `Pod` writes it). A pod it runs in a frame is also
  * eager: nothing in this page can call it first, so a lazy one would never start and its panel would stay empty. Pure. */
@@ -82,9 +88,44 @@ export function selectPods(d: AppDeployment, keep: Set<string>): { deployment: A
   }))
   const out: AppDeployment = { ...d, pods, runtimes }
   if (d.modules) out.modules = kept(d.modules, c => providers.has(c))
+  if (d.frames) out.frames = kept(d.frames, c => providers.has(c))
   if (d.tags) out.tags = kept(d.tags, p => keep.has(p))
   if (d.views) out.views = kept(d.views, k => keep.has(k) || implementations.has(k))
   const slots = (d.layout as LayoutData | undefined)?.slots
   if (Array.isArray(slots)) out.layout = { ...d.layout, slots: slots.filter(s => keep.has(s.pod)) }
   return { deployment: out, warnings }
+}
+
+const clash = (what: string, name: string) => failure('invalid-input', `clash: ${what} ${name} is already loaded`)
+
+/** `current` and `incoming` unioned; a pod or provider name already present is a clash, a runtime already present gains
+ * the incoming pods and subscriptions (its own policy kept). Pure. */
+export function merge(current: AppDeployment, incoming: AppDeployment): NanoResult<AppDeployment> {
+  for (const k of Object.keys(incoming.pods)) if (Object.hasOwn(current.pods, k)) return clash('pod', k)
+  const modules: Record<string, string> = { ...current.modules }
+  for (const [k, url] of Object.entries(incoming.modules ?? {})) {
+    if (Object.hasOwn(modules, k) && modules[k] !== url) return clash('provider', k)
+    modules[k] = url
+  }
+  const frames: Record<string, string> = { ...current.frames }
+  for (const [k, url] of Object.entries(incoming.frames ?? {})) {
+    if (Object.hasOwn(frames, k) && frames[k] !== url) return clash('frame', k)
+    frames[k] = url
+  }
+  // Merging into a runtime that is already there: two policies would silently lose one's rules, so that is refused.
+  for (const [k, r] of Object.entries(incoming.runtimes))
+    if (r.policy && Object.hasOwn(current.runtimes, k) && current.runtimes[k]!.policy)
+      return failure('invalid-input', `runtime ${k} already has a policy; import into another runtime`)
+  return success({
+    pods: { ...current.pods, ...incoming.pods },
+    runtimes: { ...current.runtimes, ...Object.fromEntries(Object.entries(incoming.runtimes).map(([k, r]) => {
+      const was = Object.hasOwn(current.runtimes, k) ? current.runtimes[k] : undefined
+      return [k, was ? { ...was, pods: [...was.pods, ...r.pods], subscriptions: [...was.subscriptions, ...r.subscriptions], ...((was.policy ?? r.policy) && { policy: was.policy ?? r.policy }) } : r]
+    })) },
+    tags: { ...current.tags, ...incoming.tags },
+    modules,
+    ...(Object.keys(frames).length && { frames }),
+    views: { ...current.views, ...incoming.views },
+    ...((incoming.layout ?? current.layout) && { layout: incoming.layout ?? current.layout }),   // the newest arrangement
+  })
 }

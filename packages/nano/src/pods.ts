@@ -26,7 +26,7 @@ export const Id = Type.String({ pattern: /^[^/\s#\x00-\x1f\x7f]{1,64}$/.source }
 const PodName = Type.String({ pattern: /^[^/.\s#\x00-\x1f\x7f]{1,64}$/.source })
 const strict = { additionalProperties: false } as const
 const Shape = Type.Record(PodName, Type.Object({ implementation: Type.String(), config: Type.Optional(Type.Unknown()), eager: Type.Boolean(),
-  isolation: Type.Optional(Type.Union([Type.Literal('host'), Type.Literal('sandbox'), Type.Literal('isolated-sandbox')])) }, strict),
+  isolation: Type.Optional(Type.Union([Type.Literal('host'), Type.Literal('sandbox'), Type.Literal('isolated-sandbox'), Type.Literal('home-origin')])) }, strict),
   { ...strict, maxProperties: 5000 })
 const Tags = Type.Record(Id, Type.Array(Type.String()), strict)
 

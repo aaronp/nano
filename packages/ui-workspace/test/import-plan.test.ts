@@ -118,3 +118,11 @@ test('a pod the import sandboxes is eager: its frame (and view) opens at once, s
   expect(Object.values(trusted(file(), 'trusted').pods).map(p => [p.isolation ?? 'host', p.eager])).toEqual([['host', false], ['sandbox', true], ['isolated-sandbox', true]])
   expect(Object.values(kept.pods)[0]!.eager).toBe(false)   // a pod Trust leaves alone keeps its own
 })
+
+test('a home-origin pod stays home-origin under either Trust (it runs as its own origin), and its frames entry follows selection', () => {
+  const d = file(); d.pods['b'] = { ...d.pods['b']!, isolation: 'home-origin' }; d.frames = { 'other.x': 'https://other.x/frame.html' }
+  expect(trusted(d, 'sandboxed').pods['b']!.isolation).toBe('home-origin')
+  expect(trusted(d, 'trusted').pods['b']!.isolation).toBe('home-origin')
+  expect(selectPods(d, new Set(['b'])).deployment.frames).toEqual({ 'other.x': 'https://other.x/frame.html' })
+  expect(selectPods(d, new Set(['a'])).deployment.frames).toEqual({})
+})

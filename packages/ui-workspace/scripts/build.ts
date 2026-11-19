@@ -4,7 +4,7 @@
  * @pritzlaff/nano-core, nano-elements, nano-ui, lit and typebox through the import map, so a module loaded later shares them.
  * With --watch, it builds again on every source change.
  */
-import { cpSync, copyFileSync, readdirSync, rmSync, watch } from 'node:fs'
+import { cpSync, copyFileSync, mkdirSync, readdirSync, rmSync, watch } from 'node:fs'
 import { join } from 'node:path'
 import { SHARED } from '../src/shared/specifiers.ts'
 
@@ -25,6 +25,8 @@ async function all() {
   await build([join(repo, 'packages/ui/src/index.ts')], join(pub, 'bundle'), { entry: 'nano-ui.[ext]' })
   await build([join(repo, 'examples/slice/shout.ts')], join(pub, 'examples/slice'))
   copyFileSync(join(repo, 'examples/slice/nano.json'), join(pub, 'examples/slice/nano.json'))
+  // the Typing example (File › Examples) is nano.ui only: its nano.json is all of it
+  mkdirSync(join(pub, 'examples/typing'), { recursive: true }); copyFileSync(join(repo, 'examples/typing/nano.json'), join(pub, 'examples/typing/nano.json'))
   await build([join(repo, 'templates/nano-template/src/index.ts')], join(pub, 'examples/template'))
   copyFileSync(join(repo, 'templates/nano-template/nano.json'), join(pub, 'examples/template/nano.json'))
   if (Bun.spawnSync(['bun', 'scripts/build.ts'], { cwd: join(repo, 'examples'), stdout: 'inherit', stderr: 'inherit' }).exitCode) throw new Error('examples build failed')
@@ -35,6 +37,6 @@ await all()
 if (watching) {
   let timer: ReturnType<typeof setTimeout> | undefined
   const again = () => { clearTimeout(timer); timer = setTimeout(() => void all().catch(e => console.error(e)), 100) }
-  for (const d of ['packages/ui-workspace/src', 'packages/ui/src', 'packages/nano/src', 'packages/elements/src', 'examples/slice', 'examples/todo', 'examples/chat', 'examples/auth', 'examples/kv', 'templates/nano-template/src'])
+  for (const d of ['packages/ui-workspace/src', 'packages/ui/src', 'packages/nano/src', 'packages/elements/src', 'examples/slice', 'examples/todo', 'examples/chat', 'examples/auth', 'examples/originkey', 'examples/drift', 'examples/kv', 'templates/nano-template/src'])
     watch(join(repo, d), { recursive: true }, again)
 }

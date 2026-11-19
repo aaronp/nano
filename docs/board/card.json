@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "title": "Nano",
+  "subtitle": "Kanban board",
+  "status": {
+    "label": "8 open",
+    "tone": "neutral"
+  },
+  "heading": {
+    "primary": "0/8",
+    "label": "tasks done"
+  },
+  "legend": [
+    {
+      "id": "Backlog",
+      "label": "Backlog",
+      "color": "#3b6fd8"
+    },
+    {
+      "id": "To-Do",
+      "label": "To-Do",
+      "color": "#b7791f"
+    },
+    {
+      "id": "Doing",
+      "label": "Doing",
+      "color": "#7c4dcc"
+    },
+    {
+      "id": "Done",
+      "label": "Done",
+      "color": "#2f855a"
+    }
+  ],
+  "report": {
+    "Backlog": 6,
+    "To-Do": 2,
+    "Doing": 0,
+    "Done": 0
+  },
+  "source": {
+    "label": "docs/board/board.md",
+    "url": "https://aaronp.github.io/agile/?src=https://aaronp.github.io/nano/docs/board/board.md"
+  },
+  "updated": "2026-11-19"
+}

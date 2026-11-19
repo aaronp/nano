@@ -29,3 +29,23 @@ test('one swatch button per theme; the chosen one is pressed and named; a click 
   expect([...group.querySelectorAll('[aria-pressed="true"]')].map(b => b.textContent!.trim())).toEqual(['Blueprint'])
   expect(schemesOf('blueprint')).toEqual(['dark'])
 })
+
+test('icons layout: only the listed themes, no names, and one light/dark toggle, only for a theme with both looks', async () => {
+  document.body.innerHTML = '<div id="shell"></div>'
+  provideBus(document.getElementById('shell')!, createBus())
+  applyChoice(document, { theme: 'shadcn', mode: 'light' })
+  const p = document.createElement('theme-picker') as El
+  p.setAttribute('layout', 'icons'); p.setAttribute('themes', 'warm,blueprint,enterprise,shadcn')
+  document.getElementById('shell')!.appendChild(p); await p.updateComplete
+  const buttons = [...p.shadowRoot!.querySelectorAll('button.theme-btn')] as HTMLElement[]
+  expect(buttons.map(b => b.getAttribute('aria-label'))).toEqual(THEME_IDS.filter(id => ['warm', 'blueprint', 'enterprise', 'shadcn'].includes(id)).map(id => `${THEMES[id].label} theme`))
+  expect(buttons.map(b => b.textContent!.trim()).filter(Boolean)).toEqual([])
+  const toggle = p.shadowRoot!.querySelector('button.scheme') as HTMLButtonElement
+  expect(toggle.getAttribute('aria-pressed')).toBe('false')
+  toggle.click(); await p.updateComplete
+  expect(document.documentElement.dataset['scheme']).toBe('dark')
+  buttons.find(b => b.getAttribute('aria-label') === 'Blueprint theme')!.click(); await p.updateComplete
+  expect(p.shadowRoot!.querySelector('button.scheme')).toBeNull()   // one look: no toggle
+  buttons.find(b => b.getAttribute('aria-label') === 'shadcn theme')!.click(); await p.updateComplete
+  expect(p.shadowRoot!.querySelector('button.scheme')).not.toBeNull()
+})

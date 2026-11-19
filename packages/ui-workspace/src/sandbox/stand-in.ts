@@ -57,10 +57,11 @@ export function standIn(real: Implementation, deps: Deps): Implementation {
   const ms = deps.readyMs ?? READY_MS
   const events = real.provides.flatMap(i => Object.values(i.ops).filter(o => o.kind === 'event'))
   return {
-    coord: real.coord, provider: real.provider, provides: real.provides, dependencies: real.dependencies,
+    coord: real.coord, provider: real.provider, provides: real.provides, dependencies: real.dependencies, calls: real.calls,
     ...(real.config && { config: real.config }), ...(real.description !== undefined && { description: real.description }),
     async make(ctx, config) {
       const self = ctx.self, frame = deps.open(self), pending = new Map<number, (r: NanoResult<unknown>) => void>()
+      const invs = new Map<number, typeof ctx>()   // a call in flight's invocation ctx, by its id
       let failed: string | undefined, n = 0, closed = () => {}, ready = () => {}, abort = (_: Error) => {}
       const gate = new Promise<void>((res, rej) => { ready = res; abort = rej })
       gate.catch(() => {})
@@ -132,7 +133,7 @@ export function standIn(real: Implementation, deps: Deps): Implementation {
           }
           case 'outcall': {
             if (failed) return
-            const sel = ctx.all({}).find(s => s.pod === m.pod && s.runtime === m.runtime)
+            const sel = ((m.via !== undefined && invs.get(m.via)) || ctx).all({}).find(s => s.pod === m.pod && s.runtime === m.runtime)
             const f = sel && (sel.call as Calls)[m.op]
             const r = f ? Promise.resolve().then(() => f(m.input)) : Promise.resolve(failure('not-found', `${self}->${m.pod} is not in ${m.runtime}`))
             return void r.then(x => answer('outresult', m.id, x), e => answer('outresult', m.id, failure('threw', message(e))))
@@ -163,14 +164,15 @@ export function standIn(real: Implementation, deps: Deps): Implementation {
       frame.ready.catch(e => fail(message(e)))
       try { await bounded(Promise.all([frame.ready, gate]), ms, `no ready within ${ms}ms`) } catch (e) { fail(message(e)); throw new Error(failed) }
 
-      const call = (p: string, input: unknown) => new Promise<NanoResult<unknown>>(res => {
+      const call = (p: string, input: unknown, inv = ctx) => new Promise<NanoResult<unknown>>(res => {
         if (failed) return res(failure('threw', failed))
         const id = ++n
-        pending.set(id, res)
-        try { post({ type: 'call', id, port: p, input }) } catch (e) { pending.delete(id); res(failure('threw', `${self}: ${message(e)}`)) }
+        invs.set(id, inv)
+        pending.set(id, r => { invs.delete(id); res(r) })
+        try { post({ type: 'call', id, port: p, input }) } catch (e) { pending.delete(id); invs.delete(id); res(failure('threw', `${self}: ${message(e)}`)) }
       })
       const handlers = new Map<string, Handler>()
-      for (const i of real.provides) for (const o of Object.values(i.ops)) if (o.kind === 'action') handlers.set(port(i, o), input => call(port(i, o), input))
+      for (const i of real.provides) for (const o of Object.values(i.ops)) if (o.kind === 'action') handlers.set(port(i, o), (input, inv) => call(port(i, o), input, inv))
       return { handlers, sources: new Map() }
     },
   }

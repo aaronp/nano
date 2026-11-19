@@ -3,6 +3,9 @@ import { spawnSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { port } from '../packages/nano/src/index.ts'
+import { MessagingDef } from '../examples/chat/messaging/contract.ts'
+import { KeyValueStoreDef } from '../examples/kv/contract.ts'
 
 const dock = (page: Page) => page.locator('workspace-dock#workspace')
 /** The participant's window, by its heading (its text would also match a line mentioning the name). */
@@ -65,7 +68,9 @@ test('todo and chat import side by side: no runtime clash', async ({ page }) => 
   await expect(dock(page).locator('chat-room')).toHaveCount(2)
   const node = dock(page).locator('nano-explorer').getByText('todos', { exact: true })   // the dock's Systems panel
   await expect(node).toHaveCount(1)
-  await node.click()
+  await node.click()   // selects: its details, with Open view
+  await page.screenshot({ path: test.info().outputPath('details.png') })
+  await dock(page).locator('nano-explorer').getByRole('button', { name: 'Open view' }).click()
   const list = dock(page).locator('todo-list')
   await list.getByRole('textbox', { name: 'New todo' }).fill('eggs')
   await list.getByRole('button', { name: 'Add' }).click()
@@ -315,4 +320,100 @@ test('Connections draws the chat example\'s call edges: alice and bob to messagi
   await expect(page.locator('c-wires [data-call]')).toHaveCount(0)
   await page.locator('c-wires').getByLabel('Call edges').check()
   await expect(page.locator('c-wires [data-call]')).toHaveCount(3)
+})
+
+test('origin-key runs home-origin: its frame is its own page, and Register / Passkey make a passkey for that origin', async ({ page }) => {
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('WebAuthn.enable')
+  await cdp.send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } })
+  await start(page)
+  await page.getByRole('button', { name: 'File', exact: true }).click()
+  await page.getByRole('button', { name: /^Open/ }).click()
+  const d = page.getByRole('dialog', { name: 'Import components' })
+  await d.getByLabel('nano.json URL').fill('http://localhost:4310/originkey/nano.json')
+  await d.getByRole('button', { name: 'Fetch' }).click()
+  await expect(d.locator('[data-pod="originKey"] [data-isolation]')).toHaveText('home-origin')
+  await d.getByRole('button', { name: 'Import', exact: true }).click()
+  await expect(d).toHaveCount(0)
+  const frame = page.frameLocator('#nano-sandbox-layer iframe[src="http://localhost:4310/originkey/frame.html"]')
+  const key = frame.locator('origin-key')
+  await expect(key.getByRole('button', { name: 'Register' })).toBeVisible({ timeout: 10_000 })
+  await key.getByRole('button', { name: 'Register' }).click()
+  await expect(key.getByRole('status')).toContainText('register: ok', { timeout: 10_000 })
+  await key.getByRole('button', { name: 'Passkey' }).click()
+  await frame.getByRole('button', { name: 'Approve' }).click()
+  await expect(key.getByRole('status')).toContainText('sign in: ok', { timeout: 10_000 })
+})
+
+test('Settings shows each runtime\'s policy rules in order, the frame permissions, and where providers come from', async ({ page }) => {
+  await start(page)
+  await open(page, '/examples/chat/nano.json')
+  await page.goto('/#/settings')
+  const s = page.locator('nano-settings')
+  await expect(s.getByRole('heading', { name: 'example.chat.backend' })).toBeVisible()
+  const rows = s.locator('h3:text("example.chat.backend") + p + table tbody tr')
+  await expect(rows).toHaveCount(5)
+  await expect(rows.first()).toContainText('allow')
+  await expect(rows.first()).toContainText('bob')
+  await expect(rows.last()).toContainText('deny')
+  await expect(s.getByRole('row', { name: /home-origin/ })).toContainText('publickey-credentials-get')
+  await expect(s.getByRole('row', { name: /example\.chat / })).toContainText('this origin')
+  await page.screenshot({ path: test.info().outputPath('settings.png'), fullPage: true })
+})
+
+test('the chat, a message sent: its declared, observed messaging.post → chatStore.put is drawn op to op in Connections and listed under messaging in Systems', async ({ page }) => {
+  await start(page)
+  await open(page, '/examples/chat/nano.json')
+  await say(room(page, 'alice'), 'hi bob')
+  await expect(room(page, 'bob').locator('li')).toHaveText([/hi bob/])
+  await page.getByRole('button', { name: 'Connections' }).first().click()
+  await expect(page.locator('c-wires')).toHaveAttribute('flipped', '')
+  const edge = page.locator('c-wires [data-call="example.chat.backend|messaging|chatStore"] [data-op-call]')
+  await expect(edge.first()).toBeVisible()
+  // the cord's ends are messaging's post jack and one of chatStore's jacks
+  const ends = await page.evaluate(() => {
+    const m = (document.querySelector('c-wires') as any).model, c = m.calls.find((x: any) => x.id === 'example.chat.backend|messaging|chatStore')
+    const at = (o: { x: number; y: number }) => Object.values(m.P).find((p: any) => p.x === o.x && p.y === o.y) as any
+    return c.ops.map((o: any) => [at(o.a)?.owner, at(o.a)?.label, at(o.b)?.owner, o.declared, o.seen])
+  })
+  expect(ends).toContainEqual(['messaging', 'post', 'chatStore', true, true])   // declared and seen: the message just sent
+  await page.locator('c-wires').getByRole('button', { name: 'Back', exact: true }).click()
+  await page.waitForTimeout(1200)
+  await page.screenshot({ path: test.info().outputPath('op-calls.png') })
+  await page.locator('c-wires').getByRole('button', { name: 'Back to the workspace' }).click()
+  await expect(page.locator('c-wires')).not.toHaveAttribute('flipped', '')
+  await dock(page).locator('nano-explorer li[data-id="p:example.chat.backend:messaging"] > .line').click()
+  await expect(dock(page).locator('nano-explorer .details')).toContainText('post → chatStore.put')
+})
+
+test('Connections, the chat after a message: messaging post\'s output jack is corded, dashed, to chatStore put\'s input jack; Show Connected hides a jack no cord touches', async ({ page }) => {
+  const { api: M } = MessagingDef, { api: KV } = KeyValueStoreDef
+  const post = `messaging ${port(M, M.ops.post)}:out`, put = `chatStore ${port(KV, KV.ops.put)}:in`, idle = `chatStore ${port(KV, KV.ops.list)}:out`
+  await start(page)
+  await open(page, '/examples/chat/nano.json')
+  await say(room(page, 'alice'), 'hi bob')
+  await expect(room(page, 'bob').locator('li')).toHaveText([/hi bob/])
+  await page.getByRole('button', { name: 'Connections' }).first().click()
+  const w = page.locator('c-wires')
+  await expect(w).toHaveAttribute('flipped', '')
+  for (const k of [post, put]) await expect(w.locator(`[data-jack="${k}"]`)).toHaveCount(1)
+  // the cord runs from post's output jack to put's input jack: seen, declared, dashed
+  const at = async (k: string) => { const c = w.locator(`[data-jack="${k}"] circle`).first(); return `${await c.getAttribute('cx')} ${await c.getAttribute('cy')}` }
+  const [a, b] = [await at(post), await at(put)]
+  const cord = w.locator(`[data-call="example.chat.backend|messaging|chatStore"] [data-op-call="seen"][d^="M${a} C"][d$=" ${b}"]`)
+  await expect(cord).toHaveAttribute('stroke-dasharray', '10 6')
+  // the output end is a filled socket, the input end a hollow one
+  await expect(w.locator(`[data-jack="${post}"] [data-dir="out"]`)).toHaveAttribute('fill', '#E6EDF3')
+  await expect(w.locator(`[data-jack="${put}"] [data-dir="in"]`)).toHaveAttribute('fill', '#0A0D11')
+  // Show: Connected (the default) leaves out a jack no cord touches; All shows it
+  await expect(w.locator(`[data-jack="${idle}"]`)).toHaveCount(0)
+  await w.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'All' }).click()
+  await expect(w.locator(`[data-jack="${idle}"]`)).toHaveCount(1)
+  await w.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Connected' }).click()
+  await w.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.waitForTimeout(1200)
+  await page.screenshot({ path: test.info().outputPath('rack.png') })
+  await w.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'All' }).click()
+  await page.waitForTimeout(1200)
+  await page.screenshot({ path: test.info().outputPath('rack-all.png') })
 })

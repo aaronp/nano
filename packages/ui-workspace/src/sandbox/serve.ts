@@ -21,7 +21,7 @@ type Opts = { render?(coord: string, target: Omit<ViewTarget, 'registry'>): void
 export function serve(port: MessagePort, load: (url: string, coord: string) => Promise<Implementation>, opts: Opts = {}): void {
   const post = (m: Msg) => port.postMessage(m)
   const outs = new Map<number, (r: R) => void>(), heard = new Set<(e: AppEvent) => void>(), subs = hearings(post)
-  let edges: Edge[] = [], handlers: ReadonlyMap<string, Handler> | undefined, building = false, n = 0
+  let edges: Edge[] = [], handlers: ReadonlyMap<string, Handler> | undefined, building = false, n = 0, at: ((id: number) => Parameters<Handler>[1]) | undefined
   let close: ((reason: 'restarted' | 'removed' | 'changed' | 'closed') => Promise<void>) | undefined
 
   /** Posts `m` with a fresh id and resolves with the answer to that id (`outresult` or `view-result`). */
@@ -30,7 +30,7 @@ export function serve(port: MessagePort, load: (url: string, coord: string) => P
     outs.set(id, res)
     try { post(m(id)) } catch (e) { outs.delete(id); res(failure('invalid-input', message(e))) }
   })
-  const out = (pod: string, runtime: string, op: string, input: unknown) => ask(id => ({ type: 'outcall', id, pod, runtime, op, input }))
+  const out = (pod: string, runtime: string, op: string, input: unknown, via?: number) => ask(id => ({ type: 'outcall', id, pod, runtime, op, input, ...(via !== undefined && { via }) }))
 
   /** What a view in the frame sees: its own pod's client, its pod's events, and a deployment of just its pod. */
   function viewApp(m: Extract<Msg, { type: 'build' }>): Application {
@@ -49,6 +49,7 @@ export function serve(port: MessagePort, load: (url: string, coord: string) => P
       : async (input: unknown) => { const r = await ask(id => ({ type: 'view-call', id, op, input: input ?? null })); if (r.ok) return r.value; throw Object.assign(new Error(`${r.fail.type}: ${r.fail.reason}`), { fail: r.fail }) } })
     const one: ReturnType<Application['runtime']> = {
       call: client, get: ((api: never, where?: { pod?: string }) => where?.pod === m.pod ? own(api) : thrown()) as never, subscribe: viewOn as never, resolve: () => ({ ok: false, reason: refused.type, fail: refused, getOrThrow: thrown }), listen: () => () => {},
+      status: () => failure(refused.type, refused.reason),
     }
     return {
       ...one, runtime: () => one, call: (...at) => client(at[at.length - 1]!), deployment: () => structuredClone(deployment),
@@ -67,6 +68,7 @@ export function serve(port: MessagePort, load: (url: string, coord: string) => P
       close = async reason => { subs.close(); await made.close(reason) }   // its subscriptions end first, so its sources' loops do
       const built = await impl.make(made.ctx, m.config)
       handlers = built.handlers
+      at = made.at
       post({ type: 'ready' })
       for (const { op, run } of built.sources.values()) {   // as nano runs a build's sources: each value is the pod's emission
         const it = run()[Symbol.asyncIterator]()
@@ -82,8 +84,8 @@ export function serve(port: MessagePort, load: (url: string, coord: string) => P
   }
 
   async function call(id: number, p: string, input: unknown) {
-    const h = handlers?.get(p)
-    const r = h ? await Promise.resolve().then(() => h(input)).catch(e => failure('threw', message(e))) : failure('unknown-op', `no handler for ${p}`)
+    const h = handlers?.get(p), inv = at
+    const r = h && inv ? await Promise.resolve().then(() => h(input, inv(id))).catch(e => failure('threw', message(e))) : failure('unknown-op', `no handler for ${p}`)
     try { post({ type: 'result', id, result: r }) } catch (e) { post({ type: 'result', id, result: failure('invalid-output', message(e)) }) }
   }
 

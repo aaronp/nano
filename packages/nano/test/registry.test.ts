@@ -28,7 +28,7 @@ describe('implementations', () => {
   test('make keys handlers by port: interface coord and op name', async () => {
     const { handlers } = await memDb.make(ctx, undefined)
     expect([...handlers.keys()].sort()).toEqual(['acme/db/get', 'acme/db/put'].sort())
-    expect(await handlers.get(port(db, db.ops.get))!('abc')).toEqual(success(3))
+    expect(await handlers.get(port(db, db.ops.get))!('abc', ctx)).toEqual(success(3))
   })
   test('a missing handler throws `<coord>: missing <iface>/<op>`', async () => {
     const half = Implementation.define('acme/mem/half', {
@@ -50,8 +50,8 @@ describe('implementations', () => {
       ],
     })
     const { handlers } = await both.make(ctx, undefined)
-    await handlers.get(port(log, log.ops.write))!('a')
-    await handlers.get(port(audit, audit.ops.write))!('b')
+    await handlers.get(port(log, log.ops.write))!('a', ctx)
+    await handlers.get(port(audit, audit.ops.write))!('b', ctx)
     expect(seen).toEqual(['log a', 'audit b'])
   })
   test("one interface's handler does not satisfy another's", async () => {

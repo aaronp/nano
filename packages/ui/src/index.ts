@@ -1,12 +1,15 @@
 /**
- * The `nano.ui` provider: input, debounce, map and log pods, and the HostUI interface a host implements.
+ * The `nano.ui` provider: input, debounce, map and log pods, the real and simulated clocks, the real and seeded random, and the HostUI and HostDeploy interfaces a host implements.
  *
  *   registry.add(uiProvider)   // then Pod.lazy(log), Pod.eager(debounce, { config: { quietMs: 200 } })
  *   defineViews()              // the default `views`, and nano-pod-view for any pod
  */
 import { uiProvider } from './provider.ts'
 
-export { Any, Debounce, HostUI, Input, Log, MapIface, Nothing } from './interfaces.ts'
+export { Any, Clock, ClockControl, Debounce, HostDeploy, HostUI, Input, Log, MapIface, Nothing, Random } from './interfaces.ts'
+export { clock } from './pods/clock.ts'
+export { simClock } from './pods/sim-clock.ts'
+export { random, seededRandom } from './pods/random.ts'
 export { debounce } from './pods/debounce.ts'
 export { input } from './pods/input.ts'
 export { log } from './pods/log.ts'
@@ -17,3 +20,15 @@ export type { LayoutBox, LayoutData, LayoutSlot } from './layout.ts'
 export { viewFor, type ViewMap, type ViewTarget } from './views/view.ts'
 export { uiProvider }
 export default uiProvider
+export { record } from './observe/record.ts'
+export { replay, diverge, roots } from './observe/replay.ts'
+export { pair, snap, truncated, type Entry, type Recorded, type Message, type MessageStore } from './observe/entry.ts'
+export { memoryStore } from './observe/memory-store.ts'
+export { timeMachine, type Frame, type Ticker, type TimeMachine } from './observe/time-machine.ts'
+export { clockDriver } from './observe/clock-driver.ts'
+export { foldAt } from './observe/fold.ts'
+export { shadowAt } from './observe/shadow.ts'
+export { NanoTimeMachine } from './observe/bar.ts'
+export { NanoRing } from './observe/ring-view.ts'
+export { emptyFilter, filterTree, matches, type FilterValue, type PodStatus } from './filter/model.ts'
+export { NanoFilter } from './filter/filter.ts'

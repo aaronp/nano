@@ -1,38 +1,8 @@
-/**
- * Pod views over the nano.ui slice: chosen by selector, default or generic; reaching the pod only by call and listen.
- */
+/** Pod views over the nano.ui slice: chosen by selector, default or generic; reaching the pod only by call and listen. */
 import { describe, expect, test } from 'bun:test'
-import { Application, AppDeployment, Registry, Pod, port, type NanoResult } from '@pritzlaff/nano-core'
-import uiProvider, { Debounce, debounce, defineViews, input, Input, Log, log, map, MapIface, views, viewFor, type ViewTarget } from '../src/index.ts'
-
-const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-const slice: AppDeployment = {
-  pods: {
-    in: Pod.eager(input), wait: Pod.eager(debounce, { config: { quietMs: 10 } }),
-    up: Pod.lazy(map, { config: { code: 'return String(x).toUpperCase()' } }), out: Pod.lazy(log),
-  },
-  runtimes: { main: { pods: ['in', 'wait', 'up', 'out'], subscriptions: [
-    { kind: 'pipe', from: 'in', source: port(Input, Input.ops.submit), to: 'wait', target: port(Debounce, Debounce.ops.push) },
-    { kind: 'pipe', from: 'wait', source: port(Debounce, Debounce.ops.flushed), to: 'up', target: port(MapIface, MapIface.ops.map) },
-    { kind: 'pipe', from: 'up', source: port(MapIface, MapIface.ops.map), to: 'out', target: port(Log, Log.ops.log) },
-  ] } },
-}
-const open = async () => {
-  const registry = Registry.create()
-  registry.add(uiProvider)
-  return { app: must(await Application.create(must(AppDeployment.assemble(slice, registry)), {})), registry }
-}
-const mount = async (tag: string, target: ViewTarget) => {
-  const el = document.createElement(tag) as HTMLElement & { target: ViewTarget; updateComplete: Promise<unknown> }
-  el.target = target
-  document.body.append(el)
-  await el.updateComplete
-  return el
-}
-const text = (el: Element) => el.shadowRoot?.textContent ?? ''
-
-defineViews()
+import { Pod, port } from '@pritzlaff/nano-core'
+import { debounce, input, log, map, views, viewFor } from '../src/index.ts'
+import { must, sleep, slice, open, mount, text } from './views-setup.ts'
 
 describe('pod views', () => {
   test('viewFor: the deployment selector wins, then the implementation default, then nano-pod-view', async () => {
@@ -83,41 +53,19 @@ describe('pod views', () => {
     expect(text(el)).toContain('"HI"')
   })
 
-  test('given nano-debounce on wait, when pushed, then pending; after flushed, it flashes, then idle', async () => {
+  test('given nano-debounce on wait, when values are pushed, then they wait in the queue with their values, and drop as one batch', async () => {
     const { app, registry } = await open()
+    must(await app.apply({ ...slice, pods: { ...slice.pods, wait: Pod.eager(debounce, { config: { quietMs: 60 } }) } }))
     const el = await mount('nano-debounce', { app, registry, runtime: 'main', pod: 'wait' })
     expect(text(el)).toContain('idle')
-    await app.call('main', 'wait').push('x')
+    await app.call('main', 'wait').push('ab')
+    await app.call('main', 'wait').push('cd')
     await el.updateComplete
-    expect(text(el)).toContain('pending')
-    await sleep(30)
+    expect(text(el)).toContain('collecting 2')
+    expect([...el.shadowRoot!.querySelectorAll('.item')].map(i => i.textContent)).toEqual(['ab', 'cd'])
+    await sleep(100)
     await el.updateComplete
-    expect(text(el)).toContain('flushed')
-    await sleep(320)
-    await el.updateComplete
-    expect(text(el)).toContain('idle')
-  })
-
-  test('given nano-pod-view on up, when apply changes its config, then it shows the new config', async () => {
-    const { app, registry } = await open()
-    const el = await mount('nano-pod-view', { app, registry, runtime: 'main', pod: 'up' })
-    must(await app.apply({ ...slice, pods: { ...slice.pods, up: Pod.lazy(map, { config: { code: 'return 7' } }) } }))
-    await el.updateComplete
-    expect(text(el)).toContain('return 7')
-  })
-
-  test('given a mounted view, when apply removes its pod, then it renders removed and its listener is gone', async () => {
-    const { app, registry } = await open()
-    let listening = 0
-    const counted = { ...app, listen: (fn: Parameters<typeof app.listen>[0]) => { listening++; const off = app.listen(fn); return () => { listening--; off() } } }
-    const el = await mount('nano-log', { app: counted, registry, runtime: 'main', pod: 'out' })
-    expect(listening).toBe(1)
-    const { out: _, ...pods } = slice.pods
-    must(await app.apply({ pods, runtimes: { main: { pods: ['in', 'wait', 'up'], subscriptions: slice.runtimes.main!.subscriptions.slice(0, 2) } } }))
-    await el.updateComplete
-    expect(text(el)).toContain('removed')
-    expect(listening).toBe(0)
-    el.remove()
-    expect(listening).toBe(0)
+    expect(el.shadowRoot!.querySelector('.ratio')!.textContent).toBe('2 → 1 batches')
+    expect(text(el)).toContain('dropping 2')
   })
 })

@@ -6,12 +6,11 @@
  *   <line-chart>                   weekly chart; follows stat:select
  *   <bus-log pattern="*" limit="8"> recent bus messages
  *   <status-line>                  the latest bus message (or status message), for the status bar
- *   <file-list> <code-pane>        the Editor page (file:open, file:saved)
  */
 import { LitElement, html, css, svg } from 'lit';
 import { requestBus, type Bus, type BusMessage, type Unsubscribe } from '../lib/bus.ts';
 import { areaPath, changePct, linePath, scalePoints } from '../lib/chart.ts';
-import { DAYS, FILES, STATS } from './sample-data.ts';
+import { DAYS, STATS } from './sample-data.ts';
 
 /** Base class: keeps the bus from the first connection and tears down subscriptions. */
 abstract class BusWidget extends LitElement {
@@ -168,60 +167,8 @@ export class StatusLine extends BusWidget {
   }
 }
 
-/* ------------------------------------------------------------------ editor */
-
-export class FileList extends BusWidget {
-  static override properties = { open: { state: true } };
-  declare open: string;
-  static override styles = css`
-    :host { display: block; height: 100%; box-sizing: border-box; padding: 12px 8px; background: var(--surface); font: 13px var(--mono); }
-    h2 { margin: 0 8px 8px; font: 600 12px var(--font); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
-    button { all: unset; box-sizing: border-box; display: block; width: 100%; padding: 5px 10px; border-radius: var(--radius); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    button:hover { background: var(--surface-2); }
-    button[aria-current='true'] { background: var(--accent-soft); }
-    button:focus-visible { outline: 2px solid var(--focus); }
-  `;
-  constructor() { super(); this.open = FILES[0]?.path ?? ''; }
-  override render() {
-    return html`<h2>Explorer</h2>${FILES.map((f) => html`<button type="button" aria-current=${String(this.open === f.path)}
-      @click=${() => { this.open = f.path; this.send('file:open', { path: f.path }); }}>${f.path}</button>`)}`;
-  }
-}
-
-export class CodePane extends BusWidget {
-  static override properties = { path: { state: true }, edits: { state: true }, saved: { state: true } };
-  declare path: string;
-  /** Unsaved text per file. */ declare edits: Readonly<Record<string, string>>;
-  /** Last saved text per file (a real app would write to its API here). */ declare saved: Readonly<Record<string, string>>;
-  static override styles = css`
-    :host { display: flex; flex-direction: column; height: 100%; background: var(--bg); }
-    .tab { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); font: 13px var(--mono); }
-    .tab span { flex: 1; }
-    button { font: inherit; padding: 3px 10px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
-    textarea { flex: 1; min-height: 0; resize: none; border: 0; padding: 14px 16px; background: transparent; color: var(--fg); font: 13px/1.6 var(--mono); tab-size: 2; }
-    textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-  `;
-  constructor() { super(); this.path = FILES[0]?.path ?? ''; this.edits = {}; this.saved = {}; }
-  protected override subscriptions(bus: Bus) {
-    return [bus.subscribe('file:open', (m) => { this.path = (m.payload as { path: string }).path; })];
-  }
-  override render() {
-    const f = FILES.find((x) => x.path === this.path);
-    if (!f) throw new Error(`bug: no file ${this.path}`);
-    const base = this.saved[f.path] ?? f.text;
-    const text = this.edits[f.path] ?? base;
-    const dirty = text !== base;
-    return html`<div class="tab"><span>${f.path}${dirty ? ' •' : ''}</span>
-        <button type="button" ?disabled=${!dirty} @click=${() => { this.saved = { ...this.saved, [f.path]: text }; this.send('file:saved', { path: f.path, bytes: text.length }); }}>Save</button></div>
-      <textarea aria-label="Contents of ${f.path}" spellcheck="false" .value=${text}
-        @input=${(e: Event) => { this.edits = { ...this.edits, [f.path]: (e.target as HTMLTextAreaElement).value }; }}></textarea>`;
-  }
-}
-
 customElements.define('stat-card', StatCard);
 customElements.define('line-chart', LineChart);
 customElements.define('bus-log', BusLog);
 customElements.define('status-line', StatusLine);
-customElements.define('file-list', FileList);
-customElements.define('code-pane', CodePane);
 

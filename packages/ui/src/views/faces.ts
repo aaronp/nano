@@ -1,48 +1,11 @@
 /**
- * The nano.ui pods' own views: `nano-input` (a field; Enter submits), `nano-debounce` (pending, a flash on flushed),
- * `nano-map` (its code and last output) and `nano-log` (its entries).
+ * The nano.ui pods' simple views: `nano-map` (its code and last output) and `nano-log` (its entries). `nano-input` and
+ * `nano-debounce` have files of their own.
  */
-import { css, html } from 'lit'
+import { html } from 'lit'
 import { port, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
-import { base, t } from '@pritzlaff/nano-elements'
-import { Debounce, Log, MapIface } from '../interfaces.ts'
+import { Log, MapIface } from '../interfaces.ts'
 import { shown, ViewElement, type ViewTarget } from './view.ts'
-
-export class NanoInput extends ViewElement {
-  private async enter(e: KeyboardEvent, tg: ViewTarget) {
-    if (e.key !== 'Enter') return
-    const box = e.target as HTMLInputElement
-    await this.pod(tg).submit(box.value)
-  }
-  protected face(tg: ViewTarget) {
-    return html`<input type="text" aria-label=${tg.pod} @keydown=${(e: KeyboardEvent) => this.enter(e, tg)}>`
-  }
-}
-
-const PUSH = port(Debounce, Debounce.ops.push)
-
-export class NanoDebounce extends ViewElement {
-  static styles = [base, css`.flash { color: ${t('accent')} }`]
-  private pending = false
-  private flash = false
-  private timer?: ReturnType<typeof setTimeout>
-
-  protected hear(e: AppEvent, tg: ViewTarget) {
-    if (e.type !== 'sent') return
-    if (e.to === tg.pod && e.port === PUSH) this.pending = true
-    else if (e.from === tg.pod) {
-      this.pending = false
-      this.flash = true
-      clearTimeout(this.timer)
-      this.timer = setTimeout(() => { this.flash = false; this.requestUpdate() }, 300)
-    } else return
-    this.requestUpdate()
-  }
-  disconnectedCallback() { super.disconnectedCallback(); clearTimeout(this.timer) }
-  protected face() {
-    return html`<span class=${this.flash ? 'badge accent flash' : 'badge'}>${this.flash ? 'flushed' : this.pending ? 'pending' : 'idle'}</span>`
-  }
-}
 
 const MAP = port(MapIface, MapIface.ops.map)
 

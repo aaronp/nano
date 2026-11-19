@@ -58,14 +58,14 @@ async function mount() {
   return { host: r.value, el }
 }
 
-test('given a fresh host, then the built-ins input, debounce, map and log are listed and main holds only ui', async () => {
+test('given a fresh host, then the built-ins input, debounce, map, log, the clocks and the randoms are listed and main holds only ui and deploy', async () => {
   const { host, el } = await mount()
   const builtins = [...el.querySelectorAll<HTMLTemplateElement>(':scope > template[data-implementation]')]
-  expect(builtins.map(t => t.dataset['title']).sort()).toEqual(['debounce', 'input', 'log', 'map'])
-  expect(host.app.deployment().runtimes).toEqual({ main: { pods: ['ui'], subscriptions: [] } })
+  expect(builtins.map(t => t.dataset['title']).sort()).toEqual(['clock', 'debounce', 'input', 'log', 'map', 'random', 'seeded-random', 'sim-clock'])
+  expect(host.app.deployment().runtimes).toEqual({ main: { pods: ['ui', 'deploy'], subscriptions: [] } })
   el.addWidget('nano-ui-map')
   await tick(10)
-  expect(host.app.deployment().runtimes.main!.pods).toEqual(['ui', 'map1'])
+  expect(host.app.deployment().runtimes.main!.pods).toEqual(['ui', 'deploy', 'map1'])
 })
 
 test('given the slice imported, then the explorer lists in, wait, up, out and Save round-trips modules and views', async () => {
@@ -85,6 +85,7 @@ test('given the slice imported, then the explorer lists in, wait, up, out and Sa
   expect(saved.views).toEqual({ up: 'nano-pod-view' })
   expect(saved.pods).toEqual(file.pods)
   expect(saved.runtimes).toEqual(file.runtimes)
+  expect(host.saved(true)).toEqual(saved)   // Reconcile and save: no call seen, nothing to add
 
   const again = new URL('./saves/nano.json', import.meta.url).href   // another directory than the slice's
   json.set(again, saved)

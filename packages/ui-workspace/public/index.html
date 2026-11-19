@@ -40,7 +40,7 @@
   <!-- Navigation: one link per <app-route> below, in order. -->
   <!-- Workspaces: each runs in a system (a registry and runtime); + makes a new one. The Workspaces link is the host's own; saved ones follow it as top-level items, in their stored order. -->
   <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspaces</a><button type="button" data-toggle-drawer aria-pressed="true" aria-label="Components drawer" title="Show or hide the components drawer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM9 4v16"/></svg></button><button type="button" data-new-workspace aria-label="New workspace" title="New workspace">+</button></div>
-  <div slot="drawer-footer" class="drawer-foot">Nano · v0.1</div>
+  <div slot="drawer-footer" class="drawer-foot"><theme-picker layout="icons" themes="warm,blueprint,enterprise,shadcn"></theme-picker><span>Nano · v0.1</span></div>
   <status-line slot="footer"></status-line>
 
   <!-- Workspace: a golden-layout dock. Each <template> is a widget the drawer can add. -->
@@ -98,19 +98,39 @@
     </section>
   </app-route>
 
-  <!-- Wiring: the whole app as page layers of wired boards (read-only); Connections flips the last workspace's dock. -->
-  <app-route path="/wiring" bleed>
+  <!-- Desk: the system as runtimes of pod columns; Connections flips the last workspace's dock. -->
+  <app-route path="/desk" bleed>
     <div class="wiring-page">
-      <nav class="wiring-views" aria-label="Wiring view"><a href="#/wiring" aria-current="page">Circuit</a><a href="#/workspace" data-connections hidden>Connections</a></nav>
-      <c-circuit></c-circuit>
+      <nav class="wiring-views" aria-label="Wiring view"><a href="#/workspace" data-connections hidden>Connections</a><a href="#/desk" aria-current="page">Desk</a><a href="#/messages">Messages</a><a href="#/ring">Ring</a></nav>
+      <nano-time-machine></nano-time-machine>
+      <c-desk></c-desk>
+    </div>
+  </app-route>
+
+  <!-- Messages: the recording as a searchable table, on the same time machine as the Desk. -->
+  <app-route path="/messages" bleed>
+    <div class="wiring-page">
+      <nav class="wiring-views" aria-label="Wiring view"><a href="#/workspace" data-connections hidden>Connections</a><a href="#/desk">Desk</a><a href="#/messages" aria-current="page">Messages</a><a href="#/ring">Ring</a></nav>
+      <nano-time-machine></nano-time-machine>
+      <c-messages></c-messages>
+    </div>
+  </app-route>
+
+  <!-- Ring: one ring per runtime, each pod as its view, messages between them; scrubbed back, the state at the cursor. -->
+  <app-route path="/ring" bleed>
+    <div class="wiring-page">
+      <nav class="wiring-views" aria-label="Wiring view"><a href="#/workspace" data-connections hidden>Connections</a><a href="#/desk">Desk</a><a href="#/messages">Messages</a><a href="#/ring" aria-current="page">Ring</a></nav>
+      <nano-time-machine></nano-time-machine>
+      <nano-ring></nano-ring>
     </div>
   </app-route>
 
   <app-route path="/settings">
     <header class="page-head">
       <h1>Settings</h1>
-      <p>How the workspace remembers its layout.</p>
+      <p>The decisions in force: each runtime's policy, isolation, where code comes from, and how the workspace remembers its layout.</p>
     </header>
+    <section class="panel"><nano-settings></nano-settings></section>
     <section class="panel">
       <h2>Layout</h2>
       <p>Resizable areas remember their sizes, and the workspace remembers a layout when you press Save layout in the app bar.</p>

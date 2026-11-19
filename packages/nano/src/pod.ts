@@ -10,7 +10,7 @@ import type { Implementation } from './implementation.ts'
 export type Pod = {
   implementation: string; config?: unknown; eager: boolean
   /** Where it runs; absent means `host`. */
-  isolation?: 'host' | 'sandbox' | 'isolated-sandbox'
+  isolation?: 'host' | 'sandbox' | 'isolated-sandbox' | 'home-origin'
 }
 
 const describe = (eager: boolean) => (impl: Implementation, opts: { config?: unknown; isolation?: Pod['isolation'] } = {}): Pod =>

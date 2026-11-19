@@ -1,11 +1,11 @@
 // <nano-tree>: nodes in a tree, in shadcn's look, with WAI-ARIA's tree keyboard. A `query` keeps what matches (and
 // the way to it); rows can carry a kind, a count, a badge, buttons at their end, and a body shown while open.
-import { LitElement, css, html, nothing } from 'lit'
+import { LitElement, html, nothing } from 'lit'
 import { ref } from 'lit/directives/ref.js'
 import { setAttrs } from '../attrs'
 import { base } from '../styles'
 import { kit } from '../kit'
-import { t } from '../tokens'
+import { treeStyles } from './tree-styles'
 
 /** A node. `end` sits at the row's end (buttons); `body` shows inside it while open; `terms` are more text to match;
  * `data` becomes `data-*` attributes on its row (`data-mark` is drawn as a tinted row). */
@@ -36,25 +36,12 @@ const pathTo = (nodes: TreeNode[], id: string): string[] => {
 export class NanoTree extends LitElement {
   static override properties = {
     nodes: { attribute: false }, query: {}, selected: {}, openDepth: { type: Number, attribute: 'open-depth' },
-    flipped: { state: true }, focused: { state: true },
+    icon: { attribute: false }, flipped: { state: true }, focused: { state: true },
   }
-  static override styles = [base, kit, css`
-    :host { display: block } ul { list-style: none; margin: 0; padding: 0 }
-    ul.group { margin-left: 15px; padding-left: 8px; border-left: 1px solid ${t('border')} }
-    li[role='treeitem'] { outline: 0 } li[role='treeitem']:focus-visible > .line { outline: 2px solid ${t('focus')}; outline-offset: -2px }
-    .line { display: flex; align-items: center; gap: 6px; padding: 5px 8px; margin: 1px 0; border-radius: ${t('radius-s')}; cursor: pointer; min-width: 0 }
-    .line:hover { background: ${t('surface-2')} } li[aria-selected='true'] > .line { background: ${t('accent-soft')} }
-    .chev { flex: none; width: 16px; text-align: center; color: ${t('muted')}; transition: transform .15s; user-select: none }
-    li[data-mark] > .line { background: ${t('warn-bg')}; box-shadow: inset 3px 0 ${t('warn')} } li[data-mark][aria-selected='true'] > .line { background: ${t('accent-soft')} }
-    li[aria-expanded='true'] > .line .chev { transform: rotate(90deg) }
-    .label { overflow-wrap: anywhere } .kind { color: ${t('muted')}; font-size: 11px; letter-spacing: .06em; text-transform: uppercase }
-    .count { color: ${t('muted')}; font-size: 11px; font-variant-numeric: tabular-nums }
-    .tag { font-size: 11px; padding: 2px 7px; border-radius: ${t('radius-s')}; background: ${t('accent-soft')}; white-space: nowrap }
-    .end { margin-left: auto; display: inline-flex; align-items: center; gap: 4px }
-    .body { padding: 2px 8px 6px 30px; color: ${t('muted')}; font-size: 12px }
-    mark { background: ${t('warn-bg')}; color: inherit; border-radius: 2px } .empty { color: ${t('muted')}; padding: 12px }
-    @media (pointer: coarse) { .line { min-height: 44px } }`]
+  static override styles = [base, kit, treeStyles]
   declare nodes: TreeNode[]; declare query: string; declare selected: string | null; declare openDepth: number
+  /** Draws before a node's label (and hides its kind word, kept as the icon's title) when it returns something. */
+  declare icon?: (n: TreeNode) => unknown
   declare flipped: Set<string>; declare focused: string | null
   #rows: Row[] = []
   constructor() { super(); this.nodes = []; this.query = ''; this.selected = null; this.openDepth = 0; this.flipped = new Set(); this.focused = null }
@@ -89,7 +76,7 @@ export class NanoTree extends LitElement {
     const el = e.target as Element
     if (el.closest('.chev')) { this.#setOpen(row, !row.open); return }
     if (el.closest('button, a, input, select, textarea, label')) return   // the row's own controls
-    this.#choose(row.id); this.#setOpen(row, !row.open); void this.#focus(row.id)
+    this.#choose(row.id); void this.#focus(row.id)   // only the chevron opens and closes
   }
 
   #key(e: KeyboardEvent) {
@@ -119,14 +106,14 @@ export class NanoTree extends LitElement {
   }
 
   #item(s: Shown, depth: number, byId: Map<string, Row>, tab: string | undefined): unknown {
-    const n = s.node, row = byId.get(n.id)!, { can, open } = row
+    const n = s.node, ic = this.icon?.(n), row = byId.get(n.id)!, { can, open } = row
     return html`<li role="treeitem" data-id=${n.id} aria-level=${depth + 1} aria-expanded=${can ? String(open) : nothing}
         aria-selected=${this.selected === n.id ? 'true' : nothing} tabindex=${n.id === tab ? 0 : -1}
         ${ref(el => setAttrs(el, n.data && Object.fromEntries(Object.entries(n.data).map(([k, v]) => [`data-${k}`, v]))))}>
       <div class="line" @click=${(e: MouseEvent) => this.#click(e, row)}>
         <span class="chev" data-toggle=${n.id} aria-hidden="true">${can ? '▸' : ''}</span>
-        <span class="label">${this.#label(n.label)}</span>
-        ${n.kind ? html`<span class="kind">${n.kind}</span>` : nothing}${n.count !== undefined ? html`<span class="count">${n.count}</span>` : nothing}
+        ${ic ? html`<span class="icon" title=${n.kind ?? nothing}>${ic}</span>` : nothing}<span class="label">${this.#label(n.label)}</span>
+        ${n.kind && !ic ? html`<span class="kind">${n.kind}</span>` : nothing}${n.count !== undefined ? html`<span class="count">${n.count}</span>` : nothing}
         ${n.badge ? html`<span class="tag">${n.badge}</span>` : nothing}${n.end !== undefined ? html`<span class="end">${n.end}</span>` : nothing}
       </div>
       ${open ? html`${n.body !== undefined ? html`<div class="body">${n.body}</div>` : nothing}

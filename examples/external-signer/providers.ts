@@ -45,8 +45,9 @@ const vault = Implementation.define(ns.implementationId('vault'), {
 const generator = Implementation.define(ns.implementationId('generator'), {
   provides: [KeyGenerator],
   dependencies: { vault: Vault },
-  make: ctx => [provide(KeyGenerator, {
-    'create-keys': async request => { const v = ctx.one(Vault); return v.ok ? v.value.call.create(request) : v },
+  calls: { 'create-keys': { vault: [Vault.ops.create] } },
+  make: () => [provide(KeyGenerator, {
+    'create-keys': async (request, c) => { const v = c.one(Vault); return v.ok ? v.value.call.create(request) : v },
   })],
 })
 
@@ -54,17 +55,19 @@ const generator = Implementation.define(ns.implementationId('generator'), {
 const signer = Implementation.define(ns.implementationId('signer'), {
   provides: [Signer],
   dependencies: { vault: Vault },
-  make: ctx => [provide(Signer, {
-    sign: async request => { const v = ctx.one(Vault); return v.ok ? v.value.call['sign-with'](request) : v },
+  calls: { sign: { vault: [Vault.ops['sign-with']] } },
+  make: () => [provide(Signer, {
+    sign: async (request, c) => { const v = c.one(Vault); return v.ok ? v.value.call['sign-with'](request) : v },
   })],
 })
 
 const tester = Implementation.define(ns.implementationId('tester'), {
   provides: [Tester],
   dependencies: { signer: Signer, generator: KeyGenerator },
-  make: ctx => [provide(Tester, {
-    async test({ purpose, payload, signAs }) {
-      const g = ctx.one(KeyGenerator), s = ctx.one(Signer)
+  calls: { test: { generator: [KeyGenerator.ops['create-keys']], signer: [Signer.ops.sign] } },
+  make: () => [provide(Tester, {
+    async test({ purpose, payload, signAs }, c) {
+      const g = c.one(KeyGenerator), s = c.one(Signer)
       if (!s.ok) return s
       if (!g.ok) return g
       const made = await g.value.call['create-keys']({ count: 1, purpose })

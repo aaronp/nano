@@ -8,5 +8,8 @@
     "@pritzlaff/nano-ui": "workspace:*",
     "lit": "^3.0.0",
     "typebox": "^1.4.0"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "^21.0.4"
   }
 }

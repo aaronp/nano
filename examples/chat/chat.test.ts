@@ -4,7 +4,7 @@
  * its rules; nothing in `example.chat.room`, and not the host, can reach the store.
  */
 import { expect, test } from 'bun:test'
-import { Application, AppDeployment, Registry, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, Registry, port, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
 import { KeyValueStoreDef } from '../kv/contract.ts'
 import kv, { impls as kvImpls } from '../kv/memory.ts'
 import { chatDeployment } from './deployment.ts'
@@ -13,6 +13,7 @@ import messaging from './messaging/kv.ts'
 import { ChatDef } from './room/contract.ts'
 import chat from './room/messaging.ts'
 
+const KV = KeyValueStoreDef.api
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const registry = Registry.create()
 for (const p of [kv, messaging, chat]) must(registry.add(p))
@@ -74,4 +75,16 @@ test('swapping the store behind the gateway: the participants don\'t change, and
   must(await app.apply(next))
   await alice.say('after')
   expect((await alice.transcript()).map(m => m.text)).toEqual(['after'])   // a fresh store: only what came after
+})
+
+test('declared op to op: alice.say → messaging.post → chatStore.put, one correlation, each call caused by the one before', async () => {
+  const app = await open(), calls: Extract<AppEvent, { type: 'sent' }>[] = []
+  app.listen(e => { if (e.type === 'sent' && e.kind === 'call') calls.push(e) })
+  await app.runtime('example.chat.room').get(ChatDef.api, { pod: 'alice' }).say('hello')
+  const say = calls.find(c => c.port === port(ChatDef.api, ChatDef.api.ops.say))!, post = calls.find(c => c.port === port(MessagingDef.api, MessagingDef.api.ops.post))!
+  const put = calls.find(c => c.port === port(KV, KV.ops.put))!
+  expect(post.cause).toBe(say.id)
+  expect(put.cause).toBe(post.id)
+  expect(new Set([say, post, put].map(c => c.correlation)).size).toBe(1)
+  expect(messaging.implementations.get('example.messaging/kv')!.calls).toEqual({ post: ['store.put'], history: ['store.list'] })
 })
