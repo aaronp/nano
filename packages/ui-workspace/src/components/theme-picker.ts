@@ -3,15 +3,18 @@
  *
  *   <theme-picker></theme-picker>                compact: a swatch per theme + light/dark/system (for small spaces)
  *   <theme-picker layout="cards"></theme-picker> large cards with previews (the Themes page)
+ *   <theme-picker layout="icons" themes="warm,blueprint"></theme-picker>   swatches only and a light/dark toggle (the drawer foot)
  */
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, svg } from 'lit';
 import { THEMES, THEME_IDS, schemesOf, themeVars } from '../lib/themes.ts';
 import { DEFAULT_CHOICE, THEME_EVENT, applyChoice, currentChoice, type ThemeChoice } from '../lib/theme-state.ts';
 import { requestBus, type Bus } from '../lib/bus.ts';
 
 export class ThemePicker extends LitElement {
-  static override properties = { layout: { type: String }, choice: { state: true } };
-  declare layout: 'compact' | 'cards';
+  static override properties = { layout: { type: String }, themes: { type: String }, choice: { state: true } };
+  declare layout: 'compact' | 'cards' | 'icons';
+  /** Comma-separated theme ids to offer (absent: all). */
+  declare themes: string;
   declare choice: ThemeChoice;
   private bus: Bus | null = null;
 
@@ -48,10 +51,14 @@ export class ThemePicker extends LitElement {
     .meta span { color: var(--muted); font-size: 13px; }
     .modes { margin-top: 16px; display: flex; align-items: center; gap: 10px; }
     /* phones: the app bar keeps only the theme menu; light/dark lives on the settings page */
+    :host([layout='icons']) .themes { border: 0; padding: 0; gap: 2px; }
+    :host([layout='icons']) .theme-btn { min-height: 28px; min-width: 28px; padding: 0 4px; }
+    .scheme { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
+    .scheme:hover { background: color-mix(in srgb, currentColor 10%, transparent); } .scheme:disabled { opacity: .45; cursor: default; }
     @media (max-width: 600px) { :host(:not([layout='cards'])) .seg, :host(:not([layout='cards'])) .lbl { display: none; } }
   `;
 
-  constructor() { super(); this.layout = 'compact'; this.choice = DEFAULT_CHOICE; }
+  constructor() { super(); this.layout = 'compact'; this.themes = ''; this.choice = DEFAULT_CHOICE; }
 
   override connectedCallback() {
     super.connectedCallback();
@@ -99,17 +106,29 @@ export class ThemePicker extends LitElement {
     }
     // A swatch per theme, as in the Decision Ledger: its page, its text (right half) and its accent (the dot),
     // in the scheme now showing when the theme has it.
-    const shown = document.documentElement.dataset['scheme'];
-    return html`<div class="themes" role="group" aria-label="Theme"><span class="lbl">Theme</span>${THEME_IDS.map((id) => {
+    const shown = document.documentElement.dataset['scheme'], icons = this.layout === 'icons';
+    const wanted = this.themes.split(',').map((x) => x.trim()).filter(Boolean);
+    const ids = wanted.length ? THEME_IDS.filter((id) => wanted.includes(id)) : THEME_IDS;
+    return html`<div class="themes" role="group" aria-label="Theme">${icons ? '' : html`<span class="lbl">Theme</span>`}${ids.map((id) => {
         const on = this.choice.theme === id;
         const s = schemesOf(id).find((x) => x === shown) ?? schemesOf(id)[0]!;
         const v = themeVars(id, s);
         return html`<button type="button" class="theme-btn" aria-pressed=${String(on)} aria-label=${`${THEMES[id].label} theme`} title=${THEMES[id].label}
           @click=${() => this.pick({ ...this.choice, theme: id })}>
           <span class="swatch" aria-hidden="true" style=${`background:${v['--bg']}`}><span style=${`background:${v['--fg']}`}></span><i style=${`background:${v['--accent']}`}></i></span>
-          ${on ? html`<span>${THEMES[id].label}</span>` : ''}</button>`;
+          ${on && !icons ? html`<span>${THEMES[id].label}</span>` : ''}</button>`;
       })}</div>
-      ${this.modes()}`;
+      ${icons ? this.scheme(shown === 'dark') : this.modes()}`;
+  }
+
+  /** One button: light ⇄ dark (the theme's only look when it has one). */
+  private scheme(dark: boolean) {
+    const both = schemesOf(this.choice.theme).length === 2;
+    return html`<button type="button" class="scheme" aria-label="Dark" aria-pressed=${String(dark)} ?disabled=${!both}
+      title=${both ? (dark ? 'Switch to light' : 'Switch to dark') : `${THEMES[this.choice.theme].label} has one look`}
+      @click=${() => this.pick({ ...this.choice, mode: dark ? 'light' : 'dark' })}>${dark
+        ? svg`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg>`
+        : svg`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`}</button>`;
   }
 }
 

@@ -40,7 +40,7 @@
   <!-- Navigation: one link per <app-route> below, in order. -->
   <!-- Workspaces: each runs in a system (a registry and runtime); + makes a new one. The Workspaces link is the host's own; saved ones follow it as top-level items, in their stored order. -->
   <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspaces</a><button type="button" data-toggle-drawer aria-pressed="true" aria-label="Components drawer" title="Show or hide the components drawer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM9 4v16"/></svg></button><button type="button" data-new-workspace aria-label="New workspace" title="New workspace">+</button></div>
-  <div slot="drawer-footer" class="drawer-foot">Nano · v0.1</div>
+  <div slot="drawer-footer" class="drawer-foot"><theme-picker layout="icons" themes="warm,blueprint,enterprise,shadcn"></theme-picker><span>Nano · v0.1</span></div>
   <status-line slot="footer"></status-line>
 
   <!-- Workspace: a golden-layout dock. Each <template> is a widget the drawer can add. -->
