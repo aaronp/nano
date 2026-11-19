@@ -32,7 +32,34 @@ test('swapping positions reorders the panels', async () => {
   select.value = '2'; select.dispatchEvent(new Event('change'))
   expect(dock.arrangement().template!.order).toEqual([...order].reverse())
   expect(dock.querySelectorAll('.dock-template .tpl-pos').length).toBe(2)
-  expect(dock.querySelector('.tpl-pos:last-child x-shown')).not.toBeNull()
+  expect(dock.querySelector('x-shown')!.closest<HTMLElement>('.tpl-pos')!.dataset['area']).toBe('2')
+})
+
+test('a swap moves the panels in place, mounting none again', async () => {
+  const { dock } = await mount()
+  dock.addWidget('shown'); dock.addWidget('plain'); await tick()
+  dock.setTemplate('two-cols')
+  const panels = [...dock.querySelectorAll('.dock-template .dock-panel')]
+  const select = dock.querySelector<HTMLSelectElement>('.tpl-pos select')!
+  select.value = '2'; select.dispatchEvent(new Event('change'))
+  expect([...dock.querySelectorAll('.dock-template .dock-panel')]).toEqual(panels)
+  expect([...dock.querySelectorAll<HTMLElement>('.tpl-pos')].map(p => [p.dataset['area'], p.querySelector('select')!.value])).toEqual([['2', '2'], ['1', '1']])
+})
+
+test('setTemplate(dock) in the dock keeps golden-layout as it is', async () => {
+  const { dock } = await two()
+  const panel = dock.querySelector('.dock-panel')
+  expect(dock.setTemplate('dock')).toBe(true)
+  expect(dock.querySelector('.dock-panel')).toBe(panel)
+})
+
+test('leaving a template with a position focused sends dock:focus null', async () => {
+  const { dock, focus, down } = await mount()
+  dock.addWidget('shown'); dock.addWidget('plain'); await tick()
+  dock.setTemplate('two-cols')
+  down(dock.querySelector('.tpl-pos x-shown')!); await tick()
+  dock.setTemplate('dock'); await tick()
+  expect(focus.at(-1)).toBeNull()
 })
 
 test('a reload in a template comes back in it, and flips back to the hand-made dock', async () => {
