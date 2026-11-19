@@ -801,3 +801,358 @@ Cons:
 
 ## Decision
 HostDeploy. The application's deployment policy (who may change the deployment) is to be revisited: see the board.
+
+---
+id: ADR-0016
+title: The Raft case study: a cluster deployed by a pod, watched by the time machine and the Ring
+status: accepted
+date: 2026-11-19
+revisit: 
+tags: raft, observability
+parent: ADR-0001
+decision: per-runtime
+---
+
+## Goal
+A teaching example of event-driven observability with nano, in the style of raft.github.io: a ring of servers electing a leader and replicating a log, every message visible, pausable, slowable and replayable. Spec: `docs/superpowers/specs/2026-11-19-raft-case-study-design.md`.
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: per-runtime — One runtime per node, all traffic through a shared messaging pod
+The gateway pattern and a ring of rings; the management pod deploys `<name>-1..N` through `HostDeploy` (ADR-0015).
+
+## Solution: one-runtime — One runtime, N node pods calling each other
+Simpler, but a single ring and no natural place for latency.
+
+## Decision
+One runtime per node through shared messaging. Node actions copy raft.github.io (stop, resume, restart, time out, request). Scrubbing binds pod views to an application rebuilt to the cursor (`shadowAt`). `HostDeploy.deploy` takes `onConflict: 'error' | 'overwrite'`. The Ring takes a `views` map so module views (the glyph) render. Strong headless tests; views only display.
+
+---
+id: ADR-0017
+title: A new runtime may place existing pods
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: deployment, raft
+parent: ADR-0016
+decision: shared
+---
+
+## Goal
+`HostDeploy`'s `addTo` must refuse conflicts, but a Raft node runtime places the shared messaging and clock pods.
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: shared — Refuse only new pod definitions and runtime ids that exist; a new runtime may place existing pods
+
+## Decision
+The gateway pattern. If wrong: one check.
+
+---
+id: ADR-0018
+title: The ledger fold uses foldAt's own step type
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: raft, exports
+parent: ADR-0016
+decision: existing
+---
+
+## Goal
+The plan named a `FoldStep` type that nothing exports.
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: existing — Use `foldAt`'s step parameter type
+
+## Decision
+No new export. If wrong: a type alias.
+
+---
+id: ADR-0019
+title: A node's published status is its state value
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: raft
+parent: ADR-0016
+decision: node
+---
+
+## Goal
+The views need a node's status; the core already has `Node`.
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: node — `RaftNode.status` and `changed` publish the core `Node` as is
+
+## Decision
+No restated shape. If wrong: a projection function.
+
+---
+id: ADR-0020
+title: The approval text names everything a deploy places and wires
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: deployment, security
+parent: ADR-0016
+decision: truthful
+---
+
+## Goal
+The approval is the only gate on a pod-triggered deploy; a count of new pods hid placements of existing pods and new edges into them.
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: truthful — List created, replaced, newly placed, wired, removed and dropped pods
+
+## Decision
+e.g. "Create runtimes example-1..3 (9 pods); places raft-messaging, raft-clock; …". If wrong: a longer dialog.
+
+---
+id: ADR-0021
+title: A dot click on the Ring seeks only
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: ring, views
+parent: ADR-0016
+decision: seek
+---
+
+## Goal
+The spec says a dot click opens the message detail, which lives in the workspace.
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: seek — Seek (which pauses); defer opening the detail
+
+## Decision
+Wiring the detail needs an event or a new option. If wrong: a small follow-up.
+
+---
+id: ADR-0022
+title: Raft's shared pods are raft-messaging and raft-clock
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: raft, examples
+parent: ADR-0016
+decision: prefixed
+---
+
+## Goal
+Chat already has `messaging` and Typing a `clock`; the combined build and imports would collide.
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: prefixed — Prefix the shared pods with raft-
+
+## Decision
+If wrong: two constants.
+
+---
+id: ADR-0023
+title: Messaging latency draws from its own seeded random
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: raft, determinism
+parent: ADR-0016
+decision: own
+---
+
+## Goal
+Delivery latency (10–30 ms) needs seeded randomness shared by every cluster.
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: own — A `raft-random` pod (seed 1) for messaging, beside each node's own seeded random
+
+## Decision
+If wrong: one pod.
+
+---
+id: ADR-0024
+title: A node's ledger is rebuilt from its recorded writes
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: raft, observability
+parent: ADR-0016
+decision: writes
+---
+
+## Goal
+A published event is recorded only while something listens, so `written` events may be missing from the history.
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: writes — Fold successful `Ledger.write` calls (each carries the whole state)
+
+## Decision
+State at t from the history, as the spec intends. If wrong: switch the filter.
+
+---
+id: ADR-0025
+title: Each node arms one timer for its next due work
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: raft, clock
+parent: ADR-0016
+decision: next-due
+---
+
+## Goal
+Ticking every 10 ms floods the history; timers on the shared sim clock must stay deterministic.
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: next-due — One timer for the next due work (late, never early)
+
+## Decision
+Proven by the replay tests. If wrong: a fixed tick.
+
+---
+id: ADR-0026
+title: Raft views: element classes unexported; idle peer dots faint
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: raft, views, exports
+parent: ADR-0016
+decision: tags
+---
+
+## Goal
+CLAUDE.md treats exports as questions; the glyph must show pending replies distinctly.
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: tags — Only the `views` map and tags are public; idle dots faint, pending hollow, granted filled
+
+## Decision
+If wrong: trivial.
+
+---
+id: ADR-0027
+title: A pod-made deploy can't place the host's own pods
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: deployment, security
+parent: ADR-0016
+decision: refuse
+---
+
+## Goal
+A deploy that places `ui` or `deploy` in its own runtime would hand out HostUI and HostDeploy.
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: refuse — Refuse an addition placing `ui` or `deploy` in a new or replaced runtime (and overwriting or removing them)
+
+## Decision
+If wrong: one check.
+
+---
+id: ADR-0028
+title: Should the Ring draw no dots for hidden shared pods?
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: ring
+parent: ADR-0016
+decision: 
+---
+
+## Goal
+Clock traffic on the Ring draws a dense stream of dots into the hidden `raft-clock` (the spec asks for dots to a hidden pod's runtime).
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: as-spec — Draw them, as the spec says
+
+## Solution: skip — Skip messages to hidden shared pods (a new Ring option)
+
+## Decision
+
+
+---
+id: ADR-0029
+title: New exports from the Raft work
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: exports
+parent: ADR-0016
+decision: 
+---
+
+## Goal
+`DeploymentAsk` (nano-core, the deployment policy's parameter type), `nodeIds` and `EMPTY` (example), and test-only `createRaft`, `openRaft`, `recordedRun`, `ids`.
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: keep — Keep them
+
+## Solution: trim — Inline or unexport them
+
+## Decision
+
+
+---
+id: ADR-0030
+title: Let the cluster pod read the deployment
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: raft, deployment
+parent: ADR-0016
+decision: 
+---
+
+## Goal
+After a Reset or reload the cluster list is empty (remove works by trying sizes 5 then 3); listing needs the pod to read the deployment, a new capability.
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Solution: read — A read op on HostDeploy (new API)
+
+## Solution: as-is — Leave the list in memory
+
+## Decision
+
