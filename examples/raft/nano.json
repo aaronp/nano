@@ -1,7 +1,7 @@
 {
   "pods": {
-    "cluster": { "implementation": "example.raft/cluster", "eager": false },
-    "raft-messaging": { "implementation": "example.raft/messaging", "config": { "minMs": 10, "maxMs": 30 }, "eager": true },
+    "cluster": { "implementation": "example.raft/cluster", "config": { "timing": { "electionMin": 3000, "electionMax": 6000, "heartbeat": 1000 } }, "eager": false },
+    "raft-messaging": { "implementation": "example.raft/messaging", "config": { "minMs": 200, "maxMs": 600 }, "eager": true },
     "raft-clock": { "implementation": "nano.ui/sim-clock", "eager": true },
     "raft-random": { "implementation": "nano.ui/seeded-random", "config": { "seed": 1 }, "eager": true }
   },

@@ -7,6 +7,8 @@
  * Time: one timer at a time on the wired clock, armed for the next moment the node has work due (its election
  * alarm, a peer's retry or heartbeat), so a quiet cluster records a few timers, not a tick every few ms.
  *
+ * `timing` (optional) is the election range and heartbeat in ms; the core's default when absent.
+ *
  *   Pod.eager(node, { config: { id: 'example-1', peers: ['example-2', 'example-3'] } })   // id: its runtime
  */
 import { Type } from 'typebox'
@@ -30,9 +32,9 @@ function nextDue(n: Node): number | undefined {
 
 export const node = Implementation.define(ns.implementationId('node'), {
   provides: [RaftNode],
-  config: Schema.define(Type.Object({ id: Type.String(), peers: Type.Array(Type.String()) }), 'NodeConfig'),
+  config: Schema.define(Type.Object({ id: Type.String(), peers: Type.Array(Type.String()), timing: Type.Optional(Type.Object({ electionMin: Type.Number(), electionMax: Type.Number(), heartbeat: Type.Number() })) }), 'NodeConfig'),
   dependencies: { messaging: Messaging, ledger: Ledger, clock: Clock, random: Random },
-  make: (ctx, { id, peers }: { id: string; peers: string[] }) => {
+  make: (ctx, { id, peers, timing }: { id: string; peers: string[]; timing?: Node['timing'] }) => {
     const wired = <T>(r: NanoResult<T>, what: string): T => { if (!r.ok) throw new Error(`node ${id} needs ${what}: ${r.fail.reason}`); return r.value }
     const messaging = wired(ctx.one(Messaging), 'messaging'), ledger = wired(ctx.one(Ledger), 'a ledger')
     const clock = wired(ctx.one(Clock), 'a clock'), random = wired(ctx.one(Random), 'a random')
@@ -84,7 +86,7 @@ export const node = Implementation.define(ns.implementationId('node'), {
     void serial(async () => {
       const p = await ledger.call.read(null), now = await clock.call.now(null)
       if (!p.ok || !now.ok || (await fill())) return
-      n = initial(id, peers, p.value, now.value, draw)
+      n = initial(id, peers, p.value, now.value, draw, timing)
       await arm(now.value)
     })
     clock.on(Clock.ops.fired, ({ output }) => {

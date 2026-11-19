@@ -278,6 +278,8 @@ All headless on the sim clock, driven by `advance`.
 - **Names:** the Ring element's name and file layout, and the exact op names and schemas (constants, per the
   rules).
 - **Defaults:** the messaging latency range, the election timeout range (raft.github.io uses about 150–300 ms) and the
-  heartbeat interval.
+  heartbeat interval. The core's default stays at 150–300 ms and 50 ms (the simulator tests rely on it); the example ships
+  seconds-scale timings through config (nano.json): heartbeat 1000 ms and elections 3000–6000 ms on the cluster pod's
+  `timing`, latency 200–600 ms on the messaging pod, so the Ring view is watchable.
 - **Styling:** colours follow the Desk's palette.
 - **Ring geometry:** sizes and spacing.

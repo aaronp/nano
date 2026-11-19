@@ -58,7 +58,9 @@ export async function createRaft(d: AppDeployment): Promise<NanoResult<Applicati
 export async function openRaft(): Promise<Application> {
   const doc = await Bun.file(new URL('./nano.json', import.meta.url)).json() as AppDeployment
   const main = doc.runtimes.raft!
-  const d = { pods: { ...doc.pods, deploy: Pod.lazy(testDeploy(() => { throw new Error('a placeholder') })) }, runtimes: { raft: {
+  // the shipped config is seconds-scale; the tests run on the fast defaults (the core's timing, 10–30 ms latency)
+  const fast = { ...doc.pods, cluster: { ...doc.pods.cluster!, config: undefined }, 'raft-messaging': { ...doc.pods['raft-messaging']!, config: { minMs: 10, maxMs: 30 } } }
+  const d = { pods: { ...fast, deploy: Pod.lazy(testDeploy(() => { throw new Error('a placeholder') })) }, runtimes: { raft: {
     ...main, pods: [...main.pods, 'deploy'], subscriptions: [...main.subscriptions, { kind: 'call' as const, from: 'cluster', to: 'deploy' }] } } }
   return must(await createRaft(d))
 }

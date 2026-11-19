@@ -143,3 +143,16 @@ test('a failed effect (the ledger refuses a write) still re-arms the node\'s tim
   await advance(app, 2000)   // several election timeouts: each a candidacy whose persist fails
   expect(writes).toBeGreaterThan(1)
 })
+
+describe('seconds-scale timing', () => {
+  test('a node built with it has its election alarm 3000-6000 ms after start', async () => {
+    const timing = { electionMin: 3000, electionMax: 6000, heartbeat: 1000 }
+    app = await openRaft()
+    const d = clusterDeployment('s', 3, 1, timing)
+    must(await app.apply({ ...app.deployment(), pods: { ...app.deployment().pods, ...d.pods }, runtimes: { ...app.deployment().runtimes, ...d.runtimes } } as AppDeployment, { caller: 'host' }))
+    await settle()
+    const n = await status(app, 's-1')
+    expect(n.electionAlarm).toBeGreaterThanOrEqual(3000)
+    expect(n.electionAlarm).toBeLessThanOrEqual(6000)
+  })
+})

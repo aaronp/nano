@@ -46,3 +46,17 @@ describe('clusterDeployment', () => {
     expect(all).toBeDefined()
   })
 })
+
+describe('timing', () => {
+  const timing = { electionMin: 3000, electionMax: 6000, heartbeat: 1000 }
+  test('a given timing goes into each node\'s config; none leaves it out', () => {
+    for (const p of Object.keys(clusterDeployment('x', 3, 1, timing).pods).filter(p => p.endsWith('-raft')))
+      expect(clusterDeployment('x', 3, 1, timing).pods[p]!.config).toMatchObject({ timing })
+    expect(clusterDeployment('x', 3, 1).pods['x-1-raft']!.config).not.toHaveProperty('timing')
+  })
+  test('the shipped nano.json is seconds-scale: cluster timing, messaging latency', async () => {
+    const doc = await Bun.file(new URL('./nano.json', import.meta.url)).json() as AppDeployment
+    expect(doc.pods.cluster!.config).toEqual({ timing })
+    expect(doc.pods['raft-messaging']!.config).toEqual({ minMs: 200, maxMs: 600 })
+  })
+})
