@@ -18,6 +18,14 @@ const list = (items: unknown[]) => items.length ? html`<ul>${items.map(i => html
 /** The runtimes `pod` is placed in. */
 const placed = (d: AppDeployment, pod: string) => Object.keys(d.runtimes).filter(r => d.runtimes[r]!.pods.includes(pod))
 const podLink = (c: Ctx, pod: string) => { const r = placed(c.d, pod)[0]; return r ? link(c, `p:${r}:${pod}`, pod) : pod }
+type Pipe = { from: string; to: string; source: string; target: string }
+/** A pipe, as `from.source → to.target`; `end` renders each pod (as text, unless given). */
+const pipeText = (s: Pipe, end: (pod: string) => unknown = p => p) => html`${end(s.from)}.${op(s.source)} → ${end(s.to)}.${op(s.target)}`
+/** The op at `port` (`<interface>/<op>`), with its interface's coord and its name; `o` none when not registered. */
+const opAt = (c: Ctx, port: string) => {
+  const at = port.lastIndexOf('/'), coord = port.slice(0, at), name = port.slice(at + 1)
+  return { coord, name, o: Object.values(c.registry.interface(coord)?.ops ?? {}).find(x => x.name === name) }
+}
 /** One call, as `[from.]source → [to.]target`, flagged when not declared. */
 const callRow = (c: Ctx, x: Called, from: boolean, to: boolean) => html`${from ? html`${podLink(c, x.from)}.` : nothing}${x.source === null ? '?' : op(x.source)} → ${to ? html`${podLink(c, x.to)}.` : nothing}${op(x.target)}${x.declared ? nothing : html` <span class="warn">not declared</span>`}`
 
@@ -40,7 +48,7 @@ function pod(c: Ctx, runtime: string, name: string) {
     ${c.calls ? row('calls', list(c.calls.filter(x => x.from === name).map(x => callRow(c, x, false, true)))) : nothing}
     ${row('called by', c.calls?.some(x => x.to === name) ? list(c.calls.filter(x => x.to === name).map(x => callRow(c, x, true, false)))
       : list(subs.filter(({ s }) => s.kind === 'call' && s.to === name).map(({ s }) => podLink(c, s.from))))}
-    ${row('pipes', list(subs.filter(({ s }) => s.kind === 'pipe' && (s.from === name || s.to === name)).map(({ s }) => s.kind === 'pipe' ? `${s.from}.${op(s.source)} → ${s.to}.${op(s.target)}` : '')))}
+    ${row('pipes', list(subs.flatMap(({ s }) => s.kind === 'pipe' && (s.from === name || s.to === name) ? [pipeText(s)] : [])))}
   </dl><button class="btn" @click=${() => c.open({ runtime, pod: name })}>Open view</button>`
 }
 
@@ -50,7 +58,7 @@ function runtime(c: Ctx, id: string) {
   return html`<h3>runtime ${id}</h3><dl>
     ${row('pods', list(r.pods.map(p => link(c, `p:${id}:${p}`, p))))}
     ${row('call edges', list(r.subscriptions.flatMap(s => s.kind === 'call' ? [html`${podLink(c, s.from)} → ${podLink(c, s.to)}`] : [])))}
-    ${row('pipes', list(r.subscriptions.flatMap(s => s.kind === 'pipe' ? [`${s.from}.${op(s.source)} → ${s.to}.${op(s.target)}`] : [])))}
+    ${row('pipes', list(r.subscriptions.flatMap(s => s.kind === 'pipe' ? [pipeText(s)] : [])))}
     ${row('policy', !r.policy ? 'none (everything allowed)' : r.policy.kind === 'rules' ? `${r.policy.rules.length} rules (see Settings)` : r.policy.kind)}
   </dl>`
 }
@@ -70,8 +78,7 @@ export const typeName = (def: (Shape & { label?: string }) | undefined): string 
 /** An Op by its port (`<interface>/<op>`): a link to its interface, its kind, and its type: what a source emits
  * (an event's value, an action's result), what a target takes. */
 function opRow(c: Ctx, port: string, side: 'source' | 'target') {
-  const at = port.lastIndexOf('/'), coord = port.slice(0, at), name = port.slice(at + 1)
-  const o = Object.values(c.registry.interface(coord)?.ops ?? {}).find(x => x.name === name)
+  const { coord, name, o } = opAt(c, port)
   const type = o && (side === 'source' ? o.output : o.input)
   return html`${link(c, `i:${coord}`, coord)}/<code>${name}</code>${o ? html` <span class="muted">${o.kind}, ${side === 'source' ? 'emits' : 'takes'}</span> <code>${typeName(type as Shape)}</code>` : nothing}`
 }
@@ -89,7 +96,11 @@ function iface(c: Ctx, coord: string) {
   const i = c.registry.manifest().interfaces.find(x => x.coord === coord)
   if (!i) return html`<p class="muted">${coord} is not registered.</p>`
   return html`<h3>interface ${coord}</h3><dl>
-    ${row('ops', list(i.ops.map(o => { const op = Object.values(c.registry.interface(coord)?.ops ?? {}).find(x => x.name === o.name); return html`${link(c, `o:${coord}/${o.name}`, o.name)} ${o.kind} <span class="muted">${o.kind === 'event' ? html`emits <code>${typeName(op?.output as Shape)}</code>` : html`<code>${typeName(op?.input as Shape)}</code> → <code>${typeName(op?.output as Shape)}</code>`}</span>` })))}
+    ${row('ops', list(i.ops.map(({ name, kind }) => {
+      const { o } = opAt(c, `${coord}/${name}`), out = html`<code>${typeName(o?.output as Shape)}</code>`
+      const shape = kind === 'event' ? html`emits ${out}` : html`<code>${typeName(o?.input as Shape)}</code> → ${out}`
+      return html`${link(c, `o:${coord}/${name}`, name)} ${kind} <span class="muted">${shape}</span>`
+    })))}
     ${row('implementations', list(c.registry.implementationsOf(coord).map(m => link(c, `m:${m.coord}`, m.coord))))}
   </dl>`
 }
@@ -106,12 +117,11 @@ function implementation(c: Ctx, coord: string) {
 }
 
 function operation(c: Ctx, port: string) {
-  const at = port.lastIndexOf('/'), coord = port.slice(0, at), name = port.slice(at + 1)
-  const o = Object.values(c.registry.interface(coord)?.ops ?? {}).find(x => x.name === name)
+  const { coord, name, o } = opAt(c, port)
   if (!o) return html`<p class="muted">${port} is not registered.</p>`
   const impls = c.registry.implementationsOf(coord).map(m => m.coord)
   const subs = Object.values(c.d.runtimes).flatMap(r => r.subscriptions)
-  const pipes = subs.flatMap(s => s.kind === 'pipe' && (s.source === port || s.target === port) ? [html`${podLink(c, s.from)}.${op(s.source)} → ${podLink(c, s.to)}.${op(s.target)}`] : [])
+  const pipes = subs.flatMap(s => s.kind === 'pipe' && (s.source === port || s.target === port) ? [pipeText(s, p => podLink(c, p))] : [])
   return html`<h3>${o.kind} ${name}</h3>${o.description ? html`<p>${o.description}</p>` : nothing}<dl>
     ${row('interface', link(c, `i:${coord}`, coord))}
     ${o.kind === 'event' ? row('emits', html`<code>${typeName(o.output as Shape)}</code>`) : html`${row('takes', html`<code>${typeName(o.input as Shape)}</code>`)}${row('returns', html`<code>${typeName(o.output as Shape)}</code>`)}`}
