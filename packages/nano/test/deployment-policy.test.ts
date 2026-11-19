@@ -46,3 +46,18 @@ test('an async policy is awaited', async () => {
   expect(!r.ok && r.fail.reason).toBe('later')
   expect(Object.keys(app.deployment().pods)).toEqual(['a'])
 })
+
+test('a policy that throws, rejects or gives no verdict refuses: apply answers denied, never rejects', async () => {
+  const bad: DeploymentPolicy[] = [
+    { isAllowed: () => { throw new Error('boom') } },
+    { isAllowed: async () => { throw new Error('boom') } },
+    { isAllowed: () => undefined as never },
+  ]
+  for (const p of bad) {
+    const { app, applied } = await make(p)
+    const r = await app.apply(dep('a', 'b'))
+    expect(!r.ok && r.fail.type).toBe('denied')
+    expect(Object.keys(app.deployment().pods)).toEqual(['a'])
+    expect(applied()).toEqual([])
+  }
+})

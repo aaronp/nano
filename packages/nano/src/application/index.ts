@@ -14,7 +14,7 @@
 import { AppDeployment } from '../deployment.ts'
 import type { Implementation } from '../implementation.ts'
 import type { Pod } from '../pod.ts'
-import type { Policy } from '../policy.ts'
+import type { Policy, Verdict } from '../policy.ts'
 import { DeploymentPolicies, type DeploymentPolicy } from '../deployment-policy.ts'
 import { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
@@ -91,8 +91,10 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
   async function reconcile(d: AppDeployment, caller: string): Promise<NanoResult<void>> {
     const checked = adopt(d)
     if (!checked.ok) return checked
-    const verdict = await (opts.deploymentPolicy ?? DeploymentPolicies.allowAll()).isAllowed({ caller, deployment: d })
-    if (!verdict.approved) return failure('denied', verdict.reason)
+    // As for a message: a throw, a rejection or no verdict refuses (`refusal` is per-Ask and sync, so it does not fit).
+    const verdict = await Promise.resolve().then(() => (opts.deploymentPolicy ?? DeploymentPolicies.allowAll()).isAllowed({ caller, deployment: d }))
+      .catch((e): Verdict => ({ approved: false, reason: `policy threw: ${e instanceof Error ? e.message : String(e)}` }))
+    if (verdict?.approved !== true) return failure('denied', verdict?.approved === false && typeof verdict.reason === 'string' ? verdict.reason : 'policy gave no verdict')
     const changes = diff(current, checked.value), before = current
     current = checked.value
     for (const o of [...live.listeners.ons]) {
