@@ -75,8 +75,8 @@ test('narrow: the buttons fold into a ⋯ menu', async () => {
   expect(q(el, '.panel').hasAttribute('hidden')).toBe(true)
   more.click(); await settle(el)
   expect(more.getAttribute('aria-expanded')).toBe('true')
-  expect(qa(el, '.panel button').map(b => b.textContent!.trim())).toEqual(['Connections', 'Desk', 'Save as workspace…', 'Save layout', 'Restore', 'Reset'])
-  qa(el, '.panel button')[4]!.click(); await settle(el)
+  expect(qa(el, '.panel button:not([role])').map(b => b.textContent!.trim())).toEqual(['Connections', 'Desk', 'Save as workspace…', 'Save layout', 'Restore', 'Reset'])
+  qa(el, '.panel button:not([role])')[4]!.click(); await settle(el)
   expect(calls).toEqual([['restore']]); expect(more.getAttribute('aria-expanded')).toBe('false')
   more.click(); await settle(el)
   el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await settle(el)
@@ -94,4 +94,17 @@ test('layout picker: eight radios, current checked, misfits disabled with a reas
   expect(calls).toEqual([['setTemplate', 'two-cols']])
   expect(qa(el, '.view')).toHaveLength(0)
   expect(qa(el, '[role="radio"][aria-checked="true"]').map(r => r.getAttribute('aria-label'))).toEqual(['Two columns'])
+})
+
+test('narrow: the layout row is the first child of the menu panel', async () => {
+  const { el } = await mount(true)
+  const row = q(el, '[role="radiogroup"]')
+  expect(row.parentElement).toBe(q(el, '.panel')); expect(q(el, '.panel').firstElementChild).toBe(row)
+  expect(qa(el, '[role="radiogroup"]')).toHaveLength(1)
+})
+
+test('each thumbnail draws one rect per position', async () => {
+  const { el } = await mount()
+  const { TEMPLATES } = await import('../src/lib/layout-templates.ts')
+  for (const t of TEMPLATES.filter(t => t.positions)) expect(q(el, `[aria-label="${t.title}"]`).querySelectorAll('rect').length).toBe(t.positions!)
 })

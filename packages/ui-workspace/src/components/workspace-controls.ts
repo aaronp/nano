@@ -88,7 +88,7 @@ export class WorkspaceControlsEl extends LitElement {
   #cmd = (c: Command, label: string, text: boolean) => html`<button aria-label=${label} title=${label} @click=${() => { this.#close(false); this.#run(c) }}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[c]}</svg>${text ? label : ''}</button>`
 
   #layouts(d: Dock | null) {
-    const ok = enabledFor(panelsInOrder(d?.arrangement().root).length), n = panelsInOrder(d?.arrangement().root).length
+    const n = panelsInOrder(d?.arrangement().root).length, ok = enabledFor(n)
     return html`<span class="layout" role="radiogroup" aria-label="Layout">${TEMPLATES.map(t => html`<button role="radio" aria-label=${t.title} aria-checked=${(d?.template ?? 'dock') === t.id ? 'true' : 'false'}
         ?disabled=${!ok.has(t.id)} title=${ok.has(t.id) ? t.title : `${t.title} needs ${t.positions} panels (${n} open)`}
         @click=${() => { this.#dock().setTemplate(t.id); this.requestUpdate() }}><svg viewBox="0 0 24 16" aria-hidden="true">${R[t.id].map(([x, y, w, h]) => svg`<rect x=${x} y=${y} width=${w} height=${h} rx="1"/>`)}</svg></button>`)}</span>`
@@ -100,11 +100,11 @@ export class WorkspaceControlsEl extends LitElement {
     const free = (d?.template ?? 'dock') === 'dock'
     const view = html`<span class="view" role="group" aria-label="View">${WINDOW_STYLES.map(w =>
         html`<button aria-pressed=${style === w.id ? 'true' : 'false'} @click=${() => { this.#dock().setWindowStyle(w.id); this.requestUpdate() }}>${w.title}</button>`)}</span>`
-    return html`${this.#layouts(d)}${free ? view : ''}
+    return html`${this.narrow ? '' : this.#layouts(d)}${free ? view : ''}
       ${this.narrow
         ? html`<button class="more" aria-label="More workspace actions" title="More workspace actions" aria-controls="panel" aria-expanded=${this.open ? 'true' : 'false'}
               @click=${() => { this.open = !this.open }}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.more}</svg></button>
-            <div id="panel" class="panel" role="group" aria-label="Workspace actions" ?hidden=${!this.open}>${COMMANDS.map(([c, l]) => this.#cmd(c, l, true))}</div>`
+            <div id="panel" class="panel" role="group" aria-label="Workspace actions" ?hidden=${!this.open}>${this.#layouts(d)}${COMMANDS.map(([c, l]) => this.#cmd(c, l, true))}</div>`
         : COMMANDS.map(([c, l]) => this.#cmd(c, l, false))}`
   }
 }
