@@ -2,7 +2,9 @@
  * A KV store's contents at any time, folded from the recorded history (no re-running): its config's entries, then
  * every put and delete to it that succeeded, reset to its config whenever a deployment changes its implementation or
  * config (the pod is rebuilt). It assumes what it can't see does nothing: a restart of the pod (which empties it back
- * to its config) and writes that reach the store other than through its put and delete are not in the fold.
+ * to its config) and writes that reach the store other than through its put and delete are not in the fold. Once the
+ * clean start is evicted, it starts from no entries and misses the configured ones until the next apply that changes
+ * the pod's implementation or config.
  *
  *   (await foldAt(store, t, kvStep('kv'))).entries   // what list({ prefix: [] }) gave at t
  */

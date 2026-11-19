@@ -5,8 +5,7 @@ import { foldAt } from '../../src/observe/fold.ts'
 import { memoryStore } from '../../src/observe/memory-store.ts'
 
 /** A store filled by hand: a clean start at 0, then `log` calls at 1, 2, 3 (the second fails), an apply at 4, and one more call at 4. */
-function logged() {
-  const store = memoryStore()
+function logged(store = memoryStore()) {
   let seq = 0
   const add = (at: number, event: Recorded) => store.append({ seq: ++seq, at, event })
   const d = (n: number): AppDeployment => ({ pods: { log: { implementation: 'nano.ui/log', eager: false, config: n } }, runtimes: {} })
@@ -39,4 +38,12 @@ test('foldAt hands step the deployments in seq order among the messages', async 
     deployment: (s, d) => { seen.push(`d${d.pods['log']!.config}`); return s },
   })
   expect(seen).toEqual(['d0', 'a', 'b', 'c', 'd1', 'd'])
+})
+
+test('foldAt still folds what survives once the clean start is evicted', async () => {
+  const store = logged(memoryStore({ max: 6 }))   // keeps seq 5 to 10: b's outcome (its sent gone), c, the apply, d
+  const seen: string[] = []
+  const n = await foldAt(store, Infinity, { ...succeeded, deployment: (s, d) => { seen.push(`d${d.pods['log']!.config}`); return s } })
+  expect(n).toBe(2)
+  expect(seen).toEqual(['d1'])
 })
