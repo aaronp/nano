@@ -65,11 +65,50 @@ test('summary names the runtimes and pod count', () => {
   const before: AppDeployment = { pods: { messaging: lazy }, runtimes: { raft: { pods: ['messaging'], subscriptions: [] } } }
   const after = addTo(before, three)
   if (!after.ok) throw new Error(after.fail.reason)
-  expect(summary(before, after.value)).toBe('Create runtimes example-1..3 (3 pods)')
+  expect(summary(before, after.value)).toBe('Create runtimes example-1..3 (3 pods); places messaging')
   expect(summary(after.value, before)).toBe('Remove runtimes example-1..3')
   const one = addTo(before, { pods: { solo: lazy }, runtimes: { solo: { pods: ['solo'], subscriptions: [] } } })
   if (!one.ok) throw new Error(one.fail.reason)
   expect(summary(before, one.value)).toBe('Create runtime solo (1 pod)')
+})
+
+test('summary names the existing pods a new runtime places and each subscription reaching one', () => {
+  const before: AppDeployment = { pods: { vault: lazy }, runtimes: { safe: { pods: ['vault'], subscriptions: [] } } }
+  const after = addTo(before, { pods: { n1: lazy }, runtimes: { x: { pods: ['n1', 'vault'], subscriptions: [{ kind: 'call', from: 'n1', to: 'vault' }] } } })
+  if (!after.ok) throw new Error(after.fail.reason)
+  expect(summary(before, after.value)).toBe('Create runtime x (1 pod); places vault; n1 → vault')
+})
+
+test('summary reads a Raft-shaped cluster compactly', () => {
+  const before: AppDeployment = { pods: { messaging: lazy, clock: lazy }, runtimes: { raft: { pods: ['messaging', 'clock'], subscriptions: [] } } }
+  const pods: AppDeployment['pods'] = {}, runtimes: AppDeployment['runtimes'] = {}
+  for (const i of [1, 2, 3]) {
+    const raft = `example-${i}-raft`, ledger = `example-${i}-ledger`, random = `example-${i}-random`
+    Object.assign(pods, { [raft]: lazy, [ledger]: lazy, [random]: lazy })
+    runtimes[`example-${i}`] = { pods: ['messaging', 'clock', raft, ledger, random], subscriptions: [
+      { kind: 'call', from: raft, to: 'messaging' }, { kind: 'call', from: raft, to: ledger }, { kind: 'call', from: raft, to: 'clock' },
+      { kind: 'call', from: raft, to: random }, { kind: 'call', from: 'messaging', to: raft }] }
+  }
+  const after = addTo(before, { pods, runtimes })
+  if (!after.ok) throw new Error(after.fail.reason)
+  expect(summary(before, after.value)).toBe('Create runtimes example-1..3 (9 pods); places messaging, clock; example-1..3-raft → messaging, example-1..3-raft → clock, messaging → example-1..3-raft')
+})
+
+test('addTo with overwrite replaces and adds, dropping the pods a replaced runtime no longer places; the summary says so', () => {
+  const d = base(), r = addTo(d, { ...three, onConflict: 'overwrite' })
+  expect(r).toMatchObject({ ok: true })
+  if (!r.ok) return
+  expect(Object.keys(r.value.runtimes).sort()).toEqual(['example-1', 'example-2', 'example-3', 'raft'])
+  expect(summary(d, r.value)).toBe('Create runtimes example-1, example-3 (2 pods); places messaging')   // example-2 comes back the same
+  const swap = addTo(d, { pods: { n: Pod.eager(log) }, runtimes: { 'example-2': { pods: ['messaging', 'n'], subscriptions: [] } }, onConflict: 'overwrite' })
+  if (!swap.ok) throw new Error(swap.fail.reason)
+  expect(swap.value.pods['example-2-raft']).toBeUndefined()
+  expect(swap.value.runtimes['example-2']).toEqual({ pods: ['messaging', 'n'], subscriptions: [] })
+  expect(summary(d, swap.value)).toBe('Replace runtime example-2; add 1 pod')
+  const both = addTo(d, { pods: { 'example-2-raft': Pod.eager(log), 'example-1-raft': lazy }, runtimes: { 'example-1': node(1), 'example-2': { pods: ['example-2-raft'], subscriptions: [] } }, onConflict: 'overwrite' })
+  if (!both.ok) throw new Error(both.fail.reason)
+  expect(summary(d, both.value)).toBe('Replace runtime example-2; replace pod example-2-raft; create runtime example-1 (1 pod); places messaging')
+  expect(addTo(d, { ...three, onConflict: 'error' })).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: expect.stringContaining('example-2') } })
 })
 
 test('approvalPolicy allows host, asks for pods, and a no denies', async () => {
@@ -91,10 +130,10 @@ test('approvalPolicy takes no answer within its time as a no', async () => {
   expect(Date.now() - at).toBeLessThan(1000)
 })
 
-async function answer(label: 'Approve' | 'Deny') {
+async function answer(label: 'Approve' | 'Deny', text = 'Create runtime node-1 (1 pod)') {
   for (let i = 0; i < 100 && !document.querySelector('dialog'); i++) await tick(5)
   const dialog = document.querySelector('dialog')!
-  expect(dialog.textContent).toContain('Create runtime node-1 (1 pod)')
+  expect(dialog.textContent).toContain(text)
   ;[...dialog.querySelectorAll('button')].find(b => b.textContent === label)!.click()
 }
 
@@ -120,4 +159,10 @@ test('given a pod needing HostDeploy imported, then it is connected to deploy an
   const applied = (await host.history.store.range()).map(e => e.event).filter(e => e.type === 'deployment')
   expect(applied.at(-1)).toMatchObject({ caller: 'deploy', deployment: { runtimes: { 'node-1': {} } } })
   expect(await host.app.call('ops', 'cluster').map({ pods: {}, runtimes: { 'node-1': { pods: [], subscriptions: [] } } })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+
+  const swapped = host.app.call('ops', 'cluster').map({ pods: { n2: lazy }, runtimes: { 'node-1': { pods: ['n2'], subscriptions: [] } }, onConflict: 'overwrite' })
+  await answer('Approve', 'Replace runtime node-1; add 1 pod')
+  expect(await swapped).toEqual({ ok: true, value: null })
+  expect(host.app.deployment().runtimes['node-1']).toEqual({ pods: ['n2'], subscriptions: [] })
+  expect(host.app.deployment().pods['n1']).toBeUndefined()
 })

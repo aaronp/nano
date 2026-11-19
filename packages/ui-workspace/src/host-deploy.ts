@@ -10,22 +10,34 @@ import { Coord, Implementation, failure, provide, success, type AppDeployment, t
 import { HostDeploy } from '@pritzlaff/nano-ui'
 import { hostUi } from './host-ui.ts'
 
-type Addition = { pods: Record<string, Pod>; runtimes: Record<string, RuntimeDeployment> }
+type Addition = { pods: Record<string, Pod>; runtimes: Record<string, RuntimeDeployment>; onConflict?: 'error' | 'overwrite' }
 type Removal = { runtimes: string[] }
 
 const ns = Coord.namespace('workspace.host'), DEPLOY = ns.implementationId('deploy')
 /** The `deploy` pod's data: built on its first call. */
 export const deployPod: Pod = { implementation: DEPLOY.toString(), eager: false }
-/** As long as the app's call timeout (its default): an unanswered ask must not hold the apply queue for good. */
-const APPROVAL_MS = 30_000
+/** Well under the app's call timeout (30 s): the pod's call into `deploy` started its timer before this apply was queued,
+ * and time waiting in the apply queue counts against it too, so a late yes must not apply after the pod saw a timeout.
+ * An unanswered ask must not hold the apply queue for good either. */
+const APPROVAL_MS = 20_000
 
-/** `d` with `add`'s pods and runtimes. A new runtime may place pods already there (shared ones); a new pod or runtime
- * whose name is taken is invalid-input naming it, and nothing is added. Pure. */
+/** `out` without those of `was` (pods once placed) that no runtime places now, nor their edges, tags and views. */
+function orphansDropped(out: AppDeployment, was: string[]): AppDeployment {
+  const still = new Set(Object.values(out.runtimes).flatMap(r => r.pods)), gone = new Set(was.filter(p => !still.has(p)))
+  for (const p of gone) { delete out.pods[p]; delete out.tags?.[p]; delete out.views?.[p] }
+  for (const r of Object.values(out.runtimes)) r.subscriptions = r.subscriptions.filter(s => !gone.has(s.from) && !gone.has(s.to))
+  return out
+}
+
+/** `d` with `add`'s pods and runtimes. A new runtime may place pods already there (shared ones). A pod or runtime whose
+ * name is taken is invalid-input naming it, nothing added; with `onConflict: 'overwrite'` it replaces that one (a
+ * replaced runtime's pods placed nowhere else then are dropped). Pure. */
 export function addTo(d: AppDeployment, add: Addition): NanoResult<AppDeployment> {
   const taken = [...Object.keys(add.pods).filter(p => Object.hasOwn(d.pods, p)), ...Object.keys(add.runtimes).filter(r => Object.hasOwn(d.runtimes, r))]
-  if (taken.length) return failure('invalid-input', `already in the deployment: ${taken.join(', ')}`)
+  if (taken.length && add.onConflict !== 'overwrite') return failure('invalid-input', `already in the deployment: ${taken.join(', ')}`)
   const out = structuredClone(d), more = structuredClone(add)
-  return success({ ...out, pods: { ...out.pods, ...more.pods }, runtimes: { ...out.runtimes, ...more.runtimes } })
+  const was = Object.keys(more.runtimes).flatMap(r => Object.hasOwn(d.runtimes, r) ? d.runtimes[r]!.pods : [])
+  return success(orphansDropped({ ...out, pods: { ...out.pods, ...more.pods }, runtimes: { ...out.runtimes, ...more.runtimes } }, was))
 }
 
 /** `d` without `rm`'s runtimes, nor the pods they placed that no other runtime places (nor those pods' edges, tags
@@ -35,30 +47,50 @@ export function removeFrom(d: AppDeployment, rm: Removal): NanoResult<AppDeploym
   if (missing !== undefined) return failure('not-found', `no runtime ${missing}`)
   const out = structuredClone(d)
   for (const r of rm.runtimes) delete out.runtimes[r]
-  const still = new Set(Object.values(out.runtimes).flatMap(r => r.pods))
-  const gone = new Set(rm.runtimes.flatMap(r => d.runtimes[r]!.pods).filter(p => !still.has(p)))
-  for (const p of gone) { delete out.pods[p]; delete out.tags?.[p]; delete out.views?.[p] }
-  for (const r of Object.values(out.runtimes)) r.subscriptions = r.subscriptions.filter(s => !gone.has(s.from) && !gone.has(s.to))
-  return success(out)
+  return success(orphansDropped(out, rm.runtimes.flatMap(r => d.runtimes[r]!.pods)))
 }
 
-/** "runtimes example-1..3" for a numbered run sharing a prefix, else the names listed. */
-function runtimes(names: string[]): string {
-  const sorted = [...names].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-  const m = sorted.map(n => /^(.*?)(\d+)$/.exec(n)), nums = m.map(x => Number(x?.[2]))
-  const run = sorted.length > 1 && m.every(x => x && x[1] === m[0]![1]) && nums.every((n, i) => i === 0 || n === nums[i - 1]! + 1)
-  return `runtime${sorted.length > 1 ? 's' : ''} ${run ? `${m[0]![1]}${nums[0]}..${nums.at(-1)}` : sorted.join(', ')}`
+/** The items, each numbered run sharing the rest (its first number varying by one) collapsed: "example-1..3-raft". */
+function collapsed(items: string[]): string[] {
+  const groups = new Map<string, { n: number; s: string }[]>()
+  for (const s of new Set(items)) {
+    const m = /\d+/.exec(s), key = m ? `${s.slice(0, m.index)}\0${s.slice(m.index + m[0].length)}` : s
+    groups.set(key, [...(groups.get(key) ?? []), { n: m ? Number(m[0]) : NaN, s }])
+  }
+  return [...groups].flatMap(([key, g]) => {
+    g.sort((a, b) => a.n - b.n)
+    const run = g.length > 1 && g.every((x, i) => i === 0 || x.n === g[i - 1]!.n + 1)
+    return run ? [key.replace('\0', `${g[0]!.n}..${g.at(-1)!.n}`)] : g.map(x => x.s)
+  })
 }
+const runtimes = (names: string[]) => `runtime${names.length > 1 ? 's' : ''} ${collapsed(names).join(', ')}`
+const plural = (n: number, what: string) => `${n} ${what}${n === 1 ? '' : 's'}`
 
-/** One line saying what going from `current` to `next` does, e.g. "Create runtimes example-1..3 (9 pods)". */
+/** One line saying truthfully what going from `current` to `next` does: runtimes replaced, created (with the new pods)
+ * and removed, pods replaced, the existing pods the new or replaced runtimes now place, and every new subscription
+ * there reaching an existing pod. E.g. "Create runtimes example-1..3 (9 pods); places messaging, clock". */
 export function summary(current: AppDeployment, next: AppDeployment): string {
-  const made = Object.keys(next.runtimes).filter(r => !Object.hasOwn(current.runtimes, r))
+  const had = (r: string) => Object.hasOwn(current.runtimes, r), old = (p: string) => Object.hasOwn(current.pods, p)
+  const made = Object.keys(next.runtimes).filter(r => !had(r))
+  const swapped = Object.keys(next.runtimes).filter(r => had(r) && JSON.stringify(current.runtimes[r]) !== JSON.stringify(next.runtimes[r]))
   const gone = Object.keys(current.runtimes).filter(r => !Object.hasOwn(next.runtimes, r))
-  const pods = Object.keys(next.pods).filter(p => !Object.hasOwn(current.pods, p)).length
-  return [
-    ...(made.length ? [`Create ${runtimes(made)} (${pods} pod${pods === 1 ? '' : 's'})`] : []),
-    ...(gone.length ? [`Remove ${runtimes(gone)}`] : []),
-  ].join('; ') || 'Change the deployment'
+  const pods = Object.keys(next.pods).filter(p => !old(p)).length
+  const podsSwapped = Object.keys(next.pods).filter(p => old(p) && JSON.stringify(current.pods[p]) !== JSON.stringify(next.pods[p]))
+  const before = (r: string) => current.runtimes[r] ?? { pods: [], subscriptions: [] }
+  const touched = [...swapped, ...made]
+  const places = touched.flatMap(r => next.runtimes[r]!.pods.filter(p => old(p) && !before(r).pods.includes(p)))
+  const edges = touched.flatMap(r => next.runtimes[r]!.subscriptions
+    .filter(s => (old(s.from) || old(s.to)) && !before(r).subscriptions.some(b => JSON.stringify(b) === JSON.stringify(s)))
+    .map(s => `${s.from} → ${s.to}`))
+  const parts = [
+    ...(swapped.length ? [`replace ${runtimes(swapped)}`] : []),
+    ...(podsSwapped.length ? [`replace pod${podsSwapped.length > 1 ? 's' : ''} ${collapsed(podsSwapped).join(', ')}`] : []),
+    ...(made.length ? [`create ${runtimes(made)} (${plural(pods, 'pod')})`] : pods ? [`add ${plural(pods, 'pod')}`] : []),
+    ...(places.length ? [`places ${collapsed(places).join(', ')}`] : []),
+    ...(edges.length ? [collapsed(edges).join(', ')] : []),
+    ...(gone.length ? [`remove ${runtimes(gone)}`] : []),
+  ].join('; ') || 'change the deployment'
+  return parts[0]!.toUpperCase() + parts.slice(1)
 }
 
 /** The host's deployment policy: the host's own applies are allowed; a pod's asks `approve(summary)`, and anything but

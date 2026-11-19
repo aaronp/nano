@@ -7,6 +7,8 @@ const { deploy, undeploy } = HostDeploy.ops
 
 test('deploy takes pods and runtimes, and gives nothing', () => {
   expect(Value.Check(deploy.input!, { pods: { a: { implementation: 'x/y', eager: false } }, runtimes: { r: { pods: ['a'], subscriptions: [] } } })).toBe(true)
+  expect(Value.Check(deploy.input!, { pods: {}, runtimes: {}, onConflict: 'overwrite' })).toBe(true)
+  expect(Value.Check(deploy.input!, { pods: {}, runtimes: {}, onConflict: 'merge' })).toBe(false)
   expect(Value.Check(deploy.input!, { pods: {} })).toBe(false)
   expect(Value.Check(deploy.input!, { runtimes: {} })).toBe(false)
   expect(Value.Check(deploy.output!, null)).toBe(true)

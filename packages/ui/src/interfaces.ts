@@ -19,7 +19,10 @@ const After = Schema.define(Type.Object({ ms: Type.Integer({ minimum: 0, maximum
 const Fired = Schema.define(Type.Object({ id: Type.Integer({ minimum: 1 }), tag: Type.Optional(Type.String()), at: Type.Number() }), 'Fired')
 const Approved = Schema.define(Type.Boolean(), 'Approved')
 // Shape-checked only, as nano-core's own deployment shape is: the apply assembles them strictly.
-const Addition = Schema.define(Type.Object({ pods: Type.Record(Type.String(), Type.Unknown()), runtimes: Type.Record(Type.String(), Type.Unknown()) }), 'Addition')
+const Addition = Schema.define(Type.Object({
+  pods: Type.Record(Type.String(), Type.Unknown()), runtimes: Type.Record(Type.String(), Type.Unknown()),
+  onConflict: Type.Optional(Type.Union([Type.Literal('error'), Type.Literal('overwrite')])),
+}), 'Addition')
 const Removal = Schema.define(Type.Object({ runtimes: Type.Array(Type.String()) }), 'Removal')
 
 /** Each returns its input, so its result can be piped: `submit` when the user submits, `change` on every edit. */
@@ -39,7 +42,7 @@ export const HostUI = ns.interface('HostUI', {
   setAppBar: Op.action(Text, Nothing),
 })
 /** What the host offers a pod to change the deployment: `deploy` adds pods and runtimes (an existing name is
- * `invalid-input`), `undeploy` removes runtimes and the pods placed nowhere else. The host's deployment policy decides. */
+ * `invalid-input`, or with `onConflict: 'overwrite'` replaced), `undeploy` removes runtimes and the pods placed nowhere else. The host's deployment policy decides. */
 export const HostDeploy = ns.interface('HostDeploy', { deploy: Op.action(Addition, Nothing), undeploy: Op.action(Removal, Nothing) })
 /** Time and timers: `after` starts a timer and returns its id, `fired` is published when it is due, at the clock's time. */
 export const Clock = ns.interface('Clock', {
