@@ -1,0 +1,97 @@
+// The Raft elements over a real 3-node cluster on the sim clock: each renders its model, each button calls its op.
+import { GlobalRegistrator } from '../../../packages/ui/node_modules/@happy-dom/global-registrator'
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
+import { afterEach, expect, test } from 'bun:test'
+import { Registry, type Application, type NanoResult } from '@pritzlaff/nano-core'
+import type { Node, Persistent } from '../core/types.ts'
+
+// after the DOM is registered, so lit takes its browser build
+const { ClockControl } = await import('@pritzlaff/nano-ui')
+const { Cluster, Ledger, RaftNode } = await import('../interfaces.ts')
+const { openRaft } = await import('../test-host.ts')
+const { glyphModel, ledgerRows } = await import('./model.ts')
+await import('../index.ts')
+const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
+const settle = () => new Promise(r => setTimeout(r, 0))
+const wait = async () => { for (let i = 0; i < 5; i++) await settle() }
+const advance = async (app: Application, ms: number) => {
+  for (let t = 0; t < ms; t += 10) { must(await app.call('raft', 'raft-clock')[ClockControl.ops.advance.name]!(10)); await settle() }
+}
+const mount = async <E extends HTMLElement>(tag: string, app: Application, runtime: string, pod: string) => {
+  const el = document.createElement(tag) as E & { target?: unknown; updateComplete: Promise<boolean> }
+  el.target = { app, registry: Registry.create(), runtime, pod }
+  document.body.append(el); await wait(); await el.updateComplete
+  return el
+}
+
+let app: Application
+afterEach(async () => { document.body.innerHTML = ''; await app?.close() })
+async function cluster() {
+  app = await openRaft()
+  must(await app.call('raft', 'cluster')[Cluster.ops.create.name]!({ name: 'example', size: 3, seed: 1 }))
+  await advance(app, 1000)
+}
+const status = async (id: string) => must(await app.call(id, `${id}-raft`)[RaftNode.ops.status.name]!(null)) as Node
+
+test('raft-node renders its glyph from the model and follows the node', async () => {
+  await cluster()
+  const el = await mount('raft-node', app, 'example-1', 'example-1-raft')
+  const s = await status('example-1'), m = glyphModel(s, 1000)
+  expect(el.shadowRoot!.querySelector('text')!.textContent).toBe(String(m.term))
+  expect(el.shadowRoot!.querySelectorAll('.dot')).toHaveLength(2)
+  const before = el.shadowRoot!.querySelector('text')!.textContent
+  await app.call('example-1', 'example-1-raft')[RaftNode.ops.timeOut.name]!(null)
+  await wait(); await el.updateComplete
+  expect(el.shadowRoot!.querySelector('text')!.textContent).toBe(String((await status('example-1')).p.currentTerm))
+  expect(Number(el.shadowRoot!.querySelector('text')!.textContent)).toBeGreaterThan(Number(before))
+})
+
+test('a click opens the detail panel; its buttons call the node ops', async () => {
+  await cluster()
+  const el = await mount('raft-node', app, 'example-1', 'example-1-raft')
+  el.shadowRoot!.querySelector('svg')!.dispatchEvent(new Event('click'))
+  await el.updateComplete; await wait()
+  const detail = el.shadowRoot!.querySelector('raft-detail') as HTMLElement & { updateComplete: Promise<boolean> }
+  await detail.updateComplete
+  expect([...detail.shadowRoot!.querySelectorAll('.rows th')].map(x => x.textContent)).toEqual(['state', 'currentTerm', 'votedFor', 'commitIndex', 'election alarm'])
+  expect(detail.shadowRoot!.querySelectorAll('.peers tr')).toHaveLength(3)   // header + 2 peers
+  const press = async (label: string) => { [...detail.shadowRoot!.querySelectorAll('button')].find(b => b.textContent === label)!.click(); await wait() }
+  await press('stop'); expect((await status('example-1')).stopped).toBe(true)
+  await press('resume'); expect((await status('example-1')).stopped).toBe(false)
+  const term = (await status('example-1')).p.currentTerm
+  await press('time out'); expect((await status('example-1')).p.currentTerm).toBe(term + 1)
+  await press('restart'); expect((await status('example-1')).role).toBe('follower')
+  await press('request')   // a follower refuses: the panel says why
+  await detail.updateComplete
+  expect(detail.shadowRoot!.querySelector('[role=alert]')).not.toBeNull()
+})
+
+test('raft-ledger follows the ledger as the leader takes a request', async () => {
+  await cluster()
+  const ids = ['example-1', 'example-2', 'example-3'], all = await Promise.all(ids.map(status))
+  const leader = all.find(n => n.role === 'leader')!.id
+  const el = await mount('raft-ledger', app, leader, `${leader}-ledger`)
+  expect(el.shadowRoot!.querySelectorAll('tr')).toHaveLength(1)
+  must(await app.call(leader, `${leader}-raft`)[RaftNode.ops.request.name]!('hello'))
+  await advance(app, 300); await wait(); await el.updateComplete
+  const p = must(await app.call(leader, `${leader}-ledger`)[Ledger.ops.read.name]!(null)) as Persistent
+  const rows = ledgerRows(p, (await status(leader)).commitIndex)
+  expect(rows).toHaveLength(1)
+  const tr = el.shadowRoot!.querySelectorAll('tr')
+  expect(tr).toHaveLength(2)
+  expect(tr[1]!.textContent).toContain('hello')
+  expect(tr[1]!.className).toBe('committed')
+})
+
+test('raft-cluster creates, lists and removes a cluster through the cluster pod', async () => {
+  app = await openRaft()
+  const el = await mount('raft-cluster', app, 'raft', 'cluster')
+  const root = el.shadowRoot!, click = async (n: string) => { (root.querySelector(`[name=${n}]`) as HTMLButtonElement).click(); await wait(); await el.updateComplete }
+  ;(root.querySelector('[name=name]') as HTMLInputElement).value = 'demo'
+  await click('create')
+  expect([...root.querySelectorAll('li')].map(l => l.textContent)).toEqual(['demo'])
+  expect(Object.keys(app.deployment().runtimes)).toContain('demo-3')
+  await click('remove')
+  expect(root.querySelectorAll('li')).toHaveLength(0)
+  expect(Object.keys(app.deployment().runtimes)).not.toContain('demo-1')
+})
