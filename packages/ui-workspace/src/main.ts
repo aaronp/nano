@@ -28,8 +28,9 @@ import { showStatus } from './lib/status.ts';
 import type { WorkspaceDock } from './components/workspace-dock.ts';
 import { defineWires, type Wires } from './wires/index.ts';
 import { defineDesk, type Desk } from './desk/index.ts';
-import { defineMessages, type Messages } from './messages/index.ts';
-import { bootWiring } from './boot-wiring.ts';   // after the shell (its bus)
+import { defineMessages } from './messages/index.ts';
+import { bootWiring, hand as handTo } from './boot-wiring.ts';   // after the shell (its bus)
+import { shadowCreate } from './history.ts';
 import { savedLayout, slotsToOpen } from './layout-data.ts';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
@@ -110,9 +111,10 @@ if (host) {
   let tm = await timeMachine(h.history), driver = clockDriver(h.app, h.registry, tm);
   const bars = document.querySelectorAll<NanoTimeMachine>('nano-time-machine');
   defineMessages();
-  const tables = document.querySelectorAll<Messages>('c-messages');
-  const desks = document.querySelectorAll<Desk>('c-desk');
-  const hand = () => { for (const d of desks) Object.assign(d, { tm, store: h.history.store }); for (const b of bars) Object.assign(b, { tm, store: h.history.store, driver }); for (const t of tables) Object.assign(t, { tm, store: h.history.store }); };
+  // The Ring's filter: the implementations in the deployment's `layout.ring.show`, read when drawn (absent: every pod).
+  const show = (_pod: string, impl: string) => { const s = (h.data().layout?.ring as { show?: unknown } | undefined)?.show; return !Array.isArray(s) || s.includes(impl); };
+  const ring = { app: h.app, registry: h.registry, create: shadowCreate(h.registry), show };
+  const hand = () => handTo(document, { tm, store: h.history.store, driver }, ring);
   hand();
   let resetting: Promise<void> | undefined;   // one Reset at a time: a second click while one runs joins it
   for (const b of bars) b.addEventListener('reset', () => resetting ??= (async () => {

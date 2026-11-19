@@ -3,9 +3,11 @@
  *
  *   const h = await recording(app)   // h.store: a clean deployment entry, then every message
  *   await h.reset()                  // every pod restarted; the history is one clean deployment entry again
+ *   shadowAt(h.store, t, shadowCreate(registry))   // the app as of t, for the Ring
  */
-import { success, type Application, type NanoResult } from '@pritzlaff/nano-core'
+import { Application, AppDeployment, DeploymentPolicies, Registry, success, type NanoResult } from '@pritzlaff/nano-core'
 import { memoryStore, record, replay, type Entry, type MessageStore } from '@pritzlaff/nano-ui'
+import { hostProvider } from './host-deploy.ts'
 
 /** The app's messages since its creation or the last Reset. */
 export type History = {
@@ -38,5 +40,23 @@ export async function recording(app: Application): Promise<History> {
   return {
     store, listen: fn => { heard.add(fn); return () => { heard.delete(fn) } },
     reset: () => pending ??= reset().finally(() => { pending = undefined }),
+  }
+}
+
+/**
+ * Builds an app rebuilt from the history (`shadowAt`'s `create`): on its own registry of the host's providers, whose
+ * `deploy` applies to this app, not the live one; every deployment allowed (each was decided live and is in the
+ * history). Not isolated: a pod run in a frame fails there.
+ */
+export function shadowCreate(registry: Registry) {
+  return async (d: AppDeployment): Promise<NanoResult<Application>> => {
+    let made: Application | undefined
+    const own = Registry.create(), host = hostProvider(() => made!)
+    for (const { coord } of registry.manifest().providers) { const added = own.add(coord === host.coord ? host : registry.provider(coord)!); if (!added.ok) return added }
+    const runtimes = AppDeployment.assemble(d, own)
+    if (!runtimes.ok) return runtimes
+    const created = await Application.create(runtimes.value, { deploymentPolicy: DeploymentPolicies.allowAll() })
+    if (created.ok) made = created.value
+    return created
   }
 }
