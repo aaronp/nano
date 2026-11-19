@@ -22,16 +22,6 @@ export const panelsInOrder = (root: unknown): PanelState[] => {
   return (item.content ?? []).flatMap(panelsInOrder);
 };
 
-/** The templates that fit exactly `count` panels; the free dock always does. */
-export const enabledFor = (count: number): Set<TemplateId> =>
-  new Set(TEMPLATES.filter((t) => t.positions === null || t.positions === count).map((t) => t.id));
-
-export const swap = <T>(order: readonly T[], i: number, j: number): T[] => {
-  const out = [...order];
-  [out[i], out[j]] = [out[j]!, out[i]!];
-  return out;
-};
-
 /** A template's positions (`null` = empty) and the panels parked off it. */
 export type TemplateState = { template: TemplateId; order: (PanelState | null)[]; parked: PanelState[]; dock: unknown };
 

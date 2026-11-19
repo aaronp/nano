@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
-import { bringBackTo, enabledFor, panelsInOrder, place, relayout, swap, templateState } from '../src/lib/layout-templates.ts'
+import { bringBackTo, panelsInOrder, place, relayout, templateState } from '../src/lib/layout-templates.ts'
 
 test('panels come in reading order', () => {
   const c = (w: string) => ({ type: 'component', componentState: { widget: w } })
@@ -9,12 +9,6 @@ test('panels come in reading order', () => {
   expect(panelsInOrder(root).map(p => p.widget)).toEqual(['a', 'b', 'c', 'd'])
 })
 test('a pod panel keeps its name', () => expect(panelsInOrder({ type: 'component', componentState: { widget: 'pod', name: 'up1' } })).toEqual([{ widget: 'pod', name: 'up1' }]))
-test('enabled templates match the count exactly; dock always', () => {
-  expect([...enabledFor(2)].sort()).toEqual(['dock', 'main-drawer', 'two-cols', 'two-rows'])
-  expect([...enabledFor(4)].sort()).toEqual(['dock', 'grid'])
-  expect([...enabledFor(5)]).toEqual(['dock'])
-})
-test('swap exchanges two positions without mutating', () => { const o = ['a','b','c']; expect(swap(o, 0, 2)).toEqual(['c','b','a']); expect(o).toEqual(['a','b','c']) })
 test('template state: unknown id, wrong count and junk read as null', () => {
   const s = templateState(localStorage, 'k')
   s.set({ template: 'two-cols', order: [{ widget: 'a' }, { widget: 'b' }], parked: [], dock: { root: null } })

@@ -7,7 +7,7 @@ import { afterEach } from 'bun:test'
 export const { createBus, provideBus } = await import('../src/lib/bus.ts')
 await import('../src/components/workspace-dock.ts')
 await import('../src/widgets/widgets.ts')
-export type Dock = HTMLElement & { addWidget(id: string): void; template: string; setTemplate(id: string): boolean; arrangement(): { root?: unknown; template?: { template: string; order: unknown[] } }; windowStyle: string; setWindowStyle(s: string): void; save(): void; restore(): void; reset(): void }
+export type Dock = HTMLElement & { addWidget(id: string): void; template: string; setTemplate(id: string): boolean; arrangement(): { root?: unknown; template?: { template: string; order: unknown[]; parked: unknown[] } }; windowStyle: string; setWindowStyle(s: string): void; save(): void; restore(): void; reset(): void }
 export const tick = () => new Promise(r => setTimeout(r, 0))
 // a placed element stand-in: it knows its instance once connected
 customElements.define('x-shown', class extends HTMLElement { model?: string; connectedCallback() { this.model = 'inst-1' } })

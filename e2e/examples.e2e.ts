@@ -282,10 +282,11 @@ test("focusing a pod's panel adds its View and Implementation to the app bar, be
   await expect(page.getByRole('button', { name: 'Connections' }).first()).toBeVisible()
 })
 
-test('a participant added from the drawer auto-connects to messaging, and talks in the room', async ({ page }) => {
+test('a participant added from the picker auto-connects to messaging, and talks in the room', async ({ page }) => {
   await start(page)
   await open(page, '/examples/chat/nano.json')
-  await page.locator('component-drawer').getByText('participant', { exact: true }).first().click()
+  await dock(page).getByRole('button', { name: 'Add a panel' }).first().click()
+  await page.locator('nano-picker').getByRole('button', { name: 'participant', exact: true }).first().click()
   await expect(page.getByText('connected participant1 → messaging (example.messaging.Messaging)')).toBeVisible()
   await say(room(page, 'participant1'), 'hello')
   await expect(room(page, 'alice').getByText('hello')).toBeVisible()

@@ -26,9 +26,11 @@ test('drop four controls, wire them in Connections, save, New, import the file: 
   await page.reload()
   await expect(dock(page).locator('nano-explorer')).toBeVisible()
 
-  // 1. the drawer's built-ins, each a pod in a panel of its own
-  const drawer = page.locator('component-drawer')
-  for (const c of ['input', 'debounce', 'map', 'log']) await drawer.getByText(c, { exact: true }).first().click()
+  // 1. the picker's built-ins (a panel header's +), each a pod in a panel of its own
+  for (const c of ['input', 'debounce', 'map', 'log']) {
+    await dock(page).getByRole('button', { name: 'Add a panel' }).first().click()
+    await page.locator('nano-picker').getByRole('button', { name: c, exact: true }).first().click()
+  }
   await expect.poll(() => pods(page)).toEqual(['debounce1', 'input1', 'log1', 'map1'])
   await expect(dock(page).locator('nano-log')).toHaveCount(1)
   await shot(page, '1-controls')

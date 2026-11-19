@@ -4,11 +4,11 @@
 import { LitElement, css, html, svg } from 'lit'
 import { base } from '@pritzlaff/nano-elements'
 import { WINDOW_STYLES, type WindowStyle } from '../lib/dock-layout.ts'
-import { TEMPLATES, enabledFor, panelsInOrder, type TemplateId } from '../lib/layout-templates.ts'
+import { TEMPLATES, type TemplateId } from '../lib/layout-templates.ts'
 import { requestBus, type Unsubscribe } from '../lib/bus.ts'
 
 
-type Dock = HTMLElement & { template: TemplateId; setTemplate(id: TemplateId): boolean; arrangement(): { root?: unknown }; windowStyle: WindowStyle; setWindowStyle(s: WindowStyle): void; connections(): void; saveAs(): void; save(): void; restore(): void; reset(): void }
+type Dock = HTMLElement & { template: TemplateId; setTemplate(id: TemplateId): boolean; windowStyle: WindowStyle; setWindowStyle(s: WindowStyle): void; connections(): void; saveAs(): void; save(): void; restore(): void; reset(): void }
 type Command = 'connections' | 'desk' | 'saveAs' | 'save' | 'restore' | 'reset'
 
 // 24×24 stroke paths, the File menu's icon style
@@ -41,7 +41,6 @@ export class WorkspaceControlsEl extends LitElement {
     svg { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }
     .layout { display: inline-flex; gap: 2px }
     .layout button[aria-checked="true"] { background: color-mix(in srgb, currentColor 22%, transparent) }
-    .layout button:disabled { opacity: .35; cursor: default }
     .layout svg { width: 24px; height: 16px; fill: currentColor; stroke: none }
     .view { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); border-radius: 8px }
     .view button { padding: 2px 8px }
@@ -88,9 +87,7 @@ export class WorkspaceControlsEl extends LitElement {
   #cmd = (c: Command, label: string, text: boolean) => html`<button aria-label=${label} title=${label} @click=${() => { this.#close(false); this.#run(c) }}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[c]}</svg>${text ? label : ''}</button>`
 
   #layouts(d: Dock | null) {
-    const n = panelsInOrder(d?.arrangement().root).length, ok = enabledFor(n)
-    return html`<span class="layout" role="radiogroup" aria-label="Layout">${TEMPLATES.map(t => html`<button role="radio" aria-label=${t.title} aria-checked=${(d?.template ?? 'dock') === t.id ? 'true' : 'false'}
-        ?disabled=${!ok.has(t.id)} title=${ok.has(t.id) ? t.title : `${t.title} needs ${t.positions} panels (${n} open)`}
+    return html`<span class="layout" role="radiogroup" aria-label="Layout">${TEMPLATES.map(t => html`<button role="radio" aria-label=${t.title} aria-checked=${(d?.template ?? 'dock') === t.id ? 'true' : 'false'} title=${t.title}
         @click=${() => { this.#dock().setTemplate(t.id); this.requestUpdate() }}><svg viewBox="0 0 24 16" aria-hidden="true">${R[t.id].map(([x, y, w, h]) => svg`<rect x=${x} y=${y} width=${w} height=${h} rx="1"/>`)}</svg></button>`)}</span>`
   }
 

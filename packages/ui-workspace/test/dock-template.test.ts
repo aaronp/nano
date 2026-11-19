@@ -1,8 +1,10 @@
 // <workspace-dock>'s template mode: its panels in a fixed layout, switchable back to the hand-made dock. See dock-setup.ts.
-import { expect, test } from 'bun:test'
-import { mount, tick } from './dock-setup.ts'
-import { panelsInOrder } from '../src/lib/layout-templates.ts'
-import { GoldenLayout } from 'golden-layout/dist/esm/index.js'
+import { expect, mock, test } from 'bun:test'
+import { panelsInOrder, type PanelState } from '../src/lib/layout-templates.ts'
+// the picker, stubbed: it resolves with `choice` and records what it was offered
+let choice: PanelState | null = null, offered: PanelState[] | undefined
+mock.module('../src/components/picker.ts', () => ({ pick: async (_: HTMLElement, o: { hidden?: PanelState[] }) => { offered = o.hidden; return choice } }))
+const { mount, tick } = await import('./dock-setup.ts')
 
 const two = async () => { const m = await mount(); m.dock.addWidget('plain'); m.dock.addWidget('plain'); await tick(); return m }
 
@@ -17,11 +19,92 @@ test('two panels flip to two-cols and back to the same tree', async () => {
   expect(JSON.stringify(dock.arrangement().root)).toBe(before)
 })
 
-test('a template that does not fit the count is refused', async () => {
-  const { bus, dock } = await mount(); dock.addWidget('plain'); await tick()
-  expect(dock.setTemplate('grid')).toBe(false)
+const n = async (k: number) => { const m = await mount(); for (let i = 0; i < k; i++) m.dock.addWidget('plain'); await tick(); return m }
+const notice = (dock: HTMLElement) => dock.querySelector<HTMLElement>('.dock-notice')!
+const positions = (dock: HTMLElement) => [...dock.querySelectorAll<HTMLElement>('.tpl-pos')]
+const filled = (dock: HTMLElement) => positions(dock).filter(p => p.querySelector('.dock-panel')).length
+const plus = async (el: Element) => { (el as HTMLElement).click(); await tick(); await tick() }
+
+test('every layout switches: what does not fit is parked behind a notice; Bring back picks one that fits', async () => {
+  const { dock } = await n(4)
+  expect(dock.setTemplate('two-cols')).toBe(true)
+  expect(filled(dock)).toBe(2)
+  expect(dock.arrangement().template!.parked.length).toBe(2)
+  expect(notice(dock).hidden).toBe(false)
+  expect(notice(dock).textContent).toContain('2 panels hidden — Bring back')
+  ;[...notice(dock).querySelectorAll('button')].find(b => b.textContent === 'Bring back')!.click()
+  expect(dock.template).toBe('grid')
+  expect(filled(dock)).toBe(4)
+  expect(notice(dock).hidden).toBe(true)
+})
+
+test('the notice dismissed stays hidden until the parked count changes', async () => {
+  const { dock } = await n(4)
+  dock.setTemplate('two-cols')
+  notice(dock).querySelector<HTMLElement>('[aria-label="Dismiss"]')!.click()
+  expect(notice(dock).hidden).toBe(true)
+  dock.setTemplate('two-rows')
+  expect(notice(dock).hidden).toBe(true)
+  dock.setTemplate('one')
+  expect(notice(dock).textContent).toContain('3 panels hidden')
+  expect(notice(dock).hidden).toBe(false)
+})
+
+test('an empty position\'s + fills it from the picker, focused; cancelled, nothing changes', async () => {
+  const { dock } = await n(1)
+  dock.setTemplate('two-cols')
+  expect(dock.arrangement().template!.order).toEqual([{ widget: 'plain' }, null])
+  choice = null; await plus(dock.querySelector('.tpl-add')!)
+  expect(dock.arrangement().template!.order).toEqual([{ widget: 'plain' }, null])
+  choice = { widget: 'shown' }; await plus(dock.querySelector('.tpl-add')!)
+  expect(dock.querySelector('.tpl-add')).toBeNull()
+  expect(dock.arrangement().template!.order[1]).toEqual({ widget: 'shown', name: 'inst-1' })
+  expect(document.activeElement).toBe(positions(dock)[1]!.querySelector('.dock-panel'))
+})
+
+test('a Hidden choice in an empty position leaves the parked panels', async () => {
+  const { dock } = await mount()
+  dock.addWidget('plain'); dock.addWidget('shown'); await tick()
+  dock.setTemplate('one')
+  const parked = dock.arrangement().template!.parked as PanelState[]
+  expect(parked).toEqual([{ widget: 'shown', name: 'inst-1' }])
+  positions(dock)[0]!.querySelector<HTMLElement>('.tpl-remove')!.click()
+  choice = parked[0]!; await plus(dock.querySelector('.tpl-add')!)
+  expect(offered).toEqual(parked)
+  expect(dock.arrangement().template!.parked).toEqual([])
+  expect(dock.arrangement().template!.order).toEqual(parked)
+})
+
+test('✕ empties a position, its panel gone', async () => {
+  const { dock } = await two()
+  dock.setTemplate('two-cols')
+  positions(dock)[0]!.querySelector<HTMLElement>('.tpl-remove')!.click()
+  expect(dock.arrangement().template!.order).toEqual([null, { widget: 'plain' }])
+  expect(dock.querySelectorAll('.dock-panel').length).toBe(1)
+  expect(positions(dock)[0]!.querySelector('.tpl-add')).not.toBeNull()
+})
+
+test('adding from outside fills the first empty position; with none, the dock comes back with it', async () => {
+  const { dock } = await n(1)
+  dock.setTemplate('two-cols')
+  dock.addWidget('shown'); await tick()
+  expect(dock.template).toBe('two-cols')
+  expect(filled(dock)).toBe(2)
+  dock.addWidget('plain'); await tick()
   expect(dock.template).toBe('dock')
-  expect(bus.history().filter(m => m.topic === 'dock:status').length).toBe(1)
+  expect(panelsInOrder(dock.arrangement().root).map(p => p.widget).sort()).toEqual(['plain', 'plain', 'shown'])
+})
+
+test('back to the dock: panels emptied in the template are gone, panels added there split in', async () => {
+  const { dock } = await mount()
+  dock.addWidget('shown'); dock.addWidget('plain'); await tick()
+  dock.setTemplate('two-cols')
+  positions(dock)[1]!.querySelector<HTMLElement>('.tpl-remove')!.click()
+  choice = { widget: 'plain' }; await plus(dock.querySelector('.tpl-add')!)
+  positions(dock)[0]!.querySelector<HTMLElement>('.tpl-remove')!.click()
+  dock.setTemplate('dock'); await tick()
+  expect(panelsInOrder(dock.arrangement().root)).toEqual([{ widget: 'plain' }])
+  expect(dock.querySelectorAll('.dock-panel').length).toBe(1)
 })
 
 test('swapping positions reorders the panels', async () => {
@@ -130,20 +213,6 @@ test('restore() in a template whose panels differ from the saved layout lands in
   dock.restore()
   expect(dock.template).toBe('dock')
   expect(JSON.stringify(dock.arrangement().root)).toBe(saved)
-})
-
-test('dragging a drawer item in a template flips back to the dock first', async () => {
-  const proto = GoldenLayout.prototype as unknown as { newDragSource(el: HTMLElement, f: () => unknown): unknown }
-  const orig = proto.newDragSource
-  let drag: (() => unknown) | undefined
-  proto.newDragSource = function (this: unknown, el: HTMLElement, f: () => unknown) { drag = f; return orig.call(this, el, f) }
-  try {
-    document.body.innerHTML = '<a data-dock-add="ws" data-widget="plain">Plain</a>'
-    const { dock } = await two()
-    dock.setTemplate('two-cols')
-    drag!()
-    expect(dock.template).toBe('dock')
-  } finally { proto.newDragSource = orig }
 })
 
 test('position headers show the palette title', async () => {

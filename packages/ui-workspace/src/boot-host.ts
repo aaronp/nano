@@ -1,8 +1,8 @@
 /**
  * The host on nano-core 0.4, started before the elements are defined (where composable.ts was): the one Application
  * (host.ts), nano-ui's views, and a palette template per implementation the host can make, before the dock's
- * hand-written ones, so the docks and the components drawer list them when they upgrade. An import that registers
- * new providers adds their templates to every dock, and drawers hear `catalog:changed`.
+ * hand-written ones, so the docks (and the picker they open) list them when they upgrade. An import that registers
+ * new providers adds their templates to every dock, and an open picker hears `catalog:changed`.
  */
 import { defineViews } from '@pritzlaff/nano-ui';
 import { toast } from '@pritzlaff/nano-elements';

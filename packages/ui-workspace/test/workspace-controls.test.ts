@@ -83,13 +83,13 @@ test('narrow: the buttons fold into a ⋯ menu', async () => {
   expect(more.getAttribute('aria-expanded')).toBe('false')
 })
 
-test('layout picker: eight radios, current checked, misfits disabled with a reason, click switches', async () => {
+test('layout picker: eight radios, all enabled, current checked, click switches', async () => {
   const { el, calls } = await mount()
   const rs = qa(el, '[role="radiogroup"][aria-label="Layout"] [role="radio"]')
   expect(rs).toHaveLength(8)
   expect(rs.filter(r => r.getAttribute('aria-checked') === 'true').map(r => r.getAttribute('aria-label'))).toEqual(['Free dock'])
-  const grid = rs.find(r => r.getAttribute('aria-label') === 'Grid') as HTMLButtonElement
-  expect(grid.disabled).toBe(true); expect(grid.title).toContain('4 panels')
+  expect(rs.filter(r => (r as HTMLButtonElement).disabled)).toEqual([])
+  expect(rs.map(r => r.title)).toEqual(rs.map(r => r.getAttribute('aria-label')!))
   rs.find(r => r.getAttribute('aria-label') === 'Two columns')!.click(); await settle(el)
   expect(calls).toEqual([['setTemplate', 'two-cols']])
   expect(qa(el, '.view')).toHaveLength(0)
