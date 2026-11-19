@@ -58,3 +58,12 @@ test('given a provider the workspace already has, then its pods keep the file\'s
   expect(t.q<HTMLInputElement>('input[data-runtime="main"]').value).toBe('main')
   expect(t.isolations()).toEqual(['timer host', 'picker host', 'store isolated-sandbox'])
 })
+
+test('given a provider coordinate with a slash (acme/mem), then the notice flags the pods the import would run with full access', async () => {
+  const file = () => ({ pods: { db: { implementation: 'acme/mem/db', eager: false } },
+    runtimes: { main: { pods: ['db'], subscriptions: [] } }, modules: { 'acme/mem': './mem.js' } })
+  const t = open('https://other.test/t/nano.json', undefined, file)
+  await t.fetched()
+  t.choose('trusted')
+  expect([...t.q<HTMLElement>('.foreign').querySelectorAll('strong')].map(s => s.textContent)).toEqual(['db'])
+})

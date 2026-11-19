@@ -18,6 +18,7 @@ import {
 } from '@pritzlaff/nano-core'
 import type { ViewMap } from '@pritzlaff/nano-ui'
 import { newerCore, type Built } from './built.ts'
+import { podsOf } from './import-plan.ts'
 
 export type Loaded = { deployment: AppDeployment; registry: Registry; views: ViewMap }
 /** A provider from another origin, as the confirm prompt lists it. `fullAccess`: the pod runs with this page's access. */
@@ -126,7 +127,6 @@ const isProvider = (p: unknown, coord: string): p is Provider =>
   typeof p === 'object' && p !== null && (p as Provider).coord === coord && (p as Provider).implementations instanceof Map
 
 const why = (e: unknown) => (e instanceof Error ? e.message : String(e))
-const providerOf = (impl: string) => impl.slice(0, impl.lastIndexOf('/'))
 
 export async function importApp(url: string, loaded: Loaded, deps: Deps): Promise<NanoResult<Loaded>> {
   try {
@@ -144,11 +144,8 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
     // a provider's own page (its home-origin pods' frame): always whole, as the origin is the point
     if (incoming.frames) incoming.frames = Object.fromEntries(Object.entries(incoming.frames).map(([c, ref]) => [c, new URL(ref, base).href]))
     const todo = refs.filter(([coord]) => !loaded.registry.provider(coord))   // already loaded; merge still checks the stored URL matches
-    const foreign: Foreign[] = todo.filter(([, u]) => away(u)).map(([coord, u]) => ({ coord, url: u.href, origin: u.origin,
-      pods: Object.entries(incoming.pods).filter(([, p]) => providerOf(p.implementation) === coord).map(([name, p]) => {
-        const isolation = p.isolation ?? 'host'
-        return { name, isolation, fullAccess: isolation !== 'isolated-sandbox' && isolation !== 'home-origin' }   // a home-origin frame is that (other) origin's
-      }) }))
+    const foreign: Foreign[] = todo.filter(([, u]) => away(u))
+      .map(([coord, u]) => ({ coord, url: u.href, origin: u.origin, pods: podsOf(incoming, coord, p => p.isolation ?? 'host') }))
     const deployment = merge(loaded.deployment, incoming)   // a clash is refused before anyone is asked
     if (!deployment.ok) return deployment
     if (foreign.length && !await deps.confirm(foreign)) return failure('invalid-input', 'import cancelled')

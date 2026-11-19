@@ -12,7 +12,7 @@ import type { AppDeployment } from '@pritzlaff/nano-core';
 import type { Host } from '../host.ts';
 import { foreignOrigin, type Foreign } from '../import.ts';
 import { el } from '../import-confirm.ts';
-import { isolationUnder, ownProvider, renameRuntimes, selectPods, suggestedName, trusted, validRuntimeId, type Trust } from '../import-plan.ts';
+import { isolationUnder, ownProvider, podsOf, renameRuntimes, selectPods, suggestedName, trusted, validRuntimeId, type Trust } from '../import-plan.ts';
 
 type Chosen = { edit(d: AppDeployment): AppDeployment };
 /** How to reach the network and the host: the page's fetch and the host, or stand-ins in tests. */
@@ -36,10 +36,7 @@ const list = (title: string, items: Node[]) => (items.length ? [el('h3', title),
 function origins(d: AppDeployment, base: string, trust: Trust, known: ImportDeps['known']) {
   const foreign: Foreign[] = Object.entries(d.modules ?? {}).flatMap(([coord, m]) => {
     const url = new URL(m, base).href, origin = foreignOrigin(url);
-    return origin ? [{ coord, url, origin, pods: Object.entries(d.pods).filter(([, p]) => p.implementation.split('/')[0] === coord).map(([name, p]) => {
-      const isolation = isolationUnder(p, trust, known);
-      return { name, isolation, fullAccess: isolation !== 'isolated-sandbox' && isolation !== 'home-origin' };
-    }) }] : [];
+    return origin ? [{ coord, url, origin, pods: podsOf(d, coord, p => isolationUnder(p, trust, known)) }] : [];
   });
   const notice = el('div');
   notice.className = 'foreign';

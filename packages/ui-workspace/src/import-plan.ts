@@ -27,6 +27,14 @@ type Known = (coord: string) => boolean
 const none: Known = () => false
 const providerOf = (p: Pod) => p.implementation.slice(0, p.implementation.lastIndexOf('/'))
 
+/** The pods of provider `coord` in `d`, each with its isolation and whether it runs with this page's full access (a
+ * home-origin frame is its provider's own origin): what an import gates, and so what the Import dialog warns of. */
+export const podsOf = (d: AppDeployment, coord: string, isolationOf: (p: Pod) => NonNullable<Pod['isolation']>) =>
+  Object.entries(d.pods).filter(([, p]) => providerOf(p) === coord).map(([name, p]) => {
+    const isolation = isolationOf(p)
+    return { name, isolation, fullAccess: isolation !== 'isolated-sandbox' && isolation !== 'home-origin' }
+  })
+
 /** `<namespace>.<runtime>`: the provider of the runtime's pods new to the workspace, the first in `modules` order; the
  * runtime alone if none, or if its id is already dotted (namespaced). */
 /** Whether a provider is the workspace's own (Trust leaves its pods as the file has them): loaded here, from this
