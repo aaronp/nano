@@ -77,12 +77,6 @@ workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_head
 workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_header .lm_controls { top: 6px; right: 6px; padding: 5px 7px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line); }
 workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_items,
 workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_items > .lm_item { height: 100% !important; }
-/* needs (boot-needs.ts): Dependencies shows for a visible panel whose instance declares needs; an unbound one is dimmed */
-.lm_controls > .dock-deps { width: auto; height: auto; opacity: 1; padding: 0 6px; font: 11px var(--font); color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
-.lm_controls > .dock-deps:hover { color: var(--fg); }
-.lm_stack:not(:has(> .lm_items > :not([style*="none"]) [data-needs])) > .lm_header .dock-deps { display: none; }
-[data-unbound] { opacity: .35; filter: grayscale(1); pointer-events: none; }
-.needs-choose { position: sticky; bottom: 0; z-index: 1; display: block; margin: 8px auto 0; padding: 6px 12px; font: 13px var(--font); color: var(--fg); background: var(--surface-2); border: 1px solid var(--accent); border-radius: 6px; cursor: pointer; }
 `;
 
 const icon = (path: string) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="none" stroke="#7a808c" stroke-width="1.6">${path}</svg>`)}")`;
@@ -142,7 +136,6 @@ export class WorkspaceDock extends HTMLElement {
     layout.registerComponentFactoryFunction('widget', (container, state) => this.mount(container, state));
     layout.on('stateChanged', () => this.send('dock:layout', { panels: this.openIds().length }));
     layout.on('focus', () => this.reportFocus());
-    layout.on('itemCreated', (e) => { const item = (e as unknown as { target: ContentItem }).target; if (item.isStack) this.addDependencies(item as Stack); });
     /* switching panels blurs the old one first: wait for the new focus, so only the change is sent */
     layout.on('blur', () => queueMicrotask(() => this.reportFocus()));
     /* empty space (not a panel, its tabs or a splitter being dragged) clears the focus */
@@ -256,18 +249,6 @@ export class WorkspaceDock extends HTMLElement {
   private podOf(item: ComponentItem): string | undefined {
     const state = item.container.stateRequestEvent?.() ?? item.container.initialState, def = this.defs.get(readWidgetId(state));
     return def && (def.id === 'pod' || def.template.dataset['implementation']) ? readWidgetName(state) : undefined;
-  }
-
-  /** A Dependencies button in a stack's header: it fires a bubbling `dock:dependencies` {system, instance} for the active
-   * panel's instance. CSS shows it only when that panel's element is marked `data-needs`. */
-  private addDependencies(stack: Stack) {
-    const b = this.el('button', 'dock-deps', 'Dependencies');
-    b.type = 'button';
-    b.addEventListener('click', () => {
-      const instance = shownInstance(stack.getActiveComponentItem()?.container.element.firstElementChild as never);
-      if (instance) this.dispatchEvent(new CustomEvent('dock:dependencies', { bubbles: true, composed: true, detail: { system: this.system, instance } }));
-    });
-    stack.header.controlsContainerElement.prepend(b);
   }
 
   private readPalette(): Map<string, Def> {
