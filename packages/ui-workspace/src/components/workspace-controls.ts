@@ -4,9 +4,11 @@
 import { LitElement, css, html, svg } from 'lit'
 import { base } from '@pritzlaff/nano-elements'
 import { WINDOW_STYLES, type WindowStyle } from '../lib/dock-layout.ts'
+import { TEMPLATES, enabledFor, panelsInOrder, type TemplateId } from '../lib/layout-templates.ts'
+import { requestBus, type Unsubscribe } from '../lib/bus.ts'
 
 
-type Dock = HTMLElement & { windowStyle: WindowStyle; setWindowStyle(s: WindowStyle): void; connections(): void; saveAs(): void; save(): void; restore(): void; reset(): void }
+type Dock = HTMLElement & { template: TemplateId; setTemplate(id: TemplateId): boolean; arrangement(): { root?: unknown }; windowStyle: WindowStyle; setWindowStyle(s: WindowStyle): void; connections(): void; saveAs(): void; save(): void; restore(): void; reset(): void }
 type Command = 'connections' | 'desk' | 'saveAs' | 'save' | 'restore' | 'reset'
 
 // 24×24 stroke paths, the File menu's icon style
@@ -20,6 +22,13 @@ const ICONS: Record<Command | 'more', ReturnType<typeof svg>> = {
   more: svg`<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`,
 }
 const COMMANDS: [Command, string][] = [['connections', 'Connections'], ['desk', 'Desk'], ['saveAs', 'Save as workspace…'], ['save', 'Save layout'], ['restore', 'Restore'], ['reset', 'Reset']]
+// one rect [x, y, w, h] per position on a 24x16 canvas, in the template's areas order (the free dock: a split, a stack)
+const R: Record<TemplateId, number[][]> = {
+  dock: [[1, 1, 10, 14], [13, 1, 10, 6], [13, 9, 10, 6]], one: [[1, 1, 22, 14]],
+  'two-cols': [[1, 1, 10, 14], [13, 1, 10, 14]], 'two-rows': [[1, 1, 22, 6], [1, 9, 22, 6]],
+  'main-two': [[1, 1, 14, 14], [17, 1, 6, 6], [17, 9, 6, 6]], 'three-cols': [[1, 1, 6, 14], [9, 1, 6, 14], [17, 1, 6, 14]],
+  grid: [[1, 1, 10, 6], [13, 1, 10, 6], [1, 9, 10, 6], [13, 9, 10, 6]], 'main-drawer': [[1, 1, 14, 14], [17, 1, 6, 14]],
+}
 const NARROW = '(max-width: 840px)'
 
 export class WorkspaceControlsEl extends LitElement {
@@ -30,6 +39,10 @@ export class WorkspaceControlsEl extends LitElement {
     button:hover { background: color-mix(in srgb, currentColor 12%, transparent) }
     button:focus-visible { outline: 2px solid var(--nano-accent, #8FB3FF); outline-offset: 2px }
     svg { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }
+    .layout { display: inline-flex; gap: 2px }
+    .layout button[aria-checked="true"] { background: color-mix(in srgb, currentColor 22%, transparent) }
+    .layout button:disabled { opacity: .35; cursor: default }
+    .layout svg { width: 24px; height: 16px; fill: currentColor; stroke: none }
     .view { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); border-radius: 8px }
     .view button { padding: 2px 8px }
     .view button[aria-pressed="true"] { background: color-mix(in srgb, currentColor 22%, transparent) }
@@ -42,6 +55,7 @@ export class WorkspaceControlsEl extends LitElement {
   declare open: boolean
   declare narrow: boolean
   #mq?: MediaQueryList
+  #off?: Unsubscribe
   constructor() { super(); this.dock = ''; this.open = false; this.narrow = false }
   #dock() {
     const d = document.getElementById(this.dock) as Dock | null
@@ -58,11 +72,13 @@ export class WorkspaceControlsEl extends LitElement {
   connectedCallback() {
     super.connectedCallback()
     document.addEventListener('click', this.#outside)
+    try { this.#off = requestBus(this).subscribe('dock:layout', () => this.requestUpdate()) } catch { /* outside a shell: re-renders on its own clicks */ }
     this.#mq = matchMedia(NARROW); this.#mq.addEventListener('change', this.#match); this.#match()
   }
   disconnectedCallback() {
     super.disconnectedCallback()
     document.removeEventListener('click', this.#outside)
+    this.#off?.()
     this.#mq?.removeEventListener('change', this.#match)
   }
 
@@ -71,10 +87,20 @@ export class WorkspaceControlsEl extends LitElement {
   #run(c: Command) { if (c === 'desk') location.hash = '#/desk'; else this.#dock()[c]() }
   #cmd = (c: Command, label: string, text: boolean) => html`<button aria-label=${label} title=${label} @click=${() => { this.#close(false); this.#run(c) }}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[c]}</svg>${text ? label : ''}</button>`
 
+  #layouts(d: Dock | null) {
+    const ok = enabledFor(panelsInOrder(d?.arrangement().root).length), n = panelsInOrder(d?.arrangement().root).length
+    return html`<span class="layout" role="radiogroup" aria-label="Layout">${TEMPLATES.map(t => html`<button role="radio" aria-label=${t.title} aria-checked=${(d?.template ?? 'dock') === t.id ? 'true' : 'false'}
+        ?disabled=${!ok.has(t.id)} title=${ok.has(t.id) ? t.title : `${t.title} needs ${t.positions} panels (${n} open)`}
+        @click=${() => { this.#dock().setTemplate(t.id); this.requestUpdate() }}><svg viewBox="0 0 24 16" aria-hidden="true">${R[t.id].map(([x, y, w, h]) => svg`<rect x=${x} y=${y} width=${w} height=${h} rx="1"/>`)}</svg></button>`)}</span>`
+  }
+
   render() {
-    const style: WindowStyle = (document.getElementById(this.dock) as Dock | null)?.windowStyle ?? 'tabs'
-    return html`<span class="view" role="group" aria-label="View">${WINDOW_STYLES.map(w =>
-        html`<button aria-pressed=${style === w.id ? 'true' : 'false'} @click=${() => { this.#dock().setWindowStyle(w.id); this.requestUpdate() }}>${w.title}</button>`)}</span>
+    const d = document.getElementById(this.dock) as Dock | null
+    const style: WindowStyle = d?.windowStyle ?? 'tabs'
+    const free = (d?.template ?? 'dock') === 'dock'
+    const view = html`<span class="view" role="group" aria-label="View">${WINDOW_STYLES.map(w =>
+        html`<button aria-pressed=${style === w.id ? 'true' : 'false'} @click=${() => { this.#dock().setWindowStyle(w.id); this.requestUpdate() }}>${w.title}</button>`)}</span>`
+    return html`${this.#layouts(d)}${free ? view : ''}
       ${this.narrow
         ? html`<button class="more" aria-label="More workspace actions" title="More workspace actions" aria-controls="panel" aria-expanded=${this.open ? 'true' : 'false'}
               @click=${() => { this.open = !this.open }}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.more}</svg></button>

@@ -15,7 +15,9 @@ const qa = (el: El, s: string) => [...el.shadowRoot!.querySelectorAll(s)] as HTM
 const stubDock = () => {
   const calls: unknown[][] = []
   const d = document.createElement('div') as any
-  d.id = 'd1'; d.windowStyle = 'tabs'
+  d.id = 'd1'; d.windowStyle = 'tabs'; d.template = 'dock'; d.panels = 2
+  d.arrangement = () => ({ root: { type: 'row', content: Array.from({ length: d.panels }, (_, i) => ({ type: 'component', componentState: { widget: `w${i}` } })) } })
+  d.setTemplate = (id: string) => { calls.push(['setTemplate', id]); d.template = id; return true }
   for (const m of ['connections', 'saveAs', 'save', 'restore', 'reset']) d[m] = () => calls.push([m])
   d.setWindowStyle = (s: string) => { calls.push(['setWindowStyle', s]); d.windowStyle = s }
   document.body.append(d)
@@ -37,7 +39,7 @@ test('the element shows View Tabs | Clear and six labelled icon buttons', async 
   const { el } = await mount()
   const view = qa(el, '.view button')
   expect(view.map(b => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([['Tabs', 'true'], ['Clear', 'false']])
-  const icons = qa(el, 'button[aria-label]')
+  const icons = qa(el, 'button[aria-label]:not([role])')
   expect(icons.map(b => b.getAttribute('aria-label'))).toEqual(['Connections', 'Desk', 'Save as workspace…', 'Save layout', 'Restore', 'Reset'])
   for (const b of icons) { expect(b.getAttribute('title')).toBe(b.getAttribute('aria-label')); expect(b.querySelector('svg')).not.toBeNull() }
 })
@@ -69,7 +71,7 @@ test('narrow: the buttons fold into a ⋯ menu', async () => {
   const { el, calls } = await mount(true)
   expect(qa(el, '.view button')).toHaveLength(2)
   const more = q(el, 'button[aria-label="More workspace actions"]')
-  expect(qa(el, 'button')).toHaveLength(2 + 1 + 6)   // the six sit hidden in the panel
+  expect(qa(el, 'button:not([role])')).toHaveLength(2 + 1 + 6)   // the six sit hidden in the panel
   expect(q(el, '.panel').hasAttribute('hidden')).toBe(true)
   more.click(); await settle(el)
   expect(more.getAttribute('aria-expanded')).toBe('true')
@@ -79,4 +81,17 @@ test('narrow: the buttons fold into a ⋯ menu', async () => {
   more.click(); await settle(el)
   el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await settle(el)
   expect(more.getAttribute('aria-expanded')).toBe('false')
+})
+
+test('layout picker: eight radios, current checked, misfits disabled with a reason, click switches', async () => {
+  const { el, calls } = await mount()
+  const rs = qa(el, '[role="radiogroup"][aria-label="Layout"] [role="radio"]')
+  expect(rs).toHaveLength(8)
+  expect(rs.filter(r => r.getAttribute('aria-checked') === 'true').map(r => r.getAttribute('aria-label'))).toEqual(['Free dock'])
+  const grid = rs.find(r => r.getAttribute('aria-label') === 'Grid') as HTMLButtonElement
+  expect(grid.disabled).toBe(true); expect(grid.title).toContain('4 panels')
+  rs.find(r => r.getAttribute('aria-label') === 'Two columns')!.click(); await settle(el)
+  expect(calls).toEqual([['setTemplate', 'two-cols']])
+  expect(qa(el, '.view')).toHaveLength(0)
+  expect(qa(el, '[role="radio"][aria-checked="true"]').map(r => r.getAttribute('aria-label'))).toEqual(['Two columns'])
 })
