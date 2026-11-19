@@ -3,7 +3,7 @@
  * can add — Components (the host's catalog) and Widgets (the page's own) — each draggable onto the dock or clicked
  * to add, and Imported (packages imported from a URL, each with remove). A small toolbar: Import, a filter, and a hide
  * button. Hidden, drawers take no room at all;
- * any [data-toggle-drawer] button (the one beside + in the nav) shows or hides them, and the choice is remembered.
+ * the app bar's Components drawer button (and any [data-toggle-drawer] button) shows or hides them, and the choice is remembered.
  * Light DOM, so golden-layout can drag from it; it never imports the dock, only calls its `addSource`.
  */
 import { importFailures } from '../lib/import-failures.ts';
@@ -41,7 +41,7 @@ export class ComponentDrawer extends HTMLElement {
     this.innerHTML = `
       <div class="cd-bar"><span class="cd-title">Components</span>
         <button type="button" data-import-open title="Import components from a manifest URL">Import</button>
-        <button type="button" data-toggle-drawer aria-label="Hide the components drawer" title="Hide (show it again from the button beside + in Workspaces)">«</button></div>
+        <button type="button" data-toggle-drawer aria-label="Hide the components drawer" title="Hide (show it again from the Components drawer button in the app bar)">«</button></div>
       <input type="search" class="cd-filter" placeholder="Filter" aria-label="Filter components">`;
     for (const s of SECTIONS) {
       const section = this.#section(s.id, s.title);

@@ -1,4 +1,4 @@
-// <nano-workspace-controls dock="<id>">: the controls of one workspace dock (window style, connections, the Desk page,
+// <nano-workspace-controls dock="<id>">: the controls of one workspace dock (the components drawer, layout, window style, connections, the Desk page,
 // save, restore, reset), the element the app bar shows while that dock's page is shown. It drives the dock by id; nothing here is persisted.
 // BACKLOG(5): it was also a nano-runes component (WorkspaceControls) in the host registry; now only the element.
 import { LitElement, css, html, svg } from 'lit'
@@ -6,13 +6,15 @@ import { base } from '@pritzlaff/nano-elements'
 import { WINDOW_STYLES, type WindowStyle } from '../lib/dock-layout.ts'
 import { TEMPLATES, enabledFor, panelsInOrder, type TemplateId } from '../lib/layout-templates.ts'
 import { requestBus, type Unsubscribe } from '../lib/bus.ts'
+import { setDrawersHidden } from './component-drawer.ts'
 
 
 type Dock = HTMLElement & { template: TemplateId; setTemplate(id: TemplateId): boolean; arrangement(): { root?: unknown }; windowStyle: WindowStyle; setWindowStyle(s: WindowStyle): void; connections(): void; saveAs(): void; save(): void; restore(): void; reset(): void }
 type Command = 'connections' | 'desk' | 'saveAs' | 'save' | 'restore' | 'reset'
 
 // 24×24 stroke paths, the File menu's icon style
-const ICONS: Record<Command | 'more', ReturnType<typeof svg>> = {
+const ICONS: Record<Command | 'more' | 'drawer', ReturnType<typeof svg>> = {
+  drawer: svg`<path d="M3 4h18v16H3zM9 4v16"/>`,
   connections: svg`<circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.7 10.5l6.6-3M8.7 13.5l6.6 3"/>`,
   desk: svg`<path d="M6 3v18M12 3v18M18 3v18"/><rect x="4" y="6" width="4" height="3" rx="1"/><rect x="10" y="13" width="4" height="3" rx="1"/><rect x="16" y="9" width="4" height="3" rx="1"/>`,
   saveAs: svg`<path d="M12 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v4"/><path d="M7 3v5h8M18 15l3 3-5 5h-3v-3z"/>`,
@@ -39,6 +41,7 @@ export class WorkspaceControlsEl extends LitElement {
     button:hover { background: color-mix(in srgb, currentColor 12%, transparent) }
     button:focus-visible { outline: 2px solid var(--nano-accent, #8FB3FF); outline-offset: 2px }
     svg { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }
+    .drawer[aria-pressed="true"] { background: color-mix(in srgb, currentColor 22%, transparent) }
     .layout { display: inline-flex; gap: 2px }
     .layout button[aria-checked="true"] { background: color-mix(in srgb, currentColor 22%, transparent) }
     .layout button:disabled { opacity: .35; cursor: default }
@@ -62,7 +65,7 @@ export class WorkspaceControlsEl extends LitElement {
     if (!d) throw new Error(`no dock ${this.dock}`)
     return d
   }
-  #outside = (e: Event) => { if (this.open && !e.composedPath().includes(this)) this.open = false }
+  #outside = (e: Event) => { if (this.open && !e.composedPath().includes(this)) this.open = false; this.requestUpdate() }   // a drawer's own hide button may have changed it
   #match = () => { this.narrow = !!this.#mq?.matches; if (!this.narrow) this.open = false }
 
   firstUpdated() {
@@ -100,7 +103,10 @@ export class WorkspaceControlsEl extends LitElement {
     const free = (d?.template ?? 'dock') === 'dock'
     const view = html`<span class="view" role="group" aria-label="View">${WINDOW_STYLES.map(w =>
         html`<button aria-pressed=${style === w.id ? 'true' : 'false'} @click=${() => { this.#dock().setWindowStyle(w.id); this.requestUpdate() }}>${w.title}</button>`)}</span>`
-    return html`${this.narrow ? '' : this.#layouts(d)}${free ? view : ''}
+    const shown = !document.documentElement.hasAttribute('data-drawers-hidden')
+    return html`<button class="drawer" aria-label="Components drawer" title="Show or hide the components drawer" aria-pressed=${shown ? 'true' : 'false'}
+        @click=${() => { setDrawersHidden(document, shown); this.requestUpdate() }}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.drawer}</svg></button>
+      ${this.narrow ? '' : this.#layouts(d)}${free ? view : ''}
       ${this.narrow
         ? html`<button class="more" aria-label="More workspace actions" title="More workspace actions" aria-controls="panel" aria-expanded=${this.open ? 'true' : 'false'}
               @click=${() => { this.open = !this.open }}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.more}</svg></button>
