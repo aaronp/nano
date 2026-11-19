@@ -36,6 +36,13 @@ test('savedLayout keeps the saved layout, the dock, its slots and the desk', () 
   expect('desk' in (savedLayout({}, 'dock', { root: undefined }, main) as object)).toBe(false)
 })
 
+test('savedLayout carries the arrangement template under the dock id', () => {
+  const T = { template: 'split', order: [], dock: {} }, R = { type: 'row', content: [panel('a')] }
+  const out = savedLayout({}, 'workspace', { root: R, template: T } as never, main) as any
+  expect(out.workspace.template).toEqual(T)
+  expect(out.slots.map((x: any) => x.pod)).toEqual(['a'])
+})
+
 test("a dock's layout tree places its pods: rows and columns split by size, a stack is a tab group", () => {
   const c = (name?: string) => ({ type: 'component', componentState: name ? { widget: 'x', name } : { widget: 'notes' } })
   const root = { type: 'row', content: [

@@ -31,19 +31,19 @@ import { defineMessages } from './messages/index.ts';
 import { bootWiring, hand as handTo } from './boot-wiring.ts';   // after the shell (its bus)
 import { shadowCreate } from './history.ts';
 import { savedLayout, slotsToOpen } from './layout-data.ts';
+import { templateState, type TemplateState } from './lib/layout-templates.ts';
 import { icon } from './icons.ts';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
 if (host) {
   const h = host, target = { app: h.app, registry: h.registry, get calls() { return h.calls(); } };
   const dock = document.querySelector<WorkspaceDock>('workspace-dock#workspace');
-  // The dock's arrangement (golden-layout's resolved config). ponytail: reads the dock's private layout; a public
-  // accessor on <workspace-dock> is a new method (a question for the user).
-  const arrangement = () => (dock as unknown as { layout?: { saveLayout(): { root: unknown } } | null } | null)?.layout?.saveLayout();
   // An import whose nano.json brings a layout for this dock shows it: through the dock's own saved layout and restore().
+  // A saved template state that templateState() would accept (its own validation, on a throwaway store).
+  const valid = (t: unknown): t is TemplateState => { const m = new Map<string, string>(), k = 'x', st = { getItem: (n: string) => m.get(n) ?? null, setItem: (n: string, v: string) => void m.set(n, v), removeItem: (n: string) => void m.delete(n) }; templateState(st, k).set(t as TemplateState); return !!templateState(st, k).get(); };
   const shown = async (r: Promise<{ ok: boolean }>, before: string) => {
     const done = await r, l = dock && h.data().layout?.[dock.id], key = dock?.getAttribute('storage-key');
-    if (done.ok && l && key && JSON.stringify(l) !== before) { try { localStorage.setItem(key, JSON.stringify(l)); } catch { /* no storage: the layout is not shown */ } dock!.restore(); }
+    if (done.ok && l && key && JSON.stringify(l) !== before) { try { localStorage.setItem(key, JSON.stringify(l)); } catch { /* no storage: the layout is not shown */ } dock!.restore(); const t = (l as { template?: unknown }).template; if (valid(t)) dock!.setTemplate(t.template); }
     // A file from another engine: its neutral slots, a panel each, in order.
     const open = done.ok && dock ? slotsToOpen(h.data(), dock.id) : [];
     if (open.length) { dock!.reset(); for (const pod of open) dock!.openPod(pod); }
@@ -62,7 +62,7 @@ if (host) {
   const menu = document.querySelector<FileMenuEl>('nano-file-menu');
   const download = (name: string, reconcile = false) => {
     const a = document.createElement('a');
-    const saved = h.saved(reconcile), l = arrangement();
+    const saved = h.saved(reconcile), l = dock?.arrangement();
     const runtimeOf = (pod: string) => Object.entries(saved.runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
     const desk = document.querySelector<Desk>('c-desk')?.layout();
     const file = l && dock ? { ...saved, layout: savedLayout(saved, dock.id, l, runtimeOf, desk) } : desk ? { ...saved, layout: { ...saved.layout, desk } } : saved;
