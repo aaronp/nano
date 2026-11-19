@@ -116,3 +116,12 @@ test('a workspace with only the host pod shows its runtime, with a hint to add p
   expect(root.querySelector('[data-runtime="main"] [data-empty]')!.textContent).toContain('File › Examples')
   el.remove()
 })
+
+test('the detail overlay closes with its close button', async () => {
+  const { el, root, settle } = await mount()
+  el.picked = { at: 0, sent: { id: 'a', runtime: 'main', kind: 'call', from: 'host', to: 'x', port: 'go', correlation: 'a' } } as any
+  await settle()
+  root.querySelector<HTMLElement>('[data-detail] [data-close]')!.click()
+  await settle()
+  expect(root.querySelector('[data-detail]')).toBeNull()
+})

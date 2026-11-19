@@ -142,7 +142,7 @@ export class Desk extends LitElement {
       ${this.sel && 'pipe' in this.sel ? html`<button data-remove @click=${() => this.#remove()}>Remove</button>` : ''}
     </div>
     <div class="stage ${l.snap ? 'snap' : ''}" tabindex="0" @keydown=${(e: KeyboardEvent) => this.#key(e)} @click=${(e: MouseEvent) => this.#click(e)}>${renderRuntimes(this.#m, this.#a, l, this.#down, { sel: this.sel && 'jack' in this.sel ? this.sel.jack : undefined, fits: this.sel && 'jack' in this.sel ? fitting(this.#m.wires, keyOf(this.sel.jack)) : new Set() })}
-      <svg width=${W} height=${H}>${renderCords(this.#m, this.#a, l, this.sel && 'pipe' in this.sel ? this.sel.pipe : undefined)}</svg>${this.tm ? html`<svg class="dots" width=${W} height=${H}>${renderDots(this.#m, this.#a, l, this.frame, m => this.#pick(m))}</svg>` : ''}${this.picked ? renderDetail(this.picked, this.chain, c => this.tm?.seek(c.at)) : ''}${this.#toast ? html`<div data-toast>${this.#toast}</div>` : ''}</div>`
+      <svg width=${W} height=${H}>${renderCords(this.#m, this.#a, l, this.sel && 'pipe' in this.sel ? this.sel.pipe : undefined)}</svg>${this.tm ? html`<svg class="dots" width=${W} height=${H}>${renderDots(this.#m, this.#a, l, this.frame, m => this.#pick(m))}</svg>` : ''}${this.picked ? renderDetail(this.picked, this.chain, c => this.tm?.seek(c.at), () => { this.picked = undefined }) : ''}${this.#toast ? html`<div data-toast>${this.#toast}</div>` : ''}</div>`
   }
 }
 

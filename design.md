@@ -134,6 +134,7 @@ for that pod. Two displays of the same data are two pods joined by a subscriptio
 (`LayoutBox` per slot id: `{ x, y, w, h }`, fractions of the page), typed as `LayoutData` in nano-ui
 (`packages/ui/src/layout.ts`); each engine keeps its own state beside them (`layout.workspace` for the workspace's dock).
 A pod not in `slots` runs unseen. See `examples/todo/side-by-side.json`.
+Observability (nano-ui): `record`, `timeMachine`, `foldAt`, `shadowAt`, `clockDriver` and `<nano-time-machine>` record the `AppEvent` stream and replay it; `kvStep` in `examples/kv` steps its store.
 
 ## FAQ
 

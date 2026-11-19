@@ -10,7 +10,7 @@ const text = (m: Message) => JSON.stringify([m.sent.from, m.sent.to, m.sent.port
 export class Messages extends LitElement {
   static properties = { tm: { attribute: false }, store: { attribute: false }, frame: { state: true }, query: { state: true }, picked: { state: true }, chain: { state: true } }
   static styles = css`
-    :host { display: block; color: #E6EDF3; font: 12px system-ui, sans-serif; padding: 8px }
+    :host { display: block; background: #0B0E12; color: #E6EDF3; font: 12px system-ui, sans-serif; padding: 8px }
     input { box-sizing: border-box; width: 100%; padding: 4px 10px; margin-bottom: 6px; border: 1px solid #2A323D; border-radius: 999px; background: #12161C; color: inherit; font: inherit }
     table { width: 100%; border-collapse: collapse } th, td { text-align: left; padding: 3px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 24ch }
     tbody tr { cursor: pointer } tr[data-at] { background: #1C3A4D } tr[data-picked] { outline: 1px solid #4CC2FF }

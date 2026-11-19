@@ -60,7 +60,7 @@ test('the detail shows input, result, ms and the cause chain; a cause seeks to i
   const { tm, el, rows } = await page()
   rows()[0]!.click(); await tick(); await el.updateComplete
   const d = el.shadowRoot!.querySelector('[data-detail]')!
-  for (const s of ['{"n":2}', '"ok-b"', '7 ms']) expect(d.textContent).toContain(s)
+  for (const s of ['{"n":2}', '"ok-b"', '7.0 ms']) expect(d.textContent).toContain(s)
   const cause = d.querySelector<HTMLElement>('[data-cause]')!
   expect(cause.textContent).toContain('alice')
   cause.click(); await el.updateComplete

@@ -116,9 +116,9 @@ if (host) {
   hand();
   let resetting: Promise<void> | undefined;   // one Reset at a time: a second click while one runs joins it
   for (const b of bars) b.addEventListener('reset', () => resetting ??= (async () => {
+    driver.close(); tm.close();   // first: a live driver would advance the restarted clock unrecorded
     const r = await h.history.reset();
     if (!r.ok) toast(r.fail.reason, { variant: 'bad' });
-    driver.close(); tm.close();
     tm = await timeMachine(h.history); driver = clockDriver(h.app, h.registry, tm);
     hand();
   })().finally(() => { resetting = undefined; }));
