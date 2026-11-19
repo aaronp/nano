@@ -1,8 +1,9 @@
 // <c-messages>: the page time machine's messages as a searchable table, and the detail of the one selected. Hand it the
 // time machine and the store behind it (as the bars are); it follows both when they are replaced after a Reset.
 import { LitElement, css, html } from 'lit'
-import { pair, type Frame, type Message, type MessageStore, type TimeMachine } from '@pritzlaff/nano-ui'
+import { type Frame, type Message, type MessageStore, type TimeMachine } from '@pritzlaff/nano-ui'
 import { renderDetail } from './detail.ts'
+import { causeChain, follow } from './follow.ts'
 
 const text = (m: Message) => JSON.stringify([m.sent.from, m.sent.to, m.sent.port, m.sent.input, m.outcome]).toLowerCase()
 
@@ -30,17 +31,11 @@ export class Messages extends LitElement {
 
   #watch() {
     this.#off?.()
-    const tm = this.isConnected ? this.tm : undefined
-    this.#off = tm?.subscribe(f => { this.frame = f })
-    // A time machine emits on change, not on subscribe: re-enter the mode it is in to get the current frame (a playing one ticks soon).
-    if (tm?.mode === 'live') tm.live(); else if (tm?.mode === 'paused') tm.pause()
+    this.#off = this.isConnected ? follow(this.tm, f => { this.frame = f }) : undefined
   }
   async #pick(m: Message) {
     this.tm?.seek(m.at); this.picked = m   // seek pauses
-    // ponytail: the causes are looked up by reading the whole store; an index if the recording gets large
-    const all = new Map(pair(await this.store?.range() ?? []).map(x => [x.sent.id, x]))
-    const chain: Message[] = []
-    for (let c = m.sent.cause; c !== undefined && chain.length < 100; ) { const x = all.get(c); if (!x) break; chain.push(x); c = x.sent.cause }
+    const chain = await causeChain(this.store, m)
     if (this.picked === m) this.chain = chain
   }
 
