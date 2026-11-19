@@ -83,6 +83,14 @@ export interface SavedWorkspace { readonly path: string; readonly title: string;
 export const KEY = 'workspace-starter.saved-workspaces';
 export const PATH = /^\/[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)*$/;
 
+/** A route for a title: `/` + lower-case dashes, `-2`, `-3`… until it is not in `taken`. */
+export const slugPath = (title: string, taken: readonly string[]): string => {
+  const base = '/' + (title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'workspace-page');
+  let path = base;
+  for (let n = 2; taken.includes(path); n++) path = `${base}-${n}`;
+  return path;
+};
+
 /** Where a saved workspace's dock keeps its layout. */
 export const layoutKey = (mainKey: string, path: string) => `${mainKey}.saved.${path}`;
 /** The suffixes of a dock's other keys under its layout key. */
@@ -115,5 +123,19 @@ export const savedWorkspaces = (storage: Pick<Storage, 'getItem' | 'setItem' | '
       storage.setItem(KEY, JSON.stringify(list().map((w) => (w.path === path ? ws : w))));
     });
   };
-  return { list, refusal, add, update };
+  /** Move the page at `path` to `index` in the list; false if it is unknown or would not move. */
+  const move = (path: string, index: number): boolean => {
+    const l = list(), from = l.findIndex((w) => w.path === path), to = Math.max(0, Math.min(index, l.length - 1));
+    if (from < 0 || from === to) return false;
+    l.splice(to, 0, ...l.splice(from, 1));
+    return write(() => storage.setItem(KEY, JSON.stringify(l))) === null;
+  };
+  /** Main's own title and icon, once set. */
+  const main = (): { title: string; icon: string } | null => {
+    try { const v = JSON.parse(storage.getItem(`${KEY}.main`) ?? 'null'); return typeof v?.title === 'string' && typeof v.icon === 'string' ? v : null; } catch { return null; }
+  };
+  const setMain = (m: { title: string; icon: string }): string | null =>
+    !m.title.trim() ? 'Give it a title for the nav.' : !(m.icon in ICONS) ? `There is no icon called ${m.icon}.`
+      : write(() => storage.setItem(`${KEY}.main`, JSON.stringify({ title: m.title, icon: m.icon })));
+  return { list, refusal, add, update, move, main, setMain };
 };
