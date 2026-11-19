@@ -103,7 +103,7 @@ describe('the messenger, stitched', () => {
     const m = STITCHED.runtimes.messenger!
     expect(await app.apply({ ...STITCHED, runtimes: { ...STITCHED.runtimes, messenger: { ...m, subscriptions: m.subscriptions.filter(s => s !== INBOX_STORE) } } }))
       .toEqual(success(undefined))
-    expect(events).toEqual([{ type: 'applied', added: [], removed: [], changed: [], rewired: ['messenger'] }])
+    expect(events).toEqual([{ type: 'applied', caller: 'host', added: [], removed: [], changed: [], rewired: ['messenger'] }])
     const sent = await send(app, 'second')
     if (!sent.ok || sent.value.status !== 'sent') throw new Error('not sent')
     expect(await inbox(app)).toEqual(success([{ id: sent.value.id, text: 'second' }]))

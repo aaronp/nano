@@ -20,7 +20,7 @@ export function listen(live: Live, runtime: string, fn: (e: AppEvent) => void): 
     else if (e.type === 'applied') {
       const keep = (l: string[]) => l.filter(p => seen.has(p))
       const n = { added: keep(e.added), removed: keep(e.removed), changed: keep(e.changed), rewired: keep(e.rewired) }
-      if (Object.values(n).some(l => l.length)) fn({ type: 'applied', ...n })
+      if (Object.values(n).some(l => l.length)) fn({ type: 'applied', caller: e.caller, ...n })
       const here = live.now().runtimes[runtime]?.pods ?? []
       for (const p of seen) if (!here.includes(p)) seen.delete(p)   // its removal and closing are delivered
     }

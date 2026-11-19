@@ -354,8 +354,8 @@ describe('changing, at the edges', () => {
     expect(order).toEqual(['a', 'b'])
     expect(app.deployment()).toEqual(b)
     expect(events.filter(e => e.type === 'applied')).toEqual([
-      { type: 'applied', added: ['x'], removed: [], changed: [], rewired: ['r'] },
-      { type: 'applied', added: ['y'], removed: ['x'], changed: [], rewired: ['r'] },
+      { type: 'applied', caller: 'host', added: ['x'], removed: [], changed: [], rewired: ['r'] },
+      { type: 'applied', caller: 'host', added: ['y'], removed: ['x'], changed: [], rewired: ['r'] },
     ])
   })
   test('given a call in flight to x, when apply removes x, then the call finishes and the next call to x is not-found', async () => {

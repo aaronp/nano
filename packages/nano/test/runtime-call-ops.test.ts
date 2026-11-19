@@ -38,5 +38,5 @@ test('an apply that only changes ops rewires and restarts nothing', async () => 
   const events: any[] = []
   app.value.listen(e => events.push(e))
   expect((await app.value.apply(dep([pair]) as never)).ok).toBe(true)
-  expect(events.filter(e => e.type === 'applied')).toEqual([{ type: 'applied', added: [], removed: [], changed: [], rewired: ['r'] }])
+  expect(events.filter(e => e.type === 'applied')).toEqual([{ type: 'applied', caller: 'host', added: [], removed: [], changed: [], rewired: ['r'] }])
 })

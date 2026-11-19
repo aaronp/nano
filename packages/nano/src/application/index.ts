@@ -15,6 +15,7 @@ import { AppDeployment } from '../deployment.ts'
 import type { Implementation } from '../implementation.ts'
 import type { Pod } from '../pod.ts'
 import type { Policy } from '../policy.ts'
+import { DeploymentPolicies, type DeploymentPolicy } from '../deployment-policy.ts'
 import { Registry } from '../registry.ts'
 import { failure, success, type NanoResult } from '../result.ts'
 import type { Runtime } from '../runtime.ts'
@@ -39,7 +40,8 @@ export type Application = {
   get: RuntimeView['get']
   resolve: RuntimeView['resolve']
   subscribe: RuntimeView['subscribe']
-  apply(next: AppDeployment): Promise<NanoResult<void>>
+  /** `caller` (default `'host'`) is asked of the deployment policy and recorded on `applied`. */
+  apply(next: AppDeployment, opts?: { caller?: string }): Promise<NanoResult<void>>
   restart(pod: string): Promise<NanoResult<void>>
   deployment(): AppDeployment
   listen(fn: (e: AppEvent) => void): () => void
@@ -47,7 +49,7 @@ export type Application = {
 }
 
 /** `isolate` gives the host's stand-in for a pod whose isolation isn't 'host' (same coord); without it such a pod fails. */
-type Opts = { policies?: Record<string, Policy>; timeoutMs?: number; isolate?: (name: string, pod: Pod) => Implementation }
+type Opts = { policies?: Record<string, Policy>; deploymentPolicy?: DeploymentPolicy; timeoutMs?: number; isolate?: (name: string, pod: Pod) => Implementation }
 
 /**
  * `runtimes` live. The application's deployment is its own: nobody else holds it, so only `apply` changes it; and its
@@ -86,9 +88,11 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     return done
   }
 
-  async function reconcile(d: AppDeployment): Promise<NanoResult<void>> {
+  async function reconcile(d: AppDeployment, caller: string): Promise<NanoResult<void>> {
     const checked = adopt(d)
     if (!checked.ok) return checked
+    const verdict = await (opts.deploymentPolicy ?? DeploymentPolicies.allowAll()).isAllowed({ caller, deployment: d })
+    if (!verdict.approved) return failure('denied', verdict.reason)
     const changes = diff(current, checked.value), before = current
     current = checked.value
     for (const o of [...live.listeners.ons]) {
@@ -99,7 +103,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     await Promise.all([...changes.removed.map(n => pods.forget(n, 'removed')), ...changes.changed.map(n => pods.forget(n, 'changed'))])
     await buildEager([...changes.added, ...changes.changed])
     await notifyPodChanges(live, before)
-    trace.emit({ type: 'applied', ...changes })
+    trace.emit({ type: 'applied', caller, ...changes })
     return success(undefined)
   }
 
@@ -110,7 +114,7 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     get: (api, where) => one.get(api, where),
     subscribe: one.subscribe,
     call: (...at) => at.length === 1 ? one.call(at[0]) : app.runtime(at[0]).call(at[1]),
-    apply: next => closing ? Promise.resolve(shut()) : queued(() => reconcile(next)),
+    apply: (next, o) => closing ? Promise.resolve(shut()) : queued(() => reconcile(next, o?.caller ?? 'host')),
     restart: pod => closing ? Promise.resolve(shut()) : queued(async () => {
       if (!current.pods[pod]) return failure('not-found', `no pod ${pod}`)
       await pods.forget(pod, 'restarted')
