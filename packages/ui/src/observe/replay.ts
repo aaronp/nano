@@ -47,7 +47,7 @@ export async function replay(app: Application, store: MessageStore, opts: Opts =
   const sends = new Map(roots(pair(entries)).map(m => [m.seq, m]))
   const cut = [...sends.values()].find(m => m.sent.input !== undefined && truncated(m.sent.input))
   if (cut) return failure('invalid-input', `message ${cut.seq}: its input was truncated when recorded`)
-  const inputs = entries.filter(e => sends.has(e.seq) || e.event.type === 'restarted' || (e.event.type === 'deployment' && e !== start))
+  const inputs = entries.filter(e => sends.has(e.seq) || e.event.type === 'restarted' || (e.event.type === 'deployment' && e !== start && (e.event.caller ?? 'host') === 'host'))   // a pod's apply happens again by replaying its cause
 
   const flight = opts.pace === 'fast' ? inFlight(app) : undefined   // before the reset, so the first input waits for its traffic too
   try {

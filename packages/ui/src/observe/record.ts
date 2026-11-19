@@ -21,10 +21,10 @@ export async function record(app: Application, store: MessageStore, opts: { clea
   const add = (event: Recorded, at = now()) => {
     try { if (held) held.push({ at, event }); else { const entry: Entry = { seq: ++seq, at, event }; store.append(entry); for (const fn of heard) try { fn(entry) } catch { /* a listener never breaks recording */ } } } catch { /* never throws into the app */ }
   }
-  const deployment = (clean?: boolean) => add({ type: 'deployment', deployment: app.deployment(), ...(clean ? { clean: true as const } : {}) })
+  const deployment = (clean?: boolean, caller?: string) => add({ type: 'deployment', deployment: app.deployment(), ...(clean ? { clean: true as const } : {}), ...(caller ? { caller } : {}) })
   deployment(opts.clean)
   const stop = app.listen(e => {
-    try { add(recorded(e)); if (e.type === 'applied') deployment() } catch { /* never throws into the app */ }
+    try { add(recorded(e)); if (e.type === 'applied') deployment(false, e.caller) } catch { /* never throws into the app */ }
   })
   try {
     await store.flush()

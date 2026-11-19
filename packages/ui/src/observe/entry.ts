@@ -12,7 +12,7 @@ export type Recorded =
   | (Exclude<AppEvent, { type: 'sent' | 'delivered' }>)
   | (Omit<Extract<AppEvent, { type: 'sent' }>, 'input'> & { input?: string })
   | { type: 'delivered'; id: string; ok: boolean; result: string; ms: number }
-  | { type: 'deployment'; deployment: AppDeployment; clean?: true }
+  | { type: 'deployment'; deployment: AppDeployment; clean?: true; caller?: string }
 
 export type Entry = { seq: number; at: number; event: Recorded }
 
