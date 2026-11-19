@@ -1,95 +1,7 @@
-/**
- * A runtime's slice of the application and closing (specs: 2026-11-14-values-and-application-design.md "Closing an
- * instance", behaviours 18–24, as revised by 2026-11-14-pods-runtimes-application-design.md), written first. An instance is closed on
- * restart, removal, change, a failed build and `app.close()`, running its `ctx.addOnCloseListener` listeners.
- */
+/** A runtime's slice of the application and closing (specs: 2026-11-14-values-and-application-design.md, 2026-11-14-pods-runtimes-application-design.md); fixtures in fixtures/acme-closing.ts. */
 import { describe, expect, test } from 'bun:test'
-import { Type } from 'typebox'
-import {
-  Application,
-  Pod,
-  AppDeployment,
-  Registry,
-  Schema,
-  Interface,
-  Implementation,
-  Op,
-  provide,
-  Provider,
-  success,
-  type AppEvent,
-  type NanoResult,
-} from '../src/index.ts'
-
-const Num = Schema.define(Type.Integer(), 'Num')
-const Nothing = Schema.define(Type.Null(), 'Nothing')
-const Counter = Interface.define('acme.Counter', { inc: Op.action(Nothing, Num) })
-
-/** What happened, in order, across every instance: 'build <pod>', 'close <pod> <reason>', 'tick <pod>'. */
-let log: string[] = []
-/** A counter that logs its build and its close. */
-const counter = Implementation.define('acme/counter', { provides: [Counter], make: ctx => {
-  log.push(`build ${ctx.self}`); let n = 0
-  ctx.addOnCloseListener(({ reason }) => { log.push(`close ${ctx.self} ${reason}`) })
-  return [provide(Counter, { inc: async () => success(++n) })]
-} })
-/** Ticks every 5ms until closed. */
-const ticker = Implementation.define('acme/ticker', { provides: [Counter], make: ctx => {
-  const t = setInterval(() => log.push(`tick ${ctx.self}`), 5)
-  ctx.addOnCloseListener(() => clearInterval(t))
-  return [provide(Counter, { inc: async () => success(0) })]
-} })
-/** Adds a close listener, then throws. */
-const halfBuilt = Implementation.define('acme/half', { provides: [Counter], make: ctx => {
-  ctx.addOnCloseListener(({ reason }) => { log.push(`close ${ctx.self} ${reason}`) })
-  throw new Error('half built')
-} })
-/** Three close listeners: one throws, one hangs, one logs. */
-const messy = Implementation.define('acme/messy', { provides: [Counter], make: ctx => {
-  ctx.addOnCloseListener(() => { throw new Error('bad close') })
-  ctx.addOnCloseListener(() => new Promise(() => {}))
-  ctx.addOnCloseListener(({ reason }) => { log.push(`close ${ctx.self} ${reason}`) })
-  return [provide(Counter, { inc: async () => success(1) })]
-} })
-
-/** Logs its build; its close listener takes 20ms, then logs. */
-const slowClose = Implementation.define('acme/slowclose', { provides: [Counter], make: ctx => {
-  log.push(`build ${ctx.self}`)
-  ctx.addOnCloseListener(async ({ reason }) => { await wait(20); log.push(`close ${ctx.self} ${reason}`) })
-  return [provide(Counter, { inc: async () => success(1) })]
-} })
-
-/** Takes 30ms to build, then logs; its inc logs too. */
-const slowMake = Implementation.define('acme/slowmake', { provides: [Counter], make: async ctx => {
-  await wait(30); log.push(`made ${ctx.self}`)
-  return [provide(Counter, { inc: async () => { log.push('handler ran'); return success(1) } })]
-} })
-
-const registry = () => { const r = Registry.create(); r.add(Provider.define('acme', [counter, ticker, halfBuilt, messy, slowClose, slowMake])); return r }
-const ok = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
-const live = async (deployment: AppDeployment, opts: { timeoutMs?: number } = {}) => {
-  log = []
-  const app = ok(await Application.create(ok(AppDeployment.assemble(deployment, registry())), opts))
-  const events: AppEvent[] = []
-  app.listen(e => events.push(e))
-  return { app, events }
-}
-const one = (pods: AppDeployment['pods']): AppDeployment => ({ pods, runtimes: { r: { pods: Object.keys(pods), subscriptions: [] } } })
-const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
-
-describe("a runtime's slice", () => {
-  // Revised behaviour 17: no live runtime object; app.call and listen filtered by runtime.
-  test('given two runtimes, when the host calls through one, then only that runtime records it, and unknown runtimes or unplaced pods are not-found', async () => {
-    const { app, events } = await live({ pods: { c: Pod.lazy(counter), d: Pod.lazy(counter) },
-      runtimes: { chat: { pods: ['c'], subscriptions: [] }, other: { pods: ['c', 'd'], subscriptions: [] } } })
-    expect(await app.call('chat', 'c').inc(null)).toEqual(success(1))
-    expect(events.filter(e => 'runtime' in e && e.runtime === 'chat').map(e => e.type)).toEqual(['sent'])
-    expect(events.filter(e => e.type === 'sent').map(e => `${e.runtime}:${e.kind}:${e.from}->${e.to}`)).toEqual(['chat:call:host->c'])
-    expect(events.filter(e => 'runtime' in e && e.runtime === 'other')).toEqual([])
-    expect(await app.call('nope', 'c').inc(null)).toMatchObject({ ok: false, fail: { type: 'not-found' } })
-    expect(await app.call('chat', 'd').inc(null)).toMatchObject({ ok: false, fail: { type: 'not-found' } })
-  })
-})
+import { Pod, success } from '../src/index.ts'
+import { log, counter, ticker, halfBuilt, messy, slowClose, slowMake, ok, live, one, wait } from './fixtures/acme-closing.ts'
 
 describe('closing', () => {
   // Behaviour 18 and 24.
@@ -104,7 +16,7 @@ describe('closing', () => {
     const d = { pods: { gone: Pod.eager(counter), changed: Pod.eager(counter, { config: 1 }), kept: Pod.eager(counter) },
       runtimes: { r: { pods: ['gone', 'changed', 'kept'], subscriptions: [] }, s: { pods: [], subscriptions: [] } } }
     const { app } = await live(d)
-    log = []
+    log.length = 0
     ok(await app.apply({ pods: { changed: Pod.eager(counter, { config: 2 }), kept: d.pods.kept },
       runtimes: { r: { pods: ['changed', 'kept'], subscriptions: [] }, s: { pods: ['kept'], subscriptions: [] } } }))
     // The two closes may come in either order; the rebuild comes after both (see the close-before-rebuild tests).
