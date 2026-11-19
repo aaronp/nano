@@ -26,11 +26,11 @@ export function navEdit(doc: Document, save: (row: HTMLElement, title: string, i
     }
   };
   /** Saves, then puts the row back in place (re-slotted, so <app-shell> re-marks the nav and the bar's label). */
-  const commit = (row: HTMLElement, title: string, icon: string) => {
+  const commit = (row: HTMLElement, title: string, icon: string, refocus = true) => {
     save(row, title, icon);
     row.parentNode?.insertBefore(row, row.nextSibling);
     controls();
-    if (editing()) row.querySelector<HTMLElement>('[data-name]')?.focus();
+    if (refocus && editing()) row.querySelector<HTMLElement>('[data-name]')?.focus();
   };
   /** The row's name as an input, in place. */
   const rename = (row: HTMLElement) => {
@@ -39,18 +39,18 @@ export function navEdit(doc: Document, save: (row: HTMLElement, title: string, i
     const old = span.textContent ?? '', input = doc.createElement('input');
     input.value = old; input.dataset.rename = ''; input.setAttribute('aria-label', 'Workspace name');
     let done = false;
-    const end = (keep: boolean) => {
+    const end = (keep: boolean, refocus: boolean) => {   // a blur leaves focus where it went
       if (done) return; done = true;
       const title = input.value.trim();
       input.replaceWith(span);
-      if (keep && title && title !== old) commit(row, title, a.dataset.icon ?? '');
-      else { controls(); if (editing()) (span as HTMLElement).focus(); }
+      if (keep && title && title !== old) commit(row, title, a.dataset.icon ?? '', refocus);
+      else { controls(); if (refocus && editing()) (span as HTMLElement).focus(); }
     };
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); end(true); }
-      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(false); }
+      if (e.key === 'Enter') { e.preventDefault(); end(true, true); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); end(false, true); }
     });
-    input.addEventListener('blur', () => end(true));
+    input.addEventListener('blur', () => end(true, false));
     input.addEventListener('click', (e) => e.preventDefault());   // inside the link: typing is not navigating
     span.replaceWith(input);
     input.focus(); input.select();
@@ -74,6 +74,7 @@ export function navEdit(doc: Document, save: (row: HTMLElement, title: string, i
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePop(); glyph.focus(); }
       else if (e.key in step && i >= 0) { e.preventDefault(); all[Math.max(0, Math.min(all.length - 1, i + step[e.key]!))]!.focus(); }
     });
+    p.addEventListener('mousedown', (e) => e.preventDefault());   // a click keeps focus inside (Safari doesn't focus buttons)
     p.addEventListener('focusout', (e) => { if (pop === p && !p.contains(e.relatedTarget as Node | null)) closePop(); });
     doc.body.append(p);
     (p.querySelector<HTMLElement>('[aria-selected="true"]') ?? p.querySelector('button'))?.focus();

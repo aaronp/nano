@@ -80,6 +80,9 @@ test('in edit mode a link click does not navigate; Enter on a focused name opens
   expect(input().closest('[data-saved]')!.getAttribute('data-saved')).toBe('/new-workspace')
   type('', 'Escape')
   expect(document.activeElement).toBe($('[data-saved="/new-workspace"] [data-name]'))
+  $('[data-saved="/new-workspace"] [data-name]').click()
+  $('[data-edit-nav]').focus()   // blur: kept, and focus stays where it went
+  expect(document.activeElement).toBe($('[data-edit-nav]'))
 })
 
 test('renaming a saved page moves its keys, link, route and dock to the new slug', () => {
@@ -128,6 +131,9 @@ test('Enter on the icon opens a grid of icons (arrows move, focus leaving closes
   $('[data-saved="/desk"] a svg').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
   pop = $('[role="listbox"]')
   expect(pop.querySelector('[aria-selected="true"]')!.getAttribute('data-icon')).toBe('window')
+  const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+  pop.querySelector('[data-icon="rocket"]')!.dispatchEvent(down)
+  expect(down.defaultPrevented).toBe(true)   // focus stays inside, so no focusout closes it before the click
   pop.querySelector<HTMLElement>('[data-icon="rocket"]')!.click()
   expect(document.querySelector('[role="listbox"]')).toBeNull()
   expect(store.list()[0]).toEqual({ path: '/desk', title: 'Desk', icon: 'rocket' })
