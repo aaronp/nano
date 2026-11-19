@@ -119,3 +119,17 @@ test('an idle peer dot is faint, a pending one hollow and bright, a granted one 
   expect(dot.getAttribute('stroke-opacity')).toBe(dot.classList.contains('idle') ? '0.2' : '1')
   expect(dot.getAttribute('fill')).toBe(dot.classList.contains('granted') ? dot.getAttribute('stroke') : 'none')
 })
+
+test('swapping the target to a second app shows that app, not the first', async () => {
+  await cluster()
+  const first = app, el = await mount('raft-node', first, 'example-1', 'example-1-raft')
+  const ledger = await mount('raft-ledger', first, 'example-1', 'example-1-ledger')
+  const term = el.shadowRoot!.querySelector('text')!.textContent
+  expect(Number(term)).toBeGreaterThan(0)
+  app = await openRaft()   // a second app with a fresh cluster at time 0: every node at term 0, no log
+  must(await app.call('raft', 'cluster')[Cluster.ops.create.name]!({ name: 'example', size: 3, seed: 1 }))
+  for (const e of [el, ledger]) { e.target = { app, registry: Registry.create(), runtime: 'example-1', pod: e === el ? 'example-1-raft' : 'example-1-ledger' }; await wait(); await e.updateComplete }
+  expect(el.shadowRoot!.querySelector('text')!.textContent).toBe('0')
+  expect(ledger.shadowRoot!.querySelectorAll('tr')).toHaveLength(1)
+  await first.close()
+})

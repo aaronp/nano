@@ -31,11 +31,17 @@ class RaftNodeView extends LitElement {
     if (!t || !this.isConnected || this.watching === t) return
     this.stop?.()
     this.watching = t
-    const rt = t.app.runtime(t.runtime)   // read once, then hear: `changed` carries the status, the clock's `fired` its time
-    const offs = [rt.subscribe(RaftNode.ops.changed, ({ output }) => { this.status = output }),
-      rt.subscribe(Clock.ops.fired, ({ output }) => { this.now = Math.max(this.now, output.at) })]
+    this.status = undefined; this.now = 0   // a new target (a shadow app, say) starts from nothing
+    const rt = t.app.runtime(t.runtime), heard = { status: false, now: false }   // read once, then hear: `changed` carries the status, `fired` its time
+    const offs = [rt.subscribe(RaftNode.ops.changed, ({ output }) => { heard.status = true; this.status = output }),
+      rt.subscribe(Clock.ops.fired, ({ output }) => { heard.now = true; this.now = output.at })]
     this.stop = () => offs.forEach(off => off())
-    void Promise.all([rt.get(RaftNode, { pod: t.pod }).status(), rt.get(Clock).now()]).then(([status, now]) => { this.status ??= status; this.now = Math.max(this.now, now) }, () => {})
+    // the read applies only for what no event has already told (an event is newer than the read), and never after a swap
+    void Promise.all([rt.get(RaftNode, { pod: t.pod }).status(), rt.get(Clock).now()]).then(([status, now]) => {
+      if (this.watching !== t) return
+      if (!heard.status) this.status = status
+      if (!heard.now) this.now = now
+    }, () => {})
   }
   render() {
     if (!this.status) return html``
