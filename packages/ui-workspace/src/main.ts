@@ -9,6 +9,7 @@
 import './boot-theme.ts';
 import { host } from './boot-host.ts';   // before the elements are defined: the docks' palettes list what the host can make
 import { toast } from '@pritzlaff/nano-elements';
+import { clockDriver, timeMachine, type NanoTimeMachine } from '@pritzlaff/nano-ui';
 import './components/app-shell.ts';
 import './components/split-pane.ts';
 import './components/component-drawer.ts';
@@ -102,6 +103,20 @@ if (host) {
   defineDesk();
   for (const d of document.querySelectorAll<Desk>('c-desk')) d.host = host;
   bootWiring(document, async () => [{ id: '/workspace' }]);
+
+  // The page's one time machine over host.history, and its clock driver, handed to every <nano-time-machine>. Reset
+  // makes both afresh: a time machine's index does not survive the history being cleared.
+  let tm = await timeMachine(h.history), driver = clockDriver(h.app, h.registry, tm);
+  const bars = document.querySelectorAll<NanoTimeMachine>('nano-time-machine');
+  const hand = () => { for (const b of bars) Object.assign(b, { tm, store: h.history.store, driver }); };
+  hand();
+  for (const b of bars) b.addEventListener('reset', async () => {
+    const r = await h.reset();
+    if (!r.ok) toast(r.fail.reason, { variant: 'bad' });
+    driver.close(); tm.close();
+    tm = await timeMachine(h.history); driver = clockDriver(h.app, h.registry, tm);
+    hand();
+  });
 
   const src = new URL(location.href).searchParams.get('src');
   // Only a URL on this page's origin: a crafted link must not open the import prompt on load.

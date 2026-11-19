@@ -1,5 +1,5 @@
 /**
- * The nano.ui default views, and `defineViews`, which defines their five tags (and `nano-pod-view`, `nano-explorer`, `nano-wiring`) once.
+ * The nano.ui default views, and `defineViews`, which defines their five tags (and `nano-pod-view`, `nano-explorer`, `nano-wiring`, `nano-time-machine`) once.
  *
  *   defineViews(); viewFor(pod, { ...app.deployment(), views: selectors }, views)
  */
@@ -9,11 +9,12 @@ import { NanoInput } from './input.ts'
 import { NanoExplorer } from '../explorer.ts'
 import { NanoWiring } from '../wiring/wiring.ts'
 import { NanoPodView } from './pod-view.ts'
+import { NanoTimeMachine } from '../observe/bar.ts'
 import type { ViewMap } from './view.ts'
 
 export const views: ViewMap = { 'nano.ui/input': 'nano-input', 'nano.ui/debounce': 'nano-debounce', 'nano.ui/map': 'nano-map', 'nano.ui/log': 'nano-log' }
 
-const tags = { 'nano-explorer': NanoExplorer, 'nano-wiring': NanoWiring, 'nano-pod-view': NanoPodView, 'nano-input': NanoInput, 'nano-debounce': NanoDebounce, 'nano-map': NanoMap, 'nano-log': NanoLog }
+const tags = { 'nano-time-machine': NanoTimeMachine, 'nano-explorer': NanoExplorer, 'nano-wiring': NanoWiring, 'nano-pod-view': NanoPodView, 'nano-input': NanoInput, 'nano-debounce': NanoDebounce, 'nano-map': NanoMap, 'nano-log': NanoLog }
 
 export function defineViews(): void {
   for (const [tag, cls] of Object.entries(tags)) if (!customElements.get(tag)) customElements.define(tag, cls)

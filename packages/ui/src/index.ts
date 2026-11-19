@@ -28,3 +28,4 @@ export { timeMachine, type Frame, type Ticker, type TimeMachine } from './observ
 export { clockDriver } from './observe/clock-driver.ts'
 export { foldAt } from './observe/fold.ts'
 export { shadowAt } from './observe/shadow.ts'
+export { NanoTimeMachine } from './observe/bar.ts'

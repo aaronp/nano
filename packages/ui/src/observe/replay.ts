@@ -8,7 +8,14 @@
 import { failure, success, type Application, type NanoResult } from '@pritzlaff/nano-core'
 import { inFlight } from './in-flight.ts'
 import { restartOrder } from './restart-order.ts'
-import { pair, truncated, type Message, type MessageStore } from './entry.ts'
+import { pair, truncated, type Entry, type Message, type MessageStore } from './entry.ts'
+
+/** The store's oldest entry if it is a clean start (a deployment whose pods held no state), else undefined: what replay and shadowAt need. */
+export async function cleanStart(store: MessageStore): Promise<Entry & { event: { type: 'deployment' } } | undefined> {
+  await store.flush()
+  const [start] = await store.range(undefined, undefined, 1)
+  return start?.event.type === 'deployment' && start.event.clean ? start as Entry & { event: { type: 'deployment' } } : undefined
+}
 
 /**
  * The messages nothing in the app caused: host calls with no cause. Their inputs are snapshots, so a Map, Set, Date or
@@ -33,9 +40,8 @@ type Opts = { to?: number; now?: () => number; sleep?: (ms: number) => Promise<v
  * before it returns, it waits until no message is in flight; an input whose wait for quiet runs out counts in `failed`.
  */
 export async function replay(app: Application, store: MessageStore, opts: Opts = {}): Promise<NanoResult<Replayed>> {
-  await store.flush()
-  const [start] = await store.range(undefined, undefined, 1)
-  if (start?.event.type !== 'deployment' || !start.event.clean) return failure('not-found', 'the recording no longer holds a clean start')
+  const start = await cleanStart(store)
+  if (!start) return failure('not-found', 'the recording no longer holds a clean start')
   const entries = await store.range(start.seq, opts.to)
   if (!entries.length) return failure('not-found', `the recording starts after ${opts.to}`)
   const sends = new Map(roots(pair(entries)).map(m => [m.seq, m]))

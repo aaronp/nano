@@ -10,7 +10,7 @@ import type { AppDeployment, Application, NanoResult } from '@pritzlaff/nano-cor
 import { failure } from '@pritzlaff/nano-core'
 import type { Entry, MessageStore } from './entry.ts'
 import { memoryStore } from './memory-store.ts'
-import { replay } from './replay.ts'
+import { cleanStart, replay } from './replay.ts'
 
 /** `d` without the pod `host`: not placed, not wired, no tags or view. */
 function without(d: AppDeployment, host: string): AppDeployment {
@@ -30,9 +30,8 @@ function without(d: AppDeployment, host: string): AppDeployment {
  */
 export async function shadowAt(store: MessageStore, t: number, create: (d: AppDeployment) => Promise<NanoResult<Application>>, opts: { host?: string } = {}): Promise<NanoResult<Application>> {
   const host = opts.host ?? 'ui'
-  await store.flush()
-  const [start] = await store.range(undefined, undefined, 1)
-  if (start?.event.type !== 'deployment' || !start.event.clean) return failure('not-found', 'the recording no longer holds a clean start')
+  const start = await cleanStart(store)
+  if (!start) return failure('not-found', 'the recording no longer holds a clean start')
   const all = await store.range(), last = all.findLast(e => e.at <= t)
   if (!last) return failure('not-found', `the recording starts after ${t}`)
   const copy = memoryStore({ max: Infinity }), dropped = new Set<string>()

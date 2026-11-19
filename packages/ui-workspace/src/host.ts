@@ -20,9 +20,10 @@ import { openFrame } from './sandbox/frames.ts'
 import { connected } from './auto-connect.ts'
 import { framesOf } from './sandbox/sandboxed-view.ts'
 import { standIn, type Frame } from './sandbox/stand-in.ts'
+import { recording, type Recording } from './history.ts'
 import { observeCalls, type OpCall } from './observed-calls.ts'
 
-export type Host = {
+export type Host = Recording & {
   readonly app: Application
   readonly registry: Registry
   /** The live deployment with the modules, view selectors and dock layout the host keeps. */
@@ -43,7 +44,6 @@ export type Host = {
 }
 
 const HOST = 'ui', MAIN = 'main'
-
 /** `d` with the host pod taken out of `main` (and `main` dropped once nothing else is in it), still among the pods. Pure. */
 function unplaced(d: AppDeployment): AppDeployment {
   const out = structuredClone(d), main = out.runtimes[MAIN]
@@ -131,7 +131,7 @@ export async function start(): Promise<NanoResult<Host>> {
   }
 
   return success({
-    app, registry, data, apply: next => apply(next),
+    app, registry, data, apply: next => apply(next), ...(await recording(app)),
     defaults: () => ({ ...loaded.views }),
     foreign: coord => !!foreignOrigin(loaded.deployment.modules?.[coord]),
     saved: reconcile => withoutHost(reconcile ? { ...observed.reconciled(), ...kept(loaded.deployment) } : data()),

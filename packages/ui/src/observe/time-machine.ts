@@ -18,7 +18,7 @@ export interface TimeMachine {
 }
 
 const IDLE = 1000
-const SPEEDS = [1 / 30, 1 / 10, 1 / 4, 1 / 2, 1, 2]
+export const SPEEDS = [1 / 30, 1 / 10, 1 / 4, 1 / 2, 1, 2]
 /** `now` is `Date.now`: recordings stamp `at` with it, and live frames put the cursor at `now()`. */
 const raf: Ticker = { now: () => Date.now(), frame: fn => { const id = requestAnimationFrame(fn); return () => cancelAnimationFrame(id) } }
 
