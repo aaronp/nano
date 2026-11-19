@@ -39,11 +39,9 @@ if (host) {
   const h = host, target = { app: h.app, registry: h.registry, get calls() { return h.calls(); } };
   const dock = document.querySelector<WorkspaceDock>('workspace-dock#workspace');
   // An import whose nano.json brings a layout for this dock shows it: through the dock's own saved layout and restore().
-  // A saved template state that templateState() would accept (its own validation, on a throwaway store).
-  const valid = (t: unknown): t is TemplateState => { const m = new Map<string, string>(), k = 'x', st = { getItem: (n: string) => m.get(n) ?? null, setItem: (n: string, v: string) => void m.set(n, v), removeItem: (n: string) => void m.delete(n) }; templateState(st, k).set(t as TemplateState); return !!templateState(st, k).get(); };
   const shown = async (r: Promise<{ ok: boolean }>, before: string) => {
     const done = await r, l = dock && h.data().layout?.[dock.id], key = dock?.getAttribute('storage-key');
-    if (done.ok && l && key && JSON.stringify(l) !== before) { try { localStorage.setItem(key, JSON.stringify(l)); } catch { /* no storage: the layout is not shown */ } dock!.restore(); const t = (l as { template?: unknown }).template; if (valid(t)) dock!.setTemplate(t.template); }
+    if (done.ok && l && key && JSON.stringify(l) !== before) { try { localStorage.setItem(key, JSON.stringify(l)); templateState(localStorage, key).set((l as { template?: TemplateState }).template ?? null); } catch { /* no storage: the layout is not shown */ } dock!.restore(); }
     // A file from another engine: its neutral slots, a panel each, in order.
     const open = done.ok && dock ? slotsToOpen(h.data(), dock.id) : [];
     if (open.length) { dock!.reset(); for (const pod of open) dock!.openPod(pod); }
