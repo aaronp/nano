@@ -135,6 +135,7 @@ for that pod. Two displays of the same data are two pods joined by a subscriptio
 (`LayoutBox` per slot id: `{ x, y, w, h }`, fractions of the page), typed as `LayoutData` in nano-ui
 (`packages/ui/src/layout.ts`); each engine keeps its own state beside them (`layout.workspace` for the workspace's dock).
 A pod not in `slots` runs unseen. See `examples/todo/side-by-side.json`.
+Host capabilities (nano-ui interfaces a host implements): `HostUI` (alert, approve, app bar) and `HostDeploy` (`deploy({ pods, runtimes })` adds them, an existing name `invalid-input`; `undeploy({ runtimes })` removes them and the pods placed nowhere else). The workspace places both in `main` (`ui`, `deploy`); `deploy` applies with `caller: 'deploy'`, and the workspace's deployment policy asks `approve` with a one-line summary, no answer within the call timeout a no.
 Observability (nano-ui): `record`, `timeMachine`, `foldAt`, `shadowAt`, `clockDriver` and `<nano-time-machine>` record the `AppEvent` stream and replay it; `kvStep` in `examples/kv` steps its store.
 
 ## FAQ

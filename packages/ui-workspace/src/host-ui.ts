@@ -2,7 +2,7 @@
  * `workspace.host/ui`: this host's HostUI. `alert` shows a toast, `approve` asks in a `<dialog>` (Approve is true,
  * Deny or closing it false), `setAppBar` sets the title (the page's and the app shell's).
  *
- *   registry.add(hostProvider); Pod.eager(hostUi)   // the pod `ui` in runtime `main`
+ *   Pod.eager(hostUi)   // the pod `ui` in runtime `main`; hostProvider (host-deploy.ts) provides it
  */
 import { Coord, Implementation, provide, success } from '@pritzlaff/nano-core'
 import { HostUI } from '@pritzlaff/nano-ui'
@@ -49,5 +49,3 @@ export const hostUi = Implementation.define(ns.implementationId('ui'), {
     },
   })],
 })
-
-export const hostProvider = ns.provider([hostUi])

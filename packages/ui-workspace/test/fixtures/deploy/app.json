@@ -1,0 +1,3 @@
+{ "pods": { "cluster": { "implementation": "test.deploy/cluster", "eager": false } },
+  "runtimes": { "ops": { "pods": ["cluster"], "subscriptions": [] } },
+  "modules": { "test.deploy": "./cluster.ts" } }

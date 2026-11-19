@@ -1,12 +1,12 @@
 /**
- * The `nano.ui` provider: input, debounce, map and log pods, the real and simulated clocks, the real and seeded random, and the HostUI interface a host implements.
+ * The `nano.ui` provider: input, debounce, map and log pods, the real and simulated clocks, the real and seeded random, and the HostUI and HostDeploy interfaces a host implements.
  *
  *   registry.add(uiProvider)   // then Pod.lazy(log), Pod.eager(debounce, { config: { quietMs: 200 } })
  *   defineViews()              // the default `views`, and nano-pod-view for any pod
  */
 import { uiProvider } from './provider.ts'
 
-export { Any, Clock, ClockControl, Debounce, HostUI, Input, Log, MapIface, Nothing, Random } from './interfaces.ts'
+export { Any, Clock, ClockControl, Debounce, HostDeploy, HostUI, Input, Log, MapIface, Nothing, Random } from './interfaces.ts'
 export { clock } from './pods/clock.ts'
 export { simClock } from './pods/sim-clock.ts'
 export { random, seededRandom } from './pods/random.ts'
