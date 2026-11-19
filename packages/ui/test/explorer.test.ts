@@ -153,14 +153,44 @@ describe('the explorer', () => {
     expect(pane(el).textContent!.replace(/\s+/g, ' ')).toContain('called byapi.save → db.save')
   })
 
-  test('the filters keep the chosen kinds in the chosen namespace, and the way to them', async () => {
-    const { filter, namespaces } = await import('../src/explorer-nodes.ts')
-    const n = (id: string, kind: string | undefined, ns: string, children?: never[]) => ({ id, label: id, ...(kind && { kind }), data: { ns }, ...(children && { children }) })
-    const list = [n('r:a', 'runtime', 'x', [n('p:a', 'pod', 'y'), n('p:b', 'pod', 'x')] as never[]), n('o:q', 'action', 'y')]
-    expect(namespaces(list as never)).toEqual(['x', 'y'])
-    const ids = (l: { id: string; children?: unknown[] }[]): unknown[] => l.map(x => [x.id, ...ids((x.children ?? []) as never)])
-    expect(ids(filter(list as never, new Set(['pod']), 'y'))).toEqual([['r:a', ['p:a']]])
-    expect(ids(filter(list as never, new Set(['operation']), ''))).toEqual([['o:q']])
+  describe('the shared filter', () => {
+    const dot = (el: El, pod: string) => tree(el).shadowRoot.querySelector(`li[data-id="p:main:${pod}"] > .line svg[role="img"]`)?.getAttribute('aria-label')
+    const ids = (el: El) => [...tree(el).shadowRoot.querySelectorAll('li')].map(l => l.dataset.id)
+    const filt = (el: El) => el.shadowRoot!.querySelector('nano-filter') as HTMLElement & { value: any; updateComplete: Promise<unknown> }
+    const set = async (el: El, v: object) => { const f = filt(el); f.dispatchEvent(new CustomEvent('change', { detail: { text: '', kinds: new Set(), namespaces: new Set(), statuses: new Set(), ...v } })); await settle(el) }
+    const reveal = async (el: El) => { (tree(el) as unknown as { reveal(id: string): void }).reveal('p:main:out'); await settle(el) }
+
+    test('pods show a status dot: a lazy pod "not started", an eager one "running" after build', async () => {
+      const el = await mount(await open(slice)); await settle(el); await reveal(el)
+      expect(dot(el, 'out')).toBe('not started')
+      expect(dot(el, 'in')).toBe('running')
+      expect(tree(el).shadowRoot.querySelector('li[data-id="p:main:in"] > .line .kind')).toBeNull()
+    })
+    test('choosing status "running" hides not-started pods', async () => {
+      const el = await mount(await open(slice)); await settle(el)
+      await set(el, { statuses: new Set(['running']) }); await reveal(el).catch(() => {})
+      const got = ids(el)
+      expect(got).toContain('p:main:in'); expect(got).not.toContain('p:main:out')
+    })
+    test('kind chips and namespace chips narrow the tree', async () => {
+      const el = await mount(await open(slice)); await settle(el)
+      await set(el, { kinds: new Set(['pod']) })
+      expect(ids(el).some(i => i!.startsWith('i:') || i!.startsWith('m:'))).toBe(false)
+      expect(ids(el)).toContain('r:main')
+      await set(el, { namespaces: new Set(['nope']) })   // unknown namespace: ignored
+      expect(ids(el)).toContain('r:main')
+      await set(el, { namespaces: new Set(['acme']) })
+      expect(ids(el)).not.toContain('r:main')
+    })
+    test("the selection's details stay when a filter hides it", async () => {
+      const el = await mount(await open(slice)); await settle(el); await reveal(el)
+      ;(tree(el).shadowRoot.querySelector('li[data-id="p:main:out"] > .line') as HTMLElement).click(); await settle(el)
+      const before = el.shadowRoot!.querySelector('.details')!.textContent
+      expect(before).toContain('out')
+      await set(el, { statuses: new Set(['failed']) })
+      expect(ids(el)).not.toContain('p:main:out')
+      expect(el.shadowRoot!.querySelector('.details')!.textContent).toBe(before)
+    })
   })
 
   test('typeName: a label, else a short shape', async () => {
@@ -190,25 +220,25 @@ describe('the explorer', () => {
   })
 
   describe('pod state', () => {
-    const badge = (el: El, pod: string) => tree(el).shadowRoot.querySelector(`li[data-id="p:main:${pod}"] > .line .tag`)?.textContent
-    test('given pods built and changed, then the badge follows built/closed; absent pods lose theirs', async () => {
+    const badge = (el: El, pod: string) => tree(el).shadowRoot.querySelector(`li[data-id="p:main:${pod}"] > .line svg[role="img"]`)?.getAttribute('aria-label')
+    test('given pods built and changed, then the dot follows built/closed; absent pods lose theirs', async () => {
       const o = await open(slice)
       const el = await mount(o)
       await settle(el)
-      expect(badge(el, 'out')).toBeUndefined()
+      expect(badge(el, 'out')).toBe('not started')
       await o.app.call('main', 'out').log(1)
       await o.app.call('main', 'up').map(1)
       await settle(el)
-      expect(badge(el, 'out')).toBe('built')
+      expect(badge(el, 'out')).toBe('running')
       const d = o.app.deployment()
       must(await o.app.apply({ ...d, pods: { ...d.pods, out: Pod.lazy(log, { config: { max: 3 } }), wait: Pod.eager(debounce, { config: { quietMs: 20 } }) } }))
       await settle(el)
-      expect(badge(el, 'out')).toBe('closed')
-      expect(badge(el, 'wait')).toBe('built')
-      expect(badge(el, 'up')).toBe('built')
+      expect(badge(el, 'out')).toBe('stopped')
+      expect(badge(el, 'wait')).toBe('running')
+      expect(badge(el, 'up')).toBe('running')
       must(await o.app.restart('up'))
       await settle(el)
-      expect(badge(el, 'up')).toBe('closed')
+      expect(badge(el, 'up')).toBe('running')   // restarted
       const d2 = o.app.deployment()
       must(await o.app.apply({ pods: { in: d2.pods.in!, wait: d2.pods.wait!, out: d2.pods.out! }, runtimes: { main: { pods: ['in', 'wait', 'out'], subscriptions: [] } } }))
       await settle(el)

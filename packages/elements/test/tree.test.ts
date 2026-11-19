@@ -150,3 +150,15 @@ test('a data key that is not a valid attribute name is skipped, not thrown on', 
   expect(item('a')!.dataset.ok).toBe('z')
   expect(item('a')!.getAttributeNames().filter(n => n.startsWith('data-')).sort()).toEqual(['data-id', 'data-ok'])
 })
+
+test('with icon, a node shows it and hides the kind word (kept as title); without, unchanged', async () => {
+  const { t, $ } = await tree('open-depth="1"')
+  const line = () => $('[data-id="analytics"] > .line')!
+  expect(line().querySelector('.kind')?.textContent).toBe('system')
+  expect(line().querySelector('.icon')).toBeNull()
+  t.icon = (n: TreeNode) => n.kind === 'system' ? html`<i class="ic">*</i>` : undefined; await settle(t)
+  expect(line().querySelector('.icon .ic')).not.toBeNull()
+  expect(line().querySelector('.icon')!.getAttribute('title')).toBe('system')
+  expect(line().querySelector('.kind')).toBeNull()
+  expect($('[data-id="commerce/payments"] > .line .kind')?.textContent).toBe('component')
+})

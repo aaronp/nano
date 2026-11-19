@@ -56,6 +56,28 @@ A dot click on the Ring pauses there but doesn't open the message detail (it liv
 Desk does, without a new nano-ui option if possible.
 ```
 
+### The Desk adopts `<nano-filter>`
+- id: t-05
+- owner:
+- tags: desk, views, filter
+- history:
+  - To Do @ 2026-11-19T20:00:00Z
+
+```md
+The Systems tree uses the shared filter; the Desk's own search and filters should use `<nano-filter>` too.
+```
+
+### The Ring adopts `<nano-filter>`
+- id: t-06
+- owner:
+- tags: ring, views, filter
+- history:
+  - To Do @ 2026-11-19T20:00:00Z
+
+```md
+The Systems tree uses the shared filter; the Ring's own filters should use `<nano-filter>` too.
+```
+
 ## Doing
 
 ## Done

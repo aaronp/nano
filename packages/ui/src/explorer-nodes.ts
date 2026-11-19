@@ -2,10 +2,11 @@
  * The explorer's tree: each runtime with its pods, implementations, interfaces and operations; then every operation
  * (actions, events) with the interface, implementations and pods it belongs to; then the interfaces and implementations.
  * A node shown again away from its primary place has the id `<where>|<primary id>`: `primary(id)` is what it selects.
- * `filter` keeps nodes of the chosen kinds in the chosen namespace (and the way to them).
+ * A pod node carries its `PodStatus` as `data.status` (a pod with no event yet: running if eager, else not started).
  */
 import { html } from 'lit'
 import type { AppDeployment, Registry } from '@pritzlaff/nano-core'
+import type { PodStatus } from './filter/model.ts'
 import type { TreeNode } from '@pritzlaff/nano-elements'
 
 export const primary = (id: string) => id.slice(id.lastIndexOf('|') + 1)
@@ -17,13 +18,13 @@ const alias = (at: string, n: TreeNode): TreeNode => ({ ...n, id: `${at}|${n.id}
 
 type Op = { port: string; iface: string; name: string; kind: string }
 
-export function nodes(d: AppDeployment, registry: Registry, states: Record<string, string>): TreeNode[] {
+export function nodes(d: AppDeployment, registry: Registry, states: Record<string, PodStatus>): TreeNode[] {
   const m = registry.manifest()
   const ops: Op[] = m.interfaces.flatMap(i => i.ops.map(o => ({ port: `${i.coord}/${o.name}`, iface: i.coord, name: o.name, kind: o.kind })))
   const implsOf = (iface: string) => registry.implementationsOf(iface).map(x => x.coord)
   const provides = (impl: string) => registry.implementation(impl)?.provides.map(i => i.coord) ?? []
   const where = (pod: string) => Object.keys(d.runtimes).find(r => d.runtimes[r]!.pods.includes(pod)) ?? ''
-  const podNode = (pod: string): TreeNode => ({ id: `p:${where(pod)}:${pod}`, label: pod, kind: 'pod', badge: states[pod], data: { ns: namespaceOf(d.pods[pod]?.implementation ?? '') } })
+  const podNode = (pod: string): TreeNode => ({ id: `p:${where(pod)}:${pod}`, label: pod, kind: 'pod', data: { ns: namespaceOf(d.pods[pod]?.implementation ?? ''), status: states[pod] ?? (d.pods[pod]?.eager ? 'running' : 'not started') } })
   const ifaceNode = (c: string): TreeNode => ({ id: `i:${c}`, label: c, kind: 'interface', data: { ns: namespaceOf(c) } })
   const implNode = (c: string): TreeNode => ({ id: `m:${c}`, label: c, kind: 'implementation', data: { ns: namespaceOf(c) } })
   const opNode = (o: Op): TreeNode => ({ id: `o:${o.port}`, label: o.port, kind: o.kind, data: { ns: namespaceOf(o.iface) } })
@@ -64,17 +65,6 @@ export function nodes(d: AppDeployment, registry: Registry, states: Record<strin
     ]),
     group('g:interfaces', 'Interfaces', m.interfaces.map(i => ifaceNode(i.coord))),
     group('g:implementations', 'Implementations', m.implementations.map(i => implNode(i.coord)))]
-}
-
-/** `list` with only nodes of `kinds` (`action`/`event` count as `operation`) in namespace `ns` ('' = any), and their
- * ancestors; a kept node keeps its children. Groups are kept when something under them is, and recounted. */
-export function filter(list: TreeNode[], kinds: Set<string>, ns: string): TreeNode[] {
-  const keep = (n: TreeNode) => !!n.kind && kinds.has(n.kind === 'action' || n.kind === 'event' ? 'operation' : n.kind) && (!ns || n.data?.ns === ns)
-  return list.flatMap(n => {
-    if (keep(n)) return [n]
-    const kids = filter(n.children ?? [], kinds, ns)
-    return kids.length ? [{ ...n, children: kids, body: undefined, ...(n.count !== undefined && !n.kind && { count: kids.length }) }] : []
-  })
 }
 
 /** Every namespace in the tree, sorted. */
