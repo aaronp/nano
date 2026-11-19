@@ -1,4 +1,4 @@
-// `<raft-cluster>`: creates and removes whole clusters (name, size 3 or 5, seed) and lists the ones made.
+// `<raft-cluster>`: creates and removes whole clusters (name, size 3 or 5, seed, heartbeat) and lists the ones made.
 import { LitElement, css, html } from 'lit'
 import { base, kit } from '@pritzlaff/nano-elements'
 import type { ViewTarget } from '@pritzlaff/nano-ui'
@@ -39,7 +39,8 @@ class RaftClusterView extends LitElement {
         <label>cluster <input class="input" name="name" placeholder="name" value="example"></label>
         <label>nodes <select class="input" name="size"><option>3</option><option>5</option></select></label>
         <label title="seeds the election timeouts: the same seed replays the same election">seed <input class="input" name="seed" type="number" value="1"></label>
-        <button class="btn" name="create" type="button" @click=${() => void this.run(() => this.pod(t).create({ name: this.field('name'), size: Number(this.field('size')) as 3 | 5, seed: Number(this.field('seed')) }))}>Create</button>
+        <label>heartbeat ms <input class="input" name="heartbeat" type="number" value="1000"></label>
+        <button class="btn" name="create" type="button" @click=${() => void this.run(() => this.pod(t).create({ name: this.field('name'), size: Number(this.field('size')) as 3 | 5, seed: Number(this.field('seed')), heartbeatMs: Number(this.field('heartbeat')) }))}>Create</button>
         <button class="btn" name="remove" type="button" @click=${() => void this.run(() => this.pod(t).remove({ name: this.field('name') }))}>Remove</button></div>
       ${this.error ? html`<p class="alert bad" role="alert">${this.error}</p>` : ''}
       <ul>${this.names.map(n => html`<li>${n}</li>`)}</ul></div>`

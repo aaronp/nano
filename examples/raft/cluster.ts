@@ -10,7 +10,7 @@ import { Coord, Implementation, Schema, failure, provide, success, type NanoResu
 import { HostDeploy } from '@pritzlaff/nano-ui'
 import type { Node } from './core/types.ts'
 import { Cluster } from './interfaces.ts'
-import { clusterDeployment, nodeIds } from './deployment.ts'
+import { clusterDeployment, nodeIds, timingFor } from './deployment.ts'
 
 const ns = Coord.namespace('example.raft')
 
@@ -21,10 +21,10 @@ export const cluster = Implementation.define(ns.implementationId('cluster'), {
   make: (ctx, config?: { timing?: Node['timing'] }) => {
     const sizes = new Map<string, number>()
     return [provide(Cluster, {
-      create: async ({ name, size, seed }) => {
+      create: async ({ name, size, seed, heartbeatMs }) => {
         const host = ctx.one(HostDeploy)
         if (!host.ok) return host
-        const r = await host.value.call.deploy(clusterDeployment(name, size, seed, config?.timing))
+        const r = await host.value.call.deploy(clusterDeployment(name, size, seed, timingFor(heartbeatMs, config?.timing)))
         if (r.ok) sizes.set(name, size)
         return r
       },

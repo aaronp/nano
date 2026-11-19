@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { AppDeployment, Registry, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider from '@pritzlaff/nano-ui'
 import raft from './index.ts'
-import { clusterDeployment } from './deployment.ts'
+import { clusterDeployment, timingFor } from './deployment.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
@@ -44,6 +44,14 @@ describe('clusterDeployment', () => {
     const d = clusterDeployment('example', 3, 1)
     const all = must(AppDeployment.assemble({ pods: { ...doc.pods, ...d.pods }, runtimes: { ...doc.runtimes, ...d.runtimes } }, registry))
     expect(all).toBeDefined()
+  })
+})
+
+describe('timingFor', () => {
+  test('a chosen heartbeat sets elections at 3-6 x; none keeps the fallback', () => {
+    expect(timingFor(200)).toEqual({ heartbeat: 200, electionMin: 600, electionMax: 1200 })
+    expect(timingFor(undefined, { electionMin: 1, electionMax: 2, heartbeat: 3 })).toEqual({ electionMin: 1, electionMax: 2, heartbeat: 3 })
+    expect(timingFor()).toBeUndefined()
   })
 })
 

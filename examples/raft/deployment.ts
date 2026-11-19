@@ -16,6 +16,10 @@ import type { Node } from './core/types.ts'
 /** The `raft` runtime's shared pods (nano.json); named for this example so it imports beside others. */
 const MESSAGING = 'raft-messaging', CLOCK = 'raft-clock'
 
+/** The timing a chosen heartbeat implies: elections 3-6 x it; none given, `fallback` (the cluster's config, else the core's). */
+export const timingFor = (heartbeatMs?: number, fallback?: Node['timing']): Node['timing'] | undefined =>
+  heartbeatMs === undefined ? fallback : { heartbeat: heartbeatMs, electionMin: 3 * heartbeatMs, electionMax: 6 * heartbeatMs }
+
 export const nodeIds = (name: string, size: number) => Array.from({ length: size }, (_, i) => `${name}-${i + 1}`)
 
 export function clusterDeployment(name: string, size: 3 | 5, seed: number, timing?: Node['timing']): { pods: AppDeployment['pods']; runtimes: AppDeployment['runtimes'] } {
