@@ -15,7 +15,7 @@ import raft from './index.ts'
 const ns = Coord.namespace('example.raft.test')
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
-/** Adds pods and runtimes (a name already there is invalid-input); removes runtimes and the pods placed nowhere else. */
+/** Adds pods and runtimes (a name already there is invalid-input); removes runtimes (an unknown one is not-found) and the pods placed nowhere else. */
 function testDeploy(app: () => Application) {
   return Implementation.define(ns.implementationId('deploy'), {
     provides: [HostDeploy],
@@ -32,7 +32,8 @@ function testDeploy(app: () => Application) {
           return apply({ ...d, pods: { ...d.pods, ...pods }, runtimes: { ...d.runtimes, ...runtimes } } as AppDeployment)
         },
         undeploy: async ({ runtimes }) => {
-          const d = structuredClone(app().deployment())
+          const d = structuredClone(app().deployment()), missing = runtimes.find(r => !(r in d.runtimes))
+          if (missing !== undefined) return failure('not-found', `no runtime ${missing}`)   // as the workspace's: nothing removed
           for (const r of runtimes) delete d.runtimes[r]
           const placed = new Set(Object.values(d.runtimes).flatMap(r => r.pods))
           for (const p of Object.keys(d.pods)) if (!placed.has(p)) delete d.pods[p]

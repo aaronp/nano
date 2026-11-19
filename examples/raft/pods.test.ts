@@ -3,10 +3,13 @@
  * cluster `example` of 3 nodes created through it, as the management view does.
  */
 import { afterEach, describe, expect, test } from 'bun:test'
-import { type AppEvent, type Application, type NanoResult } from '@pritzlaff/nano-core'
-import { foldAt, memoryStore, record } from '@pritzlaff/nano-ui'
+import { Application, AppDeployment, Coord, Implementation, Registry, failure, provide, success, type AppEvent, type NanoResult } from '@pritzlaff/nano-core'
+import uiProvider, { foldAt, memoryStore, record } from '@pritzlaff/nano-ui'
 import type { Node, Persistent } from './core/types.ts'
+import { clusterDeployment } from './deployment.ts'
 import { ledgerStep } from './fold.ts'
+import raft from './index.ts'
+import { Ledger } from './interfaces.ts'
 import { openRaft } from './test-host.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
@@ -114,4 +117,29 @@ describe('a cluster of 3 on the sim clock', () => {
     }
     expect(await foldAt(store, -1, ledgerStep('example-1-ledger'))).toBeUndefined()
   })
+
+  test('after the cluster pod restarts (its memory gone), remove still removes the cluster', async () => {
+    await cluster()
+    await app.restart('cluster')
+    expect(must(await app.call('raft', 'cluster').list(null))).toEqual([])
+    must(await app.call('raft', 'cluster').remove({ name: 'example' }))
+    expect(Object.keys(app.deployment().runtimes)).toEqual(['raft'])
+    expect(await app.call('raft', 'cluster').remove({ name: 'example' })).toMatchObject({ ok: false, fail: { type: 'not-found' } })
+  })
+})
+
+test('a failed effect (the ledger refuses a write) still re-arms the node\'s timer: it keeps trying', async () => {
+  let writes = 0
+  const broken = Implementation.define(Coord.namespace('example.raft.test').implementationId('broken-ledger'), { provides: [Ledger], make: () => [provide(Ledger, {
+    read: async () => success({ currentTerm: 0, votedFor: null, log: [] }), write: async () => { writes++; return failure('invalid-input', 'disk full') } })] })
+  const registry = Registry.create()
+  for (const p of [uiProvider, raft, Coord.namespace('example.raft.test').provider([broken])]) must(registry.add(p))
+  const doc = await Bun.file(new URL('./nano.json', import.meta.url)).json() as AppDeployment, c = clusterDeployment('example', 3, 1)
+  const { cluster: _, ...shared } = doc.pods   // a lone node (its peers never deployed), its ledger broken
+  const d: AppDeployment = { pods: { ...shared, ...c.pods, 'example-1-ledger': { implementation: 'example.raft.test/broken-ledger', eager: true } },
+    runtimes: { raft: { ...doc.runtimes.raft!, pods: doc.runtimes.raft!.pods.filter(p => p !== 'cluster') }, 'example-1': c.runtimes['example-1']! } }
+  for (const id of ['example-2', 'example-3']) for (const k of ['raft', 'ledger', 'random']) delete d.pods[`${id}-${k}`]
+  app = must(await Application.create(must(AppDeployment.assemble(d, registry)), {}))
+  await advance(app, 2000)   // several election timeouts: each a candidacy whose persist fails
+  expect(writes).toBeGreaterThan(1)
 })

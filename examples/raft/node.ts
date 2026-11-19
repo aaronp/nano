@@ -66,13 +66,16 @@ export const node = Implementation.define(ns.implementationId('node'), {
       if (short) return short
       const before = JSON.stringify(n), r = step(n, i.value, now.value, draw)
       n = r.node
-      for (const e of r.effects) {
-        const done = e.kind === 'persist' ? await ledger.call.write(e.p)
-          : e.kind === 'send' ? await messaging.call.send({ to: e.to, message: { ...e.rpc, from: id } }) : success(null)
-        if (!done.ok) return done
+      try {
+        for (const e of r.effects) {
+          const done = e.kind === 'persist' ? await ledger.call.write(e.p)
+            : e.kind === 'send' ? await messaging.call.send({ to: e.to, message: { ...e.rpc, from: id } }) : success(null)
+          if (!done.ok) return done
+        }
+      } finally {   // a failed effect still leaves the node published and on its timer
+        if (JSON.stringify(n) !== before) await ctx.publish(RaftNode.ops.changed, n)
+        await arm(now.value)
       }
-      if (JSON.stringify(n) !== before) await ctx.publish(RaftNode.ops.changed, n)
-      await arm(now.value)
       const refused = r.effects.find(e => e.kind === 'refused')
       return refused ? failure('invalid-input', refused.leader ? `${refused.reason}: the leader is ${refused.leader}` : refused.reason) : success(null)
     })

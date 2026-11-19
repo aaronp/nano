@@ -1,6 +1,7 @@
 /** Requests, refusals, stops, resumes and restarts on the seeded simulator (see `scenarios` in sim.ts). */
 import { expect, test } from 'bun:test'
 import { leaders, scenarios, type Frame, type Run } from './sim.ts'
+import { initial, step } from './step.ts'
 import type { Node } from './types.ts'
 
 const runs = scenarios()
@@ -79,4 +80,15 @@ test('restart keeps term, vote and log', () => {
   expect(values(after)).toEqual(['r'])
   expect([after.role, after.commitIndex, after.leader]).toEqual(['follower', 0, null])
   expect(end(run).nodes.n1.commitIndex).toBe(1)
+})
+
+test('Figure 8: a leader commits earlier terms\' entries only by matching one of its own term on a majority', () => {
+  const log = [{ index: 1, term: 1, value: 'a', at: 0 }, { index: 2, term: 2, value: 'b', at: 0 }]
+  let n: Node = { ...initial('n1', ['n2', 'n3'], { currentTerm: 3, votedFor: 'n1', log }, 0, () => 0), role: 'leader' }
+  const reply = (match: number) => step(n, { kind: 'receive', from: 'n2', rpc: { kind: 'append-reply', term: 3, success: true, match } }, 0, () => 0).node
+  n = reply(2)
+  expect(n.commitIndex).toBe(0)   // n1 and n2 hold entries 1–2, a majority, but from terms 1 and 2
+  n = step(n, { kind: 'request', value: 'c' }, 0, () => 0).node
+  n = reply(3)
+  expect(n.commitIndex).toBe(3)   // entry 3 (term 3) on a majority commits it and everything before
 })
