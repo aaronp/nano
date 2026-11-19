@@ -32,7 +32,26 @@ export const swap = <T>(order: readonly T[], i: number, j: number): T[] => {
   return out;
 };
 
-export type TemplateState = { template: TemplateId; order: PanelState[]; dock: unknown };
+/** A template's positions (`null` = empty) and the panels parked off it. */
+export type TemplateState = { template: TemplateId; order: (PanelState | null)[]; parked: PanelState[]; dock: unknown };
+
+/** The first `positions` panels in order, padded with empty positions; the rest parked. */
+export const place = (panels: readonly PanelState[], positions: number): { order: (PanelState | null)[]; parked: PanelState[] } => ({
+  order: Array.from({ length: positions }, (_, i) => panels[i] ?? null),
+  parked: panels.slice(positions),
+});
+
+/** `s` in template `to`: placed panels (reading order) then the parked ones, through `place`. */
+export const relayout = (s: TemplateState, to: TemplateId): TemplateState =>
+  ({ ...s, template: to, ...place([...s.order.filter((p) => p !== null), ...s.parked], TEMPLATES.find((t) => t.id === to)?.positions ?? 0) });
+
+/** The smallest template holding `count` panels; ties prefer `current`, else the first in TEMPLATES; none fits: `dock`. */
+export const bringBackTo = (count: number, current: TemplateId): TemplateId => {
+  const fit = TEMPLATES.filter((t) => t.positions != null && t.positions >= count);
+  const min = Math.min(...fit.map((t) => t.positions!));
+  const best = fit.filter((t) => t.positions === min);
+  return (best.find((t) => t.id === current) ?? best[0])?.id ?? 'dock';
+};
 
 /** The remembered template for one dock (by its storage key); missing, junk, `dock` or a wrong panel count reads as null. */
 export const templateState = (storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>, key: string) => ({
@@ -40,7 +59,7 @@ export const templateState = (storage: Pick<Storage, 'getItem' | 'setItem' | 're
     try {
       const s = JSON.parse(storage.getItem(`${key}.template`) ?? 'null') as TemplateState | null;
       const t = TEMPLATES.find((x) => x.id === s?.template);
-      return s && t?.positions != null && Array.isArray(s.order) && s.order.length === t.positions ? s : null;
+      return s && t?.positions != null && Array.isArray(s.order) && s.order.length === t.positions ? { ...s, parked: s.parked ?? [] } : null;
     } catch { return null; }
   },
   set: (s: TemplateState | null): void => {

@@ -84,7 +84,7 @@ export class WorkspaceDock extends HTMLElement {
     const saved = this.readSaved();
     this.load(saved ?? initial(this, this.defs));
     if (saved) this.say('Opened your saved layout.');
-    const t = templateState(localStorage, this.storageKey).get(); if (t?.order.every((s) => this.defs.has(s.widget))) this.show(t);
+    const t = templateState(localStorage, this.storageKey).get(); if (t?.order.every((s) => !s || this.defs.has(s.widget))) this.show(t);
   }
 
   disconnectedCallback() {
@@ -103,7 +103,7 @@ export class WorkspaceDock extends HTMLElement {
   addWidget(id: string, name?: string) {
     const def = this.defs.get(id);
     if (!def) throw new Error(`<workspace-dock> has no palette widget "${id}"`);
-    const at = this.tpl?.state.order.findIndex((s) => name && s.name === name) ?? -1;
+    const at = this.tpl?.state.order.findIndex((s) => name && s?.name === name) ?? -1;
     if (at >= 0) return this.querySelector<HTMLElement>(`.dock-template .tpl-pos[data-area="${TEMPLATES.find((x) => x.id === this.template)!.areas[at]}"] .dock-panel`)?.focus();
     this.setTemplate('dock');
     split(this.requireLayout(), name ? { widget: def.id, name } : { widget: def.id }, name ?? def.title);
@@ -130,11 +130,11 @@ export class WorkspaceDock extends HTMLElement {
    * the panel count or an implementation's pod is still being made. */
   setTemplate(id: TemplateId): boolean {
     if (id === 'dock') { if (this.tpl) this.load(LayoutConfig.fromResolved(this.kept)); return true; }
-    const order = this.tpl?.state.order ?? panelsInOrder(this.kept.root), t = TEMPLATES.find((x) => x.id === id)!;
+    const order = (this.tpl?.state.order ?? panelsInOrder(this.kept.root)).filter((s) => s !== null), t = TEMPLATES.find((x) => x.id === id)!;
     const why = !enabledFor(order.length).has(id) ? `${t.title} needs ${t.positions} panels; this page has ${order.length}.`
       : order.some((s) => this.defs.get(s.widget)?.template.dataset['implementation'] && !s.name) ? 'Wait until every new pod is made.' : undefined;
     if (why) { this.say(why); return false; }
-    this.show({ template: id, order, dock: this.kept });
+    this.show({ template: id, order, parked: [], dock: this.kept });
     return true;
   }
 
@@ -185,7 +185,7 @@ export class WorkspaceDock extends HTMLElement {
     if (this.tpl) this.tpl.dispose(); else { this.requireLayout().clearComponentFocus(); this.requireLayout().clear(); }
     const mount = (el: HTMLElement, st: PanelState, item: ComponentItem) => { mountPanel(item.container, st, this.mounting); for (const type of ['pointerdown', 'focusin']) el.addEventListener(type, () => this.reportFocus(item)); };
     const remember = () => templateState(localStorage, this.storageKey).set(s), title = (p: PanelState) => (p.widget === 'pod' ? p.name : this.defs.get(p.widget)?.title) ?? p.widget;
-    this.tpl = { state: s, dispose: renderTemplate(this.querySelector<HTMLElement>(':scope > .dock-area')!, s.template, s.order, title, mount, (i, j) => { s.order = swap(s.order, i, j); remember(); }) };
+    this.tpl = { state: s, dispose: renderTemplate(this.querySelector<HTMLElement>(':scope > .dock-area')!, s.template, s.order.filter((p) => p !== null), title, mount, (i, j) => { s.order = swap(s.order, i, j); remember(); }) };
     remember(); this.changed();
   }
 
@@ -215,8 +215,8 @@ export class WorkspaceDock extends HTMLElement {
   restore() {
     const saved = this.readSaved(); if (!saved) return this.say('No saved layout yet.');
     const t = templateState(localStorage, this.storageKey).get();   // load() clears it; re-entered, rebased, if its panels are the saved ones
-    this.load(saved); this.say('Layout restored.'); const names = (o: PanelState[]) => JSON.stringify(o.map((s) => s.name ?? s.widget).sort());
-    if (t?.order.every((s) => this.defs.has(s.widget)) && names(t.order) === names(panelsInOrder(this.kept.root))) this.show({ ...t, dock: this.kept });
+    this.load(saved); this.say('Layout restored.'); const names = (o: (PanelState | null)[]) => JSON.stringify(o.filter((s) => s !== null).map((s) => s.name ?? s.widget).sort());
+    if (t?.order.every((s) => !s || this.defs.has(s.widget)) && names(t.order) === names(panelsInOrder(this.kept.root))) this.show({ ...t, dock: this.kept });
   }
 
   reset() { this.load(initial(this, this.defs)); this.say('Back to the starting layout.'); }
