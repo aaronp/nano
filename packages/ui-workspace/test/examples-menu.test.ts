@@ -1,22 +1,34 @@
-// File › Examples › Raft: listed, and its nano.json places cluster, messaging and clock in runtime raft, cluster auto-connected to deploy.
-import { expect, test } from 'bun:test'
-import { Registry, type AppDeployment } from '@pritzlaff/nano-core'
-import uiProvider from '@pritzlaff/nano-ui'
-import raft from '../../../examples/raft/index.ts'
-import { EXAMPLES } from '../src/components/file-menu.ts'
-import { autoConnect } from '../src/auto-connect.ts'
-import { deployPod, hostProvider } from '../src/host-deploy.ts'
+// File › Examples › Raft: listed, and importing examples/raft/nano.json (the menu's path: host.importUrl) places cluster, messaging and clock in runtime raft, cluster auto-connected to deploy.
+import { GlobalRegistrator } from '@happy-dom/global-registrator'
+const page = new URL('../../../', import.meta.url).href
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: page })
+import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { plugin } from 'bun'
 
-test('File › Examples lists Raft, and its nano.json places cluster, messaging and clock in runtime raft, cluster auto-connected to deploy', async () => {
+const { EXAMPLES } = await import('../src/components/file-menu.ts')
+const { start } = await import('../src/host.ts')
+
+// The served site maps the built example's ./index.js; here it is the example's source (one module).
+const index = new URL('../../../examples/raft/index.ts', import.meta.url).pathname
+plugin({ name: 'served-raft', setup(b) {
+  b.onResolve({ filter: /examples\/raft\/index\.js$/ }, () => ({ path: 'raft', namespace: 'served-raft' }))
+  b.onLoad({ filter: /.*/, namespace: 'served-raft' }, () => ({ contents: `export * from '${index}'; export { default } from '${index}'`, loader: 'ts' }))
+} })
+// happy-dom's fetch refuses file: URLs
+const domFetch = globalThis.fetch
+beforeAll(() => { globalThis.fetch = (async (u: string) => { const f = Bun.file(new URL(u)), ok = await f.exists(); return { ok, status: ok ? 200 : 404, json: () => f.json() } }) as never })
+afterAll(() => { globalThis.fetch = domFetch })
+
+test('File › Examples lists Raft, and importing its nano.json places cluster, messaging and clock in runtime raft, cluster auto-connected to deploy', async () => {
   expect(EXAMPLES.map(([n]) => n)).toContain('raft')
-  const file: AppDeployment = await Bun.file(new URL('../../../examples/raft/nano.json', import.meta.url)).json()
-  expect(file.runtimes['raft']!.pods).toEqual(expect.arrayContaining(['cluster', 'raft-messaging', 'raft-clock']))
-  expect((file.layout as { slots: { pod: string }[] }).slots.map(s => s.pod)).toContain('cluster')
-  expect((file.layout as { ring: { show: string[] } }).ring.show).toEqual(['example.raft/node', 'example.raft/messaging'])
-  const registry = Registry.create()
-  for (const p of [uiProvider, hostProvider(() => { throw new Error('unused') }), raft]) registry.add(p)
-  const d: AppDeployment = { ...file, pods: { deploy: deployPod, ...file.pods }, runtimes: { ...file.runtimes, main: { pods: ['deploy'], subscriptions: [] } } }
-  const { deployment, notes } = autoConnect(d, registry, ['cluster'])
-  expect(notes).toEqual([expect.stringContaining('connected cluster → deploy')])
-  expect(deployment.runtimes['main']!.subscriptions).toContainEqual({ kind: 'call', from: 'cluster', to: 'deploy' })
+  const r = await start()
+  if (!r.ok) throw new Error(r.fail.reason)
+  const host = r.value
+  expect(await host.importUrl(new URL('../../../examples/raft/nano.json', import.meta.url).href)).toMatchObject({ ok: true })
+  const d = host.data()
+  expect(d.runtimes['raft']!.pods).toEqual(['cluster', 'raft-messaging', 'raft-clock', 'raft-random'])
+  expect(d.runtimes['main']!.subscriptions).toContainEqual({ kind: 'call', from: 'cluster', to: 'deploy' })
+  const layout = d.layout as unknown as { slots: { pod: string }[]; ring: { show: string[] } }
+  expect(layout.slots.map(s => s.pod)).toContain('cluster')
+  expect(layout.ring.show).toEqual(['example.raft/node', 'example.raft/messaging'])
 })
