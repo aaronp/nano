@@ -28,6 +28,8 @@ const Message = Schema.define(Type.Union([
 ]), 'RaftMessage')
 const Envelope = Schema.define(Type.Object({ to: Type.String(), message: Message }), 'Envelope')
 
+/** Election and heartbeat timing, in ms. */
+export const Timing = Type.Object({ electionMin: Int, electionMax: Int, heartbeat: Int })
 const Peer = Type.Object({ next: Int, match: Int, granted: Type.Boolean(), rpcDue: Type.Number(), heartbeatDue: Type.Number() })
 /** The core's `Node`, as the node publishes it. */
 const NodeStatus = Schema.define(Type.Object({
@@ -35,7 +37,7 @@ const NodeStatus = Schema.define(Type.Object({
   role: Type.Union([Type.Literal('follower'), Type.Literal('candidate'), Type.Literal('leader')]),
   commitIndex: Int, leader: Type.Union([Type.String(), Type.Null()]), electionAlarm: Type.Number(), stopped: Type.Boolean(),
   progress: Type.Record(Type.String(), Peer),
-  timing: Type.Object({ electionMin: Int, electionMax: Int, heartbeat: Int }),
+  timing: Timing,
 }), 'NodeStatus')
 
 const ClusterSpec = Schema.define(Type.Object({

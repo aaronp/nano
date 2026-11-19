@@ -14,7 +14,7 @@
 import { Type } from 'typebox'
 import { Coord, Implementation, Schema, failure, provide, success, type NanoResult } from '@pritzlaff/nano-core'
 import { Clock, Random } from '@pritzlaff/nano-ui'
-import { Ledger, Messaging, RaftNode } from './interfaces.ts'
+import { Ledger, Messaging, RaftNode, Timing } from './interfaces.ts'
 import { initial, step } from './core/step.ts'
 import { lastIndex, type Input, type Node } from './core/types.ts'
 
@@ -32,7 +32,7 @@ function nextDue(n: Node): number | undefined {
 
 export const node = Implementation.define(ns.implementationId('node'), {
   provides: [RaftNode],
-  config: Schema.define(Type.Object({ id: Type.String(), peers: Type.Array(Type.String()), timing: Type.Optional(Type.Object({ electionMin: Type.Number(), electionMax: Type.Number(), heartbeat: Type.Number() })) }), 'NodeConfig'),
+  config: Schema.define(Type.Object({ id: Type.String(), peers: Type.Array(Type.String()), timing: Type.Optional(Timing) }), 'NodeConfig'),
   dependencies: { messaging: Messaging, ledger: Ledger, clock: Clock, random: Random },
   make: (ctx, { id, peers, timing }: { id: string; peers: string[]; timing?: Node['timing'] }) => {
     const wired = <T>(r: NanoResult<T>, what: string): T => { if (!r.ok) throw new Error(`node ${id} needs ${what}: ${r.fail.reason}`); return r.value }

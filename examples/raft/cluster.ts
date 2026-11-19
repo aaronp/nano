@@ -9,14 +9,14 @@ import { Type } from 'typebox'
 import { Coord, Implementation, Schema, failure, provide, success, type NanoResult } from '@pritzlaff/nano-core'
 import { HostDeploy } from '@pritzlaff/nano-ui'
 import type { Node } from './core/types.ts'
-import { Cluster } from './interfaces.ts'
+import { Cluster, Timing } from './interfaces.ts'
 import { clusterDeployment, nodeIds, timingFor } from './deployment.ts'
 
 const ns = Coord.namespace('example.raft')
 
 export const cluster = Implementation.define(ns.implementationId('cluster'), {
   provides: [Cluster],
-  config: Schema.define(Type.Union([Type.Object({ timing: Type.Optional(Type.Object({ electionMin: Type.Number(), electionMax: Type.Number(), heartbeat: Type.Number() })) }), Type.Undefined()]), 'ClusterConfig'),
+  config: Schema.define(Type.Union([Type.Object({ timing: Type.Optional(Timing) }), Type.Undefined()]), 'ClusterConfig'),
   dependencies: { deploy: HostDeploy },
   make: (ctx, config?: { timing?: Node['timing'] }) => {
     const sizes = new Map<string, number>()
