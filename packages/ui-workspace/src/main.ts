@@ -10,6 +10,7 @@ import './boot-theme.ts';
 import { host } from './boot-host.ts';   // before the elements are defined: the docks' palettes list what the host can make
 import { toast } from '@pritzlaff/nano-elements';
 import { clockDriver, timeMachine, type NanoTimeMachine } from '@pritzlaff/nano-ui';
+import './boot-workspace-pages.ts';   // before the shell: it reads its routes as it starts
 import './components/app-shell.ts';
 import './components/component-drawer.ts';
 import { openImportDialog, setImportHost } from './components/import-dialog.ts';
@@ -23,7 +24,6 @@ import './widgets/notes-panel.ts';
 import './components/workspace-dock.ts';
 import { bootAppBar } from './boot-app-bar.ts';   // after the shell (its bus) and the dock: the app bar follows the page and panel focus
 import { defineSettings, type SettingsView } from './components/settings-view.ts';
-import { showStatus } from './lib/status.ts';
 import type { WorkspaceDock } from './components/workspace-dock.ts';
 import { defineWires, type Wires } from './wires/index.ts';
 import { defineDesk, type Desk } from './desk/index.ts';
@@ -95,9 +95,6 @@ if (host) {
     const { name } = (e as CustomEvent<{ kind: string; name: string }>).detail;
     ((e.target as Element).querySelector<WorkspaceDock>('workspace-dock') ?? document.querySelector<WorkspaceDock>('workspace-dock'))?.openPod(name);
   });
-  // BACKLOG(3): Save as workspace… and + (new workspace) made saved workspaces, each its own system and route.
-  document.addEventListener('dock:save-as', () => showStatus(document, 'Saved workspaces are not available yet.'));
-  document.querySelector('[data-new-workspace]')?.addEventListener('click', () => showStatus(document, 'Saved workspaces are not available yet.'));
 
   // The Desk page: <c-desk> over the app, and a link to the last workspace's Connections.
   defineDesk();

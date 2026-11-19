@@ -18,6 +18,9 @@ a[slot='nav'][data-sub] svg { width: 16px; height: 16px; }
 .nav-row [data-toggle-drawer] { display: grid; place-items: center; padding: 0; }
 .nav-row [data-toggle-drawer] svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .nav-row [data-toggle-drawer][aria-pressed='true'] { background: var(--accent-soft); }
+/* A workspace's Duplicate and Edit: shown while the row is hovered or holds focus (they stay focusable). */
+.nav-row [data-duplicate], .nav-row [data-edit] { opacity: 0; font-size: 14px; }
+.nav-row:hover :is([data-duplicate], [data-edit]), .nav-row:focus-within :is([data-duplicate], [data-edit]) { opacity: 1; }
 /* The drawer as an icon rail: only the row's link icon shows. */
 app-shell[collapsed]:not([narrow]) .nav-row button { display: none; }
 html[data-drawers-hidden] component-drawer { display: none; }
