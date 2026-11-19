@@ -321,3 +321,38 @@ No current example calls HostUI from a pod that the shadow rebuilds.
 ## Solution: stub — Provide a recording-backed HostUI stub in the shadow
 
 ## Decision
+
+---
+id: ADR-0015
+title: Pods create runtimes through a HostDeploy interface
+status: accepted
+date: 2026-11-19
+revisit: 
+tags: deployment, raft, host
+decision: host-deploy
+---
+
+## Goal
+The Raft example's management pod creates an N-node cluster: runtimes `<name>-1..N`, each holding the shared
+messaging pod, a `raft-api` pod and a `ledger` pod. A pod changing the app's deployment is new and powerful.
+
+## People
+- Project owner — decider
+- Claude — author
+
+## Solution: host-deploy — A new HostDeploy interface on the host's ui pod
+Beside `HostUI`. One op applies a deployment edit built with the existing `AppDeployment.edit` (`place`, `create`,
+`pipe`). The host asks the user first through `HostUI.approve`.
+
+Pros:
+- Deployment change stays separate from UI concerns
+- Reuses AppDeployment.edit and apply; the apply is recorded, so the time machine covers it
+
+Cons:
+- A new nano.ui interface
+
+## Solution: hostui — A deploy op on HostUI
+Smaller, but mixes deployment changes into an interface about the UI.
+
+## Decision
+HostDeploy. The application's deployment policy (who may change the deployment) is to be revisited: see the board.

@@ -1,4 +1,4 @@
-.PHONY: test test-ui install ui dev serve-template serve-examples link-templates packages smoke publish template-check template-export
+.PHONY: adr agile test test-ui install ui dev serve-template serve-examples link-templates packages smoke publish template-check template-export
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
@@ -69,3 +69,11 @@ template-check:
 # Mirror templates/nano-template to github.com/aaronp/nano-template (main) as one commit, with your git credentials.
 template-export:
 	scripts/template-export.sh https://github.com/aaronp/nano-template.git
+
+# The decision ledger (adr/decisions.md) and the task board (docs/board/board.md), each served in the browser.
+# Edits made in the viewer are not written back: download and save over the file, then commit it.
+adr:
+	bun run adr
+
+agile:
+	bun run agile
