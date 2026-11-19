@@ -9,6 +9,7 @@
  *   await pods.get('db')                 // NanoResult<{ implementation, handlers by port }>: built now, or the build already made or under way
  *   await pods.forget('db', 'restarted') // its listeners have run; the next get builds a fresh closure; calls in flight keep the old one
  *   await pods.close()                   // every build closed (`closed`); every later get is not-found
+ *   pods.status('db')                    // 'running', 'not started', 'stopped' or 'failed'
  */
 import type { NanoContext } from '../context.ts'
 import type { Implementation } from '../implementation.ts'
@@ -21,6 +22,8 @@ import { attempt, within, type Live } from './messages.ts'
 type Made = ReturnType<Live['instance']>
 type OnClose = Parameters<NanoContext['addOnCloseListener']>[0]
 type Reason = Parameters<OnClose>[0]['reason']
+/** A placed pod's lifecycle now: built, never built (or forgotten since), closed with the application, or its last build failed. */
+export type PodStatus = 'running' | 'not started' | 'stopped' | 'failed'
 
 /**
  * One build's close listeners. `close` runs them once, in the order added, each within the timeout, a throw or a
@@ -54,6 +57,8 @@ async function implementationOf(live: Live, name: string, pod: Pod): Promise<Nan
 export function instances(live: Live) {
   const made = new Map<string, { build: Made; close: (why: Reason) => Promise<void> }>()
   const closing = new Map<string, Promise<void>>()
+  /** The outcome of each name's current build; none: not built since placed or forgotten. */
+  const outcome = new Map<string, 'running' | 'failed'>()
   let closed = false
 
   async function build(name: string, c: ReturnType<typeof closer>): Made {
@@ -77,6 +82,7 @@ export function instances(live: Live) {
 
   async function forget(name: string, why: Reason) {
     const e = made.get(name)
+    outcome.delete(name)
     if (!e) return
     made.delete(name)
     // Chained: a build waits for every close of its name still settling, not only the latest.
@@ -93,11 +99,16 @@ export function instances(live: Live) {
       if (!e) {
         const c = closer(live, name), mine = { build: build(name, c), close: c.close }
         made.set(name, (e = mine))
-        void mine.build.then(r => { if (!r.ok && made.get(name) === mine) made.delete(name) })
+        void mine.build.then(r => {
+          if (made.get(name) !== mine) return
+          outcome.set(name, r.ok ? 'running' : 'failed')
+          if (!r.ok) made.delete(name)
+        })
       }
       return e.build
     },
     forget,
+    status: (name: string): PodStatus => closed ? 'stopped' : outcome.get(name) ?? 'not started',
     async close() {
       closed = true
       const builds = [...made.values()].map(e => e.build)

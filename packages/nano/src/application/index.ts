@@ -30,6 +30,7 @@ import { stream, type AppEvent } from './stream.ts'
 
 export type { AppEvent } from './stream.ts'
 export type { Resolution } from './resolve.ts'
+export type { PodStatus } from './instances.ts'
 export { lookup, type Lookup } from './lookup.ts'
 
 export type Application = {
@@ -109,9 +110,9 @@ async function create(runtimes: Record<string, Runtime>, opts: Opts = {}): Promi
     return success(undefined)
   }
 
-  const one = runtimeView(live)
+  const one = runtimeView(live, pods.status)
   const app: Application = {
-    runtime: id => runtimeView(live, id),
+    runtime: id => runtimeView(live, pods.status, id),
     resolve: (api, where) => one.resolve(api, where),
     get: (api, where) => one.get(api, where),
     subscribe: one.subscribe,
