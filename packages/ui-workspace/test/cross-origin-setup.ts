@@ -2,7 +2,8 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 import { Type } from 'typebox'
 import { Coord, Application, AppDeployment, Registry, Schema, Interface, Implementation, Op, provide, success, type Pod } from '@pritzlaff/nano-core'
-import { importApp, isolated, foreignOrigin, remembered, type Foreign, type Loaded } from '../src/import.ts'
+import { importApp, foreignOrigin, type Foreign, type Loaded } from '../src/import.ts'
+import { isolated, remembered } from '../src/import-gate.ts'
 import { described, probe } from '../src/described.ts'
 import { describeProvider } from '../src/sandbox/protocol.ts'
 

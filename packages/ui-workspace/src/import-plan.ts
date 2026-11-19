@@ -5,7 +5,7 @@
  *
  *   trusted(renameRuntimes(d, { main: suggestedName(d, 'main') }), 'sandboxed')
  */
-import type { AppDeployment, Pod, Subscription } from '@pritzlaff/nano-core'
+import { failure, success, type AppDeployment, type NanoResult, type Pod, type Subscription } from '@pritzlaff/nano-core'
 import type { LayoutData } from '@pritzlaff/nano-ui'
 
 export type Trust = 'sandboxed' | 'trusted'
@@ -96,4 +96,38 @@ export function selectPods(d: AppDeployment, keep: Set<string>): { deployment: A
   const slots = (d.layout as LayoutData | undefined)?.slots
   if (Array.isArray(slots)) out.layout = { ...d.layout, slots: slots.filter(s => keep.has(s.pod)) }
   return { deployment: out, warnings }
+}
+
+const clash = (what: string, name: string) => failure('invalid-input', `clash: ${what} ${name} is already loaded`)
+
+/** `current` and `incoming` unioned; a pod or provider name already present is a clash, a runtime already present gains
+ * the incoming pods and subscriptions (its own policy kept). Pure. */
+export function merge(current: AppDeployment, incoming: AppDeployment): NanoResult<AppDeployment> {
+  for (const k of Object.keys(incoming.pods)) if (Object.hasOwn(current.pods, k)) return clash('pod', k)
+  const modules: Record<string, string> = { ...current.modules }
+  for (const [k, url] of Object.entries(incoming.modules ?? {})) {
+    if (Object.hasOwn(modules, k) && modules[k] !== url) return clash('provider', k)
+    modules[k] = url
+  }
+  const frames: Record<string, string> = { ...current.frames }
+  for (const [k, url] of Object.entries(incoming.frames ?? {})) {
+    if (Object.hasOwn(frames, k) && frames[k] !== url) return clash('frame', k)
+    frames[k] = url
+  }
+  // Merging into a runtime that is already there: two policies would silently lose one's rules, so that is refused.
+  for (const [k, r] of Object.entries(incoming.runtimes))
+    if (r.policy && Object.hasOwn(current.runtimes, k) && current.runtimes[k]!.policy)
+      return failure('invalid-input', `runtime ${k} already has a policy; import into another runtime`)
+  return success({
+    pods: { ...current.pods, ...incoming.pods },
+    runtimes: { ...current.runtimes, ...Object.fromEntries(Object.entries(incoming.runtimes).map(([k, r]) => {
+      const was = Object.hasOwn(current.runtimes, k) ? current.runtimes[k] : undefined
+      return [k, was ? { ...was, pods: [...was.pods, ...r.pods], subscriptions: [...was.subscriptions, ...r.subscriptions], ...((was.policy ?? r.policy) && { policy: was.policy ?? r.policy }) } : r]
+    })) },
+    tags: { ...current.tags, ...incoming.tags },
+    modules,
+    ...(Object.keys(frames).length && { frames }),
+    views: { ...current.views, ...incoming.views },
+    ...((incoming.layout ?? current.layout) && { layout: incoming.layout ?? current.layout }),   // the newest arrangement
+  })
 }

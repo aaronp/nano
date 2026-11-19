@@ -1,7 +1,8 @@
 // Import from another origin: confirmed once, probed, then loaded once confirmed, and a pod that would run it asks `approve` first.
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { AppDeployment, failure, success } from '@pritzlaff/nano-core'
-import { importApp, isolated, foreignOrigin } from '../src/import.ts'
+import { importApp, foreignOrigin } from '../src/import.ts'
+import { isolated } from '../src/import-gate.ts'
 import { probe } from '../src/described.ts'
 import { renameRuntimes, trusted } from '../src/import-plan.ts'
 import { real, app, docs, installFetch, restoreFetch, empty, fakes, running } from './cross-origin-setup.ts'

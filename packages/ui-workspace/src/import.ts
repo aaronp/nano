@@ -6,19 +6,11 @@
  *
  *   const r = await importApp('/apps/slice/nano.json', loaded, { load: u => import(u), probe, confirm, approve })
  */
-import {
-  failure,
-  Provider,
-  success,
-  type AppDeployment,
-  type Implementation,
-  type NanoResult,
-  type Pod,
-  type Registry,
-} from '@pritzlaff/nano-core'
+import { failure, success, type AppDeployment, type NanoResult, type Provider, type Registry } from '@pritzlaff/nano-core'
 import type { ViewMap } from '@pritzlaff/nano-ui'
 import { newerCore, type Built } from './built.ts'
-import { podsOf } from './import-plan.ts'
+import { gated, isProvider } from './import-gate.ts'
+import { merge, podsOf } from './import-plan.ts'
 
 export type Loaded = { deployment: AppDeployment; registry: Registry; views: ViewMap }
 /** A provider from another origin, as the confirm prompt lists it. `fullAccess`: the pod runs with this page's access. */
@@ -34,41 +26,6 @@ type Deps = {
   warn?(text: string): void
 }
 
-const clash = (what: string, name: string) => failure('invalid-input', `clash: ${what} ${name} is already loaded`)
-
-/** `current` and `incoming` unioned; a pod or provider name already present is a clash, a runtime already present gains
- * the incoming pods and subscriptions (its own policy kept). Pure. */
-export function merge(current: AppDeployment, incoming: AppDeployment): NanoResult<AppDeployment> {
-  for (const k of Object.keys(incoming.pods)) if (Object.hasOwn(current.pods, k)) return clash('pod', k)
-  const modules: Record<string, string> = { ...current.modules }
-  for (const [k, url] of Object.entries(incoming.modules ?? {})) {
-    if (Object.hasOwn(modules, k) && modules[k] !== url) return clash('provider', k)
-    modules[k] = url
-  }
-  const frames: Record<string, string> = { ...current.frames }
-  for (const [k, url] of Object.entries(incoming.frames ?? {})) {
-    if (Object.hasOwn(frames, k) && frames[k] !== url) return clash('frame', k)
-    frames[k] = url
-  }
-  // Merging into a runtime that is already there: two policies would silently lose one's rules, so that is refused.
-  for (const [k, r] of Object.entries(incoming.runtimes))
-    if (r.policy && Object.hasOwn(current.runtimes, k) && current.runtimes[k]!.policy)
-      return failure('invalid-input', `runtime ${k} already has a policy; import into another runtime`)
-  return success({
-    pods: { ...current.pods, ...incoming.pods },
-    runtimes: { ...current.runtimes, ...Object.fromEntries(Object.entries(incoming.runtimes).map(([k, r]) => {
-      const was = Object.hasOwn(current.runtimes, k) ? current.runtimes[k] : undefined
-      return [k, was ? { ...was, pods: [...was.pods, ...r.pods], subscriptions: [...was.subscriptions, ...r.subscriptions], ...((was.policy ?? r.policy) && { policy: was.policy ?? r.policy }) } : r]
-    })) },
-    tags: { ...current.tags, ...incoming.tags },
-    modules,
-    ...(Object.keys(frames).length && { frames }),
-    views: { ...current.views, ...incoming.views },
-    ...((incoming.layout ?? current.layout) && { layout: incoming.layout ?? current.layout }),   // the newest arrangement
-  })
-}
-
-
 /** This page's origin on http(s); else none (a file: page, in tests). */
 const page = () => { const h = globalThis.location; return h && /^https?:$/.test(h.protocol) ? h.origin : undefined }
 
@@ -77,54 +34,6 @@ export function foreignOrigin(stored: string | undefined): string | undefined {
   const p = page(), at = p && stored ? URL.parse(stored, globalThis.location.href) : null
   return at && at.origin !== p ? at.origin : undefined
 }
-
-const runHere = (coord: string, origin: string) => `Run ${coord} from ${origin} in this page?`
-
-/** `impl` whose `make` first asks `approve` to run `impl`'s provider from `origin` in this page; a no throws. */
-function asking(impl: Implementation, origin: string, approve: Deps['approve']): Implementation {
-  return { ...impl, async make(ctx, config) {
-    if (!await approve(runHere(impl.provider, origin))) throw new Error('not approved')
-    return impl.make(ctx, config)
-  } }
-}
-
-/** `approve` asked at most once at a time per title: a yes is kept for good (the code is in the page by then), a no
- * forgotten, so the next make asks again. A make that waits shares the open dialog. */
-export function remembered(approve: Deps['approve']): Deps['approve'] {
-  const asked = new Map<string, Promise<boolean>>()
-  return title => {
-    let p = asked.get(title)
-    if (!p) asked.set(title, p = approve(title).then(yes => { if (!yes) asked.delete(title); return yes }, e => { asked.delete(title); throw e }))
-    return p
-  }
-}
-
-/** What the host's `isolate` gives for a pod: `standIn`, asking first when its frame shares the page's origin
- * (`sandbox`) and its provider is foreign (`origin`). An `isolated-sandbox` frame never asks. */
-export const isolated = (standIn: Implementation, isolation: Pod['isolation'], origin: string | undefined, approve: Deps['approve']) =>
-  isolation === 'sandbox' && origin ? asking(standIn, origin, approve) : standIn
-
-/** The interfaces with their op hashes, to tell a module that changed since it was probed. */
-const shape = (i: Implementation) => i.provides.map(f => `${f.coord}:${Object.values(f.ops).map(o => o.coord).join()}`).join(';')
-
-/** `probed` whose implementations, run in this page, ask first, then run the real one from `url`; and `load`, which
- * loads `url` once (again only after a failure). */
-function gated(probed: Provider, url: string, origin: string, deps: Deps): [Provider, () => Promise<Provider>] {
-  let real: Promise<Provider> | undefined
-  const load = () => real ??= deps.load(url).then(m => {
-    const p = (m as { default?: unknown } | undefined)?.default
-    if (!isProvider(p, probed.coord)) throw new Error(`${url} has no default Provider ${probed.coord}`)
-    return p
-  }).catch(e => { real = undefined; throw e })
-  return [Provider.define(probed.coord, [...probed.implementations.values()].map(i => asking({ ...i, async make(ctx, config) {
-    const r = (await load()).implementations.get(i.coord)
-    if (!r || shape(r) !== shape(i)) throw new Error(`${i.coord} is not what ${url} described`)
-    return r.make(ctx, config)
-  } }, origin, deps.approve)), { ...probed.meta }), load]
-}
-
-const isProvider = (p: unknown, coord: string): p is Provider =>
-  typeof p === 'object' && p !== null && (p as Provider).coord === coord && (p as Provider).implementations instanceof Map
 
 const why = (e: unknown) => (e instanceof Error ? e.message : String(e))
 

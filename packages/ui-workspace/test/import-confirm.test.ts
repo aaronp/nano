@@ -1,7 +1,8 @@
 // Import from another origin: confirmed once, probed, then loaded once confirmed, and a pod that would run it asks `approve` first.
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { success } from '@pritzlaff/nano-core'
-import { isolated, remembered, type Foreign } from '../src/import.ts'
+import type { Foreign } from '../src/import.ts'
+import { isolated, remembered } from '../src/import-gate.ts'
 import { described, probe } from '../src/described.ts'
 import { serve } from '../src/sandbox/serve.ts'
 import { confirmImports } from '../src/import-confirm.ts'

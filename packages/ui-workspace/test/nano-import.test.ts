@@ -2,7 +2,8 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { Registry, type AppDeployment } from '@pritzlaff/nano-core'
-import { importApp, merge, type Loaded } from '../src/import.ts'
+import { importApp, type Loaded } from '../src/import.ts'
+import { merge } from '../src/import-plan.ts'
 
 const fx = (name: string) => new URL(`./fixtures/import/${name}`, import.meta.url).href
 // Same-origin only (the page is not http, so the nano.json's origin is home): cross-origin is test/cross-origin.test.ts.
