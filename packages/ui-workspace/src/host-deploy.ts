@@ -32,14 +32,17 @@ function orphansDropped(out: AppDeployment, was: string[]): AppDeployment {
   return out
 }
 
-/** `d` with `add`'s pods and runtimes. A new runtime may place pods already there (shared ones). A pod or runtime whose
- * name is taken is invalid-input naming it, nothing added; with `onConflict: 'overwrite'` it replaces that one (a
- * replaced runtime's pods placed nowhere else then are dropped), except a host pod or a runtime placing one. Pure. */
+/** `d` with `add`'s pods and runtimes. A new runtime may place pods already there (shared ones), but not a host pod. A
+ * pod or runtime whose name is taken is invalid-input naming it, nothing added; with `onConflict: 'overwrite'` it
+ * replaces that one (a replaced runtime's pods placed nowhere else then are dropped), except a host pod or a runtime
+ * placing one. Pure. */
 export function addTo(d: AppDeployment, add: Addition): NanoResult<AppDeployment> {
   const taken = [...Object.keys(add.pods).filter(p => Object.hasOwn(d.pods, p)), ...Object.keys(add.runtimes).filter(r => Object.hasOwn(d.runtimes, r))]
   if (taken.length && add.onConflict !== 'overwrite') return failure('invalid-input', `already in the deployment: ${taken.join(', ')}`)
   const host = [...Object.keys(add.pods).filter(p => HOST_PODS.includes(p) && Object.hasOwn(d.pods, p)), ...Object.keys(add.runtimes).filter(r => Object.hasOwn(d.runtimes, r) && hosting(d, r))]
   if (host.length) return failure('invalid-input', `the host's own, not overwritten: ${host.join(', ')}`)
+  const placed = [...new Set(Object.values(add.runtimes).flatMap(r => r.pods).filter(p => HOST_PODS.includes(p)))]
+  if (placed.length) return failure('invalid-input', `the host's own, not placed by a pod: ${placed.join(', ')}`)
   const out = structuredClone(d), more = structuredClone(add)
   const was = Object.keys(more.runtimes).flatMap(r => Object.hasOwn(d.runtimes, r) ? d.runtimes[r]!.pods : [])
   return success(orphansDropped({ ...out, pods: { ...out.pods, ...more.pods }, runtimes: { ...out.runtimes, ...more.runtimes } }, was))
@@ -120,15 +123,23 @@ export function hostProvider(app: () => Application) {
   const deploy = Implementation.define(DEPLOY, {
     provides: [HostDeploy],
     make: ctx => {
-      // ponytail: reads the deployment before its apply is queued, so a concurrent apply in between is overwritten; queue edits in the app if pods race.
-      const applied = async (next: NanoResult<AppDeployment>): Promise<NanoResult<null>> => {
-        if (!next.ok) return next
-        const r = await app().apply(next.value, { caller: ctx.self })
-        return r.ok ? success(null) : r
+      // One call at a time: a second, while the first waits for approval, would be computed from the deployment without
+      // the first and undo it, and its ask would start after the first's, past the caller's timeout.
+      // ponytail: a host apply between the read and the apply is still overwritten; queue edits in the app if that matters.
+      let busy = false
+      const applied = async (next: () => NanoResult<AppDeployment>): Promise<NanoResult<null>> => {
+        if (busy) return failure('invalid-input', 'a deployment is already waiting for approval')
+        busy = true
+        try {
+          const d = next()
+          if (!d.ok) return d
+          const r = await app().apply(d.value, { caller: ctx.self })
+          return r.ok ? success(null) : r
+        } finally { busy = false }
       }
       return [provide(HostDeploy, {
-        deploy: add => applied(addTo(app().deployment(), add as Addition)),
-        undeploy: rm => applied(removeFrom(app().deployment(), rm)),
+        deploy: add => applied(() => addTo(app().deployment(), add as Addition)),
+        undeploy: rm => applied(() => removeFrom(app().deployment(), rm)),
       })]
     },
   })

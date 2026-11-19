@@ -140,6 +140,9 @@ test('the host pods, and a runtime placing one, are never overwritten or removed
   refused(removeFrom(d, { runtimes: ['main'] }), 'main')
   refused(removeFrom(d, { runtimes: ['side'] }), 'side')
   expect(addTo(d, { pods: { x: Pod.eager(log) }, runtimes: {}, onConflict: 'overwrite' })).toMatchObject({ ok: true })
+  refused(addTo(d, { pods: {}, runtimes: { fresh: { pods: ['x', 'deploy'], subscriptions: [] } } }), 'deploy')   // a pod never places a host pod
+  const plain = { ...d, runtimes: { ...d.runtimes, plain: { pods: ['x'], subscriptions: [] } } }
+  refused(addTo(plain, { pods: {}, runtimes: { plain: { pods: ['x', 'ui'], subscriptions: [] } }, onConflict: 'overwrite' }), 'ui')
 })
 
 async function answer(label: 'Approve' | 'Deny', text = 'Create runtime node-1 (1 pod)') {
@@ -177,4 +180,13 @@ test('given a pod needing HostDeploy imported, then it is connected to deploy an
   expect(await swapped).toEqual({ ok: true, value: null })
   expect(host.app.deployment().runtimes['node-1']).toEqual({ pods: ['n2'], subscriptions: [] })
   expect(host.app.deployment().pods['n1']).toBeUndefined()
+
+  const node = (i: number) => ({ pods: { [`n${i}`]: lazy }, runtimes: { [`node-${i}`]: { pods: [`n${i}`], subscriptions: [] } } })
+  const first = host.app.call('ops', 'cluster').map(node(3))
+  for (let i = 0; i < 100 && !document.querySelector('dialog'); i++) await tick(5)   // its ask is open
+  expect(await host.app.call('ops', 'cluster').map(node(4))).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'a deployment is already waiting for approval' } })
+  await answer('Approve', 'Create runtime node-3 (1 pod)')
+  expect(await first).toEqual({ ok: true, value: null })
+  expect(Object.keys(host.app.deployment().runtimes)).toEqual(expect.arrayContaining(['node-1', 'node-3']))
+  expect(host.app.deployment().runtimes['node-4']).toBeUndefined()
 })
