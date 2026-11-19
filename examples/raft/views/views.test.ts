@@ -1,5 +1,5 @@
 // The Raft elements over a real 3-node cluster on the sim clock: each renders its model, each button calls its op.
-import { GlobalRegistrator } from '../../../packages/ui/node_modules/@happy-dom/global-registrator'
+import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { afterEach, expect, test } from 'bun:test'
 import { Registry, type Application, type NanoResult } from '@pritzlaff/nano-core'
