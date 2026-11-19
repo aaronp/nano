@@ -14,6 +14,9 @@ type Addition = { pods: Record<string, Pod>; runtimes: Record<string, RuntimeDep
 type Removal = { runtimes: string[] }
 
 const ns = Coord.namespace('workspace.host'), DEPLOY = ns.implementationId('deploy')
+/** The host's own pods (`ui`, `deploy`): no pod may overwrite them, nor overwrite or remove a runtime placing one. */
+export const HOST_PODS: readonly [string, string] = ['ui', 'deploy']
+const hosting = (d: AppDeployment, r: string) => d.runtimes[r]!.pods.some(p => HOST_PODS.includes(p))
 /** The `deploy` pod's data: built on its first call. */
 export const deployPod: Pod = { implementation: DEPLOY.toString(), eager: false }
 /** Well under the app's call timeout (30 s): the pod's call into `deploy` started its timer before this apply was queued,
@@ -31,10 +34,12 @@ function orphansDropped(out: AppDeployment, was: string[]): AppDeployment {
 
 /** `d` with `add`'s pods and runtimes. A new runtime may place pods already there (shared ones). A pod or runtime whose
  * name is taken is invalid-input naming it, nothing added; with `onConflict: 'overwrite'` it replaces that one (a
- * replaced runtime's pods placed nowhere else then are dropped). Pure. */
+ * replaced runtime's pods placed nowhere else then are dropped), except a host pod or a runtime placing one. Pure. */
 export function addTo(d: AppDeployment, add: Addition): NanoResult<AppDeployment> {
   const taken = [...Object.keys(add.pods).filter(p => Object.hasOwn(d.pods, p)), ...Object.keys(add.runtimes).filter(r => Object.hasOwn(d.runtimes, r))]
   if (taken.length && add.onConflict !== 'overwrite') return failure('invalid-input', `already in the deployment: ${taken.join(', ')}`)
+  const host = [...Object.keys(add.pods).filter(p => HOST_PODS.includes(p) && Object.hasOwn(d.pods, p)), ...Object.keys(add.runtimes).filter(r => Object.hasOwn(d.runtimes, r) && hosting(d, r))]
+  if (host.length) return failure('invalid-input', `the host's own, not overwritten: ${host.join(', ')}`)
   const out = structuredClone(d), more = structuredClone(add)
   const was = Object.keys(more.runtimes).flatMap(r => Object.hasOwn(d.runtimes, r) ? d.runtimes[r]!.pods : [])
   return success(orphansDropped({ ...out, pods: { ...out.pods, ...more.pods }, runtimes: { ...out.runtimes, ...more.runtimes } }, was))
@@ -45,6 +50,8 @@ export function addTo(d: AppDeployment, add: Addition): NanoResult<AppDeployment
 export function removeFrom(d: AppDeployment, rm: Removal): NanoResult<AppDeployment> {
   const missing = rm.runtimes.find(r => !Object.hasOwn(d.runtimes, r))
   if (missing !== undefined) return failure('not-found', `no runtime ${missing}`)
+  const host = rm.runtimes.filter(r => hosting(d, r))
+  if (host.length) return failure('invalid-input', `places the host's own pods, not removed: ${host.join(', ')}`)
   const out = structuredClone(d)
   for (const r of rm.runtimes) delete out.runtimes[r]
   return success(orphansDropped(out, rm.runtimes.flatMap(r => d.runtimes[r]!.pods)))
@@ -67,7 +74,7 @@ const runtimes = (names: string[]) => `runtime${names.length > 1 ? 's' : ''} ${c
 const plural = (n: number, what: string) => `${n} ${what}${n === 1 ? '' : 's'}`
 
 /** One line saying truthfully what going from `current` to `next` does: runtimes replaced, created (with the new pods)
- * and removed, pods replaced, the existing pods the new or replaced runtimes now place, and every new subscription
+ * and removed, pods replaced or dropped, the existing pods the new or replaced runtimes now place, and every new subscription
  * there reaching an existing pod. E.g. "Create runtimes example-1..3 (9 pods); places messaging, clock". */
 export function summary(current: AppDeployment, next: AppDeployment): string {
   const had = (r: string) => Object.hasOwn(current.runtimes, r), old = (p: string) => Object.hasOwn(current.pods, p)
@@ -75,6 +82,7 @@ export function summary(current: AppDeployment, next: AppDeployment): string {
   const swapped = Object.keys(next.runtimes).filter(r => had(r) && JSON.stringify(current.runtimes[r]) !== JSON.stringify(next.runtimes[r]))
   const gone = Object.keys(current.runtimes).filter(r => !Object.hasOwn(next.runtimes, r))
   const pods = Object.keys(next.pods).filter(p => !old(p)).length
+  const drops = Object.keys(current.pods).filter(p => !Object.hasOwn(next.pods, p))
   const podsSwapped = Object.keys(next.pods).filter(p => old(p) && JSON.stringify(current.pods[p]) !== JSON.stringify(next.pods[p]))
   const before = (r: string) => current.runtimes[r] ?? { pods: [], subscriptions: [] }
   const touched = [...swapped, ...made]
@@ -89,6 +97,7 @@ export function summary(current: AppDeployment, next: AppDeployment): string {
     ...(places.length ? [`places ${collapsed(places).join(', ')}`] : []),
     ...(edges.length ? [collapsed(edges).join(', ')] : []),
     ...(gone.length ? [`remove ${runtimes(gone)}`] : []),
+    ...(drops.length ? [`drops ${collapsed(drops).join(', ')}`] : []),
   ].join('; ') || 'change the deployment'
   return parts[0]!.toUpperCase() + parts.slice(1)
 }

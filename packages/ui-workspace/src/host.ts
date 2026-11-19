@@ -15,7 +15,7 @@ import { foreignOrigin, importApp, isolated, remembered, type Loaded } from './i
 import { confirmImports } from './import-confirm.ts'
 import { probe } from './described.ts'
 import { hostUi } from './host-ui.ts'
-import { approvalPolicy, deployPod, hostProvider } from './host-deploy.ts'
+import { approvalPolicy, deployPod, hostProvider, HOST_PODS } from './host-deploy.ts'
 import { edgesFor } from './sandbox/edges.ts'
 import { openFrame } from './sandbox/frames.ts'
 import { connected } from './auto-connect.ts'
@@ -44,7 +44,7 @@ export type Host = {
   calls(): OpCall[]
 }
 
-const HOST = 'ui', DEPLOY = 'deploy', MAIN = 'main'
+const [HOST, DEPLOY] = HOST_PODS, MAIN = 'main'
 /** `d` with `own` taken out of `main` (dropped once empty), still among the pods. Pure. (Import keeps `deploy`'s edges.) */
 function unplaced(d: AppDeployment, own = [HOST]): AppDeployment {
   const out = structuredClone(d), main = out.runtimes[MAIN]

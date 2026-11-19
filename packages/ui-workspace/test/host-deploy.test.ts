@@ -66,7 +66,7 @@ test('summary names the runtimes and pod count', () => {
   const after = addTo(before, three)
   if (!after.ok) throw new Error(after.fail.reason)
   expect(summary(before, after.value)).toBe('Create runtimes example-1..3 (3 pods); places messaging')
-  expect(summary(after.value, before)).toBe('Remove runtimes example-1..3')
+  expect(summary(after.value, before)).toBe('Remove runtimes example-1..3; drops example-1..3-raft')
   const one = addTo(before, { pods: { solo: lazy }, runtimes: { solo: { pods: ['solo'], subscriptions: [] } } })
   if (!one.ok) throw new Error(one.fail.reason)
   expect(summary(before, one.value)).toBe('Create runtime solo (1 pod)')
@@ -104,7 +104,7 @@ test('addTo with overwrite replaces and adds, dropping the pods a replaced runti
   if (!swap.ok) throw new Error(swap.fail.reason)
   expect(swap.value.pods['example-2-raft']).toBeUndefined()
   expect(swap.value.runtimes['example-2']).toEqual({ pods: ['messaging', 'n'], subscriptions: [] })
-  expect(summary(d, swap.value)).toBe('Replace runtime example-2; add 1 pod')
+  expect(summary(d, swap.value)).toBe('Replace runtime example-2; add 1 pod; drops example-2-raft')
   const both = addTo(d, { pods: { 'example-2-raft': Pod.eager(log), 'example-1-raft': lazy }, runtimes: { 'example-1': node(1), 'example-2': { pods: ['example-2-raft'], subscriptions: [] } }, onConflict: 'overwrite' })
   if (!both.ok) throw new Error(both.fail.reason)
   expect(summary(d, both.value)).toBe('Replace runtime example-2; replace pod example-2-raft; create runtime example-1 (1 pod); places messaging')
@@ -128,6 +128,18 @@ test('approvalPolicy takes no answer within its time as a no', async () => {
   const at = Date.now()
   expect(await p.isAllowed({ caller: 'deploy', deployment: { pods: {}, runtimes: { r: { pods: [], subscriptions: [] } } } })).toMatchObject({ approved: false })
   expect(Date.now() - at).toBeLessThan(1000)
+})
+
+test('the host pods, and a runtime placing one, are never overwritten or removed', () => {
+  const d: AppDeployment = { pods: { ui: lazy, deploy: lazy, x: lazy }, runtimes: { main: { pods: ['ui', 'deploy'], subscriptions: [] }, side: { pods: ['x', 'deploy'], subscriptions: [] } } }
+  const refused = (r: { ok: boolean }, name: string) => expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: expect.stringContaining(name) } })
+  refused(addTo(d, { pods: {}, runtimes: { main: { pods: ['ui', 'deploy'], subscriptions: [] } }, onConflict: 'overwrite' }), 'main')
+  refused(addTo(d, { pods: {}, runtimes: { side: { pods: ['x'], subscriptions: [] } }, onConflict: 'overwrite' }), 'side')
+  refused(addTo(d, { pods: { deploy: lazy }, runtimes: {}, onConflict: 'overwrite' }), 'deploy')
+  refused(addTo(d, { pods: { ui: lazy }, runtimes: {}, onConflict: 'overwrite' }), 'ui')
+  refused(removeFrom(d, { runtimes: ['main'] }), 'main')
+  refused(removeFrom(d, { runtimes: ['side'] }), 'side')
+  expect(addTo(d, { pods: { x: Pod.eager(log) }, runtimes: {}, onConflict: 'overwrite' })).toMatchObject({ ok: true })
 })
 
 async function answer(label: 'Approve' | 'Deny', text = 'Create runtime node-1 (1 pod)') {
@@ -161,7 +173,7 @@ test('given a pod needing HostDeploy imported, then it is connected to deploy an
   expect(await host.app.call('ops', 'cluster').map({ pods: {}, runtimes: { 'node-1': { pods: [], subscriptions: [] } } })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
 
   const swapped = host.app.call('ops', 'cluster').map({ pods: { n2: lazy }, runtimes: { 'node-1': { pods: ['n2'], subscriptions: [] } }, onConflict: 'overwrite' })
-  await answer('Approve', 'Replace runtime node-1; add 1 pod')
+  await answer('Approve', 'Replace runtime node-1; add 1 pod; drops n1')
   expect(await swapped).toEqual({ ok: true, value: null })
   expect(host.app.deployment().runtimes['node-1']).toEqual({ pods: ['n2'], subscriptions: [] })
   expect(host.app.deployment().pods['n1']).toBeUndefined()
