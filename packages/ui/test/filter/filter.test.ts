@@ -16,7 +16,7 @@ async function mount(groups: unknown, value = emptyFilter()) {
   return el
 }
 const $$ = (el: F, sel: string) => [...el.shadowRoot!.querySelectorAll<HTMLElement>(sel)]
-const open = async (el: F) => { $$(el, 'button.toggle')[0]!.click(); await el.updateComplete }
+const open = async (el: F) => { await el.updateComplete }   // the panel is always in the DOM; the browser shows it
 
 test('renders a chip per option of each group given; no group, no row', async () => {
   const el = await mount({ kinds: ['pod', 'action'], statuses: ['running'] })
@@ -50,7 +50,22 @@ test('a chip toggles into the set and emits', async () => {
 test('the button counts active chips', async () => {
   const f = emptyFilter(); f.kinds.add('pod'); f.statuses.add('failed')
   const el = await mount({ kinds: ['pod'], statuses: ['failed'] }, f)
-  expect($$(el, 'button.toggle')[0]!.textContent).toContain('2')
+  expect($$(el, 'button.toggle')[0]!.textContent).toBe('Filter (2 active)')
+})
+
+test('the button names the popover it controls; with nothing active its name is plain', async () => {
+  const el = await mount({ kinds: ['pod'] })
+  const b = $$(el, 'button.toggle')[0]!
+  expect(b.textContent).toBe('Filter')
+  expect(b.getAttribute('aria-haspopup')).toBe('true')
+  expect(b.getAttribute('aria-expanded')).toBe('false')
+  expect(el.shadowRoot!.getElementById(b.getAttribute('aria-controls')!)!.getAttribute('popover')).toBe('auto')
+})
+
+test('each row is a group labelled by its name', async () => {
+  const el = await mount({ kinds: ['pod'], statuses: ['failed'] })
+  const named = $$(el, '.row').map(r => r.getAttribute('role') + ':' + el.shadowRoot!.getElementById(r.getAttribute('aria-labelledby')!)!.textContent)
+  expect(named).toEqual(['group:Type', 'group:Status'])
 })
 
 test('kindIcon and statusDot render an svg with a title per kind and status', () => {

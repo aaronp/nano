@@ -1,13 +1,14 @@
 /**
- * `<nano-filter>`: a search input and a filter button showing how many chips are on; the button toggles a panel under
- * it with one row of chips (toggle buttons, `aria-pressed`) per group given. It holds no state of its own: `value` is
- * the filter, and every keystroke or chip toggle emits `change` (`detail` a new FilterValue) for the host to set back.
+ * `<nano-filter>`: a search input and a filter button naming how many chips are on; the button opens a popover (top
+ * layer, so Escape and outside-click close it) with one labelled group of chips (toggle buttons, `aria-pressed`) per
+ * group given. It holds no state of its own: `value` is the filter, and every keystroke or chip toggle emits `change`
+ * (`detail` a new FilterValue) for the host to set back.
  *
  *   f.groups = { kinds: ['pod', 'action'], namespaces: ['nano.ui'], statuses: ['running', 'failed'] }
  *   f.value = emptyFilter(); f.addEventListener('change', e => { f.value = e.detail })
  */
 import { LitElement, css, html } from 'lit'
-import { base, t } from '@pritzlaff/nano-elements'
+import { base, kit } from '@pritzlaff/nano-elements'
 import { emptyFilter, type FilterValue, type PodStatus } from './model.ts'
 
 type Groups = { kinds?: string[]; namespaces?: string[]; statuses?: PodStatus[] }
@@ -15,12 +16,11 @@ const names = { kinds: 'Type', namespaces: 'Namespace', statuses: 'Status' } as 
 
 export class NanoFilter extends LitElement {
   static properties = { groups: { attribute: false }, value: { attribute: false }, open: { state: true } }
-  static styles = [base, css`
+  static styles = [base, kit, css`
     :host { position: relative; display: flex; gap: 6px; align-items: center }
     input { flex: 1 1 auto; min-width: 0 }
-    .panel { position: absolute; top: 100%; right: 0; z-index: 10; margin-top: 4px; padding: 8px; min-width: 220px; display: grid; gap: 8px;
-      background: ${t('surface')}; border: 1px solid ${t('border-strong')}; border-radius: ${t('radius')} }
-    .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center } .row > span { width: 100%; color: ${t('muted')}; font-size: 11px }`]
+    .pop { min-width: 220px; padding: 8px } .pop:popover-open { display: grid; gap: 8px }
+    .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center } .row > span { width: 100%; font-size: 11px; opacity: .7 }`]
   declare groups: Groups
   declare value: FilterValue
   declare open: boolean
@@ -33,15 +33,25 @@ export class NanoFilter extends LitElement {
     set.has(o) ? set.delete(o) : set.add(o)
     this.emit({ ...this.value, [g]: set })
   }
+  /** `open` follows the popover; opening puts the panel under the button and focus in it, closing returns focus. */
+  private toggled(e: ToggleEvent) {
+    const panel = e.target as HTMLElement, button = this.renderRoot.querySelector<HTMLElement>('.toggle')!
+    this.open = e.newState === 'open'
+    if (this.open) {
+      const b = button.getBoundingClientRect()
+      Object.assign(panel.style, { top: `${b.bottom + 4}px`, left: `${Math.max(0, b.right - panel.offsetWidth)}px` })
+      panel.querySelector<HTMLElement>('.row button')?.focus()
+    } else button.focus()
+  }
 
   render() {
     const v = this.value, count = v.kinds.size + v.namespaces.size + v.statuses.size
     const rows = (Object.keys(names) as (keyof typeof names)[]).filter(g => this.groups[g])
     return html`
       <input type="search" placeholder="Search" aria-label="Search" .value=${v.text} @input=${(e: Event) => this.emit({ ...v, text: (e.target as HTMLInputElement).value })}>
-      <button class="toggle" aria-expanded=${this.open} aria-label="Filters" @click=${() => { this.open = !this.open }}>Filter${count ? ` ${count}` : ''}</button>
-      ${this.open ? html`<div class="panel">${rows.map(g => html`
-        <div class="row"><span>${names[g]}</span>${(this.groups[g] as string[]).map(o => html`
-          <button aria-pressed=${(v[g] as Set<string>).has(o)} @click=${() => this.flip(g, o)}>${o}</button>`)}</div>`)}</div>` : ''}`
+      <button class="toggle" popovertarget="panel" aria-haspopup="true" aria-controls="panel" aria-expanded=${this.open}>Filter${count ? ` (${count} active)` : ''}</button>
+      <div class="pop" id="panel" popover="auto" role="group" aria-label="Filters" @toggle=${this.toggled}>${rows.map(g => html`
+        <div class="row" role="group" aria-labelledby="h-${g}"><span id="h-${g}">${names[g]}</span>${(this.groups[g] as string[]).map(o => html`
+          <button aria-pressed=${(v[g] as Set<string>).has(o)} @click=${() => this.flip(g, o)}>${o}</button>`)}</div>`)}</div>`
   }
 }
