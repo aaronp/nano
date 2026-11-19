@@ -112,7 +112,7 @@ export class NanoTree extends LitElement {
         ${ref(el => setAttrs(el, n.data && Object.fromEntries(Object.entries(n.data).map(([k, v]) => [`data-${k}`, v]))))}>
       <div class="line" @click=${(e: MouseEvent) => this.#click(e, row)}>
         <span class="chev" data-toggle=${n.id} aria-hidden="true">${can ? '▸' : ''}</span>
-        ${ic ? html`<span class="icon" title=${n.kind ?? nothing}>${ic}</span>` : nothing}<span class="label">${this.#label(n.label)}</span>
+        ${ic ? html`<span class="icon" title=${n.kind ?? nothing} aria-label=${n.kind ?? nothing}>${ic}</span>` : nothing}<span class="label">${this.#label(n.label)}</span>
         ${n.kind && !ic ? html`<span class="kind">${n.kind}</span>` : nothing}${n.count !== undefined ? html`<span class="count">${n.count}</span>` : nothing}
         ${n.badge ? html`<span class="tag">${n.badge}</span>` : nothing}${n.end !== undefined ? html`<span class="end">${n.end}</span>` : nothing}
       </div>

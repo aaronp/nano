@@ -10,7 +10,7 @@ import { tv } from '@pritzlaff/nano-elements'
 import type { PodStatus } from './model.ts'
 
 const shapes: Record<string, ReturnType<typeof svg>> = {
-  pod: svg`<circle cx="8" cy="8" r="5.5"/>`,
+  pod: svg`<path d="M8 2 13.5 5v6L8 14 2.5 11V5z"/>`,
   interface: svg`<path d="M6 3H3v10h3M10 3h3v10h-3"/>`,
   implementation: svg`<path d="M5.5 4 2 8l3.5 4M10.5 4 14 8l-3.5 4"/>`,
   action: svg`<path d="M3 8h9M8.5 4 12.5 8l-4 4"/>`,

@@ -166,9 +166,16 @@ describe('the explorer', () => {
       expect(dot(el, 'in')).toBe('running')
       expect(tree(el).shadowRoot.querySelector('li[data-id="p:main:in"] > .line .kind')).toBeNull()
     })
+    test('a new target starts its pods over', async () => {
+      const a = await open(slice), el = await mount(a); await settle(el)
+      await a.app.call('main', 'out').log(1); must(await a.app.restart('in')); await settle(el)
+      const b = await open({ pods: { out: Pod.lazy(log) }, runtimes: { main: { pods: ['out'], subscriptions: [] } } })
+      el.target = b; await settle(el); await reveal(el)
+      expect(dot(el, 'out')).toBe('not started')
+    })
     test('choosing status "running" hides not-started pods', async () => {
       const el = await mount(await open(slice)); await settle(el)
-      await set(el, { statuses: new Set(['running']) }); await reveal(el).catch(() => {})
+      await set(el, { statuses: new Set(['running']) }); 
       const got = ids(el)
       expect(got).toContain('p:main:in'); expect(got).not.toContain('p:main:out')
     })

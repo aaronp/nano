@@ -50,6 +50,7 @@ export class NanoExplorer extends LitElement {
     const t = this.target
     if (!t || !this.isConnected || this.watching === t) return
     this.stop()
+    this.states = {}   // a new app's pods start over
     this.watching = t
     this.off = t.app.listen(e => {
       if (e.type === 'sent') { if (e.kind === 'call' && t.calls) queueMicrotask(() => this.requestUpdate()) }   // a call seen
