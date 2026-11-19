@@ -3,9 +3,8 @@ import { LitElement, css, html } from 'lit'
 import { base, kit } from '@pritzlaff/nano-elements'
 import type { ViewTarget } from '@pritzlaff/nano-ui'
 import { Cluster } from '../interfaces.ts'
-import { follow } from './follow.ts'
 
-export class RaftClusterView extends LitElement {
+class RaftClusterView extends LitElement {
   static properties = { target: { attribute: false }, names: { state: true }, error: { state: true } }
   static styles = [base, kit, css`ul { list-style: none; margin: 0; padding: 0 }`]
   declare target?: ViewTarget
@@ -25,7 +24,8 @@ export class RaftClusterView extends LitElement {
     if (!t || !this.isConnected || this.watching === t) return
     this.stop?.()
     this.watching = t
-    this.stop = follow(t, () => { void this.pod(t).list().then(n => { this.names = n }, () => {}) })
+    this.stop = undefined
+    void this.pod(t).list().then(n => { this.names = n }, () => {})   // read once; create and remove re-read
   }
   private async run(act: () => Promise<unknown>) {
     this.error = undefined

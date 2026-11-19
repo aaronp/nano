@@ -95,3 +95,27 @@ test('raft-cluster creates, lists and removes a cluster through the cluster pod'
   expect(root.querySelectorAll('li')).toHaveLength(0)
   expect(Object.keys(app.deployment().runtimes)).not.toContain('demo-1')
 })
+
+test('mounted views add only their mount reads to the recording, a small fraction of the Raft traffic', async () => {
+  app = await openRaft()
+  must(await app.call('raft', 'cluster')[Cluster.ops.create.name]!({ name: 'example', size: 3, seed: 1 }))
+  const roots: string[] = [], raft: string[] = []
+  const advancePort = `${ClockControl.coord}/${ClockControl.ops.advance.name}`
+  app.listen(e => {
+    if (e.type !== 'sent' || e.kind === 'subscribe' || e.kind === 'unsubscribe' || e.port === advancePort) return
+    if (e.from === 'host') roots.push(e.port); else raft.push(e.port)
+  })
+  for (const id of ['example-1', 'example-2', 'example-3']) { await mount('raft-node', app, id, `${id}-raft`); await mount('raft-ledger', app, id, `${id}-ledger`) }
+  await advance(app, 2000)
+  console.log(`2 sim s, 6 views: ${raft.length} raft messages, ${roots.length} view roots`)
+  expect(roots.length).toBeLessThanOrEqual(4 * 6)   // each view reads at most twice at mount, then hears; none per advance
+  expect(roots.length * 10).toBeLessThan(raft.length)
+})
+
+test('an idle peer dot is faint, a pending one hollow and bright, a granted one filled', async () => {
+  await cluster()
+  const el = await mount('raft-node', app, 'example-1', 'example-1-raft')
+  const dot = el.shadowRoot!.querySelector('.dot')!
+  expect(dot.getAttribute('stroke-opacity')).toBe(dot.classList.contains('idle') ? '0.2' : '1')
+  expect(dot.getAttribute('fill')).toBe(dot.classList.contains('granted') ? dot.getAttribute('stroke') : 'none')
+})

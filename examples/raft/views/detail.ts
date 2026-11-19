@@ -6,7 +6,7 @@ import type { Node } from '../core/types.ts'
 import { RaftNode } from '../interfaces.ts'
 import { detailModel } from './model.ts'
 
-export class RaftDetail extends LitElement {
+class RaftDetail extends LitElement {
   static properties = { target: { attribute: false }, status: { attribute: false }, now: { attribute: false }, error: { state: true } }
   static styles = [base, kit, css`table { border-collapse: collapse; font-size: 12px } td, th { padding: 2px 8px; text-align: left } .row { flex-wrap: wrap }`]
   declare target?: ViewTarget
