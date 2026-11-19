@@ -14,5 +14,9 @@
       ]
     }
   },
-  "modules": { "example.raft": "./index.js" }
+  "modules": { "example.raft": "./index.js" },
+  "layout": {
+    "slots": [{ "id": "cluster", "runtime": "raft", "pod": "cluster" }],
+    "ring": { "show": ["example.raft/node", "example.raft/messaging"] }
+  }
 }
