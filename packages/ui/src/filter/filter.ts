@@ -19,7 +19,7 @@ export class NanoFilter extends LitElement {
   static styles = [base, kit, css`
     :host { position: relative; display: flex; gap: 6px; align-items: center }
     input { flex: 1 1 auto; min-width: 0 }
-    .pop { min-width: 220px; padding: 8px } .pop:popover-open { display: grid; gap: 8px }
+    .pop { box-sizing: border-box; padding: 8px } .pop:popover-open { display: grid; gap: 8px }
     .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center } .row > span { width: 100%; font-size: 11px; opacity: .7 }`]
   declare groups: Groups
   declare value: FilterValue
@@ -38,8 +38,9 @@ export class NanoFilter extends LitElement {
     const panel = e.target as HTMLElement, button = this.renderRoot.querySelector<HTMLElement>('.toggle')!
     this.open = e.newState === 'open'
     if (this.open) {
-      const b = button.getBoundingClientRect()
-      Object.assign(panel.style, { top: `${b.bottom + 4}px`, left: `${Math.max(0, b.right - panel.offsetWidth)}px` })
+      // Within the filter's own width (search box to button): chips wrap rather than spill over neighbouring panels.
+      const h = this.getBoundingClientRect(), b = button.getBoundingClientRect()
+      Object.assign(panel.style, { top: `${b.bottom + 4}px`, left: `${Math.max(0, h.left)}px`, width: `${Math.max(220, h.width)}px`, maxWidth: `calc(100vw - ${Math.max(0, h.left)}px)` })
       panel.querySelector<HTMLElement>('.row button')?.focus()
     } else if (panel.contains(this.shadowRoot!.activeElement)) button.focus()
   }
