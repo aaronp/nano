@@ -2,6 +2,8 @@
 // held here (`layout()` for Save). Drag a runtime by its header or a column by its body; on release, push the siblings.
 import { lookup } from '@pritzlaff/nano-core'
 import { LitElement, css, html } from 'lit'
+import type { Frame, Message, TimeMachine } from '@pritzlaff/nano-ui'
+import { renderDetail } from '../messages/detail.ts'
 import type { Host } from '../host.ts'
 import { empty as emptyWires } from '../wires/state'
 import { toggle, type ViewSettings } from '../wires/filter'
@@ -9,12 +11,13 @@ import { align, arrange, GRID, prune, push, readLayout, setSnap, type DeskLayout
 import { renderCords } from './cords'
 import { deskModel, type DeskModel } from './model'
 import { fitting, keyOf, patch, unplug, type Sel } from './edit'
+import { causes, follow, renderDots } from './dots'
 import { renderRuntimes } from './render'
 
 const empty: DeskModel = { runtimes: [], pipes: [], calls: [], rank: {}, wires: emptyWires() }
 
 export class Desk extends LitElement {
-  static properties = { host: { attribute: false }, application: {}, editing: { state: true }, sel: { state: true } }
+  static properties = { host: { attribute: false }, application: {}, editing: { state: true }, sel: { state: true }, tm: { attribute: false }, frame: { state: true }, picked: { state: true } }
   static styles = css`
     :host { display: block; height: 100%; min-height: 360px; color: #E6EDF3; font: 12px system-ui, sans-serif; background: #0B0E12 }
     .bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; align-items: center }
@@ -37,27 +40,35 @@ export class Desk extends LitElement {
     [data-fits] i { box-shadow: 0 0 0 3px #4CC2FF88 } .jack[data-selected] i { border-color: #fff; background: #fff }
     [data-toast] { position: absolute; right: 8px; bottom: 8px; padding: 6px 10px; border-radius: 6px; background: #3b1219; color: #fecaca }
     path[data-pipe] { pointer-events: stroke; cursor: pointer }
+    svg.dots circle { pointer-events: all; cursor: pointer }
+    [data-detail] { position: absolute; right: 8px; top: 8px; width: 320px; max-height: 80%; overflow: auto; padding: 8px; border: 1px solid #2A323D; border-radius: 8px; background: #12161CEE } [data-detail] pre { margin: 0; white-space: pre-wrap; word-break: break-all }
     svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none }`
   declare host?: Host
   declare application: string
   declare editing: boolean
   declare sel: Sel
+  declare tm?: TimeMachine; declare frame?: Frame; declare picked?: Message
   view: ViewSettings = { show: 'connected', pills: { runtimes: [], pods: [] } }
   #m = empty
   #l: DeskLayout = readLayout(undefined)
   #a = arrange(empty, this.#l)
   #off: (() => void)[] = []
+  #tmOff?: () => void
   #toast = ''
   #pending = false
   #read = false
-
   constructor() { super(); this.application = 'ui'; this.editing = false; this.sel = null }
   /** The current arrangement, for Save. */
   layout(): DeskLayout { return this.#l }
 
-  connectedCallback() { super.connectedCallback(); if (this.hasUpdated) this.#attach() }
-  disconnectedCallback() { super.disconnectedCallback(); this.#detach() }
-  willUpdate(changed: Map<string, unknown>) { if (changed.has('host')) { this.#detach(); this.#read = false; this.#attach() } }
+  connectedCallback() { super.connectedCallback(); if (this.hasUpdated) { this.#attach(); this.#watch() } }
+  disconnectedCallback() { super.disconnectedCallback(); this.#detach(); this.#tmOff?.(); this.#tmOff = undefined }
+  willUpdate(changed: Map<string, unknown>) {
+    if (changed.has('host')) { this.#detach(); this.#read = false; this.#attach() }
+    if (changed.has('tm')) { this.picked = undefined; this.frame = undefined; this.#watch() }
+  }
+  #watch() { this.#tmOff?.(); this.#tmOff = this.isConnected ? follow(this.tm, f => { this.frame = f }) : undefined }
+  #pick(m: Message) { this.tm?.seek(m.at); this.picked = m }   // seek pauses
   #attach() {
     const h = this.host
     if (!h || !this.isConnected || this.#off.length) return
@@ -130,7 +141,7 @@ export class Desk extends LitElement {
       ${this.sel && 'pipe' in this.sel ? html`<button data-remove @click=${() => this.#remove()}>Remove</button>` : ''}
     </div>
     <div class="stage ${l.snap ? 'snap' : ''}" tabindex="0" @keydown=${(e: KeyboardEvent) => this.#key(e)} @click=${(e: MouseEvent) => this.#click(e)}>${renderRuntimes(this.#m, this.#a, l, this.#down, { sel: this.sel && 'jack' in this.sel ? this.sel.jack : undefined, fits: this.sel && 'jack' in this.sel ? fitting(this.#m.wires, keyOf(this.sel.jack)) : new Set() })}
-      <svg width=${W} height=${H}>${renderCords(this.#m, this.#a, l, this.sel && 'pipe' in this.sel ? this.sel.pipe : undefined)}</svg>${this.#toast ? html`<div data-toast>${this.#toast}</div>` : ''}</div>`
+      <svg width=${W} height=${H}>${renderCords(this.#m, this.#a, l, this.sel && 'pipe' in this.sel ? this.sel.pipe : undefined)}</svg>${this.tm ? html`<svg class="dots" width=${W} height=${H}>${renderDots(this.#m, this.#a, l, this.frame, m => this.#pick(m))}</svg>` : ''}${this.picked ? renderDetail(this.picked, causes(this.frame, this.picked), c => this.tm?.seek(c.at)) : ''}${this.#toast ? html`<div data-toast>${this.#toast}</div>` : ''}</div>`
   }
 }
 

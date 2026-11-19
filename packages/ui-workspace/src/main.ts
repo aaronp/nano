@@ -111,7 +111,8 @@ if (host) {
   const bars = document.querySelectorAll<NanoTimeMachine>('nano-time-machine');
   defineMessages();
   const tables = document.querySelectorAll<Messages>('c-messages');
-  const hand = () => { for (const b of bars) Object.assign(b, { tm, store: h.history.store, driver }); for (const t of tables) Object.assign(t, { tm, store: h.history.store }); };
+  const desks = document.querySelectorAll<Desk>('c-desk');
+  const hand = () => { for (const d of desks) d.tm = tm; for (const b of bars) Object.assign(b, { tm, store: h.history.store, driver }); for (const t of tables) Object.assign(t, { tm, store: h.history.store }); };
   hand();
   let resetting: Promise<void> | undefined;   // one Reset at a time: a second click while one runs joins it
   for (const b of bars) b.addEventListener('reset', () => resetting ??= (async () => {

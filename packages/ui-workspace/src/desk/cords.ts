@@ -1,12 +1,14 @@
 // The Desk's cords, measured from the layout (the boxes and each jack's row), not the DOM: the spike's left-to-right
 // S-curves, pipes solid in their route's colour (the selected one outlined), calls dashed (opCord).
 import { svg } from 'lit'
+import type { Message } from '@pritzlaff/nano-ui'
 import { CALL_COLOR, OK_COLOR } from '../wires/constants'
 import { opCord } from '../wires/calls'
 import { cordD, type Cord } from '../wires/geometry'
 import { colHead, rowH, type DeskLayout, type Sized } from './arrange'
 import type { DeskModel } from './model'
 
+type Sent = Message['sent']
 type XY = { x: number; y: number }
 type Arranged = { runtimes: Record<string, Sized>; columns: Record<string, Record<string, Sized>> }
 
@@ -60,4 +62,23 @@ export function renderCords(m: DeskModel, a: Arranged, l: DeskLayout, selected?:
     return svg`<g data-call=${c.id}>${ops.map(o => opCord(o, sCurve))}${start ? [...ends, ...none ? [none] : []].map(b => svg`<path d=${cordD(sCurve(start, b))} fill="none" stroke=${CALL_COLOR} stroke-opacity="0.6" stroke-width="2.5" stroke-dasharray="10 6" stroke-linecap="round"></path>`) : ''}</g>`
   })
   return [...pipes, ...calls]
+}
+
+/**
+ * The cord a message travels, from the current model (none when its pod, pipe or runtime isn't drawn). A pipe: the pipe
+ * into the target jack (the source jack the `cause` names, else the first). A call: caller to the callee's jack, from
+ * the op the `cause` shows the caller was in, else from the caller column's side. Only calls and pipes have one.
+ */
+export function cordOf(m: DeskModel, a: Arranged, l: DeskLayout, s: Sent, cause?: Sent): Cord | undefined {
+  const into = `${s.to} ${s.port}:in`, via = cause?.to === s.from ? `${s.from} ${cause.port}:out` : undefined
+  if (s.kind === 'pipe') {
+    const ws = m.pipes.filter(w => w.runtime === s.runtime && w.from.startsWith(s.from + ' ') && w.to === into)
+    const w = ws.find(w => w.from === via) ?? ws[0], p = w && jackAt(m, a, l, s.runtime, w.from), q = w && jackAt(m, a, l, s.runtime, w.to)
+    return p && q ? sCurve(p, q) : undefined
+  }
+  const c = s.kind === 'call' ? m.calls.find(c => c.runtime === s.runtime && c.from === s.from && c.to === s.to) : undefined
+  const from = c && home(m, s.from, s.runtime), to = c && home(m, s.to, s.runtime)
+  if (!from || !to) return
+  const p = (via && jackAt(m, a, l, from, via)) || sideAt(a, l, from, s.from, true), q = jackAt(m, a, l, to, into) ?? sideAt(a, l, to, s.to, false)
+  return p && q ? sCurve(p, q) : undefined
 }
