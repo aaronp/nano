@@ -1,5 +1,5 @@
 /**
- * The Desk page (#/desk) and its switcher to the dock's own Connections view: it remembers the last route shown that is
+ * The Desk and Messages pages (#/desk, #/messages) and their switcher to the dock's own Connections view: it remembers the last route shown that is
  * a screen, so Connections goes back to it and flips that dock.
  */
 import { requestBus } from './lib/bus.ts'
@@ -12,7 +12,7 @@ export function bootWiring(doc: Document, screens: () => Promise<{ id: string }[
   if (!links.length) return
   let last: string | null = null, seq = 0, armed: string | null = null
   const arrive = async (path: string) => {
-    if (path === '/desk') {   // the Desk is not a screen
+    if (path === '/desk' || path === '/messages') {   // the Desk and Messages are not screens
       for (const link of links) { link.hidden = last === null; if (last) link.href = `#${last}` }
       return
     }

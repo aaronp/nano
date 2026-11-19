@@ -116,7 +116,8 @@ html[data-theme='retro'] .page-head a { color: #FFFF9E; }
 a[slot='nav'][data-drop='before'] { box-shadow: 0 -2px 0 var(--nano-accent, var(--focus, #36c)); }
 a[slot='nav'][data-drop='after'] { box-shadow: 0 2px 0 var(--nano-accent, var(--focus, #36c)); }
 .wiring-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.wiring-page > c-desk { flex: 1; min-height: 0; }
+.wiring-page > c-desk, .wiring-page > c-messages { flex: 1; min-height: 0; }
+.wiring-page > c-messages { overflow: auto; }
 .wiring-views { display: flex; gap: 4px; padding: 8px 12px; }
 .wiring-views a { padding: 4px 12px; border-radius: 999px; color: inherit; text-decoration: none; }
 .wiring-views a[aria-current="page"] { background: var(--accent, #3b82f6); color: #fff; }

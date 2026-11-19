@@ -72,14 +72,14 @@ test('opening the Desk first hides Connections', async () => {
   expect(t.link.hidden).toBe(true)
 })
 
-test('the Desk page nav is Connections | Desk, and there is no Circuit page', async () => {
+test('the Desk and Messages page navs are Connections | Desk | Messages, and there is no Circuit page', async () => {
   document.body.innerHTML = (await Bun.file(new URL('../public/index.html', import.meta.url)).text()).replace(/<script[\s\S]*?<\/script>/g, '')
   const navs = [...document.querySelectorAll('nav.wiring-views')]
-  expect(navs.length).toBe(1)
+  expect(navs.length).toBe(2)
   expect(document.querySelector('app-route[path="/wiring"], c-circuit')).toBeNull()
   for (const n of navs) {
-    expect([...n.querySelectorAll('a')].map(a => a.textContent)).toEqual(['Connections', 'Desk'])
-    expect(n.querySelector('a:last-child')!.getAttribute('href')).toBe('#/desk')
+    expect([...n.querySelectorAll('a')].map(a => a.textContent)).toEqual(['Connections', 'Desk', 'Messages'])
+    expect(n.querySelector('a:last-child')!.getAttribute('href')).toBe('#/messages')
   }
 })
 
@@ -89,4 +89,11 @@ test('arriving at /desk keeps the Connections link', async () => {
   const links = [...document.querySelectorAll<HTMLAnchorElement>('a[data-connections]')]
   expect(links.length).toBe(2)
   for (const l of links) { expect(l.hidden).toBe(false); expect(l.getAttribute('href')).toBe('#/workspace') }
+})
+
+test('Messages is not a screen: Connections points at the last workspace from there too', async () => {
+  const t = setup()
+  await t.go('/lab'); await t.go('/messages')
+  expect(t.link.hidden).toBe(false)
+  expect(t.link.getAttribute('href')).toBe('#/lab')
 })

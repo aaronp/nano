@@ -28,6 +28,7 @@ import { showStatus } from './lib/status.ts';
 import type { WorkspaceDock } from './components/workspace-dock.ts';
 import { defineWires, type Wires } from './wires/index.ts';
 import { defineDesk, type Desk } from './desk/index.ts';
+import { defineMessages, type Messages } from './messages/index.ts';
 import { bootWiring } from './boot-wiring.ts';   // after the shell (its bus)
 import { savedLayout, slotsToOpen } from './layout-data.ts';
 
@@ -108,7 +109,9 @@ if (host) {
   // makes both afresh: a time machine's index does not survive the history being cleared.
   let tm = await timeMachine(h.history), driver = clockDriver(h.app, h.registry, tm);
   const bars = document.querySelectorAll<NanoTimeMachine>('nano-time-machine');
-  const hand = () => { for (const b of bars) Object.assign(b, { tm, store: h.history.store, driver }); };
+  defineMessages();
+  const tables = document.querySelectorAll<Messages>('c-messages');
+  const hand = () => { for (const b of bars) Object.assign(b, { tm, store: h.history.store, driver }); for (const t of tables) Object.assign(t, { tm, store: h.history.store }); };
   hand();
   let resetting: Promise<void> | undefined;   // one Reset at a time: a second click while one runs joins it
   for (const b of bars) b.addEventListener('reset', () => resetting ??= (async () => {

@@ -101,9 +101,18 @@
   <!-- Desk: the system as runtimes of pod columns; Connections flips the last workspace's dock. -->
   <app-route path="/desk" bleed>
     <div class="wiring-page">
-      <nav class="wiring-views" aria-label="Wiring view"><a href="#/workspace" data-connections hidden>Connections</a><a href="#/desk" aria-current="page">Desk</a></nav>
+      <nav class="wiring-views" aria-label="Wiring view"><a href="#/workspace" data-connections hidden>Connections</a><a href="#/desk" aria-current="page">Desk</a><a href="#/messages">Messages</a></nav>
       <nano-time-machine></nano-time-machine>
       <c-desk></c-desk>
+    </div>
+  </app-route>
+
+  <!-- Messages: the recording as a searchable table, on the same time machine as the Desk. -->
+  <app-route path="/messages" bleed>
+    <div class="wiring-page">
+      <nav class="wiring-views" aria-label="Wiring view"><a href="#/workspace" data-connections hidden>Connections</a><a href="#/desk">Desk</a><a href="#/messages" aria-current="page">Messages</a></nav>
+      <nano-time-machine></nano-time-machine>
+      <c-messages></c-messages>
     </div>
   </app-route>
 
