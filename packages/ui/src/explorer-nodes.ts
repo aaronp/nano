@@ -2,11 +2,11 @@
  * The explorer's tree: each runtime with its pods, implementations, interfaces and operations; then every operation
  * (actions, events) with the interface, implementations and pods it belongs to; then the interfaces and implementations.
  * A node shown again away from its primary place has the id `<where>|<primary id>`: `primary(id)` is what it selects.
- * A pod node carries its `PodStatus` as `data.status` (a pod with no event yet: running if eager, else not started).
+ * A pod node carries its `PodStatus` as `data.status` (asked of the runtime: `status(runtime, pod)`).
  */
 import { html } from 'lit'
 import type { AppDeployment, Registry } from '@pritzlaff/nano-core'
-import type { PodStatus } from './filter/model.ts'
+import type { PodStatus } from '@pritzlaff/nano-core'
 import type { TreeNode } from '@pritzlaff/nano-elements'
 
 export const primary = (id: string) => id.slice(id.lastIndexOf('|') + 1)
@@ -18,13 +18,13 @@ const alias = (at: string, n: TreeNode): TreeNode => ({ ...n, id: `${at}|${n.id}
 
 type Op = { port: string; iface: string; name: string; kind: string }
 
-export function nodes(d: AppDeployment, registry: Registry, states: Record<string, PodStatus>): TreeNode[] {
+export function nodes(d: AppDeployment, registry: Registry, status: (runtime: string, pod: string) => PodStatus): TreeNode[] {
   const m = registry.manifest()
   const ops: Op[] = m.interfaces.flatMap(i => i.ops.map(o => ({ port: `${i.coord}/${o.name}`, iface: i.coord, name: o.name, kind: o.kind })))
   const implsOf = (iface: string) => registry.implementationsOf(iface).map(x => x.coord)
   const provides = (impl: string) => registry.implementation(impl)?.provides.map(i => i.coord) ?? []
   const where = (pod: string) => Object.keys(d.runtimes).find(r => d.runtimes[r]!.pods.includes(pod)) ?? ''
-  const podNode = (pod: string): TreeNode => ({ id: `p:${where(pod)}:${pod}`, label: pod, kind: 'pod', data: { ns: namespaceOf(d.pods[pod]?.implementation ?? ''), status: states[pod] ?? (d.pods[pod]?.eager ? 'running' : 'not started') } })
+  const podNode = (pod: string): TreeNode => ({ id: `p:${where(pod)}:${pod}`, label: pod, kind: 'pod', data: { ns: namespaceOf(d.pods[pod]?.implementation ?? ''), status: status(where(pod), pod) } })
   const ifaceNode = (c: string): TreeNode => ({ id: `i:${c}`, label: c, kind: 'interface', data: { ns: namespaceOf(c) } })
   const implNode = (c: string): TreeNode => ({ id: `m:${c}`, label: c, kind: 'implementation', data: { ns: namespaceOf(c) } })
   const opNode = (o: Op): TreeNode => ({ id: `o:${o.port}`, label: o.port, kind: o.kind, data: { ns: namespaceOf(o.iface) } })

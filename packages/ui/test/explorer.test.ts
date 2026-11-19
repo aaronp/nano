@@ -2,6 +2,7 @@
  * The explorer: application → runtimes → pods → edges, re-rendering on apply, drilling down through nano-open.
  */
 import { describe, expect, test } from 'bun:test'
+import { html } from 'lit'
 import { Type } from 'typebox'
 import { Coord, Application, AppDeployment, Registry, Implementation, Op, Pod, port, provide, success, Schema, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider, { Debounce, debounce, defineViews, input, Input, Log, log, map, MapIface } from '../src/index.ts'
@@ -32,10 +33,11 @@ const open = async (d: AppDeployment) => {
   registry.add(ns.provider([db, api]))
   return { app: must(await Application.create(must(AppDeployment.assemble(d, registry)), {})), registry }
 }
-type El = HTMLElement & { target: unknown; updateComplete: Promise<unknown> }
+type El = HTMLElement & { target: unknown; icon: unknown; updateComplete: Promise<unknown> }
 const mount = async (target: unknown) => {
   const el = document.createElement('nano-explorer') as El
   el.target = target
+  el.icon = (n: { kind?: string; data?: { status?: string } }) => n.kind === 'pod' ? html`<svg role="img" aria-label=${n.data!.status}></svg><svg role="img" aria-label="pod"></svg>` : undefined
   document.body.append(el)
   await el.updateComplete
   return el
@@ -168,6 +170,28 @@ describe('the explorer', () => {
       expect(labels).toEqual(expect.arrayContaining(['running', 'pod']))
       expect(tree(el).shadowRoot.querySelector('li[data-id="p:main:in"] > .line .kind')).toBeNull()
     })
+    test('opened after pods were built, the explorer shows their real status', async () => {
+      const o = await open(slice)
+      await o.app.call('main', 'out').log(1)
+      const el = await mount(o); await settle(el); await reveal(el)
+      expect(dot(el, 'out')).toBe('running')
+      expect(dot(el, 'up')).toBe('not started')
+    })
+    test('a throwing call leaves the pod running in the tree', async () => {
+      const bad = Implementation.define(ns.implementationId('bad'), { provides: [Store], make: () => [provide(Store, { save: async () => { throw new Error('boom') } })] })
+      const registry = Registry.create(); registry.add(uiProvider); registry.add(ns.provider([bad]))
+      const d: AppDeployment = { pods: { bad: Pod.lazy(bad) }, runtimes: { main: { pods: ['bad'], subscriptions: [] } } }
+      const app = must(await Application.create(must(AppDeployment.assemble(d, registry)), {}))
+      await app.call('main', 'bad').save('x').catch(() => {})
+      const el = await mount({ app, registry }); await settle(el)
+      expect(dot(el, 'bad')).toBe('running')
+    })
+    test('the explorer passes icon through to nano-tree', async () => {
+      const el = await mount(await open(slice)); await settle(el)
+      const own = () => undefined
+      el.icon = own; await settle(el)
+      expect((tree(el) as unknown as { icon: unknown }).icon).toBe(own)
+    })
     test('a new target starts its pods over', async () => {
       const a = await open(slice), el = await mount(a); await settle(el)
       await a.app.call('main', 'out').log(1); must(await a.app.restart('in')); await settle(el)
@@ -242,12 +266,12 @@ describe('the explorer', () => {
       const d = o.app.deployment()
       must(await o.app.apply({ ...d, pods: { ...d.pods, out: Pod.lazy(log, { config: { max: 3 } }), wait: Pod.eager(debounce, { config: { quietMs: 20 } }) } }))
       await settle(el)
-      expect(badge(el, 'out')).toBe('stopped')
+      expect(badge(el, 'out')).toBe('not started')   // changed: forgotten; lazy, so not rebuilt yet
       expect(badge(el, 'wait')).toBe('running')
       expect(badge(el, 'up')).toBe('running')
       must(await o.app.restart('up'))
       await settle(el)
-      expect(badge(el, 'up')).toBe('running')   // restarted
+      expect(badge(el, 'up')).toBe('not started')   // restarted: lazy, until called
       const d2 = o.app.deployment()
       must(await o.app.apply({ pods: { in: d2.pods.in!, wait: d2.pods.wait!, out: d2.pods.out! }, runtimes: { main: { pods: ['in', 'wait', 'out'], subscriptions: [] } } }))
       await settle(el)

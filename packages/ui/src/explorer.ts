@@ -1,14 +1,13 @@
 /**
  * `<nano-explorer>`: the system as a tree (explorer-nodes.ts): by runtime, by operation, by interface, by
- * implementation; the shared filter (`<nano-filter>`: search, kinds, namespaces, pod status), a kind icon and a status dot per row. Choosing a node shows its details beside the tree
+ * implementation; the shared filter (`<nano-filter>`: search, kinds, namespaces, pod status). Each pod's status is asked of nano-core (`runtime(r).status(pod)`, on each lifecycle event); the optional `icon` renderer (a node, its `kind` and a pod's `data.status`) goes to `<nano-tree>`. Choosing a node shows its details beside the tree
  * (explorer-details.ts); a pod's "Open view" (or a double-click on a pod) fires `nano-open` with `{ runtime, pod }`.
  */
 import { LitElement, css, html } from 'lit'
 import type { TreeNode } from '@pritzlaff/nano-elements'
 import { details, type Called, type Where } from './explorer-details.ts'
 import { namespaces, nodes, primary } from './explorer-nodes.ts'
-import { emptyFilter, filterTree, podStatus, type FilterValue, type PodStatus } from './filter/model.ts'
-import { kindIcon, statusDot } from './filter/icons.ts'
+import { emptyFilter, filterTree, type FilterValue, type PodStatus } from './filter/model.ts'
 import './filter/filter.ts'
 import type { Application, Registry } from '@pritzlaff/nano-core'
 import { base } from '@pritzlaff/nano-elements'
@@ -19,11 +18,11 @@ type ExplorerTarget = { app: Application; registry: Registry; calls?: Called[] }
 
 const KINDS = ['runtime', 'pod', 'interface', 'implementation', 'action', 'event']
 const STATUSES: PodStatus[] = ['running', 'not started', 'stopped', 'failed']
-/** A pod: its status dot, then the pod icon; groups (no kind) none; the rest `kindIcon`. */
-const icon = (n: TreeNode) => n.kind === 'pod' ? html`${statusDot(n.data!.status as PodStatus)}${kindIcon('pod')}` : n.kind ? kindIcon(n.kind) : undefined
+/** The events after which a pod's status may have changed. */
+const LIFECYCLE = new Set(['built', 'closed', 'restarted', 'failure', 'applied'])
 
 export class NanoExplorer extends LitElement {
-  static properties = { target: { attribute: false }, states: { state: true }, selected: { state: true }, filter: { state: true } }
+  static properties = { target: { attribute: false }, icon: { attribute: false }, selected: { state: true }, filter: { state: true } }
   static styles = [base, css`
     :host { display: block; height: 100%; container-type: inline-size }
     .pane { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0 }
@@ -35,13 +34,13 @@ export class NanoExplorer extends LitElement {
     h3 { margin: 4px 0 8px; font-size: 13px } dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0 0 12px; font-size: 12px }
     a { color: inherit; text-decoration: underline dotted } dt { opacity: .7 } dd { margin: 0 } ul { margin: 0; padding-left: 16px } .warn { color: var(--nano-warn, #d9a400) } .muted { opacity: .7 }`]
   declare target?: ExplorerTarget
-  declare states: Record<string, PodStatus>
+  declare icon?: (n: TreeNode) => unknown
   declare selected: string | null
   declare filter: FilterValue
   private off?: () => void
   private watching?: ExplorerTarget
 
-  constructor() { super(); this.states = {}; this.selected = null; this.filter = emptyFilter() }
+  constructor() { super(); this.selected = null; this.filter = emptyFilter() }
   connectedCallback() { super.connectedCallback(); this.watch() }
   disconnectedCallback() { super.disconnectedCallback(); this.stop() }
   willUpdate(changed: Map<string, unknown>) { if (changed.has('target')) this.watch() }
@@ -50,11 +49,9 @@ export class NanoExplorer extends LitElement {
     const t = this.target
     if (!t || !this.isConnected || this.watching === t) return
     this.stop()
-    this.states = {}   // a new app's pods start over
     this.watching = t
     this.off = t.app.listen(e => {
-      if (e.type === 'sent') { if (e.kind === 'call' && t.calls) queueMicrotask(() => this.requestUpdate()) }   // a call seen
-      else this.states = podStatus(this.states, e, () => new Set(Object.keys(t.app.deployment().pods)))
+      if (LIFECYCLE.has(e.type) || (e.type === 'sent' && e.kind === 'call' && t.calls)) queueMicrotask(() => this.requestUpdate())   // a status may have changed; a call seen
     })
   }
   private stop() { this.off?.(); this.off = undefined; this.watching = undefined }
@@ -66,13 +63,14 @@ export class NanoExplorer extends LitElement {
   render() {
     if (!this.target) return html``
     const t = this.target
-    const c = { d: t.app.deployment(), registry: t.registry, states: this.states, calls: t.calls, go: (id: string) => { this.selected = id }, open: (w: Where) => this.open(w) }
-    const all = nodes(c.d, t.registry, this.states)
+    const status = (r: string, pod: string): PodStatus => { const s = t.app.runtime(r).status(pod); return s.ok ? s.value : 'not started' }
+    const c = { d: t.app.deployment(), registry: t.registry, status, calls: t.calls, go: (id: string) => { this.selected = id }, open: (w: Where) => this.open(w) }
+    const all = nodes(c.d, t.registry, status)
     const shown = filterTree(all, { ...this.filter, text: '' })
     const groups = { kinds: KINDS, namespaces: namespaces(all), statuses: STATUSES }
     return html`<div class="split"><div class="pane">
         <nano-filter .groups=${groups} .value=${this.filter} @change=${(e: CustomEvent<FilterValue>) => { this.filter = e.detail }}></nano-filter>
-      <nano-tree .nodes=${shown} .icon=${icon} .query=${this.filter.text} .selected=${this.selected} open-depth="2" @dblclick=${() => this.dbl()}
+      <nano-tree .nodes=${shown} .icon=${this.icon} .query=${this.filter.text} .selected=${this.selected} open-depth="2" @dblclick=${() => this.dbl()}
         @select=${(e: CustomEvent<{ id: string }>) => { e.preventDefault(); const id = primary(e.detail.id); if (!/^g:|\/(pods|impls|ifaces|ops)$/.test(id)) this.selected = id }}></nano-tree></div>
       <section class="details" aria-label="Details">${details(c, this.selected)}</section></div>`
   }

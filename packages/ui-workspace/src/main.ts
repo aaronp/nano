@@ -32,6 +32,7 @@ import { defineMessages } from './messages/index.ts';
 import { bootWiring, hand as handTo } from './boot-wiring.ts';   // after the shell (its bus)
 import { shadowCreate } from './history.ts';
 import { savedLayout, slotsToOpen } from './layout-data.ts';
+import { icon } from './icons.ts';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
 if (host) {
@@ -52,7 +53,7 @@ if (host) {
   const layoutNow = () => JSON.stringify(dock && h.data().layout?.[dock.id]);
   setImportHost({ ...host, importUrl: (url, chosen) => { const before = layoutNow(); return shown(host!.importUrl(url, chosen), before) as ReturnType<typeof h.importUrl>; } });
   for (const dock of document.querySelectorAll<WorkspaceDock>('workspace-dock')) dock.host = host;
-  for (const el of document.querySelectorAll<HTMLElement & { target?: unknown }>('nano-explorer, nano-wiring')) el.target ??= target;
+  for (const el of document.querySelectorAll<HTMLElement & { target?: unknown; icon?: unknown }>('nano-explorer, nano-wiring')) { el.target ??= target; if (el.localName === 'nano-explorer') el.icon = icon; }
   bootAppBar(host);
   defineSettings();
   for (const el of document.querySelectorAll<SettingsView>('nano-settings')) el.host = host;

@@ -9,7 +9,7 @@ import type { AppDeployment, Registry } from '@pritzlaff/nano-core'
 export type Where = { runtime: string; pod: string }
 /** An op-level call (ui-workspace's OpCall, structurally): `from`'s op `source` (null: unknown) calls `to`'s `target`. */
 export type Called = { runtime: string; from: string; to: string; source: string | null; target: string; declared: boolean; seen: boolean }
-type Ctx = { d: AppDeployment; registry: Registry; states: Record<string, string>; calls?: Called[]; go(id: string): void; open(w: Where): void }
+type Ctx = { d: AppDeployment; registry: Registry; status(runtime: string, pod: string): string; calls?: Called[]; go(id: string): void; open(w: Where): void }
 
 const op = (port: string) => port.slice(port.lastIndexOf('/') + 1)
 const row = (k: string, v: unknown) => html`<dt>${k}</dt><dd>${v}</dd>`
@@ -34,7 +34,7 @@ function pod(c: Ctx, runtime: string, name: string) {
   return html`<h3>pod ${name}</h3><dl>
     ${row('implementation', link(c, `m:${p.implementation}`, p.implementation))}
     ${row('runtimes', placed(c.d, name).map((r, i) => html`${i ? ', ' : ''}${link(c, `r:${r}`, r)}`))}
-    ${row('isolation', p.isolation ?? 'host')}${row('starts', p.eager ? 'eager' : 'lazy')}${row('state', c.states[name] ?? 'not built')}
+    ${row('isolation', p.isolation ?? 'host')}${row('starts', p.eager ? 'eager' : 'lazy')}${row('state', c.status(placed(c.d, name)[0] ?? '', name))}
     ${row('config', p.config === undefined ? html`<span class="muted">none</span>` : html`<code>${JSON.stringify(p.config)}</code>`)}
     ${row('needs', list(needs))}
     ${c.calls ? row('calls', list(c.calls.filter(x => x.from === name).map(x => callRow(c, x, false, true)))) : nothing}

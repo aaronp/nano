@@ -4,10 +4,12 @@
  * around both must not set its own label.
  *
  *   html`${kindIcon('pod')} ${statusDot('running')}`
+ *   explorer.icon = icon   // `<nano-explorer>`'s `icon`: a pod's status dot, then the pod icon; the rest `kindIcon`
  */
-import { svg } from 'lit'
+import { html, svg } from 'lit'
 import { tv } from '@pritzlaff/nano-elements'
-import type { PodStatus } from './model.ts'
+import type { TreeNode } from '@pritzlaff/nano-elements'
+import type { PodStatus } from '@pritzlaff/nano-core'
 
 const shapes: Record<string, ReturnType<typeof svg>> = {
   pod: svg`<path d="M8 2 13.5 5v6L8 14 2.5 11V5z"/>`,
@@ -29,3 +31,6 @@ const dots: Record<PodStatus, { fill: string; stroke: string }> = {
 }
 
 export const statusDot = (s: PodStatus) => svg`<svg width="10" height="10" viewBox="0 0 10 10" role="img" aria-label=${s}><title>${s}</title><circle cx="5" cy="5" r="3.5" fill="${dots[s].fill}" stroke="${dots[s].stroke}" stroke-width="1.5"/></svg>`
+
+/** `<nano-explorer>`'s `icon`: a pod's status dot then the pod icon; a group (no kind) none; the rest `kindIcon`. */
+export const icon = (n: TreeNode) => n.kind === 'pod' ? html`${statusDot(n.data!.status as PodStatus)}${kindIcon('pod')}` : n.kind ? kindIcon(n.kind) : undefined

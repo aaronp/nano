@@ -5,6 +5,7 @@ import type { Op } from '@pritzlaff/nano-core'
 import { jacksOfImpl, snapshotOf, type Jack } from './model'
 import type { Vals } from './render-root'
 import type { Wires } from './wires'
+import { icon } from '../icons.ts'
 
 const name = (key: string) => key.slice(key.lastIndexOf('/') + 1)
 const row = (label: string, value: unknown) => html`<div style="display:grid; grid-template-columns:96px 1fr; gap:8px"><span style="color:#8B96A5">${label}</span><span class="mono" style="overflow-wrap:anywhere">${value}</span></div>`
@@ -30,7 +31,7 @@ export function renderDetail(el: Wires, d: Vals) {
     : sel.op ? action(sel.system, sel.instance, jacks.find(j => j.port === sel.op)?.op, sel.op, subs)
     : component(el, sel.system, sel.instance, pod.implementation, jacks, subs)
   return html`<section style="display:flex; flex-direction:column; gap:14px">
-    <nano-explorer .target=${h && { app: h.app, registry: h.registry }}></nano-explorer>
+    <nano-explorer .icon=${icon} .target=${h && { app: h.app, registry: h.registry }}></nano-explorer>
     <div class="detail" style="display:flex; flex-direction:column; gap:6px; font-size:12px; color:#C9D1D9">${card}</div>
   </section>`
 }

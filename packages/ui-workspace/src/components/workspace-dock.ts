@@ -31,6 +31,7 @@ import type { Host } from '../host.ts';
 import { addPod, fill } from '../dock/panels.ts';
 import { provideBus, requestBus, type Bus } from '../lib/bus.ts';
 import { panelContent, withMode } from '../lib/panel-content.ts';
+import { icon as explorerIcon } from '../icons.ts';
 import { ARRANGEMENTS, PALETTE_ID, windowStyle, type WindowStyle, shownInstance, initialLayout, panelIds, readWidgetId, readWidgetName, readWidgetMode, panelState, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
 
 const STYLE_ID = 'workspace-dock-styles';
@@ -328,7 +329,7 @@ export class WorkspaceDock extends HTMLElement {
     if (name && id !== 'pod') (shown as Element | null)?.setAttribute('name', name);   // before it connects, so it attaches to that instance
     container.element.append(content);
     const h = this.host;
-    if (h) for (const el of container.element.querySelectorAll<HTMLElement & { target?: unknown }>('nano-explorer, nano-wiring')) el.target = { app: h.app, registry: h.registry, get calls() { return h.calls(); } };
+    if (h) for (const el of container.element.querySelectorAll<HTMLElement & { target?: unknown; icon?: unknown }>('nano-explorer, nano-wiring')) { if (el.localName === 'nano-explorer') el.icon = explorerIcon; el.target = { app: h.app, registry: h.registry, get calls() { return h.calls(); } }; }
     if (h && id === 'pod' && name) container.on('destroy', fill(container.element, `pod:${name}`, h));
     // an implementation's panel makes a pod of it (or shows the one it made), as a catalog kind's placed a new instance
     const impl = def.template.dataset['implementation'];

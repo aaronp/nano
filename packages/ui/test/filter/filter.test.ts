@@ -1,8 +1,8 @@
 /**
- * `<nano-filter>`: a search, and a button with a popover of chip rows per group given; kindIcon and statusDot.
+ * `<nano-filter>`: a search, and a button with a popover of chip rows per group given.
  */
 import { expect, test } from 'bun:test'
-const { defineViews, emptyFilter, kindIcon, statusDot } = await import('../../src/index.ts')
+const { defineViews, emptyFilter } = await import('../../src/index.ts')
 const { render } = await import('lit')
 import type { FilterValue } from '../../src/index.ts'
 
@@ -66,16 +66,4 @@ test('each row is a group labelled by its name', async () => {
   const el = await mount({ kinds: ['pod'], statuses: ['failed'] })
   const named = $$(el, '.row').map(r => r.getAttribute('role') + ':' + el.shadowRoot!.getElementById(r.getAttribute('aria-labelledby')!)!.textContent)
   expect(named).toEqual(['group:Type', 'group:Status'])
-})
-
-test('kindIcon and statusDot render an svg with a title per kind and status', () => {
-  const host = document.createElement('div')
-  for (const k of ['pod', 'interface', 'implementation', 'action', 'event', 'runtime', 'other']) {
-    render(kindIcon(k) as never, host)
-    expect(host.querySelector('svg title')!.textContent).toBe(k)
-  }
-  for (const s of ['running', 'not started', 'stopped', 'failed'] as const) {
-    render(statusDot(s) as never, host)
-    expect(host.querySelector('svg title')!.textContent).toBe(s)
-  }
 })

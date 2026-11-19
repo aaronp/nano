@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AppEvent } from '@pritzlaff/nano-core'
-import { emptyFilter, filterTree, matches, podStatus, type FilterValue, type PodStatus } from '../../src/filter/model.ts'
+import { emptyFilter, filterTree, matches, type FilterValue, type PodStatus } from '../../src/filter/model.ts'
 
 const f = (p: Partial<FilterValue>): FilterValue => ({ ...emptyFilter(), ...p })
 const set = <T>(...x: T[]) => new Set(x)
@@ -67,31 +66,5 @@ describe('filterTree by status and unknown namespace', () => {
   })
   test('a selected namespace absent from the tree is ignored', () => {
     expect(filterTree(list, f({ namespaces: set('gone') }))).toEqual(list)
-  })
-})
-
-describe('podStatus', () => {
-  const placed = (...p: string[]) => () => new Set(p)
-  test('built → running, closed → stopped, failure → failed, restarted → running, applied drops removed pods', () => {
-    let s: Record<string, PodStatus> = {}
-    s = podStatus(s, { type: 'built', pod: 'a' }, placed('a', 'b'))
-    expect(s).toEqual({ a: 'running' })
-    s = podStatus(s, { type: 'closed', pod: 'a', reason: 'x' as never }, placed('a', 'b'))
-    expect(s.a).toBe('stopped')
-    s = podStatus(s, { type: 'failure', pod: 'a', reason: 'r' }, placed('a', 'b'))
-    expect(s.a).toBe('failed')
-    s = podStatus(s, { type: 'restarted', pod: 'a' }, placed('a', 'b'))
-    s = podStatus(s, { type: 'built', pod: 'b' }, placed('a', 'b'))
-    expect(s).toEqual({ a: 'running', b: 'running' })
-    s = podStatus(s, { type: 'applied', caller: 'c', added: [], removed: ['b'], changed: [], rewired: [] }, placed('a'))
-    expect(s).toEqual({ a: 'running' })
-  })
-  test('removed then placed again → starts fresh (absent, so "not started", until built)', () => {
-    let s: Record<string, PodStatus> = { b: 'running' }
-    const ap: AppEvent & { type: 'applied' } = { type: 'applied', caller: 'c', added: [], removed: ['b'], changed: [], rewired: [] }
-    s = podStatus(s, ap, placed())
-    s = podStatus(s, { ...ap, removed: [], added: ['b'] }, placed('b'))
-    expect(s.b).toBeUndefined()
-    expect(podStatus(s, { type: 'built', pod: 'b' }, placed('b')).b).toBe('running')
   })
 })

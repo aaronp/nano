@@ -1,9 +1,9 @@
-/** The shared filter's value and its pure rules: what matches, which tree nodes stay, and each pod's status. */
-import type { AppEvent } from '@pritzlaff/nano-core'
+/** The shared filter's value and its pure rules: what matches, which tree nodes stay. */
+import type { PodStatus } from '@pritzlaff/nano-core'
 import type { TreeNode } from '@pritzlaff/nano-elements'
 import { namespaces } from '../explorer-nodes.ts'
 
-export type PodStatus = 'running' | 'not started' | 'stopped' | 'failed'
+export type { PodStatus }
 export type FilterValue = { text: string; kinds: Set<string>; namespaces: Set<string>; statuses: Set<PodStatus> }
 export type FilterItem = { label: string; kind?: string; ns?: string; status?: PodStatus; terms?: string[] }
 
@@ -30,13 +30,4 @@ export function filterTree(nodes: TreeNode[], f: FilterValue): TreeNode[] {
     return kids.length ? [{ ...n, children: kids, body: undefined, ...(n.count !== undefined && !n.kind && { count: kids.length }) }] : []
   })
   return walk(nodes)
-}
-
-const to: Partial<Record<AppEvent['type'], PodStatus>> = { built: 'running', restarted: 'running', closed: 'stopped', failure: 'failed' }
-
-/** Folds one event into each pod's status; `applied` drops pods no longer `placed()`. A pod with no entry is not started. */
-export function podStatus(states: Record<string, PodStatus>, e: AppEvent, placed: () => Set<string>): Record<string, PodStatus> {
-  if (e.type === 'applied') { const p = placed(); return Object.fromEntries(Object.entries(states).filter(([k]) => p.has(k))) }
-  const s = to[e.type]
-  return s && 'pod' in e && e.pod ? { ...states, [e.pod]: s } : states
 }
