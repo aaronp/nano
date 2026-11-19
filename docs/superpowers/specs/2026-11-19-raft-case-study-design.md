@@ -128,8 +128,9 @@ replayable. It is not another production Raft. What it shows off is nano:
   - Each runtime is a cluster on an outer ring.
   - Pods placed in several runtimes (shared pods, like the messaging pod and the clock) sit near the centre.
   - With one runtime it is a single ring of its pods.
-- **Each pod is drawn as its own view** (the element nano-ui's views map gives its implementation), small, else as a
-  plain labelled node. The Raft glyph is just `raft-api`'s view.
+- **Each pod is drawn as its own view**, small, else as a plain labelled node. The element takes a `views` map
+  (implementation → tag, the existing `ViewMap`), which the workspace fills with the views its loaded modules bring
+  (user, 2026-11-19), so the Raft glyph is just `raft-api`'s view.
 - **A filter** chooses which pods are drawn, by implementation. Raft's default shows `raft-api` and the messaging pod.
   - A message to or from a hidden pod is drawn to or from its runtime's cluster.
 - **State at the cursor:** when the time machine is paused or playing away from Live, the Ring rebuilds an
