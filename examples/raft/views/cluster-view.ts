@@ -25,7 +25,7 @@ class RaftClusterView extends LitElement {
     this.stop?.()
     this.watching = t
     this.stop = undefined
-    void this.pod(t).list().then(n => { this.names = n }, () => {})   // read once; create and remove re-read
+    try { void this.pod(t).list().then(n => { this.names = n }, () => {}) } catch { /* not in this app: nothing listed */ }   // read once; create and remove re-read
   }
   private async run(act: () => Promise<unknown>) {
     this.error = undefined

@@ -37,7 +37,7 @@ export function detailModel(s: Node, now: number): { rows: [string, string][]; p
   }
 }
 
-/** The ledger table: a row per log entry, committed once its index is at or below `commitIndex`. */
-export const ledgerRows = (p: Persistent, commitIndex: number) => p.log.map(e => ({
+/** The ledger view: currentTerm and votedFor, then a row per log entry, committed once its index is at or below `commitIndex`. */
+export const ledgerModel = (p: Persistent, commitIndex: number) => ({ currentTerm: p.currentTerm, votedFor: p.votedFor, rows: p.log.map(e => ({
   index: e.index, term: e.term, value: typeof e.value === 'string' ? e.value : JSON.stringify(e.value), at: e.at.toFixed(1), committed: e.index <= commitIndex,
-}))
+})) })

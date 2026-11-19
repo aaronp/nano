@@ -32,16 +32,19 @@ class RaftNodeView extends LitElement {
     this.stop?.()
     this.watching = t
     this.status = undefined; this.now = 0   // a new target (a shadow app, say) starts from nothing
-    const rt = t.app.runtime(t.runtime), heard = { status: false, now: false }   // read once, then hear: `changed` carries the status, `fired` its time
-    const offs = [rt.subscribe(RaftNode.ops.changed, ({ output }) => { heard.status = true; this.status = output }),
-      rt.subscribe(Clock.ops.fired, ({ output }) => { heard.now = true; this.now = output.at })]
+    const heard = { status: false, now: false }, offs: (() => void)[] = []   // read once, then hear: `changed` carries the status, `fired` its time
     this.stop = () => offs.forEach(off => off())
-    // the read applies only for what no event has already told (an event is newer than the read), and never after a swap
-    void Promise.all([rt.get(RaftNode, { pod: t.pod }).status(), rt.get(Clock).now()]).then(([status, now]) => {
-      if (this.watching !== t) return
-      if (!heard.status) this.status = status
-      if (!heard.now) this.now = now
-    }, () => {})
+    try {   // throws when the app has no such runtime or pod (a shadow from before the cluster): nothing to show
+      const rt = t.app.runtime(t.runtime)
+      offs.push(rt.subscribe(RaftNode.ops.changed, ({ output }) => { heard.status = true; this.status = output }))
+      offs.push(rt.subscribe(Clock.ops.fired, ({ output }) => { heard.now = true; this.now = output.at }))
+      // the read applies only for what no event has already told (an event is newer than the read), and never after a swap
+      void Promise.all([rt.get(RaftNode, { pod: t.pod }).status(), rt.get(Clock).now()]).then(([status, now]) => {
+        if (this.watching !== t) return
+        if (!heard.status) this.status = status
+        if (!heard.now) this.now = now
+      }, () => {})
+    } catch { /* empty */ }
   }
   render() {
     if (!this.status) return html``

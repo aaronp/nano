@@ -9,7 +9,7 @@ import type { Node, Persistent } from '../core/types.ts'
 const { ClockControl } = await import('@pritzlaff/nano-ui')
 const { Cluster, Ledger, RaftNode } = await import('../interfaces.ts')
 const { openRaft } = await import('../test-host.ts')
-const { glyphModel, ledgerRows } = await import('./model.ts')
+const { glyphModel, ledgerModel } = await import('./model.ts')
 await import('../index.ts')
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const settle = () => new Promise(r => setTimeout(r, 0))
@@ -75,8 +75,9 @@ test('raft-ledger follows the ledger as the leader takes a request', async () =>
   must(await app.call(leader, `${leader}-raft`)[RaftNode.ops.request.name]!('hello'))
   await advance(app, 300); await wait(); await el.updateComplete
   const p = must(await app.call(leader, `${leader}-ledger`)[Ledger.ops.read.name]!(null)) as Persistent
-  const rows = ledgerRows(p, (await status(leader)).commitIndex)
-  expect(rows).toHaveLength(1)
+  const m = ledgerModel(p, (await status(leader)).commitIndex)
+  expect(m.rows).toHaveLength(1)
+  expect(el.shadowRoot!.querySelector('.head')!.textContent).toBe(`currentTerm ${m.currentTerm} · votedFor ${m.votedFor ?? '—'}`)
   const tr = el.shadowRoot!.querySelectorAll('tr')
   expect(tr).toHaveLength(2)
   expect(tr[1]!.textContent).toContain('hello')
@@ -132,4 +133,16 @@ test('swapping the target to a second app shows that app, not the first', async 
   expect(el.shadowRoot!.querySelector('text')!.textContent).toBe('0')
   expect(ledger.shadowRoot!.querySelectorAll('tr')).toHaveLength(1)
   await first.close()
+})
+
+test('a target whose app has no such runtime or pod (a shadow from before the cluster) renders empty, no throw', async () => {
+  app = await openRaft()
+  const empty = (el: HTMLElement) => expect(el.shadowRoot!.innerHTML.replace(/<!--[^]*?-->/g, '').trim()).toBe('')
+  for (const [tag, pod] of [['raft-node', 'example-1-raft'], ['raft-ledger', 'example-1-ledger']] as const) {
+    const el = await mount(tag, app, 'example-1', pod)   // no runtime example-1: mount awaits updateComplete, which a throw rejects
+    empty(el)
+    el.target = { app, registry: Registry.create(), runtime: 'raft', pod }   // the runtime is there, the pod isn't
+    await wait(); await el.updateComplete
+    empty(el)
+  }
 })

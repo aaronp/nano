@@ -1,14 +1,16 @@
 /**
  * `<nano-ring>`: the app as rings (ring.ts): each shown pod as its own view, the time machine's messages in flight as
  * dots between them. With the cursor in the past and still for 200 ms, the views are bound to an app rebuilt to it
- * (`shadowAt` through `create`), inert; at Live, to the live app again. A dot click seeks to its message.
+ * (`shadowAt` through `create`), inert, and the rings are that app's deployment; at Live, the live app again. A pod with
+ * no view (none in `views`, nano-ui's map or the deployment's own) is just its label. A dot click seeks to its message.
  *
  *   ring.app = app; ring.registry = registry; ring.tm = tm; ring.store = store
  *   ring.create = d => Application.create(…, { deploymentPolicy: DeploymentPolicies.allowAll() })   // a shadow's own app
  *   ring.show = (pod, impl) => impl !== 'nano.ui/clock'
- *   ring.views = { 'example.raft/node': 'raft-glyph' }   // implementation → view tag, before nano-ui's own map
+ *   ring.views = { 'example.raft/node': 'raft-node' }   // implementation → view tag, before nano-ui's own map
  */
 import { LitElement, css, html, svg } from 'lit'
+import { t, tv } from '@pritzlaff/nano-elements'
 import type { AppDeployment, Application, NanoResult, Registry } from '@pritzlaff/nano-core'
 import { views as defaults } from '../views/define.ts'
 import { viewFor, type ViewMap, type ViewTarget } from '../views/view.ts'
@@ -27,13 +29,13 @@ export class NanoRing extends LitElement {
     frame: { state: true }, shadow: { state: true }, tooLong: { state: true }, failed: { state: true },
   }
   static styles = css`
-    :host { display: block; overflow: auto; color: #E6EDF3; font: 12px system-ui, sans-serif; background: #0B0E12 }
+    :host { display: block; overflow: auto; color: ${t('fg')}; font: 12px ${t('font')}; background: ${t('bg')} }
     .stage { position: relative; margin: 8px auto }
     svg { position: absolute; inset: 0; overflow: visible; pointer-events: none }
-    circle.rt { fill: none; stroke: #2A323D; stroke-width: 2 } circle[data-dot] { pointer-events: all; cursor: pointer }
-    .pod { position: absolute; transform: translate(-50%, -50%); width: 150px; max-height: 120px; overflow: auto; padding: 4px; border: 1px solid #2A323D; border-radius: 8px; background: #181E26 }
-    .pod[inert] { opacity: .85; border-style: dashed } .pod > b { display: block; font-size: 11px; color: #94a3b8 }
-    small.warn { display: block; padding: 6px 8px; color: #fbbf24 }`
+    circle.rt { fill: none; stroke: ${t('border')}; stroke-width: 2 } circle[data-dot] { pointer-events: all; cursor: pointer }
+    .pod { position: absolute; transform: translate(-50%, -50%); width: 150px; max-height: 120px; overflow: auto; padding: 4px; border: 1px solid ${t('border')}; border-radius: ${t('radius')}; background: ${t('surface')} }
+    .pod[inert] { opacity: .85; border-style: dashed } .pod > b { display: block; font-size: 11px; color: ${t('muted')} }
+    small.warn { display: block; padding: 6px 8px; color: ${t('warn')} }`
   declare app?: Application; declare registry?: Registry; declare tm?: TimeMachine; declare store?: MessageStore
   declare create?: (d: AppDeployment) => Promise<NanoResult<Application>>
   declare show?: (pod: string, impl: string) => boolean
@@ -87,9 +89,10 @@ export class NanoRing extends LitElement {
     if (made.ok) { this.failed = undefined; this.bind(made.value) } else { this.failed = made.fail.reason; this.bind(undefined) }
   }
 
-  /** The pod's view element, kept across renders, its target set when it changes. */
+  /** The pod's view element, kept across renders, its target set when it changes; none for a pod with no view. */
   private view(d: AppDeployment, pod: string, runtime: string, app: Application, registry: Registry) {
-    const tag = viewFor(pod, d, { ...defaults, ...this.views }), key = `${pod} ${tag}`
+    const map = { ...defaults, ...this.views }, tag = viewFor(pod, d, map), key = `${pod} ${tag}`
+    if (tag === 'nano-pod-view' && d.views?.[pod] !== tag && map[d.pods[pod]?.implementation ?? ''] !== tag) return ''
     let el = this.els.get(key)
     if (!el) this.els.set(key, el = document.createElement(tag) as View)
     const t = el.target
@@ -100,18 +103,18 @@ export class NanoRing extends LitElement {
   render() {
     const { app, registry, tm } = this
     if (!app || !registry) return html``
-    const d = app.deployment(), l = ringLayout(d, { size: SIZE, show: this.show }), bound = this.shadow ?? app, past = !!this.shadow
+    const bound = this.shadow ?? app, past = !!this.shadow, d = bound.deployment(), l = ringLayout(d, { size: SIZE, show: this.show })
     const tooLong = !!tm && this.tooLong && ringSource(tm.mode, tm.cursor >= tm.span.to, false) === 'too-long'
     const home = (pod: string, rt: string | null) => rt ?? Object.keys(d.runtimes).find(r => d.runtimes[r]!.pods.includes(pod))!
     const dots = (this.frame?.inFlight ?? []).flatMap(({ message, progress }) => {
       const p = ringDot(l, d, message, Math.min(1, progress))
-      return p ? [svg`<circle data-dot=${message.sent.id} cx=${p.x} cy=${p.y} r="6" fill="#F5B73B" stroke="#0B0E12" stroke-width="2" @click=${() => tm?.seek(message.at)}></circle>`] : []
+      return p ? [svg`<circle data-dot=${message.sent.id} cx=${p.x} cy=${p.y} r="6" fill=${tv('s2')} stroke=${tv('bg')} stroke-width="2" @click=${() => tm?.seek(message.at)}></circle>`] : []
     })
     return html`
       ${tooLong ? html`<small class="warn">history too long to rebuild state</small>` : ''}
       ${this.failed ? html`<small class="warn">${this.failed}</small>` : ''}
       <div class="stage" style="width:${SIZE}px;height:${SIZE}px">
-        <svg>${l.runtimes.map(r => svg`<circle class="rt" cx=${r.x} cy=${r.y} r=${r.r}></circle><text x=${r.x} y=${r.y - r.r - 8} text-anchor="middle" fill="#94a3b8">${r.id}</text>`)}</svg>
+        <svg>${l.runtimes.map(r => svg`<circle class="rt" cx=${r.x} cy=${r.y} r=${r.r}></circle><text x=${r.x} y=${r.y - r.r - 8} text-anchor="middle" fill=${tv('muted')}>${r.id}</text>`)}</svg>
         ${l.pods.map(p => html`<div class="pod" data-pod=${p.pod} .inert=${past} style="left:${p.x}px;top:${p.y}px"><b>${p.pod}</b>${this.view(d, p.pod, home(p.pod, p.runtime), bound, registry)}</div>`)}
         <svg>${dots}</svg>
       </div>`

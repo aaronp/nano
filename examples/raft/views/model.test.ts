@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Node } from '../core/types.ts'
-import { detailModel, glyphModel, ledgerRows } from './model.ts'
+import { detailModel, glyphModel, ledgerModel } from './model.ts'
 
 const peer = { next: 1, match: 0, granted: false, rpcDue: 0, heartbeatDue: 0 }
 const timing = { electionMin: 150, electionMax: 300, heartbeat: 50 }
@@ -49,8 +49,9 @@ describe('detailModel', () => {
   })
 })
 
-test('ledgerRows marks the entries up to commitIndex committed', () => {
+test('ledgerModel: currentTerm and votedFor, then the entries, those up to commitIndex committed', () => {
   const log = [{ index: 1, term: 1, value: 'x', at: 10 }, { index: 2, term: 2, value: { n: 1 }, at: 20.55 }]
-  expect(ledgerRows({ currentTerm: 2, votedFor: null, log }, 1)).toEqual([
-    { index: 1, term: 1, value: 'x', at: '10.0', committed: true }, { index: 2, term: 2, value: '{"n":1}', at: '20.6', committed: false }])
+  expect(ledgerModel({ currentTerm: 2, votedFor: 'b', log }, 1)).toEqual({ currentTerm: 2, votedFor: 'b', rows: [
+    { index: 1, term: 1, value: 'x', at: '10.0', committed: true }, { index: 2, term: 2, value: '{"n":1}', at: '20.6', committed: false }] })
+  expect(ledgerModel({ currentTerm: 0, votedFor: null, log: [] }, 0)).toEqual({ currentTerm: 0, votedFor: null, rows: [] })
 })
