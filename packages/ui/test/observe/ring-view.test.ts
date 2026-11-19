@@ -35,7 +35,7 @@ async function typed(store = memoryStore()) {
 let cleanup: (() => Promise<void>) | undefined
 afterEach(async () => { await cleanup?.(); cleanup = undefined })
 
-async function mount(props: { app: Application; tm: TimeMachine; store: unknown; show?: unknown }) {
+async function mount(props: { app: Application; tm: TimeMachine; store: unknown; show?: unknown; views?: unknown }) {
   const el = document.createElement('nano-ring') as Ring
   Object.assign(el, { registry, create, ...props })
   document.body.replaceChildren(el)
@@ -110,4 +110,11 @@ test('a dot click seeks', async () => {
   dots[0]!.dispatchEvent(new Event('click'))
   expect(tm.mode).toBe('paused')
   expect(tm.cursor).toBe(1)
+})
+
+test('a pod whose implementation is in views renders as that tag', async () => {
+  if (!customElements.get('test-log-view')) customElements.define('test-log-view', class extends HTMLElement {})
+  const { app, tm, store } = await ring()
+  const el = await mount({ app, tm, store, views: { 'nano.ui/log': 'test-log-view' } })
+  expect(views(el).map(v => v.view.localName)).toEqual(['nano-input', 'nano-debounce', 'nano-map', 'test-log-view', 'nano-pod-view'])
 })

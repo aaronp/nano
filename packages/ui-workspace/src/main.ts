@@ -114,8 +114,10 @@ if (host) {
   // The Ring's filter: the implementations in the deployment's `layout.ring.show`, read when drawn (absent: every pod).
   const show = (_pod: string, impl: string) => { const s = (h.data().layout?.ring as { show?: unknown } | undefined)?.show; return !Array.isArray(s) || s.includes(impl); };
   const ring = { app: h.app, registry: h.registry, create: shadowCreate(h.registry), show };
-  const hand = () => handTo(document, { tm, store: h.history.store, driver }, ring);
+  // the host's view map (as the dock's panels use), handed again on each apply: an import brings its modules' views
+  const hand = () => handTo(document, { tm, store: h.history.store, driver }, { ...ring, views: h.defaults() });
   hand();
+  h.app.listen(e => { if (e.type === 'applied') hand(); });
   let resetting: Promise<void> | undefined;   // one Reset at a time: a second click while one runs joins it
   for (const b of bars) b.addEventListener('reset', () => resetting ??= (async () => {
     driver.close(); tm.close();   // first: a live driver would advance the restarted clock unrecorded

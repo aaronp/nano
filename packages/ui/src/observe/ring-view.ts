@@ -6,11 +6,12 @@
  *   ring.app = app; ring.registry = registry; ring.tm = tm; ring.store = store
  *   ring.create = d => Application.create(…, { deploymentPolicy: DeploymentPolicies.allowAll() })   // a shadow's own app
  *   ring.show = (pod, impl) => impl !== 'nano.ui/clock'
+ *   ring.views = { 'example.raft/node': 'raft-glyph' }   // implementation → view tag, before nano-ui's own map
  */
 import { LitElement, css, html, svg } from 'lit'
 import type { AppDeployment, Application, NanoResult, Registry } from '@pritzlaff/nano-core'
 import { views as defaults } from '../views/define.ts'
-import { viewFor, type ViewTarget } from '../views/view.ts'
+import { viewFor, type ViewMap, type ViewTarget } from '../views/view.ts'
 import type { MessageStore } from './entry.ts'
 import { cleanStart } from './replay.ts'
 import { ringDot, ringLayout, ringSource } from './ring.ts'
@@ -22,7 +23,7 @@ type View = HTMLElement & { target?: ViewTarget }
 
 export class NanoRing extends LitElement {
   static properties = {
-    app: { attribute: false }, registry: { attribute: false }, tm: { attribute: false }, store: { attribute: false }, create: { attribute: false }, show: { attribute: false },
+    app: { attribute: false }, registry: { attribute: false }, tm: { attribute: false }, store: { attribute: false }, create: { attribute: false }, show: { attribute: false }, views: { attribute: false },
     frame: { state: true }, shadow: { state: true }, tooLong: { state: true }, failed: { state: true },
   }
   static styles = css`
@@ -36,9 +37,10 @@ export class NanoRing extends LitElement {
   declare app?: Application; declare registry?: Registry; declare tm?: TimeMachine; declare store?: MessageStore
   declare create?: (d: AppDeployment) => Promise<NanoResult<Application>>
   declare show?: (pod: string, impl: string) => boolean
+  declare views?: ViewMap
   declare frame?: Frame; declare shadow?: Application; declare tooLong: boolean; declare failed?: string
   private offs: (() => void)[] = []
-  private views = new Map<string, View>()
+  private els = new Map<string, View>()
   private timer?: ReturnType<typeof setTimeout>
   private still?: number
   private build = 0   // the latest rebuild; an older one's app is closed when it lands
@@ -87,9 +89,9 @@ export class NanoRing extends LitElement {
 
   /** The pod's view element, kept across renders, its target set when it changes. */
   private view(d: AppDeployment, pod: string, runtime: string, app: Application, registry: Registry) {
-    const tag = viewFor(pod, d, defaults), key = `${pod} ${tag}`
-    let el = this.views.get(key)
-    if (!el) this.views.set(key, el = document.createElement(tag) as View)
+    const tag = viewFor(pod, d, { ...defaults, ...this.views }), key = `${pod} ${tag}`
+    let el = this.els.get(key)
+    if (!el) this.els.set(key, el = document.createElement(tag) as View)
     const t = el.target
     if (!t || t.app !== app || t.runtime !== runtime || t.registry !== registry) el.target = { app, registry, runtime, pod }
     return el

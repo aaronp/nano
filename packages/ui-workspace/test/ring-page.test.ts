@@ -21,7 +21,7 @@ test('the #/ring page has the bar and nano-ring, handed the page\'s tm', async (
   }
   document.body.innerHTML = route('/ring')
   const store = memoryStore(), tm = await timeMachine({ store, listen: () => () => {} }, { ticker })
-  const driver = { driving: null }, ring = { app: {}, registry: {}, create: async () => undefined, show: () => true }
+  const driver = { driving: null }, ring = { app: {}, registry: {}, create: async () => undefined, show: () => true, views: { 'example.raft/node': 'raft-glyph' } }
   hand(document, { tm, store, driver }, ring)
   const bar = document.querySelector('nano-time-machine') as unknown as Record<string, unknown>
   const el = document.querySelector('nano-ring') as unknown as Record<string, unknown>
