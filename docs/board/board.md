@@ -1,14 +1,17 @@
 ---
 version: 1
-theme: paper
+theme: ocean
+ocean.mouse: false
+effects.create: random
+effects.delete: random
+effects.complete: random
 ---
 # Nano
 
-## To Do
+## Backlog
 
 ### Revisit ADR-0010: an env (clock, random) on NanoContext
 - id: t-01
-- owner:
 - tags: adr, nano-core, clock
 - history:
   - To Do @ 2026-11-19T12:00:00Z
@@ -20,7 +23,6 @@ Re-check: did anything need time or randomness in a tight loop? Is the history c
 
 ### Revisit the application's deployment policy
 - id: t-02
-- owner:
 - tags: deployment, security
 - history:
   - To Do @ 2026-11-19T18:00:00Z
@@ -32,7 +34,6 @@ that (rules per caller, per runtime, remembered approvals) and whether host-side
 
 ### Sign off the new exports from the observability and Raft work
 - id: t-03
-- owner:
 - tags: exports, review
 - history:
   - To Do @ 2026-11-19T18:00:00Z
@@ -46,7 +47,6 @@ CLAUDE.md asks for a sign-off on each new name. Keep, inline or unexport:
 
 ### Open the message detail from a dot on the Ring
 - id: t-04
-- owner:
 - tags: ring, views
 - history:
   - To Do @ 2026-11-19T18:00:00Z
@@ -58,7 +58,6 @@ Desk does, without a new nano-ui option if possible.
 
 ### The Desk adopts `<nano-filter>`
 - id: t-05
-- owner:
 - tags: desk, views, filter
 - history:
   - To Do @ 2026-11-19T20:00:00Z
@@ -69,13 +68,37 @@ The Systems tree uses the shared filter; the Desk's own search and filters shoul
 
 ### The Ring adopts `<nano-filter>`
 - id: t-06
-- owner:
 - tags: ring, views, filter
 - history:
   - To Do @ 2026-11-19T20:00:00Z
 
 ```md
 The Systems tree uses the shared filter; the Ring's own filters should use `<nano-filter>` too.
+```
+
+## To-Do
+
+### Support multiple Nav Items
+- id: t-07
+- tags: ui
+- history:
+  - To Do @ 2026-11-19T17:11:13.164Z
+  - Doing @ 2026-11-19T17:11:15.369Z
+
+```md
+we want to be able to 'clone' the workspace, adding our own nav items
+```
+
+### Support custom HTML layouts
+- id: t-08
+- tags: ui
+- history:
+  - Doing @ 2026-11-19T17:11:55.067Z
+
+```md
+We want to be able to turn our GridLayout into a choice of best-fit responsive layouts.
+
+Ideally those are then used in the same/similar way in other ui-hosts
 ```
 
 ## Doing
