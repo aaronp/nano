@@ -96,7 +96,9 @@ replayable. It is not another production Raft. What it shows off is nano:
 - **`design.md`** gets each new name; the structure test's limits hold.
 
 **In nano-ui:** the `HostDeploy` interface:
-- `deploy({ pods, runtimes })`: adds them to the current deployment; an existing name is `invalid-input`.
+- `deploy({ pods, runtimes, onConflict? })`: adds them to the current deployment. With `onConflict: 'error'`
+  (the default) an existing name is `invalid-input`; with `'overwrite'` the addition replaces pods and runtimes of the
+  same name, and the approval says what it replaces (user, 2026-11-19).
 - `undeploy({ runtimes })`: removes those runtimes, and the pods no longer placed anywhere.
 
 **In the workspace:**

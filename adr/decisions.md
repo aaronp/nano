@@ -771,7 +771,8 @@ messaging pod, a `raft-api` pod and a `ledger` pod. A pod changing the app's dep
 | --- | --- | --- | --- |
 
 ## Solution: host-deploy — A HostDeploy component, policed by an application deployment policy
-`HostDeploy` is a component like any other: it takes a nano deployment (`deploy({ pods, runtimes })`,
+`HostDeploy` is a component like any other: it takes a nano deployment (`deploy({ pods, runtimes, onConflict? })`,
+where `onConflict` is `'error'` (default) or `'overwrite'`;
 `undeploy({ runtimes })`). Its instance is placed in the host's runtime and its host-supplied implementation holds the
 `Application`, applying through `AppDeployment.edit` / `app.apply`. Pods that need it declare it as a dependency.
 
