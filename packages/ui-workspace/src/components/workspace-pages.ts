@@ -1,7 +1,7 @@
 /**
- * Saved workspace pages: each a nav row (a drag handle for edit mode, then its link) and a route holding a components
- * drawer beside a dock of Main's widgets, its layout under layoutKey(Main's storage-key, path). Saved ones are mounted at
- * start, before <app-shell> reads its routes. Beside the app's title, + makes an empty page and ✎ toggles the nav's edit
+ * Saved workspace pages: each a nav row (a drag handle for edit mode, then its link) and a route holding a dock of
+ * Main's widgets, its layout under layoutKey(Main's storage-key, path). Saved ones are mounted at start, before
+ * <app-shell> reads its routes. Beside the app's title, + makes an empty page and ✎ toggles the nav's edit
  * mode (nav-edit.ts); the dock's "Save as workspace…" copies a page into "<title> copy". Routes follow titles.
  */
 import { ICONS, layoutKey, savedWorkspaces, slugPath, type SavedWorkspace } from '../lib/saved-workspaces.ts';
@@ -52,9 +52,8 @@ export function mountWorkspace(doc: Document, ws: SavedWorkspace): void {
   const route = doc.createElement('app-route');
   route.setAttribute('path', ws.path); route.setAttribute('bleed', ''); route.hidden = true;   // app-shell shows it when current
   const id = idOf(ws.path);
-  const pane = doc.createElement('div'), drawer = doc.createElement('component-drawer');
+  const pane = doc.createElement('div');
   pane.className = 'ws-page';
-  drawer.setAttribute('for', id);
   const wires = doc.createElement('c-wires') as Wires, dock = doc.createElement('workspace-dock') as WorkspaceDock;
   // made after start (+, Save as): the page's host, which main.ts gave Main's dock, before they connect
   if (main.host) { dock.host = main.host; wires.host = main.host; }
@@ -62,7 +61,7 @@ export function mountWorkspace(doc: Document, ws: SavedWorkspace): void {
   dock.setAttribute('storage-key', layoutKey(mainKey(doc), ws.path));
   dock.setAttribute('open', '');   // a new page starts empty; a saved layout, if any, wins
   for (const t of main.querySelectorAll(':scope > template[data-widget]')) dock.append(t.cloneNode(true));
-  wires.append(dock); pane.append(drawer, wires); route.append(pane);
+  wires.append(dock); pane.append(wires); route.append(pane);
   const fallback = mainRoute.parentElement?.querySelector(':scope > app-route[path="*"]');
   if (fallback) fallback.before(route); else mainRoute.parentElement?.append(route);
 }
@@ -89,8 +88,7 @@ export function bootWorkspacePages(doc: Document): void {
     if (ws.path === path) return;
     dock?.closest('app-route')?.setAttribute('path', ws.path);
     dock?.setAttribute('storage-key', layoutKey(mainKey(doc), ws.path));
-    // the dock's id follows the route, with what names it (the drawer, its add links)
-    for (const el of doc.querySelectorAll(`component-drawer[for="${idOf(path)}"]`)) el.setAttribute('for', idOf(ws.path));
+    // the dock's id follows the route, with what names it (its add links)
     for (const el of doc.querySelectorAll<HTMLElement>(`[data-dock-add="${idOf(path)}"]`)) el.dataset.dockAdd = idOf(ws.path);
     if (dock) dock.id = idOf(ws.path);
     if (location.hash === `#${path}`) location.hash = `#${ws.path}`;

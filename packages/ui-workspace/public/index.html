@@ -43,11 +43,10 @@
   <div slot="drawer-footer" class="drawer-foot"><theme-picker layout="icons" themes="warm,blueprint,enterprise,shadcn"></theme-picker><span>Nano · v0.1</span></div>
   <status-line slot="footer"></status-line>
 
-  <!-- Workspace: a golden-layout dock. Each <template> is a widget the drawer can add. -->
+  <!-- Workspace: a golden-layout dock. Each <template> is a widget the picker can add. -->
   <app-route path="/workspace" bleed>
-    <!-- The components drawer beside the dock; <c-wires> tilts the live dock to show the connections behind it. -->
+    <!-- <c-wires> tilts the live dock to show the connections behind it. -->
     <div class="ws-page">
-    <component-drawer for="workspace"></component-drawer>
     <c-wires>
       <workspace-dock id="workspace" storage-key="workspace-starter.layout" open="nano-explorer" arrangement="grid">
         <template data-widget="notes" data-title="Notes"><notes-panel></notes-panel></template>

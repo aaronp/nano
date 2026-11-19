@@ -36,25 +36,24 @@ app-shell[data-editing] .nav-row > a :is([data-name], [data-glyph]):focus-visibl
 .icon-pop svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 /* The drawer as an icon rail: only the row's link icon shows. */
 app-shell[collapsed]:not([narrow]) .nav-row button { display: none; }
-html[data-drawers-hidden] component-drawer { display: none; }
 
-/* A workspace page: the components drawer beside the dock. */
+/* A workspace page: the dock. */
 .ws-page { display: flex; height: 100%; min-height: 0; }
 .ws-page > c-wires { flex: 1; min-width: 0; }
-component-drawer { box-sizing: border-box; width: 240px; flex: none; display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow-y: auto;
-  background: var(--surface); border-right: 1px solid var(--line); font-size: 14px; }
-component-drawer .cd-bar { display: flex; align-items: center; gap: 6px; }
-component-drawer .cd-title { flex: 1; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-component-drawer button { font: inherit; font-size: 12px; padding: 4px 8px; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); cursor: pointer; }
-component-drawer button:disabled { opacity: .5; cursor: not-allowed; }
-component-drawer .cd-filter { box-sizing: border-box; width: 100%; font: inherit; padding: 6px 8px; border-radius: 6px; border: var(--card-border); background: var(--bg); color: var(--fg); }
-component-drawer h3 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-component-drawer .cd-section { display: flex; flex-direction: column; gap: 2px; }
-component-drawer .cd-section a { padding: 7px 10px; border-radius: var(--radius); color: var(--fg); text-decoration: none; cursor: grab; }
-component-drawer .cd-section a:hover { background: var(--surface-2); }
-component-drawer h4 { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 0; padding: 0 2px 0 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
-component-drawer h4 button { padding: 1px 6px; font-size: 11px; }
-component-drawer .cd-failed { margin: 4px 0 0; padding: 6px 10px; border-radius: var(--radius); background: var(--surface-2); color: var(--danger, #c33); font-size: 12px; overflow-wrap: anywhere; }
+
+/* <nano-picker>: the popover a + opens, to choose what fills that place (its width is picker.ts's WIDTH). */
+nano-picker { position: fixed; z-index: 50; box-sizing: border-box; width: 280px; max-height: min(420px, 70vh); overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
+  padding: 12px; background: var(--surface); border: var(--card-border); border-radius: var(--radius); box-shadow: 0 8px 24px rgb(0 0 0 / .18); font-size: 14px; }
+nano-picker .np-filter { box-sizing: border-box; width: 100%; font: inherit; padding: 6px 8px; border-radius: 6px; border: var(--card-border); background: var(--bg); color: var(--fg); }
+nano-picker > div { display: flex; flex-direction: column; gap: 10px; }
+nano-picker [hidden] { display: none; }
+nano-picker h3 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+nano-picker .np-section { display: flex; flex-direction: column; gap: 2px; }
+nano-picker .np-section [data-widget] { font: inherit; text-align: left; padding: 7px 10px; border: 0; border-radius: var(--radius); background: none; color: var(--fg); cursor: pointer; }
+nano-picker .np-section [data-widget]:hover, nano-picker .np-section [data-widget]:focus-visible { background: var(--surface-2); }
+nano-picker h4 { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 0; padding: 0 2px 0 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
+nano-picker h4 button { font: inherit; padding: 1px 6px; font-size: 11px; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); cursor: pointer; }
+nano-picker .np-failed { margin: 4px 0 0; padding: 6px 10px; border-radius: var(--radius); background: var(--surface-2); color: var(--danger, #c33); font-size: 12px; overflow-wrap: anywhere; }
 
 .page-head { margin-bottom: 20px; }
 .page-head h1 { margin: 0 0 4px; font: 600 28px/1.15 var(--display); text-wrap: balance; }

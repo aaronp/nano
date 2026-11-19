@@ -8,7 +8,7 @@ import { savedWorkspaces } from '../src/lib/saved-workspaces.ts'
 localStorage.clear()
 document.body.innerHTML = `<app-shell><span slot="title">Nano</span>
   <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace">Workspaces</a></div>
-  <app-route path="/workspace"><div class="ws-page"><component-drawer for="workspace"></component-drawer><c-wires>
+  <app-route path="/workspace"><div class="ws-page"><c-wires>
     <workspace-dock id="workspace" storage-key="main"><template data-widget="a"></template><template data-widget="b"></template></workspace-dock>
   </c-wires></div></app-route><app-route path="*"></app-route></app-shell>`
 const template = { template: 'one', order: [{ widget: 'a' }], dock: { root: null } }
@@ -87,7 +87,7 @@ test('in edit mode a link click does not navigate; Enter on a focused name opens
 
 test('renaming a saved page moves its keys, link, route and dock to the new slug', () => {
   localStorage.setItem('main.saved./new-workspace', '{}'); localStorage.setItem('main.saved./new-workspace.template', '{}')
-  $('app-route[path="/new-workspace"] component-drawer').innerHTML = '<a data-dock-add="ws_new-workspace" data-widget="a">A</a>'
+  $('app-route[path="/new-workspace"] .ws-page').insertAdjacentHTML('afterbegin', '<a data-dock-add="ws_new-workspace" data-widget="a">A</a>')
   location.hash = '#/new-workspace'
   $('[data-saved="/new-workspace"] [data-name]').click()
   type('Desk', 'Enter')
@@ -100,7 +100,6 @@ test('renaming a saved page moves its keys, link, route and dock to the new slug
   const dock = $('app-route[path="/desk"] workspace-dock')
   expect(dock.getAttribute('storage-key')).toBe('main.saved./desk')
   expect(dock.id).toBe('ws_desk')
-  expect($('app-route[path="/desk"] component-drawer').getAttribute('for')).toBe('ws_desk')
   expect($('[data-dock-add]').getAttribute('data-dock-add')).toBe('ws_desk')
   expect(location.hash).toBe('#/desk')
 })

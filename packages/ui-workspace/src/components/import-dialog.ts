@@ -1,5 +1,5 @@
 /**
- * The Import dialog (a drawer's Import button, File › Open and Import): paste a nano.json URL and Fetch, or choose a
+ * The Import dialog (File › Open and Import): paste a nano.json URL and Fetch, or choose a
  * local file, to preview it — a tree of its runtimes and their pods to tick (Import brings only the ticked pods; a
  * subscription left with one end is listed as a warning, never blocking), each runtime with the name it is imported as (`<namespace>.<runtime>` suggested; an
  * existing name merges into that runtime), its pods with the isolation Trust gives them, its modules, and which
@@ -127,6 +127,3 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
   d.showModal();
   return d;
 }
-
-// every drawer's Import button opens it
-document.addEventListener('click', (e) => { if ((e.target as Element | null)?.closest?.('[data-import-open]')) openImportDialog(document); });

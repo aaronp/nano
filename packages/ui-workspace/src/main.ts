@@ -1,6 +1,6 @@
 /**
  * Entry point. The theme is applied first (boot-theme), then components register and upgrade the page.
- * The workspace registers last so the drawer's "add widget" links exist when it wires them up.
+ * The workspace registers last.
  *
  * On nano-core 0.4 the host (host.ts: the one Application, the nano.ui built-ins, import and save of nano.json) takes
  * the place of composable.ts and nano-app: the docks, the explorer and wiring views and the app bar show its app; the
@@ -12,7 +12,6 @@ import { toast } from '@pritzlaff/nano-elements';
 import { clockDriver, timeMachine, type NanoTimeMachine } from '@pritzlaff/nano-ui';
 import './boot-workspace-pages.ts';   // before the shell: it reads its routes as it starts
 import './components/app-shell.ts';
-import './components/component-drawer.ts';
 import { openImportDialog, setImportHost } from './components/import-dialog.ts';
 import './components/gallery.ts';
 import './components/theme-picker.ts';
