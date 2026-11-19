@@ -6,6 +6,7 @@
  *   diverge(pair(await store.range(r.from, r.to)), pair(await second.range()))   // null: the same messages came out
  */
 import { failure, success, type Application, type NanoResult } from '@pritzlaff/nano-core'
+import { inFlight } from './in-flight.ts'
 import { restartOrder } from './restart-order.ts'
 import { pair, truncated, type Message, type MessageStore } from './entry.ts'
 
@@ -17,36 +18,6 @@ export const roots = (messages: Message[]): Message[] =>
   messages.filter(m => m.sent.from === 'host' && m.sent.kind === 'call' && m.sent.cause === undefined)
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
-/** How long one wait for quiet may take: core's default call timeout plus 1 s. ponytail: fixed, as the app doesn't say its `timeoutMs`; read it if it ever does. */
-const QUIET_MS = 31_000
-
-/**
- * Counts `app`'s messages in flight: each `sent` heard until its `delivered` or `denied` (an outcome of a message sent
- * before it listened is ignored: nothing waits on it). `quiet()` resolves once none is, one macrotask later and still
- * none (true), or after `QUIET_MS` from that call (false). `stop()` stops listening.
- */
-function inFlight(app: Application) {
-  const open = new Set<string>()
-  let wake = () => {}
-  const stop = app.listen(e => {
-    if (e.type === 'sent') open.add(e.id)
-    else if ((e.type === 'delivered' || e.type === 'denied') && open.delete(e.id) && !open.size) wake()
-  })
-  const quiet = async () => {
-    const end = Date.now() + QUIET_MS
-    for (;;) {
-      while (open.size) {
-        if (Date.now() >= end) return false
-        let timer: ReturnType<typeof setTimeout> | undefined
-        await new Promise<void>(r => { wake = r; timer = setTimeout(r, end - Date.now()) })
-        clearTimeout(timer)
-      }
-      await wait(0)
-      if (!open.size) return true
-    }
-  }
-  return { quiet, stop }
-}
 
 type Replayed = { sent: number; failed: number; applied: number; restarted: number; from: number; to: number }
 type Opts = { to?: number; now?: () => number; sleep?: (ms: number) => Promise<void>; pace?: 'original' | 'fast' }
