@@ -30,7 +30,7 @@ test('one swatch button per theme; the chosen one is pressed and named; a click 
   expect(schemesOf('blueprint')).toEqual(['dark'])
 })
 
-test('icons layout: only the listed themes, no names, and one light/dark toggle (disabled for a one-look theme)', async () => {
+test('icons layout: only the listed themes, no names, and one light/dark toggle, only for a theme with both looks', async () => {
   document.body.innerHTML = '<div id="shell"></div>'
   provideBus(document.getElementById('shell')!, createBus())
   applyChoice(document, { theme: 'shadcn', mode: 'light' })
@@ -45,5 +45,7 @@ test('icons layout: only the listed themes, no names, and one light/dark toggle 
   toggle.click(); await p.updateComplete
   expect(document.documentElement.dataset['scheme']).toBe('dark')
   buttons.find(b => b.getAttribute('aria-label') === 'Blueprint theme')!.click(); await p.updateComplete
-  expect((p.shadowRoot!.querySelector('button.scheme') as HTMLButtonElement).disabled).toBe(true)
+  expect(p.shadowRoot!.querySelector('button.scheme')).toBeNull()   // one look: no toggle
+  buttons.find(b => b.getAttribute('aria-label') === 'shadcn theme')!.click(); await p.updateComplete
+  expect(p.shadowRoot!.querySelector('button.scheme')).not.toBeNull()
 })

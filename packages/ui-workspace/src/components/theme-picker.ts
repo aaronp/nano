@@ -54,7 +54,7 @@ export class ThemePicker extends LitElement {
     :host([layout='icons']) .themes { border: 0; padding: 0; gap: 2px; }
     :host([layout='icons']) .theme-btn { min-height: 28px; min-width: 28px; padding: 0 4px; }
     .scheme { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
-    .scheme:hover { background: color-mix(in srgb, currentColor 10%, transparent); } .scheme:disabled { opacity: .45; cursor: default; }
+    .scheme:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
     @media (max-width: 600px) { :host(:not([layout='cards'])) .seg, :host(:not([layout='cards'])) .lbl { display: none; } }
   `;
 
@@ -121,11 +121,10 @@ export class ThemePicker extends LitElement {
       ${icons ? this.scheme(shown === 'dark') : this.modes()}`;
   }
 
-  /** One button: light ⇄ dark (the theme's only look when it has one). */
+  /** One button: light ⇄ dark, shown only for a theme that has both looks. */
   private scheme(dark: boolean) {
-    const both = schemesOf(this.choice.theme).length === 2;
-    return html`<button type="button" class="scheme" aria-label="Dark" aria-pressed=${String(dark)} ?disabled=${!both}
-      title=${both ? (dark ? 'Switch to light' : 'Switch to dark') : `${THEMES[this.choice.theme].label} has one look`}
+    if (schemesOf(this.choice.theme).length !== 2) return '';
+    return html`<button type="button" class="scheme" aria-label="Dark" aria-pressed=${String(dark)} title=${dark ? 'Switch to light' : 'Switch to dark'}
       @click=${() => this.pick({ ...this.choice, mode: dark ? 'light' : 'dark' })}>${dark
         ? svg`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg>`
         : svg`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`}</button>`;
