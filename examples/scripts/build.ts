@@ -26,6 +26,7 @@ export const EXAMPLES: Record<string, Record<string, string>> = {
   auth: { 'example.auth': 'auth/index.ts' },
   originkey: { 'example.originkey': 'originkey/index.ts' },
   drift: { 'example.drift': 'drift/index.ts' },
+  raft: { 'example.raft': 'raft/index.ts' },
   template: { 'acme.template': '../templates/nano-template/src/index.ts' },
 }
 /** Where an example's own nano.json is, when not <name>/nano.json; its runtimes renamed in the combined file. */

@@ -1,0 +1,18 @@
+{
+  "pods": {
+    "cluster": { "implementation": "example.raft/cluster", "eager": false },
+    "raft-messaging": { "implementation": "example.raft/messaging", "config": { "minMs": 10, "maxMs": 30 }, "eager": true },
+    "raft-clock": { "implementation": "nano.ui/sim-clock", "eager": true },
+    "raft-random": { "implementation": "nano.ui/seeded-random", "config": { "seed": 1 }, "eager": true }
+  },
+  "runtimes": {
+    "raft": {
+      "pods": ["cluster", "raft-messaging", "raft-clock", "raft-random"],
+      "subscriptions": [
+        { "kind": "call", "from": "raft-messaging", "to": "raft-clock" },
+        { "kind": "call", "from": "raft-messaging", "to": "raft-random" }
+      ]
+    }
+  },
+  "modules": { "example.raft": "./index.js" }
+}
