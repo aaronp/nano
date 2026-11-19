@@ -1,71 +1,132 @@
-// Workspace pages: mounting a saved one, and Duplicate, Edit and a refused choice through a stubbed dialog.
+// Workspace pages: mounting a saved one, + beside the title, the nav's edit mode (rename, icon, reorder) and Save as.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
 import { bootWorkspacePages, mountWorkspace } from '../src/components/workspace-pages.ts'
-import type { WorkspaceChoice } from '../src/components/workspace-dialog.ts'
+import { savedWorkspaces } from '../src/lib/saved-workspaces.ts'
 
-const tick = () => new Promise(r => setTimeout(r, 0))
 localStorage.clear()
-document.body.innerHTML = `<nav><div slot="nav" class="nav-row" data-workspaces><a href="#/workspace">Workspaces</a><button data-toggle-drawer></button><button data-new-workspace>+</button></div></nav>
-  <main><app-route path="/workspace"><div class="ws-page"><component-drawer for="workspace"></component-drawer><c-wires>
+document.body.innerHTML = `<app-shell><span slot="title">Nano</span>
+  <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace">Workspaces</a></div>
+  <app-route path="/workspace"><div class="ws-page"><component-drawer for="workspace"></component-drawer><c-wires>
     <workspace-dock id="workspace" storage-key="main"><template data-widget="a"></template><template data-widget="b"></template></workspace-dock>
-  </c-wires></div></app-route><app-route path="*"></app-route></main>`
+  </c-wires></div></app-route><app-route path="*"></app-route></app-shell>`
 const template = { template: 'one', order: [{ widget: 'a' }], dock: { root: null } }
 Object.assign(document.querySelector('#workspace')!, { arrangement: () => ({ root: { type: 'row' }, template }) })
 
-const answers: (WorkspaceChoice | null)[] = [], asked: { heading: string; error?: string; prev?: WorkspaceChoice }[] = []
-bootWorkspacePages(document, async (_doc, opts) => { asked.push(opts); return answers.shift() ?? null })
+bootWorkspacePages(document)
+const store = savedWorkspaces(localStorage)
 const routes = () => [...document.querySelectorAll('app-route')].map(r => r.getAttribute('path'))
+const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector<T>(s)!
+const input = () => $<HTMLInputElement>('input[data-rename]')
+const type = (value: string, key: string) => { input().value = value; input().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })) }
+const editing = () => $('app-shell').hasAttribute('data-editing')
+const savedOrder = () => [...document.querySelectorAll<HTMLElement>('[data-saved]')].map(r => r.dataset.saved)
 
 test('mountWorkspace adds a nav row and a route before the not-found page, with a dock of Main\'s widgets', () => {
   mountWorkspace(document, { path: '/lab', title: 'Lab', icon: 'star' })
-  const row = document.querySelector<HTMLElement>('[data-saved="/lab"]')!
+  const row = $('[data-saved="/lab"]')
   expect(row.previousElementSibling?.hasAttribute('data-workspaces')).toBe(true)
   expect(row.querySelector('a')!.getAttribute('href')).toBe('#/lab')
-  expect(row.querySelector('[data-edit]')!.getAttribute('aria-label')).toBe('Edit Lab')
+  expect(row.querySelector('[data-handle]')!.getAttribute('aria-label')).toBe('Move Lab')
+  expect(row.querySelector('[data-duplicate], [data-edit]')).toBeNull()
   expect(routes()).toEqual(['/workspace', '/lab', '*'])
-  expect(document.querySelector<HTMLElement>('app-route[path="/lab"]')!.hidden).toBe(true)
-  const dock = document.querySelector('app-route[path="/lab"] workspace-dock')!
+  const dock = $('app-route[path="/lab"] workspace-dock')
   expect(dock.id).toBe('ws_lab')
   expect(dock.getAttribute('storage-key')).toBe('main.saved./lab')
   expect([...dock.querySelectorAll('template')].map(t => t.dataset.widget)).toEqual(['a', 'b'])
+  row.remove(); $('app-route[path="/lab"]').remove()
 })
 
-test('Duplicate on Main copies its arrangement and template into a new page, lists it and goes there', async () => {
-  answers.push({ path: '/b', title: 'B', icon: 'star' })
-  document.querySelector<HTMLButtonElement>('[data-workspaces] [data-duplicate]')!.click(); await tick()
-  expect(JSON.parse(localStorage.getItem('main.saved./b')!)).toEqual({ root: { type: 'row' } })
-  expect(JSON.parse(localStorage.getItem('main.saved./b.template')!)).toEqual(template)
-  expect(JSON.parse(localStorage.getItem('workspace-starter.saved-workspaces')!)).toEqual([{ path: '/b', title: 'B', icon: 'star' }])
-  expect(location.hash).toBe('#/b')
-  expect(routes()).toContain('/b')
+test('the title holds + and ✎; + makes an empty page, goes there and starts its rename; a second is numbered', () => {
+  expect($('[slot="title"] [data-new-workspace]').getAttribute('aria-label')).toBe('New workspace')
+  expect($('[slot="title"] [data-edit-nav]').getAttribute('aria-pressed')).toBe('false')
+  $('[data-new-workspace]').click()
+  expect(location.hash).toBe('#/new-workspace')
+  expect(store.list()).toEqual([{ path: '/new-workspace', title: 'New workspace', icon: 'window' }])
+  expect(localStorage.getItem('main.saved./new-workspace')).toBeNull()
+  expect(input().closest('[data-saved]')!.getAttribute('data-saved')).toBe('/new-workspace')
+  type('', 'Escape')
+  $('[data-new-workspace]').click()
+  expect(store.list().at(-1)).toEqual({ path: '/new-workspace-2', title: 'New workspace 2', icon: 'window' })
+  type('Desk', 'Escape')
+  expect($('[data-saved="/new-workspace-2"] [data-name]').textContent).toBe('New workspace 2')
 })
 
-test('Edit to a new route moves the keys and updates the link and route', async () => {
-  answers.push({ path: '/c', title: 'C', icon: 'box' })
-  document.querySelector('app-route[path="/b"] component-drawer')!.innerHTML = '<a data-dock-add="ws_b" data-widget="a">A</a>'
-  document.querySelector<HTMLButtonElement>('[data-saved="/b"] [data-edit]')!.click(); await tick()
-  expect(asked.at(-1)!.prev).toEqual({ path: '/b', title: 'B', icon: 'star' })
-  expect(localStorage.getItem('main.saved./b')).toBeNull()
-  expect(localStorage.getItem('main.saved./c')).not.toBeNull()
-  expect(localStorage.getItem('main.saved./c.template')).not.toBeNull()
-  const row = document.querySelector('[data-saved="/c"]')!
-  expect(row.querySelector('a')!.getAttribute('href')).toBe('#/c')
-  expect(routes()).toContain('/c'); expect(routes()).not.toContain('/b')
-  const dock = document.querySelector('app-route[path="/c"] workspace-dock')!
-  expect(dock.getAttribute('storage-key')).toBe('main.saved./c')
-  expect(dock.id).toBe('ws_c')
-  expect(document.querySelector('app-route[path="/c"] component-drawer')!.getAttribute('for')).toBe('ws_c')
-  expect(document.querySelector('[data-dock-add]')!.getAttribute('data-dock-add')).toBe('ws_c')
-  expect(location.hash).toBe('#/c')
+test('✎ toggles edit mode; Esc leaves it', () => {
+  $('[data-edit-nav]').click()
+  expect(editing()).toBe(true)
+  expect($('[data-edit-nav]').getAttribute('aria-pressed')).toBe('true')
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+  expect(editing()).toBe(false)
+  $('[data-edit-nav]').click()
 })
 
-test('a refused choice asks again with the reason; + makes an empty page', async () => {
-  answers.push({ path: '/workspace', title: 'X', icon: 'star' }, { path: '/d', title: 'D', icon: 'star' })
-  document.querySelector<HTMLButtonElement>('[data-new-workspace]')!.click(); await tick(); await tick()
-  expect(asked.at(-1)!.error).toContain('already')
-  expect(asked.at(-1)!.prev?.path).toBe('/workspace')
-  expect(routes()).toContain('/d')
-  expect(localStorage.getItem('main.saved./d')).toBeNull()
+test('renaming a saved page moves its keys, link, route and dock to the new slug', () => {
+  localStorage.setItem('main.saved./new-workspace', '{}'); localStorage.setItem('main.saved./new-workspace.template', '{}')
+  $('app-route[path="/new-workspace"] component-drawer').innerHTML = '<a data-dock-add="ws_new-workspace" data-widget="a">A</a>'
+  location.hash = '#/new-workspace'
+  $('[data-saved="/new-workspace"] [data-name]').click()
+  type('Desk', 'Enter')
+  expect(localStorage.getItem('main.saved./new-workspace')).toBeNull()
+  expect(localStorage.getItem('main.saved./desk')).not.toBeNull()
+  expect(localStorage.getItem('main.saved./desk.template')).not.toBeNull()
+  expect($('[data-saved="/desk"] a').getAttribute('href')).toBe('#/desk')
+  expect($('[data-saved="/desk"] [data-name]').textContent).toBe('Desk')
+  expect(routes()).toContain('/desk'); expect(routes()).not.toContain('/new-workspace')
+  const dock = $('app-route[path="/desk"] workspace-dock')
+  expect(dock.getAttribute('storage-key')).toBe('main.saved./desk')
+  expect(dock.id).toBe('ws_desk')
+  expect($('app-route[path="/desk"] component-drawer').getAttribute('for')).toBe('ws_desk')
+  expect($('[data-dock-add]').getAttribute('data-dock-add')).toBe('ws_desk')
+  expect(location.hash).toBe('#/desk')
+})
+
+test('a rename to a taken slug is suffixed; Esc or an empty name keeps the old', () => {
+  $('[data-saved="/new-workspace-2"] [data-name]').click()
+  type('Desk', 'Enter')
+  expect(store.list().map(w => w.path)).toEqual(['/desk', '/desk-2'])
+  $('[data-saved="/desk-2"] [data-name]').click()
+  type('Other', 'Escape')
+  expect(editing()).toBe(true)
+  $('[data-saved="/desk-2"] [data-name]').click()
+  type('  ', 'Enter')
+  expect($('[data-saved="/desk-2"] [data-name]').textContent).toBe('Desk')
+  expect(store.list()[1]).toEqual({ path: '/desk-2', title: 'Desk', icon: 'window' })
+})
+
+test('the icon opens a grid of icons; choosing one updates the row', () => {
+  $('[data-saved="/desk"] a svg').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+  const pop = $('[role="listbox"]')
+  expect(pop.querySelector('[aria-selected="true"]')!.getAttribute('data-icon')).toBe('window')
+  pop.querySelector<HTMLElement>('[data-icon="rocket"]')!.click()
+  expect(document.querySelector('[role="listbox"]')).toBeNull()
+  expect(store.list()[0]).toEqual({ path: '/desk', title: 'Desk', icon: 'rocket' })
+  expect($('[data-saved="/desk"] a').dataset.icon).toBe('rocket')
+})
+
+test('Alt+↓ on a handle moves the page down, in the list and the nav, and says so', async () => {
+  $('[data-saved="/desk"] [data-handle]').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true }))
+  expect(store.list().map(w => w.path)).toEqual(['/desk-2', '/desk'])
+  expect(savedOrder()).toEqual(['/desk-2', '/desk'])
+  await new Promise(r => setTimeout(r, 60))
+  expect($('[aria-live="polite"]').textContent).toBe('Moved Desk down')
+})
+
+test("Main's rename is kept with its icon", () => {
+  $('[data-workspaces] [data-name]').click()
+  type('Home', 'Enter')
+  expect(store.main()).toEqual({ title: 'Home', icon: 'panels' })
+  expect($('[data-workspaces] [data-name]').textContent).toBe('Home')
+})
+
+test('Save as workspace copies the page into "<title> copy" and starts its rename', () => {
+  $('#workspace').dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true }))
+  const ws = store.list().at(-1)!
+  expect(ws).toEqual({ path: '/home-copy', title: 'Home copy', icon: 'panels' })
+  expect(JSON.parse(localStorage.getItem('main.saved./home-copy')!)).toEqual({ root: { type: 'row' } })
+  expect(JSON.parse(localStorage.getItem('main.saved./home-copy.template')!)).toEqual(template)
+  expect(location.hash).toBe('#/home-copy')
+  expect(input().closest('[data-saved]')!.getAttribute('data-saved')).toBe('/home-copy')
+  type('', 'Escape')
 })

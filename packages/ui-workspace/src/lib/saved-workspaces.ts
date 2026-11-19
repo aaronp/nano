@@ -13,6 +13,7 @@ export const ICONS: Record<string, string> = {
   box: 'M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10',
   home: 'M3 11l9-8 9 8M5 10v10h14V10M10 20v-6h4v6',
   window: 'M3 5h18v14H3zM3 9h18M6 7h.01M9 7h.01',
+  panels: 'M3 4h18v16H3zM12 4v16M12 12h9',
   user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',
   users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.1a4 4 0 0 1 0 7.8M22 21a7 7 0 0 0-5-6.7',
   archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4',

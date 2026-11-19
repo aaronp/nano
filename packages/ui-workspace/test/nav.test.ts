@@ -9,7 +9,7 @@ const tick = () => new Promise(r => setTimeout(r, 0))
 test('on a workspace, its sub-item is the current page; add links never are', async () => {
   location.hash = '#/lab'
   document.body.innerHTML = `<app-shell>
-    <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace">Workspaces</a><button data-new-workspace>+</button></div>
+    <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace">Workspaces</a></div>
     <a slot="nav" data-sub href="#/workspace">Main</a><a slot="nav" data-sub data-saved href="#/lab">Lab</a>
     <a slot="nav" data-sub href="#/lab" data-dock-add="x" data-widget="y">+ Y</a>
     <app-route path="/workspace"></app-route><app-route path="/lab"></app-route><app-route path="*"></app-route></app-shell>`
@@ -46,7 +46,7 @@ test('on a wide screen the menu button collapses the drawer to a rail and back, 
 
 test('a nav row (a saved workspace) is current by its own link; leaving clears it', async () => {
   const shell = document.querySelector('app-shell') as HTMLElement & { updateComplete: Promise<boolean> }
-  shell.insertAdjacentHTML('beforeend', '<div slot="nav" class="nav-row" data-saved="/b"><a href="#/b">B</a><button data-edit></button></div><app-route path="/b"></app-route>')
+  shell.insertAdjacentHTML('beforeend', '<div slot="nav" class="nav-row" data-saved="/b"><a href="#/b">B</a><button data-handle></button></div><app-route path="/b"></app-route>')
   await tick()
   const row = shell.querySelector('[data-saved="/b"]')!
   location.hash = '#/b'; window.dispatchEvent(new HashChangeEvent('hashchange')); await shell.updateComplete; await tick()

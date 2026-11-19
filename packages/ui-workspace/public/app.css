@@ -8,17 +8,30 @@ a[slot='nav'] svg { width: 20px; height: 20px; flex: none; fill: none; stroke: c
 .drawer-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 14px 4px; color: var(--muted); font-size: 12px; }
 .drawer-foot theme-picker { color: var(--fg); }
 
-/* The Workspaces nav row: its link, and a + to make a new workspace. */
+/* A workspace nav row: its link (and, saved pages, a drag handle for edit mode). */
 .nav-row a { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; color: inherit; text-decoration: none; }
 .nav-row a svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .nav-row button { flex: none; width: 26px; height: 26px; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); font: inherit; font-size: 16px; line-height: 1; cursor: pointer; }
 .nav-row button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 a[slot='nav'][data-sub] svg { width: 16px; height: 16px; }
-/* The components drawer's toggle beside +: pressed while the drawers show. */
-/* A workspace's Duplicate and Edit: shown while the row is hovered or holds focus (they stay focusable). */
-.nav-row [data-duplicate], .nav-row [data-edit] { opacity: 0; font-size: 14px; }
-.nav-row:hover :is([data-duplicate], [data-edit]), .nav-row:focus-within :is([data-duplicate], [data-edit]) { opacity: 1; }
-@media (hover: none) { .nav-row :is([data-duplicate], [data-edit]) { opacity: 1; } }   /* touch: no hover to reveal them */
+/* + (new page) and ✎ (edit mode) beside the app's title: shown while it is hovered or holds focus (they stay focusable). */
+[slot='title'] button { width: 26px; height: 26px; margin-left: 6px; vertical-align: middle; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); font: 15px/1 var(--font); cursor: pointer; opacity: 0; }
+[slot='title']:is(:hover, :focus-within) button, [slot='title'] [aria-pressed='true'] { opacity: 1; }
+[slot='title'] [aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
+[slot='title'] button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+@media (hover: none) { [slot='title'] button { opacity: 1; } }   /* touch: no hover to reveal them */
+/* Edit mode: a saved row's handle, and the name and icon to click. */
+.nav-row [data-handle] { display: none; border: 0; background: none; color: var(--muted); cursor: grab; }
+app-shell[data-editing] .nav-row [data-handle] { display: block; }
+app-shell[data-editing] .nav-row > a :is([data-name], svg) { cursor: pointer; border-radius: 4px; outline: 1px dashed var(--line); outline-offset: 2px; }
+.nav-row input[data-rename] { flex: 1; min-width: 0; font: inherit; padding: 2px 6px; border: var(--card-border); border-radius: 6px; background: var(--surface-2); color: var(--fg); }
+/* The icon grid a row's icon opens in edit mode. */
+.icon-pop { position: fixed; z-index: 50; display: grid; grid-template-columns: repeat(6, 40px); gap: 6px; max-height: 236px; overflow-y: auto; padding: 8px;
+  background: var(--surface); border: var(--card-border); border-radius: var(--radius); box-shadow: 0 8px 24px rgb(0 0 0 / .18); }
+.icon-pop button { display: grid; place-items: center; aspect-ratio: 1; border-radius: 10px; border: 1px solid transparent; background: var(--surface-2); color: var(--fg); cursor: pointer; }
+.icon-pop button[aria-selected='true'] { border-color: var(--accent); color: var(--accent); }
+.icon-pop button:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: 1px; }
+.icon-pop svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 /* The drawer as an icon rail: only the row's link icon shows. */
 app-shell[collapsed]:not([narrow]) .nav-row button { display: none; }
 html[data-drawers-hidden] component-drawer { display: none; }
@@ -113,8 +126,8 @@ html[data-theme='retro'] .page-head a { color: #FFFF9E; }
 .import-dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* Dragging a saved workspace: a line where it will land. */
-a[slot='nav'][data-drop='before'] { box-shadow: 0 -2px 0 var(--nano-accent, var(--focus, #36c)); }
-a[slot='nav'][data-drop='after'] { box-shadow: 0 2px 0 var(--nano-accent, var(--focus, #36c)); }
+.nav-row[data-drop='before'] { box-shadow: 0 -2px 0 var(--nano-accent, var(--focus, #36c)); }
+.nav-row[data-drop='after'] { box-shadow: 0 2px 0 var(--nano-accent, var(--focus, #36c)); }
 .wiring-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .wiring-page > c-desk, .wiring-page > c-messages, .wiring-page > nano-ring { flex: 1; min-height: 0; }
 .wiring-page > c-messages { overflow: auto; }
