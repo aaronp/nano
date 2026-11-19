@@ -1,7 +1,7 @@
 /**
  * Inline SVG for the kinds of things nano shows (pod, interface, implementation, action, event, runtime; a group for
- * any other) and a status dot, all in theme tokens. Each carries a `<title>` naming it. A kind icon sits beside the
- * kind's text, so it is hidden from assistive tech; a status dot stands alone, so it is an `img` named by its status.
+ * any other) and a status dot, all in theme tokens. Each is an `img` named by its kind or status (and carries a `<title>`), so a wrapper
+ * around both must not set its own label.
  *
  *   html`${kindIcon('pod')} ${statusDot('running')}`
  */
@@ -19,7 +19,7 @@ const shapes: Record<string, ReturnType<typeof svg>> = {
   group: svg`<path d="M2 4.5h4l1.5 1.5H14v6.5H2z"/>`,
 }
 
-export const kindIcon = (kind: string) => svg`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="${tv('muted')}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><title>${kind}</title>${shapes[kind] ?? shapes.group}</svg>`
+export const kindIcon = (kind: string) => svg`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="${tv('muted')}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label=${kind}><title>${kind}</title>${shapes[kind] ?? shapes.group}</svg>`
 
 const dots: Record<PodStatus, { fill: string; stroke: string }> = {
   running: { fill: tv('good'), stroke: tv('good') },

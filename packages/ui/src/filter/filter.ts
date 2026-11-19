@@ -33,7 +33,7 @@ export class NanoFilter extends LitElement {
     set.has(o) ? set.delete(o) : set.add(o)
     this.emit({ ...this.value, [g]: set })
   }
-  /** `open` follows the popover; opening puts the panel under the button and focus in it, closing returns focus. */
+  /** `open` follows the popover; opening puts the panel under the button and focus in it, closing returns focus only if it was in the panel. */
   private toggled(e: ToggleEvent) {
     const panel = e.target as HTMLElement, button = this.renderRoot.querySelector<HTMLElement>('.toggle')!
     this.open = e.newState === 'open'
@@ -41,7 +41,7 @@ export class NanoFilter extends LitElement {
       const b = button.getBoundingClientRect()
       Object.assign(panel.style, { top: `${b.bottom + 4}px`, left: `${Math.max(0, b.right - panel.offsetWidth)}px` })
       panel.querySelector<HTMLElement>('.row button')?.focus()
-    } else button.focus()
+    } else if (panel.contains(this.shadowRoot!.activeElement)) button.focus()
   }
 
   render() {

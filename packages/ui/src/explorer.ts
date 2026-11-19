@@ -68,7 +68,7 @@ export class NanoExplorer extends LitElement {
     const t = this.target
     const c = { d: t.app.deployment(), registry: t.registry, states: this.states, calls: t.calls, go: (id: string) => { this.selected = id }, open: (w: Where) => this.open(w) }
     const all = nodes(c.d, t.registry, this.states)
-    const shown = filterTree(all, this.filter)
+    const shown = filterTree(all, { ...this.filter, text: '' })
     const groups = { kinds: KINDS, namespaces: namespaces(all), statuses: STATUSES }
     return html`<div class="split"><div class="pane">
         <nano-filter .groups=${groups} .value=${this.filter} @change=${(e: CustomEvent<FilterValue>) => { this.filter = e.detail }}></nano-filter>

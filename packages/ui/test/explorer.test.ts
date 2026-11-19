@@ -164,6 +164,8 @@ describe('the explorer', () => {
       const el = await mount(await open(slice)); await settle(el); await reveal(el)
       expect(dot(el, 'out')).toBe('not started')
       expect(dot(el, 'in')).toBe('running')
+      const labels = [...tree(el).shadowRoot.querySelectorAll('li[data-id="p:main:in"] > .line [aria-label]')].map(x => x.getAttribute('aria-label'))
+      expect(labels).toEqual(expect.arrayContaining(['running', 'pod']))
       expect(tree(el).shadowRoot.querySelector('li[data-id="p:main:in"] > .line .kind')).toBeNull()
     })
     test('a new target starts its pods over', async () => {
