@@ -4,7 +4,7 @@
  * `m:<implementation>`, `o:<interface>/<op>`. `go(id)` selects another node (a link); `open(where)` asks the host for a pod's view.
  */
 import { html, nothing, type TemplateResult } from 'lit'
-import type { AppDeployment, Registry } from '@pritzlaff/nano-core'
+import type { AppDeployment, Registry, Subscription } from '@pritzlaff/nano-core'
 
 export type Where = { runtime: string; pod: string }
 /** An op-level call (ui-workspace's OpCall, structurally): `from`'s op `source` (null: unknown) calls `to`'s `target`. */
@@ -18,7 +18,7 @@ const list = (items: unknown[]) => items.length ? html`<ul>${items.map(i => html
 /** The runtimes `pod` is placed in. */
 const placed = (d: AppDeployment, pod: string) => Object.keys(d.runtimes).filter(r => d.runtimes[r]!.pods.includes(pod))
 const podLink = (c: Ctx, pod: string) => { const r = placed(c.d, pod)[0]; return r ? link(c, `p:${r}:${pod}`, pod) : pod }
-type Pipe = { from: string; to: string; source: string; target: string }
+type Pipe = Extract<Subscription, { kind: 'pipe' }>
 /** A pipe, as `from.source → to.target`; `end` renders each pod (as text, unless given). */
 const pipeText = (s: Pipe, end: (pod: string) => unknown = p => p) => html`${end(s.from)}.${op(s.source)} → ${end(s.to)}.${op(s.target)}`
 /** The op at `port` (`<interface>/<op>`), with its interface's coord and its name; `o` none when not registered. */

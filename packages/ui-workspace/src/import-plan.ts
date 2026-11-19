@@ -35,8 +35,6 @@ export const podsOf = (d: AppDeployment, coord: string, isolationOf: (p: Pod) =>
     return { name, isolation, fullAccess: isolation !== 'isolated-sandbox' && isolation !== 'home-origin' }
   })
 
-/** `<namespace>.<runtime>`: the provider of the runtime's pods new to the workspace, the first in `modules` order; the
- * runtime alone if none, or if its id is already dotted (namespaced). */
 /** Whether a provider is the workspace's own (Trust leaves its pods as the file has them): loaded here, from this
  * page's origin. A foreign provider imported before is not: a file naming it again still gets the user's Trust. */
 export const ownProvider = (loaded: boolean, stored: string | undefined): boolean => {
