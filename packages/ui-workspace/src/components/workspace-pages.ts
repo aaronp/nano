@@ -12,7 +12,7 @@ import type { Wires } from '../wires/wires.ts';
 
 const mainDock = (doc: Document) => doc.querySelector<WorkspaceDock>('workspace-dock#workspace');
 const mainKey = (doc: Document) => mainDock(doc)?.getAttribute('storage-key') ?? 'workspace';
-const idOf = (path: string) => `ws${path.replace(/\//g, '-')}`;
+const idOf = (path: string) => `ws${path.replace(/\//g, '_')}`;   // _ is never in a path: /a/b and /a-b differ
 const pageDock = (doc: Document, path: string) => doc.querySelector<WorkspaceDock>(`app-route[path="${path}"] workspace-dock`);
 
 const button = (doc: Document, action: string, label: string, text: string) => {

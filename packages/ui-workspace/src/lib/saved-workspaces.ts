@@ -101,21 +101,19 @@ export const savedWorkspaces = (storage: Pick<Storage, 'getItem' | 'setItem' | '
     if (!(ws.icon in ICONS)) return `There is no icon called ${ws.icon}.`;
     return null;
   };
-  const add = (ws: SavedWorkspace, taken: readonly string[]): string | null => {
-    const r = refusal(ws, taken);
-    if (!r) storage.setItem(KEY, JSON.stringify([...list(), ws]));
-    return r;
-  };
+  /** A storage that will not write is a refusal too. */
+  const write = (f: () => void): string | null => { try { f(); return null; } catch (e) { return `Could not save: ${(e as Error).message}`; } };
+  const add = (ws: SavedWorkspace, taken: readonly string[]): string | null =>
+    refusal(ws, taken) ?? write(() => storage.setItem(KEY, JSON.stringify([...list(), ws])));
   /** Replace the page at `path`; a new route carries its dock's keys (under `mainKey`) with it. */
   const update = (path: string, ws: SavedWorkspace, taken: readonly string[], mainKey: string): string | null => {
-    const r = refusal(ws, taken, path);
-    if (r) return r;
-    if (ws.path !== path) for (const x of SUFFIXES) {
-      const from = layoutKey(mainKey, path) + x, v = storage.getItem(from);
-      if (v !== null) { storage.setItem(layoutKey(mainKey, ws.path) + x, v); storage.removeItem(from); }
-    }
-    storage.setItem(KEY, JSON.stringify(list().map((w) => (w.path === path ? ws : w))));
-    return null;
+    return refusal(ws, taken, path) ?? write(() => {
+      if (ws.path !== path) for (const x of SUFFIXES) {
+        const from = layoutKey(mainKey, path) + x, v = storage.getItem(from);
+        if (v !== null) { storage.setItem(layoutKey(mainKey, ws.path) + x, v); storage.removeItem(from); }
+      }
+      storage.setItem(KEY, JSON.stringify(list().map((w) => (w.path === path ? ws : w))));
+    });
   };
   return { list, refusal, add, update };
 };

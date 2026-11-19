@@ -31,3 +31,9 @@ test('update to a new route moves the dock keys; a taken route is refused and mo
   expect(st.m.get('m.saved./b.template')).toBe('v.template')
   expect(s.list().map((w) => w.path)).toEqual(['/b', '/c'])
 })
+
+test('a storage that will not write is a refusal, not a throw', () => {
+  const st = { ...memory(), setItem: () => { throw new Error('quota') } }, s = savedWorkspaces(st)
+  expect(s.add(a, [])).toBe('Could not save: quota')
+  expect(s.update('/a', a, [], 'm')).toBe('Could not save: quota')
+})

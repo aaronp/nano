@@ -73,7 +73,7 @@ export class WorkspaceDock extends HTMLElement {
     const layout = new GoldenLayout(area);
     layout.resizeWithContainerAutomatically = true;
     layout.registerComponentFactoryFunction('widget', (container, state) => mountPanel(container, state, this.mounting));
-    layout.on('stateChanged', () => this.layout && this.send('dock:layout', { panels: this.openIds().length }));
+    layout.on('stateChanged', () => this.layout && this.changed());
     layout.on('focus', () => this.reportFocus());
     /* switching panels blurs the old one first: wait for the new focus, so only the change is sent */
     layout.on('blur', () => queueMicrotask(() => this.reportFocus()));
@@ -149,15 +149,12 @@ export class WorkspaceDock extends HTMLElement {
   /** Ids of the panels currently open, in layout order. */
   openIds(): readonly string[] { return panelIds(this.kept.root as never); }
 
-  private get storageKey(): string {
-    const k = this.getAttribute('storage-key');
-    if (!k) throw new Error('<workspace-dock> needs a storage-key attribute to save layouts');
-    return k;
-  }
+  private get storageKey(): string { const k = this.getAttribute('storage-key'); if (!k) throw new Error('<workspace-dock> needs a storage-key attribute to save layouts'); return k; }
 
   private get system(): string { return this.getAttribute('system') ?? 'host'; }
   private send(topic: string, payload: unknown) { this.requireBus().publish(topic, payload, 'workspace-dock'); }
   private say(message: string) { this.send('dock:status', { message }); }
+  private changed() { this.send('dock:layout', { panels: this.openIds().length }); }   // panels or template changed: the picker re-reads
 
   /** Sends `dock:focus` when the focused panel has changed: its instance, or null if it shows none or none is focused. */
   private reportFocus(item = this.layout?.focusedComponentItem) {
@@ -175,7 +172,7 @@ export class WorkspaceDock extends HTMLElement {
   }
 
   /** Makes an element (its data-widget names a palette widget) a drag source for this dock, and click-to-add. */
-  addSource(el: HTMLElement, layout = this.requireLayout()) { dragSource(el, layout, this.defs, (id) => this.addWidget(id)); }
+  addSource(el: HTMLElement, layout = this.requireLayout()) { dragSource(el, layout, this.defs, (id) => this.addWidget(id), () => this.setTemplate('dock')); }
 
   /** What mountPanel needs from the dock. */
   private get mounting() { return { doc: this.ownerDocument, defs: this.defs, bus: this.requireBus(), host: this.host, registry: this.registry, send: (t: string, p: unknown) => this.send(t, p) }; }
@@ -187,9 +184,9 @@ export class WorkspaceDock extends HTMLElement {
   private show(s: TemplateState) {
     if (this.tpl) this.tpl.dispose(); else { this.requireLayout().clearComponentFocus(); this.requireLayout().clear(); }
     const mount = (el: HTMLElement, st: PanelState, item: ComponentItem) => { mountPanel(item.container, st, this.mounting); for (const type of ['pointerdown', 'focusin']) el.addEventListener(type, () => this.reportFocus(item)); };
-    const remember = () => templateState(localStorage, this.storageKey).set(s);
-    this.tpl = { state: s, dispose: renderTemplate(this.querySelector<HTMLElement>(':scope > .dock-area')!, s.template, s.order, mount, (i, j) => { s.order = swap(s.order, i, j); remember(); }) };
-    remember();
+    const remember = () => templateState(localStorage, this.storageKey).set(s), title = (p: PanelState) => (p.widget === 'pod' ? p.name : this.defs.get(p.widget)?.title) ?? p.widget;
+    this.tpl = { state: s, dispose: renderTemplate(this.querySelector<HTMLElement>(':scope > .dock-area')!, s.template, s.order, title, mount, (i, j) => { s.order = swap(s.order, i, j); remember(); }) };
+    remember(); this.changed();
   }
 
   private requireLayout(): GoldenLayout { if (!this.layout) throw new Error('bug: workspace used before it was connected'); return this.layout; }
@@ -197,9 +194,10 @@ export class WorkspaceDock extends HTMLElement {
 
   /** Loads `config`, sized for the dock's tab bar. */
   private load(config: LayoutConfig) {
-    if (this.tpl) { this.tpl.dispose(); this.tpl = null; templateState(localStorage, this.storageKey).set(null); this.reportFocus(); }
+    const left = this.tpl; if (left) { left.dispose(); this.tpl = null; templateState(localStorage, this.storageKey).set(null); this.reportFocus(); }
     this.requireLayout().clearComponentFocus();   // the focused panel is about to go: dock:focus null, not a stale panel
     this.requireLayout().loadLayout({ ...config, dimensions: { ...config.dimensions, headerHeight: HEADER_H } });
+    if (left) this.changed();
   }
 
   /** A remembered layout, if storage works and it only names widgets this palette still has. */
@@ -216,8 +214,9 @@ export class WorkspaceDock extends HTMLElement {
 
   restore() {
     const saved = this.readSaved(); if (!saved) return this.say('No saved layout yet.');
-    const t = templateState(localStorage, this.storageKey).get();   // load() clears it; re-enter after
-    this.load(saved); this.say('Layout restored.'); if (t?.order.every((s) => this.defs.has(s.widget))) this.show(t);
+    const t = templateState(localStorage, this.storageKey).get();   // load() clears it; re-entered, rebased, if its panels are the saved ones
+    this.load(saved); this.say('Layout restored.'); const names = (o: PanelState[]) => JSON.stringify(o.map((s) => s.name ?? s.widget).sort());
+    if (t?.order.every((s) => this.defs.has(s.widget)) && names(t.order) === names(panelsInOrder(this.kept.root))) this.show({ ...t, dock: this.kept });
   }
 
   reset() { this.load(initial(this, this.defs)); this.say('Back to the starting layout.'); }

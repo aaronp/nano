@@ -1,9 +1,9 @@
 /**
  * <workspace-dock>'s template mode: its panels in a fixed CSS grid, one position per template area. Each position has a
- * thin header (its title and a native select of positions; choosing one swaps the two panels). At ≤840px the grid
+ * thin header (its title, from `title`, and a native select of positions; choosing one swaps the two panels). At ≤840px the grid
  * stacks; `main-drawer`'s drawer becomes a slide-over, toggled by a button.
  *
- *   const dispose = renderTemplate(area, 'two-cols', order, (el, state, item) => mountPanel(item.container, state, …), (i, j) => swapped)
+ *   const dispose = renderTemplate(area, 'two-cols', order, state => title, (el, state, item) => mountPanel(item.container, state, …), (i, j) => swapped)
  */
 import type { ComponentContainer, ComponentItem } from 'golden-layout/dist/esm/index.js';
 import { TEMPLATES, type PanelState, type TemplateId } from '../lib/layout-templates.ts';
@@ -41,7 +41,7 @@ const ensureStyles = (doc: Document) => {
 /** Shows `order` in template `t` inside `host`, each panel mounted once: `mount` fills a position's panel element, given a
  * stand-in for golden-layout's item (its container: element, on('destroy'), focus, stateRequestEvent). Choosing a position
  * moves the two panels in place, then `onSwap`. Returns the dispose: fires every panel's destroy and removes the grid. */
-export function renderTemplate(host: HTMLElement, t: TemplateId, order: PanelState[], mount: (el: HTMLElement, state: PanelState, item: ComponentItem) => void, onSwap: (i: number, j: number) => void): () => void {
+export function renderTemplate(host: HTMLElement, t: TemplateId, order: PanelState[], title: (s: PanelState) => string, mount: (el: HTMLElement, state: PanelState, item: ComponentItem) => void, onSwap: (i: number, j: number) => void): () => void {
   const doc = host.ownerDocument;
   ensureStyles(doc);
   const areas = TEMPLATES.find((x) => x.id === t)?.areas ?? [];
@@ -53,7 +53,7 @@ export function renderTemplate(host: HTMLElement, t: TemplateId, order: PanelSta
     const state = order[i]!;
     const pos = grid.appendChild(Object.assign(doc.createElement('section'), { className: 'tpl-pos' }));
     const head = pos.appendChild(Object.assign(doc.createElement('header'), { className: 'tpl-head' }));
-    head.append(Object.assign(doc.createElement('span'), { textContent: state.name ?? state.widget }));
+    head.append(Object.assign(doc.createElement('span'), { textContent: title(state) }));
     const select = head.appendChild(doc.createElement('select'));
     select.setAttribute('aria-label', 'Position');
     for (const a of areas) select.append(Object.assign(doc.createElement('option'), { value: a, textContent: a }));

@@ -2,6 +2,7 @@
 import { expect, test } from 'bun:test'
 import { mount, tick } from './dock-setup.ts'
 import { panelsInOrder } from '../src/lib/layout-templates.ts'
+import { GoldenLayout } from 'golden-layout/dist/esm/index.js'
 
 const two = async () => { const m = await mount(); m.dock.addWidget('plain'); m.dock.addWidget('plain'); await tick(); return m }
 
@@ -104,4 +105,50 @@ test('restore() with no stored template stays in the dock', async () => {
   const { dock } = await two()
   dock.save(); dock.restore()
   expect(dock.template).toBe('dock')
+})
+
+test('entering a template, and the flip back on add, send dock:layout for the picker', async () => {
+  const { bus, dock } = await two()
+  const layouts = () => bus.history().filter(m => m.topic === 'dock:layout')
+  let n = layouts().length
+  dock.setTemplate('two-cols')
+  expect(layouts().length).toBe(n + 1)
+  expect(layouts().at(-1)!.payload).toEqual({ panels: 2 })
+  n = layouts().length
+  dock.setTemplate('dock')
+  expect(layouts().length).toBeGreaterThan(n)
+  dock.setTemplate('two-cols'); n = layouts().length
+  dock.addWidget('plain')
+  expect(layouts().slice(n).map(m => m.payload)).toContainEqual({ panels: 2 })   // the flip back, before the add's own
+})
+
+test('restore() in a template whose panels differ from the saved layout lands in the dock with the saved root', async () => {
+  const { dock } = await mount()
+  dock.addWidget('shown'); await tick(); dock.save()
+  const saved = JSON.stringify(dock.arrangement().root)
+  dock.addWidget('plain'); await tick(); dock.setTemplate('two-cols')
+  dock.restore()
+  expect(dock.template).toBe('dock')
+  expect(JSON.stringify(dock.arrangement().root)).toBe(saved)
+})
+
+test('dragging a drawer item in a template flips back to the dock first', async () => {
+  const proto = GoldenLayout.prototype as unknown as { newDragSource(el: HTMLElement, f: () => unknown): unknown }
+  const orig = proto.newDragSource
+  let drag: (() => unknown) | undefined
+  proto.newDragSource = function (this: unknown, el: HTMLElement, f: () => unknown) { drag = f; return orig.call(this, el, f) }
+  try {
+    document.body.innerHTML = '<a data-dock-add="ws" data-widget="plain">Plain</a>'
+    const { dock } = await two()
+    dock.setTemplate('two-cols')
+    drag!()
+    expect(dock.template).toBe('dock')
+  } finally { proto.newDragSource = orig }
+})
+
+test('position headers show the palette title', async () => {
+  const { dock } = await mount()
+  dock.addWidget('shown'); dock.addWidget('plain'); await tick()
+  dock.setTemplate('two-cols')
+  expect([...dock.querySelectorAll('.tpl-head span')].map(s => s.textContent)).toEqual(['Shown', 'Plain'])
 })
