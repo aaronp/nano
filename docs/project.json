@@ -1,0 +1,68 @@
+{
+  "manifestVersion": 1,
+  "tools": [
+    {
+      "id": "decisions",
+      "aliases": [
+        "adr"
+      ],
+      "name": "Decisions",
+      "tool": "ADR log",
+      "package": "@pritzlaff/adr",
+      "bin": "adr",
+      "file": "docs/adr/decisions.md",
+      "srcEnv": "ADR_SRC",
+      "homepage": "https://github.com/aaronp/adr",
+      "spec": "https://aaronp.github.io/adr/spec.md",
+      "viewer": "https://aaronp.github.io/adr/",
+      "dashboard": {
+        "tint": "#E6DCFF",
+        "question": "Do you know why it’s built this way?",
+        "noLead": "Record each decision with its options and the trade-off you chose."
+      },
+      "order": 3
+    },
+    {
+      "id": "risks",
+      "aliases": [],
+      "name": "Risks",
+      "tool": "Risk register",
+      "package": "@pritzlaff/risk-register",
+      "bin": "risk-register",
+      "file": "docs/risks/risks.md",
+      "srcEnv": "RR_SRC",
+      "homepage": "https://github.com/aaronp/risk-register",
+      "spec": "https://aaronp.github.io/risk-register/spec.md",
+      "viewer": "https://aaronp.github.io/risk-register/",
+      "dashboard": {
+        "tint": "#FFD9D9",
+        "question": "Do you know what could go wrong?",
+        "noLead": "Log each risk, score it and give it an owner and a mitigation."
+      },
+      "starter": "---\nregister: Project\n---\n",
+      "order": 4
+    },
+    {
+      "id": "work",
+      "aliases": [
+        "agile"
+      ],
+      "name": "Delivery",
+      "tool": "Agile board",
+      "package": "@pritzlaff/agile",
+      "bin": "agile",
+      "file": "docs/board/board.md",
+      "srcEnv": "AGILE_SRC",
+      "homepage": "https://github.com/aaronp/agile",
+      "spec": "https://aaronp.github.io/agile/spec.md",
+      "viewer": "https://aaronp.github.io/agile/",
+      "dashboard": {
+        "tint": "#CFEDF3",
+        "question": "Do you know what’s happening right now?",
+        "noLead": "Put the work on the board and limit what is in progress."
+      },
+      "starter": "# Board\n\n## To Do\n\n## Doing\n\n## Done\n",
+      "order": 6
+    }
+  ]
+}

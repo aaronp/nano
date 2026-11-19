@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "title": "Nano",
+  "subtitle": "Kanban board",
+  "status": {
+    "label": "4 open",
+    "tone": "neutral"
+  },
+  "heading": {
+    "primary": "0/4",
+    "label": "tasks done"
+  },
+  "legend": [
+    {
+      "id": "To Do",
+      "label": "To Do",
+      "color": "#3b6fd8"
+    },
+    {
+      "id": "Doing",
+      "label": "Doing",
+      "color": "#b7791f"
+    },
+    {
+      "id": "Done",
+      "label": "Done",
+      "color": "#2f855a"
+    }
+  ],
+  "report": {
+    "To Do": 4,
+    "Doing": 0,
+    "Done": 0
+  },
+  "source": {
+    "label": "docs/board/board.md",
+    "url": "https://aaronp.github.io/agile/?src=https://aaronp.github.io/nano/docs/board/board.md"
+  },
+  "updated": "2026-11-19"
+}

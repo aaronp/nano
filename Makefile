@@ -77,3 +77,10 @@ adr:
 
 agile:
 	bun run agile
+
+# >>> @pritzlaff/project — managed by `project add/remove/update`; edits inside are overwritten
+.PHONY: snapshot dashboard risks
+snapshot: ; npx project snapshot
+dashboard: ; npx project build
+risks: ; npx risk-register docs/risks/risks.md
+# <<< @pritzlaff/project
