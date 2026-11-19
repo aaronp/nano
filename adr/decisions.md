@@ -770,20 +770,23 @@ messaging pod, a `raft-api` pod and a `ledger` pod. A pod changing the app's dep
 | id | criterion | weight | description |
 | --- | --- | --- | --- |
 
-## Solution: host-deploy — A new HostDeploy interface on the host's ui pod
-Beside `HostUI`. Two ops: `deploy({ pods, runtimes })` adds them (an existing name is `invalid-input`) and
-`undeploy({ runtimes })` removes them. The host applies each through the existing `AppDeployment.edit` / `app.apply`,
-asking the user first through `HostUI.approve`.
+## Solution: host-deploy — A HostDeploy component, policed by an application deployment policy
+`HostDeploy` is a component like any other: it takes a nano deployment (`deploy({ pods, runtimes })`,
+`undeploy({ runtimes })`). Its instance is placed in the host's runtime and its host-supplied implementation holds the
+`Application`, applying through `AppDeployment.edit` / `app.apply`. Pods that need it declare it as a dependency.
 
-| criterion | score |
-| --- | --- |
+Who may deploy is a new **deployment policy** on the `Application` (nano-core): `isAllowed({ caller, deployment })`,
+passed to `Application.create` as runtime policies are, with `DeploymentPolicies.allowAll()` for tests. The workspace's
+policy prompts through `HostUI.approve`. `apply` takes a `caller` and `applied` records it, so replay re-applies only
+the host's own applies and reproduces a pod's by replaying its cause.
 
 Pros:
 - Deployment change stays separate from UI concerns
+- Who may deploy is policy, like who may call
 - Reuses AppDeployment.edit and apply; the apply is recorded, so the time machine covers it
 
 Cons:
-- A new nano.ui interface
+- A nano-core change (DeploymentPolicy, apply's caller) and a new nano.ui interface
 
 ## Solution: hostui — A deploy op on HostUI
 Smaller, but mixes deployment changes into an interface about the UI.
