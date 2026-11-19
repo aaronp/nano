@@ -88,6 +88,8 @@ test('raft-cluster creates, lists and removes a cluster through the cluster pod'
   app = await openRaft()
   const el = await mount('raft-cluster', app, 'raft', 'cluster')
   const root = el.shadowRoot!, click = async (n: string) => { (root.querySelector(`[name=${n}]`) as HTMLButtonElement).click(); await wait(); await el.updateComplete }
+  // each field carries a visible label (its <label> wraps it)
+  expect(['name', 'size', 'seed'].map(n => root.querySelector(`[name=${n}]`)!.closest('label')?.textContent?.trim().split(/\s/)[0])).toEqual(['cluster', 'nodes', 'seed'])
   ;(root.querySelector('[name=name]') as HTMLInputElement).value = 'demo'
   await click('create')
   expect([...root.querySelectorAll('li')].map(l => l.textContent)).toEqual(['demo'])

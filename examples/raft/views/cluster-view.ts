@@ -6,7 +6,7 @@ import { Cluster } from '../interfaces.ts'
 
 class RaftClusterView extends LitElement {
   static properties = { target: { attribute: false }, names: { state: true }, error: { state: true } }
-  static styles = [base, kit, css`ul { list-style: none; margin: 0; padding: 0 }`]
+  static styles = [base, kit, css`ul { list-style: none; margin: 0; padding: 0 } label { display: inline-flex; align-items: center; gap: .35em; font-size: .85em; color: var(--nano-muted, inherit) }`]
   declare target?: ViewTarget
   declare names: string[]
   declare error?: string
@@ -36,9 +36,9 @@ class RaftClusterView extends LitElement {
     const t = this.target
     if (!t) return html``
     return html`<div class="col"><div class="row">
-        <input class="input" name="name" aria-label="Name" placeholder="name" value="example">
-        <select class="input" name="size" aria-label="Size"><option>3</option><option>5</option></select>
-        <input class="input" name="seed" type="number" aria-label="Seed" value="1">
+        <label>cluster <input class="input" name="name" placeholder="name" value="example"></label>
+        <label>nodes <select class="input" name="size"><option>3</option><option>5</option></select></label>
+        <label title="seeds the election timeouts: the same seed replays the same election">seed <input class="input" name="seed" type="number" value="1"></label>
         <button class="btn" name="create" type="button" @click=${() => void this.run(() => this.pod(t).create({ name: this.field('name'), size: Number(this.field('size')) as 3 | 5, seed: Number(this.field('seed')) }))}>Create</button>
         <button class="btn" name="remove" type="button" @click=${() => void this.run(() => this.pod(t).remove({ name: this.field('name') }))}>Remove</button></div>
       ${this.error ? html`<p class="alert bad" role="alert">${this.error}</p>` : ''}
