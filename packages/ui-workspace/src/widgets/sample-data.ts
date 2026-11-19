@@ -11,9 +11,3 @@ export const STATS: readonly { readonly label: string; readonly unit: string; re
 ];
 
 export const DAYS: readonly string[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-export const FILES: readonly { readonly path: string; readonly text: string }[] = [
-  { path: 'README.md', text: '# [Project]\n\nThis editor page is a vertical split (editor above, console below)\nwith a horizontal split inside the top pane.\n' },
-  { path: 'src/main.ts', text: "import './components/app-shell.ts';\n\n// Register your own pages and widgets here.\n" },
-  { path: 'src/config.json', text: '{\n  "name": "[project]",\n  "version": "0.1.0"\n}\n' },
-];

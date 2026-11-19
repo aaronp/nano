@@ -11,7 +11,6 @@ import { host } from './boot-host.ts';   // before the elements are defined: the
 import { toast } from '@pritzlaff/nano-elements';
 import { clockDriver, timeMachine, type NanoTimeMachine } from '@pritzlaff/nano-ui';
 import './components/app-shell.ts';
-import './components/split-pane.ts';
 import './components/component-drawer.ts';
 import { openImportDialog, setImportHost } from './components/import-dialog.ts';
 import './components/gallery.ts';
