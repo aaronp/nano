@@ -32,11 +32,11 @@ describe('matches', () => {
     expect(matches({ label: 'x', ns: 'a' }, f({ namespaces: set('a', 'gone') }), { namespaces: set('a', 'c') })).toBe(true)
     expect(matches({ label: 'x', ns: 'c' }, f({ namespaces: set('a', 'gone') }), { namespaces: set('a', 'c') })).toBe(false)
   })
-  test('statuses: only pods whose status is listed; non-pods pass when only status is set', () => {
+  test('statuses: only pods whose status is listed; an item with no status fails', () => {
     const v = f({ statuses: set<PodStatus>('failed') })
     expect(matches({ label: 'p', kind: 'pod', status: 'failed' }, v)).toBe(true)
     expect(matches({ label: 'p', kind: 'pod', status: 'running' }, v)).toBe(false)
-    expect(matches({ label: 'i', kind: 'interface' }, v)).toBe(true)
+    expect(matches({ label: 'i', kind: 'interface' }, v)).toBe(false)
   })
 })
 
@@ -54,6 +54,19 @@ describe('filterTree', () => {
     expect(out[0]!.children![0]!.children!.map(x => x.id)).toEqual(['p:a'])
     expect(filterTree(list as never, f({ kinds: set('action') })).map(x => x.id)).toEqual(['o:q'])
     expect(filterTree(list as never, emptyFilter())).toEqual(list as never)
+  })
+})
+
+describe('filterTree by status and unknown namespace', () => {
+  const pod = (id: string, status: string) => ({ id, label: id, kind: 'pod', data: { ns: 'x', status } })
+  const list = [{ id: 'r', label: 'r', kind: 'runtime', data: { ns: 'x' }, children: [pod('a', 'running'), pod('b', 'not started')] }]
+  test('status keeps matching pods and their ancestors only', () => {
+    const out = filterTree(list, f({ statuses: set<PodStatus>('running') }))
+    expect(out.map(x => x.id)).toEqual(['r'])
+    expect(out[0]!.children!.map(x => x.id)).toEqual(['a'])
+  })
+  test('a selected namespace absent from the tree is ignored', () => {
+    expect(filterTree(list, f({ namespaces: set('gone') }))).toEqual(list)
   })
 })
 
