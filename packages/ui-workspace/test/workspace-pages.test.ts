@@ -21,6 +21,7 @@ const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector
 const input = () => $<HTMLInputElement>('input[data-rename]')
 const type = (value: string, key: string) => { input().value = value; input().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })) }
 const editing = () => $('app-shell').hasAttribute('data-editing')
+const key = (el: Element, k: string) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }))
 const savedOrder = () => [...document.querySelectorAll<HTMLElement>('[data-saved]')].map(r => r.dataset.saved)
 
 test('mountWorkspace adds a nav row and a route before the not-found page, with a dock of Main\'s widgets', () => {
@@ -53,13 +54,32 @@ test('the title holds + and ✎; + makes an empty page, goes there and starts it
   expect($('[data-saved="/new-workspace-2"] [data-name]').textContent).toBe('New workspace 2')
 })
 
-test('✎ toggles edit mode; Esc leaves it', () => {
+test('✎ toggles edit mode, making names and icons buttons; Esc leaves it, unless handled or in a dialog', () => {
   $('[data-edit-nav]').click()
   expect(editing()).toBe(true)
   expect($('[data-edit-nav]').getAttribute('aria-pressed')).toBe('true')
+  expect($('[data-workspaces] [data-name]').getAttribute('role')).toBe('button')
+  expect($('[data-saved="/new-workspace"] [data-glyph]').getAttribute('tabindex')).toBe('0')
+  const handled = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }); handled.preventDefault()
+  document.dispatchEvent(handled)
+  document.body.insertAdjacentHTML('beforeend', '<dialog><button id="in-dialog"></button></dialog>')
+  key($('#in-dialog'), 'Escape'); $('dialog').remove()
+  expect(editing()).toBe(true)
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
   expect(editing()).toBe(false)
+  expect($('[data-workspaces] [data-name]').hasAttribute('role')).toBe(false)
   $('[data-edit-nav]').click()
+})
+
+test('in edit mode a link click does not navigate; Enter on a focused name opens its input', () => {
+  const click = new MouseEvent('click', { bubbles: true, cancelable: true })
+  $('[data-saved="/new-workspace"] a').dispatchEvent(click)
+  expect(click.defaultPrevented).toBe(true)
+  $('[data-saved="/new-workspace"] [data-name]').focus()
+  key(document.activeElement!, 'Enter')
+  expect(input().closest('[data-saved]')!.getAttribute('data-saved')).toBe('/new-workspace')
+  type('', 'Escape')
+  expect(document.activeElement).toBe($('[data-saved="/new-workspace"] [data-name]'))
 })
 
 test('renaming a saved page moves its keys, link, route and dock to the new slug', () => {
@@ -86,6 +106,8 @@ test('a rename to a taken slug is suffixed; Esc or an empty name keeps the old',
   $('[data-saved="/new-workspace-2"] [data-name]').click()
   type('Desk', 'Enter')
   expect(store.list().map(w => w.path)).toEqual(['/desk', '/desk-2'])
+  expect($('app-route[path="/desk-2"] workspace-dock').getAttribute('storage-key')).toBe('main.saved./desk-2')
+  expect(document.activeElement).toBe($('[data-saved="/desk-2"] [data-name]'))
   $('[data-saved="/desk-2"] [data-name]').click()
   type('Other', 'Escape')
   expect(editing()).toBe(true)
@@ -95,9 +117,16 @@ test('a rename to a taken slug is suffixed; Esc or an empty name keeps the old',
   expect(store.list()[1]).toEqual({ path: '/desk-2', title: 'Desk', icon: 'window' })
 })
 
-test('the icon opens a grid of icons; choosing one updates the row', () => {
+test('Enter on the icon opens a grid of icons (arrows move, focus leaving closes); choosing one updates the row', () => {
+  $('[data-saved="/desk"] [data-glyph]').focus(); key(document.activeElement!, 'Enter')
+  let pop = $('[role="listbox"]')
+  expect(document.activeElement!.getAttribute('data-icon')).toBe('window')
+  key(document.activeElement!, 'ArrowRight')
+  expect(document.activeElement).toBe(pop.querySelector('[data-icon="window"]')!.nextElementSibling)
+  $('[data-edit-nav]').focus()
+  expect(document.querySelector('[role="listbox"]')).toBeNull()
   $('[data-saved="/desk"] a svg').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
-  const pop = $('[role="listbox"]')
+  pop = $('[role="listbox"]')
   expect(pop.querySelector('[aria-selected="true"]')!.getAttribute('data-icon')).toBe('window')
   pop.querySelector<HTMLElement>('[data-icon="rocket"]')!.click()
   expect(document.querySelector('[role="listbox"]')).toBeNull()
