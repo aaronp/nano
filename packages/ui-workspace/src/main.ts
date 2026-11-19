@@ -110,13 +110,14 @@ if (host) {
   const bars = document.querySelectorAll<NanoTimeMachine>('nano-time-machine');
   const hand = () => { for (const b of bars) Object.assign(b, { tm, store: h.history.store, driver }); };
   hand();
-  for (const b of bars) b.addEventListener('reset', async () => {
-    const r = await h.reset();
+  let resetting: Promise<void> | undefined;   // one Reset at a time: a second click while one runs joins it
+  for (const b of bars) b.addEventListener('reset', () => resetting ??= (async () => {
+    const r = await h.history.reset();
     if (!r.ok) toast(r.fail.reason, { variant: 'bad' });
     driver.close(); tm.close();
     tm = await timeMachine(h.history); driver = clockDriver(h.app, h.registry, tm);
     hand();
-  });
+  })().finally(() => { resetting = undefined; }));
 
   const src = new URL(location.href).searchParams.get('src');
   // Only a URL on this page's origin: a crafted link must not open the import prompt on load.

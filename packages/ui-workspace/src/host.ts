@@ -20,12 +20,12 @@ import { openFrame } from './sandbox/frames.ts'
 import { connected } from './auto-connect.ts'
 import { framesOf } from './sandbox/sandboxed-view.ts'
 import { standIn, type Frame } from './sandbox/stand-in.ts'
-import { recording, type Recording } from './history.ts'
+import { recording, type History } from './history.ts'
 import { observeCalls, type OpCall } from './observed-calls.ts'
 
-export type Host = Recording & {
-  readonly app: Application
-  readonly registry: Registry
+export type Host = {
+  readonly app: Application; readonly registry: Registry
+  readonly history: History   // the app recorded from creation, before any import; and Reset (history.ts)
   /** The live deployment with the modules, view selectors and dock layout the host keeps. */
   data(): AppDeployment
   /** Implementation → its default view tag, from nano.ui and every loaded module. */
@@ -131,7 +131,7 @@ export async function start(): Promise<NanoResult<Host>> {
   }
 
   return success({
-    app, registry, data, apply: next => apply(next), ...(await recording(app)),
+    app, registry, data, apply: next => apply(next), history: await recording(app),
     defaults: () => ({ ...loaded.views }),
     foreign: coord => !!foreignOrigin(loaded.deployment.modules?.[coord]),
     saved: reconcile => withoutHost(reconcile ? { ...observed.reconciled(), ...kept(loaded.deployment) } : data()),

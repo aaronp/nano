@@ -49,7 +49,7 @@ test('given Typing typed into, when Reset, then every pod restarts, the log is e
   const restarted: string[] = []
   h.app.listen((e: AppEvent) => { if (e.type === 'restarted') restarted.push(e.pod) })
 
-  expect(await h.reset()).toMatchObject({ ok: true })
+  expect(await h.history.reset()).toMatchObject({ ok: true })
   expect(restarted.sort()).toEqual(Object.keys(h.app.deployment().pods).sort())
   const entries = await h.history.store.range()   // read before the log is, which is a message too
   expect(entries.map(e => e.event)).toEqual([{ type: 'deployment', deployment: h.app.deployment(), clean: true }])
@@ -60,7 +60,7 @@ test('given a Reset mid-session, then replaying the history gives the same messa
   const h = await host()
   expect(await h.importUrl(typing)).toMatchObject({ ok: true })
   await h.app.call('main', 'map').map('before')
-  expect(await h.reset()).toMatchObject({ ok: true })
+  expect(await h.history.reset()).toMatchObject({ ok: true })
   await h.app.call('main', 'map').map('a')
   await h.app.call('main', 'map').map('b')
   await tick()
@@ -75,4 +75,17 @@ test('given a Reset mid-session, then replaying the history gives the same messa
     expect(diverge(pair(await h.history.store.range(r.value.from, r.value.to)), pair(await second.range()))).toBeNull()
   }
   expect(await h.app.call('main', 'log').entries(null)).toMatchObject({ ok: true, value: ['A', 'B'] })
+})
+
+test('given two Resets at once, then they are one: the history is one clean deployment, recorded once from then on', async () => {
+  const h = await host()
+  expect(await h.importUrl(typing)).toMatchObject({ ok: true })
+  await h.app.call('main', 'map').map('x')
+  const [a, b] = await Promise.all([h.history.reset(), h.history.reset()])
+  expect([a.ok, b.ok]).toEqual([true, true])
+  expect((await h.history.store.range()).map(e => e.event)).toEqual([{ type: 'deployment', deployment: h.app.deployment(), clean: true }])
+  await h.app.call('main', 'map').map('y')
+  const seqs = (await h.history.store.range()).map(e => e.seq)
+  expect(seqs).toEqual([...new Set(seqs)])   // one recorder: no entry twice
+  expect(seqs.length).toBe(new Set((await h.history.store.range()).map(e => JSON.stringify(e.event))).size)
 })
