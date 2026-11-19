@@ -9,414 +9,67 @@ decision: tools
 ---
 
 ## Goal
-Event-driven observability for any nano app: record it from its start, move a cursor over the recording by hand or on
-a scaled ticker, and let views (the time bar, the Messages table, the Desk's dots, later the Ring view) react the same
-whatever moves time. Spec: `docs/superpowers/specs/2026-11-18-time-machine-design.md`.
+Give any nano app event-driven observability: record it from its start, move a cursor over the recording by hand or
+on a scaled ticker, and let views (the time bar, the Messages table, the Desk's dots, the Ring) react the same way
+whatever moves time. The impact is architectural: whatever does the observing must not itself become part of what is
+observed, or recording and replay turn recursive and the observed app is perturbed. Spec:
+`docs/superpowers/specs/2026-11-18-time-machine-design.md`.
 
 ## Hypothesis
-- We believe: 
-- Will result in: 
-- Measured by: 
+- We believe: keeping the observing tools outside the app (plain modules and web components that send no nano messages)
+- Will result in: recordings that contain only the app's own traffic, and views that are decoupled from what drives time
+- Measured by: replaying a recording reproduces it exactly (`diverge` is null) with the views mounted
 
 ## People
-- Project owner — decider
+- Product Owner — decider
 - Claude — author
 
 ## Criteria
 | id | criterion | weight | description |
 | --- | --- | --- | --- |
+| isolation | Observed app untouched | 5 | Observing adds no messages to, and changes nothing in, the app being observed. |
+| simplicity | Simplicity | 4 | No recursion, no "don't record this" mode, few new concepts. |
+| reuse | Reusable displays | 3 | The time machine and its views work for any app and any host. |
+| dogfooding | Built with nano | 2 | Uses nano's own pods and wiring, showing the model off. |
 
 ## Solution: tools — Plain web components and modules, not pods
-The time machine and its views send no nano messages, so they are never recorded: no recursion, and the observed app
-is never touched. State at a time t comes from folding the history (cheap) or from a shadow app replayed to t (exact).
+The time machine, folding helpers, the shadow app and the views are ordinary TypeScript and Lit elements. They read
+the recording and the app's event stream, and send no nano messages.
 
 | criterion | score |
 | --- | --- |
+| isolation | 5 |
+| simplicity | 5 |
+| reuse | 4 |
+| dogfooding | 2 |
 
 Pros:
+- Nothing to exclude from recordings; no recursion
+- Views are subscribers to frames, decoupled from what moves time
 
 Cons:
+- The observability layer doesn't showcase nano's own pod model
 
 ## Solution: pods — Observability as nano pods
-The tools would be pods in the app. Their own messages would be recorded, so recording them needs a no-op mode.
+The time machine and views are pods wired into the app.
 
 | criterion | score |
 | --- | --- |
+| isolation | 2 |
+| simplicity | 2 |
+| reuse | 3 |
+| dogfooding | 5 |
 
 Pros:
+- Dogfoods nano; the tools could be deployed and rewired like any pod
 
 Cons:
+- Their own messages are recorded, so recording needs a no-op mode while replaying
+- Observing perturbs the app being observed
 
 ## Decision
-Plain web components and modules. Reset means reset and clear (restart every pod, start a fresh clean recording).
-The in-memory history keeps 100,000 entries; past that, the bar says "history too long to rebuild state".
-
----
-id: ADR-0002
-title: A message's travel window is constant in recording time
-status: proposed
-date: 2026-11-18
-revisit: 
-tags: time-machine
-parent: ADR-0001
-decision: constant
----
-
-## Goal
-Each message in flight is drawn for a visual travel time (600 ms at speed 1). Decide what the speed setting scales.
-
-## Hypothesis
-- We believe: 
-- Will result in: 
-- Measured by: 
-
-## People
-
-## Criteria
-| id | criterion | weight | description |
-| --- | --- | --- | --- |
-
-## Solution: constant — Constant window; speed scales cursor motion
-The window is a constant `travelMs` (600) of recording time; on screen a message takes `travelMs / speed`. Frames are
-a pure function of the cursor.
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Solution: scaled — Scale the window by speed
-The window itself changes with speed, so the same cursor gives different frames at different speeds.
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Decision
-Constant window. If wrong: retune one constant.
-
----
-id: ADR-0003
-title: Live mode ticks frames on the recording's clock while anything is in flight
-status: proposed
-date: 2026-11-18
-revisit: 
-tags: time-machine
-parent: ADR-0001
-decision: date-now
----
-
-## Goal
-In Live mode the cursor follows the newest entry, but dots must keep moving between appends.
-
-## Hypothesis
-- We believe: 
-- Will result in: 
-- Measured by: 
-
-## People
-
-## Criteria
-| id | criterion | weight | description |
-| --- | --- | --- | --- |
-
-## Solution: date-now — Tick while in flight, on Date.now
-Live mode keeps emitting frames while any message is in flight; the default ticker's `now` is `Date.now`, the clock
-that stamps entries.
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Decision
-Tick while in flight on `Date.now`. If wrong: nothing to undo.
-
----
-id: ADR-0004
-title: The time machine accepts only the six speeds
-status: proposed
-date: 2026-11-18
-revisit: 
-tags: time-machine
-parent: ADR-0001
-decision: six
----
-
-## Goal
-The spec lists speeds 1/30, 1/10, 1/4, 1/2, 1 and 2.
-
-## Hypothesis
-- We believe: 
-- Will result in: 
-- Measured by: 
-
-## People
-
-## Criteria
-| id | criterion | weight | description |
-| --- | --- | --- | --- |
-
-## Solution: six — Only those six
-`setSpeed` throws a `RangeError` for anything else.
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Solution: any — Any positive number
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Decision
-Only the six. If wrong: loosen one check.
-
----
-id: ADR-0005
-title: clockDriver takes an optional ticker
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: time-machine, clock
-parent: ADR-0001
-decision: ticker
----
-
-## Goal
-The clock driver measures elapsed real time; headless tests need to fake it.
-
-## Hypothesis
-- We believe: 
-- Will result in: 
-- Measured by: 
-
-## People
-
-## Criteria
-| id | criterion | weight | description |
-| --- | --- | --- | --- |
-
-## Solution: ticker — An optional `ticker` option
-`clockDriver(app, registry, tm, { maxHz?, ticker? })`, with the time machine's own `Ticker` type. The only addition to
-the planned signature.
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Decision
-The optional ticker. If wrong: drop one option.
-
----
-id: ADR-0006
-title: The time bar is <nano-time-machine> in nano-ui
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: time-machine, views
-parent: ADR-0001
-decision: nano-ui
----
-
-## Goal
-The spec named a workspace element `<c-time-machine>`; the project owner then asked for reusable time-machine displays.
-
-## Hypothesis
-- We believe: 
-- Will result in: 
-- Measured by: 
-
-## People
-
-## Criteria
-| id | criterion | weight | description |
-| --- | --- | --- | --- |
-
-## Solution: nano-ui — `<nano-time-machine>` in nano-ui
-Takes a time machine, emits `reset`, sends no nano messages. Usable by any host.
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Solution: workspace — `<c-time-machine>` in the workspace
-As the spec first said; not reusable outside the workspace.
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Decision
-`<nano-time-machine>` in nano-ui. If wrong: a rename.
-
----
-id: ADR-0007
-title: Reset lives on the history (host.history.reset())
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: time-machine, workspace
-parent: ADR-0001
-decision: on-history
----
-
-## Goal
-Adding `history` and `reset` took the workspace's `Host` to 11 members, over the repo's 10-member limit.
-
-## Hypothesis
-- We believe: 
-- Will result in: 
-- Measured by: 
-
-## People
-
-## Criteria
-| id | criterion | weight | description |
-| --- | --- | --- | --- |
-
-## Solution: on-history — `host.history = { store, listen, reset }`
-`Host` keeps 10 plain members; the recording code lives in its own module (`src/history.ts`) because `host.ts` was
-already at 150 lines. Concurrent Resets join the one in progress.
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Solution: on-host — `host.reset()` beside `host.history`
-11 members (first done through a type intersection, which hid it from the structure check).
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Decision
-On the history. If wrong: rename back to `host.reset()`.
-
----
-id: ADR-0008
-title: Module-level exports that no package index re-exports are internal
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: conventions
-parent: ADR-0001
-decision: internal
----
-
-## Goal
-CLAUDE.md treats every new export as a question. Files share helpers: `cleanStart`, `SPEEDS`, `inFlight`,
-`recording`, `cordOf`, `follow`, `causeChain`.
-
-## Hypothesis
-- We believe: 
-- Will result in: 
-- Measured by: 
-
-## People
-
-## Criteria
-| id | criterion | weight | description |
-| --- | --- | --- | --- |
-
-## Solution: internal — Internal plumbing, no design.md entry
-The same rule already applied to workspace-internal exports.
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Solution: inline — Inline them
-No shared helpers between files; duplication instead.
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Decision
-Internal plumbing. If wrong: inline them.
-
----
-id: ADR-0009
-title: Messages search filters the recent rows in the view
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: time-machine, views
-parent: ADR-0001
-decision: recent
----
-
-## Goal
-The Messages table must be searchable by pod, port or value.
-
-## Hypothesis
-- We believe: 
-- Will result in: 
-- Measured by: 
-
-## People
-
-## Criteria
-| id | criterion | weight | description |
-| --- | --- | --- | --- |
-
-## Solution: recent — Filter the frame's recent rows
-The last 200 messages up to the cursor. No new store method; older messages aren't searchable from the table.
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Solution: store — Search the whole store with `store.search`
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Decision
-Filter the recent rows. If wrong: switch to `store.search`.
+Plain web components and modules. State at a time t comes from folding the history (cheap) or from a shadow app
+replayed to t (exact). Reset means reset and clear; the in-memory history keeps 100,000 entries.
 
 ---
 id: ADR-0010
@@ -549,7 +202,7 @@ Spike, 2026-11-19 (bun, M-series Mac, 20,000 calls from inside a pod handler, `n
 
 ---
 id: ADR-0011
-title: Let the clock driver advance only when a timer is due
+title: Stop the clock driver flooding the history with idle advances
 status: proposed
 date: 2026-11-19
 revisit: 
@@ -559,54 +212,87 @@ decision:
 ---
 
 ## Goal
-A live sim-clock app records an `advance` every 50 ms (about 40 entries a second), flooding the Messages table and
-evicting the history's clean start within the hour.
+While a sim-clock app is live, the clock driver calls `ClockControl.advance` every tick (up to 20 a second), and
+each call is a recorded host message, about 40 history entries a second whether or not anything is due. The impact:
+the Messages table shows mostly `advance` rows, and the 100,000-entry history drops its clean start within the hour,
+after which state can no longer be rebuilt (no scrubbing past state, no shadow app). A Raft cluster adds its own real
+traffic on top. Decide how the driver keeps simulated time moving without drowning the history.
 
 ## Hypothesis
-- We believe: 
-- Will result in: 
-- Measured by: 
+- We believe: advancing only when something is due (or recording far fewer advances)
+- Will result in: a history dominated by the app's own messages, rebuildable for a working session
+- Measured by: an idle sim-clock app records near zero entries per second; a live Raft cluster's history stays
+  rebuildable for at least 30 minutes
 
 ## People
+- Product Owner — decider
+- Claude — author
 
 ## Criteria
 | id | criterion | weight | description |
 | --- | --- | --- | --- |
+| history | History stays useful | 5 | Few entries per second when idle; the clean start survives a working session. |
+| exact | Exact replay | 5 | Replay still reproduces the run, so every advance that changes anything is recorded. |
+| concepts | No new concepts | 3 | No new op, interface or option, or the smallest one. |
+| robust | Robustness | 3 | Doesn't depend on fragile inference about which timers exist. |
 
 ## Solution: next-due — A "next due" op on ClockControl
-The driver advances only to the next due timer. New API.
+The sim clock answers when its next timer is due; the driver advances straight to it (capped by real elapsed time ×
+speed), and does nothing while nothing is due.
 
 | criterion | score |
 | --- | --- |
+| history | 5 |
+| exact | 5 |
+| concepts | 3 |
+| robust | 5 |
 
 Pros:
+- Idle apps record nothing; every recorded advance fires something
+- The clock knows its timers, so nothing is inferred
 
 Cons:
+- A new op on a nano.ui interface (new API)
 
-## Solution: infer — Infer due times from recorded after/cancel/fired traffic
-No new concept, but fragile.
+## Solution: infer — Infer due times from the recorded after/cancel/fired traffic
+The driver watches `after`, `cancel` and `fired` messages to the clock and computes the next due time itself.
 
 | criterion | score |
 | --- | --- |
+| history | 5 |
+| exact | 4 |
+| concepts | 5 |
+| robust | 2 |
 
 Pros:
+- No new API
 
 Cons:
+- Restates the clock's timer table outside the clock (concept drift)
+- Breaks if a timer is set before the driver starts listening, or by a host call it misses
 
-## Solution: accept — Accept it; lower the rate, cap the index, hide advance rows
+## Solution: accept — Accept it; slow the ticks and hide advance rows
+Lower the driver's rate (e.g. 4 a second), cap the time machine's index, and filter `advance` rows from the table.
 
 | criterion | score |
 | --- | --- |
+| history | 2 |
+| exact | 5 |
+| concepts | 4 |
+| robust | 4 |
 
 Pros:
+- Smallest change
 
 Cons:
+- Still records advances forever; the history still fills, just more slowly
+- Coarser ticks make paced playback jerkier
 
 ## Decision
 
 ---
 id: ADR-0012
-title: Keep the observe API public in nano-ui
+title: Make the observe API public in nano-ui
 status: proposed
 date: 2026-11-19
 revisit: 
@@ -616,195 +302,223 @@ decision:
 ---
 
 ## Goal
-The spec said new exports are workspace-internal except `kvStep`; the plan exported `record`, `replay`,
-`timeMachine`, `foldAt`, `shadowAt`, `clockDriver`, `<nano-time-machine>` and their types from nano-ui for reuse.
+The time-machine spec said its new exports are workspace-internal (only `kvStep` public). The plan instead exported
+the observe API from nano-ui (`record`, `replay`, `timeMachine`, `foldAt`, `shadowAt`, `clockDriver`,
+`<nano-time-machine>`, `<nano-ring>` and their types) so the displays can be reused, which the Product Owner asked
+for. The impact: public names are a contract every host and example then depends on, and CLAUDE.md treats each one
+as a question. Decide whether observability is part of nano-ui's public surface.
 
 ## Hypothesis
-- We believe: 
-- Will result in: 
-- Measured by: 
+- We believe: publishing the observe API from nano-ui
+- Will result in: any host or example (the Raft case study, a future IDE) gets recording, scrubbing and the Ring for free
+- Measured by: a second host uses the time bar and the Ring without copying workspace code
 
 ## People
-
-## Criteria
-| id | criterion | weight | description |
-| --- | --- | --- | --- |
-
-## Solution: public — Public in nano-ui
-Reusable by any host, the Ring view and the Raft example.
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Solution: internal — Workspace-internal as the spec said
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Decision
-
----
-id: ADR-0013
-title: The order export in examples/kv
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: exports, examples
-parent: ADR-0001
-decision: 
----
-
-## Goal
-`kvStep` sorts entries into `list` order with `order`, now exported from `examples/kv/memory.ts`.
-
-## Hypothesis
-- We believe: 
-- Will result in: 
-- Measured by: 
-
-## People
-
-## Criteria
-| id | criterion | weight | description |
-| --- | --- | --- | --- |
-
-## Solution: keep — Keep the export
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Solution: inline — Inline it in kvStep
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Decision
-
----
-id: ADR-0014
-title: The shadow app leaves out the host's ui pod
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: time-machine
-parent: ADR-0001
-decision: 
----
-
-## Goal
-`shadowAt` rebuilds the app without the host's own `ui` pod. Pods that call HostUI (`approve`, `alert`) then behave
-differently in the shadow than they did live.
-
-## Hypothesis
-- We believe: 
-- Will result in: 
-- Measured by: 
-
-## People
-
-## Criteria
-| id | criterion | weight | description |
-| --- | --- | --- | --- |
-
-## Solution: accept — Accept for now
-No current example calls HostUI from a pod that the shadow rebuilds.
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Solution: stub — Provide a recording-backed HostUI stub in the shadow
-
-| criterion | score |
-| --- | --- |
-
-Pros:
-
-Cons:
-
-## Decision
-
----
-id: ADR-0015
-title: Pods create runtimes through a HostDeploy interface
-status: accepted
-date: 2026-11-19
-revisit: 
-tags: deployment, raft, host
-decision: host-deploy
----
-
-## Goal
-The Raft example's management pod creates an N-node cluster: runtimes `<name>-1..N`, each holding the shared
-messaging pod, a `raft-api` pod and a `ledger` pod. A pod changing the app's deployment is new and powerful.
-
-## Hypothesis
-- We believe: 
-- Will result in: 
-- Measured by: 
-
-## People
-- Project owner — decider
+- Product Owner — decider
 - Claude — author
 
 ## Criteria
 | id | criterion | weight | description |
 | --- | --- | --- | --- |
+| reuse | Reuse across hosts | 5 | Hosts other than ui-workspace can observe their apps. |
+| surface | Small public surface | 4 | Fewer public names to keep stable. |
+| freedom | Freedom to change | 3 | The API can still change shape cheaply while it's young. |
 
-## Solution: host-deploy — A HostDeploy component, policed by an application deployment policy
-`HostDeploy` is a component like any other: it takes a nano deployment (`deploy({ pods, runtimes, onConflict? })`,
-where `onConflict` is `'error'` (default) or `'overwrite'`;
-`undeploy({ runtimes })`). Its instance is placed in the host's runtime and its host-supplied implementation holds the
-`Application`, applying through `AppDeployment.edit` / `app.apply`. Pods that need it declare it as a dependency.
-
-Who may deploy is a new **deployment policy** on the `Application` (nano-core): `isAllowed({ caller, deployment })`,
-passed to `Application.create` as runtime policies are, with `DeploymentPolicies.allowAll()` for tests. The workspace's
-policy prompts through `HostUI.approve`. `apply` takes a `caller` and `applied` records it, so replay re-applies only
-the host's own applies and reproduces a pod's by replaying its cause.
-
-Pros:
-- Deployment change stays separate from UI concerns
-- Who may deploy is policy, like who may call
-- Reuses AppDeployment.edit and apply; the apply is recorded, so the time machine covers it
-
-Cons:
-- A nano-core change (DeploymentPolicy, apply's caller) and a new nano.ui interface
-
-## Solution: hostui — A deploy op on HostUI
-Smaller, but mixes deployment changes into an interface about the UI.
+## Solution: public — Public in nano-ui
+Exported from `@pritzlaff/nano-ui` and listed in design.md.
 
 | criterion | score |
 | --- | --- |
+| reuse | 5 |
+| surface | 2 |
+| freedom | 2 |
 
 Pros:
+- One implementation for every host; the Raft example and the Ring use it directly
 
 Cons:
+- About 17 new public names to keep stable
+
+## Solution: internal — Workspace-internal, as the spec said
+The observe code lives in ui-workspace and isn't exported.
+
+| criterion | score |
+| --- | --- |
+| reuse | 1 |
+| surface | 5 |
+| freedom | 5 |
+
+Pros:
+- Free to reshape while it settles
+
+Cons:
+- Other hosts must copy it; examples can't ship observability
+
+## Solution: subpath — Public, but behind a separate entry point
+Export from `@pritzlaff/nano-ui/observe`, marked experimental.
+
+| criterion | score |
+| --- | --- |
+| reuse | 5 |
+| surface | 3 |
+| freedom | 4 |
+
+Pros:
+- Reusable, while signalling the API may still change
+
+Cons:
+- A second entry point to build and document
 
 ## Decision
-HostDeploy. The application's deployment policy (who may change the deployment) is to be revisited: see the board.
+
+---
+id: ADR-0014
+title: How the shadow app treats the host's own UI pod
+status: proposed
+date: 2026-11-19
+revisit: 
+tags: time-machine, replay
+parent: ADR-0001
+decision: 
+---
+
+## Goal
+`shadowAt` rebuilds the app to a time t without the host's own `ui` pod (HostUI), so replay never opens real
+dialogs. Any pod that calls HostUI (`approve`, `alert`) then gets a failure in the shadow where it got an answer live,
+and the rebuilt state drifts from what really happened. The impact grows as examples lean on approvals (HostDeploy
+asks through the deployment policy, which is fine; a pod asking `approve` directly is not). Decide how the shadow
+answers host-UI calls.
+
+## Hypothesis
+- We believe: answering HostUI calls in the shadow from the recording
+- Will result in: shadow apps that match the live run even for pods that ask the user things
+- Measured by: a fixture pod that calls `approve` rebuilds to the same state in the shadow as live
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| fidelity | Shadow fidelity | 5 | The shadow's state at t equals the live state at t. |
+| safety | No real side effects | 5 | Rebuilding never shows dialogs or alerts to the user. |
+| effort | Effort | 2 | How much new machinery it needs. |
+
+## Solution: accept — Leave it out; document the assumption
+Pods calling HostUI drift in the shadow; no current example does.
+
+| criterion | score |
+| --- | --- |
+| fidelity | 2 |
+| safety | 5 |
+| effort | 5 |
+
+Pros:
+- Nothing to build
+
+Cons:
+- Silent drift for any app whose pods ask the user
+
+## Solution: stub — A recording-backed HostUI stand-in in the shadow
+The shadow places a `ui` stand-in whose answers come from the recorded outcomes of the live calls, in order.
+
+| criterion | score |
+| --- | --- |
+| fidelity | 5 |
+| safety | 5 |
+| effort | 3 |
+
+Pros:
+- Exact shadows for interactive apps; the same idea extends to any host-side pod
+
+Cons:
+- A replay-mode stand-in is new machinery (close to the deferred env idea in ADR-0010)
+
+## Decision
+
+---
+id: ADR-0015
+title: Pods create runtimes through a HostDeploy component, policed by an application deployment policy
+status: accepted
+date: 2026-11-19
+revisit: 
+tags: deployment, raft, host, security
+parent: ADR-0016
+decision: host-deploy
+---
+
+## Goal
+The Raft example's management pod deploys an N-node cluster: runtimes `<name>-1..N`, each holding the shared
+messaging pod, a `raft-api` pod and a `ledger` pod. A pod changing the app's deployment is new and powerful: it can
+add code paths, rewire existing pods and remove things. The impact is on nano's security model and on replay (a
+pod-made change must be reproduced exactly once). Decide how a pod asks for a deployment change and who allows it.
+
+## Hypothesis
+- We believe: a HostDeploy component policed by an application-level deployment policy
+- Will result in: pods that can deploy only what the user approves, recorded and replayed exactly once
+- Measured by: the approval names everything a deploy places, wires, replaces and drops; replay of a recorded
+  cluster creation applies it once; host pods can't be touched
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| security | Who may deploy is policy | 5 | Deployment changes pass a policy, like calls do; the user sees exactly what changes. |
+| separation | Separation of concerns | 4 | Deployment isn't mixed into UI interfaces. |
+| replay | Exact replay | 4 | A pod's deployment change is reproduced once, by replaying its cause. |
+| size | Size of change | 2 | How much new core API it needs. |
+
+## Solution: host-deploy — A HostDeploy component and an application deployment policy
+`HostDeploy` is a component like any other: `deploy({ pods, runtimes, onConflict? })` (`onConflict` `'error'` by
+default, or `'overwrite'`) and `undeploy({ runtimes })`. Its instance is placed in the host's runtime and its
+host-supplied implementation holds the `Application`. nano-core gains `DeploymentPolicy`
+(`isAllowed({ caller, deployment })`, `DeploymentPolicies.allowAll()`), `apply(next, { caller })` and
+`applied.caller`. The workspace's policy prompts through `HostUI.approve` with a summary of everything created,
+replaced, placed, wired and dropped, bounded at 20 s, one pending deploy at a time; host pods (`ui`, `deploy`) can't
+be placed, replaced or removed by a pod.
+
+| criterion | score |
+| --- | --- |
+| security | 5 |
+| separation | 5 |
+| replay | 5 |
+| size | 3 |
+
+Pros:
+- Who may deploy is policy, like who may call; the approval is truthful
+- Reuses apply; recorded with its caller, so replay re-applies only the host's own changes
+
+Cons:
+- A nano-core change and a new nano-ui interface
+
+## Solution: hostui — A deploy op on HostUI
+Add `deploy` to the existing HostUI interface, asking the user inline.
+
+| criterion | score |
+| --- | --- |
+| security | 3 |
+| separation | 1 |
+| replay | 3 |
+| size | 5 |
+
+Pros:
+- Smallest change; no core API
+
+Cons:
+- Mixes deployment into an interface about the UI
+- No application-level policy: the rule lives in one host's UI code
+
+## Decision
+HostDeploy with an application deployment policy. Revisiting the application's deployment policy as a whole (who
+may deploy, beyond the user's approval) is a board item.
 
 ---
 id: ADR-0016
-title: The Raft case study: a cluster deployed by a pod, watched by the time machine and the Ring
+title: The Raft case study — a cluster deployed by a pod, one runtime per node, watched by the time machine
 status: accepted
 date: 2026-11-19
 revisit: 
@@ -814,345 +528,302 @@ decision: per-runtime
 ---
 
 ## Goal
-A teaching example of event-driven observability with nano, in the style of raft.github.io: a ring of servers electing a leader and replicating a log, every message visible, pausable, slowable and replayable. Spec: `docs/superpowers/specs/2026-11-19-raft-case-study-design.md`.
+A teaching example of event-driven observability with nano, in the style of raft.github.io: a ring of servers
+electing a leader and replicating a log, with every message visible, pausable, slowable and replayable. It must
+show nano off (runtimes created by a pod, the app gateway pattern, storage as a pod, determinism as a mechanism, the
+time machine and the Ring) rather than be another Raft. The main structural choice is how the servers talk. Spec:
+`docs/superpowers/specs/2026-11-19-raft-case-study-design.md`.
+
+## Hypothesis
+- We believe: one runtime per node, all traffic through a shared messaging pod, on a simulated clock with seeded randomness
+- Will result in: a cluster you can pause, slow to 1/30× and scrub, whose recording replays exactly
+- Measured by: replay at both paces gives `diverge` null and ledgers folded from history equal a rebuilt app's, for seeds 1–5
 
 ## People
 - Product Owner — decider
 - Claude — author
 
-## Solution: per-runtime — One runtime per node, all traffic through a shared messaging pod
-The gateway pattern and a ring of rings; the management pod deploys `<name>-1..N` through `HostDeploy` (ADR-0015).
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| teaching | Shows nano's model | 5 | Exercises runtimes, the gateway pattern, pod-made deployments and the Ring's ring of rings. |
+| control | Network control | 3 | One place to add latency, drops or partitions later. |
+| simplicity | Simplicity | 3 | Few moving parts for a reader to follow. |
+
+## Solution: per-runtime — One runtime per node, through a shared messaging pod
+Runtimes `<name>-1..N`, each with its own `raft-api`, `ledger` and seeded random; `raft-messaging` and `raft-clock`
+shared across them (the gateway pattern).
+
+| criterion | score |
+| --- | --- |
+| teaching | 5 |
+| control | 5 |
+| simplicity | 3 |
+
+Pros:
+- A ring of rings on the Ring view; the gateway pattern in action
+- Messaging is the one place for latency (and later drops), under seeded random
+
+Cons:
+- More runtimes and wiring to deploy
 
 ## Solution: one-runtime — One runtime, N node pods calling each other
-Simpler, but a single ring and no natural place for latency.
+All nodes in one runtime with call edges between them.
+
+| criterion | score |
+| --- | --- |
+| teaching | 2 |
+| control | 2 |
+| simplicity | 5 |
+
+Pros:
+- The simplest deployment
+
+Cons:
+- A single ring; no gateway pattern; no natural place for latency or drops
 
 ## Decision
-One runtime per node through shared messaging. Node actions copy raft.github.io (stop, resume, restart, time out, request). Scrubbing binds pod views to an application rebuilt to the cursor (`shadowAt`). `HostDeploy.deploy` takes `onConflict: 'error' | 'overwrite'`. The Ring takes a `views` map so module views (the glyph) render. Strong headless tests; views only display.
+One runtime per node through shared messaging. Node actions copy raft.github.io (stop, resume, restart, time out,
+request). Scrubbing binds pod views to an application rebuilt to the cursor. The Ring takes a `views` map so module
+views (the glyph) render. Strong headless tests; views only display.
 
 ---
-id: ADR-0017
-title: A new runtime may place existing pods
-status: proposed
+id: ADR-0024
+title: How a storage pod's state at a time t comes from the history
+status: accepted
 date: 2026-11-19
 revisit: 
-tags: deployment, raft
-parent: ADR-0016
-decision: shared
+tags: observability, raft, storage
+parent: ADR-0001
+decision: writes
 ---
 
 ## Goal
-`HostDeploy`'s `addTo` must refuse conflicts, but a Raft node runtime places the shared messaging and clock pods.
+Scrubbing and consistency checks need a storage pod's state at any time t from the history alone (folding, without
+rebuilding the app). The spec's guidance was "keep state in a store pod and publish changes as events". But nano
+records a published event only while something listens to it, so the events may simply be missing from the history.
+The impact: folding events would silently show stale or empty state. Decide what the fold reads.
+
+## Hypothesis
+- We believe: folding the store's recorded write calls (each carrying the whole new state)
+- Will result in: state at any t that always matches a rebuilt app
+- Measured by: `foldAt(ledgerStep)` equals the shadow app's `Ledger.read` at every boundary, seeds 1–5
 
 ## People
 - Product Owner — decider
 - Claude — author
 
-## Solution: shared — Refuse only new pod definitions and runtime ids that exist; a new runtime may place existing pods
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| complete | Always in the history | 5 | The fold's input is recorded whether or not anyone is watching. |
+| cost | History cost | 3 | How much it adds to the history. |
+| general | Generality | 3 | The pattern works for other storage pods. |
+
+## Solution: writes — Fold successful write calls
+Calls are always recorded; `Ledger.write` carries the whole `Persistent`, so each one is a full snapshot.
+
+| criterion | score |
+| --- | --- |
+| complete | 5 |
+| cost | 4 |
+| general | 4 |
+
+Pros:
+- Works headless and with no views open
+
+Cons:
+- Relies on writes carrying whole state (or the fold replaying partial writes)
+
+## Solution: events — Fold the `written` events
+As the spec's guidance said.
+
+| criterion | score |
+| --- | --- |
+| complete | 1 |
+| cost | 4 |
+| general | 4 |
+
+Pros:
+- Matches the published-events guidance
+
+Cons:
+- Missing from the history whenever nothing listens
+
+## Solution: always-record — Record every publish, listened to or not
+A nano-core change: publishes become recorded messages regardless of listeners.
+
+| criterion | score |
+| --- | --- |
+| complete | 5 |
+| cost | 2 |
+| general | 5 |
+
+Pros:
+- Events become a reliable source for every pod
+
+Cons:
+- A core change, and more history for every publish in every app
 
 ## Decision
-The gateway pattern. If wrong: one check.
+Fold the write calls. Worth revisiting the spec's "publish changes as events" guidance, since events alone aren't a
+reliable history source today.
 
 ---
-id: ADR-0018
-title: The ledger fold uses foldAt's own step type
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: raft, exports
-parent: ADR-0016
-decision: existing
----
-
-## Goal
-The plan named a `FoldStep` type that nothing exports.
-
-## People
-- Product Owner — decider
-- Claude — author
-
-## Solution: existing — Use `foldAt`'s step parameter type
-
-## Decision
-No new export. If wrong: a type alias.
-
----
-id: ADR-0019
-title: A node's published status is its state value
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: raft
-parent: ADR-0016
-decision: node
----
-
-## Goal
-The views need a node's status; the core already has `Node`.
-
-## People
-- Product Owner — decider
-- Claude — author
-
-## Solution: node — `RaftNode.status` and `changed` publish the core `Node` as is
-
-## Decision
-No restated shape. If wrong: a projection function.
-
----
-id: ADR-0020
-title: The approval text names everything a deploy places and wires
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: deployment, security
-parent: ADR-0016
-decision: truthful
----
-
-## Goal
-The approval is the only gate on a pod-triggered deploy; a count of new pods hid placements of existing pods and new edges into them.
-
-## People
-- Product Owner — decider
-- Claude — author
-
-## Solution: truthful — List created, replaced, newly placed, wired, removed and dropped pods
-
-## Decision
-e.g. "Create runtimes example-1..3 (9 pods); places raft-messaging, raft-clock; …". If wrong: a longer dialog.
-
----
-id: ADR-0021
-title: A dot click on the Ring seeks only
+id: ADR-0028
+title: Whether the Ring draws messages to hidden shared pods
 status: proposed
 date: 2026-11-19
 revisit: 
 tags: ring, views
 parent: ADR-0016
-decision: seek
----
-
-## Goal
-The spec says a dot click opens the message detail, which lives in the workspace.
-
-## People
-- Product Owner — decider
-- Claude — author
-
-## Solution: seek — Seek (which pauses); defer opening the detail
-
-## Decision
-Wiring the detail needs an event or a new option. If wrong: a small follow-up.
-
----
-id: ADR-0022
-title: Raft's shared pods are raft-messaging and raft-clock
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: raft, examples
-parent: ADR-0016
-decision: prefixed
----
-
-## Goal
-Chat already has `messaging` and Typing a `clock`; the combined build and imports would collide.
-
-## People
-- Product Owner — decider
-- Claude — author
-
-## Solution: prefixed — Prefix the shared pods with raft-
-
-## Decision
-If wrong: two constants.
-
----
-id: ADR-0023
-title: Messaging latency draws from its own seeded random
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: raft, determinism
-parent: ADR-0016
-decision: own
----
-
-## Goal
-Delivery latency (10–30 ms) needs seeded randomness shared by every cluster.
-
-## People
-- Product Owner — decider
-- Claude — author
-
-## Solution: own — A `raft-random` pod (seed 1) for messaging, beside each node's own seeded random
-
-## Decision
-If wrong: one pod.
-
----
-id: ADR-0024
-title: A node's ledger is rebuilt from its recorded writes
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: raft, observability
-parent: ADR-0016
-decision: writes
----
-
-## Goal
-A published event is recorded only while something listens, so `written` events may be missing from the history.
-
-## People
-- Product Owner — decider
-- Claude — author
-
-## Solution: writes — Fold successful `Ledger.write` calls (each carries the whole state)
-
-## Decision
-State at t from the history, as the spec intends. If wrong: switch the filter.
-
----
-id: ADR-0025
-title: Each node arms one timer for its next due work
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: raft, clock
-parent: ADR-0016
-decision: next-due
----
-
-## Goal
-Ticking every 10 ms floods the history; timers on the shared sim clock must stay deterministic.
-
-## People
-- Product Owner — decider
-- Claude — author
-
-## Solution: next-due — One timer for the next due work (late, never early)
-
-## Decision
-Proven by the replay tests. If wrong: a fixed tick.
-
----
-id: ADR-0026
-title: Raft views: element classes unexported; idle peer dots faint
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: raft, views, exports
-parent: ADR-0016
-decision: tags
----
-
-## Goal
-CLAUDE.md treats exports as questions; the glyph must show pending replies distinctly.
-
-## People
-- Product Owner — decider
-- Claude — author
-
-## Solution: tags — Only the `views` map and tags are public; idle dots faint, pending hollow, granted filled
-
-## Decision
-If wrong: trivial.
-
----
-id: ADR-0027
-title: A pod-made deploy can't place the host's own pods
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: deployment, security
-parent: ADR-0016
-decision: refuse
----
-
-## Goal
-A deploy that places `ui` or `deploy` in its own runtime would hand out HostUI and HostDeploy.
-
-## People
-- Product Owner — decider
-- Claude — author
-
-## Solution: refuse — Refuse an addition placing `ui` or `deploy` in a new or replaced runtime (and overwriting or removing them)
-
-## Decision
-If wrong: one check.
-
----
-id: ADR-0028
-title: Should the Ring draw no dots for hidden shared pods?
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: ring
-parent: ADR-0016
 decision: 
 ---
 
 ## Goal
-Clock traffic on the Ring draws a dense stream of dots into the hidden `raft-clock` (the spec asks for dots to a hidden pod's runtime).
+The Ring draws a message to or from a hidden pod as going to its runtime's centre (spec). For Raft, the hidden shared
+`raft-clock` receives every timer call (`after`, `cancel`) from every node and from messaging, so a dense stream of
+dots runs into the `raft` runtime and dominates the picture, hiding the Raft messages the example is about. Decide
+what the Ring shows for traffic to hidden pods.
+
+## Hypothesis
+- We believe: letting the deployment say which traffic the Ring hides
+- Will result in: a Raft Ring that shows votes and appends travelling between nodes, as on raft.github.io
+- Measured by: in a live 3-node cluster, most dots on the Ring are Raft messages
 
 ## People
 - Product Owner — decider
 - Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| clarity | Clarity | 5 | The picture shows the messages the app is about. |
+| honesty | Nothing hidden by surprise | 3 | The viewer can tell traffic was left out. |
+| concepts | No new concepts | 3 | No new Ring option, or the smallest one. |
 
 ## Solution: as-spec — Draw them, as the spec says
 
-## Solution: skip — Skip messages to hidden shared pods (a new Ring option)
+| criterion | score |
+| --- | --- |
+| clarity | 1 |
+| honesty | 5 |
+| concepts | 5 |
+
+Pros:
+- Every message is visible
+
+Cons:
+- Clock traffic swamps the picture
+
+## Solution: skip-hidden — No dots for messages whose other end is hidden
+A message is drawn only when both ends are shown.
+
+| criterion | score |
+| --- | --- |
+| clarity | 4 |
+| honesty | 3 |
+| concepts | 4 |
+
+Pros:
+- Uses the existing `show` filter; no new option
+
+Cons:
+- Also hides messages to a hidden pod that does matter (e.g. a node writing its ledger)
+
+## Solution: hide-ports — The deployment's layout lists ports the Ring doesn't draw
+`layout.ring.hide: [port(Clock, Clock.ops.after), …]` beside `layout.ring.show`.
+
+| criterion | score |
+| --- | --- |
+| clarity | 5 |
+| honesty | 4 |
+| concepts | 3 |
+
+Pros:
+- Precise: hides timer traffic, keeps everything else
+
+Cons:
+- A second Ring setting in the layout
 
 ## Decision
-
-
----
-id: ADR-0029
-title: New exports from the Raft work
-status: proposed
-date: 2026-11-19
-revisit: 
-tags: exports
-parent: ADR-0016
-decision: 
----
-
-## Goal
-`DeploymentAsk` (nano-core, the deployment policy's parameter type), `nodeIds` and `EMPTY` (example), and test-only `createRaft`, `openRaft`, `recordedRun`, `ids`.
-
-## People
-- Product Owner — decider
-- Claude — author
-
-## Solution: keep — Keep them
-
-## Solution: trim — Inline or unexport them
-
-## Decision
-
 
 ---
 id: ADR-0030
-title: Let the cluster pod read the deployment
+title: Let the Raft cluster pod read the deployment
 status: proposed
 date: 2026-11-19
 revisit: 
 tags: raft, deployment
-parent: ADR-0016
+parent: ADR-0015
 decision: 
 ---
 
 ## Goal
-After a Reset or reload the cluster list is empty (remove works by trying sizes 5 then 3); listing needs the pod to read the deployment, a new capability.
+The cluster pod remembers which clusters it created only in memory. After a Reset (which restarts every pod) or a
+page reload, its list is empty while the node runtimes remain; remove now works by guessing sizes (5, then 3), but
+the view can't show what exists. A pod reading the deployment is a new capability. The impact is on what pods may
+know about the app, and on whether a management pod can be stateless.
+
+## Hypothesis
+- We believe: giving the cluster pod a way to read which runtimes exist
+- Will result in: a cluster view that's correct after Reset or reload, and a stateless management pod
+- Measured by: after a Reset, the cluster view lists the clusters whose runtimes exist
 
 ## People
 - Product Owner — decider
 - Claude — author
 
-## Solution: read — A read op on HostDeploy (new API)
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| correct | Correct after Reset/reload | 4 | The view shows what really exists. |
+| exposure | Minimal exposure | 4 | Pods learn as little about the app as possible. |
+| concepts | No new concepts | 3 | No new op, or the smallest one. |
+
+## Solution: read-op — A read op on HostDeploy
+`HostDeploy.runtimes()` returns runtime ids (or a filtered view), policed like deploy.
+
+| criterion | score |
+| --- | --- |
+| correct | 5 |
+| exposure | 3 |
+| concepts | 3 |
+
+Pros:
+- One source of truth: the deployment
+
+Cons:
+- New API; pods can see the app's shape
+
+## Solution: ledger — Persist the cluster list in a storage pod
+The cluster pod keeps its list in a store pod with config, like the ledgers.
+
+| criterion | score |
+| --- | --- |
+| correct | 3 |
+| exposure | 5 |
+| concepts | 4 |
+
+Pros:
+- No new host capability
+
+Cons:
+- Reset empties stores too, so the list still goes wrong after Reset; a second copy of the truth
 
 ## Solution: as-is — Leave the list in memory
+Remove keeps guessing sizes.
+
+| criterion | score |
+| --- | --- |
+| correct | 1 |
+| exposure | 5 |
+| concepts | 5 |
+
+Pros:
+- Nothing to build
+
+Cons:
+- The view is wrong after every Reset or reload
 
 ## Decision
-
