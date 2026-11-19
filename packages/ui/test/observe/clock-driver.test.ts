@@ -7,10 +7,12 @@ import { record } from '../../src/observe/record.ts'
 import { timeMachine, type Ticker } from '../../src/observe/time-machine.ts'
 import { must, settle, typingSim } from './typing.ts'
 
+/** A ticker run by hand; the time machine and the driver both wait on it, so every waiting frame runs. */
 function fakeTicker() {
-  let now = 0, waiting: (() => void) | undefined
-  const ticker: Ticker = { now: () => now, frame: fn => { waiting = fn; return () => { if (waiting === fn) waiting = undefined } } }
-  return { ticker, async run(ms: number) { now += ms; const fn = waiting; waiting = undefined; fn?.(); await settle(); await settle() } }
+  let now = 0
+  const waiting = new Set<() => void>()
+  const ticker: Ticker = { now: () => now, frame: fn => { waiting.add(fn); return () => { waiting.delete(fn) } } }
+  return { ticker, async run(ms: number) { now += ms; const fns = [...waiting]; waiting.clear(); fns.forEach(fn => fn()); await settle(); await settle() } }
 }
 const registry = () => { const r = Registry.create(); must(r.add(uiProvider)); return r }
 const time = async (app: Application) => must(await app.call('main', 'clock').now(null))
@@ -46,8 +48,9 @@ test('pause stops advancing', async () => {
 
 test('ticks are capped at 20 a second', async () => {
   const s = await setup()
-  for (let i = 0; i < 10; i++) await s.t.run(10)   // 100 ms: 2 ticks at most
-  expect(await time(s.app)).toBe(100)
+  for (let i = 0; i < 4; i++) { await s.t.run(10); expect(await time(s.app)).toBe(0) }   // under 50 ms: no tick yet
+  await s.t.run(10)
+  expect(await time(s.app)).toBe(50)
   s.done(); await s.app.close()
 })
 
