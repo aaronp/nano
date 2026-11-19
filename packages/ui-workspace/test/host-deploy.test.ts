@@ -148,7 +148,7 @@ test('the host pods, and a runtime placing one, are never overwritten or removed
 async function answer(label: 'Approve' | 'Deny', text = 'Create runtime node-1 (1 pod)') {
   for (let i = 0; i < 100 && !document.querySelector('dialog'); i++) await tick(5)
   const dialog = document.querySelector('dialog')!
-  expect(dialog.textContent).toContain(text)
+  for (const clause of text.split('; ')) expect(dialog.textContent).toContain(clause)   // the dialog lists the summary's clauses
   ;[...dialog.querySelectorAll('button')].find(b => b.textContent === label)!.click()
 }
 
