@@ -1,5 +1,14 @@
 {
-  "lines": {},
-  "members": {},
+  "lines": {
+    "packages/ui-workspace/src/components/workspace-dock.ts": 226,
+    "packages/ui-workspace/src/sandbox/stand-in.ts": 179,
+    "packages/ui-workspace/src/lib/themes.ts": 163,
+    "packages/ui-workspace/src/host.ts": 151,
+    "packages/ui-workspace/src/widgets/widgets.ts": 174
+  },
+  "members": {
+    "packages/ui/src/observe/time-machine.ts:TimeMachine": 12,
+    "packages/ui-workspace/src/wires/state.ts:State": 26
+  },
   "undocumented": []
 }
