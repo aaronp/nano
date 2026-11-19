@@ -25,6 +25,7 @@ test('mountWorkspace adds a nav row and a route before the not-found page, with 
   expect(row.querySelector('a')!.getAttribute('href')).toBe('#/lab')
   expect(row.querySelector('[data-edit]')!.getAttribute('aria-label')).toBe('Edit Lab')
   expect(routes()).toEqual(['/workspace', '/lab', '*'])
+  expect(document.querySelector<HTMLElement>('app-route[path="/lab"]')!.hidden).toBe(true)
   const dock = document.querySelector('app-route[path="/lab"] workspace-dock')!
   expect(dock.id).toBe('ws-lab')
   expect(dock.getAttribute('storage-key')).toBe('main.saved./lab')
@@ -43,6 +44,7 @@ test('Duplicate on Main copies its arrangement and template into a new page, lis
 
 test('Edit to a new route moves the keys and updates the link and route', async () => {
   answers.push({ path: '/c', title: 'C', icon: 'box' })
+  document.querySelector('app-route[path="/b"] component-drawer')!.innerHTML = '<a data-dock-add="ws-b" data-widget="a">A</a>'
   document.querySelector<HTMLButtonElement>('[data-saved="/b"] [data-edit]')!.click(); await tick()
   expect(asked.at(-1)!.prev).toEqual({ path: '/b', title: 'B', icon: 'star' })
   expect(localStorage.getItem('main.saved./b')).toBeNull()
@@ -51,7 +53,11 @@ test('Edit to a new route moves the keys and updates the link and route', async 
   const row = document.querySelector('[data-saved="/c"]')!
   expect(row.querySelector('a')!.getAttribute('href')).toBe('#/c')
   expect(routes()).toContain('/c'); expect(routes()).not.toContain('/b')
-  expect(document.querySelector('app-route[path="/c"] workspace-dock')!.getAttribute('storage-key')).toBe('main.saved./c')
+  const dock = document.querySelector('app-route[path="/c"] workspace-dock')!
+  expect(dock.getAttribute('storage-key')).toBe('main.saved./c')
+  expect(dock.id).toBe('ws-c')
+  expect(document.querySelector('app-route[path="/c"] component-drawer')!.getAttribute('for')).toBe('ws-c')
+  expect(document.querySelector('[data-dock-add]')!.getAttribute('data-dock-add')).toBe('ws-c')
   expect(location.hash).toBe('#/c')
 })
 

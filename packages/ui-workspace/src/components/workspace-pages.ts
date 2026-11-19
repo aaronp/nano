@@ -12,6 +12,7 @@ import type { Wires } from '../wires/wires.ts';
 
 const mainDock = (doc: Document) => doc.querySelector<WorkspaceDock>('workspace-dock#workspace');
 const mainKey = (doc: Document) => mainDock(doc)?.getAttribute('storage-key') ?? 'workspace';
+const idOf = (path: string) => `ws${path.replace(/\//g, '-')}`;
 const pageDock = (doc: Document, path: string) => doc.querySelector<WorkspaceDock>(`app-route[path="${path}"] workspace-dock`);
 
 const button = (doc: Document, action: string, label: string, text: string) => {
@@ -41,8 +42,8 @@ export function mountWorkspace(doc: Document, ws: SavedWorkspace): void {
   (saved[saved.length - 1] ?? doc.querySelector('[data-workspaces]'))?.after(row);
 
   const route = doc.createElement('app-route');
-  route.setAttribute('path', ws.path); route.setAttribute('bleed', '');
-  const id = `ws${ws.path.replace(/\//g, '-')}`;
+  route.setAttribute('path', ws.path); route.setAttribute('bleed', ''); route.hidden = true;   // app-shell shows it when current
+  const id = idOf(ws.path);
   const pane = doc.createElement('div'), drawer = doc.createElement('component-drawer');
   pane.className = 'ws-page';
   drawer.setAttribute('for', id);
@@ -97,6 +98,10 @@ export function bootWorkspacePages(doc: Document, ask = askWorkspace): void {
     fill(doc, row, ws);
     dock?.closest('app-route')?.setAttribute('path', ws.path);
     dock?.setAttribute('storage-key', layoutKey(mainKey(doc), ws.path));
+    // the dock's id follows the route, with what names it (the drawer, its add links)
+    for (const el of doc.querySelectorAll(`component-drawer[for="${idOf(path)}"]`)) el.setAttribute('for', idOf(ws.path));
+    for (const el of doc.querySelectorAll<HTMLElement>(`[data-dock-add="${idOf(path)}"]`)) el.dataset.dockAdd = idOf(ws.path);
+    if (dock) dock.id = idOf(ws.path);
     if (location.hash === `#${path}`) location.hash = `#${ws.path}`;
   };
 

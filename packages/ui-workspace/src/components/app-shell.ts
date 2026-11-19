@@ -87,6 +87,12 @@ export class AppShell extends LitElement {
       if (!a.hasAttribute('data-dock-add') && isCurrent(a.getAttribute('href'), this.route)) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     }
+    // a nav row (a workspace's: its link and buttons) is current by its own link, unless a top-level item already is
+    const marked = this.querySelector(':scope > a[slot="nav"][aria-current]') !== null;
+    for (const row of this.querySelectorAll(':scope > [slot="nav"]:not(a)')) {
+      if (!marked && isCurrent(row.querySelector(':scope > a[href]')?.getAttribute('href') ?? null, this.route)) row.setAttribute('aria-current', 'page');
+      else row.removeAttribute('aria-current');
+    }
     // the app bar's page: the nav link (top-level, or in a nav row) for the route; the rail's tooltips are the labels
     let page: AppShell['page'] = null;
     for (const a of this.querySelectorAll<HTMLAnchorElement>(':scope > a[slot="nav"], :scope > [slot="nav"] a[href]')) {

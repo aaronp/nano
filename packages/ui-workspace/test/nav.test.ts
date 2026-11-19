@@ -43,3 +43,14 @@ test('on a wide screen the menu button collapses the drawer to a rail and back, 
   menu.click(); await shell.updateComplete
   expect(shell.hasAttribute('collapsed')).toBe(false)
 })
+
+test('a nav row (a saved workspace) is current by its own link; leaving clears it', async () => {
+  const shell = document.querySelector('app-shell') as HTMLElement & { updateComplete: Promise<boolean> }
+  shell.insertAdjacentHTML('beforeend', '<div slot="nav" class="nav-row" data-saved="/b"><a href="#/b">B</a><button data-edit></button></div><app-route path="/b"></app-route>')
+  await tick()
+  const row = shell.querySelector('[data-saved="/b"]')!
+  location.hash = '#/b'; window.dispatchEvent(new HashChangeEvent('hashchange')); await shell.updateComplete; await tick()
+  expect(row.getAttribute('aria-current')).toBe('page')
+  location.hash = '#/lab'; window.dispatchEvent(new HashChangeEvent('hashchange')); await shell.updateComplete; await tick()
+  expect(row.hasAttribute('aria-current')).toBe(false)
+})
