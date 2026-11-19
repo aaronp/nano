@@ -3,7 +3,6 @@
  */
 import { expect, test } from 'bun:test'
 const { defineViews, emptyFilter } = await import('../../src/index.ts')
-const { render } = await import('lit')
 import type { FilterValue } from '../../src/index.ts'
 
 defineViews()
@@ -73,4 +72,15 @@ test('each row is a group labelled by its name', async () => {
   const el = await mount({ kinds: ['pod'], statuses: ['failed'] })
   const named = $$(el, '.row').map(r => r.getAttribute('role') + ':' + el.shadowRoot!.getElementById(r.getAttribute('aria-labelledby')!)!.textContent)
   expect(named).toEqual(['group:Type', 'group:Status'])
+})
+
+test('closing the panel with focus outside it leaves focus alone; with focus inside it returns it to the button', async () => {
+  const el = await mount({ kinds: ['pod'] })
+  const panel = el.shadowRoot!.querySelector<HTMLElement>('#panel')!, button = el.shadowRoot!.querySelector<HTMLElement>('.toggle')!
+  const outside = document.createElement('input'); document.body.append(outside)
+  const close = () => panel.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'closed', oldState: 'open' }))
+  outside.focus(); close()
+  expect(document.activeElement).toBe(outside)
+  $$(el, '.row button')[0]!.focus(); close()
+  expect(el.shadowRoot!.activeElement).toBe(button)
 })

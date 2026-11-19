@@ -73,6 +73,8 @@ test('scrubbing back rebinds the views to a shadow app, inert', async () => {
   expect(shadow).not.toBe(app)
   for (const { wrap, view } of vs.slice(0, 4)) { expect(view.target!.app).toBe(shadow); expect(wrap.inert).toBe(true) }
   expect(await shadow.call('main', 'log').entries(null)).toEqual(success(['HI']))
+  const logText = () => views(el).find(v => v.wrap.dataset.pod === 'log')!.view.shadowRoot!.textContent
+  expect(logText()).toContain('HI'); expect(logText()).not.toContain('HEY')   // the drawn log is the rebuilt one
   expect(await app.call('main', 'log').entries(null)).toEqual(success(['HI', 'HEY']))
 })
 
@@ -84,7 +86,9 @@ test('Live rebinds to the live app', async () => {
   tm.live()
   await el.updateComplete
   for (const { wrap, view } of views(el).slice(0, 4)) { expect(view.target!.app).toBe(app); expect(wrap.inert).toBe(false) }
-  await settle()
+  await settle(); await sleep(50)
+  expect(views(el).find(v => v.wrap.dataset.pod === 'log')!.view.shadowRoot!.textContent).toContain('HEY')   // live again
+
   expect((await shadow.call('main', 'log').entries(null)).ok).toBe(false)   // closed
 })
 

@@ -28,6 +28,9 @@ test("request to a follower: refused 'not leader' naming the leader", () => {
 
 test("no leader known: refused 'no leader known'", () => {
   expect(refusalsAt(runs.replicate, 0)).toEqual([{ at: 0, to: 'n1', effect: { kind: 'refused', reason: 'no leader known' } }])
+  const f = runs.replicate.frames.find(f => f.at === 0 && f.input.kind === 'request')!
+  expect(f.nodes.n1.p).toEqual({ currentTerm: 0, votedFor: null, log: [] })   // the ledger (node.p) is unchanged
+  expect(f.ledgers.n1).toEqual(f.nodes.n1.p)
 })
 
 test("request to a stopped node: refused 'stopped', ledger unchanged", () => {
@@ -80,6 +83,7 @@ test('restart keeps term, vote and log', () => {
   expect(values(after)).toEqual(['r'])
   expect([after.role, after.commitIndex, after.leader]).toEqual(['follower', 0, null])
   expect(end(run).nodes.n1.commitIndex).toBe(1)
+  expect(run.frames[i].nodes.n1.electionAlarm).toBeGreaterThan(run.frames[i].at)   // re-armed after now
 })
 
 test('Figure 8: a leader commits earlier terms\' entries only by matching one of its own term on a majority', () => {

@@ -182,8 +182,8 @@ describe('the explorer', () => {
       const registry = Registry.create(); registry.add(uiProvider); registry.add(ns.provider([bad]))
       const d: AppDeployment = { pods: { bad: Pod.lazy(bad) }, runtimes: { main: { pods: ['bad'], subscriptions: [] } } }
       const app = must(await Application.create(must(AppDeployment.assemble(d, registry)), {}))
-      await app.call('main', 'bad').save('x').catch(() => {})
       const el = await mount({ app, registry }); await settle(el)
+      await app.call('main', 'bad').save('x').catch(() => {}); await settle(el)
       expect(dot(el, 'bad')).toBe('running')
     })
     test('the explorer passes icon through to nano-tree', async () => {

@@ -190,3 +190,28 @@ test('given a pod needing HostDeploy imported, then it is connected to deploy an
   expect(Object.keys(host.app.deployment().runtimes)).toEqual(expect.arrayContaining(['node-1', 'node-3']))
   expect(host.app.deployment().runtimes['node-4']).toBeUndefined()
 })
+
+test('undeploy through the host: approved removes the runtimes and drops their pods; denied changes nothing; history says caller deploy', async () => {
+  const r = await start()
+  if (!r.ok) throw new Error(r.fail.reason)
+  const host = r.value
+  expect(await host.importUrl(new URL('./fixtures/deploy/app.json', import.meta.url).href)).toMatchObject({ ok: true })
+  const added = host.app.call('ops', 'cluster').map({ pods: { n1: lazy }, runtimes: { 'node-1': { pods: ['n1'], subscriptions: [] } } })
+  await answer('Approve'); expect(await added).toEqual({ ok: true, value: null })
+  const undeploy = () => (host.app.call('main', 'deploy') as unknown as { undeploy(r: { runtimes: string[] }): Promise<unknown> }).undeploy({ runtimes: ['node-1'] })
+
+  const denied = undeploy()
+  await answer('Deny', 'Remove runtime node-1')
+  expect(await denied).toMatchObject({ ok: false, fail: { type: 'denied' } })
+  expect(host.app.deployment().runtimes['node-1']).toBeDefined()
+
+  const approved = undeploy()
+  await answer('Approve', 'Remove runtime node-1; drops n1')
+  expect(await approved).toEqual({ ok: true, value: null })
+  expect(host.app.deployment().runtimes['node-1']).toBeUndefined()
+  expect(host.app.deployment().pods['n1']).toBeUndefined()
+  await tick(10)
+  const applied = (await host.history.store.range()).map(e => e.event).filter(e => e.type === 'deployment')
+  expect(applied.at(-1)).toMatchObject({ caller: 'deploy' })
+  expect(Object.keys((applied.at(-1) as { deployment: AppDeployment }).deployment.runtimes)).not.toContain('node-1')
+})

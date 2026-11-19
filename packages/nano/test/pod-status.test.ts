@@ -15,6 +15,8 @@ const Nothing = Schema.define(Type.Null(), 'Nothing')
 const Counter = Interface.define('acme.Counter', { inc: Op.action(Nothing, Num) })
 
 let breakBuild = false
+/** Run `f` with builds of `counter` failing; the flag is always reset. */
+const building = async <T>(f: () => Promise<T>) => { breakBuild = true; try { return await f() } finally { breakBuild = false } }
 const counter = Implementation.define('acme/counter', { provides: [Counter], make: () => {
   if (breakBuild) throw new Error('cannot build')
   return [provide(Counter, { inc: async () => success(1) })]
@@ -46,11 +48,15 @@ describe('a runtime answers each pod status', () => {
     expect(app.runtime('r').status('t')).toEqual(success('running'))
   })
   test('a build that throws: failed; a restart that builds: running', async () => {
-    breakBuild = true
-    const app = await live(one({ c: Pod.eager(counter) }))
-    breakBuild = false
+    const app = await building(() => live(one({ c: Pod.eager(counter) })))
     expect(app.runtime('r').status('c')).toEqual(success('failed'))
     ok(await app.restart('c'))
+    expect(app.runtime('r').status('c')).toEqual(success('running'))
+  })
+  test('a failed pod an apply changes: running again', async () => {
+    const app = await building(() => live(one({ c: Pod.eager(counter) })))
+    expect(app.runtime('r').status('c')).toEqual(success('failed'))
+    ok(await app.apply(one({ c: Pod.eager(thrower) })))
     expect(app.runtime('r').status('c')).toEqual(success('running'))
   })
   test('restart: lazy → not started; eager → running once rebuilt', async () => {
