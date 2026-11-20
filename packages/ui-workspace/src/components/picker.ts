@@ -17,7 +17,8 @@ export function pick(anchor: HTMLElement, entries: Entries): ReturnType<typeof p
   p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Add a component');
   p.style.left = `${Math.max(8, Math.min(r.left, innerWidth - WIDTH - 8))}px`; p.style.top = `${r.bottom + 4}px`;
   doc.body.append(p);
-  const grid = pickerGrid(p, entries, true);
+  const grid = pickerGrid(p, entries);
+  p.querySelector<HTMLElement>('.np-filter')!.focus();
   // no room below the anchor: above it, kept in view
   if (r.bottom + 4 + p.offsetHeight > innerHeight - 8) p.style.top = `${Math.max(8, r.top - 4 - p.offsetHeight)}px`;
 

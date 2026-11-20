@@ -166,14 +166,14 @@ export class WorkspaceDock extends HTMLElement {
   private plus(parent: HTMLElement, className: string, target?: () => ComponentItem | undefined) {
     const b = parent.insertBefore(Object.assign(this.ownerDocument.createElement('button'), { type: 'button', className, textContent: '+', title: 'Add a panel' }), parent.firstChild);
     b.setAttribute('aria-label', 'Add a panel');
-    b.addEventListener('click', () => void this.choose(b).then((p) => this.put(p, target?.())));
+    b.addEventListener('click', () => void this.choose((e) => pick(b, e)).then((p) => this.put(p, target?.())));
   }
   private put(p: PanelState | null, target?: ComponentItem) { const el = p && this.split(p, target).container.element; if (el) { el.tabIndex = -1; el.focus(); } }
-  private offer() { void this.choose(this.empty!, undefined, true).then((p) => { this.offer(); this.put(p); }); }
-  /** The picker's choice (a popover at `anchor`, or inline in it); an implementation's (a new pod) is first deployed lazy in the chosen runtime (addPod). */
-  private async choose(anchor: HTMLElement, hidden?: PanelState[], inline = false): Promise<PanelState | null> {
-    const templates = [...this.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')], runtimes = Object.keys(this.host?.data().runtimes ?? { main: 1 }), c = await (inline ? pickerGrid : pick)(anchor, { templates, hidden, runtimes }), p = c?.state, impl = p && !p.name && this.host && this.defs.get(p.widget)?.template.dataset['implementation'], name = impl && await addPod(this.host!, impl, c.runtime ?? 'main');
-    return !impl ? p ?? null : name ? { widget: p!.widget, name } : null;
+  private offer() { void this.choose((e) => pickerGrid(this.empty!, e)).then((p) => { this.offer(); this.put(p); }); }
+  /** The picker's choice (`show`: a popover, or a grid inline); an implementation's (a new pod) is first deployed lazy in the chosen runtime (addPod). */
+  private async choose(show: (e: Parameters<typeof pick>[1]) => ReturnType<typeof pick>, hidden?: PanelState[]): Promise<PanelState | null> {
+    const templates = [...this.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')], runtimes = Object.keys(this.host?.data().runtimes ?? { main: 1 }), c = await show({ templates, hidden, runtimes }), p = c?.state, impl = p && !p.name && this.host && this.defs.get(p.widget)?.template.dataset['implementation'], gone = impl && c.runtime !== undefined && !(c.runtime in this.host!.data().runtimes), name = impl && !gone && await addPod(this.host!, impl, c.runtime ?? 'main');
+    return !impl ? p ?? null : name ? { widget: p!.widget, name } : (gone && this.say(`Runtime ${c.runtime} is no longer there: nothing was added.`), null);   // a pill that went stale
   }
   private split(p: PanelState, target?: ComponentItem) { return split(this.requireLayout(), p, p.name ?? this.defs.get(p.widget)?.title ?? p.widget, target); }
   /** Whether a stored template's panels are all in this palette; whether `p` is an implementation's panel whose pod is being made. */
@@ -190,7 +190,7 @@ export class WorkspaceDock extends HTMLElement {
     if (this.tpl) this.tpl.dispose(); else { this.requireLayout().clearComponentFocus(); this.requireLayout().clear(); }
     this.tpl = showTemplate(this.querySelector<HTMLElement>(':scope > .dock-area')!, s, { title: (p) => (p.widget === 'pod' ? p.name : this.defs.get(p.widget)?.title) ?? p.widget,
       mount: (el, st, item) => { mountPanel(item.container, st, this.mounting); for (const type of ['pointerdown', 'focusin']) el.addEventListener(type, () => this.reportFocus(item)); },
-      pick: (anchor, hidden, inline) => this.choose(anchor, hidden, inline), bringBack: (to) => this.setTemplate(to),
+      pick: (host, hidden) => this.choose((e) => pickerGrid(host, e), hidden), bringBack: (to) => this.setTemplate(to),
       unnamed: this.unnamed, say: (m) => this.say(m), add: (p) => this.addWidget(p.widget, p.name),
       remember: (st) => { templateState(this.storage, this.storageKey).set(st); if (this.tpl) this.changed(); } });
     this.changed();

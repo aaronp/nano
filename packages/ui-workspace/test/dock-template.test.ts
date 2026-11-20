@@ -236,3 +236,18 @@ test('position headers show the palette title', async () => {
   dock.setTemplate('two-cols')
   expect([...dock.querySelectorAll('.tpl-head span')].map(s => s.textContent)).toEqual(['Shown', 'Plain'])
 })
+
+test('a Hidden tile another position has taken is not filled twice: the place stays empty and says so', async () => {
+  const { dock } = await mount()
+  for (let i = 0; i < 3; i++) dock.addWidget('shown')
+  await tick(); dock.setTemplate('two-cols')
+  for (const r of dock.querySelectorAll<HTMLElement>('.tpl-remove')) r.click()
+  const parked = dock.arrangement().template!.parked as PanelState[]
+  expect(parked.length).toBe(1); expect(positions(dock).every(p => p.classList.contains('empty'))).toBe(true)
+  choice = parked[0]!
+  const [a, b] = [...dock.querySelectorAll<HTMLElement>('.tpl-add')]
+  await plus(a!); await plus(b!)
+  expect(dock.arrangement().template!.order.filter(Boolean)).toEqual(parked)
+  expect(dock.arrangement().template!.parked).toEqual([])
+  expect(positions(dock)[1]!.classList.contains('empty')).toBe(true)
+})

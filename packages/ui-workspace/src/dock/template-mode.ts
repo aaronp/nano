@@ -14,8 +14,8 @@ import { renderTemplate } from './template-view.ts';
 type Needs = {
   title(p: PanelState): string;
   mount(el: HTMLElement, p: PanelState, item: ComponentItem): void;
-  /** The picker at `anchor` (a popover), or, `inline`, in it (filling it). */
-  pick(anchor: HTMLElement, hidden: PanelState[], inline?: boolean): Promise<PanelState | null>;
+  /** The picker's grid, in `host` (filling it). */
+  pick(host: HTMLElement, hidden: PanelState[]): Promise<PanelState | null>;
   /** Stores the state as it now is (and tells whoever listens). */
   remember(s: TemplateState): void;
   bringBack(to: TemplateId): void;
@@ -49,7 +49,12 @@ export function showTemplate(area: HTMLElement, s: TemplateState, n: Needs) {
   };
   const view = renderTemplate(area, s.template, s.order, n.title, n.mount, {
     swap: () => { s = state(); n.remember(s); },
-    add: (i, host) => void n.pick(host, s.parked, true).then((p) => { if (p) { fill(i, p); view.panel(i)?.focus(); } }),
+    add: (i, host) => { const offered = s.parked; void n.pick(host, s.parked).then((p) => {
+      if (!p) return;
+      // a Hidden tile offered here that another position has since taken: nothing is filled, the place offers the grid again
+      if (p.name && offered.some((q) => same(q, p)) && !s.parked.some((q) => same(q, p))) { view.set(i, null); return n.say(`${n.title(p)} is already shown.`); }
+      fill(i, p); view.panel(i)?.focus();
+    }); },
     remove: (i) => { view.set(i, null); changed(); },
     named: () => { changed(); if (!making()) for (const p of waiting.splice(0)) n.add(p); },
   });

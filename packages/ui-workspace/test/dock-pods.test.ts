@@ -107,6 +107,17 @@ test('a pick into a chosen runtime places the pod there', async () => {
   expect(store.get('workspace')!.slots).toEqual([slot('input1', 'edge')])
 })
 
+test('a pick into a runtime that has since gone places nothing', async () => {
+  const h = await host()
+  const { go, store, input } = mount(h, [])
+  go('workspace')
+  choice = { widget: input }; runtime = 'gone'
+  document.querySelector<HTMLElement>('.dock-empty')!.click()
+  await new Promise(r => setTimeout(r, 50))
+  expect(h.data().pods['input1']).toBeUndefined()
+  expect(store.get('workspace')!.slots).toEqual([])
+})
+
 test('addPod in a rules runtime adds the rule letting the host reach the pod, so it can be started', async () => {
   const h = await host()
   await place(h, 'locked', ['other'], 'nano.ui/input', { kind: 'rules', rules: [{ deny: '*' }] })

@@ -8,7 +8,7 @@ const { pick } = await import('../src/components/picker.ts')
 const { pickerGrid } = await import('../src/components/picker-grid.ts')
 const { setImportFailures } = await import('../src/lib/import-failures.ts')
 
-const open = (hidden?: { widget: string; name?: string }[], runtimes?: string[]) => {
+const open = (hidden?: { widget: string; name?: string }[], runtimes = ['main']) => {
   document.body.innerHTML = `<button id="plus">+</button><div id="dock">
     <template data-widget="range" data-title="Range" data-catalog></template><template data-widget="log" data-title="Log" data-catalog></template>
     <template data-widget="notes" data-title="Notes"></template>
@@ -90,7 +90,7 @@ test('near the bottom of the viewport it opens above its anchor, in view', () =>
   const proto = customElements.get('nano-picker')!.prototype
   Object.defineProperty(proto, 'offsetHeight', { configurable: true, get: () => 300 })
   try {
-    void pick(plus, { templates: [] })
+    void pick(plus, { templates: [], runtimes: ['main'] })
     const top = parseFloat((document.querySelector('nano-picker') as HTMLElement).style.top)
     expect(top).toBe(innerHeight - 30 - 4 - 300)
     expect(top + 300).toBeLessThanOrEqual(innerHeight - 8)
@@ -125,7 +125,6 @@ test('the pills list the runtimes; the choice comes back with a provider tile, i
   ;({ p, chosen } = open(undefined, ['main']))   // a choice no longer offered: back to main
   expect(checked(p)).toEqual(['main'])
   p.querySelector('input')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await chosen
-  pickerGrid(document.body, { templates: [] }); expect(checked(document.body)).toEqual(['main'])   // no runtimes given: main
 })
 
 test('the pills are disabled while focus is in Views', () => {
@@ -133,6 +132,9 @@ test('the pills are disabled while focus is in Views', () => {
   ;(p.querySelector('[data-section="views"] [data-widget]') as HTMLElement).focus()
   expect(pills(p).every(b => (b as HTMLButtonElement).disabled)).toBe(true)
   ;(p.querySelector('[data-widget="range"]') as HTMLElement).focus()
+  expect(pills(p).some(b => (b as HTMLButtonElement).disabled)).toBe(false)
+  ;(p.querySelector('[data-section="views"] [data-widget]') as HTMLElement).focus()
+  p.querySelector('input')!.focus()   // out of Views: enabled again
   expect(pills(p).some(b => (b as HTMLButtonElement).disabled)).toBe(false)
 })
 
@@ -157,7 +159,30 @@ test('inline, the grid fills its place, has no Esc or outside-click close, and a
   document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
   window.dispatchEvent(new Event('hashchange'))
   expect(host.querySelector('input')).not.toBeNull()
+  expect(host.firstElementChild!.getAttribute('role')).toBe('group')
   pills(host)[1]!.click()
   ;(host.querySelector('[data-widget="range"]') as HTMLElement).click()
   expect(await chosen).toEqual({ state: { widget: 'range' }, runtime: 'edge' })
+})
+
+test('the pills are a radio group: one tab stop, the arrows move the choice', () => {
+  const { p } = open(undefined, ['main', 'edge'])
+  const key = (el: Element, k: string) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }))
+  pills(p)[0]!.click()   // (the session may remember another choice)
+  expect(pills(p).map(b => b.tabIndex)).toEqual([0, -1])
+  pills(p)[0]!.focus(); key(pills(p)[0]!, 'ArrowRight')
+  expect(checked(p)).toEqual(['edge']); expect(document.activeElement).toBe(pills(p)[1]!); expect(pills(p).map(b => b.tabIndex)).toEqual([-1, 0])
+  key(pills(p)[1]!, 'ArrowLeft'); expect(checked(p)).toEqual(['main'])
+})
+
+test('Up and Down move by a row of tiles', () => {
+  document.body.innerHTML = ['A', 'B', 'C', 'D'].map(t => `<template data-widget="${t}" data-title="${t}" data-catalog></template>`).join('')
+  const was = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetTop')
+  Object.defineProperty(HTMLElement.prototype, 'offsetTop', { configurable: true, get(this: HTMLElement) { return 'CD'.includes(this.textContent!) ? 10 : 0 } })
+  try {
+    void pick(document.body, { templates: [...document.querySelectorAll('template')], runtimes: ['main'] })
+    const tile = (w: string) => document.querySelector(`nano-picker [data-widget="${w}"]`) as HTMLElement, key = (el: Element, k: string) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }))
+    tile('A').focus(); key(tile('A'), 'ArrowDown'); expect(document.activeElement).toBe(tile('C'))
+    key(tile('C'), 'ArrowUp'); expect(document.activeElement).toBe(tile('A'))
+  } finally { if (was) Object.defineProperty(HTMLElement.prototype, 'offsetTop', was); else delete (HTMLElement.prototype as { offsetTop?: number }).offsetTop }
 })
