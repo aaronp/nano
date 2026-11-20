@@ -2,7 +2,7 @@
  * `workspace.host/deploy`: this host's HostDeploy, the pod `deploy` beside `ui` in `main`. It applies to the host's
  * `Application` as its own pod (`caller: 'deploy'`), and the host's deployment policy (`approvalPolicy`) asks the user.
  *
- *   registry.add(hostProvider(() => app))                       // ui and deploy
+ *   registry.add(hostProvider(() => app, pages))                // ui, deploy, and pages (host-pages.ts) over the page store
  *   Application.create(runtimes, { deploymentPolicy: approvalPolicy(ask, () => app.deployment()) })
  *   addTo(d, { pods, runtimes })   // d with them; an existing pod or runtime name is invalid-input
  */
@@ -10,13 +10,14 @@ import { Coord, Implementation, failure, provide, success, type AppDeployment, t
 import { HostDeploy } from '@pritzlaff/nano-ui'
 import { summary } from './deploy-summary.ts'
 import { hostUi } from './host-ui.ts'
+import { hostPages } from './host-pages.ts'
 
 type Addition = { pods: Record<string, Pod>; runtimes: Record<string, RuntimeDeployment>; onConflict?: 'error' | 'overwrite' }
 type Removal = { runtimes: string[] }
 
 const ns = Coord.namespace('workspace.host'), DEPLOY = ns.implementationId('deploy')
-/** The host's own pods (`ui`, `deploy`): no pod may overwrite them, nor overwrite or remove a runtime placing one. */
-export const HOST_PODS: readonly [string, string] = ['ui', 'deploy']
+/** The host's own pods (`ui`, `deploy`, `pages`): no pod may overwrite them, nor overwrite or remove a runtime placing one. */
+export const HOST_PODS: readonly [string, string, string] = ['ui', 'deploy', 'pages']
 const hosting = (d: AppDeployment, r: string) => d.runtimes[r]!.pods.some(p => HOST_PODS.includes(p))
 /** The `deploy` pod's data: built on its first call. */
 export const deployPod: Pod = { implementation: DEPLOY.toString(), eager: false }
@@ -74,8 +75,9 @@ export function approvalPolicy(approve: (text: string) => Promise<boolean>, curr
   } }
 }
 
-/** The host's provider: `ui` (HostUI) and `deploy` (HostDeploy, applying to `app()`). */
-export function hostProvider(app: () => Application) {
+/** The host's provider: `ui` (HostUI), `deploy` (HostDeploy, applying to `app()`) and `pages` (HostPages over `pages`,
+ * asking through `app()`'s `ui`; none in a replayed app). */
+export function hostProvider(app: () => Application, pages?: Parameters<typeof hostPages>[0]) {
   const deploy = Implementation.define(DEPLOY, {
     provides: [HostDeploy],
     make: ctx => {
@@ -99,5 +101,9 @@ export function hostProvider(app: () => Application) {
       })]
     },
   })
-  return ns.provider([hostUi, deploy])
+  const approve = async (title: string) => {
+    const r = await (app().call('main', HOST_PODS[0]) as { approve(a: { title: string }): Promise<NanoResult<unknown>> }).approve({ title })
+    return r.ok && r.value === true
+  }
+  return ns.provider([hostUi, deploy, hostPages(pages, approve)])
 }

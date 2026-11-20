@@ -29,7 +29,7 @@ const Slot = Type.Union([Type.Object({ id: Type.String(), runtime: Type.String()
 const PageT = Type.Object({ id: Type.String(), title: Type.String(), icon: Type.Optional(Type.String()), slots: Type.Array(Slot), geometry: Type.Optional(Type.Record(Type.String(), Box)) })
 const Pages = Schema.define(Type.Array(PageT), 'Pages')
 const PageAt = Schema.define(Type.Object({ page: PageT, index: Type.Optional(Type.Integer({ minimum: 0 })) }), 'PageAt')
-const PageId = Schema.define(Type.String(), 'PageId')
+const PageId = Schema.define(Type.Object({ id: Type.String() }), 'PageId')
 
 /** Each returns its input, so its result can be piped: `submit` when the user submits, `change` on every edit. */
 export const Input = ns.interface('Input', { submit: Op.action(Any, Any), change: Op.action(Any, Any) })

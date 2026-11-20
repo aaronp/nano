@@ -1,7 +1,7 @@
 /**
  * The host: the one `Application`, what is loaded (`Loaded`: the deployment with its modules and view selectors, the
- * registry, the default views), and import, apply and save over them. Its own pods are `ui` (HostUI) and `deploy`
- * (HostDeploy, host-deploy.ts) in runtime `main`, never saved. A failure is shown with `toast()` and changes nothing.
+ * registry, the default views), and import, apply and save over them. Its own pods are `ui` (HostUI), `deploy` and `pages`
+ * (HostDeploy, HostPages over `start(pages)`'s store: host-deploy.ts, host-pages.ts) in runtime `main`, never saved. A failure is shown with `toast()` and changes nothing.
  *
  *   const host = (await start()).value
  *   await host.importUrl('/examples/slice/nano.json')   // importApp, then apply
@@ -17,6 +17,7 @@ import { confirmImports } from './import-confirm.ts'
 import { probe } from './described.ts'
 import { hostUi } from './host-ui.ts'
 import { approvalPolicy, deployPod, hostProvider, HOST_PODS } from './host-deploy.ts'
+import { pagesPod } from './host-pages.ts'
 import { edgesFor } from './sandbox/edges.ts'
 import { openFrame } from './sandbox/frames.ts'
 import { connected } from './auto-connect.ts'
@@ -38,14 +39,14 @@ export type Host = {
   importUrl(url: string, chosen?: { edit(d: AppDeployment): AppDeployment }): Promise<NanoResult<void>>
   /** Whether the provider `coord` is loaded from another origin than this page (so imported only once approved). */
   foreign(coord: string): boolean
-  /** What Save writes: `data()` without the host pods `ui` and `deploy`, and without `main` once nothing else is in it; with
+  /** What Save writes: `data()` without the host's own pods (`HOST_PODS`), and without `main` once nothing else is in it; with
    * `reconcile`, the call edges that gained a seen, undeclared op pair carry their `ops` (observed-calls.ts). */
   saved(reconcile?: boolean): AppDeployment
   /** The op-level calls declared and seen so far (one observer for the app's life). */
   calls(): OpCall[]
 }
 
-const [HOST, DEPLOY] = HOST_PODS, MAIN = 'main'
+const [HOST, DEPLOY, PAGES] = HOST_PODS, MAIN = 'main'
 /** `d` with `own` taken out of `main` (dropped once empty), still among the pods. Pure. (Import keeps `deploy`'s edges.) */
 function unplaced(d: AppDeployment, own = [HOST]): AppDeployment {
   const out = structuredClone(d), main = out.runtimes[MAIN]
@@ -59,15 +60,14 @@ function unplaced(d: AppDeployment, own = [HOST]): AppDeployment {
 
 /** `d` without the host's own pods. Pure. */
 function withoutHost(d: AppDeployment): AppDeployment {
-  const out = unplaced(d, [HOST, DEPLOY])
-  for (const p of [HOST, DEPLOY]) { delete out.pods[p]; delete out.tags?.[p]; delete out.views?.[p] }
+  const out = unplaced(d, [...HOST_PODS]); for (const p of HOST_PODS) { delete out.pods[p]; delete out.tags?.[p]; delete out.views?.[p] }
   return out
 }
 
-/** `d` with the host pods first in `main` (`deploy` unless it is there). Pure. */
+/** `d` with the host pods first in `main` (`deploy` and `pages` unless there). Pure. */
 function placed(d: AppDeployment): AppDeployment {
-  const main = d.runtimes[MAIN] ?? { pods: [], subscriptions: [] }, deploy = main.pods.includes(DEPLOY) ? [] : [DEPLOY]
-  return { ...d, pods: { [HOST]: Pod.eager(hostUi), [DEPLOY]: deployPod, ...d.pods }, runtimes: { ...d.runtimes, [MAIN]: { ...main, pods: [HOST, ...deploy, ...main.pods] } } }
+  const main = d.runtimes[MAIN] ?? { pods: [], subscriptions: [] }, more = [DEPLOY, PAGES].filter(p => !main.pods.includes(p))
+  return { ...d, pods: { [HOST]: Pod.eager(hostUi), [DEPLOY]: deployPod, [PAGES]: pagesPod, ...d.pods }, runtimes: { ...d.runtimes, [MAIN]: { ...main, pods: [HOST, ...more, ...main.pods] } } }
 }
 
 /** nano.ui's URL as importApp stores a provider: its path on http(s), else whole (a file: page, in tests). Relative to
@@ -80,10 +80,10 @@ const shown = <T>(r: NanoResult<T>): NanoResult<T> => {
   return r
 }
 
-export async function start(): Promise<NanoResult<Host>> {
+export async function start(pages?: Parameters<typeof hostProvider>[1]): Promise<NanoResult<Host>> {
   // nano.ui is bundle/nano-ui.js under the page: through the import map, the module this file imports.
   const registry = Registry.create()
-  for (const p of [uiProvider, hostProvider(() => live())]) { const added = registry.add(p); if (!added.ok) return added }
+  for (const p of [uiProvider, hostProvider(() => live(), pages)]) { const added = registry.add(p); if (!added.ok) return added }
   const first = placed({ pods: {}, runtimes: {}, modules: { "nano.ui": nanoUi }, views: {} })
   const runtimes = AppDeployment.assemble(first, registry)
   if (!runtimes.ok) return runtimes

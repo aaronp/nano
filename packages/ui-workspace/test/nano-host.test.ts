@@ -58,14 +58,14 @@ async function mount() {
   return { host: r.value, el }
 }
 
-test('given a fresh host, then the built-ins input, debounce, map, log, the clocks and the randoms are listed and main holds only ui and deploy', async () => {
+test('given a fresh host, then the built-ins input, debounce, map, log, the clocks and the randoms are listed and main holds only ui, deploy and pages', async () => {
   const { host, el } = await mount()
   const builtins = [...el.querySelectorAll<HTMLTemplateElement>(':scope > template[data-implementation]')]
   expect(builtins.map(t => t.dataset['title']).sort()).toEqual(['clock', 'debounce', 'input', 'log', 'map', 'random', 'seeded-random', 'sim-clock'])
-  expect(host.app.deployment().runtimes).toEqual({ main: { pods: ['ui', 'deploy'], subscriptions: [] } })
+  expect(host.app.deployment().runtimes).toEqual({ main: { pods: ['ui', 'deploy', 'pages'], subscriptions: [] } })
   el.addWidget('nano-ui-map')
   await tick(10)
-  expect(host.app.deployment().runtimes.main!.pods).toEqual(['ui', 'deploy', 'map1'])
+  expect(host.app.deployment().runtimes.main!.pods).toEqual(['ui', 'deploy', 'pages', 'map1'])
 })
 
 test('given the slice imported, then the explorer lists in, wait, up, out and Save round-trips modules and views', async () => {

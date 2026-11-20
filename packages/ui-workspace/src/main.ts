@@ -4,10 +4,11 @@
  *
  * On nano-core 0.4 the host (host.ts: the one Application, the nano.ui built-ins, import and save of nano.json) takes
  * the place of composable.ts and nano-app: the docks, the explorer and wiring views and the app bar show its app; the
- * File menu saves its nano.json and imports one; `?src=<url>` imports that nano.json on load.
+ * File menu saves its nano.json (its `layout.pages` from the page store) and imports one; `?src=<url>` imports that
+ * nano.json on load, into the stored document boot-host.ts loaded.
  */
 import './boot-theme.ts';
-import { host } from './boot-host.ts';   // before the elements are defined: the docks' palettes list what the host can make
+import { host, pages } from './boot-host.ts';   // before the elements are defined: the docks' palettes list what the host can make
 import { toast } from '@pritzlaff/nano-elements';
 import { clockDriver, timeMachine, type NanoTimeMachine } from '@pritzlaff/nano-ui';
 import './boot-workspace-pages.ts';   // before the shell: it reads its routes as it starts
@@ -62,7 +63,8 @@ if (host) {
     const saved = h.saved(reconcile), l = dock?.arrangement();
     const runtimeOf = (pod: string) => Object.entries(saved.runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
     const desk = document.querySelector<Desk>('c-desk')?.layout();
-    const file = l && dock ? { ...saved, layout: savedLayout(saved, dock.id, l, runtimeOf, desk) } : desk ? { ...saved, layout: { ...saved.layout, desk } } : saved;
+    const was = l && dock ? { ...saved, layout: savedLayout(saved, dock.id, l, runtimeOf, desk) } : desk ? { ...saved, layout: { ...saved.layout, desk } } : saved;
+    const file = { ...was, layout: { ...was.layout, pages: pages.list() } };   // the pages are the store's
     a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' }));
     a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
