@@ -2,7 +2,7 @@
  * Selectors: which call subscriptions a call may use — an interface, or data narrowing by tags, implementation,
  * provider, or the runtime the subscription is in.
  *
- *   selectorData(DB)                                    // { implements: acme.DB } (an InterfaceCoord)
+ *   selectorData(DB)                                    // its `implements` is DB's InterfaceCoord, acme.DB
  *   matches({ implements: acme.interfaceId('DB'), tags: ['primary'] }, target)
  *   Selector.of(DB, { runtime: Coord.runtime('v2') })   // still DB (typed clients survive), plus implements and runtime
  *

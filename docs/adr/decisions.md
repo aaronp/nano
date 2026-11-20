@@ -1315,4 +1315,6 @@ Cons:
 
 ## Decision
 Typed. Ids used as keys and names in data and APIs, and the `runtime` field of events and policy asks, stay strings
-(identifiers, not coordinates).
+(identifiers, not coordinates). `Interface.define` accepts only interface coordinates (`ns.Name`); the slash form
+(`acme/db`) is refused. A sandbox module built with an older nano-core that declares a slash-form interface now fails
+`described()` with `invalid-input`.
