@@ -47,10 +47,10 @@ test('the template from another origin, Trusted: host pods, its view before anyt
   await expect(dock.locator('nano-timer').first()).toBeVisible()
   await expect(page.locator('dialog[open]')).toHaveCount(0)   // nothing asked to run yet
 
-  // (b) a timer from the picker's Imported section (a panel header's +), with no pipes: Start, and it counts
+  // (b) a timer from the picker's imported provider group (a panel header's +), with no pipes: Start, and it counts
   const before = await dock.locator('nano-timer').count()
   await dock.getByRole('button', { name: 'Add a panel' }).first().click()
-  await page.locator('nano-picker [data-section="imported"]').getByRole('button', { name: 'timer', exact: true }).click()
+  await page.locator('nano-picker [data-kind="provider"]:not([data-section="nano.ui"])').getByRole('button', { name: 'timer', exact: true }).click()
   const approve = async () => {   // running it in this page asks first
     const yes = page.locator('dialog[open]').getByRole('button', { name: 'Approve' })
     while (await yes.isVisible().catch(() => false) || await yes.waitFor({ timeout: 1000 }).then(() => true, () => false)) await yes.click()
