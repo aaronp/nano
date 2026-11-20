@@ -19,17 +19,20 @@ type Dock = HTMLElement & { addWidget(id: string, name?: string): void; setTempl
 const until = async (ok: () => boolean) => { for (let i = 0; i < 200 && !ok(); i++) await new Promise(r => setTimeout(r, 5)); expect(ok()).toBe(true) }
 afterEach(() => { document.body.innerHTML = ''; localStorage.clear() })
 
-async function mount() {
-  const r = await start()
+type H = Extract<Awaited<ReturnType<typeof start>>, { ok: true }>['value']
+/** A dock on a host; `late`, the host is given after it connects, as main.ts does on a reload. */
+async function mount(given?: H, late = false) {
+  const r = given ? { ok: true as const, value: given } : await start()
   if (!r.ok) throw new Error(r.fail.reason)
-  const dock = document.createElement('workspace-dock') as Dock
-  Object.assign(dock, { id: 'ws', host: r.value })
+  const dock = document.createElement('workspace-dock') as Dock & { host?: H }
+  Object.assign(dock, { id: 'ws' }, !late && { host: r.value })
   dock.setAttribute('storage-key', 't.pods'); dock.setAttribute('open', 'plain')
   dock.innerHTML = '<template data-widget="plain" data-title="Plain"><div>plain</div></template>'
   dock.prepend(...implementationTemplates(r.value, document))
   const bus = createBus(), page = document.createElement('div')
   provideBus(page, bus); page.append(dock); document.body.append(page)
-  return { dock, bus, input: implementationTemplates(r.value, document).find(t => t.dataset['implementation'] === 'nano.ui/input')!.dataset['widget']! }
+  if (late) dock.host = r.value
+  return { dock, bus, host: r.value, input: implementationTemplates(r.value, document).find(t => t.dataset['implementation'] === 'nano.ui/input')!.dataset['widget']! }
 }
 const stored = () => templateState(localStorage, 't.pods').get()!.order
 
@@ -54,4 +57,20 @@ test('an add with no room while a pod is being made waits for it, says so, then 
   expect(bus.history().filter(m => m.topic === 'dock:status').at(-1)!.payload).toEqual({ message: 'Adding Plain once the new pod is made.' })
   await until(() => dock.template === 'dock')
   expect(dock.querySelectorAll('.dock-panel').length).toBe(3)
+})
+
+test('a reload in a template, its host given after the dock connects, keeps the pods named and makes none', async () => {
+  const { dock, host, input } = await mount()
+  dock.setTemplate('two-cols')
+  choice = { widget: input }
+  dock.querySelector<HTMLElement>('.tpl-add')!.click()
+  await until(() => !!stored()[1]?.name)
+  const before = JSON.stringify(stored()), pods = Object.keys(host.data().pods).length
+  document.body.innerHTML = ''
+  const { dock: again } = await mount(host, true)
+  await new Promise(r => setTimeout(r, 50))
+  expect(again.template).toBe('two-cols')
+  expect(JSON.stringify(stored())).toBe(before)
+  expect(Object.keys(host.data().pods).length).toBe(pods)
+  expect(again.querySelectorAll('.tpl-pos')[1]!.querySelector('.dock-panel')!.childElementCount).toBe(1)   // its pod's view, made with the host
 })

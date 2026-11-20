@@ -5,10 +5,8 @@
  *   <workspace-dock id="workspace" storage-key="my-app.workspace" open="notes,chart" arrangement="grid">
  *     <template data-widget="notes" data-title="Notes"> …any markup or widget… </template>   (one per palette entry)
  *   </workspace-dock>
- *
  * Adding panels: each panel header's `+` opens the picker (picker.ts) and splits that panel for the choice; an empty dock
  * shows one large `+`. A saved layout opens automatically next time. Panels refer to widgets by id, so saved layouts hold no markup.
- *
  * Bus topics (the app bus): dock:opened {widget} · dock:layout {panels} · dock:saved · dock:error {message} ·
  * dock:status {message} (what the last command did, for a status line).
  * The dock has no toolbar: its commands are public, for controls elsewhere (the app bar) to call.
@@ -23,7 +21,6 @@
  * bubbling, composed `dock:focus` DOM event {system, instance, widget}, or null when the focused panel shows no
  * instance or nothing is focused (empty space clicked, the panel closed, the page changed: `route:changed` on the bus).
  * Light DOM, because golden-layout positions its drag proxy in document.body.
- *
  * On nano-core 0.4: `host` is the page's Host. A `pod` panel (addWidget('pod', name), as a click in the explorer
  * does) shows that pod's view (dock/panels.ts); <nano-explorer> and <nano-wiring> in a panel get the host's app.
  */
@@ -43,8 +40,10 @@ export class WorkspaceDock extends HTMLElement {
   /** The system (registry) the panels' components live in; unset, they use the page's provided registry. Declared,
    * not a class field: a field would wipe a value set before the element upgrades (saved workspaces set it at start). */
   declare registry?: unknown;
-  /** The page's host (main.ts sets it): pod panels and the nano-ui elements in panels show its app. */
-  declare host?: Host;
+  /** The page's host (main.ts sets it after the docks connect: panels already up are made again with it); pod panels show its app. */
+  get host(): Host | undefined { return this.#host; }
+  set host(h) { const late = !this.#host && h && this.layout; this.#host = h; if (late) { if (this.tpl) this.show(this.tpl.state); else this.load(LayoutConfig.fromResolved(this.kept)); } }
+  #host?: Host;
   private bus: Bus | null = null;
   private layout: GoldenLayout | null = null;
   private defs = new Map<string, Def>();
@@ -56,6 +55,7 @@ export class WorkspaceDock extends HTMLElement {
 
   connectedCallback() {
     if (this.layout) return; /* already built (re-insertion) */
+    if (Object.hasOwn(this, 'host')) { const h = this.host; delete (this as { host?: Host }).host; this.host = h; }   // set before the element upgraded
     ensureStyles(this.ownerDocument);
     if (!this.bus) {
       this.bus = requestBus(this);

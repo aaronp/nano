@@ -95,8 +95,10 @@ export function mountPanel(container: ComponentContainer, state: JsonValue | und
   // the saved mode (BACKLOG(2): an instance's own `nano/deploy` label is gone with the registry)
   const mode = readWidgetMode(state)
   const content = withMode(panelContent(doc, def.template, registry), id, mode, name)
-  const shown = (id === 'pod' ? { name } : content.firstElementChild) as (Element & { model?: unknown }) | null
-  if (name && id !== 'pod') (shown as Element | null)?.setAttribute('name', name)   // before it connects, so it attaches to that instance
+  // a pod's or an implementation's panel shows its pod by name: kept in its state even with no host yet to show it
+  const impl = def.template.dataset['implementation']
+  const shown = (id === 'pod' || impl ? { name } : content.firstElementChild) as (Element & { model?: unknown }) | null
+  if (name && id !== 'pod' && !impl) (shown as Element | null)?.setAttribute('name', name)   // before it connects, so it attaches to that instance
   container.element.append(content)
   if (h) for (const el of container.element.querySelectorAll<HTMLElement & { target?: unknown; icon?: unknown }>('nano-explorer, nano-wiring')) {
     if (el.localName === 'nano-explorer') el.icon = explorerIcon
@@ -104,7 +106,6 @@ export function mountPanel(container: ComponentContainer, state: JsonValue | und
   }
   if (h && id === 'pod' && name) container.on('destroy', fill(container.element, `pod:${name}`, h))
   // an implementation's panel makes a pod of it (or shows the one it made), as a catalog kind's placed a new instance
-  const impl = def.template.dataset['implementation']
   if (h && impl) {
     let stop = () => {}, gone = false, pod = name
     const show = (p: string) => { pod = p; if (!gone) stop = fill(container.element, `pod:${p}`, h) }
