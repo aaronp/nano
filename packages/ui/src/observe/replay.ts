@@ -71,7 +71,7 @@ export async function replay(app: Application, store: MessageStore, opts: Opts =
       }
       const { sent } = sends.get(seq)!
       const input = sent.input === undefined || sent.input === 'undefined' ? undefined : JSON.parse(sent.input)
-      const op = sent.port.slice(sent.port.lastIndexOf('/') + 1)
+      const port = sent.port!, op = port.slice(port.lastIndexOf('/') + 1)   // roots are calls: each has a port
       n.sent++
       const done = Promise.resolve().then(() => app.runtime(sent.runtime).call(sent.to)[op]!(input))
         .then(r => { if (!r.ok) n.failed++ }, () => { n.failed++ })

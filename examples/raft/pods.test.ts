@@ -85,7 +85,7 @@ describe('a cluster of 3 on the sim clock', () => {
     const after = events.slice(removed)
     expect(after.filter(e => e.type === 'failure' || e.type === 'warning')).toEqual([])
     expect(after.filter(e => e.type === 'sent' && e.to.startsWith('example-'))).toEqual([])
-    expect(after.some(e => e.type === 'sent' && e.port.endsWith('/fired'))).toBe(true)   // messages were in flight
+    expect(after.some(e => e.type === 'sent' && e.port?.endsWith('/fired'))).toBe(true)   // messages were in flight
     expect(rejections).toEqual([])
   })
 

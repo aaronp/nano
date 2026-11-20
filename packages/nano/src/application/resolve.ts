@@ -18,6 +18,7 @@ import { listen } from './listen.ts'
 import type { AppEvent } from './stream.ts'
 import { impl, refusal, type Live, type On } from './messages.ts'
 import { lookup } from './lookup.ts'
+import { starter } from './start.ts'
 import type { PodStatus } from './instances.ts'
 
 type Reason = 'not-found' | 'not-unique' | 'denied'
@@ -51,6 +52,10 @@ export type RuntimeView = {
   listen(fn: (e: AppEvent) => void): () => void
   /** `pod`'s lifecycle now (`running`, `not started`, `stopped`, `failed`); `not-found` if it is not placed here. */
   status(pod: string): NanoResult<PodStatus>
+  /** Build `pod`, placed here and not running, by a `start` message from the host (ADR-0031): `not-found`, `invalid-input` "already running", `denied`, or the build's `Fail`. */
+  start(pod: string): Promise<NanoResult<void>>
+  /** `pod` running, reused (`started: false`) or started now (`true`), with `call(pod)`'s client; or `start`'s `Fail`. */
+  getOrCreate(pod: string): Promise<NanoResult<{ started: boolean; pod: Client }>>
 }
 type DataOf<S> = S extends TSchema ? Static<S> : unknown
 type In<O> = O extends Op<infer I, any> ? DataOf<I> : unknown
@@ -74,7 +79,7 @@ const throws = (fail: Fail) => (): never => { throw thrown(fail) }
 /**
  * Runtime `id` (or, absent, the application's one runtime) as the host sees it, looked up again at each use, so one
  * added later by `apply` works and a missing one is `not-found`.
- * Its plain objects resolve again at each call, so a rewired placement is followed. `status` is the instances'.
+ * Its plain objects resolve again at each call, so a rewired placement is followed. `status` is the instances'; `start` and `getOrCreate` are `start.ts`'s.
  */
 export function runtimeView(live: Live, status: (pod: string) => PodStatus, id?: string): RuntimeView {
   const at = () => id === undefined ? only(live) : named(live, id)
@@ -129,7 +134,7 @@ export function runtimeView(live: Live, status: (pod: string) => PodStatus, id?:
   const watch = (fn: (e: AppEvent) => void) => { const r = at(); return r.ok ? listen(live, r.value, fn) : throws(r.fail)() }
   const statusOf = (pod: string): NanoResult<PodStatus> => { const r = at(); return !r.ok ? r
     : lookup(live.now()).placed.get(r.value)?.has(pod) ? success(status(pod)) : failure('not-found', `${pod} is not placed in ${r.value}`) }
-  return { resolve, get: (api, where) => resolve(api, where).getOrThrow(), call, subscribe, listen: watch, status: statusOf }
+  return { resolve, get: (api, where) => resolve(api, where).getOrThrow(), call, subscribe, listen: watch, status: statusOf, ...starter(live, at, status, call) }
 }
 
 /** Runtime `id` if the application has it now, else `not-found`. */

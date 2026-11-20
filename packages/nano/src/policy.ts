@@ -8,7 +8,7 @@
 import { Type, type Static } from 'typebox'
 export type Verdict = { approved: true } | { approved: false; reason: string }
 /** What a policy is asked: a message's envelope. `outside` is true when `from` is not placed in `runtime` (the host, or another runtime's pod). */
-export type Ask = { runtime: string; kind: 'call' | 'pipe' | 'on' | 'subscribe' | 'unsubscribe' | 'lifecycle'; from: string; to: string; port?: string; outside: boolean; data?: unknown }
+export type Ask = { runtime: string; kind: 'call' | 'pipe' | 'on' | 'subscribe' | 'unsubscribe' | 'lifecycle' | 'start'; from: string; to: string; port?: string; outside: boolean; data?: unknown }
 export type Policy = { isAllowed(ask: Ask): Verdict }
 
 const ALLOW_ALL: Policy = Object.freeze({ isAllowed: () => ({ approved: true as const }) })
@@ -18,7 +18,7 @@ export const Policies = {
   allowAll: (): Policy => ALLOW_ALL,
 }
 
-const Kind = Type.Union([Type.Literal('call'), Type.Literal('pipe'), Type.Literal('on'), Type.Literal('subscribe'), Type.Literal('unsubscribe'), Type.Literal('lifecycle'), Type.Literal('*')])
+const Kind = Type.Union([Type.Literal('call'), Type.Literal('pipe'), Type.Literal('on'), Type.Literal('subscribe'), Type.Literal('unsubscribe'), Type.Literal('lifecycle'), Type.Literal('start'), Type.Literal('*')])
 const Kinds = Type.Union([Kind, Type.Array(Kind)])
 const Match = { from: Type.Optional(Type.String()), toPod: Type.Optional(Type.String()), toInterface: Type.Optional(Type.String()),
   toPort: Type.Optional(Type.String()), outside: Type.Optional(Type.Boolean()) }

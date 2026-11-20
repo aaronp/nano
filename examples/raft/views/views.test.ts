@@ -75,7 +75,7 @@ test('mounted views add only their mount reads to the recording, a small fractio
   const roots: string[] = [], raft: string[] = []
   const advancePort = `${ClockControl.coord}/${ClockControl.ops.advance.name}`
   app.listen(e => {
-    if (e.type !== 'sent' || e.kind === 'subscribe' || e.kind === 'unsubscribe' || e.port === advancePort) return
+    if (e.type !== 'sent' || e.kind === 'subscribe' || e.kind === 'unsubscribe' || e.kind === 'start' || e.port === advancePort) return
     if (e.from === 'host') roots.push(e.port); else raft.push(e.port)
   })
   for (const id of ['example-1', 'example-2', 'example-3']) { await mount('raft-node', app, id, `${id}-raft`); await mount('raft-ledger', app, id, `${id}-ledger`) }

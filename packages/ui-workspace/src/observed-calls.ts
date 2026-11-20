@@ -42,7 +42,7 @@ export function observeCalls(app: Application, registry: Registry) {
       if (sent.size > 1000) sent.delete(sent.keys().next().value!)
       if (e.kind !== 'call') return
       const cause = e.cause === undefined ? undefined : sent.get(e.cause)
-      const call = { runtime: e.runtime, from: e.from, to: e.to, source: cause?.to === e.from ? cause.port : null, target: e.port, declared: false, seen: true }
+      const call = { runtime: e.runtime, from: e.from, to: e.to, source: cause?.to === e.from ? cause.port ?? null : null, target: e.port, declared: false, seen: true }
       const s = seen.get(key(call)) ?? { call, ok: 0, id: new Set() }
       s.ok++; s.id.add(e.id); seen.set(key(call), s)
     } else if (e.type === 'denied') {
