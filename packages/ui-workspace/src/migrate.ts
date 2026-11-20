@@ -53,19 +53,20 @@ export function legacyPages(layout: unknown, d: AppDeployment): Legacy[] {
   return pageOk(page) ? [page] : []
 }
 
-/** `pages` as a UIDeployment, in their order; a pod slot whose pod `d` does not have is dropped. Pure. */
+/** `pages` as a UIDeployment, in their order; a pod slot whose pod `d` does not have, and a page or slot whose id or coordinate is bad, is dropped. Pure. */
 export function toPlatform(pages: Legacy[], d: AppDeployment): UIDeployment {
   const slot = (s: OldSlot): [string, Slot][] => {
-    if ('view' in s) return [[s.id, { kind: 'view', view: s.view }]]
+    if (!idOk(s.id)) return []
+    if ('view' in s) return s.view ? [[s.id, { kind: 'view', view: s.view }]] : []
     const impl = d.pods[s.pod]?.implementation
-    return impl ? [[s.id, { kind: 'pod', pod: Coord.pod(Coord.parse('implementation', impl), Coord.runtime(s.runtime), s.pod) }]] : []
+    try { return impl ? [[s.id, { kind: 'pod', pod: Coord.pod(Coord.parse('implementation', impl), Coord.runtime(s.runtime), s.pod) }]] : [] } catch { return [] }
   }
   const page = (p: Legacy, order: number): Page => {
     const w = obj(p.workspace) ? p.workspace : {}, layout = Object.fromEntries(Object.entries(w).filter(([k]) => !RESTORE.includes(k)))
     const restore = Object.fromEntries(Object.entries(w).filter(([k]) => RESTORE.includes(k)))
     return { slots: Object.fromEntries(p.slots.flatMap(slot)), ...(Object.keys(layout).length && { layout }), meta: { title: p.title, ...(p.icon !== undefined && { icon: p.icon }), order, ...restore } }
   }
-  return { pages: Object.fromEntries(pages.map((p, i) => [p.id, page(p, i)])) }
+  return { pages: Object.fromEntries(pages.filter(p => idOk(p.id)).map((p, i) => [p.id, page(p, i)])) }
 }
 
 /** `d` without the old pages in its layout (`pages`, `workspace`, `slots`, `geometry`); no layout once nothing is left. */

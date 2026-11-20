@@ -50,6 +50,13 @@ describe('apply', () => {
     expect(p.apply({ pages: {} }, { base: 1 })).toEqual(success(undefined))
     expect(p.document().version).toBe(2)
   })
+  test('a throwing listener is swallowed: the document stays applied and the rest still hear it', async () => {
+    const p = Platform.create(await live(), registry), heard: unknown[] = []
+    p.listen(() => { throw new Error('boom') }); p.listen(c => heard.push(c.added))
+    expect(p.apply({ pages: { one: { slots: {} } } })).toEqual(success(undefined))
+    expect(heard).toEqual([['one']])
+    expect(p.document().version).toBe(1)
+  })
   test('a slot naming an absent pod is accepted (it resolves missing)', async () => {
     const p = Platform.create(await live(), registry)
     ok(p.apply(page({ a: { kind: 'pod', pod: at('r', 'nobody') } })))

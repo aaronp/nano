@@ -62,12 +62,13 @@ test('drop four controls, wire them in Connections, save, New, import the file: 
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('dialog').getByRole('button', { name: /Save|OK/ }).click()])
   expect(download.suggestedFilename()).toBe('demo.json')
   const file = (await download.path())!, saved = JSON.parse(readFileSync(file, 'utf8'))
-  expect(Object.keys(saved.pods).sort()).toEqual(['debounce1', 'input1', 'log1', 'map1'])
-  expect(saved.runtimes.main.subscriptions).toHaveLength(3)
-  expect(JSON.stringify(saved.layout.workspace)).toContain('log1')
-  // beside the dock's own state, the neutral layout: a slot and a box per pod
-  expect(saved.layout.slots.map((s: { pod: string }) => s.pod).sort()).toEqual(['debounce1', 'input1', 'log1', 'map1'])
-  for (const s of saved.layout.slots) expect(saved.layout.geometry[s.id]).toMatchObject({ w: expect.any(Number), h: expect.any(Number) })
+  // the bundle { app, platform }: the app's pods and pipes, and Main's page (its dock's layout, a pod slot per pod)
+  expect(Object.keys(saved.app.pods).sort()).toEqual(['debounce1', 'input1', 'log1', 'map1'])
+  expect(saved.app.runtimes.main.subscriptions).toHaveLength(3)
+  const main = saved.platform.pages.workspace
+  expect(JSON.stringify(main.layout)).toContain('log1')
+  const podSlots = Object.values(main.slots as Record<string, { kind: string; pod?: string }>).filter(s => s.kind === 'pod')
+  expect(podSlots.map(s => s.pod!.split('/').pop()).sort()).toEqual(['debounce1', 'input1', 'log1', 'map1'])
   await shot(page, '3-saved')
 
   // 4. File › New: nothing but the starting dock

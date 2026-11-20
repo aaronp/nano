@@ -7,7 +7,7 @@
  *   p.apply(next, { base: 3 })        // refused unless the document is still at version 3
  *   p.resolve('home')                 // per slot: { kind: 'pod', pods }, { kind: 'missing' } or { kind: 'view', view }
  *   await p.open('home')              // per slot: { pod, started }, { fail }, or the resolution (missing, view)
- *   p.listen(c => …)                  // after an Application `applied`, `resolved` names the pages that resolve differently
+ *   p.listen(c => …)                  // after an Application `applied`, `resolved` names the pages that resolve differently; a throw is swallowed
  */
 import { Coord, failure, matches, success, type Application, type Fail, type NanoResult, type PodCoord, type Registry } from '@pritzlaff/nano-core'
 import { parse, type Page, type Slot, type UIDeployment } from './document.ts'
@@ -27,7 +27,8 @@ function create(app: Application, registry: Registry, doc: UIDeployment = { page
   if (!first.ok) throw new Error(first.fail.reason)
   let current = first.value, version = 0
   const listeners = new Set<(c: Change) => void>()
-  const tell = (c: Change) => { for (const fn of [...listeners]) fn(c) }
+  // a throwing listener is swallowed, as the Application's are (D79): the document stays applied and the rest still hear it
+  const tell = (c: Change) => { for (const fn of [...listeners]) try { fn(c) } catch { /* swallowed */ } }
 
   const slot = (s: Slot): Resolved => {
     if (s.kind === 'view') return { kind: 'view', view: s.view }

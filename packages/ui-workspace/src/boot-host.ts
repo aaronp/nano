@@ -34,7 +34,8 @@ const at = host && doc && URL.createObjectURL(new Blob([JSON.stringify(doc)], { 
 const loaded = host && at ? await host.importUrl(at).finally(() => URL.revokeObjectURL(at)) : { ok: true };
 const first = host ? await bootPages(host, storage, doc, stored.pages(), loaded.ok) : undefined;
 /** The page's pages (ADR-0038): one Platform for the page's life; undefined without a host. */
-export const platform = host && first?.ok ? Platform.create(host.app, host.registry, first.value) : host ? Platform.create(host.app, host.registry) : undefined;
+const startWith = first?.ok ? first : host && await bootPages(host, storage, null, null, false);   // pages that failed: Main alone
+export const platform = host && startWith?.ok ? Platform.create(host.app, host.registry, startWith.value) : undefined;
 
 if (host && platform) {
   host.importUrl = importing(host.importUrl.bind(host), platform);

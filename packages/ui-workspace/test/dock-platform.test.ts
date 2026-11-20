@@ -42,9 +42,13 @@ test('an undeployed pod\'s slot stays and shows "not found" with a remove button
   expect(panels('workspace').length).toBe(2)
   await undeploy(h, 'input1')
   await until(() => !!gone())
-  gone()!.querySelector('button')!.click()
+  expect(gone()!.querySelector('[role="status"]')!.textContent).toBe('a: not found')
+  const remove = gone()!.querySelector('button')!
+  expect(remove.getAttribute('aria-label')).toBe('Remove slot a')
+  remove.click()
   await until(() => panels('workspace').length === 1)
   expect(Object.keys(written('workspace').slots)).toEqual(['b'])
+  await until(() => document.activeElement?.classList.contains('dock-area') ?? false)   // focus kept in the dock
   expect(running(h, 'input2')).toBe(true)
 })
 
@@ -68,7 +72,7 @@ test('a select slot matching pods in two runtimes shows the first (by runtime, t
   await until(() => panels('workspace').length === 3 && running(h, 'ina', 'a') && running(h, 'inb', 'b'))
   const views = panels('workspace').map(p => (p.firstElementChild as { target?: { runtime: string; pod: string } } | null)?.target)
   expect(views.map(t => t && `${t.runtime}/${t.pod}`).sort()).toEqual(['a/ina', 'a/ina', 'b/inb'])
-  expect(panels('workspace').filter(p => p.textContent!.includes('2 matched')).length).toBe(1)
+  expect(panels('workspace').filter(p => p.querySelector('[role="status"]')?.textContent === '2 matched').length).toBe(1)
 })
 
 test('a select slot stays a select when the dock rewrites the slots (a dock:layout)', async () => {

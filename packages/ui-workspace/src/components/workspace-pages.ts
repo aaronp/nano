@@ -86,7 +86,7 @@ export function bootWorkspacePages(doc: Document, platform: ReturnType<typeof Pl
     const d = platform.document().doc, [main, ...rest] = ordered(d).map((id) => rowOf(d, id));
     for (const row of rows()) if (!rest.some((p) => p.id === row.dataset.saved)) {
       const id = row.dataset.saved!;
-      row.remove(); doc.querySelector(`app-route[path="/${id}"]`)?.remove();
+      row.remove(); [...doc.querySelectorAll('app-route')].find((r) => r.getAttribute('path') === `/${id}`)?.remove();   // by value: no selector to escape
       if (location.hash === `#/${id}`) location.hash = `#/${MAIN}`;
     }
     let prev = doc.querySelector('[data-workspaces]');
@@ -115,7 +115,7 @@ export function bootWorkspacePages(doc: Document, platform: ReturnType<typeof Pl
     const order = Math.max(0, ...Object.values(d.pages).map((p) => metaOf(p).order ?? 0)) + 1;
     if (!apply({ pages: { ...d.pages, [id]: { ...page, meta: { title, ...(icon !== undefined && { icon }), order } } } })) return;
     location.hash = `#/${id}`;
-    edit.rename(doc.querySelector<HTMLElement>(`[data-saved="${id}"]`)!);
+    edit.rename(rows().find((r) => r.dataset.saved === id)!);
   };
 
   doc.addEventListener('click', (e) => {

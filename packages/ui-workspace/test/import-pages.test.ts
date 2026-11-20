@@ -33,3 +33,13 @@ test('an incoming page on one of the workspace\'s own routes is taken as clashin
   const out = withImported(doc({ pages: { workspace: main } }), doc({ pages: { ring: trading, two: { slots: {}, meta: { title: 'Two', order: 1 } } } }))
   expect(Object.keys(out.pages)).toEqual(['workspace', 'ring-2', 'two'])
 })
+
+test('a plain nano.json\'s Main filling Main keeps Main\'s title, icon, view slots and layout (the file has none)', async () => {
+  const { importing } = await import('../src/import-pages.ts')
+  const app = { listen: () => () => {}, deployment: () => ({ pods: {}, runtimes: {} }) } as never
+  const platform = Platform.create(app, {} as never, doc({ pages: { workspace: { slots: { x: view }, layout: { root: 1 }, meta: { title: 'Mine', icon: 'star', order: 0 } } } }))
+  const file = { pods: { clock1: { implementation: 'example.clock/clock' } }, runtimes: { main: { pods: ['clock1'], subscriptions: [] } }, layout: { pages: [{ id: 'workspace', title: 'Workspace', slots: [{ id: 'c', runtime: 'main', pod: 'clock1' }] }] } }
+  const url = `data:application/json,${encodeURIComponent(JSON.stringify(file))}`
+  expect(await importing(async () => ({ ok: true, value: undefined }), platform)(url)).toMatchObject({ ok: true })
+  expect(written(platform.document().doc)).toEqual({ pages: { workspace: { slots: { x: view, c: pod }, layout: { root: 1 }, meta: { title: 'Mine', icon: 'star', order: 0 } } } })
+})

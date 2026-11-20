@@ -214,3 +214,12 @@ test('Save as workspace copies the page into "<title> copy" (same slots, its arr
   expect(input().closest('[data-saved]')!.getAttribute('data-saved')).toBe('home-copy')
   type('', 'Escape')
 })
+
+test('a page id holding `"` mounts and unmounts: its selectors are escaped', () => {
+  const d = platform.document().doc
+  must(platform.apply({ pages: { ...d.pages, 'q"t': { slots: {}, meta: { title: 'Quote', order: 99 } } } }))
+  expect(routes()).toContain('/q"t')
+  must(platform.apply({ pages: d.pages }))
+  expect(routes()).not.toContain('/q"t')
+  expect(savedOrder()).not.toContain('q"t')
+})

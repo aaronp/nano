@@ -9,7 +9,7 @@ import { KeyValueStoreDef } from '../examples/kv/contract.ts'
 
 const dock = (page: Page) => page.locator('workspace-dock#workspace')
 /** The participant's window, by its heading (its text would also match a line mentioning the name). */
-const room = (page: Page, who: string) => dock(page).locator('chat-room').filter({ has: page.getByRole('heading', { name: who, exact: true }) })
+const room = (page: Page, who: string, at = dock(page)) => at.locator('chat-room').filter({ has: page.getByRole('heading', { name: who, exact: true }) })
 const runtimes = (page: Page) => page.evaluate(() => Object.keys((document.querySelector('workspace-dock') as any).host.data().runtimes).sort())
 
 async function start(page: Page) {
@@ -64,8 +64,12 @@ test('todo and chat import side by side: no runtime clash', async ({ page }) => 
   await open(page, '/examples/chat/nano.json')
   const names = await runtimes(page)
   expect(names).toEqual(expect.arrayContaining(['example.chat.backend', 'example.chat.room', 'example.todo.backend', 'example.todo.frontend']))
-  // the second file's slots replace the panels (the workspace's own rule); todos is still there, from the explorer
-  await expect(dock(page).locator('chat-room')).toHaveCount(2)
+  // Main shows a pod now (todo's), so the second file's Main is a page beside it, workspace-2 (the workspace's own rule)
+  const chat = page.locator('workspace-dock#ws_workspace-2')
+  await page.goto('/#/workspace-2')
+  await expect(chat.locator('chat-room')).toHaveCount(2)
+  // todos is still on Main, from the explorer
+  await page.goto('/#/workspace')
   const node = dock(page).locator('nano-explorer').getByText('todos', { exact: true })   // the dock's Systems panel
   await expect(node).toHaveCount(1)
   await node.click()   // selects: its details, with Open view
@@ -75,8 +79,9 @@ test('todo and chat import side by side: no runtime clash', async ({ page }) => 
   await list.getByRole('textbox', { name: 'New todo' }).fill('eggs')
   await list.getByRole('button', { name: 'Add' }).click()
   await expect(list.locator('li')).toHaveText([/eggs/])
-  await say(room(page, 'alice'), 'still here')
-  await expect(room(page, 'bob').locator('li')).toHaveText([/alice.*still here/])
+  await page.goto('/#/workspace-2')
+  await say(room(page, 'alice', chat), 'still here')
+  await expect(room(page, 'bob', chat).locator('li')).toHaveText([/alice.*still here/])
 })
 
 test('auth: with a virtual authenticator, Register then Passkey; the log shows ok', async ({ page }) => {

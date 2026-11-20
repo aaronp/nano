@@ -6,7 +6,8 @@
  * slot, the dock's own write; `remove` drops a slot as a change made elsewhere (its panel goes).
  * `podPanel(el, slot, h, pods)` shows slot `slot` in `el`: its pod's chosen view (`nano-sandboxed` for a non-host pod),
  * made again when its view or runtime changes, and "N matched" under it when a selector matched several; why it failed
- * to open (tried again on a later apply while its page shows); or "not found" with a Remove button, never deploying or starting it.
+ * to open (tried again on a later apply while its page shows); or "<slot>: not found" with a Remove button (focus
+ * then goes to the dock's area), never deploying or starting it. The notes are `role="status"`.
  *
  *   dock.pods = pagePods(platform, 'workspace', quiet); dock.pods.open()
  *   const stop = podPanel(container.element, 'any', host, dock.pods)
@@ -75,6 +76,8 @@ export function pagePods(platform: Instance, id: string, quiet: (f: () => void) 
 }
 
 const note = (className: string, text: string) => Object.assign(document.createElement('p'), { className, textContent: text })
+/** A note announced as it changes (`role="status"`). */
+const said = (className: string, text: string) => { const p = note(className, text); p.setAttribute('role', 'status'); return p }
 
 /** Shows slot `slot` of `pods` in `el` (see above); returns what stops it listening. */
 export function podPanel(el: HTMLElement, slot: string, h: Host, pods: PagePods): () => void {
@@ -86,8 +89,14 @@ export function podPanel(el: HTMLElement, slot: string, h: Host, pods: PagePods)
     if ('kind' in o) {
       shown = ''
       const remove = Object.assign(document.createElement('button'), { type: 'button', className: 'dock-remove', textContent: 'Remove' })
-      remove.addEventListener('click', () => pods.remove(slot))
-      return el.replaceChildren(note('dock-fail', 'not found'), remove)
+      remove.setAttribute('aria-label', `Remove slot ${slot}`)
+      remove.addEventListener('click', () => {
+        // its panel goes: focus to the dock's area, not lost to the body (once the dock, built again, is back)
+        const dock = el.closest('workspace-dock')
+        pods.remove(slot)
+        setTimeout(() => { const area = dock?.querySelector<HTMLElement>(':scope > .dock-area'); if (area) { area.tabIndex = -1; area.focus() } })
+      })
+      return el.replaceChildren(said('dock-fail', `${slot}: not found`), remove)
     }
     const { runtime: { id: runtime }, pod } = o.pod
     if (!h.data().pods[pod]) return   // gone since it opened: the Platform's re-resolution opens the page again
@@ -96,7 +105,7 @@ export function podPanel(el: HTMLElement, slot: string, h: Host, pods: PagePods)
     if (key === shown) return
     shown = key
     const view = Object.assign(document.createElement(tag), { target: { app: h.app, registry: h.registry, runtime, pod } satisfies ViewTarget })
-    el.replaceChildren(view, ...(matched > 1 ? [note('dock-matched', `${matched} matched`)] : []))
+    el.replaceChildren(view, ...(matched > 1 ? [said('dock-matched', `${matched} matched`)] : []))
   }
   render()
   const off = [pods.listen(render), h.app.listen(e => {

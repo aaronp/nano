@@ -5,7 +5,8 @@
  * `-2`, `-3`…; the incoming Main (`workspace`) fills Main when Main shows only views (after New, say), else it is a
  * page beside it. `importing` wraps the host's
  * `importUrl`: the file's pages (a bundle's, or a nano.json's old layout migrated), edited as the Import dialog chose
- * (`chosen.pages`), are applied with the app; a plain nano.json's Main filling Main keeps Main's title and icon.
+ * (`chosen.pages`), are applied with the app; a plain nano.json's Main filling Main keeps Main's title, icon and view
+ * slots (and its layout, when the file's Main has none).
  *
  *   applyPages(platform, withImported(platform.document().doc, incoming))   // the workspace's rules checked first
  *   host.importUrl = importing(host.importUrl.bind(host), platform)
@@ -47,9 +48,13 @@ export const importing = (importUrl: Host['importUrl'], platform: ReturnType<typ
     const read = done.ok && file !== undefined ? opened(file) : undefined
     if (!read?.ok) return done
     const was = platform.document().doc, next = withImported(was, chosen?.pages ? chosen.pages(read.value.pages) : read.value.pages)
-    const legacy = !(typeof file === 'object' && file !== null && 'platform' in file), main = next.pages[MAIN], kept = was.pages[MAIN]?.meta as Record<string, unknown> | undefined
-    // a plain nano.json's Main has no title of its own ("Workspace"): filling Main, it keeps Main's title and icon
-    if (legacy && main && kept && main !== was.pages[MAIN]) next.pages[MAIN] = { ...main, meta: { ...(main.meta as object), title: kept['title'], icon: kept['icon'] } }
+    const legacy = !(typeof file === 'object' && file !== null && 'platform' in file), main = next.pages[MAIN], prev = was.pages[MAIN]
+    // a plain nano.json's Main has no title of its own ("Workspace"): filling Main, it keeps Main's title, icon, view slots (the explorer) and, without its own, layout
+    if (legacy && main && prev && main !== prev) {
+      const views = Object.fromEntries(Object.entries(prev.slots).filter(([, s]) => s.kind === 'view')), m = (prev.meta ?? {}) as Record<string, unknown>
+      next.pages[MAIN] = { ...main, slots: { ...views, ...main.slots }, ...(main.layout === undefined && prev.layout !== undefined && { layout: prev.layout }),
+        meta: { ...(main.meta as object), title: m['title'], icon: m['icon'] } }
+    }
     const r = applyPages(platform, next)
     if (!r.ok) showStatus(document, r.fail.reason)
     return done
