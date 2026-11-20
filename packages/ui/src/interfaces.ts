@@ -24,6 +24,12 @@ const Addition = Schema.define(Type.Object({
   onConflict: Type.Optional(Type.Union([Type.Literal('error'), Type.Literal('overwrite')])),
 }), 'Addition')
 const Removal = Schema.define(Type.Object({ runtimes: Type.Array(Type.String()) }), 'Removal')
+const Box = Type.Object({ x: Type.Number(), y: Type.Number(), w: Type.Number(), h: Type.Number() })
+const Slot = Type.Union([Type.Object({ id: Type.String(), runtime: Type.String(), pod: Type.String() }), Type.Object({ id: Type.String(), view: Type.String() })])
+const PageT = Type.Object({ id: Type.String(), title: Type.String(), icon: Type.Optional(Type.String()), slots: Type.Array(Slot), geometry: Type.Optional(Type.Record(Type.String(), Box)) })
+const Pages = Schema.define(Type.Array(PageT), 'Pages')
+const PageAt = Schema.define(Type.Object({ page: PageT, index: Type.Optional(Type.Integer({ minimum: 0 })) }), 'PageAt')
+const PageId = Schema.define(Type.String(), 'PageId')
 
 /** Each returns its input, so its result can be piped: `submit` when the user submits, `change` on every edit. */
 export const Input = ns.interface('Input', { submit: Op.action(Any, Any), change: Op.action(Any, Any) })
@@ -44,6 +50,10 @@ export const HostUI = ns.interface('HostUI', {
 /** What the host offers a pod to change the deployment: `deploy` adds pods and runtimes (an existing name is
  * `invalid-input`, or with `onConflict: 'overwrite'` replaced), `undeploy` removes runtimes and the pods placed nowhere else. The host's deployment policy decides. */
 export const HostDeploy = ns.interface('HostDeploy', { deploy: Op.action(Addition, Nothing), undeploy: Op.action(Removal, Nothing) })
+/** The pages of the layout: `pages` lists them, `setPage` adds or replaces one (by id, at `index` if given), `removePage` drops one, `open` shows one. */
+export const HostPages = ns.interface('HostPages', {
+  pages: Op.action(Nothing, Pages), setPage: Op.action(PageAt, Nothing), removePage: Op.action(PageId, Nothing), open: Op.action(PageId, Nothing),
+})
 /** Time and timers: `after` starts a timer and returns its id, `fired` is published when it is due, at the clock's time. */
 export const Clock = ns.interface('Clock', {
   now: Op.action(Nothing, Num), after: Op.action(After, TimerId), cancel: Op.action(TimerId, Nothing), fired: Op.event(Fired),

@@ -39,7 +39,7 @@ export function dockPlacements(screen: string, root: Item | null | undefined): P
 type Root = Parameters<typeof dockPlacements>[1]
 
 /** A slot per pod panel whose pod is placed (`runtimeOf` says where), boxed by the dock's rows, columns and sizes. */
-export function layoutFromDock(root: Root, runtimeOf: (pod: string) => string | undefined): Required<LayoutData> {
+export function layoutFromDock(root: Root, runtimeOf: (pod: string) => string | undefined): Required<Pick<LayoutData, 'slots' | 'geometry'>> {
   const slots: LayoutSlot[] = [], geometry: Required<LayoutData>['geometry'] = {}
   for (const p of dockPlacements('', root)) {
     const runtime = runtimeOf(p.instance)
