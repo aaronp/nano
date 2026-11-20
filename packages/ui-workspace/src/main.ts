@@ -73,7 +73,8 @@ if (host && platform) {
     new: async () => {
       const d = h.data(), r = await h.apply({ ...d, pods: Object.fromEntries(HOST_PODS.map(p => [p, d.pods[p]!])), runtimes: { main: { pods: [...HOST_PODS], subscriptions: [] } }, tags: {}, views: {}, layout: undefined });
       if (!r.ok) return;
-      toMain(m => { const { icon, order } = metaOf(m); return withMeta({ ...(m.title !== undefined && { title: m.title }), slots: {}, ...(m.meta !== undefined && { meta: m.meta }) }, { icon, order }); });   // other clients' meta kept
+      toMain(m => { const { icon, order } = metaOf(m), { workspace: _, ...layout } = (m.layout ?? {}) as Record<string, unknown>;   // other clients' layout and meta kept
+        return withMeta({ ...(m.title !== undefined && { title: m.title }), slots: {}, ...(Object.keys(layout).length && { layout }), ...(m.meta !== undefined && { meta: m.meta }) }, { icon, order }); });
       if (menu) menu.dirty = false;
     },
   };

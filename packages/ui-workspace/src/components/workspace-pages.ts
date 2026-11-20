@@ -10,7 +10,7 @@
  */
 import type { Page, Platform, UIDeployment } from '@pritzlaff/nano-platform';
 import { ICONS } from '../lib/icons.ts';
-import { applyPages, metaOf, ordered, routeOf, slugPath, withMeta, MAIN } from '../lib/pages.ts';
+import { applyPages, FIXED, metaOf, ordered, routeOf, slugPath, withMeta, MAIN } from '../lib/pages.ts';
 import { showStatus } from '../lib/status.ts';
 import { keepDocks } from '../dock/page-docks.ts';
 import { navEdit } from './nav-edit.ts';
@@ -78,7 +78,8 @@ export function bootWorkspacePages(doc: Document, platform: ReturnType<typeof Pl
   doc.querySelector('[slot="title"]')?.append(button(doc, 'newWorkspace', 'New workspace', '+'), button(doc, 'editNav', 'Edit workspaces', '✎'));
   doc.querySelector('[data-edit-nav]')?.setAttribute('aria-pressed', 'false');
   const rows = () => [...doc.querySelectorAll<HTMLElement>('[data-saved]')];
-  const taken = () => [...doc.querySelectorAll('app-route')].map((r) => r.getAttribute('path') ?? '');
+  /** Routes and ids a new page's id avoids: every route, every page's id (one on a fixed route is at /p/<id>), every fixed route. */
+  const taken = () => [...[...doc.querySelectorAll('app-route')].map((r) => r.getAttribute('path') ?? ''), ...[...Object.keys(platform.document().doc.pages), ...FIXED].map((id) => `/${id}`)];
 
   const apply = (next: UIDeployment) => { const r = applyPages(platform, next); if (!r.ok) showStatus(doc, r.fail.reason); return r.ok; };
   /** Makes the nav, routes and docks what the Platform holds: new pages mounted, gone ones unmounted, titles and icons relabelled, order kept. */

@@ -27,7 +27,7 @@ const doc = () => JSON.parse(JSON.stringify(platform.document().doc)) as { pages
 const page = (id: string) => doc().pages[id]
 /** A page as the nav shows it: its id, title and icon. */
 const row = (id: string) => { const p = page(id)!, m = p.meta.workspace; return { id, title: p.title, ...(m.icon !== undefined && { icon: m.icon }) } }
-const ids = () => Object.keys(doc().pages).sort((a, b) => a === 'workspace' ? -1 : b === 'workspace' ? 1 : (page(a)!.meta.workspace.order as number) - (page(b)!.meta.workspace.order as number))
+const ids = () => Object.keys(doc().pages).sort((a, b) => a === 'workspace' ? -1 : b === 'workspace' ? 1 : ((page(a)!.meta?.workspace?.order ?? 1e9) as number) - ((page(b)!.meta?.workspace?.order ?? 1e9) as number))
 const routes = () => [...document.querySelectorAll('app-route')].map(r => r.getAttribute('path'))
 const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector<T>(s)!
 const input = () => $<HTMLInputElement>('input[data-rename]')
@@ -213,6 +213,19 @@ test('Save as workspace copies the page into "<title> copy" (same slots, its arr
   expect(location.hash).toBe('#/home-copy')
   expect(input().closest('[data-saved]')!.getAttribute('data-saved')).toBe('home-copy')
   type('', 'Escape')
+})
+
+test('a new page\'s id avoids every page\'s id, not only mounted routes: another client\'s `inbox` (at /p/inbox) and a page whose route is not mounted stay as they are', () => {
+  const inbox = { title: 'Inbox', slots: { n: { kind: 'view' as const, view: 'notes' } }, meta: { other: 1 } }
+  must(platform.apply({ pages: { ...platform.document().doc.pages, inbox } }))
+  expect(routes()).toContain('/p/inbox')
+  const copy = page('home-copy')
+  $('app-route[path="/home-copy"]').remove()   // its route not mounted (yet)
+  $('#workspace').dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true }))
+  type('', 'Escape')
+  expect(location.hash).toBe('#/home-copy-2')
+  expect(page('home-copy')).toEqual(copy)
+  expect(page('inbox') as unknown).toEqual(inbox)
 })
 
 test('a page id holding `"` mounts and unmounts: its selectors are escaped', () => {

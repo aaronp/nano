@@ -8,7 +8,7 @@ test('a deep link to another page: Save writes the bundle, New empties Main and 
   document.body.innerHTML = html.slice(html.indexOf('>', html.indexOf('<body')) + 1, html.lastIndexOf('<script type="module">'))
   location.hash = '#/two'
   const at = URL.parse('./bundle/nano-ui.js', location.href)!.href, layout = { root: { type: 'row', content: [] }, 'window-style': 'focus' }
-  const pages = { pages: { workspace: { title: 'Main', slots: { notes: { kind: 'view', view: 'notes' } }, layout: { workspace: layout }, meta: { workspace: { order: 0 } } }, two: { title: 'Two', slots: {}, meta: { workspace: { order: 1 } } } } }
+  const pages = { pages: { workspace: { title: 'Main', slots: { notes: { kind: 'view', view: 'notes' } }, layout: { workspace: layout, react: { columns: 3 } }, meta: { workspace: { order: 0 } } }, two: { title: 'Two', slots: {}, meta: { workspace: { order: 1 } } } } }
   const app = { pods: {}, runtimes: {}, modules: { 'nano.ui': at }, views: {} }
   localStorage.setItem('nano-workspace.document', JSON.stringify(app)); localStorage.setItem('nano-workspace.platform', JSON.stringify(pages))
   // happy-dom fetches no blob: URL (a browser does); the downloads are kept
@@ -29,7 +29,7 @@ test('a deep link to another page: Save writes the bundle, New empties Main and 
   expect(file.platform.pages.workspace).toEqual(pages.pages.workspace)
   document.dispatchEvent(new CustomEvent('file:new'))
   await tick(50)
-  expect(JSON.parse(JSON.stringify(platform!.document().doc.pages['workspace']))).toEqual({ title: 'Main', slots: {}, meta: { workspace: { order: 0 } } })
+  expect(JSON.parse(JSON.stringify(platform!.document().doc.pages['workspace']))).toEqual({ title: 'Main', slots: {}, layout: { react: { columns: 3 } }, meta: { workspace: { order: 0 } } })   // other clients' layout kept
   expect(errors).toEqual([])
   expect(document.querySelector('workspace-dock#workspace > .dock-area')).toBeNull()
 })

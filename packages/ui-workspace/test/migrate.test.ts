@@ -3,7 +3,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
 import { Coord, type AppDeployment } from '@pritzlaff/nano-core'
-import { legacyPages, oldPages, opened, toPlatform, withOldDocks } from '../src/migrate.ts'
+import { keyed, legacyPages, oldPages, opened, toPlatform, withOldDocks } from '../src/migrate.ts'
 
 const memory = () => {
   const m = new Map<string, string>()
@@ -74,4 +74,15 @@ test('opened: a bundle as its parts; a plain nano.json without its old pages, mi
   expect(bare.ok && strs(bare.value)).toEqual({ app: d, pages: { pages: {} } })
   for (const bad of [null, 3, 'x']) expect(opened(bad)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   expect(opened({ app: d, platform: { pages: { p: { slots: { s: { kind: 'pod', pod: 'no' } } } } } })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+})
+
+test('keyed: an old-shape bundle opened is moved; an unknown layout key stays; meta.title stays beside a set title; a keyed page as it is', () => {
+  const old = { slots: {}, layout: { root: { type: 'row' }, 'window-style': 'glass', react: { columns: 2 } }, meta: { title: 'Old', icon: 'star', order: 1, other: 3 } }
+  const moved = { title: 'Old', slots: {}, layout: { react: { columns: 2 }, workspace: { root: { type: 'row' }, 'window-style': 'glass' } }, meta: { other: 3, workspace: { icon: 'star', order: 1 } } }
+  const b = opened({ app: d, platform: { pages: { old } } })
+  expect(b.ok && strs(b.value.pages)).toEqual({ pages: { old: moved } })
+  expect(keyed({ slots: {}, meta: { title: 'Meta' }, title: 'Set' })).toEqual({ slots: {}, meta: { title: 'Meta' }, title: 'Set' })
+  const only = { slots: {}, layout: { workspace: { root: null } } }
+  expect(keyed(only)).toBe(only)
+  expect(keyed(moved)).toBe(moved)
 })

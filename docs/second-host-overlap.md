@@ -65,7 +65,8 @@ point are the workspace's. Nothing says which `meta` keys are cross-host. Either
 what a CLI or any UI shows), or host-core documents the shared keys.
 
 **C. The workspace's page rules are not in the data.** *Resolved (ADR-0039): they stay the workspace's; a page
-another client makes on one of its routes is shown at `/p/<id>`, and a missing Main is recreated.* Main (`workspace`) must exist and is first, page ids must not be
+another client makes on one of its routes is shown at `/p/<id>`, and a missing Main is recreated.* Until the workspace has booted once over a stored
+document in the old shape (title in `meta.title`), /react/ shows such a page's id rather than its title. Main (`workspace`) must exist and is first, page ids must not be
 one of the workspace's routes (`FIXED`: `ring`, `desk`, `settings`…), order is `meta.order`. /react/ cannot import them
 (they are in ui-workspace) and does not copy them: a page titled "Ring" made in /react/ gets id `ring`, which the
 workspace's own writes would refuse but its boot will take as-is (a route clash; not tried). /react/ shows pages in

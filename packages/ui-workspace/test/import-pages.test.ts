@@ -23,10 +23,17 @@ test('a taken id with other content is added as -2, -3…, in the file\'s order;
 })
 
 test('the incoming Main fills a Main that shows only views (after New): its slots, layout and meta, first still', () => {
-  const saved = { slots: { c: pod }, layout: { root: 2 }, title: 'Main', meta: { workspace: { order: 0 } } }
-  const out = withImported(doc({ pages: { workspace: { ...main, layout: { root: 1 } }, two: { slots: {}, title: 'Two', meta: { workspace: { order: 1 } } } } }), doc({ pages: { workspace: saved } }))
+  const saved = { slots: { c: pod }, layout: { workspace: { root: 2 } }, title: 'Main', meta: { workspace: { order: 0 } } }
+  const out = withImported(doc({ pages: { workspace: { ...main, layout: { workspace: { root: 1 } } }, two: { slots: {}, title: 'Two', meta: { workspace: { order: 1 } } } } }), doc({ pages: { workspace: saved } }))
   expect(written(out.pages['workspace'])).toEqual(saved)
   expect(Object.keys(out.pages)).toEqual(['workspace', 'two'])
+})
+
+test('an incoming Main filling Main keeps Main\'s other clients\' layout and meta keys; the workspace\'s keys and the slots are the file\'s', () => {
+  const was = { ...main, layout: { workspace: { root: 1 }, react: { columns: 3 } }, meta: { workspace: { order: 0, icon: 'home' }, react: { x: 1 } } }
+  const file = { title: 'Main', slots: { c: pod }, layout: { workspace: { root: 2 }, react: { columns: 9 } }, meta: { workspace: { order: 4, icon: 'star' }, other: 2 } }
+  expect(written(withImported(doc({ pages: { workspace: was } }), doc({ pages: { workspace: file } })).pages['workspace'])).toEqual(
+    { title: 'Main', slots: { c: pod }, layout: { workspace: { root: 2 }, react: { columns: 3 } }, meta: { workspace: { order: 0, icon: 'star' }, react: { x: 1 } } })
 })
 
 test('an incoming page on one of the workspace\'s own routes is taken as clashing: added as -2, the rest of the import kept', () => {
@@ -34,12 +41,12 @@ test('an incoming page on one of the workspace\'s own routes is taken as clashin
   expect(Object.keys(out.pages)).toEqual(['workspace', 'ring-2', 'two'])
 })
 
-test('a plain nano.json\'s Main filling Main keeps Main\'s title, icon, view slots and layout (the file has none)', async () => {
+test('a plain nano.json\'s Main filling Main keeps Main\'s title, icon, view slots, layout (the file has none) and other clients\' keys', async () => {
   const { importing } = await import('../src/import-pages.ts')
   const app = { listen: () => () => {}, deployment: () => ({ pods: {}, runtimes: {} }) } as never
-  const platform = Platform.create(app, {} as never, doc({ pages: { workspace: { slots: { x: view }, layout: { root: 1 }, title: 'Mine', meta: { workspace: { icon: 'star', order: 0 } } } } }))
+  const platform = Platform.create(app, {} as never, doc({ pages: { workspace: { slots: { x: view }, layout: { workspace: { root: 1 }, react: { columns: 3 } }, title: 'Mine', meta: { workspace: { icon: 'star', order: 0 }, react: { x: 1 } } } } }))
   const file = { pods: { clock1: { implementation: 'example.clock/clock' } }, runtimes: { main: { pods: ['clock1'], subscriptions: [] } }, layout: { pages: [{ id: 'workspace', title: 'Workspace', slots: [{ id: 'c', runtime: 'main', pod: 'clock1' }] }] } }
   const url = `data:application/json,${encodeURIComponent(JSON.stringify(file))}`
   expect(await importing(async () => ({ ok: true, value: undefined }), platform)(url)).toMatchObject({ ok: true })
-  expect(written(platform.document().doc)).toEqual({ pages: { workspace: { slots: { x: view, c: pod }, layout: { root: 1 }, title: 'Mine', meta: { workspace: { icon: 'star', order: 0 } } } } })
+  expect(written(platform.document().doc)).toEqual({ pages: { workspace: { slots: { x: view, c: pod }, layout: { workspace: { root: 1 }, react: { columns: 3 } }, title: 'Mine', meta: { workspace: { icon: 'star', order: 0 }, react: { x: 1 } } } } })
 })

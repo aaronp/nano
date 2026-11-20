@@ -22,6 +22,18 @@ const order = (p: Page) => { const o = metaOf(p).order; return typeof o === 'num
 /** A page as compared: without its place in the order. */
 const body = (p: Page) => { const { order: _, ...m } = metaOf(p); return JSON.stringify(withMeta(p, m)) }
 
+const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+/** `mine`'s keys of other clients, with `from`'s `workspace` key (if any); undefined if that leaves none. */
+const ours = (mine: unknown, from: unknown) => {
+  const { workspace: _, ...o } = obj(mine) ? mine : {}, w = obj(from) && 'workspace' in from ? { ...o, workspace: from['workspace'] } : o
+  return Object.keys(w).length ? w : undefined
+}
+/** `p` filling Main (`was`): its title, slots and the workspace's keys; Main's other clients' `layout` and `meta` keys kept. */
+const filling = (was: Page, p: Page): Page => {
+  const layout = ours(was.layout, p.layout), meta = ours(was.meta, p.meta)
+  return { ...(p.title !== undefined && { title: p.title }), slots: p.slots, ...(layout && { layout }), ...(meta && { meta }) }
+}
+
 /** `current` with `incoming`'s pages, by the workspace's rules. Pure. */
 export function withImported(current: UIDeployment, incoming: UIDeployment): UIDeployment {
   const pages = { ...current.pages }
@@ -32,7 +44,7 @@ export function withImported(current: UIDeployment, incoming: UIDeployment): UID
     const fills = id === MAIN && !!same && Object.values(same.slots).every(s => s.kind === 'view')
     let at = id   // one of the workspace's own routes is taken too
     for (let n = 2; !fills && (pages[at] || FIXED.includes(at)); n++) at = `${id}-${n}`
-    pages[at] = withMeta(p, { ...metaOf(p), order: fills ? order(same!) : ++last })
+    pages[at] = withMeta(fills ? filling(same!, p) : p, { ...metaOf(p), order: fills ? order(same!) : ++last })
   }
   return { pages }
 }
@@ -52,7 +64,8 @@ export const importing = (importUrl: Host['importUrl'], platform: ReturnType<typ
     // a plain nano.json's Main has no title of its own ("Workspace"): filling Main, it keeps Main's title, icon, view slots (the explorer) and, without its own, layout
     if (legacy && main && prev && main !== prev) {
       const views = Object.fromEntries(Object.entries(prev.slots).filter(([, s]) => s.kind === 'view'))
-      next.pages[MAIN] = withMeta({ ...main, ...(prev.title !== undefined && { title: prev.title }), slots: { ...views, ...main.slots }, ...(main.layout === undefined && prev.layout !== undefined && { layout: prev.layout }) },
+      const engine = (p: Page) => (obj(p.layout) ? p.layout['workspace'] : undefined)
+      next.pages[MAIN] = withMeta({ ...main, ...(prev.title !== undefined && { title: prev.title }), slots: { ...views, ...main.slots }, ...(engine(main) === undefined && engine(prev) !== undefined && { layout: { ...(obj(main.layout) && main.layout), workspace: engine(prev) } }) },
         { ...metaOf(main), icon: metaOf(prev).icon })
     }
     const r = applyPages(platform, next)
