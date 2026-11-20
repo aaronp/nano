@@ -1402,3 +1402,66 @@ Platform. Supersedes ADR-0032 and ADR-0033. Slots: `{ kind: 'pod', pod: PodCoord
 SelectorData } | { kind: 'view', view }`; dangling references resolve `missing`; several selector matches show the first;
 Save/Open use a bundle `{ app, platform }`; pods change pages through `HostPlatform { document, apply }` with a
 version check.
+
+---
+id: ADR-0039
+title: A page's layout is keyed by client; its title is shared data
+status: accepted
+date: 2026-11-21
+revisit: 
+tags: platform, pages, clients
+parent: ADR-0038
+decision: keyed
+---
+
+## Goal
+A second host (React) on the same UIDeployment showed that `layout` and `meta` had no rule for who owns what: the
+workspace read every `layout` key as its dock's state (dropping the other host's, and breaking on a page holding only
+it), and both hosts used `meta.title` by habit. The impact is whether several clients can share pages safely.
+
+## Hypothesis
+- We believe: each client reads and writes only its own `layout` key; a page's title is a field of `Page`
+- Will result in: clients sharing pages without knowing each other's internals; every client can show a title
+- Measured by: the React host keeps its columns across a workspace visit; a page titled in one host shows in the other
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| isolation | Clients don't break each other | 5 | One client's data never breaks or vanishes in another. |
+| shared | Shared meaning where every client needs it | 3 | What every client shows is named in the data. |
+| small | Small data model | 3 | Few named fields; the rest opaque. |
+
+## Solution: keyed — layout keyed by client; title on Page
+| criterion | score |
+| --- | --- |
+| isolation | 5 |
+| shared | 5 |
+| small | 4 |
+
+Pros:
+- No client needs another's internals; titles portable
+
+Cons:
+- One more Page field; a one-time move of the workspace's layout under its key
+
+## Solution: free — layout free-form; title stays in meta
+| criterion | score |
+| --- | --- |
+| isolation | 1 |
+| shared | 2 |
+| small | 5 |
+
+Pros:
+- No change
+
+Cons:
+- Each client must guard against every other's data; titles shared only by habit
+
+## Decision
+Keyed. `Page` is `{ title?, slots, layout?, meta? }`; `layout` and `meta` are keyed by client (the workspace's under
+`workspace`, the React host's under `react`). The workspace's page rules (Main present and first, reserved ids) stay
+the workspace's: it remaps a reserved id to another route at boot rather than clashing, and recreates a missing Main.
