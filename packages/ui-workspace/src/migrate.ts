@@ -70,8 +70,9 @@ export function opened(file: unknown): NanoResult<{ app: AppDeployment; pages: U
     const pages = Platform.parse(file.platform)
     return pages.ok ? success({ app: stripped(file.app as AppDeployment), pages: pages.value }) : failure('invalid-input', `the file's pages: ${pages.fail.reason}`)
   }
+  if (!obj(file)) return failure('invalid-input', 'not a nano.json: not an object')
   const d = file as AppDeployment
-  return success({ app: stripped(d), pages: obj(file) && obj(d.pods) ? toPlatform(legacyPages(d.layout, d), d) : { pages: {} } })
+  return success({ app: stripped(d), pages: obj(d.pods) ? toPlatform(legacyPages(d.layout, d), d) : { pages: {} } })
 }
 
 const read = (from: Storage, k: string): unknown => { try { return JSON.parse(from.getItem(k) ?? 'null') } catch { return null } }

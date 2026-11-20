@@ -1,7 +1,8 @@
 /**
  * `workspace.host/platform`: this host's HostPlatform over its Platform (boot-host.ts), the pod `platform` beside `ui` and
  * `deploy` in `main`, never saved. `document` gives the pages, written, at their version, unasked. `apply({ next, base })`
- * is refused when `base` is stale ("the pages changed since") or `next` is malformed, else asks `approve` (HostUI's
+ * is refused when `base` is stale ("the pages changed since"), `next` is malformed, drops Main (`workspace`) or adds a
+ * page on one of the workspace's own routes (`FIXED`), else asks `approve` (HostUI's
  * through the app, timed by hostProvider) with a summary of the pages and slots added or removed; anything but a yes is
  * `denied`, a yes applies `next` at `base`. The workspace's own edits apply unasked. Without a Platform (a replayed
  * app's provider) both are not-found.
@@ -11,6 +12,7 @@
  */
 import { Coord, Implementation, failure, provide, success, type NanoResult, type Pod } from '@pritzlaff/nano-core'
 import { HostPlatform, Platform, type UIDeployment } from '@pritzlaff/nano-platform'
+import { FIXED } from './lib/pages.ts'
 
 type Instance = ReturnType<typeof Platform.create>
 const PLATFORM = Coord.namespace('workspace.host').implementationId('platform')
@@ -41,6 +43,9 @@ export function hostPlatform(platform: () => Instance | undefined, approve: (tex
         if (base !== at.version) return failure('invalid-input', 'the pages changed since')
         const read = Platform.parse(next)
         if (!read.ok) return read
+        if (!read.value.pages['workspace']) return failure('invalid-input', 'Main (the page workspace) is not removed')
+        const fixed = Object.keys(read.value.pages).find(id => FIXED.includes(id) && !(id in at.doc.pages))
+        if (fixed) return failure('invalid-input', `${fixed} is the workspace's own route, not a page`)
         const text = summary(at.doc, read.value)
         if (!await approve(text).catch(() => false)) return failure('denied', `not approved: ${text}`)
         const r = p.apply(read.value, { base })

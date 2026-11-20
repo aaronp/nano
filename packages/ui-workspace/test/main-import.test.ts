@@ -1,5 +1,5 @@
 // A plain nano.json from before pages (neutral `slots`, no pages) opens: its legacy layout is migrated into the pages,
-// its Main filling a Main that shows only views (Review Focus 5). And the wiring view's open-panel on an unbuilt Main
+// its Main filling a Main that shows only views (Review Focus 5) and keeping Main's title and icon. And the wiring view's open-panel on an unbuilt Main
 // adds a pod slot to Main's page instead of opening a panel.
 import { expect, test } from 'bun:test'
 import { tick } from './host-deploy-setup.ts'
@@ -27,7 +27,7 @@ test('a legacy slots-only import fills a views-only Main with its pods; open-pan
   document.dispatchEvent(new CustomEvent('file:example', { detail: { name: 'legacy' } }))
   for (let i = 0; i < 200 && !platform!.document().doc.pages['workspace']!.slots['b']; i++) await tick(5)
   expect(host!.data().layout).toBeUndefined()   // the legacy layout is not kept
-  expect(now().pages.workspace).toEqual({ slots: { a: { kind: 'pod', pod: 'nano.ui/input@main/a' }, b: { kind: 'pod', pod: 'nano.ui/input@main/b' } }, meta: { title: 'Workspace', order: 0 } })
+  expect(now().pages.workspace).toEqual({ slots: { a: { kind: 'pod', pod: 'nano.ui/input@main/a' }, b: { kind: 'pod', pod: 'nano.ui/input@main/b' } }, meta: { title: 'Main', order: 0 } })   // a plain file's Main keeps Main's title
   expect(Object.keys(now().pages)).toEqual(['workspace', 'two'])   // no "Workspace" page beside it
   // the wiring view's open-panel, Main unbuilt: a slot on Main's page (once), no panel opened
   document.dispatchEvent(new CustomEvent('wires:open-panel', { detail: { kind: 'pod', name: 'spare' } }))

@@ -43,13 +43,17 @@ async function placeOld(host: Host, old: Legacy[]): Promise<void> {
   if (names.length < missing.length) showStatus(document, 'Some panels of your old pages are gone: what they showed is no longer available.')
 }
 
-export async function bootPages(host: Host, storage: Storage, doc: AppDeployment | null, stored: unknown): Promise<NanoResult<UIDeployment>> {
-  if (stored !== null) return Platform.parse(stored)
-  const kept = legacyPages(doc?.layout, host.data()), old = kept.length ? withOldDocks(storage, kept) : oldPages(storage)
-  await placeOld(host, old)
-  const out = toPlatform(old, host.data())
-  out.pages[MAIN] ??= { slots: {}, meta: { title: 'Workspace', order: 0 } }
-  return success(out)
+/** The pages to boot with; `loaded`: whether the stored document loaded (if not, nothing is migrated, and nothing placed). */
+export async function bootPages(host: Host, storage: Storage, doc: AppDeployment | null, stored: unknown, loaded = true): Promise<NanoResult<UIDeployment>> {
+  const read = stored !== null ? Platform.parse(stored) : success<UIDeployment>({ pages: {} })
+  if (!read.ok) return read
+  if (stored === null && loaded) {
+    const kept = legacyPages(doc?.layout, host.data()), old = kept.length ? withOldDocks(storage, kept) : oldPages(storage)
+    await placeOld(host, old)
+    read.value.pages = toPlatform(old, host.data()).pages
+  }
+  read.value.pages[MAIN] ??= { slots: {}, meta: { title: 'Workspace', order: 0 } }   // a document saved without Main still has it
+  return read
 }
 
 type Store = ReturnType<typeof pageStore>
@@ -71,13 +75,18 @@ function asStore(platform: Instance): Page[] {
 }
 
 export function mirror(platform: Instance, store: Store, data: () => AppDeployment): void {
-  let busy = false, held = new Set<string>()
+  let busy = false, held = new Set<string>(), heard = 0, mine = 0
   const quiet = (f: () => void) => { busy = true; try { f() } finally { busy = false; held = new Set(store.list().map(p => p.id)) } }
-  const reseed = () => quiet(() => {
-    const want = asStore(platform)
-    for (const p of store.list()) if (!want.some(w => w.id === p.id)) store.remove(p.id)
-    want.forEach((p, i) => { if (JSON.stringify(store.get(p.id)) !== JSON.stringify(p) || store.list()[i]?.id !== p.id) store.set(p, i) })
-  })
+  // Each write of its own tells the store's listeners once; a listener's write while it reseeds is one more, pushed after.
+  const reseed = () => {
+    heard = mine = 0
+    quiet(() => {
+      const want = asStore(platform), own = (r: { ok: boolean }) => { if (r.ok) mine++ }
+      for (const p of store.list()) if (!want.some(w => w.id === p.id)) own(store.remove(p.id))
+      want.forEach((p, i) => { if (JSON.stringify(store.get(p.id)) !== JSON.stringify(p) || store.list()[i]?.id !== p.id) own(store.set(p, i)) })
+    })
+    if (heard > mine) push()
+  }
   const push = () => quiet(() => {
     const cur = platform.document().doc, next = toPlatform(store.list(), data())
     for (const [id, p] of Object.entries(next.pages)) {
@@ -93,6 +102,6 @@ export function mirror(platform: Instance, store: Store, data: () => AppDeployme
   })
   reseed()
   platform.listen(() => { if (!busy) reseed() })
-  store.subscribe(() => { if (!busy) push() })
+  store.subscribe(() => { if (busy) heard++; else push() })
 }
 

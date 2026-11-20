@@ -72,5 +72,6 @@ test('opened: a bundle as its parts; a plain nano.json without its old pages, mi
   expect(p.ok && strs(p.value)).toEqual({ app: { ...d, layout: { desk: 1 } }, pages: { pages: { workspace: { slots: { c: { kind: 'pod', pod: 'example.clock/clock@main/clock1' } }, meta: { title: 'Workspace', order: 0 } } } } })
   const bare = opened({ ...d, layout: { pages: [] } })
   expect(bare.ok && strs(bare.value)).toEqual({ app: d, pages: { pages: {} } })
+  for (const bad of [null, 3, 'x']) expect(opened(bad)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   expect(opened({ app: d, platform: { pages: { p: { slots: { s: { kind: 'pod', pod: 'no' } } } } } })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
 })

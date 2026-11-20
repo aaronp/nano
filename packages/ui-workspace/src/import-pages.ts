@@ -4,7 +4,7 @@
  * no-op; a taken id with other content added under the next free `-2`, `-3`…; the incoming Main (`workspace`) fills
  * Main when Main shows only views (after New, say), else it is a page beside it. `importing` wraps the host's
  * `importUrl`: the file's pages (a bundle's, or a nano.json's old layout migrated), edited as the Import dialog chose
- * (`chosen.pages`), are applied with the app.
+ * (`chosen.pages`), are applied with the app; a plain nano.json's Main filling Main keeps Main's title and icon.
  *
  *   platform.apply(withImported(platform.document().doc, incoming))
  *   host.importUrl = importing(host.importUrl.bind(host), platform)
@@ -45,7 +45,11 @@ export const importing = (importUrl: Host['importUrl'], platform: ReturnType<typ
     const done = await importUrl(url, chosen)
     const read = done.ok && file !== undefined ? opened(file) : undefined
     if (!read?.ok) return done
-    const r = platform.apply(withImported(platform.document().doc, chosen?.pages ? chosen.pages(read.value.pages) : read.value.pages))
+    const was = platform.document().doc, next = withImported(was, chosen?.pages ? chosen.pages(read.value.pages) : read.value.pages)
+    const legacy = !(typeof file === 'object' && file !== null && 'platform' in file), main = next.pages[MAIN], kept = was.pages[MAIN]?.meta as Record<string, unknown> | undefined
+    // a plain nano.json's Main has no title of its own ("Workspace"): filling Main, it keeps Main's title and icon
+    if (legacy && main && kept && main !== was.pages[MAIN]) next.pages[MAIN] = { ...main, meta: { ...(main.meta as object), title: kept['title'], icon: kept['icon'] } }
+    const r = platform.apply(next)
     if (!r.ok) showStatus(document, r.fail.reason)
     return done
   }

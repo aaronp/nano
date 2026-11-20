@@ -49,6 +49,25 @@ test('apply with a stale base is refused, unasked; with the current base it is a
   await app.close()
 })
 
+test('removing Main or adding a page on one of the workspace\'s own routes is refused, unasked', async () => {
+  const { asked, app, platform, pod } = await podApp(async () => true)
+  expect(await pod.apply({ next: { pages: { other: { slots: {} } } }, base: 0 })).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'Main (the page workspace) is not removed' } })
+  for (const id of ['ring', 'settings', 'inbox'])
+    expect(await pod.apply({ next: { pages: { workspace: { slots: {} }, [id]: { slots: {} } } }, base: 0 })).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: `${id} is the workspace's own route, not a page` } })
+  expect(asked).toEqual([])
+  expect(Object.keys(platform.document().doc.pages)).toEqual(['workspace'])
+  await app.close()
+})
+
+test('the pages changing while the approval waits: the yes is refused, as stale', async () => {
+  let platform: ReturnType<typeof Platform.create> | undefined
+  const { app, platform: p, pod } = await podApp(async () => { platform!.apply({ pages: { ...platform!.document().doc.pages, mine: { slots: {} } } }); return true })
+  platform = p
+  expect(await pod.apply({ next: { pages: { workspace: { slots: {} }, theirs: { slots: {} } } }, base: 0 })).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'the pages changed since' } })
+  expect(Object.keys(p.document().doc.pages)).toEqual(['workspace', 'mine'])
+  await app.close()
+})
+
 test('through hostProvider, the ask is the ui pod\'s dialog, and no answer within 20 s is a no', async () => {
   const registry = Registry.create()
   let app: Application | undefined, platform: ReturnType<typeof Platform.create> | undefined
@@ -58,13 +77,13 @@ test('through hostProvider, the ask is the ui pod\'s dialog, and no answer withi
   platform = Platform.create(app, registry)
   jest.useFakeTimers()
   try {
-    const r = (app.call('main', 'platform') as unknown as PodApi).apply({ next: { pages: { trading: { slots: {} } } }, base: 0 })
+    const r = (app.call('main', 'platform') as unknown as PodApi).apply({ next: { pages: { workspace: { slots: {} }, trading: { slots: {} } } }, base: 0 })
     for (let i = 0; i < 50 && !document.querySelector('dialog'); i++) { await Promise.resolve(); jest.advanceTimersByTime(1) }
     expect(document.querySelector('dialog')?.textContent).toContain('Add page trading')
     jest.advanceTimersByTime(20_000)
     expect(await r).toMatchObject({ ok: false, fail: { type: 'denied' } })
   } finally { jest.useRealTimers() }
-  expect(platform.document().doc.pages).toEqual({})
+  expect(platform.document().doc.pages).toEqual({})   // created empty; nothing applied
   document.querySelector('dialog')?.remove()
   await app.close()
 })

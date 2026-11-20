@@ -21,7 +21,7 @@ export const slugPath = (title: string, taken: readonly string[]): string => {
 type Placed = (runtime: string, pod: string) => boolean
 const MAIN = 'workspace'
 /** The workspace's own routes: never a page's id. */
-const FIXED = ['ring', 'desk', 'settings', 'systems', 'messages', 'components', 'themes', 'inbox']
+export const FIXED = ['ring', 'desk', 'settings', 'systems', 'messages', 'components', 'themes', 'inbox']
 const isPod = (s: Page['slots'][number]): s is LayoutSlot => 'pod' in s
 
 export function pageStore(initial: Page[], placed: Placed) {
