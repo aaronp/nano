@@ -1,4 +1,5 @@
-/** Mounts the saved workspace pages, before <app-shell> reads its routes, and handles Duplicate, Edit, + and Save as. */
+/** Mounts the store's pages, before <app-shell> reads its routes, and handles + and Save as. */
+import { pages } from './boot-host.ts';
 import { bootWorkspacePages } from './components/workspace-pages.ts';
 
-bootWorkspacePages(document);
+bootWorkspacePages(document, pages);

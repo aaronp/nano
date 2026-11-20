@@ -9,6 +9,16 @@
 import { failure, success, type NanoResult } from '@pritzlaff/nano-core'
 import { pagesOf, type LayoutSlot, type Page } from '@pritzlaff/nano-ui'
 
+/** A route for a title: `/` + lower-case dashes, `-2`, `-3`… until it is not in `taken`. A page's id is this without the `/`. */
+export const slugPath = (title: string, taken: readonly string[]): string => {
+  const base = '/' + (title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'workspace-page')
+  let path = base
+  for (let n = 2; taken.includes(path); n++) path = `${base}-${n}`
+  return path
+}
+/** Where a page's dock keeps its layout until the page holds it. */
+export const layoutKey = (mainKey: string, path: string) => `${mainKey}.saved.${path}`
+
 type Placed = (runtime: string, pod: string) => boolean
 const MAIN = 'workspace'
 /** The workspace's own routes: never a page's id. */

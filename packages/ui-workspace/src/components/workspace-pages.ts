@@ -1,20 +1,25 @@
 /**
- * Saved workspace pages: each a nav row (a drag handle for edit mode, then its link) and a route holding a dock of
- * Main's widgets, its layout under layoutKey(Main's storage-key, path). Saved ones are mounted at start, before
- * <app-shell> reads its routes. Beside the app's title, + makes an empty page and ✎ toggles the nav's edit
- * mode (nav-edit.ts); the dock's "Save as workspace…" copies a page into "<title> copy". Routes follow titles.
+ * The workspace's pages, shown from the page store (lib/pages.ts): one nav row (a drag handle for edit mode, then its
+ * link), one route and one dock of Main's widgets per page, in store order; Main is the page `workspace` at
+ * /workspace, its row and dock in index.html. The store's changes mount, unmount, relabel and reorder them, whoever
+ * made them (this nav, a pod through HostPages, an import). A page's id is its route and never changes; a rename
+ * changes its title. Each dock still keeps its layout under layoutKey(Main's storage-key, path). Beside the app's
+ * title, + makes an empty page and ✎ toggles the nav's edit mode (nav-edit.ts); the dock's "Save as workspace…"
+ * copies a page into "<title> copy".
  */
-import { ICONS, layoutKey, savedWorkspaces, slugPath, type SavedWorkspace } from '../lib/saved-workspaces.ts';
+import type { Page } from '@pritzlaff/nano-ui';
+import { ICONS } from '../lib/icons.ts';
+import { layoutKey, slugPath, type pageStore } from '../lib/pages.ts';
 import { templateState } from '../lib/layout-templates.ts';
 import { navEdit } from './nav-edit.ts';
 import type { WorkspaceDock } from './workspace-dock.ts';
 import type { Wires } from '../wires/wires.ts';
 
+const MAIN = 'workspace';
 const MAIN_ICON = 'panels';   // Main's icon until one is chosen
 const mainDock = (doc: Document) => doc.querySelector<WorkspaceDock>('workspace-dock#workspace');
 const mainKey = (doc: Document) => mainDock(doc)?.getAttribute('storage-key') ?? 'workspace';
-const idOf = (path: string) => `ws${path.replace(/\//g, '_')}`;   // _ is never in a path: /a/b and /a-b differ
-const pageDock = (doc: Document, path: string) => doc.querySelector<WorkspaceDock>(`app-route[path="${path}"] workspace-dock`);
+const idOf = (id: string) => `ws_${id}`;
 
 const button = (doc: Document, action: string, label: string, text: string) => {
   const b = doc.createElement('button');
@@ -29,36 +34,35 @@ const label = (a: HTMLAnchorElement, title: string, icon: string) => {
   a.dataset.icon = icon; a.title = title;
 };
 
-/** A saved page's nav row: its drag handle (shown in edit mode), then its link. */
-const fill = (doc: Document, row: HTMLElement, ws: SavedWorkspace) => {
-  const a = doc.createElement('a'), handle = button(doc, 'handle', `Move ${ws.title}`, '⠿');
-  a.href = `#${ws.path}`;
-  label(a, ws.title, ws.icon);
+/** A page's nav row: its drag handle (shown in edit mode), then its link. */
+const fill = (doc: Document, row: HTMLElement, p: Page) => {
+  const a = doc.createElement('a'), handle = button(doc, 'handle', `Move ${p.title}`, '⠿');
+  a.href = `#/${p.id}`;
+  label(a, p.title, p.icon ?? 'window');
   handle.draggable = true;
-  row.dataset.saved = ws.path;
+  row.dataset.saved = p.id;
   row.replaceChildren(handle, a);
 };
 
-/** Adds a saved page's nav row (after Main's row, or the last saved one) and its route (before the not-found page). */
-export function mountWorkspace(doc: Document, ws: SavedWorkspace): void {
+/** Adds a page's nav row (after Main's row, or the last saved one) and its route (before the not-found page). */
+export function mountWorkspace(doc: Document, p: Page): void {
   const main = mainDock(doc), mainRoute = main?.closest('app-route');
   if (!main || !mainRoute) return;
   const row = doc.createElement('div');
   row.slot = 'nav'; row.className = 'nav-row';
-  fill(doc, row, ws);
+  fill(doc, row, p);
   const saved = doc.querySelectorAll('.nav-row[data-saved]');
   (saved[saved.length - 1] ?? doc.querySelector('[data-workspaces]'))?.after(row);
 
   const route = doc.createElement('app-route');
-  route.setAttribute('path', ws.path); route.setAttribute('bleed', ''); route.hidden = true;   // app-shell shows it when current
-  const id = idOf(ws.path);
+  route.setAttribute('path', `/${p.id}`); route.setAttribute('bleed', ''); route.hidden = true;   // app-shell shows it when current
   const pane = doc.createElement('div');
   pane.className = 'ws-page';
   const wires = doc.createElement('c-wires') as Wires, dock = doc.createElement('workspace-dock') as WorkspaceDock;
-  // made after start (+, Save as): the page's host, which main.ts gave Main's dock, before they connect
+  // made after start (+, Save as, a pod): the page's host, which main.ts gave Main's dock, before they connect
   if (main.host) { dock.host = main.host; wires.host = main.host; }
-  dock.id = id;
-  dock.setAttribute('storage-key', layoutKey(mainKey(doc), ws.path));
+  dock.id = idOf(p.id);
+  dock.setAttribute('storage-key', layoutKey(mainKey(doc), `/${p.id}`));
   dock.setAttribute('open', '');   // a new page starts empty; a saved layout, if any, wins
   for (const t of main.querySelectorAll(':scope > template[data-widget]')) dock.append(t.cloneNode(true));
   wires.append(dock); pane.append(wires); route.append(pane);
@@ -66,55 +70,58 @@ export function mountWorkspace(doc: Document, ws: SavedWorkspace): void {
   if (fallback) fallback.before(route); else mainRoute.parentElement?.append(route);
 }
 
-/** Mounts the saved pages and Main's title and icon, and handles +, edits in the nav and the dock's "Save as workspace…". */
-export function bootWorkspacePages(doc: Document): void {
-  const store = savedWorkspaces(localStorage);
-  for (const ws of store.list()) mountWorkspace(doc, ws);
-  const mainLink = doc.querySelector<HTMLAnchorElement>('[data-workspaces] > a'), m = store.main();
-  if (mainLink) label(mainLink, m?.title ?? mainLink.textContent?.trim() ?? 'Main', m?.icon ?? MAIN_ICON);
+/** Shows the store's pages, and handles +, edits in the nav and the dock's "Save as workspace…". */
+export function bootWorkspacePages(doc: Document, store: ReturnType<typeof pageStore>): void {
   doc.querySelector('[slot="title"]')?.append(button(doc, 'newWorkspace', 'New workspace', '+'), button(doc, 'editNav', 'Edit workspaces', '✎'));
   doc.querySelector('[data-edit-nav]')?.setAttribute('aria-pressed', 'false');
+  const rows = () => [...doc.querySelectorAll<HTMLElement>('[data-saved]')];
   const taken = () => [...doc.querySelectorAll('app-route')].map((r) => r.getAttribute('path') ?? '');
 
-  /** Moves a saved page's row, route, dock and keys to `ws` (its path may change); a refusal keeps it as it was. */
-  const save = (row: HTMLElement, title: string, icon: string) => {
-    const a = row.querySelector<HTMLAnchorElement>(':scope > a')!, path = row.dataset.saved;
-    if (!path) { if (!store.setMain({ title, icon })) label(a, title, icon); return; }
-    const others = taken().filter((p) => p !== path), cur = store.list().find((w) => w.path === path);
-    const ws = { path: title === cur?.title ? path : slugPath(title, others), title, icon };
-    if (store.update(path, ws, others, mainKey(doc))) return;
-    const dock = pageDock(doc, path);
-    fill(doc, row, ws);
-    if (ws.path === path) return;
-    dock?.closest('app-route')?.setAttribute('path', ws.path);
-    dock?.setAttribute('storage-key', layoutKey(mainKey(doc), ws.path));
-    // the dock's id follows the route
-    if (dock) dock.id = idOf(ws.path);
-    if (location.hash === `#${path}`) location.hash = `#${ws.path}`;
+  /** Makes the nav, routes and docks what the store lists: new pages mounted, gone ones unmounted, titles and icons relabelled, order kept. */
+  const sync = () => {
+    const [main, ...rest] = store.list();
+    for (const row of rows()) if (!rest.some((p) => p.id === row.dataset.saved)) {
+      const id = row.dataset.saved!;
+      row.remove(); doc.querySelector(`app-route[path="/${id}"]`)?.remove();
+      if (location.hash === `#/${id}`) location.hash = `#/${MAIN}`;
+    }
+    let prev = doc.querySelector('[data-workspaces]');
+    for (const p of rest) {
+      let row = rows().find((r) => r.dataset.saved === p.id);
+      if (!row) { mountWorkspace(doc, p); row = rows().find((r) => r.dataset.saved === p.id); }
+      const a = row?.querySelector('a');
+      if (row && a && (a.dataset.icon !== (p.icon ?? 'window') || a.title !== p.title)) fill(doc, row, p);
+      if (row && prev && prev.nextElementSibling !== row) prev.after(row);
+      prev = row ?? prev;
+    }
+    const link = doc.querySelector<HTMLAnchorElement>('[data-workspaces] > a');
+    if (link && main && (link.title !== main.title || link.dataset.icon !== (main.icon ?? MAIN_ICON))) label(link, main.title, main.icon ?? MAIN_ICON);
   };
-  const edit = navEdit(doc, save);
+  store.subscribe(sync);
+  sync();
+  const edit = navEdit(doc, store, (row, title, icon) => {
+    const p = store.get(row.dataset.saved ?? MAIN);
+    if (p) store.set({ ...p, title, icon });
+  });
 
-  /** A new page titled `base` (numbered as its route is), empty or a copy of `from`'s arrangement; then its rename. */
-  const create = (base: string, icon: string, from: WorkspaceDock | null) => {
-    const path = slugPath(base, taken()), n = path.slice(slugPath(base, []).length + 1);
-    const ws = { path, title: n ? `${base} ${n}` : base, icon };
-    if (store.add(ws, taken())) return;
+  /** A new page: `page` under a new id slugged from its title, empty or with `from`'s arrangement; then its rename. */
+  const add = (page: Page, from: WorkspaceDock | null) => {
+    const id = slugPath(page.title, taken()).slice(1);
     if (from) {
-      const { template, ...layout } = from.arrangement(), key = layoutKey(mainKey(doc), path);
+      const { template, ...layout } = from.arrangement(), key = layoutKey(mainKey(doc), `/${id}`);
       try { localStorage.setItem(key, JSON.stringify(layout)); } catch { /* no storage: it starts empty */ }
       templateState(localStorage, key).set(template ?? null);
     }
-    mountWorkspace(doc, ws);
-    location.hash = `#${path}`;
-    edit.rename(doc.querySelector<HTMLElement>(`[data-saved="${path}"]`)!);
+    if (!store.set({ ...page, id }).ok) return;
+    location.hash = `#/${id}`;
+    edit.rename(doc.querySelector<HTMLElement>(`[data-saved="${id}"]`)!);
   };
 
   doc.addEventListener('click', (e) => {
-    if ((e.target as Element | null)?.closest?.('[data-new-workspace]')) create('New workspace', 'window', null);
+    if ((e.target as Element | null)?.closest?.('[data-new-workspace]')) add({ id: '', title: 'New workspace', icon: 'window', slots: [] }, null);
   });
   doc.addEventListener('dock:save-as', (e) => {
-    const dock = e.target as WorkspaceDock, path = dock.closest('app-route')?.getAttribute('path');
-    const a = doc.querySelector<HTMLAnchorElement>(`.nav-row > a[href="#${path}"]`);
-    create(`${a?.querySelector('[data-name]')?.textContent ?? 'Workspace'} copy`, a?.dataset.icon ?? MAIN_ICON, dock);
+    const dock = e.target as WorkspaceDock, src = store.get(dock.closest('app-route')?.getAttribute('path')?.slice(1) ?? '');
+    if (src) add({ ...src, title: `${src.title} copy` }, dock);
   });
 }

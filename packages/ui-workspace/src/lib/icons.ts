@@ -1,6 +1,3 @@
-/** Saved workspaces: a copy of the workspace on its own route, with a title and icon in the nav. Pure; they are the
- * Application's screens, kept in storage by screens.ts. Each one's layout is also kept by its own dock, under its own storage key. */
-
 /** The nav icons to choose from: 24×24 stroke paths, drawn like the nav's other icons. */
 export const ICONS: Record<string, string> = {
   rocket: 'M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.2 2.2 0 0 0-2.9-.1zM12 15l-3-3a22 22 0 0 1 2-3.9A12.9 12.9 0 0 1 22 2c0 2.7-.8 7.5-6 11a22.4 22.4 0 0 1-4 2zM9 12H4s.6-3 2-4c1.6-1.1 5 0 5 0M12 15v5s3-.6 4-2c1.1-1.6 0-5 0-5',
@@ -76,67 +73,4 @@ export const ICONS: Record<string, string> = {
   leaf: 'M11 20A7 7 0 0 1 4 13c0-6 6-9 16-10-1 10-4 16-10 16zM4 21c3-6 7-9 12-11',
   coffee: 'M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM17 9h1a3 3 0 0 1 0 6h-1M8 2v3M12 2v3',
   gift: 'M3 8h18v4H3zM5 12v9h14v-9M12 8v13M12 8S10 3 7.5 4 9 8 12 8zM12 8s2-5 4.5-4S15 8 12 8z',
-};
-
-/** A saved workspace: where it lives and how the nav shows it. */
-export interface SavedWorkspace { readonly path: string; readonly title: string; readonly icon: string }
-
-export const KEY = 'workspace-starter.saved-workspaces';
-export const PATH = /^\/[a-z0-9][a-z0-9-]*(\/[a-z0-9][a-z0-9-]*)*$/;
-
-/** A route for a title: `/` + lower-case dashes, `-2`, `-3`… until it is not in `taken`. */
-export const slugPath = (title: string, taken: readonly string[]): string => {
-  const base = '/' + (title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'workspace-page');
-  let path = base;
-  for (let n = 2; taken.includes(path); n++) path = `${base}-${n}`;
-  return path;
-};
-
-/** Where a saved workspace's dock keeps its layout. */
-export const layoutKey = (mainKey: string, path: string) => `${mainKey}.saved.${path}`;
-/** The suffixes of a dock's other keys under its layout key. */
-const SUFFIXES = ['', '.template', '.window-style'];
-
-/** The saved workspaces in storage: list them, check a new one (a refusal is a sentence), add one, or update one. */
-export const savedWorkspaces = (storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>) => {
-  const list = (): SavedWorkspace[] => {
-    try { const v = JSON.parse(storage.getItem(KEY) ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
-  };
-  /** `own` is a page's current path when it is being edited: it is not taken by itself. */
-  const refusal = (ws: SavedWorkspace, taken: readonly string[], own?: string): string | null => {
-    if (!PATH.test(ws.path)) return 'The route must look like /my-workspace: lower-case letters, digits and dashes after a /.';
-    if (ws.path !== own && (taken.includes(ws.path) || list().some((w) => w.path === ws.path))) return `${ws.path} is already a page.`;
-    if (!ws.title.trim()) return 'Give it a title for the nav.';
-    if (!(ws.icon in ICONS)) return `There is no icon called ${ws.icon}.`;
-    return null;
-  };
-  /** A storage that will not write is a refusal too. */
-  const write = (f: () => void): string | null => { try { f(); return null; } catch (e) { return `Could not save: ${(e as Error).message}`; } };
-  const add = (ws: SavedWorkspace, taken: readonly string[]): string | null =>
-    refusal(ws, taken) ?? write(() => storage.setItem(KEY, JSON.stringify([...list(), ws])));
-  /** Replace the page at `path`; a new route carries its dock's keys (under `mainKey`) with it. */
-  const update = (path: string, ws: SavedWorkspace, taken: readonly string[], mainKey: string): string | null => {
-    return refusal(ws, taken, path) ?? write(() => {
-      if (ws.path !== path) for (const x of SUFFIXES) {
-        const from = layoutKey(mainKey, path) + x, v = storage.getItem(from);
-        if (v !== null) { storage.setItem(layoutKey(mainKey, ws.path) + x, v); storage.removeItem(from); }
-      }
-      storage.setItem(KEY, JSON.stringify(list().map((w) => (w.path === path ? ws : w))));
-    });
-  };
-  /** Move the page at `path` to `index` in the list; false if it is unknown or would not move. */
-  const move = (path: string, index: number): boolean => {
-    const l = list(), from = l.findIndex((w) => w.path === path), to = Math.max(0, Math.min(index, l.length - 1));
-    if (from < 0 || from === to) return false;
-    l.splice(to, 0, ...l.splice(from, 1));
-    return write(() => storage.setItem(KEY, JSON.stringify(l))) === null;
-  };
-  /** Main's own title and icon, once set. */
-  const main = (): { title: string; icon: string } | null => {
-    try { const v = JSON.parse(storage.getItem(`${KEY}.main`) ?? 'null'); return typeof v?.title === 'string' && typeof v.icon === 'string' ? v : null; } catch { return null; }
-  };
-  const setMain = (m: { title: string; icon: string }): string | null =>
-    !m.title.trim() ? 'Give it a title for the nav.' : !(m.icon in ICONS) ? `There is no icon called ${m.icon}.`
-      : write(() => storage.setItem(`${KEY}.main`, JSON.stringify({ title: m.title, icon: m.icon })));
-  return { list, refusal, add, update, move, main, setMain };
 };

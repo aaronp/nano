@@ -2,16 +2,17 @@
  * The nav's edit mode: ✎ beside the app's title toggles [data-editing] on <app-shell>, Esc leaves. A workspace row's
  * name, clicked, becomes an input (Enter or blur keeps, Esc cancels, empty keeps the old); its icon opens a grid of
  * ICONS; a saved row's handle reorders it, by drag or Alt+↑/↓ (announced). `save` keeps a row's new title and icon;
- * the nav follows the saved list's order.
+ * the store's change reorders the nav.
  */
-import { ICONS, savedWorkspaces } from '../lib/saved-workspaces.ts';
+import { ICONS } from '../lib/icons.ts';
+import type { pageStore } from '../lib/pages.ts';
 
 const ROW = '[data-workspaces], [data-saved]';
 const nameOf = (row: Element) => row.querySelector('[data-name]')?.textContent ?? '';
 
-export function navEdit(doc: Document, save: (row: HTMLElement, title: string, icon: string) => void) {
-  const store = savedWorkspaces(localStorage);
+export function navEdit(doc: Document, store: ReturnType<typeof pageStore>, save: (row: HTMLElement, title: string, icon: string) => void) {
   const editing = () => doc.querySelector('app-shell[data-editing]') !== null;
+  store.subscribe(() => controls());   // a page changed from elsewhere is relabelled: its controls come back
   const setEditing = (on: boolean) => {
     doc.querySelector('app-shell')?.toggleAttribute('data-editing', on);
     doc.querySelector('[data-edit-nav]')?.setAttribute('aria-pressed', String(on));
@@ -98,15 +99,9 @@ export function navEdit(doc: Document, save: (row: HTMLElement, title: string, i
   live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite');
   live.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)';
   doc.body.append(live);
-  const index = (path: string) => store.list().findIndex((w) => w.path === path);
-  const arrange = () => {
-    let prev = doc.querySelector('[data-workspaces]');
-    for (const w of store.list()) {
-      const r = doc.querySelector(`[data-saved="${w.path}"]`);
-      if (r && prev && prev.nextElementSibling !== r) prev.after(r);
-      prev = r ?? prev;
-    }
-  };
+  const index = (id: string) => store.list().findIndex((p) => p.id === id);
+  /** Moves a saved page to `to` (the store refuses Main's place; its change reorders the nav). */
+  const move = (id: string, to: number) => { const p = store.get(id); return !!p && to >= 1 && to < store.list().length && store.set(p, to).ok; };
   const savedRow = (t: EventTarget | null) => (t as Element | null)?.closest?.<HTMLElement>('[data-saved]') ?? null;
   doc.addEventListener('keydown', (e) => {
     const t = e.target as Element | null;
@@ -117,8 +112,8 @@ export function navEdit(doc: Document, save: (row: HTMLElement, title: string, i
     if (!handle || !row || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
     e.preventDefault();
     const up = e.key === 'ArrowUp', path = row.dataset.saved!;
-    if (!store.move(path, index(path) + (up ? -1 : 1))) return;
-    arrange(); handle.focus();
+    if (!move(path, index(path) + (up ? -1 : 1))) return;
+    handle.focus();
     live.textContent = '';   // cleared first so a repeat is announced again
     setTimeout(() => { live.textContent = `Moved ${nameOf(row)} ${up ? 'up' : 'down'}`; }, 50);
   });
@@ -142,7 +137,7 @@ export function navEdit(doc: Document, save: (row: HTMLElement, title: string, i
     const row = savedRow(e.target);
     if (!dragged || !row) return;
     e.preventDefault();   // dropping on a link must not navigate
-    if (store.move(dragged, index(row.dataset.saved!))) arrange();
+    move(dragged, index(row.dataset.saved!));
     dragged = ''; clear();
   });
   doc.addEventListener('dragend', () => { dragged = ''; clear(); });

@@ -1,7 +1,7 @@
 // The page store: the run-time truth for pages. Main (`workspace`) first and kept; fixed routes and unplaced pods refused.
 import { expect, spyOn, test } from 'bun:test'
 import type { Page } from '@pritzlaff/nano-ui'
-import { pageStore } from '../src/lib/pages.ts'
+import { pageStore, slugPath } from '../src/lib/pages.ts'
 
 const main: Page = { id: 'workspace', title: 'Workspace', slots: [] }
 const trading: Page = { id: 'trading', title: 'Trading', icon: 'chart', slots: [{ id: 'a', runtime: 'main', pod: 'clock1' }, { id: 'n', view: 'nano-explorer' }] }
@@ -79,4 +79,10 @@ test('subscribe returns its unsubscribe', () => {
   off()
   s.set(trading)
   expect(heard).toEqual([])
+})
+
+test('slugPath slugs a title and avoids taken routes', () => {
+  expect(slugPath('My Desk', ['/my-desk'])).toBe('/my-desk-2')
+  expect(slugPath('My Desk', ['/my-desk', '/my-desk-2'])).toBe('/my-desk-3')
+  expect(slugPath('  ', [])).toBe('/workspace-page')
 })
