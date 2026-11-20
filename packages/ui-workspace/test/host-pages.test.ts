@@ -35,7 +35,11 @@ test('a setPage or removePage asks first: a yes changes the pages, a no does not
   expect(await pages.setPage({ page: { ...trading, title: 'Markets' } })).toMatchObject({ ok: false, fail: { type: 'denied' } })
   expect(await pages.removePage({ id: 'trading' })).toMatchObject({ ok: false, fail: { type: 'denied' } })
   expect(store.get('trading')?.title).toBe('Trading')
-  expect(asked).toEqual(['Add page Trading', 'Change page Markets', 'Remove page Trading'])
+  expect(asked).toEqual(['Add page "Trading" showing nothing', 'Change page "Markets" showing nothing', 'Remove page "Trading"'])
+  asked.length = 0
+  yes = true
+  await pages.setPage({ page: { ...trading, slots: [{ id: 'n', view: 'nano-explorer' }, { id: 'p', runtime: 'main', pod: 'pages' }] } })
+  expect(asked).toEqual(['Change page "Trading" showing nano-explorer, pages'])   // the pod-supplied title quoted, what it shows named
   await app.close()
 })
 
@@ -49,7 +53,7 @@ test('through hostProvider, the ask is the ui pod\'s dialog, and no answer withi
   try {
     const r = (app.call('main', 'pages') as unknown as Pages).setPage({ page: trading })
     for (let i = 0; i < 50 && !document.querySelector('dialog'); i++) { await Promise.resolve(); jest.advanceTimersByTime(1) }
-    expect(document.querySelector('dialog')?.textContent).toContain('Add page Trading')
+    expect(document.querySelector('dialog')?.textContent).toContain('Add page "Trading" showing nothing')
     jest.advanceTimersByTime(20_000)
     expect(await r).toMatchObject({ ok: false, fail: { type: 'denied' } })
   } finally { jest.useRealTimers() }

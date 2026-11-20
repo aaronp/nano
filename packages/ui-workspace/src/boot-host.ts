@@ -10,12 +10,14 @@
  * and is the run-time truth for pages from then on; the first save removes the old keys. The
  * old docks made their pods as they mounted, so a migrated pod slot's pod is placed now, lazy in `main` under its name
  * (its implementation found by the panel's widget id); one with no implementation is dropped, and a status says so.
-
+ *
  * The kept layout holds no `pages`: the store is their only home. A later import that brings `layout.pages` has them
- * merged into the store (`merge`, refusals shown as statuses) and then dropped from the kept layout, so a page
- * deleted since cannot come back from a stale copy. The document is saved, debounced, on each `applied` and page
- * change; pod slots whose pod went are pruned on `applied`. A stored document that fails to load is not saved over this session. Storage the page may not use: the
- * app runs in memory, and the first save says so.
+ * merged into the store (`merge`, refusals shown as statuses) and then dropped from the kept layout, with the legacy
+ * `workspace`/`slots`/`geometry` Save writes beside them (the pages hold them), so a page deleted since cannot come back
+ * from a stale copy and Main is not replaced. The document is saved, debounced (flushed on `pagehide`), on each
+ * `applied` and page change; pod slots whose pod went are pruned on `applied`. A stored document that fails to load, or
+ * that another tab has written since, is not saved over this session. Storage the page may not use: the app runs in
+ * memory, and the first save says so.
  */
 import { defineViews, pagesOf, type LayoutSlot } from '@pritzlaff/nano-ui';
 import type { Pod } from '@pritzlaff/nano-core';
@@ -67,11 +69,20 @@ if (host) {
     const done = await importUrl(url, chosen), kept = host.data().layout;
     if (!done.ok || !Array.isArray(kept?.pages)) return done;
     for (const why of pages.merge(pagesOf({ pages: kept.pages }))) showStatus(document, why);
-    await host.apply({ ...host.data(), layout: { ...kept, pages: undefined } });
+    const r = await host.apply({ ...host.data(), layout: { ...kept, pages: undefined, workspace: undefined, slots: undefined, geometry: undefined } });
+    if (!r.ok) showStatus(document, r.fail.reason);
     return done;
   };
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const save = () => { clearTimeout(timer); timer = setTimeout(() => { const d = host.saved(); stored.save({ ...d, layout: { ...d.layout, pages: pages.list() } }); }, SAVE_MS); };
+  let timer: ReturnType<typeof setTimeout> | undefined, elsewhere = false;
+  const write = () => { timer = undefined; if (elsewhere) return; const d = host.saved(); stored.save({ ...d, layout: { ...d.layout, pages: pages.list() } }); };
+  const save = () => { clearTimeout(timer); timer = setTimeout(write, SAVE_MS); };
+  addEventListener('pagehide', () => { if (timer !== undefined) { clearTimeout(timer); write(); } });
+  // Another tab saved the document: this tab's copy is stale, so it saves no more (the last writer would win).
+  addEventListener('storage', (e) => {
+    if ((e as StorageEvent).key !== KEY || elsewhere) return;
+    elsewhere = true; clearTimeout(timer);
+    showStatus(document, 'Your workspace changed in another tab: reload this page to continue. Changes here are no longer saved.');
+  });
   host.app.listen((e) => { if (e.type === 'applied') { pages.prune(placed); if (loaded.ok) save(); } });
   if (loaded.ok) { pages.subscribe(save); save(); }
   else showStatus(document, 'Your saved workspace did not load (see the message); changes are not saved this session, so it is kept as it was.');

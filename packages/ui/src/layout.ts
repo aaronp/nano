@@ -1,15 +1,18 @@
 /**
- * The layout convention: which pods are on the page and where, engine-neutral, inside `AppDeployment.layout` (the
- * deployer's plain object). Each layout engine keeps its own state beside it under its own key.
+ * The layout convention: the app's pages, engine-neutral, inside `AppDeployment.layout` (the deployer's plain object).
+ * Each page has an id (fixed when it is made), a title, an optional icon, its slots (a placed pod, or a view by its
+ * custom-element tag), their geometry, and each layout engine's own state under the engine's key.
  *
- *   "layout": {
- *     "slots": [{ "id": "a", "runtime": "example.todo.frontend", "pod": "listA" }, { "id": "b", "runtime": "example.todo.frontend", "pod": "listB" }],
- *     "geometry": { "a": { "x": 0, "y": 0, "w": 0.5, "h": 1 }, "b": { "x": 0.5, "y": 0, "w": 0.5, "h": 1 } },
+ *   "layout": { "pages": [{
+ *     "id": "workspace", "title": "Main",
+ *     "slots": [{ "id": "a", "runtime": "example.todo.frontend", "pod": "listA" }, { "id": "x", "view": "nano-explorer" }],
+ *     "geometry": { "a": { "x": 0, "y": 0, "w": 0.5, "h": 1 } },
  *     "workspace": { ...golden-layout's own state }
- *   }
+ *   }] }
  *
- * A slot's key is the pod's instance coordinate; a pod has at most one view (its implementation's, from the provider
- * module's `views`, or the deployment's `views` override). A pod not in `slots` runs unseen.
+ * A file from before pages has `slots`, `geometry` and `workspace` at the top: `pagesOf` reads them as one page. A pod
+ * has at most one view (its implementation's, from the provider module's `views`, or the deployment's `views`
+ * override); a pod in no page's slots runs unseen.
  */
 import { Coord } from '@pritzlaff/nano-core'
 

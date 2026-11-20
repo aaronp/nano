@@ -119,7 +119,6 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
     const as = names(), t = trust(), only = kept();
     const done = await deps.importUrl(url, { edit: f => trusted(renameRuntimes(selectPods(f, only).deployment, as), t, deps.known) });   // a failure is a toast
     if (!done.ok) { button().disabled = false; return; }
-    document.dispatchEvent(new CustomEvent('nano:changed'));
     d.close();
   });
   d.addEventListener('close', () => d.remove());

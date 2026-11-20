@@ -1,6 +1,7 @@
 // The Import dialog's choices, as pure edits of the fetched nano.json: its runtimes renamed, its pods' isolation by Trust.
 import { expect, test } from 'bun:test'
 import type { AppDeployment } from '@pritzlaff/nano-core'
+import { pagesOf } from '@pritzlaff/nano-ui'
 import { ownProvider, renameRuntimes, selectPods, suggestedName, trusted, validRuntimeId } from '../src/import-plan.ts'
 
 const file = (): AppDeployment => ({
@@ -28,6 +29,13 @@ test('renameRuntimes with no names, or a file without layout, changes nothing', 
   expect(renameRuntimes(file(), {})).toEqual(file())
   const { layout: _, ...bare } = file()
   expect(renameRuntimes(bare, { main: 'm' }).layout).toBeUndefined()
+})
+
+test("renameRuntimes renames the runtime of each imported page's pod slots; view slots are kept, and the pages stay valid", () => {
+  const pages = [{ id: 'p', title: 'P', slots: [{ id: 'x', view: 'nano-explorer' }, { id: 'a', runtime: 'main', pod: 'a' }, { id: 'b', runtime: 'side', pod: 'b' }] }]
+  const out = renameRuntimes({ ...file(), layout: { pages } }, { main: 'acme.template.main' })
+  expect(out.layout).toEqual({ pages: [{ id: 'p', title: 'P', slots: [{ id: 'x', view: 'nano-explorer' }, { id: 'a', runtime: 'acme.template.main', pod: 'a' }, { id: 'b', runtime: 'side', pod: 'b' }] }] })
+  expect(pagesOf(out.layout)).toHaveLength(1)
 })
 
 test('suggestedName is the provider namespace of the runtime’s first pod by modules order, then the runtime', () => {
@@ -85,6 +93,12 @@ test('selectPods keeps the ticked pods; drops runtimes left empty, modules no ke
   expect(e.layout?.['geometry']).toEqual({})
   expect(e.tags).toEqual({ todos: ['x'] })
   expect(e.views).toEqual({ 'example.todo/kv': 'todo-list' })
+})
+
+test("selectPods drops an unticked pod's slots from the imported pages too; view slots are kept", () => {
+  const pages = [{ id: 'p', title: 'P', slots: [{ id: 'todos', runtime: 'front', pod: 'todos' }, { id: 'x', view: 'nano-explorer' }, { id: 'store', runtime: 'main', pod: 'store' }] }]
+  const { deployment: d } = selectPods({ ...app(), layout: { pages } }, new Set(['todos', 'timer']))
+  expect(d.layout).toEqual({ pages: [{ id: 'p', title: 'P', slots: [{ id: 'todos', runtime: 'front', pod: 'todos' }, { id: 'x', view: 'nano-explorer' }] }] })
 })
 
 test('selectPods keeps a subscription only with both ends; one end kept is a warning, as text', () => {

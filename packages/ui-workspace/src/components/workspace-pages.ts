@@ -28,7 +28,7 @@ const button = (doc: Document, action: string, label: string, text: string) => {
 
 /** A nav link's content: its icon (named in data-icon) and its name, which edit mode makes controls; the title is the rail's tooltip. */
 const label = (a: HTMLAnchorElement, title: string, icon: string) => {
-  a.innerHTML = `<span data-glyph><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[icon] ?? ''}"/></svg></span><span data-name></span>`;
+  a.innerHTML = `<span data-glyph><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${Object.hasOwn(ICONS, icon) ? ICONS[icon] : ''}"/></svg></span><span data-name></span>`;
   a.querySelector('[data-name]')!.textContent = title;
   a.dataset.icon = icon; a.title = title;
 };

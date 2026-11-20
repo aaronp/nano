@@ -35,6 +35,8 @@ import { panelsInOrder, type PanelState, type TemplateState } from './lib/layout
 import { slotsOf } from './dock/page-slots.ts';
 import { icon } from './icons.ts';
 import { HOST_PODS } from './host-deploy.ts';
+import { showStatus } from './lib/status.ts';
+import type { LayoutSlot, Page } from '@pritzlaff/nano-ui';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
 if (host) {
@@ -42,13 +44,17 @@ if (host) {
   // Main's page (the store's): written, never its dock, which shows it once built (it may not be: a deep link elsewhere).
   const MAIN = 'workspace', main = () => { const { workspace: _, ...p } = pages.get(MAIN)!; return p; };
   const placedIn = (pod: string) => Object.entries(h.data().runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
+  const set = (p: Page) => { const r = pages.set(p); if (!r.ok) showStatus(document, r.fail.reason); };   // a refusal shown
+  /** Main's page with `slots` after its view slots, or after all of them (`keep`); its engine state kept, so the dock
+   * prunes and adds panels. A never-built Main with neither slots nor state shows these alone: no starting explorer. */
+  const toMain = (slots: LayoutSlot[], keep: 'view' | 'all') => { const m = pages.get(MAIN)!; set({ ...m, slots: [...m.slots.filter(s => keep === 'all' || 'view' in s), ...slots] }); };
   // An import whose nano.json brings a layout for Main (under its dock's id) becomes Main's arrangement, its panels the slots.
   const shown = async (r: Promise<{ ok: boolean }>, before: string) => {
     const done = await r, l = h.data().layout?.[MAIN] as { root?: unknown; template?: TemplateState } | undefined;
-    if (done.ok && l && JSON.stringify(l) !== before) pages.set({ ...main(), workspace: l, slots: slotsOf(l.template ? [...l.template.order.filter((p): p is PanelState => !!p), ...l.template.parked] : panelsInOrder(l.root), placedIn) });
-    // A file from another engine: its neutral slots, a panel each, in order.
+    if (done.ok && l && JSON.stringify(l) !== before) set({ ...main(), workspace: l, slots: slotsOf(l.template ? [...l.template.order.filter((p): p is PanelState => !!p), ...l.template.parked] : panelsInOrder(l.root), placedIn) });
+    // A file from another engine: its neutral slots, a panel each, in order, in place of Main's pod panels.
     const open = done.ok ? slotsToOpen(h.data(), MAIN) : [];
-    if (open.length) pages.set({ ...main(), slots: open.map(pod => ({ id: pod, runtime: placedIn(pod)!, pod })) });
+    if (open.length) toMain(open.map(pod => ({ id: pod, runtime: placedIn(pod)!, pod })), 'view');
     return done;
   };
   const layoutNow = () => JSON.stringify(h.data().layout?.[MAIN]);
@@ -84,7 +90,7 @@ if (host) {
     new: async () => {
       const d = h.data(), r = await h.apply({ ...d, pods: Object.fromEntries(HOST_PODS.map(p => [p, d.pods[p]!])), runtimes: { main: { pods: [...HOST_PODS], subscriptions: [] } }, tags: {}, views: {}, layout: undefined });
       if (!r.ok) return;
-      pages.set({ ...main(), slots: [] });
+      set({ ...main(), slots: [] });
       if (menu) menu.dirty = false;
     },
   };
@@ -98,7 +104,9 @@ if (host) {
   // The wiring view asks for a rack component back on the front: the dock's panel for that pod.
   document.addEventListener('wires:open-panel', e => {
     const { name } = (e as CustomEvent<{ kind: string; name: string }>).detail;
-    ((e.target as Element).querySelector<WorkspaceDock>('workspace-dock') ?? document.querySelector<WorkspaceDock>('workspace-dock'))?.openPod(name);
+    const d = (e.target as Element).querySelector<WorkspaceDock>('workspace-dock') ?? document.querySelector<WorkspaceDock>('workspace-dock'), runtime = placedIn(name);
+    if (d?.querySelector(':scope > .dock-area')) d.openPod(name);
+    else if (runtime && !pages.get(MAIN)!.slots.some(s => 'pod' in s && s.pod === name)) toMain([{ id: name, runtime, pod: name }], 'all');   // not built: Main's page
   });
 
   // The Desk page: <c-desk> over the app, and a link to the last workspace's Connections.

@@ -6,19 +6,24 @@
  *   trusted(renameRuntimes(d, { main: suggestedName(d, 'main') }), 'sandboxed')
  */
 import { failure, success, type AppDeployment, type NanoResult, type Pod, type Subscription } from '@pritzlaff/nano-core'
-import type { LayoutData } from '@pritzlaff/nano-ui'
+import type { LayoutData, LayoutSlot, Page } from '@pritzlaff/nano-ui'
 
 export type Trust = 'sandboxed' | 'trusted'
 
 /** A runtime id (the id rule): no `/`, whitespace or `#`, 1 to 64 characters. */
 export const validRuntimeId = (s: string) => /^[^/\s#\x00-\x1f\x7f]{1,64}$/.test(s)
 
-/** `d` with each runtime `k` of `names` renamed `names[k]`: the `runtimes` keys and the layout's slots. Pure. */
+/** `d.layout` with each pod slot edited (`[]` drops it), in its legacy `slots` and in its `pages` (view slots kept). */
+function podSlots(d: AppDeployment, edit: (s: LayoutSlot) => LayoutSlot[]): AppDeployment['layout'] {
+  const { slots, pages } = (d.layout ?? {}) as LayoutData, each = (s: Page['slots']) => s.flatMap((s): Page['slots'] => 'pod' in s ? edit(s) : [s])
+  return { ...d.layout, ...(Array.isArray(slots) && { slots: each(slots) }), ...(Array.isArray(pages) && { pages: pages.map(p => Array.isArray(p?.slots) ? { ...p, slots: each(p.slots) } : p) }) }
+}
+
+/** `d` with each runtime `k` of `names` renamed `names[k]`: the `runtimes` keys and the layout's slots, its pages' too. Pure. */
 export function renameRuntimes(d: AppDeployment, names: Record<string, string>): AppDeployment {
   const to = (id: string) => (Object.hasOwn(names, id) ? names[id]! : id)
   const out: AppDeployment = { ...d, runtimes: Object.fromEntries(Object.entries(d.runtimes).map(([id, r]) => [to(id), r])) }
-  const slots = (d.layout as LayoutData | undefined)?.slots
-  if (Array.isArray(slots)) out.layout = { ...d.layout, slots: slots.map(s => ({ ...s, runtime: to(s.runtime) })) }
+  if (d.layout) out.layout = podSlots(d, s => [{ ...s, runtime: to(s.runtime) }])
   return out
 }
 
@@ -91,8 +96,7 @@ export function selectPods(d: AppDeployment, keep: Set<string>): { deployment: A
   if (d.frames) out.frames = kept(d.frames, c => providers.has(c))
   if (d.tags) out.tags = kept(d.tags, p => keep.has(p))
   if (d.views) out.views = kept(d.views, k => keep.has(k) || implementations.has(k))
-  const slots = (d.layout as LayoutData | undefined)?.slots
-  if (Array.isArray(slots)) out.layout = { ...d.layout, slots: slots.filter(s => keep.has(s.pod)) }
+  if (d.layout) out.layout = podSlots(d, s => keep.has(s.pod) ? [s] : [])
   return { deployment: out, warnings }
 }
 

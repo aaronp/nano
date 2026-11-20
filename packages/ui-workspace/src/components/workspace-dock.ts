@@ -11,7 +11,7 @@
  * Bus topics (the app bus): dock:opened {widget} · dock:layout {panels} · dock:saved · dock:error {message} ·
  * dock:status {message} (what the last command did). It has no toolbar: its commands are public, for the app bar to call.
  *   windowStyle / setWindowStyle(s): tabs or clear (remembered per dock).
- *   save() / restore() / reset(): keep a restore point, return to it, start again. saveAs() fires a bubbling `dock:save-as` {layout, system} event, for the
+ *   save() / restore() / reset(): keep a restore point, return to it, start again. saveAs() fires a bubbling `dock:save-as` event, for the
  *   page to save it as a workspace of its own (workspace-pages.ts). connections() fires a bubbling
  *   `dock:connections` DOM event; whatever wraps the dock (the wiring view) decides what it means.
  * template / setTemplate(id): panels in a fixed layout (layout-templates.ts; dock/template-mode.ts), what does not fit
@@ -40,8 +40,8 @@ import { PALETTE_ID, windowStyle, type WindowStyle, panelIds } from '../lib/dock
 import { TEMPLATES, panelsInOrder, place, relayout, templateState, type PanelState, type TemplateId, type TemplateState } from '../lib/layout-templates.ts';
 
 export class WorkspaceDock extends HTMLElement {
-  /** The system (registry) the panels' components live in; unset, they use the page's provided registry. Declared,
-   * not a class field: a field would wipe a value set before the element upgrades (saved workspaces set it at start). */
+  /** The system (registry) the panels' components live in; unset (the workspace sets none), they use the page's provided
+   * registry. Declared, not a class field: a field would wipe a value set before the element upgrades. */
   declare registry?: unknown;
   /** The page's host, set before the dock connects; pod panels show its app. */
   declare host?: Host;
@@ -117,8 +117,8 @@ export class WorkspaceDock extends HTMLElement {
   get windowStyle(): WindowStyle { return windowStyle(this.storage, this.storageKey).get(); }
   setWindowStyle(s: WindowStyle) { windowStyle(this.storage, this.storageKey).set(s); this.setAttribute('chrome', s); }
 
-  /** Fires `dock:save-as` with this layout, for the page to save it as a workspace of its own. */
-  saveAs() { this.dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true, composed: true, detail: { layout: this.kept, system: this.system } })); }
+  /** Fires `dock:save-as`, for the page to save this dock's page as a workspace of its own (the page holds its layout). */
+  saveAs() { this.dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true, composed: true })); }
 
   /** The template shown, or 'dock' for golden-layout. */
   get template(): TemplateId { return this.tpl?.state.template ?? 'dock'; }
@@ -213,7 +213,6 @@ export class WorkspaceDock extends HTMLElement {
     if (message) { this.say(message); return this.send('dock:error', { message }); }
     this.say('Layout saved.');
     // BACKLOG(3): its route's screen got the layout too (setLayout on the Application's screens); 0.4 has no screens.
-    this.ownerDocument.dispatchEvent(new CustomEvent('nano:changed'));   // the working copy follows
     this.send('dock:saved', { panels: this.openIds().length });
   }
   /** Back to the restore point (its template too). */

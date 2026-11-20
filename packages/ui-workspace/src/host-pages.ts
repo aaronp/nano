@@ -1,7 +1,7 @@
 /**
  * `workspace.host/pages`: this host's HostPages over the page store (lib/pages.ts), the pod `pages` beside `ui` and
  * `deploy` in `main`, never saved. A call's `setPage` or `removePage` asks `approve` (HostUI's through the app, timed by
- * hostProvider) with a one-line summary, and anything but a yes is `denied`; `pages` and `open` are not asked. The
+ * hostProvider) with a one-line summary (the pod-supplied title quoted, and what the page shows), and anything but a yes is `denied`; `pages` and `open` are not asked. The
  * workspace's own UI writes the store directly, unasked. Without a store (a replayed app's provider) every op is not-found.
  *
  *   ns.provider([hostUi, deploy, hostPages(store, timed(askTheUser))])   // hostProvider (host-deploy.ts)
@@ -26,10 +26,11 @@ export function hostPages(store: ReturnType<typeof pageStore> | undefined, appro
       setPage: async ({ page, index }) => {
         if (!store) return none
         const p = page as Page
-        const text = `${store.get(p.id) ? 'Change' : 'Add'} page ${p.title}${index === undefined ? '' : `, moved to place ${index + 1}`}`
+        const shows = p.slots.map(s => 'pod' in s ? s.pod : s.view).join(', ') || 'nothing'   // what the page would show, as the call says
+        const text = `${store.get(p.id) ? 'Change' : 'Add'} page "${p.title}" showing ${shows}${index === undefined ? '' : `, moved to place ${index + 1}`}`
         return asked(text, () => store.set(p, index))
       },
-      removePage: async ({ id }) => store ? asked(`Remove page ${store.get(id)?.title ?? id}`, () => store.remove(id)) : none,
+      removePage: async ({ id }) => store ? asked(`Remove page "${store.get(id)?.title ?? id}"`, () => store.remove(id)) : none,
       open: async ({ id }) => {
         if (!store) return none
         if (!store.get(id)) return failure('not-found', `no page ${id}`)

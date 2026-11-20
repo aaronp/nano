@@ -148,7 +148,7 @@ HostPages = ns.interface('HostPages', {
 ## Part 4 — The workspace driven by the deployment (ui-workspace)
 
 - Nav rows, routes and docks come from `layout.pages`: one page each; `+` adds one (`setPage`), edit mode renames
-  (the id follows the title by `slugPath`, its route with it), changes the icon, reorders (`index`); Main is the page
+  (only the title: the id, and so the route, is fixed by `slugPath` when the page is made, as Part 2 says), changes the icon, reorders (`index`); Main is the page
   `workspace`, first. The localStorage keys of saved pages, per-dock layouts and template state go; on first boot after
   this change they are read once into `layout.pages` (*my call*), then removed.
 - A dock's state is its page's `workspace` key; its panels are the page's `slots`. Every change (split, close, drag,
