@@ -47,6 +47,14 @@
         "typebox": "^1.4.0",
       },
     },
+    "packages/platform": {
+      "name": "@pritzlaff/nano-platform",
+      "version": "0.1.0",
+      "dependencies": {
+        "@pritzlaff/nano-core": "workspace:*",
+        "typebox": "^1.4.0",
+      },
+    },
     "packages/ui": {
       "name": "@pritzlaff/nano-ui",
       "version": "0.4.0",
@@ -66,6 +74,7 @@
       "dependencies": {
         "@pritzlaff/nano-core": "workspace:*",
         "@pritzlaff/nano-elements": "workspace:*",
+        "@pritzlaff/nano-platform": "workspace:*",
         "@pritzlaff/nano-ui": "workspace:*",
         "golden-layout": "2.6.0",
         "lit": "^3.3.3",
@@ -98,6 +107,8 @@
     "@pritzlaff/nano-core": ["@pritzlaff/nano-core@workspace:packages/nano"],
 
     "@pritzlaff/nano-elements": ["@pritzlaff/nano-elements@workspace:packages/elements"],
+
+    "@pritzlaff/nano-platform": ["@pritzlaff/nano-platform@workspace:packages/platform"],
 
     "@pritzlaff/nano-ui": ["@pritzlaff/nano-ui@workspace:packages/ui"],
 

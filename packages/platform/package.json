@@ -1,0 +1,11 @@
+{
+  "name": "@pritzlaff/nano-platform",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "The Platform: pages over an Application, as their own document (the UIDeployment), changed by one apply.",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@pritzlaff/nano-core": "workspace:*",
+    "typebox": "^1.4.0"
+  }
+}

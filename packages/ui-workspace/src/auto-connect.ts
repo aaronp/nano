@@ -9,15 +9,13 @@
  */
 import { matches, type AppDeployment, type Registry, type SelectorData } from '@pritzlaff/nano-core'
 import { toast } from '@pritzlaff/nano-elements'
+import { targets } from '@pritzlaff/nano-platform'
 
 const where = (d: AppDeployment, pod: string) => Object.keys(d.runtimes).find(r => d.runtimes[r]!.pods.includes(pod))
 
 export function autoConnect(d: AppDeployment, registry: Registry, pods: readonly string[]): { deployment: AppDeployment; notes: string[] } {
   const out: AppDeployment = structuredClone(d), notes: string[] = []
-  const target = (name: string, runtime: string) => {
-    const impl = registry.implementation(out.pods[name]?.implementation ?? '')
-    return impl && { name, runtime, implementation: impl.coord, provider: impl.provider, provides: new Set(impl.provides.map(i => i.coord)), tags: new Set(out.tags?.[name] ?? []) }
-  }
+  const target = targets(out, registry)
   const meets = (s: SelectorData, name: string, runtime: string) => { const t = target(name, runtime); return !!t && matches(s, t) }
   for (const pod of pods) {
     const deps = registry.implementation(out.pods[pod]?.implementation ?? '')?.dependencies ?? {}
