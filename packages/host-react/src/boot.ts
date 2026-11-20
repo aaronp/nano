@@ -59,6 +59,6 @@ export async function boot(storage: Storage, load: Load = u => import(u), base =
   const save = () => { if (stopped) return; const failed = writeStored(storage, saved(), platform.document().doc); if (failed) stop(`not saved: ${failed}`) }
   app.listen(e => { if (e.type === 'applied') save() })
   platform.listen(save)
-  globalThis.addEventListener?.('storage', e => { const k = (e as StorageEvent).key; if (k === KEYS.app || k === KEYS.pages) stop('changed in another tab: reload to continue') })
+  globalThis.addEventListener?.('storage', e => { const k = (e as StorageEvent).key; if (k === KEYS.app || k === KEYS.pages || k === KEYS.old) stop('changed in another tab: reload to continue') })
   return success({ app, registry, platform, views: views.value, saved, stopped: () => stopped })
 }

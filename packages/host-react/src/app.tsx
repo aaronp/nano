@@ -1,5 +1,5 @@
 /**
- * The React host: a tab bar of the Platform's pages (titles from `title`), the shown page as a CSS grid of its
+ * The React host: a row of tabs per level of the Outline's tree along the path to the shown page (titles from `title`), the shown page as a CSS grid of its
  * slots in slot order (its column count in `layout.react`), and a picker that deploys a lazy pod into a runtime and
  * applies its slot. Only the shown page is opened (`platform.open`), again when it or its resolution changes.
  */
@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import type { Host } from './boot.ts'
 import { catalog } from './catalog.ts'
 import { SlotCell, type Opened } from './slot.tsx'
-import { addPage, addSlot, columnsOf, removeSlot, setColumns, titleOf } from './slots.ts'
+import { addPage, addSlot, columnsOf, levels, removeSlot, setColumns, titleOf } from './slots.ts'
 
 /** Re-renders on every Platform change; the pages it names. */
 function useChanges(h: Host): [number, string[]] {
@@ -33,8 +33,8 @@ function Picker({ h, page, say }: { h: Host; page: string; say(s: string): void 
 }
 
 export function App({ h }: { h: Host }) {
-  const [n, touched] = useChanges(h), doc = h.platform.document().doc, ids = Object.keys(doc.pages)
-  const [chosen, setChosen] = useState(ids[0] ?? ''), page = doc.pages[chosen] ? chosen : (ids[0] ?? '')
+  const [n, touched] = useChanges(h), doc = h.platform.document().doc, first = doc.roots[0] ?? ''
+  const [chosen, setChosen] = useState(first), page = doc.pages[chosen] ? chosen : first
   const [opened, setOpened] = useState<Record<string, Opened>>({}), [note, say] = useState('')
   const [opens, setOpens] = useState(0)
   useEffect(() => { if (touched.includes(page)) setOpens(o => o + 1) }, [n])
@@ -45,17 +45,20 @@ export function App({ h }: { h: Host }) {
     return () => { live = false }
   }, [h, page, opens])
   const shown = doc.pages[page], columns = columnsOf(shown)
-  const newPage = () => {
+  const newPage = (top: boolean) => {
     const title = prompt('Page title')?.trim()
     if (!title) return
-    const r = addPage(h, title)
+    const r = addPage(h, title, top ? undefined : page || undefined)
     if (r.ok) setChosen(r.value); else say(r.fail.reason)
   }
   return (
     <>
-      <nav role="tablist" aria-label="Pages">
-        {ids.map(id => <button key={id} role="tab" aria-selected={id === page} onClick={() => setChosen(id)}>{titleOf(id, doc.pages[id])}</button>)}
-        <button type="button" onClick={newPage} aria-label="New page">+</button>
+      {levels(doc, page).map((row, i) => <nav key={i} role="tablist" aria-label={`Pages, level ${i + 1}`}>
+        {row.ids.map(id => <button key={id} role="tab" aria-selected={id === row.at} onClick={() => setChosen(id)}>{titleOf(id, doc.pages[id])}</button>)}
+      </nav>)}
+      <nav aria-label="Add a page">
+        <button type="button" onClick={() => newPage(false)} aria-label="New child page" disabled={!page}>+</button>
+        <button type="button" onClick={() => newPage(true)} aria-label="New top page">+ top</button>
       </nav>
       {shown ? <main role="tabpanel" aria-label={titleOf(page, shown)}>
         <div className="bar">

@@ -5,7 +5,7 @@
  *   await addSlot(h, 'workspace', 'nano.ui/log', 'main')   // success('log1')
  */
 import { AppDeployment, Coord, failure, success, type NanoResult } from '@pritzlaff/nano-core'
-import type { Page } from '@pritzlaff/nano-outline'
+import type { Outline, Page } from '@pritzlaff/nano-outline'
 import type { Host } from './boot.ts'
 import { connect } from './connect.ts'
 
@@ -47,12 +47,21 @@ async function make(h: Host, page: string, impl: string, runtime: string): Promi
 
 export const removeSlot = (h: Host, page: string, slot: string) => edit(h, page, ({ slots: { [slot]: _, ...rest }, ...p }) => ({ ...p, slots: rest }))
 
-/** A new empty page titled `title`; its id from the title. */
-export function addPage(h: Host, title: string): NanoResult<string> {
-  const { roots, pages } = h.platform.document().doc
+/** A new empty page titled `title`, a child of page `parent` or (none) a root; its id from the title. */
+export function addPage(h: Host, title: string, parent?: string): NanoResult<string> {
+  const { roots, pages } = h.platform.document().doc, up = parent === undefined ? undefined : pages[parent]
+  if (parent !== undefined && !up) return failure('not-found', `no page ${parent}`)
   const id = free(title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'page', s => s in pages)
-  const r = h.platform.apply({ roots: [...roots, id], pages: { ...pages, [id]: { slots: {}, title } } })
+  const made = { ...pages, [id]: { slots: {}, title } }
+  const r = h.platform.apply(parent !== undefined && up ? { roots, pages: { ...made, [parent]: { ...up, children: [...(up.children ?? []), id] } } } : { roots: [...roots, id], pages: made })
   return r.ok ? success(id) : r
+}
+
+/** One row of tabs per level along the path to `page`: the roots, then each page on the path's children (when it has any), with the path's page at each. */
+export function levels(doc: Outline, page: string): { ids: string[]; at: string | undefined }[] {
+  const path: string[] = []
+  for (let p: string | undefined = page; p; p = Object.keys(doc.pages).find(k => doc.pages[k]!.children?.includes(p!))) path.unshift(p)
+  return [doc.roots, ...path.map(p => doc.pages[p]?.children ?? [])].map((ids, i) => ({ ids, at: path[i] })).filter(r => r.ids.length)
 }
 
 export const titleOf = (id: string, p: Page | undefined) => p?.title ?? id

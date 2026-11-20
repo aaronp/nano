@@ -4,7 +4,7 @@ import { Coord, Implementation, Pod, provide, success } from '@pritzlaff/nano-co
 import { log, MapIface } from '@pritzlaff/nano-ui'
 import { boot } from '../src/boot.ts'
 import { catalog } from '../src/catalog.ts'
-import { addPage, addSlot, columnsOf, removeSlot, setColumns, titleOf } from '../src/slots.ts'
+import { addPage, addSlot, columnsOf, levels, removeSlot, setColumns, titleOf } from '../src/slots.ts'
 import { KEYS } from '../src/stored.ts'
 
 const acme = Coord.namespace('acme')
@@ -82,4 +82,28 @@ test('a new page: an id from its title, `title` only; columns go in layout.react
   expect(columnsOf(h.platform.document().doc.pages['workspace'])).toBe(3)
   expect(setColumns(h, 'my-page', 4)).toMatchObject({ ok: true })   // a page the workspace has not arranged
   expect(read(s, KEYS.pages).pages['my-page'].layout).toEqual({ react: { columns: 4 } })
+})
+
+test('storage: the Outline key first, else the old platform key; only the Outline key is written; a write to either key in another tab stops saving', async () => {
+  const pages = { roots: ['a'], pages: { a: { slots: {}, title: 'A' } } }
+  const old = memory({ [KEYS.old]: pages }), h = await started(old)
+  expect(Object.keys(h.platform.document().doc.pages)).toEqual(['a'])
+  expect(addPage(h, 'B')).toMatchObject({ ok: true })
+  expect(read(old, KEYS.pages).roots).toEqual(['a', 'b'])
+  expect(read(old, KEYS.old)).toEqual(pages)   // the old key left as it was
+  const both = memory({ [KEYS.old]: pages, [KEYS.pages]: { roots: ['z'], pages: { z: { slots: {} } } } })
+  expect(Object.keys((await started(both)).platform.document().doc.pages)).toEqual(['z'])
+})
+
+test('tabs per level: the roots, then each page on the path to the shown page, its children; a child added under the shown page, a root with no parent', async () => {
+  const h = await started(memory())
+  addPage(h, 'Top'); addPage(h, 'Sub', 'top'); addPage(h, 'Deep', 'sub'); addPage(h, 'Other')
+  const doc = () => h.platform.document().doc
+  expect(doc().roots).toEqual(['top', 'other'])
+  expect(doc().pages['top']!.children).toEqual(['sub'])
+  expect(levels(doc(), 'deep')).toEqual([{ ids: ['top', 'other'], at: 'top' }, { ids: ['sub'], at: 'sub' }, { ids: ['deep'], at: 'deep' }])
+  expect(levels(doc(), 'top')).toEqual([{ ids: ['top', 'other'], at: 'top' }, { ids: ['sub'], at: undefined }])
+  expect(levels(doc(), 'other')).toEqual([{ ids: ['top', 'other'], at: 'other' }])
+  expect(levels({ roots: [], pages: {} }, '')).toEqual([])
+  expect(addPage(h, 'X', 'nope')).toMatchObject({ ok: false })
 })

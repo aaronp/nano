@@ -6,15 +6,15 @@
 import type { AppDeployment } from '@pritzlaff/nano-core'
 import type { Outline } from '@pritzlaff/nano-outline'
 
-export const KEYS = { app: 'nano-workspace.document', pages: 'nano-workspace.platform' } as const
+export const KEYS = { app: 'nano-workspace.document', pages: 'nano-workspace.outline', old: 'nano-workspace.platform' } as const
 
 const read = (s: Storage, k: string): unknown => { try { return JSON.parse(s.getItem(k) ?? 'null') } catch { return null } }
 const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 
-/** The stored app document (null unless it has pods and runtimes) and pages (as written, or null). */
+/** The stored app document (null unless it has pods and runtimes) and pages (as written, or null: the Outline's key, else the old `nano-workspace.platform`; only the Outline's is written). */
 export function readStored(s: Storage): { app: AppDeployment | null; pages: unknown } {
   const app = read(s, KEYS.app)
-  return { app: obj(app) && obj(app['pods']) && obj(app['runtimes']) ? app as AppDeployment : null, pages: read(s, KEYS.pages) }
+  return { app: obj(app) && obj(app['pods']) && obj(app['runtimes']) ? app as AppDeployment : null, pages: read(s, KEYS.pages) ?? read(s, KEYS.old) }
 }
 
 /** Saves both; why not, if storage refused. */
