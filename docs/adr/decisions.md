@@ -1254,3 +1254,65 @@ Cons:
 ## Decision
 Checkpoint: every change writes the live arrangement to the page; Save layout keeps a restore point on the page;
 Restore returns to it; Reset to the starting layout.
+
+---
+id: ADR-0037
+title: Runtime coordinates, and selectors built from coordinates
+status: accepted
+date: 2026-11-21
+revisit: 
+tags: core, coordinates, selectors
+decision: typed
+---
+
+## Goal
+Coordinates are nano's identifiers, layered: a namespace, then interfaces and implementations in it, then ports and
+pods. `PodCoord` composes an `ImplCoord` but holds its runtime as a string, and `SelectorData` (implements,
+implementation, provider, runtime) is all strings. The Platform (pages over the Application) will identify pods by
+coordinate and by selector, so the impact is whether those references are type-checked composition or strings.
+
+## Hypothesis
+- We believe: a `RuntimeCoord`, used by `PodCoord` and by `SelectorData` alongside the existing coordinate types
+- Will result in: references that can't confuse a pod name with a runtime, built on what exists
+- Measured by: tsc rejects a string where a runtime coordinate belongs; saved documents and recordings load unchanged
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| safety | Type-checked references | 5 | Mixing up runtime, pod and implementation is a compile error. |
+| compose | Built on existing coordinates | 4 | No restated string forms; coordinates compose. |
+| churn | Little churn | 2 | Few call sites change; saved data unchanged. |
+
+## Solution: typed — RuntimeCoord; selectors take coordinates
+| criterion | score |
+| --- | --- |
+| safety | 5 |
+| compose | 5 |
+| churn | 2 |
+
+Pros:
+- One composed, checked form for every reference the Platform makes
+
+Cons:
+- About 60 call sites move; selectors are a little more verbose to write
+
+## Solution: strings — Keep strings; the Platform validates
+| criterion | score |
+| --- | --- |
+| safety | 2 |
+| compose | 2 |
+| churn | 5 |
+
+Pros:
+- No core change
+
+Cons:
+- Every client re-checks strings; a pod name can stand where a runtime belongs
+
+## Decision
+Typed. Ids used as keys and names in data and APIs, and the `runtime` field of events and policy asks, stay strings
+(identifiers, not coordinates).
