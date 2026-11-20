@@ -33,11 +33,11 @@ const slot = (pod: string, runtime = 'main') => ({ id: pod, runtime, pod })
 const running = (h: H, pod: string) => { const s = h.app.runtime('main').status(pod); return s.ok && s.value === 'running' }
 
 /** The workspace's pages over `h`: Main's dock and one per other page, in hidden routes until `go` shows one (as app-shell does). */
-function mount(h: H, pages: Page[]) {
+function mount(h: H, pages: Page[], open = '') {
   const store = pageStore(pages, (r, p) => !!h.data().runtimes[r]?.pods.includes(p)), bus = createBus(), app = document.createElement('div')
   provideBus(app, bus)
   app.innerHTML = `<span slot="title"></span><div class="nav-row" data-workspaces><a href="#/workspace"></a></div>
-    <app-route path="/workspace" hidden><workspace-dock id="workspace" storage-key="main" open=""><template data-widget="notes" data-title="Notes"><div>notes</div></template></workspace-dock></app-route>
+    <app-route path="/workspace" hidden><workspace-dock id="workspace" storage-key="main" open="${open}"><template data-widget="notes" data-title="Notes"><div>notes</div></template></workspace-dock></app-route>
     <app-route path="*" hidden></app-route>`
   const main = app.querySelector<Dock>('workspace-dock')!
   main.host = h
@@ -146,7 +146,7 @@ test('closing a panel removes its slot, not its pod', async () => {
   expect(Object.keys(h.data().pods)).toContain('input2')
 })
 
-test('the dock\'s state is its page\'s: Save writes the page\'s `workspace`, and a page that holds one shows it', async () => {
+test('the dock\'s state is its page\'s: its layout and template are in the page\'s `workspace`, nothing in localStorage', async () => {
   const h = await host()
   await place(h, 'main', ['input1'])
   const { go, store, dock } = mount(h, [{ id: 'workspace', title: 'Main', slots: [slot('input1')] }])
@@ -157,4 +157,77 @@ test('the dock\'s state is its page\'s: Save writes the page\'s `workspace`, and
   dock('workspace').setTemplate('one')
   expect((store.get('workspace')!['workspace'] as { template?: { template: string } }).template?.template).toBe('one')
   expect(localStorage.length).toBe(0)
+})
+
+/** A reload: the page shown again from the pages as the store now has them, on the same host. */
+const reload = (h: H, store: { list(): Page[] }, open = '') => { const pages = store.list(); document.body.innerHTML = ''; return mount(h, pages, open) }
+const swapped = (d: Dock) => { const sel = d.querySelector<HTMLSelectElement>('.tpl-pos select')!; sel.value = sel.options[1]!.value; sel.dispatchEvent(new Event('change')) }
+const order = (d: Dock & { arrangement?(): { template?: { order: unknown[] } } }) => (d as unknown as { arrangement(): { template?: { order: ({ name?: string } | null)[] } } }).arrangement().template?.order.map(p => p?.name)
+
+test('every change is kept (ADR-0036): a move unsaved is there after a reload; Restore returns to what Save kept', async () => {
+  const h = await host()
+  await place(h, 'main', ['input1', 'input2'])
+  const first = mount(h, [{ id: 'workspace', title: 'Main', slots: [slot('input1'), slot('input2')] }])
+  first.go('workspace')
+  await until(() => first.panels('workspace').length === 2)
+  first.dock('workspace').setTemplate('two-cols')
+  ;(first.dock('workspace') as Dock & { save(): void }).save()
+  swapped(first.dock('workspace'))
+  expect(order(first.dock('workspace'))).toEqual(['input2', 'input1'])
+  const again = reload(h, first.store)
+  again.go('workspace')
+  await until(() => again.panels('workspace').length === 2)
+  expect(again.dock('workspace').template).toBe('two-cols')
+  expect(order(again.dock('workspace'))).toEqual(['input2', 'input1'])
+  ;(again.dock('workspace') as Dock & { restore(): void }).restore()
+  expect(order(again.dock('workspace'))).toEqual(['input1', 'input2'])
+})
+
+test('Main\'s starting panel closed without saving stays closed after a reload', async () => {
+  const h = await host()
+  const first = mount(h, [], 'notes')
+  first.go('workspace')
+  await until(() => first.panels('workspace').length === 1)
+  expect(first.store.get('workspace')!.slots).toEqual([{ id: 'notes', view: 'notes' }])
+  first.dock('workspace').querySelector<HTMLElement>('.lm_close_tab')!.click()
+  await until(() => first.store.get('workspace')!.slots.length === 0)
+  const again = reload(h, first.store, 'notes')
+  again.go('workspace')
+  await new Promise(r => setTimeout(r, 20))
+  expect(again.panels('workspace').length).toBe(0)
+})
+
+test('a slot added to a visited page that is hidden opens its pod only when the page shows again', async () => {
+  const h = await host()
+  await place(h, 'main', ['input1', 'input2'])
+  const { go, store, panels } = mount(h, [{ id: 'workspace', title: 'Main', slots: [] }, { id: 'two', title: 'Two', slots: [slot('input1')] }])
+  go('two')
+  await until(() => running(h, 'input1'))
+  go('workspace')
+  store.set({ ...store.get('two')!, slots: [slot('input1'), slot('input2')] })   // as a pod's setPage would
+  await new Promise(r => setTimeout(r, 30))
+  expect(h.app.runtime('main').status('input2')).toEqual({ ok: true, value: 'not started' })
+  go('two')
+  await until(() => running(h, 'input2') && panels('two').length === 2)
+})
+
+test('a view slot this dock has no widget for is kept when the dock rewrites the slots', async () => {
+  const h = await host()
+  const other = { id: 'elsewhere', view: 'other-front-end-view' }
+  const { go, store, dock } = mount(h, [{ id: 'workspace', title: 'Main', slots: [other, { id: 'notes', view: 'notes' }] }])
+  go('workspace')
+  await until(() => dock('workspace').querySelectorAll('.dock-panel').length === 1)
+  dock('workspace').setTemplate('two-cols')   // a dock:layout
+  expect(store.get('workspace')!.slots).toEqual([{ id: 'notes', view: 'notes' }, other])
+})
+
+test('a pod that failed to open is opened on a later apply that lets the host in', async () => {
+  const h = await host()
+  await place(h, 'locked', ['x'], 'nano.ui/input', { kind: 'rules', rules: [] })
+  const { go, panels } = mount(h, [{ id: 'workspace', title: 'Main', slots: [slot('x', 'locked')] }])
+  go('workspace')
+  await until(() => panels('workspace')[0]?.textContent === 'no rule allows it')
+  const d = h.data()
+  expect((await h.apply({ ...d, runtimes: { ...d.runtimes, locked: { ...d.runtimes['locked']!, policy: { kind: 'rules', rules: [{ allow: '*' }] } } } })).ok).toBe(true)
+  await until(() => h.app.runtime('locked').status('x').ok && panels('workspace')[0]!.querySelector('.dock-fail') === null)
 })

@@ -1,17 +1,17 @@
 /**
  * <workspace-dock>: a golden-layout workspace. Panels can be dragged by their tabs, docked, stacked as tabs,
- * resized, maximised and closed. The arrangement can be saved, restored and reset.
+ * resized, maximised and closed. Every change is kept (ADR-0036); Save keeps a restore point, Restore returns to it, Reset
+ * to the starting layout.
  *
  *   <workspace-dock id="workspace" storage-key="my-app.workspace" open="notes,chart" arrangement="grid">
  *     <template data-widget="notes" data-title="Notes"> …any markup or widget… </template>   (one per palette entry)
  *   </workspace-dock>
  * Adding panels: each panel header's `+` opens the picker (picker.ts) and splits that panel for the choice; an empty dock
- * shows one large `+`. A saved layout opens automatically next time. Panels refer to widgets by id, so saved layouts hold no markup.
+ * shows one large `+`. The kept layout opens next time. Panels refer to widgets by id, so layouts hold no markup.
  * Bus topics (the app bus): dock:opened {widget} · dock:layout {panels} · dock:saved · dock:error {message} ·
- * dock:status {message} (what the last command did, for a status line).
- * The dock has no toolbar: its commands are public, for controls elsewhere (the app bar) to call.
+ * dock:status {message} (what the last command did). It has no toolbar: its commands are public, for the app bar to call.
  *   windowStyle / setWindowStyle(s): tabs or clear (remembered per dock).
- *   save() / restore() / reset(): the layout. saveAs() fires a bubbling `dock:save-as` {layout, system} event, for the
+ *   save() / restore() / reset(): keep a restore point, return to it, start again. saveAs() fires a bubbling `dock:save-as` {layout, system} event, for the
  *   page to save it as a workspace of its own (workspace-pages.ts). connections() fires a bubbling
  *   `dock:connections` DOM event; whatever wraps the dock (the wiring view) decides what it means.
  * template / setTemplate(id): panels in a fixed layout (layout-templates.ts; dock/template-mode.ts), what does not fit
@@ -23,7 +23,7 @@
  * Light DOM, because golden-layout positions its drag proxy in document.body.
  * `host` (the page's Host, given before it connects): a `pod` panel (addWidget('pod', name), as the explorer does) opens
  * that pod and shows its view (dock/panels.ts); a picked implementation is first deployed as a new lazy pod (addPod).
- * `storage` (default localStorage) keeps its state under `storage-key`; a page's dock gets its page's (dock/page-slots.ts).
+ * `storage` (default localStorage) keeps its state under `storage-key`; a page's dock gets its page's (dock/page-docks.ts).
  * In a hidden <app-route> it is built when the route first shows.
  */
 import { GoldenLayout, LayoutConfig, type Stack, type ComponentItem, type ContentItem, type ResolvedLayoutConfig } from 'golden-layout/dist/esm/index.js';   // its ES build (src/dock/golden-layout.d.ts)
@@ -146,8 +146,8 @@ export class WorkspaceDock extends HTMLElement {
   private get system(): string { return this.getAttribute('system') ?? 'host'; }
   private send(topic: string, payload: unknown) { this.requireBus().publish(topic, payload, 'workspace-dock'); }
   private say(message: string) { this.send('dock:status', { message }); }
-  /** Panels or template changed: the controls re-read; the empty dock's `+` shows when nothing else does. */
-  private changed() { const panels = this.openIds().length; this.empty!.hidden = !!this.tpl || panels > 0; this.send('dock:layout', { panels }); }
+  /** Panels or template changed: kept (golden-layout's config: the template keeps itself), the controls re-read; the empty dock's `+` shows when nothing else does. */
+  private changed() { writeSaved(this.storage, this.storageKey, this.kept); const panels = this.openIds().length; this.empty!.hidden = !!this.tpl || panels > 0; this.send('dock:layout', { panels }); }
   /** Sends `dock:focus` when the focused panel has changed: its instance, or null if it shows none or none is focused. */
   private reportFocus(item = this.layout?.focusedComponentItem) {
     if (item === this.focused) return;
@@ -203,22 +203,21 @@ export class WorkspaceDock extends HTMLElement {
     this.requireLayout().loadLayout({ ...config, dimensions: { ...config.dimensions, headerHeight: HEADER_H } });
     if (left) this.changed();
   }
-  /** A remembered layout, if storage works and it only names widgets this palette still has. */
-  private readSaved() { return readSaved(this.storage, this.storageKey, (id) => this.defs.has(id), (m) => this.say(m)); }
+  /** The kept layout (or, `.saved`, the restore point), if storage works and it only names widgets this palette still has. */
+  private readSaved(key = this.storageKey) { return readSaved(this.storage, key, (id) => this.defs.has(id), (m) => this.say(m)); }
+  /** Keeps a restore point: the layout as it is now, its template too. */
   save() {
-    const message = writeSaved(this.storage, this.storageKey, this.kept);
+    const key = `${this.storageKey}.saved`, message = writeSaved(this.storage, key, this.kept);
+    if (!message) templateState(this.storage, key).set(this.tpl?.state ?? null);
     if (message) { this.say(message); return this.send('dock:error', { message }); }
     this.say('Layout saved.');
     // BACKLOG(3): its route's screen got the layout too (setLayout on the Application's screens); 0.4 has no screens.
     this.ownerDocument.dispatchEvent(new CustomEvent('nano:changed'));   // the working copy follows
     this.send('dock:saved', { panels: this.openIds().length });
   }
-  restore() {
-    const saved = this.readSaved(); if (!saved) return this.say('No saved layout yet.');
-    const t = templateState(this.storage, this.storageKey).get();   // load() clears it; re-entered, rebased, if its panels are the saved ones
-    this.load(saved); this.say('Layout restored.'); const names = (o: (PanelState | null)[]) => JSON.stringify(o.filter((s) => s !== null).map((s) => s.name ?? s.widget).sort());
-    if (t && this.known(t) && names([...t.order, ...t.parked]) === names(panelsInOrder(this.kept.root))) this.show({ ...t, dock: this.kept });
-  }
+  /** Back to the restore point (its template too). */
+  restore() { const key = `${this.storageKey}.saved`, saved = this.readSaved(key), t = templateState(this.storage, key).get(); if (!saved) return this.say('No saved layout yet.');
+    this.load(saved); this.say('Layout restored.'); if (t && this.known(t)) this.show({ ...t, dock: this.kept }); else this.changed(); }
 
   reset() { this.load(initial(this, this.defs)); this.say('Back to the starting layout.'); }
 }

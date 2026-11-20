@@ -31,7 +31,7 @@ test('storage that throws: nothing throws, one status message', () => {
   expect(document.querySelectorAll('[data-nano-status]').length).toBe(1)
 })
 
-test('migrate reads Main, the saved pages, their dock layouts and templates, and leaves those keys', () => {
+test('migrate reads Main, the saved pages, their dock layouts, templates and window styles, and leaves those keys', () => {
   const { m, storage } = memory()
   const config = { root: { type: 'row', content: [{ type: 'component', componentState: { widget: 'example.clock/clock', name: 'clock1' } }, { type: 'component', componentState: { widget: 'nano-explorer' } }] } }
   const template = { template: 'two-cols', order: [{ widget: 'notes' }, null], parked: [{ widget: 'example.clock/clock', name: 'clock2' }], dock: null }
@@ -44,7 +44,7 @@ test('migrate reads Main, the saved pages, their dock layouts and templates, and
   const pages = persisted(storage, 'k').migrate(storage)
   expect(pages).toEqual([
     { id: 'workspace', title: 'Home', icon: 'home', workspace: config, slots: [{ id: 'clock1', runtime: 'main', pod: 'clock1' }, { id: 'nano-explorer', view: 'nano-explorer' }] },
-    { id: 'trading', title: 'Trading', icon: 'chart', workspace: { template }, slots: [{ id: 'notes', view: 'notes' }, { id: 'clock2', runtime: 'main', pod: 'clock2' }] },
+    { id: 'trading', title: 'Trading', icon: 'chart', workspace: { template, 'window-style': 'glass' }, slots: [{ id: 'notes', view: 'notes' }, { id: 'clock2', runtime: 'main', pod: 'clock2' }] },
     { id: 'a-b', title: 'AB', icon: 'box', slots: [] },
   ])
   expect(m.size).toBe(6)   // the nav and docks still read them

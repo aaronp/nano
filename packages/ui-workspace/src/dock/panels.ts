@@ -38,7 +38,7 @@ export function fill(el: HTMLElement, id: string, h: Host): () => void {
     return h.app.listen(e => { lines.push(JSON.stringify(e)); if (lines.length > 200) lines.shift(); pre.textContent = lines.join('\n') })   // the last 200
   }
   const pod = id.slice('pod:'.length), runtimeOf = () => { const d = h.data(); return Object.keys(d.runtimes).find(r => d.runtimes[r]!.pods.includes(pod)) }
-  let shown = '', open = false
+  let shown = '', open = false, trying = false   // a failed open is tried again on a later apply (placed, or let in, since)
   const show = () => {
     const runtime = open && runtimeOf()
     if (!runtime) return
@@ -47,8 +47,8 @@ export function fill(el: HTMLElement, id: string, h: Host): () => void {
     if (key !== shown) { shown = key; el.replaceChildren(made(tag, { ...target, runtime, pod } satisfies ViewTarget)) }
   }
   const fail = (why: string) => el.replaceChildren(Object.assign(document.createElement('p'), { className: 'dock-fail', textContent: why }))
-  void h.app.runtime(runtimeOf() ?? '').getOrCreate(pod).then(r => { if (r.ok) { open = true; show() } else fail(r.fail.reason) })
-  return h.app.listen(e => { if (e.type === 'applied') show() })
+  const tryOpen = () => { if (trying) return; trying = true; void h.app.runtime(runtimeOf() ?? '').getOrCreate(pod).then(r => { trying = false; if (r.ok) { open = true; show() } else fail(r.fail.reason) }) }
+  tryOpen(); return h.app.listen(e => { if (e.type === 'applied') { if (open) show(); else tryOpen() } })
 }
 
 /** The config a built-in starts with, where it needs one. */

@@ -188,11 +188,11 @@ test('clicking a position reports its instance as dock:focus', async () => {
   expect(focus.at(-1)).toEqual({ system: 'host', instance: 'inst-1', widget: 'ws' })
 })
 
-test('restore() re-enters a stored template with its swapped order', async () => {
+test('restore() returns to the restore point: saved in a template, it re-enters it with its order (ADR-0036)', async () => {
   const { dock } = await two()
-  dock.save(); dock.setTemplate('two-cols')
-  const t = dock.arrangement().template!, order = [...t.order].reverse()
-  localStorage.setItem(`${dock.getAttribute('storage-key')}.template`, JSON.stringify({ ...t, order }))
+  dock.setTemplate('two-cols')
+  const order = dock.arrangement().template!.order
+  dock.save(); dock.setTemplate('dock'); dock.setTemplate('one')
   dock.restore()
   expect(dock.template).toBe('two-cols')
   expect(dock.arrangement().template!.order).toEqual(order)

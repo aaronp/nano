@@ -49,11 +49,11 @@ export function persisted(storage: Storage, key: string) {
         return obj(config) || obj(template) || s ? { ...p, workspace: { ...(obj(config) && config), ...(obj(template) && { template }), ...(s && { 'window-style': s }) } } : p
       })
       const page = (id: string, title: string, icon: unknown, dock: string): Page => {
-        const config = read(dock), template = read(`${dock}.template`)
+        const config = read(dock), template = read(`${dock}.template`), s = style(dock)
         const t = obj(template) ? template : {}, panels = [...panelsInOrder(obj(config) ? config.root : null),
           ...(Array.isArray(t.order) ? t.order : []).filter(obj), ...(Array.isArray(t.parked) ? t.parked : []), ...panelsInOrder(obj(t.dock) ? t.dock.root : null)] as PanelState[]
         const slots = [...new Map(panels.filter(p => obj(p) && typeof p.widget === 'string').map(p => [slotOf(p).id, slotOf(p)])).values()]
-        const workspace = obj(config) || obj(template) ? { ...(obj(config) && config), ...(obj(template) && { template }) } : undefined
+        const workspace = obj(config) || obj(template) || s ? { ...(obj(config) && config), ...(obj(template) && { template }), ...(s && { 'window-style': s }) } : undefined
         return { id, title, ...(typeof icon === 'string' && { icon }), ...(workspace && { workspace }), slots }
       }
       const list = read(LIST), main = read(`${LIST}.main`), saved = Array.isArray(list) ? list.filter(w => obj(w) && typeof w.path === 'string') : []

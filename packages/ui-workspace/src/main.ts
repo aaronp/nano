@@ -31,25 +31,27 @@ import { defineMessages } from './messages/index.ts';
 import { bootWiring, hand as handTo } from './boot-wiring.ts';   // after the shell (its bus)
 import { shadowCreate } from './history.ts';
 import { savedLayout, slotsToOpen } from './layout-data.ts';
-import { templateState, type TemplateState } from './lib/layout-templates.ts';
+import { panelsInOrder, type PanelState, type TemplateState } from './lib/layout-templates.ts';
+import { slotsOf } from './dock/page-slots.ts';
 import { icon } from './icons.ts';
 import { HOST_PODS } from './host-deploy.ts';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
 if (host) {
   const h = host, target = { app: h.app, registry: h.registry, get calls() { return h.calls(); } };
-  const dock = document.querySelector<WorkspaceDock>('workspace-dock#workspace');
-  // An import whose nano.json brings a layout for this dock shows it: through the dock's own saved layout and restore().
+  // Main's page (the store's): written, never its dock, which shows it once built (it may not be: a deep link elsewhere).
+  const MAIN = 'workspace', main = () => { const { workspace: _, ...p } = pages.get(MAIN)!; return p; };
+  const placedIn = (pod: string) => Object.entries(h.data().runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
+  // An import whose nano.json brings a layout for Main (under its dock's id) becomes Main's arrangement, its panels the slots.
   const shown = async (r: Promise<{ ok: boolean }>, before: string) => {
-    const done = await r;
-    const l = dock && h.data().layout?.[dock.id], key = dock?.getAttribute('storage-key');
-    if (done.ok && l && key && JSON.stringify(l) !== before) { try { dock!.storage.setItem(key, JSON.stringify(l)); templateState(dock!.storage, key).set((l as { template?: TemplateState }).template ?? null); } catch { /* no storage: the layout is not shown */ } dock!.restore(); }
+    const done = await r, l = h.data().layout?.[MAIN] as { root?: unknown; template?: TemplateState } | undefined;
+    if (done.ok && l && JSON.stringify(l) !== before) pages.set({ ...main(), workspace: l, slots: slotsOf(l.template ? [...l.template.order.filter((p): p is PanelState => !!p), ...l.template.parked] : panelsInOrder(l.root), placedIn) });
     // A file from another engine: its neutral slots, a panel each, in order.
-    const open = done.ok && dock ? slotsToOpen(h.data(), dock.id) : [];
-    if (open.length) { dock!.reset(); for (const pod of open) dock!.openPod(pod); }
+    const open = done.ok ? slotsToOpen(h.data(), MAIN) : [];
+    if (open.length) pages.set({ ...main(), slots: open.map(pod => ({ id: pod, runtime: placedIn(pod)!, pod })) });
     return done;
   };
-  const layoutNow = () => JSON.stringify(dock && h.data().layout?.[dock.id]);
+  const layoutNow = () => JSON.stringify(h.data().layout?.[MAIN]);
   setImportHost({ ...host, importUrl: (url, chosen) => { const before = layoutNow(); return shown(host!.importUrl(url, chosen), before) as ReturnType<typeof h.importUrl>; } });
   for (const dock of document.querySelectorAll<WorkspaceDock>('workspace-dock')) dock.host = host;
   for (const el of document.querySelectorAll<HTMLElement & { target?: unknown; icon?: unknown }>('nano-explorer, nano-wiring')) { el.target ??= target; if (el.localName === 'nano-explorer') el.icon = icon; }
@@ -62,10 +64,10 @@ if (host) {
   const menu = document.querySelector<FileMenuEl>('nano-file-menu');
   const download = (name: string, reconcile = false) => {
     const a = document.createElement('a');
-    const saved = h.saved(reconcile), l = dock?.arrangement();
+    const saved = h.saved(reconcile), { saved: _p, 'saved.template': _t, 'window-style': _w, ...l } = (pages.get(MAIN)!['workspace'] ?? {}) as Record<string, unknown>;
     const runtimeOf = (pod: string) => Object.entries(saved.runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
     const desk = document.querySelector<Desk>('c-desk')?.layout();
-    const was = l && dock ? { ...saved, layout: savedLayout(saved, dock.id, l, runtimeOf, desk) } : desk ? { ...saved, layout: { ...saved.layout, desk } } : saved;
+    const was = Object.keys(l).length ? { ...saved, layout: savedLayout(saved, MAIN, l, runtimeOf, desk) } : desk ? { ...saved, layout: { ...saved.layout, desk } } : saved;
     const file = { ...was, layout: { ...was.layout, pages: pages.list() } };   // the pages are the store's
     a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' }));
     a.download = name; document.body.append(a); a.click(); a.remove();
@@ -77,12 +79,12 @@ if (host) {
     save: () => download('nano.json'), reconcile: () => download('nano.json', true), download: () => download('nano.json'),
     'save-as': async () => { const name = await askName(document, 'nano'); if (name) download(`${name}.json`); },
     open: () => openImportDialog(document), import: () => openImportDialog(document),
-    // New: an apply of an empty deployment (the host's own pods stay; providers stay loaded), and the dock's
-    // starting layout. BACKLOG(8): the old New also started a working copy.
+    // New: an apply of an empty deployment (the host's own pods stay; providers stay loaded), and Main's page emptied
+    // (its dock's starting layout shows). BACKLOG(8): the old New also started a working copy.
     new: async () => {
       const d = h.data(), r = await h.apply({ ...d, pods: Object.fromEntries(HOST_PODS.map(p => [p, d.pods[p]!])), runtimes: { main: { pods: [...HOST_PODS], subscriptions: [] } }, tags: {}, views: {}, layout: undefined });
       if (!r.ok) return;
-      dock?.reset();
+      pages.set({ ...main(), slots: [] });
       if (menu) menu.dirty = false;
     },
   };

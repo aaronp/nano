@@ -3,14 +3,14 @@
  * link), one route and one dock of Main's widgets per page, in store order; Main is the page `workspace` at
  * /workspace, its row and dock in index.html. The store's changes mount, unmount, relabel and reorder them, whoever
  * made them (this nav, a pod through HostPages, an import). A page's id is its route and never changes; a rename
- * changes its title. Each dock keeps its page (dock/page-slots.ts: its state the page's `workspace`, its panels the
+ * changes its title. Each dock keeps its page (dock/page-docks.ts: its state the page's `workspace`, its panels the
  * page's slots). Beside the app's title, + makes an empty page and ✎ toggles the nav's edit mode (nav-edit.ts); the
  * dock's "Save as workspace…" copies a page (its slots and arrangement) into "<title> copy".
  */
 import type { Page } from '@pritzlaff/nano-ui';
 import { ICONS } from '../lib/icons.ts';
 import { slugPath, type pageStore } from '../lib/pages.ts';
-import { keepDocks } from '../dock/page-slots.ts';
+import { keepDocks } from '../dock/page-docks.ts';
 import { navEdit } from './nav-edit.ts';
 import type { WorkspaceDock } from './workspace-dock.ts';
 import type { Wires } from '../wires/wires.ts';
