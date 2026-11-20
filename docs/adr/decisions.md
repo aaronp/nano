@@ -1176,3 +1176,81 @@ Cons:
 
 ## Decision
 Picks deploy lazy pods; the page that shows one starts it.
+
+---
+id: ADR-0036
+title: Pages save every change; Save layout keeps a restore point
+status: accepted
+date: 2026-11-20
+revisit: 
+tags: presentation, persistence, workspace
+parent: ADR-0032
+decision: checkpoint
+---
+
+## Goal
+Pages are deployment data, and the spec says every arrangement change (split, close, drag, template switch, swap,
+park) rewrites the page, so a reload never loses work. The workspace dock already has Save layout, Restore and Reset,
+which assumed the live arrangement was *not* kept. The impact is what those three commands mean once it is.
+
+## Hypothesis
+- We believe: the page always holds the live arrangement; Save layout stores a restore point beside it on the page
+- Will result in: no lost work on reload, and the commands people already know keep a useful meaning
+- Measured by: move a panel, reload, the move is there; Save, move, Restore returns to the saved arrangement
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| no-loss | No lost work | 5 | A reload shows what you last had. |
+| familiar | Commands keep meaning | 3 | Save, Restore and Reset still do something people expect. |
+| simple | Simplicity | 3 | Few states per page. |
+
+## Solution: checkpoint — Live arrangement always saved; Save layout is a restore point
+The page's engine key holds the live arrangement (written on every change) and, after Save layout, a saved one.
+Restore returns to the saved one; Reset returns to the dock's starting layout, as now.
+
+| criterion | score |
+| --- | --- |
+| no-loss | 5 |
+| familiar | 4 |
+| simple | 3 |
+
+Pros:
+- Nothing is lost on reload; Save/Restore become an undo point
+
+Cons:
+- Two arrangements per page in the engine key
+
+## Solution: drop-save — Live arrangement always saved; Save layout and Restore removed
+| criterion | score |
+| --- | --- |
+| no-loss | 5 |
+| familiar | 2 |
+| simple | 5 |
+
+Pros:
+- One state per page
+
+Cons:
+- Removes two commands people use, with no way back to a known arrangement
+
+## Solution: save-only — Keep writing the arrangement only on Save
+| criterion | score |
+| --- | --- |
+| no-loss | 1 |
+| familiar | 5 |
+| simple | 4 |
+
+Pros:
+- Unchanged behaviour
+
+Cons:
+- A reload loses unsaved moves, and slots and engine state drift apart (against the spec)
+
+## Decision
+Checkpoint: every change writes the live arrangement to the page; Save layout keeps a restore point on the page;
+Restore returns to it; Reset to the starting layout.
