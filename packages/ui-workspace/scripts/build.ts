@@ -31,6 +31,7 @@ async function all() {
   copyFileSync(join(repo, 'templates/nano-template/nano.json'), join(pub, 'examples/template/nano.json'))
   if (Bun.spawnSync(['bun', 'scripts/build.ts'], { cwd: join(repo, 'examples'), stdout: 'inherit', stderr: 'inherit' }).exitCode) throw new Error('examples build failed')
   for (const name of readdirSync(join(repo, 'examples/dist'))) cpSync(join(repo, 'examples/dist', name), join(pub, 'examples', name), { recursive: true })
+  if (Bun.spawnSync(['bun', 'scripts/build.ts'], { cwd: join(repo, 'packages/host-react'), stdout: 'inherit', stderr: 'inherit' }).exitCode) throw new Error('host-react build failed')   // the second host, at /react/
 }
 
 await all()
