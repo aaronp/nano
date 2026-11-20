@@ -30,9 +30,8 @@ export type LayoutData = { slots?: LayoutSlot[]; geometry?: Record<string, Layou
 
 const str = (v: unknown): v is string => typeof v === 'string'
 const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-const impl = Coord.namespace('nano.ui').implementationId('page')
-// Core's `Coord` id rule: slightly stricter than the deployment `Id` schema (it rejects `@`).
-const idOk = (id: unknown) => { try { Coord.pod(impl, id as string, 'p'); return str(id) } catch { return false } }
+// Core's runtime id rule (`Coord.runtime`): slightly stricter than the deployment `Id` schema (it rejects `@`).
+const idOk = (id: unknown) => { try { return str(id) && !!Coord.runtime(id) } catch { return false } }
 const slotOk = (s: unknown) => obj(s) && str(s.id) && (str(s.view) || (str(s.runtime) && str(s.pod)))
 const pageOk = (p: unknown): p is Page =>
   obj(p) && idOk(p.id) && str(p.title) && Array.isArray(p.slots) && p.slots.every(slotOk) && (p.icon === undefined || str(p.icon)) && (p.geometry === undefined || obj(p.geometry))

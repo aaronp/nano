@@ -1,7 +1,7 @@
 /**
  * The migration's contracts: a database of rows, and the migration that copies one to another.
  *
- *   ctx.one(Selector.of(DB, { runtime: 'v2' }))   // success(Selection): .value.call.all({}) gives the rows in v2's db
+ *   ctx.one(Selector.of(DB, { runtime: Coord.runtime('v2') }))   // success(Selection): .value.call.all({}) gives the rows in v2's db
  */
 import { Type } from 'typebox'
 import { Coord, Schema, Op } from '@pritzlaff/nano-core'

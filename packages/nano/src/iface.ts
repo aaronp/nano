@@ -2,8 +2,8 @@
  * Interfaces: a coordinate plus a set of ops, each named by its key (its coordinate the hash of that name and its
  * schemas), indexed by name and by op coord. A port is one op as offered by one interface, written readably.
  *
- *   const db = Interface.define('acme/db', { get: Op.action(Key, Value) })
- *   port(db, db.ops.get)   // 'acme/db/get'
+ *   const db = Interface.define('acme.Db', { get: Op.action(Key, Value) })
+ *   port(db, db.ops.get)   // 'acme.Db/get'
  *
  * An implementation starts from the contract it provides: `api.impl(coord)` is a builder (`needs`, `config`, each
  * optional, each typing the next step; `description(text)` too; `make` at every step; `create` all at once; `satisfies` for another interface
@@ -13,7 +13,7 @@
  */
 import type { Static, TSchema } from 'typebox'
 import type { NanoContext } from './context.ts'
-import type { ImplCoord, InterfaceCoord } from './coord.ts'
+import { Coord, type ImplCoord, type InterfaceCoord } from './coord.ts'
 import { Implementation } from './implementation.ts'
 import { lift } from './plain.ts'
 import type { Op } from './op.ts'
@@ -85,7 +85,7 @@ type Named<U extends Record<string, Unnamed>> = { [K in keyof U]: U[K] & { reado
 
 function define<U extends Record<string, Unnamed>>(at: string | InterfaceCoord, unnamed: U): Interface<Named<U>> {
   const coord = String(at)
-  if (!COORD.test(coord)) throw new Error(`bad interface coordinate ${coord}`)
+  try { Coord.parse('interface', coord) } catch { throw new Error(`bad interface coordinate ${coord}`) }   // `ns.Name` only
   const ops = Object.fromEntries(Object.entries(unnamed).map(([name, o]) =>
     [name, { ...o, name, coord: hashOf(canonical({ name, input: o.input?.hash ?? null, output: o.output!.hash })) }])) as Named<U>
   const api: Interface<Named<U>> = { coord, ops, byCoord: new Map(Object.values(ops).map(o => [o.coord, o])), impl: at => builder(api, at) as never }

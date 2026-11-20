@@ -29,7 +29,7 @@ export function autoConnect(d: AppDeployment, registry: Registry, pods: readonly
       if (found.length !== 1) { notes.push(`${pod} needs ${what}: ${found.length ? `${found.join(', ')} all provide it; wire one in Connections` : 'nothing provides it'}`); continue }
       const to = found[0]!, at = where(out, to)!, rt = out.runtimes[at]!
       rt.subscriptions.push({ kind: 'call', from: pod, to })
-      if (rt.policy?.kind === 'rules') rt.policy.rules.unshift({ allow: ['call', 'subscribe'], from: pod, outside: !rt.pods.includes(pod), ...(s.implements && { toInterface: s.implements }) })
+      if (rt.policy?.kind === 'rules') rt.policy.rules.unshift({ allow: ['call', 'subscribe'], from: pod, outside: !rt.pods.includes(pod), ...(s.implements && { toInterface: String(s.implements) }) })
       notes.push(`connected ${pod} → ${to} (${what})`)
     }
   }

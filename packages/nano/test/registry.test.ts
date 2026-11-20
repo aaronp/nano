@@ -12,8 +12,8 @@ import { Registry } from '../src/registry.ts'
 const Str = Schema.define(Type.String(), 'Str')
 const Nothing = Schema.define(Type.Null(), 'Nothing')
 const Num = Schema.define(Type.Number(), 'Num')
-const db = Interface.define('acme/db', { get: Op.action(Str, Num), put: Op.action(Str, Nothing), changed: Op.event(Str) })
-const log = Interface.define('acme/log', { write: Op.action(Str, Nothing) })
+const db = Interface.define('acme.Db', { get: Op.action(Str, Num), put: Op.action(Str, Nothing), changed: Op.event(Str) })
+const log = Interface.define('acme.Log', { write: Op.action(Str, Nothing) })
 const ctx = { self: 'db', runtimes: [] } as unknown as NanoContext // makes here never call out
 
 const memDb = Implementation.define('acme/mem/db', {
@@ -27,7 +27,7 @@ const mem = Provider.define('acme/mem', [memDb, memLog], { author: 'acme' })
 describe('implementations', () => {
   test('make keys handlers by port: interface coord and op name', async () => {
     const { handlers } = await memDb.make(ctx, undefined)
-    expect([...handlers.keys()].sort()).toEqual(['acme/db/get', 'acme/db/put'].sort())
+    expect([...handlers.keys()].sort()).toEqual(['acme.Db/get', 'acme.Db/put'].sort())
     expect(await handlers.get(port(db, db.ops.get))!('abc', ctx)).toEqual(success(3))
   })
   test('a missing handler throws `<coord>: missing <iface>/<op>`', async () => {
@@ -36,10 +36,10 @@ describe('implementations', () => {
       // @ts-expect-error put is required
       make: () => [provide(db, { get: async () => success(1) })],
     })
-    await expect(half.make(ctx, undefined)).rejects.toThrow('acme/mem/half: missing acme/db/put')
+    await expect(half.make(ctx, undefined)).rejects.toThrow('acme/mem/half: missing acme.Db/put')
   })
   test('two interfaces sharing an identical op get distinct handlers, one per port', async () => {
-    const audit = Interface.define('acme/audit', { write: Op.action(Str, Nothing) })
+    const audit = Interface.define('acme.Audit', { write: Op.action(Str, Nothing) })
     expect(audit.ops.write.coord).toBe(log.ops.write.coord)
     const seen: string[] = []
     const both = Implementation.define('acme/mem/both', {
@@ -55,13 +55,13 @@ describe('implementations', () => {
     expect(seen).toEqual(['log a', 'audit b'])
   })
   test("one interface's handler does not satisfy another's", async () => {
-    const audit = Interface.define('acme/audit', { write: Op.action(Str, Nothing) })
+    const audit = Interface.define('acme.Audit', { write: Op.action(Str, Nothing) })
     const one = Implementation.define('acme/mem/one', { provides: [log, audit], make: () => [provide(log, { write: async () => success(null) })] })
-    await expect(one.make(ctx, undefined)).rejects.toThrow('acme/mem/one: missing acme/audit/write')
+    await expect(one.make(ctx, undefined)).rejects.toThrow('acme/mem/one: missing acme.Audit/write')
   })
   test('a part for an interface not in provides throws', async () => {
     const stray = Implementation.define('acme/mem/stray', { provides: [], make: () => [provide(log, { write: async () => success(null) })] })
-    await expect(stray.make(ctx, undefined)).rejects.toThrow('acme/mem/stray: acme/log is not provided')
+    await expect(stray.make(ctx, undefined)).rejects.toThrow('acme/mem/stray: acme.Log is not provided')
   })
   test('a bad implementation coordinate throws', () => {
     for (const c of ['acme', 'acme/', 'acme/mem/', '/db', 'acme//db'])
@@ -69,7 +69,7 @@ describe('implementations', () => {
   })
   test('an interface provided twice throws', async () => {
     const twice = Implementation.define('acme/mem/twice', { provides: [log], make: () => [provide(log, { write: async () => success(null) }), provide(log, { write: async () => success(null) })] })
-    await expect(twice.make(ctx, undefined)).rejects.toThrow('acme/mem/twice: acme/log is provided twice')
+    await expect(twice.make(ctx, undefined)).rejects.toThrow('acme/mem/twice: acme.Log is provided twice')
   })
   test('handlers are typed from the op schemas', () => {
     // @ts-expect-error get returns a number, not a string
@@ -86,15 +86,15 @@ describe('registry', () => {
     expect(r.add(mem)).toEqual(success(undefined))
     expect(r.provider('acme/mem')).toBe(mem)
     expect(r.implementation('acme/mem/db')).toBe(memDb)
-    expect(r.interface('acme/log')).toBe(log)
+    expect(r.interface('acme.Log')).toBe(log)
     expect(r.op(db.ops.changed.coord)).toBe(db.ops.changed)
     expect(r.implementation('acme/mem/nope')).toBeUndefined()
   })
   test('implementationsOf an interface', () => {
     const r = Registry.create()
     r.add(mem)
-    expect(r.implementationsOf('acme/db')).toEqual([memDb])
-    expect(r.implementationsOf('acme/none')).toEqual([])
+    expect(r.implementationsOf('acme.Db')).toEqual([memDb])
+    expect(r.implementationsOf('acme.None')).toEqual([])
   })
   test('the manifest is plain, sorted data (`structuredClone` equals it)', () => {
     const r = Registry.create()
@@ -103,8 +103,8 @@ describe('registry', () => {
     expect(structuredClone(m)).toEqual(m)
     expect(m.providers).toEqual([{ coord: 'acme/mem', implementations: ['acme/mem/db', 'acme/mem/log'] }])
     expect(m.implementations.map(i => i.coord)).toEqual(['acme/mem/db', 'acme/mem/log'])
-    expect(m.implementations[0]!.dependencies).toEqual({ log: { implements: 'acme/log' } })
-    expect(m.interfaces.map(i => i.coord)).toEqual(['acme/db', 'acme/log'])
+    expect(m.implementations[0]!.dependencies).toEqual({ log: { implements: 'acme.Log' } })
+    expect(m.interfaces.map(i => i.coord)).toEqual(['acme.Db', 'acme.Log'])
     expect(m.interfaces[1]!.ops).toEqual([{ name: 'write', kind: 'action', coord: log.ops.write.coord, input: Str.hash, output: Nothing.hash }])
   })
   test('adding a clashing provider fails and adds nothing', () => {
@@ -112,13 +112,13 @@ describe('registry', () => {
     r.add(mem)
     expect(r.add(mem)).toEqual({ ok: false, fail: { type: 'invalid-input', reason: 'provider acme/mem is already registered' } })
 
-    const other = Interface.define('acme/other', { write: Op.action(Str, Nothing) })
+    const other = Interface.define('acme.Other', { write: Op.action(Str, Nothing) })
     const dup = Provider.define('acme/mem2', [
       Implementation.define('acme/mem2/other', { provides: [other], make: () => [] }),
-      Implementation.define('acme/mem2/db', { provides: [Interface.define('acme/db', { get: db.ops.get })], make: () => [] }),
+      Implementation.define('acme/mem2/db', { provides: [Interface.define('acme.Db', { get: db.ops.get })], make: () => [] }),
     ])
-    expect(r.add(dup)).toEqual({ ok: false, fail: { type: 'invalid-input', reason: 'interface acme/db differs' } })
-    expect(r.interface('acme/other')).toBeUndefined()
+    expect(r.add(dup)).toEqual({ ok: false, fail: { type: 'invalid-input', reason: 'interface acme.Db differs' } })
+    expect(r.interface('acme.Other')).toBeUndefined()
     expect(r.provider('acme/mem2')).toBeUndefined()
     expect(r.implementation('acme/mem2/other')).toBeUndefined()
   })

@@ -7,6 +7,7 @@
  *   await probe(url, () => openFrame('isolated-sandbox'))   // the module at `url` described from inside a frame
  */
 import {
+  Coord,
   Schema,
   failure,
   Interface,
@@ -28,10 +29,12 @@ export type Probed = { provider: Provider; views: ViewMap; built?: Built }
 const TAG = /^[a-z][a-z0-9._]*-[a-z0-9._-]*$/
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const schema = (s: SchemaJson) => Schema.define(s.schema as never, s.type || undefined) as SchemaDef
-/** Only the selector fields, so an extra key (a `byCoord`) cannot pass for an interface. */
-const selector = ({ implements: i, tags, implementation: m, provider: p, runtime: r }: SelectorData): SelectorData =>
-  ({ ...(i !== undefined && { implements: i }), ...(tags && { tags }), ...(m !== undefined && { implementation: m }),
-    ...(p !== undefined && { provider: p }), ...(r !== undefined && { runtime: r }) })
+type Written = Described['implementations'][number]['dependencies'][string]
+/** Only the selector fields, each read back to its coordinate, so an extra key (a `byCoord`) cannot pass for an interface. */
+const selector = ({ implements: i, tags, implementation: m, provider: p, runtime: r }: Written): SelectorData =>
+  ({ ...(i !== undefined && { implements: Coord.parse('interface', i) }), ...(tags && { tags }),
+    ...(m !== undefined && { implementation: Coord.parse('implementation', m) }),
+    ...(p !== undefined && { provider: Coord.parse('namespace', p) }), ...(r !== undefined && { runtime: Coord.parse('runtime', r) }) })
 
 /** `d` as a Provider, and the view tags of its own implementations. Never throws. */
 export function described(d: Described): NanoResult<Probed> {

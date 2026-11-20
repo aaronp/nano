@@ -25,7 +25,7 @@ export function declaredOps(d: AppDeployment, registry: Registry): OpCall[] {
     for (const [op, targets] of Object.entries(impl.calls)) {
       const from = impl.provides.find(i => Object.values(i.ops).some(o => o.name === op))
       for (const t of targets) {
-        const [role, name] = t.split('.'), iface = impl.dependencies[role!]?.implements
+        const [role, name] = t.split('.'), dep = impl.dependencies[role!]?.implements, iface = dep && String(dep)
         if (from && iface && to.provides.some(i => i.coord === iface)) add(`${from.coord}/${op}`, `${iface}/${name}`)
       }
     }

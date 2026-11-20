@@ -19,7 +19,7 @@ export const migrate = Implementation.define(ns.implementationId('migrate'), {
   dependencies: { db: DB },
   calls: { run: { db: [DB.ops.all, DB.ops.insert] } },
   make: (_ctx, config: { from: string; to: string }) => [provide(Migrate, { run: async (_, c) => {
-    const from = c.one(Selector.of(DB, { runtime: config.from })), to = c.one(Selector.of(DB, { runtime: config.to }))
+    const from = c.one(Selector.of(DB, { runtime: Coord.runtime(config.from) })), to = c.one(Selector.of(DB, { runtime: Coord.runtime(config.to) }))
     if (!to.ok) return to
     if (!from.ok) return from
     const rows = await from.value.call.all({})

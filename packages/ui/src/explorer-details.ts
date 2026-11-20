@@ -36,7 +36,7 @@ function pod(c: Ctx, runtime: string, name: string) {
   const subs = Object.entries(c.d.runtimes).flatMap(([r, rt]) => rt.subscriptions.map(s => ({ r, s })))
   const calls = subs.filter(({ s }) => s.kind === 'call' && s.from === name).map(({ s }) => s.to)
   const needs = Object.entries(impl?.dependencies ?? {}).map(([role, sel]) => {
-    const to = calls.find(t => { const i = c.registry.implementation(c.d.pods[t]?.implementation ?? ''); return !sel.implements || i?.provides.some(x => x.coord === sel.implements) })
+    const to = calls.find(t => { const i = c.registry.implementation(c.d.pods[t]?.implementation ?? ''); return !sel.implements || i?.provides.some(x => x.coord === String(sel.implements)) })
     return html`${role} (${sel.implements ?? 'any'}) → ${to ? podLink(c, to) : html`<span class="warn">not connected</span>`}`
   })
   return html`<h3>pod ${name}</h3><dl>
@@ -111,7 +111,7 @@ function implementation(c: Ctx, coord: string) {
   return html`<h3>implementation ${coord}</h3>${m.description ? html`<p>${m.description}</p>` : nothing}<dl>
     ${row('provider', m.provider)}
     ${row('provides', list(m.provides.map(i => link(c, `i:${i.coord}`, i.coord))))}
-    ${row('needs', list(Object.entries(m.dependencies).map(([role, s]) => html`${role}: ${s.implements ? link(c, `i:${s.implements}`, s.implements) : JSON.stringify(s)}`)))}
+    ${row('needs', list(Object.entries(m.dependencies).map(([role, s]) => html`${role}: ${s.implements ? link(c, `i:${s.implements}`, String(s.implements)) : JSON.stringify(s)}`)))}
     ${row('pods', list(Object.entries(c.d.pods).filter(([, p]) => p.implementation === coord).map(([n]) => podLink(c, n))))}
   </dl>`
 }

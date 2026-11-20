@@ -3,7 +3,7 @@
  *
  *   const r = Registry.create()
  *   r.add(mem)                        // NanoResult<void>; fails `invalid-input` on a clash
- *   r.implementationsOf('acme/db')    // [memDb]
+ *   r.implementationsOf('acme.Db')    // [memDb]
  */
 import type { Interface } from './iface.ts'
 import type { Implementation } from './implementation.ts'
@@ -14,7 +14,8 @@ import type { SelectorData } from './selector.ts'
 
 export type Manifest = {
   providers: { coord: string; implementations: string[] }[]
-  implementations: { coord: string; provides: string[]; dependencies: Record<string, SelectorData> }[]
+  /** Each dependency's selector written out: every coordinate as its string. */
+  implementations: { coord: string; provides: string[]; dependencies: Record<string, { [K in keyof SelectorData]: K extends 'tags' ? string[] : string }> }[]
   interfaces: { coord: string; ops: { name: string; kind: OpKind; coord: string; input?: string; output?: string }[] }[]
 }
 
@@ -67,7 +68,7 @@ function create(): Registry {
       implementations: [...impls.values()].sort(byCoord).map(i => ({
         coord: i.coord,
         provides: i.provides.map(x => x.coord).sort(),
-        dependencies: structuredClone(i.dependencies) as Record<string, SelectorData>,
+        dependencies: JSON.parse(JSON.stringify(i.dependencies)),   // coordinates write as their strings
       })),
       interfaces: [...ifaces.values()].sort(byCoord).map(i => ({
         coord: i.coord,

@@ -48,18 +48,19 @@ describe('fits', () => {
 describe('Interface.define', () => {
   const get = Op.action(Str, Num)
   test('names each op by its key and indexes it by coord', () => {
-    const i = Interface.define('acme/db', { get })
+    const i = Interface.define('acme.Db', { get })
     expect(i.ops.get.name).toBe('get')
     expect(i.byCoord.get(i.ops.get.coord)).toBe(i.ops.get)
   })
   test('a bad coordinate throws', () => {
     expect(() => Interface.define('db', { get })).toThrow('bad interface coordinate db')
   })
-  test('dotted and slashed coordinates are accepted', () => {
+  test('dotted coordinates are accepted; the slash form is not an interface coordinate', () => {
+    expect(() => Interface.define('acme/db', { get })).toThrow('bad interface coordinate acme/db')
     expect(Interface.define('com.example.DB', { get }).coord).toBe('com.example.DB')
   })
   test('one signature under two keys is two ops', () => {
-    const i = Interface.define('acme/db', { get, put: get })
+    const i = Interface.define('acme.Db', { get, put: get })
     expect(i.ops.put.name).toBe('put')
     expect(i.ops.put.coord).not.toBe(i.ops.get.coord)
   })
@@ -68,12 +69,12 @@ describe('Interface.define', () => {
     expect(port(Log, Log.ops.record)).toBe('acme.Log/record')
   })
   test('Client types an action as a promise of a result', () => {
-    const i = Interface.define('acme/db', { get })
+    const i = Interface.define('acme.Db', { get })
     const c: Client<typeof i> = { get: async (s: string) => success(s.length) }
     expect(Object.keys(c)).toEqual(['get'])
   })
   test('Client has no key for an event', () => {
-    const i = Interface.define('acme/db', { get, tick: Op.event(Num) })
+    const i = Interface.define('acme.Db', { get, tick: Op.event(Num) })
     const c: Client<typeof i> = { get: async (s: string) => success(s.length) }
     // @ts-expect-error events are not callable
     void c.tick

@@ -18,7 +18,7 @@ type OpCord = NonNullable<Call['ops']>[number]
  * `to`'s when none names one). */
 export function calledOps(d: AppDeployment, registry: Registry, from: string, to: string): string[] {
   const provides = registry.implementation(d.pods[to]?.implementation ?? '')?.provides ?? []
-  const named = new Set(Object.values(registry.implementation(d.pods[from]?.implementation ?? '')?.dependencies ?? {}).flatMap(s => s.implements ?? []))
+  const named = new Set(Object.values(registry.implementation(d.pods[from]?.implementation ?? '')?.dependencies ?? {}).flatMap(s => (s.implements ? [String(s.implements)] : [])))
   const used = provides.some(i => named.has(i.coord)) ? provides.filter(i => named.has(i.coord)) : provides
   return used.flatMap(i => Object.values(i.ops).map(op => `${i.coord}/${op.name}:${op.kind === 'action' ? 'in' : 'out'}`))
 }
