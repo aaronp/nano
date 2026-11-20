@@ -4,7 +4,7 @@
 It imports only `@pritzlaff/nano-core`, `@pritzlaff/nano-platform`, `@pritzlaff/nano-ui`, `react` and `react-dom`, is
 built into `packages/ui-workspace/public/react/` and served at `/react/`, and shares the workspace's stored documents
 (`nano-workspace.document`, `nano-workspace.platform`). It does: boot from them, list and switch pages (titles from
-`meta.title`), show each page as a CSS grid (columns in `layout.react`), render each slot (a pod through its view, a
+`title`), show each page as a CSS grid (columns in `layout.react`), render each slot (a pod through its view, a
 `view` slot as "not available here", `missing` as "not found" with Remove, a start failure with its reason), add a slot
 (pick an implementation and a runtime: deploy a lazy pod, then `platform.apply`), remove a slot, add a page, and save
 on each change. About 310 lines of TypeScript/TSX, plus a 50-line index.html.
@@ -33,7 +33,7 @@ does more).
 | 10 | **Adding the pod slot**: `Coord.pod(...)`, a free slot id, apply the page | 6 (`slots.ts`) | `dock/page-pods.ts` `add` (15) | **host-core** (the Platform rightly has no per-operation API) |
 | 11 | **Page edit helper and remove slot**: page `id` replaced by `f(page)`, applied | 6 (`slots.ts` `edit`, `removeSlot`) | `dock/page-pods.ts` `write`, `dock/page-docks.ts` `edit` | **host-core** |
 | 12 | **New page id from a title** (slug, `-2`…) | 4 (`slots.ts` `addPage`) | `lib/pages.ts` `slugPath` | **host-core** |
-| 13 | **Title from `meta.title`** (else the id) | 1 (`slots.ts` `titleOf`) | `lib/pages.ts` `metaOf` | **host-core**, or the Platform names `title` (see B) |
+| 13 | **Title from `title`** (else the id) | 1 (`slots.ts` `titleOf`) | `lib/pages.ts` (`rowOf` in `workspace-pages.ts`) | resolved: `Page.title` (B) |
 | 14 | **Opening the shown page, again on its changes**: `platform.open` on show; re-open when the Platform's change report names it (`added`/`changed`/`resolved`); drop a stale result | ~12 (`app.tsx` `useChanges` and the effect) | `dock/page-pods.ts` `pagePods` (~25), `dock/page-docks.ts` re-open logic | **host-core** (a framework-free `pagePods`-like model: `open`, `get(slot)`, `listen`) |
 | 15 | **What a slot shows**: the opened result → pod view / fail reason / not found + Remove / view not available | ~12 (`slot.tsx` `SlotCell`) | `dock/page-pods.ts` `podPanel` (~40) | the decision in **host-core**; drawing stays per framework |
 | 16 | **Mounting a pod's view**: `viewFor(pod, deployment-with-views, defaults)`, make the element, set `target`, replace on tag/runtime/pod change | 10 (`slot.tsx` `PodView`) | `dock/page-pods.ts` `podPanel`, `chosen`, `viewTags` | **nano-ui** (`mountView(el, target, defaults)`: it owns the view contract) |
@@ -44,7 +44,8 @@ Roughly: of ~310 lines, ~205 restate the workspace (items 1–18); the rest is R
 
 ## What the seam made awkward
 
-**A. The workspace does not keep to its own layout key (the biggest finding).** The Platform says `layout` is the
+**A. The workspace does not keep to its own layout key (the biggest finding).** *Resolved (ADR-0039): the workspace
+keeps its dock's state in `layout.workspace` and its meta in `meta.workspace`, other keys kept; host-react's guard is gone.* The Platform says `layout` is the
 client's, and the brief says to write only `layout.react`. But the workspace reads *every* key of `page.layout` except
 `template` and `window-style` as golden-layout's config (`dock/page-docks.ts` `pageStorage`, `only(w, false)`), and on
 each dock change rewrites the layout as `{ ...only(w, true), ...config }`. So:
@@ -58,11 +59,13 @@ should not leak. Fix (in the workspace, a later step): keep its engine state und
 `layout.template`…), migrating the current shape once; and say in the Platform spec that `layout` and `meta` are maps
 keyed by client.
 
-**B. `meta` is de facto shared.** Titles are `meta.title` for both hosts; order (`meta.order`), icon and the restore
+**B. `meta` is de facto shared.** *Resolved (ADR-0039): the title is `Page.title`; `layout` and `meta` are keyed by
+client.* Titles are `meta.title` for both hosts; order (`meta.order`), icon and the restore
 point are the workspace's. Nothing says which `meta` keys are cross-host. Either the Platform names a page title (it is
 what a CLI or any UI shows), or host-core documents the shared keys.
 
-**C. The workspace's page rules are not in the data.** Main (`workspace`) must exist and is first, page ids must not be
+**C. The workspace's page rules are not in the data.** *Resolved (ADR-0039): they stay the workspace's; a page
+another client makes on one of its routes is shown at `/p/<id>`, and a missing Main is recreated.* Main (`workspace`) must exist and is first, page ids must not be
 one of the workspace's routes (`FIXED`: `ring`, `desk`, `settings`…), order is `meta.order`. /react/ cannot import them
 (they are in ui-workspace) and does not copy them: a page titled "Ring" made in /react/ gets id `ring`, which the
 workspace's own writes would refuse but its boot will take as-is (a route clash; not tried). /react/ shows pages in
@@ -111,4 +114,4 @@ its own Platform module; harmless (a Platform is per `create`), but worth keepin
 - **A new framework-free host-core**: storage keys and persistence with the another-tab guard, boot from storage, the
   pick (deploy then apply), page edits (add/remove slot, new page id, title), a `pagePods`-like open/re-open model, and
   the shared-module list with an import-map helper.
-- **ui-workspace** (not a move, a fix): keep its engine state under its own layout key.
+- **ui-workspace** (not a move, a fix): keep its engine state under its own layout key. Done (ADR-0039).

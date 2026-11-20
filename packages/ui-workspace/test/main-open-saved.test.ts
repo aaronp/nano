@@ -10,8 +10,8 @@ test('save the bundle, then open it: the same pages, nothing duplicated; after N
   location.hash = '#/two'
   const at = URL.parse('./bundle/nano-ui.js', location.href)!.href
   const pages = { pages: {
-    workspace: { slots: { x: { kind: 'view', view: 'nano-explorer' } }, layout: { root: { type: 'row', content: [] }, 'window-style': 'clear' }, meta: { title: 'Main', order: 0, saved: { root: { type: 'column', content: [] } } } },
-    two: { slots: {}, meta: { title: 'Two', order: 1 } },
+    workspace: { title: 'Main', slots: { x: { kind: 'view', view: 'nano-explorer' } }, layout: { workspace: { root: { type: 'row', content: [] }, 'window-style': 'clear' } }, meta: { workspace: { order: 0, saved: { root: { type: 'column', content: [] } } } } },
+    two: { title: 'Two', slots: {}, meta: { workspace: { order: 1 } } },
   } }
   localStorage.setItem('nano-workspace.document', JSON.stringify({ pods: {}, runtimes: {}, modules: { 'nano.ui': at }, views: {} }))
   localStorage.setItem('nano-workspace.platform', JSON.stringify(pages))

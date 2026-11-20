@@ -33,7 +33,7 @@ import { shadowCreate } from './history.ts';
 import { icon } from './icons.ts';
 import { HOST_PODS } from './host-deploy.ts';
 import { showStatus } from './lib/status.ts';
-import { applyPages, MAIN } from './lib/pages.ts';
+import { applyPages, MAIN, metaOf, withMeta } from './lib/pages.ts';
 import { Coord } from '@pritzlaff/nano-core';
 import type { Page } from '@pritzlaff/nano-platform';
 
@@ -73,7 +73,7 @@ if (host && platform) {
     new: async () => {
       const d = h.data(), r = await h.apply({ ...d, pods: Object.fromEntries(HOST_PODS.map(p => [p, d.pods[p]!])), runtimes: { main: { pods: [...HOST_PODS], subscriptions: [] } }, tags: {}, views: {}, layout: undefined });
       if (!r.ok) return;
-      toMain(m => { const { title, icon, order } = (m.meta ?? {}) as Record<string, unknown>; return { slots: {}, meta: { title, icon, order } }; });
+      toMain(m => { const { icon, order } = metaOf(m); return withMeta({ ...(m.title !== undefined && { title: m.title }), slots: {}, ...(m.meta !== undefined && { meta: m.meta }) }, { icon, order }); });   // other clients' meta kept
       if (menu) menu.dirty = false;
     },
   };

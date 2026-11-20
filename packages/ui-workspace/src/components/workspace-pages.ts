@@ -1,16 +1,16 @@
 /**
  * The workspace's pages, shown from the Platform's document (ADR-0038): one nav row (a drag handle for edit mode, then
- * its link), one route and one dock of Main's widgets per page, in nav order (lib/pages.ts: Main, then `meta.order`);
+ * its link), one route (`routeOf`) and one dock of Main's widgets per page, in nav order (lib/pages.ts: Main, then order);
  * Main is the page `workspace` at /workspace, its row and dock in index.html. The Platform's changes mount, unmount,
  * relabel and reorder them, whoever made them (this nav, a pod through HostPlatform, an import). A page's id is its
- * route and never changes; a rename changes its `meta.title`. Each dock keeps its page (dock/page-docks.ts: its state
+ * route and never changes; a rename changes its `title`. Each dock keeps its page (dock/page-docks.ts: its state
  * the page's `layout`, its panels the page's slots). Beside the app's title, + makes an empty page and ✎ toggles the
  * nav's edit mode (nav-edit.ts); the dock's "Save as workspace…" copies a page (its slots and arrangement) into
  * "<title> copy". Each edit is one `next`, applied by `applyPages` (the workspace's rules checked first).
  */
 import type { Page, Platform, UIDeployment } from '@pritzlaff/nano-platform';
 import { ICONS } from '../lib/icons.ts';
-import { applyPages, metaOf, ordered, slugPath, MAIN } from '../lib/pages.ts';
+import { applyPages, metaOf, ordered, routeOf, slugPath, withMeta, MAIN } from '../lib/pages.ts';
 import { showStatus } from '../lib/status.ts';
 import { keepDocks } from '../dock/page-docks.ts';
 import { navEdit } from './nav-edit.ts';
@@ -19,7 +19,7 @@ import type { Wires } from '../wires/wires.ts';
 
 type Row = { id: string; title: string; icon?: string };
 /** Page `id` of `d` as its nav row shows it. */
-const rowOf = (d: UIDeployment, id: string): Row => { const m = metaOf(d.pages[id]); return { id, title: m.title ?? id, ...(m.icon !== undefined && { icon: m.icon }) }; };
+const rowOf = (d: UIDeployment, id: string): Row => { const m = metaOf(d.pages[id]); return { id, title: d.pages[id]?.title ?? id, ...(m.icon !== undefined && { icon: m.icon }) }; };
 const MAIN_ICON = 'panels';   // Main's icon until one is chosen
 const mainDock = (doc: Document) => doc.querySelector<WorkspaceDock>('workspace-dock#workspace');
 const idOf = (id: string) => `ws_${id}`;
@@ -40,7 +40,7 @@ const label = (a: HTMLAnchorElement, title: string, icon: string) => {
 /** A page's nav row: its drag handle (shown in edit mode), then its link. */
 const fill = (doc: Document, row: HTMLElement, p: Row) => {
   const a = doc.createElement('a'), handle = button(doc, 'handle', `Move ${p.title}`, '⠿');
-  a.href = `#/${p.id}`;
+  a.href = `#${routeOf(p.id)}`;
   label(a, p.title, p.icon ?? 'window');
   handle.draggable = true;
   row.dataset.saved = p.id;
@@ -58,7 +58,7 @@ export function mountWorkspace(doc: Document, p: Row): void {
   (saved[saved.length - 1] ?? doc.querySelector('[data-workspaces]'))?.after(row);
 
   const route = doc.createElement('app-route');
-  route.setAttribute('path', `/${p.id}`); route.setAttribute('bleed', ''); route.hidden = true;   // app-shell shows it when current
+  route.setAttribute('path', routeOf(p.id)); route.setAttribute('bleed', ''); route.hidden = true;   // app-shell shows it when current
   const pane = doc.createElement('div');
   pane.className = 'ws-page';
   const wires = doc.createElement('c-wires') as Wires, dock = doc.createElement('workspace-dock') as WorkspaceDock;
@@ -86,8 +86,8 @@ export function bootWorkspacePages(doc: Document, platform: ReturnType<typeof Pl
     const d = platform.document().doc, [main, ...rest] = ordered(d).map((id) => rowOf(d, id));
     for (const row of rows()) if (!rest.some((p) => p.id === row.dataset.saved)) {
       const id = row.dataset.saved!;
-      row.remove(); [...doc.querySelectorAll('app-route')].find((r) => r.getAttribute('path') === `/${id}`)?.remove();   // by value: no selector to escape
-      if (location.hash === `#/${id}`) location.hash = `#/${MAIN}`;
+      row.remove(); [...doc.querySelectorAll('app-route')].find((r) => r.getAttribute('path') === routeOf(id))?.remove();   // by value: no selector to escape
+      if (location.hash === `#${routeOf(id)}`) location.hash = `#/${MAIN}`;
     }
     let prev = doc.querySelector('[data-workspaces]');
     for (const p of rest) {
@@ -106,15 +106,15 @@ export function bootWorkspacePages(doc: Document, platform: ReturnType<typeof Pl
   keepDocks(doc, platform);
   const edit = navEdit(doc, platform, (row, title, icon) => {
     const d = platform.document().doc, id = row.dataset.saved ?? MAIN, p = d.pages[id];
-    if (p) apply({ pages: { ...d.pages, [id]: { ...p, meta: { ...metaOf(p), title, icon } } } });
+    if (p) apply({ pages: { ...d.pages, [id]: withMeta({ ...p, title }, { ...metaOf(p), icon }) } });
   });
 
   /** A new page, last: `page` under a new id slugged from `title`; then its rename. */
   const add = (title: string, icon: string | undefined, page: Page) => {
     const id = slugPath(title, taken()).slice(1), d = platform.document().doc;
     const order = Math.max(0, ...Object.values(d.pages).map((p) => metaOf(p).order ?? 0)) + 1;
-    if (!apply({ pages: { ...d.pages, [id]: { ...page, meta: { title, ...(icon !== undefined && { icon }), order } } } })) return;
-    location.hash = `#/${id}`;
+    if (!apply({ pages: { ...d.pages, [id]: withMeta({ ...page, title }, { ...(icon !== undefined && { icon }), order }) } })) return;
+    location.hash = `#${routeOf(id)}`;
     edit.rename(rows().find((r) => r.dataset.saved === id)!);
   };
 
@@ -122,7 +122,7 @@ export function bootWorkspacePages(doc: Document, platform: ReturnType<typeof Pl
     if ((e.target as Element | null)?.closest?.('[data-new-workspace]')) add('New workspace', 'window', { slots: {} });
   });
   doc.addEventListener('dock:save-as', (e) => {
-    const dock = e.target as WorkspaceDock, id = dock.closest('app-route')?.getAttribute('path')?.slice(1) ?? '', src = platform.document().doc.pages[id];
-    if (src) { const r = rowOf(platform.document().doc, id); add(`${r.title} copy`, r.icon, { slots: src.slots, layout: dock.arrangement() }); }
+    const dock = e.target as WorkspaceDock, at = dock.closest('app-route')?.getAttribute('path'), d = platform.document().doc, id = Object.keys(d.pages).find((p) => routeOf(p) === at);
+    if (id) { const r = rowOf(d, id); add(`${r.title} copy`, r.icon, { slots: d.pages[id]!.slots, layout: { workspace: dock.arrangement() } }); }
   });
 }

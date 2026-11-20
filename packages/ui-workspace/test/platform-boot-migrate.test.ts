@@ -17,7 +17,7 @@ test('a migrated pod panel\'s pod is placed lazy and its slot kept; one with no 
   expect(document.querySelector('[data-nano-status]')).not.toBeNull()
   expect(await host.apply(host.data())).toMatchObject({ ok: true })
   expect(platform.resolve('t')['log7']!.kind).toBe('pod')
-  expect(JSON.parse(JSON.stringify(platform.document().doc.pages['t']))).toEqual({ slots: { log7: { kind: 'pod', pod: 'nano.ui/log@main/log7' } }, layout: { root: { type: 'row', content: [{ type: 'component', componentState: { widget: 'nano-ui-log', name: 'log7' } }, { type: 'component', componentState: { widget: 'gone-widget', name: 'ghost1' } }] } }, meta: { title: 'T', icon: 'star', order: 1 } })
+  expect(JSON.parse(JSON.stringify(platform.document().doc.pages['t']))).toEqual({ title: 'T', slots: { log7: { kind: 'pod', pod: 'nano.ui/log@main/log7' } }, layout: { workspace: { root: { type: 'row', content: [{ type: 'component', componentState: { widget: 'nano-ui-log', name: 'log7' } }, { type: 'component', componentState: { widget: 'gone-widget', name: 'ghost1' } }] } } }, meta: { workspace: { icon: 'star', order: 1 } } })
   expect(localStorage.getItem('workspace-starter.saved-workspaces')).not.toBeNull()
   await tick(400)
   expect(JSON.parse(localStorage.getItem('nano-workspace.platform')!).pages.t.slots).toEqual({ log7: { kind: 'pod', pod: 'nano.ui/log@main/log7' } })

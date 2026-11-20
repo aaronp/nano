@@ -6,7 +6,7 @@ import { Platform, type UIDeployment } from '@pritzlaff/nano-platform'
 import { applyPages, moved, ordered, refusal, slugPath } from '../src/lib/pages.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
-const at = (order?: number) => ({ slots: {}, ...(order !== undefined && { meta: { title: 'T', order } }) })
+const at = (order?: number) => ({ title: 'T', slots: {}, ...(order !== undefined && { meta: { workspace: { order } } }) })
 const doc: UIDeployment = { pages: { b: at(2), workspace: at(5), a: at(1), none: at() } }
 
 test('ordered: Main first, then by meta.order, a page without one last', () => {
@@ -16,8 +16,8 @@ test('ordered: Main first, then by meta.order, a page without one last', () => {
 test('moved: the page at its new place, each page whose place changed given it as meta.order; Main and its place refused', () => {
   const next = moved(doc, 'b', 1)!
   expect(ordered(next)).toEqual(['workspace', 'b', 'a', 'none'])
-  expect(Object.fromEntries(Object.entries(next.pages).map(([id, p]) => [id, (p.meta as { order: number }).order]))).toEqual({ workspace: 0, b: 1, a: 2, none: 3 })
-  expect(next.pages['b']!.meta).toEqual({ title: 'T', order: 1 })
+  expect(Object.fromEntries(Object.entries(next.pages).map(([id, p]) => [id, (p.meta as { workspace: { order: number } }).workspace.order]))).toEqual({ workspace: 0, b: 1, a: 2, none: 3 })
+  expect(next.pages['b']).toEqual({ title: 'T', slots: {}, meta: { workspace: { order: 1 } } })
   expect(moved(doc, 'workspace', 1)).toBeUndefined()
   expect(moved(doc, 'a', 0)).toBeUndefined()
   expect(moved(doc, 'a', 4)).toBeUndefined()

@@ -1,8 +1,9 @@
 /**
  * Each page's dock on its page (ADR-0036, ADR-0038). `keepDocks(doc, platform)` (a dock's route id names its page):
- * - its `storage` is its page's: `<storage-key>` is golden-layout's live config, written by the dock on every change,
- *   with `.template` and `.window-style` beside it in the page's `layout`; `.saved` and `.saved.template` (Save's restore
- *   point) are in its `meta`. Each write is one `platform.apply` (`applyPages`), the dock's own. The live layout is read
+ * - its `storage` is its page's, under the workspace's keys (ADR-0039; other clients' keys kept as they are):
+ *   `<storage-key>` is golden-layout's live config, written by the dock on every change, with `.template` and
+ *   `.window-style` beside it in the page's `layout.workspace`; `.saved` and `.saved.template` (Save's restore point) are
+ *   in its `meta.workspace`. Each write is one `platform.apply` (`applyPages`), the dock's own. The live layout is read
  *   reconciled with the slots; a page with slots and no layout reads as an empty one, so the dock's starting panel shows
  *   only on a page with neither;
  * - its `pods` are its page's (dock/page-pods.ts), opened when it is built (its page shown), its panels then added for
@@ -23,7 +24,7 @@ import type { Page, Platform, Slot } from '@pritzlaff/nano-platform';
 import type { WorkspaceDock } from '../components/workspace-dock.ts';
 import { requestBus } from '../lib/bus.ts';
 import { panelsInOrder, type PanelState } from '../lib/layout-templates.ts';
-import { applyPages } from '../lib/pages.ts';
+import { applyPages, routeOf } from '../lib/pages.ts';
 import { reconcile, slotOf, slotsOf } from './page-slots.ts';
 import { pagePods } from './page-pods.ts';
 
@@ -32,6 +33,8 @@ type W = Record<string, unknown>;
 const obj = (v: unknown): v is W => typeof v === 'object' && v !== null && !Array.isArray(v);
 /** Keys beside golden-layout's config in a page's `layout`, and those in its `meta`: `<storage-key>.<key>` in the dock's storage. */
 const BESIDE = ['template', 'window-style'], META = ['saved', 'saved.template'];
+/** The workspace's own entry of a page's `layout` or `meta`. */
+const mine = (v: unknown): W => (obj(v) && obj(v['workspace']) ? v['workspace'] : {});
 const only = (w: W, beside: boolean) => Object.fromEntries(Object.entries(w).filter(([k]) => BESIDE.includes(k) === beside));
 const none = ResolvedLayoutConfig.createDefault(), EMPTY = JSON.stringify({ ...none, header: { ...none.header, popout: false } });   // no panels, as `initial` frames them
 const text = JSON.stringify;
@@ -47,13 +50,13 @@ function pageStorage(platform: Instance, id: string, key: string, quiet: (f: () 
   const part = (k: string) => (k === key ? '' : k.startsWith(`${key}.`) ? k.slice(key.length + 1) : undefined);
   const write = (s: string, f: (w: W) => W) => quiet(() => edit(platform, id, (p) => {
     const at = META.includes(s) ? 'meta' : 'layout';
-    return { ...p, [at]: f(obj(p[at]) ? p[at] : {}) };
+    return { ...p, [at]: { ...(obj(p[at]) ? p[at] : {}), workspace: f(mine(p[at])) } };
   }));
   return {
     getItem(k: string) {
       const s = part(k), p = platform.document().doc.pages[id];
       if (s === undefined || !p) return null;
-      const w = META.includes(s) ? (obj(p.meta) ? p.meta : {}) : reconcile(p.layout, p.slots).engine as W, v = s ? w[s] : only(w, false);
+      const w = META.includes(s) ? mine(p.meta) : reconcile(mine(p.layout), p.slots).engine as W, v = s ? w[s] : only(w, false);
       if (!s && !Object.keys(v as object).length) return Object.keys(p.slots).length ? EMPTY : null;
       return v === undefined ? null : typeof v === 'string' ? v : text(v);
     },
@@ -73,10 +76,10 @@ export function keepDocks(doc: Document, platform: Instance): void {
   const quiet = (f: () => void) => { const was = busy; busy = true; try { f(); } finally { busy = was; } };
   const pageOf = (id: string) => platform.document().doc.pages[id];
   const docks = () => [...doc.querySelectorAll<WorkspaceDock>('workspace-dock')]
-    .map((d) => [d, d.closest('app-route')?.getAttribute('path')?.slice(1) ?? ''] as const).filter(([, id]) => pageOf(id));
+    .map((d) => { const at = d.closest('app-route')?.getAttribute('path'); return [d, Object.keys(platform.document().doc.pages).find((id) => routeOf(id) === at) ?? ''] as const; }).filter(([, id]) => pageOf(id));
   const built = (d: WorkspaceDock) => !!d.querySelector(':scope > .dock-area');
   const hidden = (d: WorkspaceDock) => !!d.closest<HTMLElement>('app-route')?.hidden;
-  const layoutOf = (id: string) => text(pageOf(id)?.layout ?? null);
+  const layoutOf = (id: string) => text(mine(pageOf(id)?.layout));
   const panels = (d: WorkspaceDock) => { const a = d.arrangement(); return a.template ? [...a.template.order.filter((p): p is PanelState => !!p), ...a.template.parked] : panelsInOrder(a.root); };
   /** Each palette widget of dock `d`: a pod's or a view; undefined, not in its palette. */
   const kinds = (d: WorkspaceDock) => {

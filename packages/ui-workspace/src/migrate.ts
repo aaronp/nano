@@ -3,10 +3,13 @@
  * pages' list and each page's dock), a document's `layout.pages`, and the legacy `layout.workspace` (Main's dock) with
  * top-level `slots`/`geometry`. Each is first read as the old page list (`Legacy`, nano-ui's `pagesOf` form, copied here
  * as that goes), then `toPlatform` makes the UIDeployment: a pod slot a `pod` slot whose implementation is the
- * deployment's (none there: dropped), a view slot a `view` slot, title, icon, order and Save layout's restore point in
- * `meta`, the rest of the dock's state its `layout`. `geometry` is dropped (the arrangement is the dock's).
+ * deployment's (none there: dropped), a view slot a `view` slot, the title its `title`, icon, order and Save layout's
+ * restore point in `meta.workspace`, the rest of the dock's state its `layout.workspace` (ADR-0039). `geometry` is
+ * dropped (the arrangement is the dock's). `keyed` moves a page from before ADR-0039 (its dock's state at the top of
+ * `layout`, the title and the workspace's meta at the top of `meta`) under the workspace's keys, once.
  *
  *   toPlatform(legacyPages(doc.layout, doc), doc)   // a stored document's pages
+ *   keyed(page)                                      // the page under the workspace's keys; a keyed one as it is
  *   opened(file)                                     // a nano.json or a { app, platform } bundle: the app, its pages
  */
 import { Coord, failure, success, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
@@ -18,6 +21,8 @@ type OldSlot = { id: string; runtime: string; pod: string } | { id: string; view
 export type Legacy = { id: string; title: string; icon?: string; slots: OldSlot[]; workspace?: unknown; [k: string]: unknown }
 
 const RESTORE = ['saved', 'saved.template']
+/** The workspace's keys at the top of a page's `layout` and `meta` before ADR-0039: golden-layout's config and those beside it; its meta. */
+const ENGINE = ['root', 'openPopouts', 'dimensions', 'settings', 'header', 'resolved', 'template', 'window-style'], MINE = ['icon', 'order', ...RESTORE]
 // The keys before pages were deployment data: the saved pages' list and Main's title and icon (saved-workspaces), and
 // Main's dock (index.html's `storage-key`), each saved page's dock under `<dock>.saved.<path>`, each with `.template`.
 const LIST = 'workspace-starter.saved-workspaces', DOCK = 'workspace-starter.layout'
@@ -64,9 +69,23 @@ export function toPlatform(pages: Legacy[], d: AppDeployment): UIDeployment {
   const page = (p: Legacy, order: number): Page => {
     const w = obj(p.workspace) ? p.workspace : {}, layout = Object.fromEntries(Object.entries(w).filter(([k]) => !RESTORE.includes(k)))
     const restore = Object.fromEntries(Object.entries(w).filter(([k]) => RESTORE.includes(k)))
-    return { slots: Object.fromEntries(p.slots.flatMap(slot)), ...(Object.keys(layout).length && { layout }), meta: { title: p.title, ...(p.icon !== undefined && { icon: p.icon }), order, ...restore } }
+    return { title: p.title, slots: Object.fromEntries(p.slots.flatMap(slot)), ...(Object.keys(layout).length && { layout: { workspace: layout } }), meta: { workspace: { ...(p.icon !== undefined && { icon: p.icon }), order, ...restore } } }
   }
   return { pages: Object.fromEntries(pages.filter(p => idOk(p.id)).map((p, i) => [p.id, page(p, i)])) }
+}
+
+/** `o`'s entries split by whether their key is in `keys`. */
+const split = (o: Record<string, unknown>, keys: string[]) => [false, true].map(b => Object.fromEntries(Object.entries(o).filter(([k]) => keys.includes(k) === b))) as [Record<string, unknown>, Record<string, unknown>]
+
+/** Page `p` under the workspace's keys (ADR-0039): its dock's state to `layout.workspace`, `meta.title` to `title`, its
+ * meta to `meta.workspace`; other keys kept where they are. A page with either `workspace` key, or nothing to move, as it is. */
+export function keyed(p: Page): Page {
+  const l = obj(p.layout) ? p.layout : {}, m = obj(p.meta) ? p.meta : {}
+  if ('workspace' in l || 'workspace' in m) return p
+  const [others, engine] = split(l, ENGINE), move = str(m['title']) && p.title === undefined, { title, ...rest } = m, [kept, mine] = split(move ? rest : m, MINE)
+  const moves = (o: object) => Object.keys(o).length > 0
+  if (!moves(engine) && !moves(mine) && !move) return p
+  return { ...p, ...(move && { title: title as string }), ...(moves(engine) && { layout: { ...others, workspace: engine } }), ...((move || moves(mine)) && { meta: { ...kept, workspace: mine } }) }
 }
 
 /** `d` without the old pages in its layout (`pages`, `workspace`, `slots`, `geometry`); no layout once nothing is left. */
@@ -80,7 +99,7 @@ const stripped = (d: AppDeployment): AppDeployment => {
 export function opened(file: unknown): NanoResult<{ app: AppDeployment; pages: UIDeployment }> {
   if (obj(file) && obj(file.app) && 'platform' in file) {
     const pages = Platform.parse(file.platform)
-    return pages.ok ? success({ app: stripped(file.app as AppDeployment), pages: pages.value }) : failure('invalid-input', `the file's pages: ${pages.fail.reason}`)
+    return pages.ok ? success({ app: stripped(file.app as AppDeployment), pages: { pages: Object.fromEntries(Object.entries(pages.value.pages).map(([id, p]) => [id, keyed(p)])) } }) : failure('invalid-input', `the file's pages: ${pages.fail.reason}`)
   }
   if (!obj(file)) return failure('invalid-input', 'not a nano.json: not an object')
   const d = file as AppDeployment

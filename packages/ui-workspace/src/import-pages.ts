@@ -16,11 +16,11 @@ import type { Page, Platform, UIDeployment } from '@pritzlaff/nano-platform'
 import type { Host } from './host.ts'
 import { opened } from './migrate.ts'
 import { showStatus } from './lib/status.ts'
-import { applyPages, FIXED, MAIN } from './lib/pages.ts'
+import { applyPages, FIXED, MAIN, metaOf, withMeta } from './lib/pages.ts'
 
-const order = (p: Page) => { const o = (p.meta as { order?: unknown } | undefined)?.order; return typeof o === 'number' ? o : Infinity }
+const order = (p: Page) => { const o = metaOf(p).order; return typeof o === 'number' ? o : Infinity }
 /** A page as compared: without its place in the order. */
-const body = (p: Page) => { const { order: _, ...meta } = (p.meta ?? {}) as Record<string, unknown>; return JSON.stringify({ ...p, meta }) }
+const body = (p: Page) => { const { order: _, ...m } = metaOf(p); return JSON.stringify(withMeta(p, m)) }
 
 /** `current` with `incoming`'s pages, by the workspace's rules. Pure. */
 export function withImported(current: UIDeployment, incoming: UIDeployment): UIDeployment {
@@ -32,7 +32,7 @@ export function withImported(current: UIDeployment, incoming: UIDeployment): UID
     const fills = id === MAIN && !!same && Object.values(same.slots).every(s => s.kind === 'view')
     let at = id   // one of the workspace's own routes is taken too
     for (let n = 2; !fills && (pages[at] || FIXED.includes(at)); n++) at = `${id}-${n}`
-    pages[at] = { ...p, meta: { ...(p.meta as object), order: fills ? order(same!) : ++last } }
+    pages[at] = withMeta(p, { ...metaOf(p), order: fills ? order(same!) : ++last })
   }
   return { pages }
 }
@@ -51,9 +51,9 @@ export const importing = (importUrl: Host['importUrl'], platform: ReturnType<typ
     const legacy = !(typeof file === 'object' && file !== null && 'platform' in file), main = next.pages[MAIN], prev = was.pages[MAIN]
     // a plain nano.json's Main has no title of its own ("Workspace"): filling Main, it keeps Main's title, icon, view slots (the explorer) and, without its own, layout
     if (legacy && main && prev && main !== prev) {
-      const views = Object.fromEntries(Object.entries(prev.slots).filter(([, s]) => s.kind === 'view')), m = (prev.meta ?? {}) as Record<string, unknown>
-      next.pages[MAIN] = { ...main, slots: { ...views, ...main.slots }, ...(main.layout === undefined && prev.layout !== undefined && { layout: prev.layout }),
-        meta: { ...(main.meta as object), title: m['title'], icon: m['icon'] } }
+      const views = Object.fromEntries(Object.entries(prev.slots).filter(([, s]) => s.kind === 'view'))
+      next.pages[MAIN] = withMeta({ ...main, ...(prev.title !== undefined && { title: prev.title }), slots: { ...views, ...main.slots }, ...(main.layout === undefined && prev.layout !== undefined && { layout: prev.layout }) },
+        { ...metaOf(main), icon: metaOf(prev).icon })
     }
     const r = applyPages(platform, next)
     if (!r.ok) showStatus(document, r.fail.reason)

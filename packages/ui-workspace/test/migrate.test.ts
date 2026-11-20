@@ -43,7 +43,7 @@ test('withOldDocks gives each page its old dock\'s state (layout, template, wind
   ])
 })
 
-test('toPlatform: pod slots by coordinate (the deployment\'s implementation), view slots, title, icon, order and restore point in meta, the dock state its layout', () => {
+test('toPlatform: pod slots by coordinate (the deployment\'s implementation), view slots, title, icon, order and restore point in meta.workspace, the dock state its layout.workspace, the title its title', () => {
   const saved = { root: { type: 'column' } }, engine = { root: { type: 'row' }, 'window-style': 'clear', saved, 'saved.template': null }
   const out = toPlatform([
     { id: 'workspace', title: 'Main', icon: 'home', slots: [{ id: 'clock1', runtime: 'main', pod: 'clock1' }, { id: 'x', view: 'nano-explorer' }, { id: 'gone', runtime: 'main', pod: 'gone' }], workspace: engine, geometry: {} },
@@ -51,8 +51,8 @@ test('toPlatform: pod slots by coordinate (the deployment\'s implementation), vi
   ], d)
   expect(String((out.pages['workspace']!.slots['clock1'] as { pod: unknown }).pod)).toBe(String(Coord.pod(Coord.parse('implementation', clock), Coord.runtime('main'), 'clock1')))
   expect(strs(out)).toEqual({ pages: {
-    workspace: { slots: { clock1: { kind: 'pod', pod: 'example.clock/clock@main/clock1' }, x: { kind: 'view', view: 'nano-explorer' } }, layout: { root: { type: 'row' }, 'window-style': 'clear' }, meta: { title: 'Main', icon: 'home', order: 0, saved, 'saved.template': null } },
-    two: { slots: {}, meta: { title: 'Two', order: 1 } },
+    workspace: { title: 'Main', slots: { clock1: { kind: 'pod', pod: 'example.clock/clock@main/clock1' }, x: { kind: 'view', view: 'nano-explorer' } }, layout: { workspace: { root: { type: 'row' }, 'window-style': 'clear' } }, meta: { workspace: { icon: 'home', order: 0, saved, 'saved.template': null } } },
+    two: { title: 'Two', slots: {}, meta: { workspace: { order: 1 } } },
   } })
 })
 
@@ -69,7 +69,7 @@ test('opened: a bundle as its parts; a plain nano.json without its old pages, mi
   const b = opened({ app: { ...d, layout: { desk: 1 } }, platform: pages })
   expect(b.ok && strs(b.value)).toEqual({ app: { ...d, layout: { desk: 1 } }, pages })
   const p = opened({ ...d, layout: { desk: 1, slots: [{ id: 'c', runtime: 'main', pod: 'clock1' }], geometry: {} } })
-  expect(p.ok && strs(p.value)).toEqual({ app: { ...d, layout: { desk: 1 } }, pages: { pages: { workspace: { slots: { c: { kind: 'pod', pod: 'example.clock/clock@main/clock1' } }, meta: { title: 'Workspace', order: 0 } } } } })
+  expect(p.ok && strs(p.value)).toEqual({ app: { ...d, layout: { desk: 1 } }, pages: { pages: { workspace: { title: 'Workspace', slots: { c: { kind: 'pod', pod: 'example.clock/clock@main/clock1' } }, meta: { workspace: { order: 0 } } } } } })
   const bare = opened({ ...d, layout: { pages: [] } })
   expect(bare.ok && strs(bare.value)).toEqual({ app: d, pages: { pages: {} } })
   for (const bad of [null, 3, 'x']) expect(opened(bad)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })

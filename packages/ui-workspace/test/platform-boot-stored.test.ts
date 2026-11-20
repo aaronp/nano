@@ -21,8 +21,8 @@ test('an old stored document migrates once: pages into the Platform (pod slots b
   const { host, platform } = await import('../src/boot-host.ts')
   if (!host || !platform) throw new Error('the host did not start')
   const migrated = { pages: {
-    workspace: { slots: { a: { kind: 'pod', pod: 'nano.ui/log@main/log1' } }, meta: { title: 'Workspace', order: 0 } },
-    trading: { slots: { n: { kind: 'view', view: 'nano-explorer' } }, meta: { title: 'Trading', icon: 'chart', order: 1 } },
+    workspace: { title: 'Workspace', slots: { a: { kind: 'pod', pod: 'nano.ui/log@main/log1' } }, meta: { workspace: { order: 0 } } },
+    trading: { title: 'Trading', slots: { n: { kind: 'view', view: 'nano-explorer' } }, meta: { workspace: { icon: 'chart', order: 1 } } },
   } }
   expect(strs(platform.document().doc)).toEqual(migrated)
   expect(host.data().layout).toEqual({ ring: { show: [] } })   // other keys kept, no pages

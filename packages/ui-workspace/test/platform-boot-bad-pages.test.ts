@@ -12,7 +12,7 @@ test('unparseable stored pages: the Platform has Main, a status says so, and Fil
   const { platform } = await import('../src/boot-host.ts')
   if (!platform) throw new Error('the host did not start')
   expect(Object.keys(platform.document().doc.pages)).toEqual(['workspace'])
-  expect(platform.document().doc.pages['workspace']!.meta).toEqual({ title: 'Workspace', order: 0 })
+  expect(platform.document().doc.pages['workspace']).toMatchObject({ title: 'Workspace', meta: { workspace: { order: 0 } } })
   await tick(50)
   expect([...document.querySelectorAll('[data-nano-status]')].map(e => e.textContent).join()).toContain('saved pages did not load')
   document.dispatchEvent(new CustomEvent('file:new'))

@@ -114,17 +114,17 @@ test('closing a panel removes its slot, not its pod', async () => {
   expect(Object.keys(h.data().pods)).toContain('input2')
 })
 
-test('the dock\'s state is its page\'s: its layout and template in the page\'s `layout`, its restore point in `meta`, nothing in localStorage', async () => {
+test('the dock\'s state is its page\'s: its layout and template in the page\'s `layout.workspace`, its restore point in `meta.workspace`, nothing in localStorage', async () => {
   const h = await host()
   await place(h, 'main', ['input1'])
   const { go, written, dock } = mount(h, { workspace: page('Main', { input1: pod('input1') }, 0) })
   go('workspace')
   await until(() => dock('workspace').querySelectorAll('.dock-panel').length === 1)
   dock('workspace').save()
-  expect(JSON.stringify(written('workspace').meta.saved)).toContain('"input1"')
-  await until(() => JSON.stringify(written('workspace').layout).includes('"input1"'))
+  expect(JSON.stringify(written('workspace').meta.workspace.saved)).toContain('"input1"')
+  await until(() => JSON.stringify(written('workspace').layout.workspace).includes('"input1"'))
   dock('workspace').setTemplate('one')
-  expect(written('workspace').layout.template.template).toBe('one')
+  expect(written('workspace').layout.workspace.template.template).toBe('one')
   expect(localStorage.length).toBe(0)
 })
 

@@ -40,7 +40,7 @@ export const undeploy = async (h: H, name: string) => {
 }
 /** A `pod` slot for `name` in `runtime`. */
 export const pod = (name: string, runtime = 'main', impl = 'nano.ui/input'): Slot => ({ kind: 'pod', pod: Coord.pod(Coord.parse('implementation', impl), Coord.runtime(runtime), name) })
-export const page = (title: string, slots: Record<string, Slot> = {}, order = 1): Page => ({ slots, meta: { title, order } })
+export const page = (title: string, slots: Record<string, Slot> = {}, order = 1): Page => ({ title, slots, meta: { workspace: { order } } })
 export const running = (h: H, name: string, runtime = 'main') => { const s = h.app.runtime(runtime).status(name); return s.ok && s.value === 'running' }
 export const strs = (v: unknown) => JSON.parse(JSON.stringify(v ?? null))
 

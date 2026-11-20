@@ -1,11 +1,12 @@
 /**
  * The workspace's rules for its pages, which are the Platform's (ADR-0038): Main (`MAIN`) is always there and first; a
- * page's id is its route and never changes (a rename sets its `meta.title`), never one of the workspace's own routes
- * (`FIXED`); the rest are in `meta.order`. The workspace builds each page edit as a `next` and gives it to `applyPages`,
+ * page's id never changes (a rename sets its `title`) and is its route (`routeOf`: `/p/<id>` for one of the workspace's
+ * own routes, `FIXED`, which another client may have used; the workspace never makes one); the rest are in the
+ * workspace's own meta (`meta.workspace`, ADR-0039: `order`, `icon`, Save layout's restore point). The workspace builds each page edit as a `next` and gives it to `applyPages`,
  * which checks these rules (`refusal`, as the pod `platform` does) before the Platform's `apply`.
  *
- *   ordered(doc)                                   // ['workspace', …the rest by meta.order]
- *   applyPages(platform, moved(doc, 'two', 1)!)    // a reorder: each `meta.order` that changes rewritten
+ *   ordered(doc)                                   // ['workspace', …the rest by meta.workspace.order]
+ *   applyPages(platform, moved(doc, 'two', 1)!)    // a reorder: each order that changes rewritten
  *   slugPath('Trading', taken).slice(1)             // a new page's id
  */
 import { failure, type NanoResult } from '@pritzlaff/nano-core'
@@ -24,17 +25,23 @@ export const slugPath = (title: string, taken: readonly string[]): string => {
   return path
 }
 
-type Meta = { title?: string; icon?: string; order?: number; [k: string]: unknown }
-/** A page's `meta` as the workspace writes it (title, icon, order, Save layout's restore point); `{}` if it is none. */
-export const metaOf = (p: Page | undefined): Meta => (typeof p?.meta === 'object' && p.meta !== null ? p.meta : {}) as Meta
+/** A page's route: `/<id>`, or `/p/<id>` for an id that is one of the workspace's own routes. */
+export const routeOf = (id: string): string => (FIXED.includes(id) ? `/p/${id}` : `/${id}`)
 
-/** The page ids in nav order: Main, then by `meta.order` (a page without one last). */
+type Meta = { icon?: string; order?: number; [k: string]: unknown }
+const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+/** A page's own meta of the workspace (`meta.workspace`: icon, order, Save layout's restore point); `{}` if it is none. */
+export const metaOf = (p: Page | undefined): Meta => (obj(p?.meta) && obj(p.meta['workspace']) ? p.meta['workspace'] : {}) as Meta
+/** Page `p` with `m` as the workspace's own meta; other clients' meta kept. */
+export const withMeta = (p: Page, m: Meta): Page => ({ ...p, meta: { ...(obj(p.meta) ? p.meta : {}), workspace: m } })
+
+/** The page ids in nav order: Main, then by order (a page without one last). */
 export const ordered = (doc: UIDeployment): string[] => {
   const at = (id: string) => metaOf(doc.pages[id]).order ?? Infinity
   return Object.keys(doc.pages).sort((a, b) => (a === MAIN ? -1 : b === MAIN ? 1 : at(a) - at(b) || 0))
 }
 
-/** `doc` with page `id` at place `to` of `ordered(doc)`, each page whose place changed given it as `meta.order`;
+/** `doc` with page `id` at place `to` of `ordered(doc)`, each page whose place changed given it as its order;
  * undefined for Main, Main's place, a place past the end or an unknown page. */
 export function moved(doc: UIDeployment, id: string, to: number): UIDeployment | undefined {
   const ids = ordered(doc).filter((x) => x !== id)
@@ -42,7 +49,7 @@ export function moved(doc: UIDeployment, id: string, to: number): UIDeployment |
   ids.splice(to, 0, id)
   return { pages: Object.fromEntries(Object.entries(doc.pages).map(([p, page]) => {
     const i = ids.indexOf(p), m = metaOf(page)
-    return [p, m.order === i ? page : { ...page, meta: { ...m, order: i } }]
+    return [p, m.order === i ? page : withMeta(page, { ...m, order: i })]
   })) }
 }
 
