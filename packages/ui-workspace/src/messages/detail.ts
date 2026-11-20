@@ -2,7 +2,7 @@
 import { html } from 'lit'
 import type { Message } from '@pritzlaff/nano-ui'
 
-const label = (m: Message) => `${m.sent.from} → ${m.sent.to}/${m.sent.port}`
+const label = (m: Message) => m.sent.port === undefined ? `${m.sent.from} → ${m.sent.to} (${m.sent.kind})` : `${m.sent.from} → ${m.sent.to}/${m.sent.port}`   // a start has no port
 
 /** `chain` is the message's causes, nearest first; `seek` moves the time machine to one. */
 export function renderDetail(m: Message, chain: Message[], seek: (m: Message) => void, onClose?: () => void) {

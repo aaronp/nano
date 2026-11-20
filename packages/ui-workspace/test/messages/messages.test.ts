@@ -66,3 +66,14 @@ test('the detail shows input, result, ms and the cause chain; a cause seeks to i
   cause.click(); await el.updateComplete
   expect(tm.cursor).toBe(100)
 })
+
+test('a start row shows its kind in the port cell, not undefined', async () => {
+  const store = memoryStore()
+  store.append({ seq: 1, at: 100, event: { type: 'sent', id: 's', runtime: 'main', kind: 'start', from: 'host', to: 'c', correlation: 's' } })
+  const tm = await timeMachine({ store, listen: () => () => {} }, { ticker })
+  const el = document.createElement('c-messages') as Messages
+  Object.assign(el, { tm, store }); document.body.replaceChildren(el)
+  await el.updateComplete; await tick()
+  const cells = [...el.shadowRoot!.querySelectorAll('tbody tr td')].map(td => td.textContent)
+  expect(cells[3]).toBe('start'); expect(cells.join('|')).not.toContain('undefined')
+})

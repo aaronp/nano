@@ -18,11 +18,11 @@ export async function cleanStart(store: MessageStore): Promise<Entry & { event: 
 }
 
 /**
- * The messages nothing in the app caused: host calls with no cause. Their inputs are snapshots, so a Map, Set, Date or
+ * The messages nothing in the app caused: host calls and starts with no cause. Their inputs are snapshots, so a Map, Set, Date or
  * BigInt comes back as its JSON text and an undefined field is gone.
  */
 export const roots = (messages: Message[]): Message[] =>
-  messages.filter(m => m.sent.from === 'host' && m.sent.kind === 'call' && m.sent.cause === undefined)
+  messages.filter(m => m.sent.from === 'host' && (m.sent.kind === 'call' || m.sent.kind === 'start') && m.sent.cause === undefined)
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
@@ -71,9 +71,10 @@ export async function replay(app: Application, store: MessageStore, opts: Opts =
       }
       const { sent } = sends.get(seq)!
       const input = sent.input === undefined || sent.input === 'undefined' ? undefined : JSON.parse(sent.input)
-      const port = sent.port!, op = port.slice(port.lastIndexOf('/') + 1)   // roots are calls: each has a port
+      const port = sent.port ?? '', op = port.slice(port.lastIndexOf('/') + 1)   // a start has none
       n.sent++
-      const done = Promise.resolve().then(() => app.runtime(sent.runtime).call(sent.to)[op]!(input))
+      const rt = app.runtime(sent.runtime)
+      const done = Promise.resolve().then(() => sent.kind === 'start' ? rt.start(sent.to) : rt.call(sent.to)[op]!(input))
         .then(r => { if (!r.ok) n.failed++ }, () => { n.failed++ })
       calls.push({ settled: settled.get(sent.id) ?? Infinity, done })
     }

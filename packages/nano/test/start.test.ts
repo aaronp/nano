@@ -79,7 +79,7 @@ describe('start', () => {
 })
 
 describe('getOrCreate', () => {
-  test('running → started: false; stopped (not started) → started: true', async () => {
+  test('running → started: false; not started → started: true', async () => {
     const app = await live(one({ e: Pod.eager(counter), l: Pod.lazy(counter) }))
     expect(ok(await app.runtime('r').getOrCreate('e')).started).toBe(false)
     expect(ok(await app.runtime('r').getOrCreate('l')).started).toBe(true)
@@ -90,6 +90,26 @@ describe('getOrCreate', () => {
     const [a, b] = await Promise.all([app.runtime('r').getOrCreate('c'), app.runtime('r').getOrCreate('c')])
     expect([ok(a).started, ok(b).started].sort()).toEqual([false, true])
     expect(seen.filter(e => e.type === 'built')).toHaveLength(1)
+  })
+  test('a lazy pod restarted (not started again) → started: true', async () => {
+    const app = await live(one({ c: Pod.lazy(counter) }))
+    ok(await app.runtime('r').start('c')); ok(await app.restart('c'))
+    expect(app.runtime('r').status('c')).toEqual(success('not started'))
+    expect(ok(await app.runtime('r').getOrCreate('c')).started).toBe(true)
+  })
+  test('stopped (only once the application is closed) → not-found: a stopped pod cannot be started', async () => {
+    const app = await live(one({ c: Pod.eager(counter) }))
+    ok(await app.close())
+    expect(app.runtime('r').status('c')).toEqual(success('stopped'))
+    expect(await app.runtime('r').getOrCreate('c')).toEqual(failure('not-found', 'application is closed'))
+  })
+  test('racing in two runtimes: each asks its own policy (A denies, B builds)', async () => {
+    const app = await live({ pods: { c: Pod.lazy(counter) }, runtimes: {
+      a: { pods: ['c'], subscriptions: [], policy: { kind: 'rules', rules: [{ allow: 'call' }] } }, b: { pods: ['c'], subscriptions: [] } } })
+    const [a, b] = await Promise.all([app.runtime('a').start('c'), app.runtime('b').start('c')])
+    expect(a).toMatchObject({ ok: false, fail: { type: 'denied' } })
+    expect(b).toEqual(success(undefined))
+    expect(app.runtime('b').status('c')).toEqual(success('running'))
   })
   test("its pod is call(pod)'s client", async () => {
     const app = await live(one({ c: Pod.lazy(counter) }))
