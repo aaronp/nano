@@ -9,7 +9,7 @@
  * `layout.pages`, else the old keys (`migrate`), else Main alone, and is the run-time truth for pages from then on. The
  * old docks made their pods as they mounted, so a migrated pod slot's pod is placed now, lazy in `main` under its name
  * (its implementation found by the panel's widget id); one with no implementation is dropped, and a status says so.
- * The document is saved, debounced, on each `applied` and page change; pod slots whose pod went are pruned on
+ * The kept layout holds no `pages` after boot (the store is their only home; an import's own come in with it). The document is saved, debounced, on each `applied` and page change; pod slots whose pod went are pruned on
  * `applied`. A stored document that fails to load is not saved over this session. Storage the page may not use: the
  * app runs in memory, and the first save says so.
  */
@@ -46,7 +46,7 @@ if (!started.ok) toast(started.fail.reason, { variant: 'bad', duration: 0 });
 export const host: Host | undefined = live = started.ok ? started.value : undefined;
 
 if (host) {
-  const at = doc && URL.createObjectURL(new Blob([JSON.stringify(doc)], { type: 'application/json' }));
+  const at = doc && URL.createObjectURL(new Blob([JSON.stringify({ ...doc, layout: { ...doc.layout, pages: undefined } })], { type: 'application/json' }));
   const loaded = at ? await host.importUrl(at).finally(() => URL.revokeObjectURL(at)) : { ok: true };
   const missing = migrated.flatMap(p => p.slots).filter((s): s is LayoutSlot => 'pod' in s && !placed(s.runtime, s.pod));
   if (missing.length) {
