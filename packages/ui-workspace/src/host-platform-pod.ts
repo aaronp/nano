@@ -1,10 +1,10 @@
 /**
- * `workspace.host/platform`: this host's HostOutline over its Platform (boot-host.ts), the pod `platform` beside `ui` and
+ * `workspace.host/platform`: this host's HostOutline over its Outline (boot-host.ts), the pod `platform` beside `ui` and
  * `deploy` in `main`, never saved. `document` gives the pages, written, at their version, unasked. `apply({ next, base })`
  * is refused when `base` is stale ("the pages changed since"), `next` is malformed or breaks the workspace's rules
  * (`refusal`, lib/pages.ts: Main dropped, a page added on one of its own routes), else asks `approve` (HostUI's
  * through the app, timed by hostProvider) with a summary of the pages and slots added or removed; anything but a yes is
- * `denied`, a yes applies `next` at `base`. The workspace's own edits apply unasked. Without a Platform (a replayed
+ * `denied`, a yes applies `next` at `base`. The workspace's own edits apply unasked. Without an Outline (a replayed
  * app's provider) both are not-found.
  *
  *   ns.provider([hostUi, deploy, hostPlatform(() => platform, timed(askTheUser))])   // hostProvider (host-deploy.ts)

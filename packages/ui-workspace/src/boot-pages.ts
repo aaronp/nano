@@ -54,5 +54,5 @@ export async function bootPages(host: Host, storage: Storage, doc: AppDeployment
     read.value.pages[MAIN] = { title: 'Workspace', slots: {}, meta: { workspace: { order: 0 } } }
     read.value.roots.unshift(MAIN)
   }
-  return Outline.parse(JSON.parse(JSON.stringify(read.value)))   // what the Platform takes, or a failure (never a throw at boot)
+  return Outline.parse(JSON.parse(JSON.stringify(read.value)))   // what the Outline takes, or a failure (never a throw at boot)
 }

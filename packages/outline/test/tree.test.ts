@@ -30,6 +30,9 @@ test('apply refuses a missing id, a page in two places, a cycle and an orphan, n
   refused(tree(['a'], { a: ['b', 'b'] }), 'b')
   refused(tree(['a'], { b: ['c'], c: ['b'] }), 'b')
   refused(tree(['a'], { b: ['b'] }), 'b')
+  refused(tree(['a'], { under: [], b: ['c', 'under'], c: ['b'] }), 'b')   // a page under a cycle: the cycle's page is named
+  refused({ roots: ['a', 'toString'], pages: { a: { slots: {} } } }, 'toString')
+  refused({ roots: ['a'], pages: { a: { slots: {}, children: ['constructor'] } } }, 'constructor')
   refused(tree(['a'], {}, ['lost']), 'lost')
   expect(strs(p.document())).toEqual({ doc: strs(tree(['a'])), version: 0 })
   expect(() => Outline.create(p as never, registry, tree(['a'], {}, ['lost']))).toThrow(/page lost/)
@@ -66,7 +69,8 @@ test('a moved page keeps its id, slots, resolution and open', async () => {
   const doc = tree(['a', 'b'], { a: ['v'] })
   doc.pages.v!.slots = { s: { kind: 'view', view: 'nano-systems' } }
   const p = Outline.create(await live(), registry, doc)
-  ok(p.apply({ ...tree(['a', 'b'], { b: ['v'] }), pages: { ...tree(['a', 'b'], { b: ['v'] }).pages, v: doc.pages.v! } }))
+  const next = tree(['a', 'b'], { b: ['v'] })
+  ok(p.apply({ ...next, pages: { ...next.pages, v: doc.pages.v! } }))
   expect(p.resolve('v')).toEqual({ s: { kind: 'view', view: 'nano-systems' } })
   expect(await p.open('v')).toEqual({ s: { kind: 'view', view: 'nano-systems' } })
 })

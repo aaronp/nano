@@ -1,6 +1,6 @@
 /**
  * The two documents, under the workspace's storage keys (so a page made in either host shows in the other): the app
- * document (an `AppDeployment` with its modules, views and layout) and the Platform's Outline, as written.
+ * document (an `AppDeployment` with its modules, views and layout) and the Outline (its pages), as written.
  * Storage that throws reads as empty; a failed save is returned, not thrown.
  */
 import type { AppDeployment } from '@pritzlaff/nano-core'
