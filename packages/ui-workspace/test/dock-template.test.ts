@@ -38,6 +38,16 @@ test('every layout switches: what does not fit is parked behind a notice; Bring 
   expect(notice(dock).hidden).toBe(true)
 })
 
+test('with nothing parked the notice is not shown: Bring back, then a position emptied and refilled', async () => {
+  const { dock } = await n(4)
+  dock.setTemplate('two-cols')
+  ;[...notice(dock).querySelectorAll('button')].find(b => b.textContent === 'Bring back')!.click()
+  positions(dock)[0]!.querySelector<HTMLElement>('.tpl-remove')!.click()
+  choice = { widget: 'plain' }; await plus(dock.querySelector('.tpl-add')!)
+  expect(dock.arrangement().template!.parked).toEqual([])
+  expect(getComputedStyle(notice(dock)).display).toBe('none')
+})
+
 test('the notice dismissed stays hidden until the parked count changes', async () => {
   const { dock } = await n(4)
   dock.setTemplate('two-cols')

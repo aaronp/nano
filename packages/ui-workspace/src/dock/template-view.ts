@@ -29,6 +29,7 @@ const CSS = `
 .dock-template .tpl-add:hover { color: var(--accent); }
 .dock-template .tpl-toggle { display: none; }
 .dock-notice { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 4; display: flex; align-items: center; gap: 8px; padding: 6px 10px; font: 12px var(--font); color: var(--fg); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; }
+.dock-notice[hidden] { display: none; }
 .dock-notice button { font: inherit; color: var(--accent); background: none; border: 0; cursor: pointer; }
 @media (max-width: 840px) {
   .dock-template:not([data-template="main-drawer"]) { grid-template: none; grid-auto-rows: minmax(240px, 1fr); overflow: auto; }

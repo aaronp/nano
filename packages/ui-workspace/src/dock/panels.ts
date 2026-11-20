@@ -67,12 +67,20 @@ export function implementationTemplates(h: Host, doc: Document): HTMLTemplateEle
   }))
 }
 
-/** Adds a pod of `coord` to runtime main, named `<kind><n>` with the first free n; its name, once applied. */
-export async function addPod(h: Host, coord: string): Promise<string | undefined> {
+/** The adds in flight, one after another: each reads `data()` after the last applied, so no two take one name. */
+let adding: Promise<unknown> = Promise.resolve()
+/** Adds a pod of `coord` to runtime main, named `name` if given and free, else `<kind><n>` with the first free n; its
+ * name, once applied. Calls run one at a time. */
+export function addPod(h: Host, coord: string, name?: string): Promise<string | undefined> {
+  const run = adding.then(() => make(h, coord, name))
+  adding = run.catch(() => {})
+  return run
+}
+async function make(h: Host, coord: string, preferred?: string): Promise<string | undefined> {
   const d = h.data(), kind = coord.slice(coord.indexOf('/') + 1)
   let n = 1
   while (`${kind}${n}` in d.pods) n++
-  const name = `${kind}${n}`, pod = { implementation: coord, eager: true, ...(starts[coord] !== undefined && { config: starts[coord] }) }
+  const name = preferred && !(preferred in d.pods) ? preferred : `${kind}${n}`, pod = { implementation: coord, eager: true, ...(starts[coord] !== undefined && { config: starts[coord] }) }
   const main = d.runtimes['main'] ?? { pods: [], subscriptions: [] }
   const r = await h.apply(connected({ ...d, pods: { ...d.pods, [name]: pod }, runtimes: { ...d.runtimes, main: { ...main, pods: [...main.pods, name] } } }, h.registry, [name]))
   return r.ok ? name : undefined
@@ -109,8 +117,10 @@ export function mountPanel(container: ComponentContainer, state: JsonValue | und
   if (h && impl) {
     let stop = () => {}, gone = false, pod = name
     const show = (p: string) => { pod = p; if (!gone) stop = fill(container.element, `pod:${p}`, h) }
-    // once named, its state changed: a template position stores it (golden-layout reads it as it saves)
-    if (name) show(name); else void addPod(h, impl).then((p) => { if (p) { show(p); if (!gone) container.emit('stateChanged') } })
+    // a pod it names that is gone (pods are not kept across a reload) is made again under that name; named otherwise,
+    // its state changed: a template position stores it (golden-layout reads it as it saves)
+    if (name && name in h.data().pods) show(name)
+    else void addPod(h, impl, name).then((p) => { if (p) { show(p); if (p !== name && !gone) container.emit('stateChanged') } })
     container.stateRequestEvent = () => ({ widget: id, ...(pod && { name: pod }) })
     container.on('destroy', () => { gone = true; stop() })
     send('dock:opened', { widget: id })
