@@ -33,7 +33,7 @@ import { shadowCreate } from './history.ts';
 import { savedLayout, slotsToOpen } from './layout-data.ts';
 import { templateState, type TemplateState } from './lib/layout-templates.ts';
 import { icon } from './icons.ts';
-import { slugPath } from './lib/pages.ts';
+import { showStatus } from './lib/status.ts';
 import { HOST_PODS } from './host-deploy.ts';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
@@ -42,13 +42,10 @@ if (host) {
   const dock = document.querySelector<WorkspaceDock>('workspace-dock#workspace');
   // An import whose nano.json brings a layout for this dock shows it: through the dock's own saved layout and restore().
   const shown = async (r: Promise<{ ok: boolean }>, before: string) => {
-    const was = JSON.stringify(pagesOf(h.data().layout)), done = await r;
-    // An import that brings pages adds them to the store: an id already taken (Main's `workspace` always) is slugged from the title
-    const now = pagesOf(h.data().layout);
-    if (done.ok && JSON.stringify(now) !== was) for (const p of now) {
-      const taken = [...document.querySelectorAll('app-route')].map(x => x.getAttribute('path') ?? '');
-      pages.set({ ...p, id: taken.includes(`/${p.id}`) || p.id === 'workspace' ? slugPath(p.id === 'workspace' ? p.title : p.id, taken).slice(1) : p.id });
-    }
+    const done = await r;
+    // An import that brings `layout.pages` (the loaded layout is the imported one, import-plan's merge) adds them to the store
+    const imported = h.data().layout?.pages;
+    if (done.ok && Array.isArray(imported)) for (const why of pages.merge(pagesOf({ pages: imported }))) showStatus(document, why);
     const l = dock && h.data().layout?.[dock.id], key = dock?.getAttribute('storage-key');
     if (done.ok && l && key && JSON.stringify(l) !== before) { try { localStorage.setItem(key, JSON.stringify(l)); templateState(localStorage, key).set((l as { template?: TemplateState }).template ?? null); } catch { /* no storage: the layout is not shown */ } dock!.restore(); }
     // A file from another engine: its neutral slots, a panel each, in order.

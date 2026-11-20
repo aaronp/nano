@@ -107,12 +107,16 @@ export function bootWorkspacePages(doc: Document, store: ReturnType<typeof pageS
   /** A new page: `page` under a new id slugged from its title, empty or with `from`'s arrangement; then its rename. */
   const add = (page: Page, from: WorkspaceDock | null) => {
     const id = slugPath(page.title, taken()).slice(1);
-    if (from) {
-      const { template, ...layout } = from.arrangement(), key = layoutKey(mainKey(doc), `/${id}`);
+    const key = layoutKey(mainKey(doc), `/${id}`);
+    if (from) {   // written first: the page's dock reads its keys as the store's change mounts it
+      const { template, ...layout } = from.arrangement();
       try { localStorage.setItem(key, JSON.stringify(layout)); } catch { /* no storage: it starts empty */ }
       templateState(localStorage, key).set(template ?? null);
     }
-    if (!store.set({ ...page, id }).ok) return;
+    if (!store.set({ ...page, id }).ok) {   // refused: no orphan keys
+      for (const x of ['', '.template']) try { localStorage.removeItem(key + x); } catch { /* none */ }
+      return;
+    }
     location.hash = `#/${id}`;
     edit.rename(doc.querySelector<HTMLElement>(`[data-saved="${id}"]`)!);
   };

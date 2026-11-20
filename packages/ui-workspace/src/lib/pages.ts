@@ -5,6 +5,7 @@
  *   const pages = pageStore(pagesOf(doc.layout), (runtime, pod) => placedIn(runtime, pod))
  *   pages.set({ id: slugPath('Trading', taken).slice(1), title: 'Trading', slots: [] })   // adds; by id it replaces
  *   pages.prune(placed)   // on `applied`: pod slots whose pod went, gone from every page
+ *   pages.merge(importedPages)   // an import's pages: new ids added, identical ones skipped, clashes suffixed
  */
 import { failure, success, type NanoResult } from '@pritzlaff/nano-core'
 import { pagesOf, type LayoutSlot, type Page } from '@pritzlaff/nano-ui'
@@ -32,7 +33,7 @@ export function pageStore(initial: Page[], placed: Placed) {
   const heard = new Set<() => void>()
   const changed = () => { for (const fn of heard) fn() }
   const bad = (reason: string) => failure('invalid-input', reason)
-  return {
+  const store = {
     list: (): Page[] => structuredClone(pages),
     get: (id: string): Page | undefined => structuredClone(pages.find(p => p.id === id)),
     /** Adds `page`, or replaces the page with its id; `index` moves it there (Main stays first). */
@@ -71,5 +72,23 @@ export function pageStore(initial: Page[], placed: Placed) {
       return any
     },
     subscribe(fn: () => void): () => void { heard.add(fn); return () => { heard.delete(fn) } },
+    /**
+     * Adds an import's pages: a free id as it is; a taken id with identical content (title, icon, slots, engine keys)
+     * skipped, so a repeat is a no-op; a taken id with other content added under the next free `-2`, `-3`… The
+     * incoming `workspace` is never Main (its id is taken). Returns `set`'s refusals, one message each.
+     */
+    merge(incoming: Page[]): string[] {
+      const refused: string[] = [], body = (p: Page) => JSON.stringify({ ...p, id: '' })
+      for (const p of structuredClone(incoming)) {
+        const same = pages.find(q => q.id === p.id)
+        if (same && body(same) === body(p)) continue
+        let id = p.id
+        for (let n = 2; pages.some(q => q.id === id); n++) id = `${p.id}-${n}`
+        const r = store.set({ ...p, id })
+        if (!r.ok) refused.push(r.fail.reason)
+      }
+      return refused
+    },
   }
+  return store
 }

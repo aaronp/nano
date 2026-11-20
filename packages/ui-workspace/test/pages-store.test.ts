@@ -86,3 +86,32 @@ test('slugPath slugs a title and avoids taken routes', () => {
   expect(slugPath('My Desk', ['/my-desk', '/my-desk-2'])).toBe('/my-desk-3')
   expect(slugPath('  ', [])).toBe('/workspace-page')
 })
+
+test('merge: a free id is added as it is; a taken id with identical content is skipped, so a repeat is a no-op', () => {
+  const s = pageStore([main], placed)
+  expect(s.merge([trading])).toEqual([])
+  expect(s.list()).toEqual([main, trading])
+  expect(s.merge([structuredClone(trading)])).toEqual([])
+  expect(s.list()).toEqual([main, trading])
+})
+
+test('merge: a taken id with other content is added as -2, -3…; the incoming workspace is never Main', () => {
+  const s = pageStore([main], placed), other = { ...trading, title: 'Other' }
+  s.merge([trading, other, { ...trading, title: 'Third' }])
+  expect(s.list().map(p => [p.id, p.title])).toEqual([['workspace', 'Workspace'], ['trading', 'Trading'], ['trading-2', 'Other'], ['trading-3', 'Third']])
+  s.merge([{ ...main, title: 'Imported', slots: [{ id: 'a', runtime: 'main', pod: 'clock1' }] }, { ...main, slots: [] }])   // the second is identical to Main: skipped
+  expect(s.list()[0]).toEqual(main)
+  expect(s.get('workspace-2')?.title).toBe('Imported')
+  expect(s.list().length).toBe(5)
+})
+
+test('merge: set\'s refusals come back as messages, the rest still added; a deleted page imported again is added back', () => {
+  const s = pageStore([main], placed)
+  const out = s.merge([{ id: 'ring', title: 'R', slots: [] }, { id: 'x', title: 'X', slots: [{ id: 'q', runtime: 'main', pod: 'nope' }] }, trading])
+  expect(out.length).toBe(2)
+  expect(out[0]).toContain('ring'); expect(out[1]).toContain('nope')
+  expect(s.list().map(p => p.id)).toEqual(['workspace', 'trading'])
+  s.remove('trading')
+  expect(s.merge([trading])).toEqual([])
+  expect(s.list().map(p => p.id)).toEqual(['workspace', 'trading'])
+})
