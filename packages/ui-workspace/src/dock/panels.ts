@@ -69,8 +69,8 @@ export function implementationTemplates(h: Host, doc: Document): HTMLTemplateEle
 
 /** The adds in flight, one after another: each reads `data()` after the last applied, so no two take one name. */
 let adding: Promise<unknown> = Promise.resolve()
-/** Adds a pod of `coord` to runtime main, named `name` if given and free, else `<kind><n>` with the first free n; its
- * name, once applied. Calls run one at a time. */
+/** Adds a pod of `coord` to runtime main, named `name` if given and free (a pod of `coord` already named so is kept),
+ * else `<kind><n>` with the first free n; its name, once applied. Calls run one at a time. */
 export function addPod(h: Host, coord: string, name?: string): Promise<string | undefined> {
   const run = adding.then(() => make(h, coord, name))
   adding = run.catch(() => {})
@@ -78,6 +78,7 @@ export function addPod(h: Host, coord: string, name?: string): Promise<string | 
 }
 async function make(h: Host, coord: string, preferred?: string): Promise<string | undefined> {
   const d = h.data(), kind = coord.slice(coord.indexOf('/') + 1)
+  if (preferred && d.pods[preferred]?.implementation === coord) return preferred   // made again already (a copied page names it too)
   let n = 1
   while (`${kind}${n}` in d.pods) n++
   const name = preferred && !(preferred in d.pods) ? preferred : `${kind}${n}`, pod = { implementation: coord, eager: true, ...(starts[coord] !== undefined && { config: starts[coord] }) }

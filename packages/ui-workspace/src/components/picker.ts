@@ -74,11 +74,11 @@ export function pick(anchor: HTMLElement, { templates, hidden }: Entries): Promi
   return new Promise((resolve) => {
     const close = (choice: PanelState | null) => {
       p.remove();
-      doc.removeEventListener('pointerdown', outside, true);
+      doc.removeEventListener('pointerdown', outside, true); doc.defaultView?.removeEventListener('hashchange', gone);
       doc.removeEventListener('catalog:changed', build); doc.removeEventListener('imports:failed', build);
       resolve(choice);
     };
-    const outside = (e: Event) => { if (!p.contains(e.target as Node | null)) close(null); };
+    const outside = (e: Event) => { if (!p.contains(e.target as Node | null)) close(null); }, gone = () => close(null);   // gone: the page changed (Back)
     p.addEventListener('click', (e) => {
       const b = (e.target as Element).closest<HTMLElement>('[data-widget]');
       if (b) close(b.dataset.name === undefined ? { widget: b.dataset.widget! } : { widget: b.dataset.widget!, name: b.dataset.name });
@@ -91,10 +91,12 @@ export function pick(anchor: HTMLElement, { templates, hidden }: Entries): Promi
     });
     p.addEventListener('focusout', (e) => { if (e.relatedTarget instanceof Node && !p.contains(e.relatedTarget)) close(null); });
     filter.addEventListener('input', applyFilter);
-    doc.addEventListener('pointerdown', outside, true);
+    doc.addEventListener('pointerdown', outside, true); doc.defaultView?.addEventListener('hashchange', gone);
     doc.addEventListener('catalog:changed', build); doc.addEventListener('imports:failed', build);
     build();
     doc.body.append(p);
+    // no room below the anchor: above it, kept in view
+    if (r.bottom + 4 + p.offsetHeight > innerHeight - 8) p.style.top = `${Math.max(8, r.top - 4 - p.offsetHeight)}px`;
     filter.focus();
   });
 }

@@ -6,12 +6,11 @@ import { expect, test } from 'bun:test'
 await import('../src/components/app-shell.ts')
 const tick = () => new Promise(r => setTimeout(r, 0))
 
-test('on a workspace, its sub-item is the current page; add links never are', async () => {
+test('on a workspace, its sub-item is the current page', async () => {
   location.hash = '#/lab'
   document.body.innerHTML = `<app-shell>
     <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace">Workspaces</a></div>
     <a slot="nav" data-sub href="#/workspace">Main</a><a slot="nav" data-sub data-saved href="#/lab">Lab</a>
-    <a slot="nav" data-sub href="#/lab" data-dock-add="x" data-widget="y">+ Y</a>
     <app-route path="/workspace"></app-route><app-route path="/lab"></app-route><app-route path="*"></app-route></app-shell>`
   const shell = document.querySelector('app-shell') as HTMLElement & { updateComplete: Promise<boolean> }
   await shell.updateComplete; await tick()

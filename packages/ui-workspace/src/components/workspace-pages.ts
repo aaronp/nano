@@ -88,8 +88,7 @@ export function bootWorkspacePages(doc: Document): void {
     if (ws.path === path) return;
     dock?.closest('app-route')?.setAttribute('path', ws.path);
     dock?.setAttribute('storage-key', layoutKey(mainKey(doc), ws.path));
-    // the dock's id follows the route, with what names it (its add links)
-    for (const el of doc.querySelectorAll<HTMLElement>(`[data-dock-add="${idOf(path)}"]`)) el.dataset.dockAdd = idOf(ws.path);
+    // the dock's id follows the route
     if (dock) dock.id = idOf(ws.path);
     if (location.hash === `#${path}`) location.hash = `#${ws.path}`;
   };

@@ -87,7 +87,6 @@ test('in edit mode a link click does not navigate; Enter on a focused name opens
 
 test('renaming a saved page moves its keys, link, route and dock to the new slug', () => {
   localStorage.setItem('main.saved./new-workspace', '{}'); localStorage.setItem('main.saved./new-workspace.template', '{}')
-  $('app-route[path="/new-workspace"] .ws-page').insertAdjacentHTML('afterbegin', '<a data-dock-add="ws_new-workspace" data-widget="a">A</a>')
   location.hash = '#/new-workspace'
   $('[data-saved="/new-workspace"] [data-name]').click()
   type('Desk', 'Enter')
@@ -100,7 +99,6 @@ test('renaming a saved page moves its keys, link, route and dock to the new slug
   const dock = $('app-route[path="/desk"] workspace-dock')
   expect(dock.getAttribute('storage-key')).toBe('main.saved./desk')
   expect(dock.id).toBe('ws_desk')
-  expect($('[data-dock-add]').getAttribute('data-dock-add')).toBe('ws_desk')
   expect(location.hash).toBe('#/desk')
 })
 

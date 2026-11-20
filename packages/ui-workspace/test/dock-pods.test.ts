@@ -105,3 +105,10 @@ test('concurrent adds of one implementation take distinct names', async () => {
   expect(new Set(names).size).toBe(2)
   expect(names.every(n => n && n in host.data().pods)).toBe(true)
 })
+
+test('adds naming one pod of one implementation (a copied page names it too) share it: one pod made', async () => {
+  const { host } = await mount()
+  const before = Object.keys(host.data().pods).length
+  expect(await Promise.all([addPod(host, 'nano.ui/input', 'input7'), addPod(host, 'nano.ui/input', 'input7')])).toEqual(['input7', 'input7'])
+  expect(Object.keys(host.data().pods).length).toBe(before + 1)
+})

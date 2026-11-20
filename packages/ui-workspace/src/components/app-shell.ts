@@ -83,8 +83,7 @@ export class AppShell extends LitElement {
 
   private markNav() {
     for (const a of this.querySelectorAll<HTMLAnchorElement>(':scope > a[slot="nav"]')) {
-      // a sub-item that is a page (a workspace) can be current; one that adds something (data-dock-add) never is
-      if (!a.hasAttribute('data-dock-add') && isCurrent(a.getAttribute('href'), this.route)) a.setAttribute('aria-current', 'page');
+      if (isCurrent(a.getAttribute('href'), this.route)) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     }
     // a nav row (a workspace's: its link and buttons) is current by its own link, unless a top-level item already is
@@ -98,7 +97,7 @@ export class AppShell extends LitElement {
     for (const a of this.querySelectorAll<HTMLAnchorElement>(':scope > a[slot="nav"], :scope > [slot="nav"] a[href]')) {
       const label = (a.textContent ?? '').trim();
       if (label && !a.title) a.title = label;
-      if (!page && !a.hasAttribute('data-dock-add') && isCurrent(a.getAttribute('href'), this.route))
+      if (!page && isCurrent(a.getAttribute('href'), this.route))
         page = { href: a.getAttribute('href')!, label, icon: a.querySelector('svg')?.cloneNode(true) ?? null };
     }
     if (page?.href !== this.page?.href || page?.label !== this.page?.label) this.page = page;

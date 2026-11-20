@@ -78,3 +78,24 @@ test('✕ on an imported package fires imports:remove with its url; failed impor
   expect(p.querySelector('[data-section="imported"]')!.textContent).toContain('https://dead/manifest.json: not found')
   setImportFailures([])
 })
+
+test('near the bottom of the viewport it opens above its anchor, in view', () => {
+  document.body.innerHTML = '<button id="plus">+</button>'
+  const plus = document.getElementById('plus')!
+  plus.getBoundingClientRect = () => ({ top: innerHeight - 30, bottom: innerHeight - 10, left: 10, right: 30, width: 20, height: 20, x: 10, y: innerHeight - 30, toJSON() {} }) as DOMRect
+  const proto = customElements.get('nano-picker')!.prototype
+  Object.defineProperty(proto, 'offsetHeight', { configurable: true, get: () => 300 })
+  try {
+    void pick(plus, { templates: [] })
+    const top = parseFloat((document.querySelector('nano-picker') as HTMLElement).style.top)
+    expect(top).toBe(innerHeight - 30 - 4 - 300)
+    expect(top + 300).toBeLessThanOrEqual(innerHeight - 8)
+  } finally { delete (proto as { offsetHeight?: number }).offsetHeight }
+})
+
+test('a page change (Back) resolves null and removes the popover', async () => {
+  const { chosen } = open()
+  window.dispatchEvent(new Event('hashchange'))
+  expect(await chosen).toBeNull()
+  expect(document.querySelector('nano-picker')).toBeNull()
+})

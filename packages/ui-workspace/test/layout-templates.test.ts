@@ -36,5 +36,6 @@ test('stored state: old format reads with parked [], nulls accepted', () => {
   const s = templateState(localStorage, 'k2')
   localStorage.setItem('k2.template', JSON.stringify({ template: 'two-cols', order: [a, b], dock: null })); expect(s.get()?.parked).toEqual([])
   localStorage.setItem('k2.template', JSON.stringify({ template: 'two-cols', order: [a, null], parked: [b], dock: null })); expect(s.get()?.order).toEqual([a, null])
+  localStorage.setItem('k2.template', JSON.stringify({ template: 'two-cols', order: [a, b], parked: 'b', dock: null })); expect(s.get()).toBeNull()
   localStorage.setItem('k2.template', JSON.stringify({ template: 'two-cols', order: [a], dock: null })); expect(s.get()).toBeNull()
 })

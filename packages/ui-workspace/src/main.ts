@@ -68,7 +68,11 @@ if (host) {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     if (menu) menu.dirty = false;
   };
-  host.app.listen(e => { if (e.type === 'applied' && menu) menu.dirty = true; });
+  // Until the person first acts, applies are the page restoring itself (a reload's panels making their named pods
+  // again), not edits: the File menu stays clean.
+  let acted = false;
+  for (const t of ['pointerdown', 'keydown']) addEventListener(t, () => { acted = true; }, { capture: true, once: true });
+  host.app.listen(e => { if (e.type === 'applied' && menu && acted) menu.dirty = true; });
   const commands: Record<string, () => unknown> = {
     save: () => download('nano.json'), reconcile: () => download('nano.json', true), download: () => download('nano.json'),
     'save-as': async () => { const name = await askName(document, 'nano'); if (name) download(`${name}.json`); },

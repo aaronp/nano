@@ -43,13 +43,13 @@ export const bringBackTo = (count: number, current: TemplateId): TemplateId => {
   return (best.find((t) => t.id === current) ?? best[0])?.id ?? 'dock';
 };
 
-/** The remembered template for one dock (by its storage key); missing, junk, `dock` or a wrong panel count reads as null. */
+/** The remembered template for one dock (by its storage key); missing, junk, `dock`, a wrong panel count or a `parked` that is no list reads as null. */
 export const templateState = (storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>, key: string) => ({
   get: (): TemplateState | null => {
     try {
       const s = JSON.parse(storage.getItem(`${key}.template`) ?? 'null') as TemplateState | null;
       const t = TEMPLATES.find((x) => x.id === s?.template);
-      return s && t?.positions != null && Array.isArray(s.order) && s.order.length === t.positions ? { ...s, parked: s.parked ?? [] } : null;
+      return s && t?.positions != null && Array.isArray(s.order) && s.order.length === t.positions && (s.parked === undefined || Array.isArray(s.parked)) ? { ...s, parked: s.parked ?? [] } : null;
     } catch { return null; }
   },
   set: (s: TemplateState | null): void => {
