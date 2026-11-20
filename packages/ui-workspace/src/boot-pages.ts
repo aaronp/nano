@@ -61,7 +61,8 @@ function asStore(platform: Instance): Page[] {
   const meta = (id: string) => (platform.document().doc.pages[id]!.meta ?? {}) as Meta
   const at = (id: string) => meta(id).order ?? Infinity
   return Object.keys(platform.document().doc.pages).sort((a, b) => (a === MAIN ? -1 : b === MAIN ? 1 : at(a) - at(b))).map(id => {
-    const p = platform.document().doc.pages[id]!, { title, icon, order: _, ...restore } = meta(id)
+    const p = platform.document().doc.pages[id]!, { title, icon, saved, 'saved.template': template } = meta(id)
+    const restore = { ...(saved !== undefined && { saved }), ...(template !== undefined && { 'saved.template': template }) }
     const slots = Object.entries(platform.resolve(id)).flatMap(([s, r]): Page['slots'] =>
       r.kind === 'view' ? [{ id: s, view: r.view }] : r.kind === 'pod' ? [{ id: s, runtime: r.pods[0]!.runtime.id, pod: r.pods[0]!.pod }] : [])
     const workspace = { ...(p.layout as object), ...restore }
@@ -81,6 +82,8 @@ export function mirror(platform: Instance, store: Store, data: () => AppDeployme
     const cur = platform.document().doc, next = toPlatform(store.list(), data())
     for (const [id, p] of Object.entries(next.pages)) {
       const was = cur.pages[id], r = platform.resolve(id)
+      const { title: _t, icon: _i, order: _o, saved: _s, 'saved.template': _st, ...other } = (was?.meta ?? {}) as Meta
+      p.meta = { ...other, ...(p.meta as object) }   // meta the store does not hold, kept
       for (const [s, v] of Object.entries(was?.slots ?? {}))
         if (!(s in p.slots) ? r[s]?.kind === 'missing' : v.kind === 'select' && p.slots[s]!.kind === 'pod') p.slots[s] = v
     }
