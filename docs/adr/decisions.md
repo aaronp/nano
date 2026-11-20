@@ -1465,3 +1465,80 @@ Cons:
 Keyed. `Page` is `{ title?, slots, layout?, meta? }`; `layout` and `meta` are keyed by client (the workspace's under
 `workspace`, the React host's under `react`). The workspace's page rules (Main present and first, reserved ids) stay
 the workspace's: it remaps a reserved id to another route at boot rather than clashing, and recreates a missing Main.
+
+---
+id: ADR-0040
+title: The Outline: pages as a tree with stable ids, named for what it is
+status: accepted
+date: 2026-11-21
+revisit: 
+tags: outline, pages, platform
+parent: ADR-0038
+decision: tree
+---
+
+## Goal
+A user's pages form a menu hierarchy (trading, chat, support, a dashboard) whose structure and contents are a logical
+model any front-end (web, CLI) could present. The Platform held flat pages, named for a word the user uses for the
+rendering technology. The impact is the shared data model's shape and name.
+
+## Hypothesis
+- We believe: a tree of pages with stable ids and shared order (`{ roots, pages }`, each page's `children`), in a
+  layer named the Outline
+- Will result in: every front-end showing the same hierarchy; moving a page never breaks references to it
+- Measured by: both hosts show the same tree; a moved page keeps its id and route
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| shared | Hierarchy shared by front-ends | 5 | Grouping and order are data, not one UI's meta. |
+| stable | Stable references | 4 | Moving a page keeps its id, routes and `open({ id })`. |
+| simple | Simple document | 3 | Easy to read, validate and write. |
+
+## Solution: tree — Flat map with child lists
+| criterion | score |
+| --- | --- |
+| shared | 5 |
+| stable | 5 |
+| simple | 4 |
+
+Pros:
+- Stable ids; order is structure; a move edits two lists
+
+Cons:
+- Validation (no orphans, cycles or duplicates); parents' lists to keep in step
+
+## Solution: nested — Pages hold their children
+| criterion | score |
+| --- | --- |
+| shared | 5 |
+| stable | 1 |
+| simple | 5 |
+
+Pros:
+- Reads as the hierarchy
+
+Cons:
+- An id is a path: moving a page changes it
+
+## Solution: flat — Flat pages, grouping in a client's meta
+| criterion | score |
+| --- | --- |
+| shared | 1 |
+| stable | 5 |
+| simple | 5 |
+
+Pros:
+- No change
+
+Cons:
+- Each front-end invents its own grouping
+
+## Decision
+Tree, named the Outline (`@pritzlaff/nano-outline`, document `Outline`, nodes pages). The change report gains `moved`;
+`HostOutline` declares a `changed` event so components follow the tree through nano. Flat documents still parse
+(every page a root). Supersedes ADR-0038's name and flat pages; ADR-0039 stands.
