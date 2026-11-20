@@ -20,7 +20,7 @@ const saved = async (): Promise<AppDeployment> => Bun.file(new URL('./nano.json'
 /** backend lets the host subscribe from outside, and anything inside; nothing else, until an edge is created. */
 const backendPolicy = (): RuntimeDeployment['policy'] => ({ kind: 'rules', rules: [
   { allow: 'subscribe', from: 'host', outside: true, toInterface: String(KeyValueStoreDef.api.coord) },
-  { allow: '*', outside: false }, { deny: '*' }] })
+  { allow: '*', outside: false }, { allow: 'start', from: 'host', outside: true }, { deny: '*' }] })   // the host may start a pod here, to show its panel
 
 /** The todo app, in code. */
 function build(base: AppDeployment) {

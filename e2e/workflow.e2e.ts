@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 // SHOTS=<dir> also screenshots each step there.
 const shot = (page: Page, name: string) => process.env['SHOTS'] ? page.screenshot({ path: `${process.env['SHOTS']}/${name}.png` }) : Promise.resolve()
 const dock = (page: Page) => page.locator('workspace-dock#workspace')
-const pods = (page: Page) => page.evaluate(() => Object.keys((document.querySelector('workspace-dock') as any).host.data().pods).filter(p => p !== 'ui').sort())
+const pods = (page: Page) => page.evaluate(() => Object.keys((document.querySelector('workspace-dock') as any).host.data().pods).filter(p => !['ui', 'deploy', 'pages'].includes(p)).sort())   // the host's own pods (HOST_PODS)
 const pipes = (page: Page) => page.evaluate(() => (document.querySelector('workspace-dock') as any).host.data().runtimes.main.subscriptions.map((s: any) => `${s.from}>${s.to}`).sort())
 
 /** Drags a cord in <c-wires>'s edit mode from one jack to another, with the mouse, where the jacks are drawn. */
