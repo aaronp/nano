@@ -62,21 +62,27 @@ export function removeFrom(d: AppDeployment, rm: Removal): NanoResult<AppDeploym
   return success(orphansDropped(out, rm.runtimes.flatMap(r => d.runtimes[r]!.pods)))
 }
 
+type Approve = (text: string) => Promise<boolean>
+/** `approve`, where anything but a yes within `ms` (a throw, a no, no answer) is false. */
+const timed = (approve: Approve, ms = APPROVAL_MS): Approve => async text => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), ms) })
+  return (await Promise.race([approve(text).catch(() => false), late]).finally(() => clearTimeout(timer))) === true
+}
+
 /** The host's deployment policy: the host's own applies are allowed; a pod's asks `approve(summary)`, and anything but
  * a yes within `ms` (a throw, a no, no answer) refuses. `current` is the deployment the summary compares with. */
-export function approvalPolicy(approve: (text: string) => Promise<boolean>, current: () => AppDeployment, ms = APPROVAL_MS): DeploymentPolicy {
+export function approvalPolicy(approve: Approve, current: () => AppDeployment, ms = APPROVAL_MS): DeploymentPolicy {
+  const ask = timed(approve, ms)
   return { async isAllowed({ caller, deployment }) {
     if (caller === 'host') return { approved: true }
     const text = summary(current(), deployment)
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const late = new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), ms) })
-    const yes = await Promise.race([approve(text).catch(() => false), late]).finally(() => clearTimeout(timer))
-    return yes === true ? { approved: true } : { approved: false, reason: `not approved: ${text}` }
+    return await ask(text) ? { approved: true } : { approved: false, reason: `not approved: ${text}` }
   } }
 }
 
 /** The host's provider: `ui` (HostUI), `deploy` (HostDeploy, applying to `app()`) and `pages` (HostPages over `pages`,
- * asking through `app()`'s `ui`; none in a replayed app). */
+ * asking through `app()`'s `ui`, no answer within 20 s a no; none in a replayed app). */
 export function hostProvider(app: () => Application, pages?: Parameters<typeof hostPages>[0]) {
   const deploy = Implementation.define(DEPLOY, {
     provides: [HostDeploy],
@@ -101,9 +107,9 @@ export function hostProvider(app: () => Application, pages?: Parameters<typeof h
       })]
     },
   })
-  const approve = async (title: string) => {
+  const approve = timed(async title => {
     const r = await (app().call('main', HOST_PODS[0]) as { approve(a: { title: string }): Promise<NanoResult<unknown>> }).approve({ title })
     return r.ok && r.value === true
-  }
+  })
   return ns.provider([hostUi, deploy, hostPages(pages, approve)])
 }

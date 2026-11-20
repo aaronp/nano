@@ -1,12 +1,13 @@
 /**
  * The host's stored document (`saved()` with `layout.pages`), under one storage key: loaded at boot as the app's own
  * (ADR-0034), saved as it changes. Storage that throws or is full never throws here: the app runs in memory, and the
- * first failed save says so once. `migrate` reads the keys from before pages were deployment data into pages, once.
+ * first failed save says so once. `migrate` reads the keys from before pages were deployment data into pages; the boot
+ * asks it only while nothing is stored. It leaves them: the nav and docks still read them until they keep their page.
  *
  *   const doc = persisted(localStorage, KEY)
  *   doc.load()                 // the stored AppDeployment, or null
  *   doc.save(d)
- *   doc.migrate(localStorage)  // the old saved pages, Main first, then their keys gone ([] when there were none)
+ *   doc.migrate(localStorage)  // the old saved pages, Main first ([] when there were none)
  */
 import type { AppDeployment } from '@pritzlaff/nano-core'
 import type { Page } from '@pritzlaff/nano-ui'
@@ -34,8 +35,7 @@ export function persisted(storage: Storage, key: string) {
       }
     },
     migrate(from: Storage): Page[] {
-      const gone: string[] = []
-      const read = (k: string): unknown => { gone.push(k); try { return JSON.parse(from.getItem(k) ?? 'null') } catch { return null } }
+      const read = (k: string): unknown => { try { return JSON.parse(from.getItem(k) ?? 'null') } catch { return null } }
       const page = (id: string, title: string, icon: unknown, dock: string): Page => {
         const config = read(dock), template = read(`${dock}.template`)
         const t = obj(template) ? template : {}, panels = [...panelsInOrder(obj(config) ? config.root : null),
@@ -48,7 +48,6 @@ export function persisted(storage: Storage, key: string) {
       const first = page('workspace', obj(main) && typeof main.title === 'string' ? main.title : 'Workspace', obj(main) ? main.icon : undefined, DOCK)
       const rest = saved.map(w => page(String(w.path).slice(1).replaceAll('/', '-'), String(w.title ?? w.path), w.icon, `${DOCK}.saved.${w.path}`))
       const pages = first.workspace || rest.length || obj(main) ? [first, ...rest] : []
-      for (const k of gone) try { from.removeItem(k) } catch { /* storage unavailable: nothing to remove */ }
       return pages
     },
   }

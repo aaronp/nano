@@ -1,12 +1,14 @@
 // HostPages in the workspace: the pod `pages` over the page store (a pod's change asks first), and the boot from the
 // stored document: the pages seeded from it, kept in step with the system (an undeployed pod leaves every page), saved.
-import { expect, test } from 'bun:test'
+import { expect, jest, test } from 'bun:test'
 import { Application, AppDeployment, Coord, Pod, Registry, type NanoResult } from '@pritzlaff/nano-core'
 import type { Page } from '@pritzlaff/nano-ui'
 import { tick } from './host-deploy-setup.ts'
 
 const { log } = await import('@pritzlaff/nano-ui')
 const { hostPages, pagesPod } = await import('../src/host-pages.ts')
+const { hostProvider } = await import('../src/host-deploy.ts')
+const { hostUi } = await import('../src/host-ui.ts')
 const { pageStore } = await import('../src/lib/pages.ts')
 
 type Pages = {
@@ -18,13 +20,13 @@ const trading: Page = { id: 'trading', title: 'Trading', slots: [] }
 
 async function pagesApp(answer: () => Promise<boolean>) {
   const store = pageStore([], () => true), asked: string[] = [], registry = Registry.create()
-  registry.add(Coord.namespace('workspace.host').provider([hostPages(store, t => { asked.push(t); return answer() }, 20)]))
+  registry.add(Coord.namespace('workspace.host').provider([hostPages(store, t => { asked.push(t); return answer() })]))
   const d: AppDeployment = { pods: { pages: pagesPod }, runtimes: { main: { pods: ['pages'], subscriptions: [] } } }
   const app = must(await Application.create(must(AppDeployment.assemble(d, registry))))
   return { store, asked, app, pages: app.call('main', 'pages') as unknown as Pages }
 }
 
-test('a setPage or removePage asks first: a yes changes the pages, a no or no answer does not', async () => {
+test('a setPage or removePage asks first: a yes changes the pages, a no does not', async () => {
   let yes = true
   const { store, asked, app, pages } = await pagesApp(async () => yes)
   expect(must(await pages.setPage({ page: trading }))).toBeNull()
@@ -37,10 +39,22 @@ test('a setPage or removePage asks first: a yes changes the pages, a no or no an
   await app.close()
 })
 
-test('no answer within the time is a no', async () => {
-  const { store, app, pages } = await pagesApp(() => new Promise<boolean>(() => {}))
-  expect(await pages.setPage({ page: trading })).toMatchObject({ ok: false, fail: { type: 'denied' } })
+test('through hostProvider, the ask is the ui pod\'s dialog, and no answer within 20 s is a no', async () => {
+  const store = pageStore([], () => true), registry = Registry.create()
+  let app: Application | undefined
+  registry.add(hostProvider(() => app!, store))
+  const d: AppDeployment = { pods: { ui: Pod.eager(hostUi), pages: pagesPod }, runtimes: { main: { pods: ['ui', 'pages'], subscriptions: [] } } }
+  app = must(await Application.create(must(AppDeployment.assemble(d, registry))))
+  jest.useFakeTimers()
+  try {
+    const r = (app.call('main', 'pages') as unknown as Pages).setPage({ page: trading })
+    for (let i = 0; i < 50 && !document.querySelector('dialog'); i++) { await Promise.resolve(); jest.advanceTimersByTime(1) }
+    expect(document.querySelector('dialog')?.textContent).toContain('Add page Trading')
+    jest.advanceTimersByTime(20_000)
+    expect(await r).toMatchObject({ ok: false, fail: { type: 'denied' } })
+  } finally { jest.useRealTimers() }
   expect(store.get('trading')).toBeUndefined()
+  document.querySelector('dialog')?.remove()
   await app.close()
 })
 
@@ -71,6 +85,7 @@ test('boot: the stored document is loaded and its pages seeded; a pod undeployed
   globalThis.fetch = (async (u: string, ...rest: unknown[]) => blobs.has(u) ? new Response(blobs.get(u)) : (domFetch as Function)(u, ...rest)) as never
   const { host, pages } = await import('../src/boot-host.ts')
   if (!host) throw new Error('the host did not start')
+  expect(document.querySelector('dialog')).toBeNull()   // the app's own document, nano.ui only: nothing asked
   expect(Object.keys(host.data().pods)).toEqual(['ui', 'deploy', 'pages', 'log1', 'log2'])
   expect(pages.list()).toEqual(stored.layout!['pages'] as Page[])
   // the pod `pages` answers from the same store, unasked

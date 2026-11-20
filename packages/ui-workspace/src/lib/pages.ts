@@ -16,7 +16,8 @@ const FIXED = ['ring', 'desk', 'settings', 'systems', 'messages', 'components', 
 const isPod = (s: Page['slots'][number]): s is LayoutSlot => 'pod' in s
 
 export function pageStore(initial: Page[], placed: Placed) {
-  const given = structuredClone(initial).filter(p => !FIXED.includes(p.id))
+  // a bad page dropped (and warned, by pagesOf), a fixed route's too, the first of an id kept
+  const given = structuredClone(pagesOf({ pages: initial })).filter((p, i, all) => !FIXED.includes(p.id) && all.findIndex(q => q.id === p.id) === i)
   let pages: Page[] = [given.find(p => p.id === MAIN) ?? { id: MAIN, title: 'Workspace', slots: [] }, ...given.filter(p => p.id !== MAIN)]
   const heard = new Set<() => void>()
   const changed = () => { for (const fn of heard) fn() }

@@ -30,7 +30,7 @@ test('storage that throws: nothing throws, one status message', () => {
   expect(document.querySelectorAll('[data-nano-status]').length).toBe(1)
 })
 
-test('migrate reads Main, the saved pages, their dock layouts and templates, then removes those keys', () => {
+test('migrate reads Main, the saved pages, their dock layouts and templates, and leaves those keys', () => {
   const { m, storage } = memory()
   const config = { root: { type: 'row', content: [{ type: 'component', componentState: { widget: 'example.clock/clock', name: 'clock1' } }, { type: 'component', componentState: { widget: 'nano-explorer' } }] } }
   const template = { template: 'two-cols', order: [{ widget: 'notes' }, null], parked: [{ widget: 'example.clock/clock', name: 'clock2' }], dock: null }
@@ -46,8 +46,8 @@ test('migrate reads Main, the saved pages, their dock layouts and templates, the
     { id: 'trading', title: 'Trading', icon: 'chart', workspace: { template }, slots: [{ id: 'notes', view: 'notes' }, { id: 'clock2', runtime: 'main', pod: 'clock2' }] },
     { id: 'a-b', title: 'AB', icon: 'box', slots: [] },
   ])
-  expect([...m.keys()].sort()).toEqual(['other', 'workspace-starter.layout.saved./trading.window-style'])
-  expect(persisted(storage, 'k').migrate(storage)).toEqual([])   // once
+  expect(m.size).toBe(6)   // the nav and docks still read them
+  expect(persisted(storage, 'k').migrate(storage)).toEqual(pages)
 })
 
 test('migrate with only the main dock layout gives Main; with nothing, no pages', () => {
@@ -57,5 +57,5 @@ test('migrate with only the main dock layout gives Main; with nothing, no pages'
   expect(persisted(storage, 'k').migrate(storage)).toEqual([
     { id: 'workspace', title: 'Workspace', workspace: { template: { template: 'one', order: [{ widget: 'notes' }], parked: [], dock: null } }, slots: [{ id: 'notes', view: 'notes' }] },
   ])
-  expect(m.size).toBe(0)
+  expect(m.size).toBe(1)
 })

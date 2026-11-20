@@ -33,6 +33,7 @@ import { shadowCreate } from './history.ts';
 import { savedLayout, slotsToOpen } from './layout-data.ts';
 import { templateState, type TemplateState } from './lib/layout-templates.ts';
 import { icon } from './icons.ts';
+import { HOST_PODS } from './host-deploy.ts';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
 if (host) {
@@ -79,10 +80,10 @@ if (host) {
     save: () => download('nano.json'), reconcile: () => download('nano.json', true), download: () => download('nano.json'),
     'save-as': async () => { const name = await askName(document, 'nano'); if (name) download(`${name}.json`); },
     open: () => openImportDialog(document), import: () => openImportDialog(document),
-    // New: an apply of an empty deployment (the host's own pod `ui` stays; providers stay loaded), and the dock's
+    // New: an apply of an empty deployment (the host's own pods stay; providers stay loaded), and the dock's
     // starting layout. BACKLOG(8): the old New also started a working copy.
     new: async () => {
-      const d = h.data(), r = await h.apply({ ...d, pods: { ui: d.pods['ui']! }, runtimes: { main: { pods: ['ui'], subscriptions: [] } }, tags: {}, views: {}, layout: undefined });
+      const d = h.data(), r = await h.apply({ ...d, pods: Object.fromEntries(HOST_PODS.map(p => [p, d.pods[p]!])), runtimes: { main: { pods: [...HOST_PODS], subscriptions: [] } }, tags: {}, views: {}, layout: undefined });
       if (!r.ok) return;
       dock?.reset();
       if (menu) menu.dirty = false;
@@ -130,5 +131,7 @@ if (host) {
   const src = new URL(location.href).searchParams.get('src');
   // Only a URL on this page's origin: a crafted link must not open the import prompt on load.
   if (src && new URL(src, location.href).origin !== location.origin) toast(`${src} is not on this origin`, { variant: 'bad' });
-  else if (src) await shown(host.importUrl(new URL(src, location.href).href), layoutNow());   // a failure is shown as a toast
+  else if (src && (await shown(host.importUrl(new URL(src, location.href).href), layoutNow())).ok) {   // a failure is shown as a toast
+    const at = new URL(location.href); at.searchParams.delete('src'); history.replaceState(history.state, '', at);   // imported into the stored document: a reload must not import it again
+  }
 }

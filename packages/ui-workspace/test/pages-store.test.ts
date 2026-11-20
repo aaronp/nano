@@ -1,5 +1,5 @@
 // The page store: the run-time truth for pages. Main (`workspace`) first and kept; fixed routes and unplaced pods refused.
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import type { Page } from '@pritzlaff/nano-ui'
 import { pageStore } from '../src/lib/pages.ts'
 
@@ -7,11 +7,19 @@ const main: Page = { id: 'workspace', title: 'Workspace', slots: [] }
 const trading: Page = { id: 'trading', title: 'Trading', icon: 'chart', slots: [{ id: 'a', runtime: 'main', pod: 'clock1' }, { id: 'n', view: 'nano-explorer' }] }
 const placedPods = new Set(['main/clock1'])
 const placed = (r: string, p: string) => placedPods.has(`${r}/${p}`)
+const warned = spyOn(console, 'warn').mockImplementation(() => {})   // pagesOf warns on each bad page, as expected here
 const refused = (r: { ok: boolean }) => expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
 
 test('Main is there and first, even when not given', () => {
   expect(pageStore([], placed).list()).toEqual([main])
   expect(pageStore([trading, { ...main, title: 'Home' }], placed).list().map(p => p.id)).toEqual(['workspace', 'trading'])
+})
+
+test('the initial pages are checked: a bad one or a fixed route dropped, the first of an id kept', () => {
+  warned.mockClear()
+  const s = pageStore([main, trading, { ...trading, title: 'Again' }, { id: 'a/b', title: 'x', slots: [] }, { id: 'ring', title: 'R', slots: [] }], placed)
+  expect(s.list()).toEqual([main, trading])
+  expect(warned).toHaveBeenCalledTimes(1)
 })
 
 test('set adds or replaces by id; a rename keeps the id; index moves it', () => {
