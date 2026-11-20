@@ -353,9 +353,10 @@ test('Settings shows each runtime\'s policy rules in order, the frame permission
   const s = page.locator('nano-settings')
   await expect(s.getByRole('heading', { name: 'example.chat.backend' })).toBeVisible()
   const rows = s.locator('h3:text("example.chat.backend") + p + table tbody tr')
-  await expect(rows).toHaveCount(5)
+  await expect(rows).toHaveCount(6)
   await expect(rows.first()).toContainText('allow')
   await expect(rows.first()).toContainText('bob')
+  await expect(rows.nth(4)).toContainText(/allow\s*start\s*host/)   // the host may start a pod there, to show its panel
   await expect(rows.last()).toContainText('deny')
   await expect(s.getByRole('row', { name: /home-origin/ })).toContainText('publickey-credentials-get')
   await expect(s.getByRole('row', { name: /example\.chat / })).toContainText('this origin')

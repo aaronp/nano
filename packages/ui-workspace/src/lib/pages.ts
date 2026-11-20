@@ -73,15 +73,17 @@ export function pageStore(initial: Page[], placed: Placed) {
     /**
      * Adds an import's pages: a free id as it is; a taken id with identical content (title, icon, slots, engine keys)
      * skipped, so a repeat is a no-op; a taken id with other content added under the next free `-2`, `-3`… The
-     * incoming `workspace` is never Main (its id is taken). Returns `set`'s refusals, one message each.
+     * incoming `workspace` fills Main only when Main has no slots (after New, say), else it is a page beside it.
+     * Returns `set`'s refusals, one message each.
      */
     merge(incoming: Page[]): string[] {
       const refused: string[] = [], body = (p: Page) => JSON.stringify({ ...p, id: '' })
       for (const p of structuredClone(incoming)) {
         const same = pages.find(q => q.id === p.id)
         if (same && body(same) === body(p)) continue
+        const fills = p.id === MAIN && !same!.slots.length
         let id = p.id
-        for (let n = 2; pages.some(q => q.id === id); n++) id = `${p.id}-${n}`
+        for (let n = 2; !fills && pages.some(q => q.id === id); n++) id = `${p.id}-${n}`
         const r = store.set({ ...p, id })
         if (!r.ok) refused.push(r.fail.reason)
       }
