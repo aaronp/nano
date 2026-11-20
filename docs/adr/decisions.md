@@ -827,3 +827,352 @@ Cons:
 - The view is wrong after every Reset or reload
 
 ## Decision
+
+---
+id: ADR-0031
+title: Start pods explicitly, per runtime, with start and getOrCreate
+status: accepted
+date: 2026-11-20
+revisit: 
+tags: core, lifecycle, pods
+decision: explicit
+---
+
+## Goal
+Opening a page must start the lazy pods it shows and reuse those already running, never making duplicates. Today a
+lazy pod is built only by its first call (D70: "there is no `start()`"), and a subscription never builds its source,
+so a view that only listens waits forever. The impact is on core's lifecycle model: how, and by whom, a pod is
+started. Spec: `docs/superpowers/specs/2026-11-20-pages-as-deployment-design.md`.
+
+## Hypothesis
+- We believe: two explicit operations on a runtime's live view, `start(pod)` and `getOrCreate(pod)`
+- Will result in: data-driven page opening with no surprising side effects, and no duplicate pods
+- Measured by: opening a second page naming a running pod starts nothing (`started: false`); subscribing never builds a pod
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| explicit | No hidden side effects | 5 | Starting a pod is something someone asked for, visible in code and on the stream. |
+| model | Fits the model | 4 | Few new concepts; policed and traced like other messages. |
+| reuse | Reuse, not duplicates | 4 | A running pod is found and reused; one build however many callers. |
+| simplicity | Simplicity | 3 | Little new core surface. |
+
+## Solution: explicit — start and getOrCreate on RuntimeView
+`start(pod): NanoResult<void>` builds a placed pod that isn't running (refusing one that is); `getOrCreate(pod)`
+returns `{ started, pod }` (`pod` is exactly `call(pod)`'s client) or the `Fail`. `start` is a message of a new kind
+`start`, from `host`, asked of the runtime's policy.
+
+| criterion | score |
+| --- | --- |
+| explicit | 5 |
+| model | 4 |
+| reuse | 5 |
+| simplicity | 3 |
+
+Pros:
+- Starting is always asked for, traced and policed
+- `started` tells the caller whether it started the pod
+
+Cons:
+- Reverses D70; a new message kind in `AppEvent` and `Ask`
+- A call still builds a lazy pod on the way, so a policy refusing `start` doesn't block that path
+
+## Solution: subscribe-builds — A subscription builds its lazy source
+Connecting an `on` to a lazy, unbuilt pod builds it, as a call does.
+
+| criterion | score |
+| --- | --- |
+| explicit | 1 |
+| model | 3 |
+| reuse | 4 |
+| simplicity | 5 |
+
+Pros:
+- One rule in `connect`; no new API
+
+Cons:
+- Wiring a subscription starts a pod as a side effect
+
+## Solution: ping — The host calls something on each lazy pod
+Opening a page calls an op on each pod to build it.
+
+| criterion | score |
+| --- | --- |
+| explicit | 2 |
+| model | 1 |
+| reuse | 3 |
+| simplicity | 3 |
+
+Pros:
+- No core change
+
+Cons:
+- There is no op every pod has; the host would invent one
+
+## Decision
+Explicit `start` and `getOrCreate` on `app.runtime(id)` (not `Application`, which is at its 10-member cap). `start`
+is a traced, policed message of kind `start`; `lifecycle` keeps its meaning. Supersedes D70 and the "no `start()`"
+lines in D90, D98, the model spec and the design.md FAQ: the old rule was about the application; this is per pod.
+
+---
+id: ADR-0032
+title: Keep pages in AppDeployment.layout
+status: accepted
+date: 2026-11-20
+revisit: 
+tags: presentation, layout, deployment
+decision: in-layout
+---
+
+## Goal
+Pages, their layouts and which pods sit where should be deployment data, not the workspace's private storage, so a
+different front-end (say React, with its own look) can load and show them. The impact is the shape of the saved
+document and how the system and its presentation relate.
+
+## Hypothesis
+- We believe: pages (containers of slots, each with a fixed id as its coordinate) in `AppDeployment.layout.pages`
+- Will result in: one portable document holding the system and its pages, saved and loaded together
+- Measured by: a reload reopens the same pages and pods; a document's pages open in another host with no workspace state
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| portable | Portable | 5 | Another front-end can read pages without the workspace's engine state. |
+| one-truth | One source of truth | 5 | No second copy of pods or pages to keep in step. |
+| core | Core untouched | 4 | Core keeps ignoring presentation. |
+| multi | Several front-ends | 2 | Different front-ends can keep different pages over one system. |
+
+## Solution: in-layout — layout.pages in the deployment
+`layout.pages: Page[]`, each `{ id, title, icon?, slots, geometry?, <engine>? }`; core only shape-checks `layout`.
+
+| criterion | score |
+| --- | --- |
+| portable | 5 |
+| one-truth | 5 |
+| core | 5 |
+| multi | 2 |
+
+Pros:
+- One document to persist, export and load
+- Builds on the existing `LayoutSlot` and `LayoutBox`
+
+Cons:
+- `layout` changes from "the page" to "the pages" (the old shape reads as page `workspace`)
+
+## Solution: separate — A presentation document pointing into a deployment
+Pages live in their own document that names pods by runtime and pod.
+
+| criterion | score |
+| --- | --- |
+| portable | 4 |
+| one-truth | 2 |
+| core | 5 |
+| multi | 5 |
+
+Pros:
+- Several front-ends can each own pages over one system
+
+Cons:
+- Two documents to keep in step; slots can name pods that no longer exist
+
+## Decision
+`layout.pages` in the deployment. Slots are the truth; an engine's state (the page's `workspace` key) is a hint keyed
+by slot id. A slot is a pod's (`{ id, runtime, pod }`) or a host view's (`{ id, view }`). Page ids are fixed when the
+page is made; titles change freely.
+
+---
+id: ADR-0033
+title: Change pages through a HostPages capability, apart from HostDeploy
+status: accepted
+date: 2026-11-20
+revisit: 
+tags: presentation, host, capabilities
+decision: host-pages
+---
+
+## Goal
+Pages need a capability to read and change them, which the workspace UI and pods can use and the host persists. The
+impact is whether rearranging presentation and changing the system share one path and one approval.
+
+## Hypothesis
+- We believe: a separate `HostPages` interface (`pages`, `setPage`, `removePage`, `open`)
+- Will result in: presentation changes that never change the system, and a system that never depends on pages
+- Measured by: no page operation applies a deployment; pruning slots of removed pods is the only system → page effect
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| decoupled | Presentation decoupled | 5 | Page changes and system changes have separate owners and paths. |
+| approval | Sensible approval | 3 | A pod changing pages is asked; a drag in the UI isn't a "deployment". |
+| surface | Small surface | 3 | Few new names. |
+
+## Solution: host-pages — A new HostPages interface
+A nano-ui interface the workspace implements as host pod `pages`; a pod's changes ask `HostUI.approve`.
+
+| criterion | score |
+| --- | --- |
+| decoupled | 5 |
+| approval | 5 |
+| surface | 3 |
+
+Pros:
+- Each fact has one owner and one path
+
+Cons:
+- A new interface, a third host pod and a second approval path
+
+## Solution: extend-deploy — HostDeploy.deploy accepts layout
+`deploy` takes `layout` beside pods and runtimes.
+
+| criterion | score |
+| --- | --- |
+| decoupled | 1 |
+| approval | 2 |
+| surface | 5 |
+
+Pros:
+- One capability, one approval path
+
+Cons:
+- Dragging a panel becomes a deployment; presentation and system blur
+
+## Decision
+`HostPages`. A pick is two separate steps: deploy the pod (system), then add a slot (presentation). Pages never
+start, stop, count or remove pods; when the system removes a pod, pages drop its slots on `applied`.
+
+---
+id: ADR-0034
+title: Trust the app's own stored document at boot
+status: accepted
+date: 2026-11-20
+revisit: 
+tags: security, persistence, host
+decision: trust-own
+---
+
+## Goal
+The host now persists the whole document (system, modules, views, pages) and boots from it. The document names code
+to load (`modules`), and `Application.load` is for trusted documents. The impact is a trust boundary: does a reload
+run stored code without asking?
+
+## Hypothesis
+- We believe: the stored document is the app's own (same origin, written by it) and loads without asking
+- Will result in: a reload that simply reopens what you had
+- Measured by: a reload asks nothing for nano.ui or same-origin providers; a foreign provider still asks once per session
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| safety | Safety | 5 | Stored data can't run code a person never agreed to. |
+| flow | Smooth reload | 4 | A reload reopens your work without prompts. |
+| simplicity | Simplicity | 2 | No new consent store. |
+
+## Solution: trust-own — Trust storage, keep per-session consent for foreign code
+Same-origin storage is trusted like the app's code; foreign providers ask once per session as now; `?src=` imports
+into the stored document.
+
+| criterion | score |
+| --- | --- |
+| safety | 4 |
+| flow | 4 |
+| simplicity | 5 |
+
+Pros:
+- No prompts for your own work; foreign code still asks
+
+Cons:
+- Poisoned storage (already requiring same-origin script) is trusted
+
+## Solution: ask-always — Ask before loading any stored module
+Every reload asks for each provider in the stored document.
+
+| criterion | score |
+| --- | --- |
+| safety | 5 |
+| flow | 1 |
+| simplicity | 4 |
+
+Pros:
+- Nothing runs unasked
+
+Cons:
+- Every reload is a consent prompt
+
+## Decision
+Trust the app's own stored document; foreign providers keep their once-per-session consent; `?src=` imports into the
+stored document, never replacing it.
+
+---
+id: ADR-0035
+title: Picks deploy lazy pods
+status: accepted
+date: 2026-11-20
+revisit: 
+tags: presentation, lifecycle, picker
+decision: lazy
+---
+
+## Goal
+A pick from the picker deploys a pod. Today every pick is eager (built at once). The impact is what starts pods: the
+deployment, or the pages that show them.
+
+## Hypothesis
+- We believe: picks deploy lazy pods, started by the page that shows them (`getOrCreate`)
+- Will result in: nothing running only because some other page lists it
+- Measured by: a pod on a never-opened page stays `not started`
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| intent | Runs what you look at | 4 | Pods start when shown, not just because they exist. |
+| behaviour | Pods that need to run | 3 | A timer or socket pod that must always run still can. |
+| simplicity | Simplicity | 2 | One rule. |
+
+## Solution: lazy — Picks are lazy
+| criterion | score |
+| --- | --- |
+| intent | 5 |
+| behaviour | 3 |
+| simplicity | 5 |
+
+Pros:
+- Page opening is what starts things, explicitly
+
+Cons:
+- A pod that must run unseen needs `eager` set by other means (import or deploy)
+
+## Solution: eager — Picks are eager, as now
+| criterion | score |
+| --- | --- |
+| intent | 2 |
+| behaviour | 5 |
+| simplicity | 5 |
+
+Pros:
+- Unchanged behaviour
+
+Cons:
+- Every picked pod runs from the moment it is deployed, shown or not
+
+## Decision
+Picks deploy lazy pods; the page that shows one starts it.
