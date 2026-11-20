@@ -1,6 +1,7 @@
 /**
  * What each dock panel holds: `explorer` and `wiring` nano-ui's elements, `stream` the app's events, `pod:<name>` the
- * pod's chosen view (`nano-sandboxed` for a non-host pod), made again when its view or runtime changes.
+ * pod opened (its runtime's `getOrCreate`: reused if running, else started) and then its chosen view (`nano-sandboxed`
+ * for a non-host pod), made again when its view or runtime changes; a pod that fails to open shows why instead.
  *
  *   const dispose = fill(container.element, 'pod:up', host)
  *   mountPanel(container, state, { doc, defs, bus, host, registry, send })   // golden-layout's factory for a panel
@@ -8,6 +9,7 @@
 import type { ComponentContainer, ComponentItem, ContentItem, JsonValue } from 'golden-layout/dist/esm/index.js'
 import { viewFor, type ViewTarget } from '@pritzlaff/nano-ui'
 import type { Host } from '../host.ts'
+import { AppDeployment } from '@pritzlaff/nano-core'
 import { connected } from '../auto-connect.ts'
 import { icon as explorerIcon } from '../icons.ts'
 import { provideBus, type Bus } from '../lib/bus.ts'
@@ -35,16 +37,17 @@ export function fill(el: HTMLElement, id: string, h: Host): () => void {
     pre.className = 'dock-stream'
     return h.app.listen(e => { lines.push(JSON.stringify(e)); if (lines.length > 200) lines.shift(); pre.textContent = lines.join('\n') })   // the last 200
   }
-  const pod = id.slice('pod:'.length)
-  let shown = ''
+  const pod = id.slice('pod:'.length), runtimeOf = () => { const d = h.data(); return Object.keys(d.runtimes).find(r => d.runtimes[r]!.pods.includes(pod)) }
+  let shown = '', open = false
   const show = () => {
-    const d = h.data(), runtime = Object.keys(d.runtimes).find(r => d.runtimes[r]!.pods.includes(pod))
+    const runtime = open && runtimeOf()
     if (!runtime) return
     const tag = chosen(h, pod), key = `${tag} ${runtime}`
     // the target is set once: a new one on every apply would restart the view's listening
     if (key !== shown) { shown = key; el.replaceChildren(made(tag, { ...target, runtime, pod } satisfies ViewTarget)) }
   }
-  show()
+  const fail = (why: string) => el.replaceChildren(Object.assign(document.createElement('p'), { className: 'dock-fail', textContent: why }))
+  void h.app.runtime(runtimeOf() ?? '').getOrCreate(pod).then(r => { if (r.ok) { open = true; show() } else fail(r.fail.reason) })
   return h.app.listen(e => { if (e.type === 'applied') show() })
 }
 
@@ -69,22 +72,26 @@ export function implementationTemplates(h: Host, doc: Document): HTMLTemplateEle
 
 /** The adds in flight, one after another: each reads `data()` after the last applied, so no two take one name. */
 let adding: Promise<unknown> = Promise.resolve()
-/** Adds a pod of `coord` to runtime main, named `name` if given and free (a pod of `coord` already named so is kept),
- * else `<kind><n>` with the first free n; its name, once applied. Calls run one at a time. */
-export function addPod(h: Host, coord: string, name?: string): Promise<string | undefined> {
-  const run = adding.then(() => make(h, coord, name))
+/** Places a lazy pod of `coord` in `runtime` (ADR-0035: the page showing it starts it), named `<kind><n>` with the first
+ * free n, its dependencies connected; in a `rules` runtime, after a rule letting the host reach it (as `edit`'s `create`
+ * lets its caller in). Its name, once applied. Calls run one at a time. */
+export function addPod(h: Host, coord: string, runtime: string): Promise<string | undefined> {
+  const run = adding.then(() => make(h, coord, runtime))
   adding = run.catch(() => {})
   return run
 }
-async function make(h: Host, coord: string, preferred?: string): Promise<string | undefined> {
-  const d = h.data(), kind = coord.slice(coord.indexOf('/') + 1)
-  if (preferred && d.pods[preferred]?.implementation === coord) return preferred   // made again already (a copied page names it too)
+async function make(h: Host, coord: string, runtime: string): Promise<string | undefined> {
+  const d = h.data(), kind = coord.slice(coord.indexOf('/') + 1), impl = h.registry.implementation(coord)
+  if (!impl) return undefined
   let n = 1
   while (`${kind}${n}` in d.pods) n++
-  const name = preferred && !(preferred in d.pods) ? preferred : `${kind}${n}`, pod = { implementation: coord, eager: true, ...(starts[coord] !== undefined && { config: starts[coord] }) }
-  const main = d.runtimes['main'] ?? { pods: [], subscriptions: [] }
-  const r = await h.apply(connected({ ...d, pods: { ...d.pods, [name]: pod }, runtimes: { ...d.runtimes, main: { ...main, pods: [...main.pods, name] } } }, h.registry, [name]))
-  return r.ok ? name : undefined
+  const name = `${kind}${n}`, e = AppDeployment.edit(d, h.registry)
+  e.place(impl, { pod: name, in: runtime })
+  const out = e.deployment(), r = out.runtimes[runtime]!
+  if (starts[coord] !== undefined) out.pods[name]!.config = starts[coord]
+  if (r.policy?.kind === 'rules') r.policy.rules.unshift({ allow: ['call', 'subscribe', 'start'], from: 'host', outside: true, toPod: name })
+  const applied = await h.apply(connected(out, h.registry, [name]))
+  return applied.ok ? name : undefined
 }
 
 type Mounting = { doc: Document; defs: ReadonlyMap<string, Def>; bus: Bus; host?: Host; registry?: unknown; send(topic: string, payload: unknown): void }
@@ -114,18 +121,15 @@ export function mountPanel(container: ComponentContainer, state: JsonValue | und
     el.target = { app: h.app, registry: h.registry, get calls() { return h.calls() } }
   }
   if (h && id === 'pod' && name) container.on('destroy', fill(container.element, `pod:${name}`, h))
-  // an implementation's panel makes a pod of it (or shows the one it made), as a catalog kind's placed a new instance
+  // an implementation's panel opens the pod it names; unnamed (picks deploy first), it makes one in main and names it
   if (h && impl) {
     let stop = () => {}, gone = false, pod = name
     const show = (p: string) => { pod = p; if (!gone) stop = fill(container.element, `pod:${p}`, h) }
-    // a pod it names that is gone (pods are not kept across a reload) is made again under that name; named otherwise,
-    // its state changed: a template position stores it (golden-layout reads it as it saves)
-    if (name && name in h.data().pods) show(name)
-    else void addPod(h, impl, name).then((p) => { if (p) { show(p); if (p !== name && !gone) container.emit('stateChanged') } })
+    if (name) show(name)
+    else void addPod(h, impl, 'main').then((p) => { if (p) { show(p); if (!gone) container.emit('stateChanged') } })
     container.stateRequestEvent = () => ({ widget: id, ...(pod && { name: pod }) })
     container.on('destroy', () => { gone = true; stop() })
-    send('dock:opened', { widget: id })
-    return
+    return send('dock:opened', { widget: id })
   }
   for (const type of ['pointerdown', 'focusin']) container.element.addEventListener(type, () => container.focus())
   // saved layouts name the instance each panel shows, so Reset and Restore reattach instead of making new ones

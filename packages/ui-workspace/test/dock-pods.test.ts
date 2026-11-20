@@ -1,8 +1,9 @@
-// <workspace-dock>'s template mode with the real host: an implementation picked into a position is stored with its pod
-// once made, and an add from outside with no room waits for that pod rather than being dropped.
+// The docks on their pages with the real host: a dock keeps its page (its engine state under the page's `workspace`,
+// its panels the page's slots), opening a page gets or creates its pods, and a pick deploys a lazy pod first.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: new URL('../../../', import.meta.url).href })
 import { afterEach, expect, mock, test } from 'bun:test'
+import type { Page } from '@pritzlaff/nano-ui'
 import type { PanelState } from '../src/lib/layout-templates.ts'
 
 let choice: PanelState | null = null   // the picker, stubbed
@@ -12,103 +13,148 @@ const { start } = await import('../src/host.ts')
 await import('../src/components/workspace-dock.ts')
 const { addPod, implementationTemplates } = await import('../src/dock/panels.ts')
 const { createBus, provideBus } = await import('../src/lib/bus.ts')
-const { templateState } = await import('../src/lib/layout-templates.ts')
+const { pageStore } = await import('../src/lib/pages.ts')
+const { bootWorkspacePages } = await import('../src/components/workspace-pages.ts')
 defineViews()
 
-type Dock = HTMLElement & { addWidget(id: string, name?: string): void; setTemplate(id: string): boolean; template: string; save(): void }
-const until = async (ok: () => boolean) => { for (let i = 0; i < 200 && !ok(); i++) await new Promise(r => setTimeout(r, 5)); expect(ok()).toBe(true) }
-afterEach(() => { document.body.innerHTML = ''; localStorage.clear() })
-
 type H = Extract<Awaited<ReturnType<typeof start>>, { ok: true }>['value']
-/** A dock on a host; `late`, the host is given after it connects, as main.ts does on a reload. */
-async function mount(given?: H, late = false) {
-  const r = given ? { ok: true as const, value: given } : await start()
+type Dock = HTMLElement & { host?: H; setTemplate(id: string): boolean; template: string }
+const until = async (ok: () => boolean) => { for (let i = 0; i < 200 && !ok(); i++) await new Promise(r => setTimeout(r, 5)); expect(ok()).toBe(true) }
+afterEach(() => { document.body.innerHTML = ''; choice = null })
+
+const host = async () => { const r = await start(); if (!r.ok) throw new Error(r.fail.reason); return r.value }
+/** Places `pods` (lazy, of `impl`) in runtime `at`, made with `policy` if new: a stored document as a fresh host loads it. */
+const place = async (h: H, at: string, pods: string[], impl = 'nano.ui/input', policy?: unknown) => {
+  const d = h.data(), rt = d.runtimes[at] ?? { pods: [], subscriptions: [], ...(policy !== undefined && { policy }) }
+  const r = await h.apply({ ...d, pods: { ...d.pods, ...Object.fromEntries(pods.map(p => [p, { implementation: impl, eager: false }])) }, runtimes: { ...d.runtimes, [at]: { ...rt, pods: [...rt.pods, ...pods] } } } as never)
   if (!r.ok) throw new Error(r.fail.reason)
-  const dock = document.createElement('workspace-dock') as Dock & { host?: H }
-  Object.assign(dock, { id: 'ws' }, !late && { host: r.value })
-  dock.setAttribute('storage-key', 't.pods'); dock.setAttribute('open', 'plain')
-  dock.innerHTML = '<template data-widget="plain" data-title="Plain"><div>plain</div></template>'
-  dock.prepend(...implementationTemplates(r.value, document))
-  const bus = createBus(), page = document.createElement('div')
-  provideBus(page, bus); page.append(dock); document.body.append(page)
-  if (late) dock.host = r.value
-  return { dock, bus, host: r.value, input: implementationTemplates(r.value, document).find(t => t.dataset['implementation'] === 'nano.ui/input')!.dataset['widget']! }
 }
-const stored = () => templateState(localStorage, 't.pods').get()!.order
+const slot = (pod: string, runtime = 'main') => ({ id: pod, runtime, pod })
+const running = (h: H, pod: string) => { const s = h.app.runtime('main').status(pod); return s.ok && s.value === 'running' }
 
-test('an implementation picked into a position is stored with its pod once made', async () => {
-  const { dock, input } = await mount()
-  dock.setTemplate('two-cols')
-  choice = { widget: input }
-  dock.querySelector<HTMLElement>('.tpl-add')!.click()
-  await until(() => !!stored()[1]?.name)
-  expect(stored()[1]).toEqual({ widget: input, name: 'input1' })
+/** The workspace's pages over `h`: Main's dock and one per other page, in hidden routes until `go` shows one (as app-shell does). */
+function mount(h: H, pages: Page[]) {
+  const store = pageStore(pages, (r, p) => !!h.data().runtimes[r]?.pods.includes(p)), bus = createBus(), app = document.createElement('div')
+  provideBus(app, bus)
+  app.innerHTML = `<span slot="title"></span><div class="nav-row" data-workspaces><a href="#/workspace"></a></div>
+    <app-route path="/workspace" hidden><workspace-dock id="workspace" storage-key="main" open=""><template data-widget="notes" data-title="Notes"><div>notes</div></template></workspace-dock></app-route>
+    <app-route path="*" hidden></app-route>`
+  const main = app.querySelector<Dock>('workspace-dock')!
+  main.host = h
+  main.prepend(...implementationTemplates(h, document))
+  document.body.append(app)
+  bootWorkspacePages(document, store)
+  const go = (id: string) => {
+    for (const r of document.querySelectorAll<HTMLElement>('app-route')) r.hidden = r.getAttribute('path') !== `/${id}`
+    bus.publish('route:changed', { path: `/${id}` }, 'test')
+  }
+  const dock = (id: string) => document.querySelector<Dock>(`app-route[path="/${id}"] workspace-dock`)!
+  const panels = (id: string) => [...dock(id)?.querySelectorAll<HTMLElement>('.dock-panel') ?? []]   // none while a dock is built again
+  return { store, go, dock, panels, input: implementationTemplates(h, document).find(t => t.dataset['implementation'] === 'nano.ui/input')!.dataset['widget']! }
+}
+const starts = (h: H) => { const to: string[] = []; h.app.listen(e => { if (e.type === 'sent' && e.kind === 'start') to.push(e.to) }); return to }
+/** Each getOrCreate's `started`, in order. */
+const opened = (h: H) => {
+  const seen: boolean[] = [], runtime = h.app.runtime.bind(h.app)
+  h.app.runtime = ((id: string) => { const v = runtime(id); return { ...v, getOrCreate: async (p: string) => { const r = await v.getOrCreate(p); if (r.ok) seen.push(r.value.started); return r } } }) as never
+  return seen
+}
+
+test('a reload (a fresh host from the stored document) opens the same pods: no new names, started once, then reused on a second page (Review Focus 2)', async () => {
+  const h = await host()
+  await place(h, 'main', ['input1'])
+  const names = Object.keys(h.data().pods).sort(), started = starts(h), seen = opened(h)
+  const { go, panels } = mount(h, [{ id: 'workspace', title: 'Main', slots: [slot('input1')] }, { id: 'two', title: 'Two', slots: [slot('input1')] }])
+  await new Promise(r => setTimeout(r, 20))
+  expect(h.app.runtime('main').status('input1')).toEqual({ ok: true, value: 'not started' })   // not at boot
+  go('workspace')
+  await until(() => panels('workspace')[0]?.childElementCount === 1)
+  await until(() => started.length === 1)
+  expect(started).toEqual(['input1'])
+  go('two')
+  await until(() => panels('two')[0]?.childElementCount === 1)
+  go('workspace'); go('two')
+  await new Promise(r => setTimeout(r, 20))
+  expect(started).toEqual(['input1'])   // the second page reused it; showing a page again opens nothing
+  expect(seen).toEqual([true, false])
+  expect(Object.keys(h.data().pods).sort()).toEqual(names)
 })
 
-test('an add with no room while a pod is being made waits for it, says so, then flips to the dock with it', async () => {
-  const { dock, bus, input } = await mount()
-  dock.setTemplate('two-cols')
+test('a pick deploys a lazy pod in the runtime, adds its slot, and opening it starts it', async () => {
+  const h = await host(), started = starts(h)
+  const { go, store, input, panels } = mount(h, [])
+  go('workspace')
   choice = { widget: input }
-  dock.querySelector<HTMLElement>('.tpl-add')!.click()
-  for (let i = 0; i < 50 && dock.querySelector('.tpl-add'); i++) await Promise.resolve()   // filled, its pod not yet made
-  expect(stored()[1]).toEqual({ widget: input })
-  dock.addWidget('plain')
-  expect(dock.template).toBe('two-cols')
-  expect(bus.history().filter(m => m.topic === 'dock:status').at(-1)!.payload).toEqual({ message: 'Adding Plain once the new pod is made.' })
-  await until(() => dock.template === 'dock')
-  expect(dock.querySelectorAll('.dock-panel').length).toBe(3)
+  document.querySelector<HTMLElement>('.dock-empty')!.click()
+  await until(() => store.get('workspace')!.slots.length === 1)
+  expect(h.data().pods['input1']).toEqual({ implementation: 'nano.ui/input', eager: false })
+  expect(store.get('workspace')!.slots).toEqual([slot('input1')])
+  await until(() => started.length === 1 && panels('workspace')[0]!.childElementCount === 1)
+  expect(h.app.runtime('main').status('input1')).toEqual({ ok: true, value: 'running' })
 })
 
-test('a reload in a template, its host given after the dock connects, keeps the pods named and makes none', async () => {
-  const { dock, host, input } = await mount()
-  dock.setTemplate('two-cols')
-  choice = { widget: input }
-  dock.querySelector<HTMLElement>('.tpl-add')!.click()
-  await until(() => !!stored()[1]?.name)
-  const before = JSON.stringify(stored()), pods = Object.keys(host.data().pods).length
-  document.body.innerHTML = ''
-  const { dock: again } = await mount(host, true)
-  await new Promise(r => setTimeout(r, 50))
-  expect(again.template).toBe('two-cols')
-  expect(JSON.stringify(stored())).toBe(before)
-  expect(Object.keys(host.data().pods).length).toBe(pods)
-  expect(again.querySelectorAll('.tpl-pos')[1]!.querySelector('.dock-panel')!.childElementCount).toBe(1)   // its pod's view, made with the host
-})
-
-test('a reload on a fresh host (pods are not kept) makes each named pod again under its name, in a template and the dock', async () => {
-  const { dock, input } = await mount()
-  choice = { widget: input }
-  dock.querySelector<HTMLElement>('.dock-split')!.click()
-  await until(() => 'input1' in dock.host!.data().pods)
-  dock.save()   // the dock: plain and input1, saved
-  dock.setTemplate('three-cols')
-  dock.querySelector<HTMLElement>('.tpl-add')!.click()
-  await until(() => !!stored()[2]?.name)
-  const before = JSON.stringify(stored())
-  expect(stored().map(p => p?.name).filter(Boolean).sort()).toEqual(['input1', 'input2'])
-  document.body.innerHTML = ''
-  const { dock: again, host } = await mount(undefined, true)
-  await until(() => 'input1' in host.data().pods && 'input2' in host.data().pods)
-  expect(JSON.stringify(stored())).toBe(before)
-  expect([...again.querySelectorAll('.tpl-pos .dock-panel')].every(p => p.childElementCount === 1)).toBe(true)
-  again.setTemplate('dock'); localStorage.removeItem('t.pods.template')
-  document.body.innerHTML = ''
-  const { dock: docked, host: third } = await mount(undefined, true)
-  await until(() => 'input1' in third.data().pods)
-  expect(docked.template).toBe('dock')
-  expect([...docked.querySelectorAll('.dock-panel')].every(p => p.childElementCount === 1)).toBe(true)
+test('addPod in a rules runtime adds the rule letting the host reach the pod, so it can be started', async () => {
+  const h = await host()
+  await place(h, 'locked', ['other'], 'nano.ui/input', { kind: 'rules', rules: [{ deny: '*' }] })
+  const name = await addPod(h, 'nano.ui/input', 'locked')
+  expect(name).toBe('input1')
+  expect(h.data().runtimes['locked']!.policy).toEqual({ kind: 'rules', rules: [{ allow: ['call', 'subscribe', 'start'], from: 'host', outside: true, toPod: 'input1' }, { deny: '*' }] })
+  expect((await h.app.runtime('locked').getOrCreate('input1')).ok).toBe(true)
 })
 
 test('concurrent adds of one implementation take distinct names', async () => {
-  const { host } = await mount()
-  const names = await Promise.all([addPod(host, 'nano.ui/input'), addPod(host, 'nano.ui/input')])
+  const h = await host()
+  const names = await Promise.all([addPod(h, 'nano.ui/input', 'main'), addPod(h, 'nano.ui/input', 'main')])
   expect(new Set(names).size).toBe(2)
-  expect(names.every(n => n && n in host.data().pods)).toBe(true)
+  expect(names.every(n => n && n in h.data().pods)).toBe(true)
 })
 
-test('adds naming one pod of one implementation (a copied page names it too) share it: one pod made', async () => {
-  const { host } = await mount()
-  const before = Object.keys(host.data().pods).length
-  expect(await Promise.all([addPod(host, 'nano.ui/input', 'input7'), addPod(host, 'nano.ui/input', 'input7')])).toEqual(['input7', 'input7'])
-  expect(Object.keys(host.data().pods).length).toBe(before + 1)
+test('a slot whose pod fails shows the reason in its panel; the others open (Review Focus 5)', async () => {
+  const h = await host()
+  await place(h, 'locked', ['x'], 'nano.ui/input', { kind: 'rules', rules: [] })
+  await place(h, 'main', ['input1'])
+  const { go, panels } = mount(h, [{ id: 'workspace', title: 'Main', slots: [slot('x', 'locked'), slot('input1')] }])
+  go('workspace')
+  await until(() => panels('workspace').length === 2 && panels('workspace').some(p => p.textContent!.includes('no rule allows it')))
+  await until(() => running(h, 'input1'))
+})
+
+test('a page changed through the store (a slot added) shows it in the dock; one removed goes', async () => {
+  const h = await host()
+  await place(h, 'main', ['input1', 'input2'])
+  const { go, store, panels } = mount(h, [{ id: 'workspace', title: 'Main', slots: [slot('input1')] }])
+  go('workspace')
+  await until(() => panels('workspace').length === 1)
+  store.set({ ...store.get('workspace')!, slots: [slot('input1'), slot('input2'), { id: 'notes', view: 'notes' }] })
+  await until(() => panels('workspace').length === 3)
+  await until(() => running(h, 'input2'))
+  store.set({ ...store.get('workspace')!, slots: [slot('input2')] })
+  await until(() => panels('workspace').length === 1)
+  expect(store.get('workspace')!.slots).toEqual([slot('input2')])
+})
+
+test('closing a panel removes its slot, not its pod', async () => {
+  const h = await host()
+  await place(h, 'main', ['input1', 'input2'])
+  const { go, store, dock } = mount(h, [{ id: 'workspace', title: 'Main', slots: [slot('input1'), slot('input2')] }])
+  go('workspace')
+  await until(() => dock('workspace').querySelectorAll('.dock-panel').length === 2)
+  dock('workspace').setTemplate('two-cols')
+  dock('workspace').querySelector<HTMLElement>('.tpl-remove')!.click()
+  expect(store.get('workspace')!.slots.length).toBe(1)
+  expect(Object.keys(h.data().pods)).toContain('input1')
+  expect(Object.keys(h.data().pods)).toContain('input2')
+})
+
+test('the dock\'s state is its page\'s: Save writes the page\'s `workspace`, and a page that holds one shows it', async () => {
+  const h = await host()
+  await place(h, 'main', ['input1'])
+  const { go, store, dock } = mount(h, [{ id: 'workspace', title: 'Main', slots: [slot('input1')] }])
+  go('workspace')
+  await until(() => dock('workspace').querySelectorAll('.dock-panel').length === 1)
+  ;(dock('workspace') as Dock & { save(): void }).save()
+  expect(JSON.stringify(store.get('workspace')!['workspace'])).toContain('"input1"')
+  dock('workspace').setTemplate('one')
+  expect((store.get('workspace')!['workspace'] as { template?: { template: string } }).template?.template).toBe('one')
+  expect(localStorage.length).toBe(0)
 })

@@ -21,14 +21,16 @@
  * bubbling, composed `dock:focus` DOM event {system, instance, widget}, or null when the focused panel shows no
  * instance or nothing is focused (empty space clicked, the panel closed, the page changed: `route:changed` on the bus).
  * Light DOM, because golden-layout positions its drag proxy in document.body.
- * On nano-core 0.4: `host` is the page's Host. A `pod` panel (addWidget('pod', name), as a click in the explorer
- * does) shows that pod's view (dock/panels.ts); <nano-explorer> and <nano-wiring> in a panel get the host's app.
+ * `host` (the page's Host, given before it connects): a `pod` panel (addWidget('pod', name), as the explorer does) opens
+ * that pod and shows its view (dock/panels.ts); a picked implementation is first deployed as a new lazy pod (addPod).
+ * `storage` (default localStorage) keeps its state under `storage-key`; a page's dock gets its page's (dock/page-slots.ts).
+ * In a hidden <app-route> it is built when the route first shows.
  */
 import { GoldenLayout, LayoutConfig, type Stack, type ComponentItem, type ContentItem, type ResolvedLayoutConfig } from 'golden-layout/dist/esm/index.js';   // its ES build (src/dock/golden-layout.d.ts)
 import type { Host } from '../host.ts';
 import { ensureStyles, HEADER_H } from '../dock/dock-css.ts';
 import { initial, readPalette, split, type Def } from '../dock/palette.ts';
-import { mountPanel, panelOf, shows } from '../dock/panels.ts';
+import { addPod, mountPanel, panelOf, shows } from '../dock/panels.ts';
 import { readSaved, writeSaved } from '../dock/saved.ts';
 import { showTemplate } from '../dock/template-mode.ts';
 import { pick } from './picker.ts';
@@ -40,10 +42,10 @@ export class WorkspaceDock extends HTMLElement {
   /** The system (registry) the panels' components live in; unset, they use the page's provided registry. Declared,
    * not a class field: a field would wipe a value set before the element upgrades (saved workspaces set it at start). */
   declare registry?: unknown;
-  /** The page's host (main.ts sets it after the docks connect: panels already up are made again with it); pod panels show its app. */
-  get host(): Host | undefined { return this.#host; }
-  set host(h) { const late = !this.#host && h && this.layout; this.#host = h; if (late) { if (this.tpl) this.show(this.tpl.state); else this.load(LayoutConfig.fromResolved(this.kept)); } }
-  #host?: Host;
+  /** The page's host, set before the dock connects; pod panels show its app. */
+  declare host?: Host;
+  /** Where the dock keeps its state (localStorage unless set before it connects). */
+  declare storage: Storage;
   private bus: Bus | null = null;
   private layout: GoldenLayout | null = null;
   private defs = new Map<string, Def>();
@@ -55,28 +57,27 @@ export class WorkspaceDock extends HTMLElement {
 
   connectedCallback() {
     if (this.layout) return; /* already built (re-insertion) */
-    if (Object.hasOwn(this, 'host')) { const h = this.host; delete (this as { host?: Host }).host; this.host = h; }   // set before the element upgraded
+    this.storage ??= localStorage;
     ensureStyles(this.ownerDocument);
     if (!this.bus) {
       this.bus = requestBus(this);
-      /* a page change clears focus: coming back, clicking the same panel reports it again */
-      this.bus.subscribe('route:changed', () => { this.layout?.clearComponentFocus(); this.reportFocus(); });
+      /* a page change clears focus: coming back, clicking the same panel reports it again; a page first shown builds */
+      this.bus.subscribe('route:changed', () => { if (!this.layout) return this.connectedCallback(); this.layout.clearComponentFocus(); this.reportFocus(); });
+      this.addEventListener('nano-open', (e) => this.openPod((e as CustomEvent<{ pod: string }>).detail.pod));
     }
     if (!this.id) throw new Error('<workspace-dock> needs an id');
+    if (!this.isConnected || this.closest<HTMLElement>('app-route')?.hidden) return;   // built when its page shows: its panels open then
     this.defs = readPalette(this);
     this.defs.set('pod', { id: 'pod', title: 'Pod', template: this.ownerDocument.createElement('template') });   // not in the picker: the explorer opens it
-    this.addEventListener('nano-open', (e) => this.openPod((e as CustomEvent<{ pod: string }>).detail.pod));
     this.setAttribute('chrome', this.windowStyle);
-    const area = Object.assign(document.createElement('div'), { className: 'dock-area' });
-    this.append(area);
+    const area = this.appendChild(Object.assign(document.createElement('div'), { className: 'dock-area' }));
     const layout = new GoldenLayout(area);
     layout.resizeWithContainerAutomatically = true;
     layout.registerComponentFactoryFunction('widget', (container, state) => mountPanel(container, state, this.mounting));
     layout.on('stateChanged', () => this.layout && this.changed());
     layout.on('itemCreated', (e) => { const s = e.target as ContentItem; if (s.isStack) this.plus((s as Stack).header.controlsContainerElement, 'dock-split', () => (s as Stack).getActiveComponentItem()); });
     layout.on('focus', () => this.reportFocus());
-    /* switching panels blurs the old one first: wait for the new focus, so only the change is sent */
-    layout.on('blur', () => queueMicrotask(() => this.reportFocus()));
+    layout.on('blur', () => queueMicrotask(() => this.reportFocus()));   // switching panels blurs the old one first: only the change is sent
     /* empty space (not a panel, its tabs or a splitter being dragged) clears the focus */
     area.addEventListener('pointerdown', (e) => { if (!(e.target as Element).closest('.dock-panel, .lm_header, .lm_splitter')) layout.clearComponentFocus(); });
     this.layout = layout;
@@ -84,17 +85,12 @@ export class WorkspaceDock extends HTMLElement {
     const saved = this.readSaved();
     this.load(saved ?? initial(this, this.defs));
     if (saved) this.say('Opened your saved layout.');
-    const t = templateState(localStorage, this.storageKey).get(); if (t && this.known(t)) this.show(t);
+    const t = templateState(this.storage, this.storageKey).get(); if (t && this.known(t)) this.show(t); else this.changed();
   }
 
   disconnectedCallback() {
-    /* golden-layout keeps document-level listeners; tear down only when really removed */
-    queueMicrotask(() => {
-      if (this.isConnected) return;
-      this.tpl?.dispose(); this.tpl = null;
-      this.layout?.destroy();
-      this.layout = null;
-    });
+    /* golden-layout keeps document-level listeners; tear down only when really removed (connected again, built afresh) */
+    queueMicrotask(() => { if (!this.isConnected) { this.tpl?.dispose(); this.tpl = null; this.layout?.destroy(); this.layout = null; this.querySelector(':scope > .dock-area')?.remove(); } });
   }
 
   /** Open a palette widget as a new panel; with `name`, its element shows that existing instance. It splits the focused
@@ -117,8 +113,8 @@ export class WorkspaceDock extends HTMLElement {
   }
 
   /** How panels are framed (remembered per dock). */
-  get windowStyle(): WindowStyle { return windowStyle(localStorage, this.storageKey).get(); }
-  setWindowStyle(s: WindowStyle) { windowStyle(localStorage, this.storageKey).set(s); this.setAttribute('chrome', s); }
+  get windowStyle(): WindowStyle { return windowStyle(this.storage, this.storageKey).get(); }
+  setWindowStyle(s: WindowStyle) { windowStyle(this.storage, this.storageKey).set(s); this.setAttribute('chrome', s); }
 
   /** Fires `dock:save-as` with this layout, for the page to save it as a workspace of its own. */
   saveAs() { this.dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true, composed: true, detail: { layout: this.kept, system: this.system } })); }
@@ -169,10 +165,15 @@ export class WorkspaceDock extends HTMLElement {
   private plus(parent: HTMLElement, className: string, target?: () => ComponentItem | undefined) {
     const b = parent.insertBefore(Object.assign(this.ownerDocument.createElement('button'), { type: 'button', className, textContent: '+', title: 'Add a panel' }), parent.firstChild);
     b.setAttribute('aria-label', 'Add a panel');
-    b.addEventListener('click', () => void pick(b, { templates: this.templates }).then((p) => { const el = p && this.split(p, target?.()).container.element; if (el) { el.tabIndex = -1; el.focus(); } }));
+    b.addEventListener('click', () => void this.choose(b).then((p) => { const el = p && this.split(p, target?.()).container.element; if (el) { el.tabIndex = -1; el.focus(); } }));
     return b;
   }
-  private get templates() { return [...this.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')]; }
+  /** The picker's choice; an implementation's (a new pod) is first deployed lazy (addPod; Task 6: in the chosen runtime). */
+  private async choose(anchor: HTMLElement, hidden?: PanelState[]): Promise<PanelState | null> {
+    const p = await pick(anchor, { templates: [...this.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')], hidden });
+    const impl = p && !p.name && this.host && this.defs.get(p.widget)?.template.dataset['implementation'], name = impl && await addPod(this.host!, impl, 'main');
+    return !impl ? p : name ? { widget: p!.widget, name } : null;
+  }
   private split(p: PanelState, target?: ComponentItem) { return split(this.requireLayout(), p, p.name ?? this.defs.get(p.widget)?.title ?? p.widget, target); }
   /** Whether a stored template's panels are all in this palette; whether `p` is an implementation's panel whose pod is being made. */
   private known(t: TemplateState) { return [...t.order, ...t.parked].every((s) => !s || this.defs.has(s.widget)); }
@@ -188,34 +189,33 @@ export class WorkspaceDock extends HTMLElement {
     if (this.tpl) this.tpl.dispose(); else { this.requireLayout().clearComponentFocus(); this.requireLayout().clear(); }
     this.tpl = showTemplate(this.querySelector<HTMLElement>(':scope > .dock-area')!, s, { title: (p) => (p.widget === 'pod' ? p.name : this.defs.get(p.widget)?.title) ?? p.widget,
       mount: (el, st, item) => { mountPanel(item.container, st, this.mounting); for (const type of ['pointerdown', 'focusin']) el.addEventListener(type, () => this.reportFocus(item)); },
-      pick: (anchor, hidden) => pick(anchor, { templates: this.templates, hidden }), bringBack: (to) => this.setTemplate(to),
+      pick: (anchor, hidden) => this.choose(anchor, hidden), bringBack: (to) => this.setTemplate(to),
       unnamed: this.unnamed, say: (m) => this.say(m), add: (p) => this.addWidget(p.widget, p.name),
-      remember: (st) => { templateState(localStorage, this.storageKey).set(st); if (this.tpl) this.changed(); } });
+      remember: (st) => { templateState(this.storage, this.storageKey).set(st); if (this.tpl) this.changed(); } });
     this.changed();
   }
   private requireLayout(): GoldenLayout { if (!this.layout) throw new Error('bug: workspace used before it was connected'); return this.layout; }
   private requireBus(): Bus { if (!this.bus) throw new Error('bug: workspace used before it was connected'); return this.bus; }
   /** Loads `config`, sized for the dock's tab bar. */
   private load(config: LayoutConfig) {
-    const left = this.tpl; if (left) { left.dispose(true); this.tpl = null; templateState(localStorage, this.storageKey).set(null); this.reportFocus(); }
+    const left = this.tpl; if (left) { left.dispose(true); this.tpl = null; templateState(this.storage, this.storageKey).set(null); this.reportFocus(); }
     this.requireLayout().clearComponentFocus();   // the focused panel is about to go: dock:focus null, not a stale panel
     this.requireLayout().loadLayout({ ...config, dimensions: { ...config.dimensions, headerHeight: HEADER_H } });
     if (left) this.changed();
   }
   /** A remembered layout, if storage works and it only names widgets this palette still has. */
-  private readSaved() { return readSaved(localStorage, this.storageKey, (id) => this.defs.has(id), (m) => this.say(m)); }
+  private readSaved() { return readSaved(this.storage, this.storageKey, (id) => this.defs.has(id), (m) => this.say(m)); }
   save() {
-    const message = writeSaved(localStorage, this.storageKey, this.kept);
+    const message = writeSaved(this.storage, this.storageKey, this.kept);
     if (message) { this.say(message); return this.send('dock:error', { message }); }
     this.say('Layout saved.');
     // BACKLOG(3): its route's screen got the layout too (setLayout on the Application's screens); 0.4 has no screens.
     this.ownerDocument.dispatchEvent(new CustomEvent('nano:changed'));   // the working copy follows
     this.send('dock:saved', { panels: this.openIds().length });
   }
-
   restore() {
     const saved = this.readSaved(); if (!saved) return this.say('No saved layout yet.');
-    const t = templateState(localStorage, this.storageKey).get();   // load() clears it; re-entered, rebased, if its panels are the saved ones
+    const t = templateState(this.storage, this.storageKey).get();   // load() clears it; re-entered, rebased, if its panels are the saved ones
     this.load(saved); this.say('Layout restored.'); const names = (o: (PanelState | null)[]) => JSON.stringify(o.filter((s) => s !== null).map((s) => s.name ?? s.widget).sort());
     if (t && this.known(t) && names([...t.order, ...t.parked]) === names(panelsInOrder(this.kept.root))) this.show({ ...t, dock: this.kept });
   }

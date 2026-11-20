@@ -17,8 +17,6 @@ export const slugPath = (title: string, taken: readonly string[]): string => {
   for (let n = 2; taken.includes(path); n++) path = `${base}-${n}`
   return path
 }
-/** Where a page's dock keeps its layout until the page holds it. */
-export const layoutKey = (mainKey: string, path: string) => `${mainKey}.saved.${path}`
 
 type Placed = (runtime: string, pod: string) => boolean
 const MAIN = 'workspace'

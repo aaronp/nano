@@ -43,7 +43,7 @@ if (host) {
   const shown = async (r: Promise<{ ok: boolean }>, before: string) => {
     const done = await r;
     const l = dock && h.data().layout?.[dock.id], key = dock?.getAttribute('storage-key');
-    if (done.ok && l && key && JSON.stringify(l) !== before) { try { localStorage.setItem(key, JSON.stringify(l)); templateState(localStorage, key).set((l as { template?: TemplateState }).template ?? null); } catch { /* no storage: the layout is not shown */ } dock!.restore(); }
+    if (done.ok && l && key && JSON.stringify(l) !== before) { try { dock!.storage.setItem(key, JSON.stringify(l)); templateState(dock!.storage, key).set((l as { template?: TemplateState }).template ?? null); } catch { /* no storage: the layout is not shown */ } dock!.restore(); }
     // A file from another engine: its neutral slots, a panel each, in order.
     const open = done.ok && dock ? slotsToOpen(h.data(), dock.id) : [];
     if (open.length) { dock!.reset(); for (const pod of open) dock!.openPod(pod); }
@@ -72,11 +72,7 @@ if (host) {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     if (menu) menu.dirty = false;
   };
-  // Until the person first acts, applies are the page restoring itself (a reload's panels making their named pods
-  // again), not edits: the File menu stays clean.
-  let acted = false;
-  for (const t of ['pointerdown', 'keydown']) addEventListener(t, () => { acted = true; }, { capture: true, once: true });
-  host.app.listen(e => { if (e.type === 'applied' && menu && acted) menu.dirty = true; });
+  host.app.listen(e => { if (e.type === 'applied' && menu) menu.dirty = true; });
   const commands: Record<string, () => unknown> = {
     save: () => download('nano.json'), reconcile: () => download('nano.json', true), download: () => download('nano.json'),
     'save-as': async () => { const name = await askName(document, 'nano'); if (name) download(`${name}.json`); },

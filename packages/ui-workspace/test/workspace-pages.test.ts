@@ -35,7 +35,7 @@ test('mountWorkspace adds a nav row and a route before the not-found page, with 
   expect(routes()).toEqual(['/workspace', '/lab', '*'])
   const dock = $('app-route[path="/lab"] workspace-dock')
   expect(dock.id).toBe('ws_lab')
-  expect(dock.getAttribute('storage-key')).toBe('main.saved./lab')
+  expect(dock.getAttribute('storage-key')).toBe('lab')
   expect([...dock.querySelectorAll('template')].map(t => t.dataset.widget)).toEqual(['a', 'b'])
   row.remove(); $('app-route[path="/lab"]').remove()
 })
@@ -47,7 +47,6 @@ test('the title holds + and ✎; + makes an empty page, goes there and starts it
   expect(location.hash).toBe('#/new-workspace')
   expect(store.list().slice(1)).toEqual([{ id: 'new-workspace', title: 'New workspace', icon: 'window', slots: [] }])
   expect(routes()).toEqual(['/workspace', '/new-workspace', '*'])
-  expect(localStorage.getItem('main.saved./new-workspace')).toBeNull()
   expect(input().closest('[data-saved]')!.getAttribute('data-saved')).toBe('new-workspace')
   type('', 'Escape')
   $('[data-new-workspace]').click()
@@ -88,7 +87,6 @@ test('in edit mode a link click does not navigate; Enter on a focused name opens
 })
 
 test('a rename changes the title only: the id, route, hash, dock and its key stay (Review Focus 4)', () => {
-  localStorage.setItem('main.saved./new-workspace', '{}')
   location.hash = '#/new-workspace'
   $('[data-saved="new-workspace"] [data-name]').click()
   type('Desk', 'Enter')
@@ -98,9 +96,8 @@ test('a rename changes the title only: the id, route, hash, dock and its key sta
   expect($('[data-saved="new-workspace"] [data-name]').textContent).toBe('Desk')
   expect(routes()).toEqual(['/workspace', '/new-workspace', '/new-workspace-2', '*'])
   const dock = $('app-route[path="/new-workspace"] workspace-dock')
-  expect(dock.getAttribute('storage-key')).toBe('main.saved./new-workspace')
+  expect(dock.getAttribute('storage-key')).toBe('new-workspace')
   expect(dock.id).toBe('ws_new-workspace')
-  expect(localStorage.getItem('main.saved./new-workspace')).toBe('{}')
   expect(location.hash).toBe('#/new-workspace')
 })
 
@@ -190,11 +187,9 @@ test('a page added through the store (as a pod would) appears in the nav and rou
   expect(location.hash).toBe('#/workspace')
 })
 
-test('Save as workspace copies the page into "<title> copy" (same slots, a new id) and starts its rename', () => {
+test('Save as workspace copies the page into "<title> copy" (same slots, its arrangement as the page\'s `workspace`, a new id) and starts its rename', () => {
   $('#workspace').dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true }))
-  expect(store.list().at(-1)).toEqual({ id: 'home-copy', title: 'Home copy', icon: 'panels', slots: [] })
-  expect(JSON.parse(localStorage.getItem('main.saved./home-copy')!)).toEqual({ root: { type: 'row' } })
-  expect(JSON.parse(localStorage.getItem('main.saved./home-copy.template')!)).toEqual(template)
+  expect(store.list().at(-1)).toEqual({ id: 'home-copy', title: 'Home copy', icon: 'panels', slots: [], workspace: { root: { type: 'row' }, template } })
   expect(location.hash).toBe('#/home-copy')
   expect(input().closest('[data-saved]')!.getAttribute('data-saved')).toBe('home-copy')
   type('', 'Escape')

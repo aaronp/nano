@@ -3,14 +3,14 @@
  * link), one route and one dock of Main's widgets per page, in store order; Main is the page `workspace` at
  * /workspace, its row and dock in index.html. The store's changes mount, unmount, relabel and reorder them, whoever
  * made them (this nav, a pod through HostPages, an import). A page's id is its route and never changes; a rename
- * changes its title. Each dock still keeps its layout under layoutKey(Main's storage-key, path). Beside the app's
- * title, + makes an empty page and ✎ toggles the nav's edit mode (nav-edit.ts); the dock's "Save as workspace…"
- * copies a page into "<title> copy".
+ * changes its title. Each dock keeps its page (dock/page-slots.ts: its state the page's `workspace`, its panels the
+ * page's slots). Beside the app's title, + makes an empty page and ✎ toggles the nav's edit mode (nav-edit.ts); the
+ * dock's "Save as workspace…" copies a page (its slots and arrangement) into "<title> copy".
  */
 import type { Page } from '@pritzlaff/nano-ui';
 import { ICONS } from '../lib/icons.ts';
-import { layoutKey, slugPath, type pageStore } from '../lib/pages.ts';
-import { templateState } from '../lib/layout-templates.ts';
+import { slugPath, type pageStore } from '../lib/pages.ts';
+import { keepDocks } from '../dock/page-slots.ts';
 import { navEdit } from './nav-edit.ts';
 import type { WorkspaceDock } from './workspace-dock.ts';
 import type { Wires } from '../wires/wires.ts';
@@ -18,7 +18,6 @@ import type { Wires } from '../wires/wires.ts';
 const MAIN = 'workspace';
 const MAIN_ICON = 'panels';   // Main's icon until one is chosen
 const mainDock = (doc: Document) => doc.querySelector<WorkspaceDock>('workspace-dock#workspace');
-const mainKey = (doc: Document) => mainDock(doc)?.getAttribute('storage-key') ?? 'workspace';
 const idOf = (id: string) => `ws_${id}`;
 
 const button = (doc: Document, action: string, label: string, text: string) => {
@@ -62,7 +61,7 @@ export function mountWorkspace(doc: Document, p: Page): void {
   // made after start (+, Save as, a pod): the page's host, which main.ts gave Main's dock, before they connect
   if (main.host) { dock.host = main.host; wires.host = main.host; }
   dock.id = idOf(p.id);
-  dock.setAttribute('storage-key', layoutKey(mainKey(doc), `/${p.id}`));
+  dock.setAttribute('storage-key', p.id);
   dock.setAttribute('open', '');   // a new page starts empty; a saved layout, if any, wins
   for (const t of main.querySelectorAll(':scope > template[data-widget]')) dock.append(t.cloneNode(true));
   wires.append(dock); pane.append(wires); route.append(pane);
@@ -99,6 +98,7 @@ export function bootWorkspacePages(doc: Document, store: ReturnType<typeof pageS
   };
   store.subscribe(sync);
   sync();
+  keepDocks(doc, store);
   const edit = navEdit(doc, store, (row, title, icon) => {
     const p = store.get(row.dataset.saved ?? MAIN);
     if (p) store.set({ ...p, title, icon });
@@ -107,16 +107,7 @@ export function bootWorkspacePages(doc: Document, store: ReturnType<typeof pageS
   /** A new page: `page` under a new id slugged from its title, empty or with `from`'s arrangement; then its rename. */
   const add = (page: Page, from: WorkspaceDock | null) => {
     const id = slugPath(page.title, taken()).slice(1);
-    const key = layoutKey(mainKey(doc), `/${id}`);
-    if (from) {   // written first: the page's dock reads its keys as the store's change mounts it
-      const { template, ...layout } = from.arrangement();
-      try { localStorage.setItem(key, JSON.stringify(layout)); } catch { /* no storage: it starts empty */ }
-      templateState(localStorage, key).set(template ?? null);
-    }
-    if (!store.set({ ...page, id }).ok) {   // refused: no orphan keys
-      for (const x of ['', '.template']) try { localStorage.removeItem(key + x); } catch { /* none */ }
-      return;
-    }
+    if (!store.set({ ...page, id, ...(from && { workspace: from.arrangement() }) }).ok) return;
     location.hash = `#/${id}`;
     edit.rename(doc.querySelector<HTMLElement>(`[data-saved="${id}"]`)!);
   };

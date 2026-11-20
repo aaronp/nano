@@ -1,6 +1,6 @@
 // First boot with nothing stored: the old saved pages migrate, and a pod panel's pod (made by the old docks as they
 // mounted) is placed lazy in `main` under its name, so its slot survives the next `applied`; a panel whose widget
-// names no implementation is dropped, with a status. The old keys stay (the nav and docks still read them).
+// names no implementation is dropped, with a status. The old keys go with the first save, so it happens once.
 import { expect, test } from 'bun:test'
 import { tick } from './host-deploy-setup.ts'
 
@@ -20,4 +20,6 @@ test('a migrated pod panel\'s pod is placed lazy and its slot kept; one with no 
   expect(localStorage.getItem('workspace-starter.saved-workspaces')).not.toBeNull()
   await tick(400)
   expect(JSON.parse(localStorage.getItem('nano-workspace.document')!).layout.pages[1].slots).toEqual([{ id: 'log7', runtime: 'main', pod: 'log7' }])
+  expect(localStorage.getItem('workspace-starter.saved-workspaces')).toBeNull()
+  expect(localStorage.getItem('workspace-starter.layout.saved./t')).toBeNull()
 })

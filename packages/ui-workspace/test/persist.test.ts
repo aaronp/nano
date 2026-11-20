@@ -7,7 +7,8 @@ import { persisted } from '../src/persist.ts'
 
 const memory = () => {
   const m = new Map<string, string>()
-  return { m, storage: { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, v) }, removeItem: (k: string) => { m.delete(k) } } as unknown as Storage }
+  return { m, storage: { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, v) }, removeItem: (k: string) => { m.delete(k) },
+    get length() { return m.size }, key: (i: number) => [...m.keys()][i] ?? null } as unknown as Storage }
 }
 const doc: AppDeployment = { pods: {}, runtimes: { r: { pods: [], subscriptions: [] } }, layout: { pages: [{ id: 'workspace', title: 'Workspace', slots: [] }] } }
 
@@ -58,4 +59,30 @@ test('migrate with only the main dock layout gives Main; with nothing, no pages'
     { id: 'workspace', title: 'Workspace', workspace: { template: { template: 'one', order: [{ widget: 'notes' }], parked: [], dock: null } }, slots: [{ id: 'notes', view: 'notes' }] },
   ])
   expect(m.size).toBe(1)
+})
+
+test('given pages, migrate gives each its old dock\'s state (layout, template, window style) as its `workspace`; the first save that works removes every old key, once', () => {
+  const { m, storage } = memory(), p = persisted(storage, 'k')
+  const config = { root: { type: 'row', content: [] } }, template = { template: 'one', order: [null], parked: [], dock: null }
+  m.set('workspace-starter.saved-workspaces', '[]'); m.set('workspace-starter.saved-workspaces.main', '{}')
+  m.set('workspace-starter.layout', JSON.stringify(config)); m.set('workspace-starter.layout.window-style', 'focus')
+  m.set('workspace-starter.layout.saved./lab.template', JSON.stringify(template)); m.set('workspace-starter.layout.saved./gone', '{}')
+  m.set('other', 'kept')
+  const pages = [{ id: 'workspace', title: 'W', slots: [] }, { id: 'lab', title: 'Lab', slots: [], workspace: { root: null } }, { id: 'none', title: 'None', slots: [] }]
+  expect(p.migrate(storage, pages)).toEqual([
+    { id: 'workspace', title: 'W', slots: [], workspace: { ...config, 'window-style': 'focus' } },
+    { id: 'lab', title: 'Lab', slots: [], workspace: { template } },
+    { id: 'none', title: 'None', slots: [] },
+  ])
+  p.save(doc)
+  expect([...m.keys()].sort()).toEqual(['k', 'other'])
+  m.set('workspace-starter.layout', '{}'); p.save(doc)
+  expect(m.has('workspace-starter.layout')).toBe(true)   // once a session
+})
+
+test('a save that fails removes no old key', () => {
+  const { m, storage } = memory()
+  m.set('workspace-starter.layout', '{}')
+  persisted({ ...storage, setItem() { throw new Error('full') } } as unknown as Storage, 'k').save(doc)
+  expect(m.has('workspace-starter.layout')).toBe(true)
 })

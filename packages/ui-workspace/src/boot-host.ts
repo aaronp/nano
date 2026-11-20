@@ -6,7 +6,8 @@
  *
  * It boots from the stored document (persist.ts), the app's own (ADR-0034): imported as any file is, so nano.ui and
  * same-origin providers ask nothing and a foreign provider is confirmed first. `pages` (lib/pages.ts) is seeded from its
- * `layout.pages`, else the old keys (`migrate`), else Main alone, and is the run-time truth for pages from then on. The
+ * `layout.pages` (each given its old dock's state, if any: `migrate`), else the old keys (`migrate`), else Main alone,
+ * and is the run-time truth for pages from then on; the first save removes the old keys. The
  * old docks made their pods as they mounted, so a migrated pod slot's pod is placed now, lazy in `main` under its name
  * (its implementation found by the panel's widget id); one with no implementation is dropped, and a status says so.
 
@@ -32,7 +33,7 @@ const stored = persisted(storage, KEY), doc = stored.load(), kept = pagesOf(doc?
 let live: Host | undefined;
 const placed = (runtime: string, pod: string) => !!live?.app.deployment().runtimes[runtime]?.pods.includes(pod);
 /** The page's pages: the run-time truth for `layout.pages` (lib/pages.ts). */
-export const pages = pageStore(kept.length ? kept : migrated, placed);
+export const pages = pageStore(kept.length ? stored.migrate(storage, kept) : migrated, placed);
 /** The widget id of the old panel showing `pod`, anywhere in `v` (a page's engine state). */
 const widgetOf = (v: unknown, pod: string): string | undefined => {
   if (typeof v !== 'object' || v === null) return undefined;
