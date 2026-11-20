@@ -53,6 +53,8 @@ test("the nav shows the tree: Main's row synced like the others, children indent
   expect(row('two').querySelector<HTMLElement>('[data-toggle]')!.hidden).toBe(true)
   expect(row('workspace').querySelector('[data-toggle]')!.hasAttribute('hidden')).toBe(false)
   expect(row('workspace').querySelector('[data-handle]')).toBeNull()   // Main does not move
+  expect(row('b').querySelector('a')!.textContent).toBe('B, level 3')   // a screen reader hears its depth, visually hidden
+  expect(row('b').querySelector('a [data-depth]')!.className).toBe('visually-hidden')
 })
 
 test('a toggle collapses and expands its subtree, locally (no apply); a collapsed parent of the current route opens', () => {
@@ -75,16 +77,21 @@ test('Alt+→ nests a page as the last child of the sibling above; Alt+← moves
   alt('two', 'ArrowRight')
   expect(kids('lab')).toEqual(['a', 'two']); expect(d().roots).toEqual(['workspace', 'lab'])
   expect(levels()[order().indexOf('two')]).toBe('2')
+  expect(row('two').querySelector('a')!.textContent).toBe('Two, level 2')
   expect(document.activeElement).toBe(row('two').querySelector('[data-handle]'))
   await wait(); expect(live()).toBe('Moved Two into Lab')
+  const handle = () => row('two').querySelector('[data-handle]')
   alt('two', 'ArrowUp')
   expect(kids('lab')).toEqual(['two', 'a'])
+  expect(document.activeElement).toBe(handle())
   await wait(); expect(live()).toBe('Moved Two up')
   alt('two', 'ArrowUp')   // already first: refused
   expect(kids('lab')).toEqual(['two', 'a'])
   alt('two', 'ArrowDown'); expect(kids('lab')).toEqual(['a', 'two'])
+  expect(document.activeElement).toBe(handle())
   alt('two', 'ArrowLeft')
   expect(d().roots).toEqual(['workspace', 'lab', 'two']); expect(kids('lab')).toEqual(['a'])
+  expect(document.activeElement).toBe(handle())
   await wait(); expect(live()).toBe('Moved Two out of Lab')
   alt('two', 'ArrowLeft')   // a root: refused
   expect(d().roots).toEqual(['workspace', 'lab', 'two'])
@@ -123,9 +130,19 @@ test("drag onto a row's middle nests it (the last child); near its edge reorders
   expect(d().roots).toEqual(['workspace', 'two', 'lab']); expect(kids('a')).toEqual(['b'])
   expect(drag('two', 'kid', 38)).toEqual({ accepted: true, mark: 'after' })
   expect(kids('workspace')).toEqual(['kid', 'two'])
-  drag('two', 'lab', 38)
+  drag('two', 'lab', 38)   // after a parent shown open: where its first child shows
+  expect(kids('lab')).toEqual(['two', 'a'])
+  alt('two', 'ArrowLeft')
   expect(d().roots).toEqual(['workspace', 'lab', 'two'])
   expect(walk(d())).toEqual(['workspace', 'kid', 'lab', 'a', 'b', 'two'])
+})
+
+test('a drop after a collapsed parent puts the page after its subtree, at its level', () => {
+  const t = row('lab').querySelector<HTMLElement>('[data-toggle]')!
+  t.click()
+  drag('two', 'kid', 38); drag('two', 'lab', 38)
+  expect(d().roots).toEqual(['workspace', 'lab', 'two']); expect(kids('lab')).toEqual(['a'])
+  t.click()
 })
 
 test("a drop into the row's own subtree is refused, as is one before Main", () => {

@@ -37,6 +37,7 @@ app-shell[data-editing] .nav-row > a :is([data-name], [data-glyph]):focus-visibl
 /* The tree: a row indented by its level; a leaf's toggle keeps its space; Add child and Remove only in edit mode. */
 .nav-row { padding-inline-start: calc(14px + var(--level, 0) * 16px); }
 .nav-row[hidden] { display: none; }
+.nav-row .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .nav-row [data-toggle] { width: 18px; border: 0; background: none; color: var(--muted); }
 .nav-row [data-toggle][hidden] { display: block; visibility: hidden; }
 app-shell:not([data-editing]) .nav-row :is([data-add-child], [data-remove]) { display: none; }

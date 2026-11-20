@@ -10,7 +10,7 @@
  * "<title> copy", its next sibling. Each edit is one `next`, applied by `applyPages` (the workspace's rules checked first).
  */
 import type { Page, Outline } from '@pritzlaff/nano-outline';
-import { applyPages, FIXED, metaOf, move, parentOf, routeOf, slugPath, walk, withMeta, MAIN } from '../lib/pages.ts';
+import { applyPages, childrenOf, FIXED, metaOf, move, parentOf, routeOf, slugPath, walk, withMeta, MAIN } from '../lib/pages.ts';
 import { showStatus } from '../lib/status.ts';
 import { keepDocks } from '../dock/page-docks.ts';
 import { navEdit } from './nav-edit.ts';
@@ -23,7 +23,6 @@ import type { Wires } from '../wires/wires.ts';
 const rowOf = (d: Outline, id: string): Row => { const m = metaOf(d.pages[id]); return { id, title: d.pages[id]?.title ?? id, ...(m.icon !== undefined && { icon: m.icon }) }; };
 const mainDock = (doc: Document) => doc.querySelector<WorkspaceDock>('workspace-dock#workspace');
 const idOf = (id: string) => `ws_${id}`;
-const listOf = (d: Outline, parent: string | undefined) => (parent === undefined ? d.roots : d.pages[parent]?.children ?? []);
 
 /** Adds a page's nav row (after Main's row, or the last saved one) and its route (before the not-found page). */
 export function mountWorkspace(doc: Document, p: Row): void {
@@ -93,7 +92,7 @@ export function bootWorkspacePages(doc: Document, outline: ReturnType<typeof Out
   /** A new page at `index` (default: the last) of `parent`'s children (undefined: the roots): `page` under a new id slugged from `title`; then its rename. */
   const add = (title: string, icon: string | undefined, page: Page, parent?: string, index?: number) => {
     const id = slugPath(title, taken()).slice(1), d = outline.document().doc;
-    const next = move({ roots: [...d.roots, id], pages: { ...d.pages, [id]: withMeta({ ...page, title }, { ...(icon !== undefined && { icon }) }) } }, id, parent, index ?? listOf(d, parent).length);
+    const next = move({ roots: [...d.roots, id], pages: { ...d.pages, [id]: withMeta({ ...page, title }, { ...(icon !== undefined && { icon }) }) } }, id, parent, index ?? childrenOf(d, parent).length);
     if (!next || !apply(next)) return;
     tree.reveal(id);
     location.hash = `#${routeOf(id)}`;
@@ -107,6 +106,6 @@ export function bootWorkspacePages(doc: Document, outline: ReturnType<typeof Out
   });
   doc.addEventListener('dock:save-as', (e) => {
     const dock = e.target as WorkspaceDock, at = dock.closest('app-route')?.getAttribute('path'), d = outline.document().doc, id = Object.keys(d.pages).find((p) => routeOf(p) === at);
-    if (id) { const r = rowOf(d, id), parent = parentOf(d, id); add(`${r.title} copy`, r.icon, { slots: d.pages[id]!.slots, layout: { workspace: dock.arrangement() } }, parent, listOf(d, parent).indexOf(id) + 1); }   // the page only, not its children
+    if (id) { const r = rowOf(d, id), parent = parentOf(d, id); add(`${r.title} copy`, r.icon, { slots: d.pages[id]!.slots, layout: { workspace: dock.arrangement() } }, parent, childrenOf(d, parent).indexOf(id) + 1); }   // the page only, not its children
   });
 }

@@ -43,6 +43,8 @@ export const withMeta = (p: Page, m: Meta): Page => {
 
 /** The page ids in tree order: depth first, each list in order (Main, the first root, first). */
 export const walk = (doc: Outline, ids = doc.roots): string[] => ids.flatMap((id) => [id, ...walk(doc, doc.pages[id]?.children ?? [])])
+/** Page `parent`'s children in order; undefined: the roots ([] for a leaf or an unknown page). */
+export const childrenOf = (doc: Outline, parent: string | undefined): string[] => (parent === undefined ? doc.roots : doc.pages[parent]?.children ?? [])
 /** Page `id`'s parent; undefined for a root (or a page not in the tree). */
 export const parentOf = (doc: Outline, id: string): string | undefined => Object.keys(doc.pages).find((p) => doc.pages[p]!.children?.includes(id))
 /** Page `id` and every page below it, in tree order. */
@@ -57,7 +59,7 @@ const unlisted = (doc: Outline, keep: (id: string) => boolean): Outline => ({ ro
  * Main, Main's place, an unknown page or parent, a parent in `id`'s subtree or an index past the end. */
 export function move(doc: Outline, id: string, parent: string | undefined, index: number): Outline | undefined {
   if (id === MAIN || !Object.hasOwn(doc.pages, id) || (parent !== undefined && (!Object.hasOwn(doc.pages, parent) || subtree(doc, id).includes(parent)))) return undefined
-  const out = unlisted(doc, (x) => x !== id), list = parent === undefined ? out.roots : out.pages[parent]!.children ?? []
+  const out = unlisted(doc, (x) => x !== id), list = childrenOf(out, parent)
   if (index < (parent === undefined ? 1 : 0) || index > list.length) return undefined
   const to = [...list.slice(0, index), id, ...list.slice(index)]
   return parent === undefined ? { ...out, roots: to } : { ...out, pages: { ...out.pages, [parent]: { ...out.pages[parent]!, children: to } } }

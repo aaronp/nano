@@ -6,32 +6,35 @@
  * `reveal` opens the parents of where it went; the Outline's change reorders the nav.
  */
 import type { Outline } from '@pritzlaff/nano-outline';
-import { applyPages, move, parentOf, subtree } from '../lib/pages.ts';
+import { applyPages, childrenOf, move, parentOf, subtree } from '../lib/pages.ts';
 
 type Zone = 'before' | 'inside' | 'after';
-const listOf = (d: Outline, parent: string | undefined) => (parent === undefined ? d.roots : d.pages[parent]?.children ?? []);
 const titleOf = (d: Outline, id: string) => d.pages[id]?.title ?? id;
 
 /** Where key `key` takes page `id`: the next document (undefined if refused) and what is said. */
 function byKey(d: Outline, id: string, key: string): [Outline | undefined, string] | undefined {
-  const parent = parentOf(d, id), list = listOf(d, parent), i = list.indexOf(id), t = titleOf(d, id), above = list[i - 1];
+  const parent = parentOf(d, id), list = childrenOf(d, parent), i = list.indexOf(id), t = titleOf(d, id), above = list[i - 1];
   if (key === 'ArrowUp' || key === 'ArrowDown') return [move(d, id, parent, i + (key === 'ArrowUp' ? -1 : 1)), `Moved ${t} ${key === 'ArrowUp' ? 'up' : 'down'}`];
-  if (key === 'ArrowRight' && above !== undefined) return [move(d, id, above, listOf(d, above).length), `Moved ${t} into ${titleOf(d, above)}`];
+  if (key === 'ArrowRight' && above !== undefined) return [move(d, id, above, childrenOf(d, above).length), `Moved ${t} into ${titleOf(d, above)}`];
   if (key === 'ArrowLeft' && parent !== undefined) {
     const up = parentOf(d, parent);
-    return [move(d, id, up, listOf(d, up).indexOf(parent) + 1), `Moved ${t} out of ${titleOf(d, parent)}`];
+    return [move(d, id, up, childrenOf(d, up).indexOf(parent) + 1), `Moved ${t} out of ${titleOf(d, parent)}`];
   }
   return undefined;
 }
 
-/** Page `id` dropped at `zone` of page `at`'s row; undefined if refused (its own subtree, Main's place). */
-function byDrop(d: Outline, id: string, at: string, zone: Zone): Outline | undefined {
+/** Page `id` dropped at `zone` of page `at`'s row; undefined if refused (its own subtree, Main's place). After a parent
+ * shown open is where its first child shows, so the page goes there. */
+function byDrop(d: Outline, id: string, at: string, zone: Zone, open: boolean): Outline | undefined {
   if (subtree(d, id).includes(at)) return undefined;
-  if (zone === 'inside') return move(d, id, at, listOf(d, at).filter((x) => x !== id).length);
+  if (zone === 'after' && open && childrenOf(d, at).length) return move(d, id, at, 0);
+  if (zone === 'inside') return move(d, id, at, childrenOf(d, at).filter((x) => x !== id).length);
   const parent = parentOf(d, at);
-  return move(d, id, parent, listOf(d, parent).filter((x) => x !== id).indexOf(at) + (zone === 'after' ? 1 : 0));
+  return move(d, id, parent, childrenOf(d, parent).filter((x) => x !== id).indexOf(at) + (zone === 'after' ? 1 : 0));
 }
 
+/** Whether page `at`'s row shows its children (its toggle open). */
+const openRow = (row: HTMLElement) => row.querySelector(':scope > [data-toggle]')?.getAttribute('aria-expanded') === 'true';
 const zoneOf = (e: MouseEvent, row: HTMLElement): Zone => {
   const r = row.getBoundingClientRect(), y = (e.clientY - r.top) / (r.height || 1);
   return y < 0.25 ? 'before' : y > 0.75 ? 'after' : 'inside';
@@ -73,7 +76,7 @@ export function navMoves(doc: Document, outline: ReturnType<typeof Outline.creat
     if (dragged === undefined || !row) return;
     clear();
     const zone = zoneOf(e, row);
-    if (!byDrop(outline.document().doc, dragged, row.dataset.saved!, zone)) return;   // not a drop target: the browser shows "no drop"
+    if (!byDrop(outline.document().doc, dragged, row.dataset.saved!, zone, openRow(row))) return;   // not a drop target: the browser shows "no drop"
     e.preventDefault();
     row.dataset.drop = zone;
   });
@@ -82,7 +85,7 @@ export function navMoves(doc: Document, outline: ReturnType<typeof Outline.creat
     if (dragged === undefined || !row) return;
     e.preventDefault();   // dropping on a link must not navigate
     const d = outline.document().doc, at = row.dataset.saved!, zone = zoneOf(e, row);
-    apply(dragged, byDrop(d, dragged, at, zone), `Moved ${titleOf(d, dragged)} ${zone === 'inside' ? 'into' : zone} ${titleOf(d, at)}`);
+    apply(dragged, byDrop(d, dragged, at, zone, openRow(row)), `Moved ${titleOf(d, dragged)} ${zone === 'inside' ? 'into' : zone} ${titleOf(d, at)}`);
     dragged = undefined; clear();
   });
   doc.addEventListener('dragend', () => { dragged = undefined; clear(); });
