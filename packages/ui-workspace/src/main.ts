@@ -33,6 +33,7 @@ import { shadowCreate } from './history.ts';
 import { icon } from './icons.ts';
 import { HOST_PODS } from './host-deploy.ts';
 import { showStatus } from './lib/status.ts';
+import { applyPages } from './lib/pages.ts';
 import { Coord } from '@pritzlaff/nano-core';
 import type { Page } from '@pritzlaff/nano-platform';
 
@@ -42,7 +43,7 @@ if (host && platform) {
   // Main's page (the Platform's): written, never its dock, which shows it once built (it may not be: a deep link elsewhere).
   const MAIN = 'workspace', placedIn = (pod: string) => Object.entries(h.data().runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
   /** The pages with Main's replaced by `edit(Main)`; a refusal shown. */
-  const toMain = (edit: (m: Page) => Page) => { const d = p.document().doc, r = p.apply({ pages: { ...d.pages, [MAIN]: edit(d.pages[MAIN]!) } }); if (!r.ok) showStatus(document, r.fail.reason); };
+  const toMain = (edit: (m: Page) => Page) => { const d = p.document().doc, r = applyPages(p, { pages: { ...d.pages, [MAIN]: edit(d.pages[MAIN]!) } }); if (!r.ok) showStatus(document, r.fail.reason); };
   setImportHost(host);   // its importUrl applies the file's pages too (boot-host.ts)
   for (const dock of document.querySelectorAll<WorkspaceDock>('workspace-dock')) dock.host = host;
   for (const el of document.querySelectorAll<HTMLElement & { target?: unknown; icon?: unknown }>('nano-explorer, nano-wiring')) { el.target ??= target; if (el.localName === 'nano-explorer') el.icon = icon; }
@@ -87,7 +88,7 @@ if (host && platform) {
   document.addEventListener('wires:open-panel', e => {
     const { name } = (e as CustomEvent<{ kind: string; name: string }>).detail;
     const d = (e.target as Element).querySelector<WorkspaceDock>('workspace-dock') ?? document.querySelector<WorkspaceDock>('workspace-dock'), runtime = placedIn(name);
-    if (d?.querySelector(':scope > .dock-area')) d.openPod(name);
+    if (d?.querySelector(':scope > .dock-area')) d.openPod(name, runtime);
     else if (runtime && !Object.values(p.document().doc.pages[MAIN]!.slots).some(s => s.kind === 'pod' && s.pod.pod === name))   // not built: Main's page
       toMain(m => ({ ...m, slots: { ...m.slots, [name]: { kind: 'pod', pod: Coord.pod(Coord.parse('implementation', h.data().pods[name]!.implementation), Coord.runtime(runtime), name) } } }));
   });

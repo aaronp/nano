@@ -12,7 +12,6 @@
 import { Coord, failure, success, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
 import { Platform, type Page, type Slot, type UIDeployment } from '@pritzlaff/nano-platform'
 import { panelsInOrder, type PanelState, type TemplateState } from './lib/layout-templates.ts'
-import { slotsOf } from './dock/page-slots.ts'
 
 type OldSlot = { id: string; runtime: string; pod: string } | { id: string; view: string }
 export type Legacy = { id: string; title: string; icon?: string; slots: OldSlot[]; workspace?: unknown; [k: string]: unknown }
@@ -29,6 +28,17 @@ const pageOk = (p: unknown): p is Legacy => obj(p) && idOk(p.id) && str(p.title)
 const panelsOf = (w: Record<string, unknown>) => {
   const t = w.template as TemplateState | undefined
   return obj(t) ? [...(t.order ?? []).filter((p): p is PanelState => !!p), ...(t.parked ?? [])] : panelsInOrder(w.root)
+}
+
+/** A legacy dock's panels as the old slots (as the old docks read them): a placed pod's panel a pod slot, any other a view slot of its widget; one per id. */
+const slotsOf = (panels: PanelState[], runtimeOf: (pod: string) => string | undefined): OldSlot[] => {
+  const slots = new Map<string, OldSlot>()
+  for (const p of panels) {
+    const runtime = p.name === undefined ? undefined : runtimeOf(p.name)
+    if (runtime) slots.set(p.name!, { id: p.name!, runtime, pod: p.name! })
+    else if (p.widget !== 'pod' && !slots.has(p.widget)) slots.set(p.widget, { id: p.widget, view: p.widget })
+  }
+  return [...slots.values()]
 }
 
 /** The old pages of a layout: its `pages` (bad ones dropped), else the legacy Main (`workspace`'s panels, else `slots`), else none. */

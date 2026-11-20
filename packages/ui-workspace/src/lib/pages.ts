@@ -1,14 +1,20 @@
 /**
- * The page store: the run-time truth for the layout's pages (nano-ui's `Page`), in nav order. Main (`workspace`) is
- * always there and first; a page's id never changes (a rename sets its title). `layout.pages` is written from it.
+ * The workspace's rules for its pages, which are the Platform's (ADR-0038): Main (`MAIN`) is always there and first; a
+ * page's id is its route and never changes (a rename sets its `meta.title`), never one of the workspace's own routes
+ * (`FIXED`); the rest are in `meta.order`. The workspace builds each page edit as a `next` and gives it to `applyPages`,
+ * which checks these rules (`refusal`, as the pod `platform` does) before the Platform's `apply`.
  *
- *   const pages = pageStore(pagesOf(doc.layout), (runtime, pod) => placedIn(runtime, pod))
- *   pages.set({ id: slugPath('Trading', taken).slice(1), title: 'Trading', slots: [] })   // adds; by id it replaces
- *   pages.prune(placed)   // on `applied`: pod slots whose pod went, gone from every page
- *   pages.merge(importedPages)   // an import's pages: new ids added, identical ones skipped, clashes suffixed
+ *   ordered(doc)                                   // ['workspace', …the rest by meta.order]
+ *   applyPages(platform, moved(doc, 'two', 1)!)    // a reorder: each `meta.order` that changes rewritten
+ *   slugPath('Trading', taken).slice(1)             // a new page's id
  */
-import { failure, success, type NanoResult } from '@pritzlaff/nano-core'
-import { pagesOf, type LayoutSlot, type Page } from '@pritzlaff/nano-ui'
+import { failure, type NanoResult } from '@pritzlaff/nano-core'
+import type { Page, Platform, UIDeployment } from '@pritzlaff/nano-platform'
+
+/** Main's id (and route). */
+export const MAIN = 'workspace'
+/** The workspace's own routes: never a page's id. */
+export const FIXED = ['ring', 'desk', 'settings', 'systems', 'messages', 'components', 'themes', 'inbox']
 
 /** A route for a title: `/` + lower-case dashes, `-2`, `-3`… until it is not in `taken`. A page's id is this without the `/`. */
 export const slugPath = (title: string, taken: readonly string[]): string => {
@@ -18,77 +24,37 @@ export const slugPath = (title: string, taken: readonly string[]): string => {
   return path
 }
 
-type Placed = (runtime: string, pod: string) => boolean
-const MAIN = 'workspace'
-/** The workspace's own routes: never a page's id. */
-export const FIXED = ['ring', 'desk', 'settings', 'systems', 'messages', 'components', 'themes', 'inbox']
-const isPod = (s: Page['slots'][number]): s is LayoutSlot => 'pod' in s
+type Meta = { title?: string; icon?: string; order?: number; [k: string]: unknown }
+/** A page's `meta` as the workspace writes it (title, icon, order, Save layout's restore point); `{}` if it is none. */
+export const metaOf = (p: Page | undefined): Meta => (typeof p?.meta === 'object' && p.meta !== null ? p.meta : {}) as Meta
 
-export function pageStore(initial: Page[], placed: Placed) {
-  // a bad page dropped (and warned, by pagesOf), a fixed route's too, the first of an id kept
-  const given = structuredClone(pagesOf({ pages: initial })).filter((p, i, all) => !FIXED.includes(p.id) && all.findIndex(q => q.id === p.id) === i)
-  let pages: Page[] = [given.find(p => p.id === MAIN) ?? { id: MAIN, title: 'Workspace', slots: [] }, ...given.filter(p => p.id !== MAIN)]
-  const heard = new Set<() => void>()
-  const changed = () => { for (const fn of heard) fn() }
-  const bad = (reason: string) => failure('invalid-input', reason)
-  const store = {
-    list: (): Page[] => structuredClone(pages),
-    get: (id: string): Page | undefined => structuredClone(pages.find(p => p.id === id)),
-    /** Adds `page`, or replaces the page with its id; `index` moves it there (Main stays first). */
-    set(page: Page, index?: number): NanoResult<void> {
-      if (FIXED.includes(page.id)) return bad(`${page.id} is the workspace's own route, not a page`)
-      if (pagesOf({ pages: [page] }).length !== 1) return bad(`not a page: ${page.id}`)
-      const missing = page.slots.filter(isPod).find(s => !placed(s.runtime, s.pod))
-      if (missing) return bad(`${missing.pod} is not placed in ${missing.runtime}`)
-      if (index !== undefined && (page.id === MAIN ? index !== 0 : index === 0)) return bad('Main stays first')
-      const at = pages.findIndex(p => p.id === page.id), next = pages.filter(p => p.id !== page.id)
-      const to = page.id === MAIN ? 0 : index ?? (at < 0 ? next.length : at)
-      next.splice(Math.min(to, next.length), 0, structuredClone(page))
-      pages = next
-      changed()
-      return success(undefined)
-    },
-    remove(id: string): NanoResult<void> {
-      if (id === MAIN) return bad('Main is not removed')
-      if (FIXED.includes(id)) return bad(`${id} is the workspace's own route, not a page`)
-      if (!pages.some(p => p.id === id)) return failure('not-found', `no page ${id}`)
-      pages = pages.filter(p => p.id !== id)
-      changed()
-      return success(undefined)
-    },
-    /** Drops the pod slots (and their geometry) whose pod is not `now` placed; whether anything changed. */
-    prune(now: Placed = placed): boolean {
-      let any = false
-      pages = pages.map(p => {
-        const gone = p.slots.filter(s => isPod(s) && !now(s.runtime, s.pod)).map(s => s.id)
-        if (!gone.length) return p
-        any = true
-        const { geometry: was, ...rest } = p, geometry = Object.entries(was ?? {}).filter(([id]) => !gone.includes(id))
-        return { ...rest, slots: p.slots.filter(s => !gone.includes(s.id)), ...(geometry.length && { geometry: Object.fromEntries(geometry) }) }
-      })
-      if (any) changed()
-      return any
-    },
-    subscribe(fn: () => void): () => void { heard.add(fn); return () => { heard.delete(fn) } },
-    /**
-     * Adds an import's pages: a free id as it is; a taken id with identical content (title, icon, slots, engine keys)
-     * skipped, so a repeat is a no-op; a taken id with other content added under the next free `-2`, `-3`… The
-     * incoming `workspace` fills Main only when Main has no pod slots (after New, say: its starter views alone), else
-     * it is a page beside it. Returns `set`'s refusals, one message each.
-     */
-    merge(incoming: Page[]): string[] {
-      const refused: string[] = [], body = (p: Page) => JSON.stringify({ ...p, id: '' })
-      for (const p of structuredClone(incoming)) {
-        const same = pages.find(q => q.id === p.id)
-        if (same && body(same) === body(p)) continue
-        const fills = p.id === MAIN && !same!.slots.some(isPod)   // views alone are the starter
-        let id = p.id
-        for (let n = 2; !fills && pages.some(q => q.id === id); n++) id = `${p.id}-${n}`
-        const r = store.set({ ...p, id })
-        if (!r.ok) refused.push(r.fail.reason)
-      }
-      return refused
-    },
-  }
-  return store
+/** The page ids in nav order: Main, then by `meta.order` (a page without one last). */
+export const ordered = (doc: UIDeployment): string[] => {
+  const at = (id: string) => metaOf(doc.pages[id]).order ?? Infinity
+  return Object.keys(doc.pages).sort((a, b) => (a === MAIN ? -1 : b === MAIN ? 1 : at(a) - at(b) || 0))
+}
+
+/** `doc` with page `id` at place `to` of `ordered(doc)`, each page whose place changed given it as `meta.order`;
+ * undefined for Main, Main's place, a place past the end or an unknown page. */
+export function moved(doc: UIDeployment, id: string, to: number): UIDeployment | undefined {
+  const ids = ordered(doc).filter((x) => x !== id)
+  if (id === MAIN || !doc.pages[id] || to < 1 || to > ids.length) return undefined
+  ids.splice(to, 0, id)
+  return { pages: Object.fromEntries(Object.entries(doc.pages).map(([p, page]) => {
+    const i = ids.indexOf(p), m = metaOf(page)
+    return [p, m.order === i ? page : { ...page, meta: { ...m, order: i } }]
+  })) }
+}
+
+/** Why `next` breaks the workspace's rules, coming from `was`: Main dropped, or a page added on a fixed route. */
+export function refusal(was: UIDeployment, next: UIDeployment): string | undefined {
+  if (!next.pages[MAIN]) return `Main (the page ${MAIN}) is not removed`
+  const fixed = Object.keys(next.pages).find((id) => FIXED.includes(id) && !(id in was.pages))
+  return fixed && `${fixed} is the workspace's own route, not a page`
+}
+
+/** The workspace's own page edit: `next` refused (`invalid-input`) if it breaks the rules, else the Platform's `apply`. */
+export function applyPages(platform: ReturnType<typeof Platform.create>, next: UIDeployment): NanoResult<void> {
+  const why = refusal(platform.document().doc, next)
+  return why ? failure('invalid-input', why) : platform.apply(next)
 }

@@ -1,18 +1,19 @@
 /**
  * The nav's edit mode: ✎ beside the app's title toggles [data-editing] on <app-shell>, Esc leaves. A workspace row's
  * name, clicked, becomes an input (Enter or blur keeps, Esc cancels, empty keeps the old); its icon opens a grid of
- * ICONS; a saved row's handle reorders it, by drag or Alt+↑/↓ (announced). `save` keeps a row's new title and icon;
- * the store's change reorders the nav.
+ * ICONS; a saved row's handle reorders it, by drag or Alt+↑/↓ (announced: `moved`, one apply of each `meta.order` that
+ * changes). `save` keeps a row's new title and icon; the Platform's change reorders the nav.
  */
+import type { Platform } from '@pritzlaff/nano-platform';
 import { ICONS } from '../lib/icons.ts';
-import type { pageStore } from '../lib/pages.ts';
+import { applyPages, moved, ordered } from '../lib/pages.ts';
 
 const ROW = '[data-workspaces], [data-saved]';
 const nameOf = (row: Element) => row.querySelector('[data-name]')?.textContent ?? '';
 
-export function navEdit(doc: Document, store: ReturnType<typeof pageStore>, save: (row: HTMLElement, title: string, icon: string) => void) {
+export function navEdit(doc: Document, platform: ReturnType<typeof Platform.create>, save: (row: HTMLElement, title: string, icon: string) => void) {
   const editing = () => doc.querySelector('app-shell[data-editing]') !== null;
-  store.subscribe(() => controls());   // a page changed from elsewhere is relabelled: its controls come back
+  platform.listen(() => controls());   // a page changed from elsewhere is relabelled: its controls come back
   const setEditing = (on: boolean) => {
     doc.querySelector('app-shell')?.toggleAttribute('data-editing', on);
     doc.querySelector('[data-edit-nav]')?.setAttribute('aria-pressed', String(on));
@@ -99,9 +100,9 @@ export function navEdit(doc: Document, store: ReturnType<typeof pageStore>, save
   live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite');
   live.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)';
   doc.body.append(live);
-  const index = (id: string) => store.list().findIndex((p) => p.id === id);
-  /** Moves a saved page to `to` (the store refuses Main's place; its change reorders the nav). */
-  const move = (id: string, to: number) => { const p = store.get(id); return !!p && to >= 1 && to < store.list().length && store.set(p, to).ok; };
+  const index = (id: string) => ordered(platform.document().doc).indexOf(id);
+  /** Moves a saved page to place `to` (Main's is refused; the Platform's change reorders the nav). */
+  const move = (id: string, to: number) => { const next = moved(platform.document().doc, id, to); return !!next && applyPages(platform, next).ok; };
   const savedRow = (t: EventTarget | null) => (t as Element | null)?.closest?.<HTMLElement>('[data-saved]') ?? null;
   doc.addEventListener('keydown', (e) => {
     const t = e.target as Element | null;

@@ -11,7 +11,7 @@ import type { Host } from './host.ts'
 import { connected } from './auto-connect.ts'
 import { defineAppBar, type AppBarEl } from './components/app-bar.ts'
 import { defineWorkspaceControls } from './components/workspace-controls.ts'
-import { chosen, viewTags } from './dock/panels.ts'
+import { chosen, viewTags } from './dock/page-pods.ts'
 import { requestBus } from './lib/bus.ts'
 
 const value = (e: Event) => (e.target as HTMLElement & { value: string }).value

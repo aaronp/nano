@@ -7,9 +7,8 @@
  * It boots from the stored document (persist.ts), the app's own (ADR-0034): imported as any file is, so nano.ui and
  * same-origin providers ask nothing and a foreign provider is confirmed first. Its pages are the Platform's (ADR-0038):
  * `platform`, made once for the page's life, from the stored pages, else migrated once (boot-pages.ts), and changed only
- * by its `apply`; an import's pages are applied with it (import-pages.ts). `pages` (lib/pages.ts), which the nav and
- * docks read, mirrors it. Both documents are saved, debounced (flushed on `pagehide`), on each `applied` and page
- * change. A stored document or pages that fail to load, or that another tab has written since, are not saved over this
+ * by its `apply`; an import's pages are applied with it (import-pages.ts); the nav and docks show it. Both documents
+ * are saved, debounced (flushed on `pagehide`), on each `applied` and page change. A stored document or pages that fail to load, or that another tab has written since, are not saved over this
  * session. Storage the page may not use: the app runs in memory, and the first save says so.
  */
 import { defineViews } from '@pritzlaff/nano-ui';
@@ -17,33 +16,27 @@ import { Platform } from '@pritzlaff/nano-platform';
 import { toast } from '@pritzlaff/nano-elements';
 import { start, type Host } from './host.ts';
 import { implementationTemplates } from './dock/panels.ts';
-import { pageStore } from './lib/pages.ts';
 import { persisted } from './persist.ts';
 import { showStatus } from './lib/status.ts';
-import { bootPages, mirror } from './boot-pages.ts';
+import { bootPages } from './boot-pages.ts';
 import { importing } from './import-pages.ts';
 
 const KEY = 'nano-workspace.document', PAGES_KEY = 'nano-workspace.platform', SAVE_MS = 300;
 const storage = (() => { try { return localStorage; } catch (e) { const no = () => { throw e; }; return { getItem: no, setItem: no, removeItem: no, key: no, get length() { return no(); } } as unknown as Storage; } })();
 const stored = persisted(storage, KEY, PAGES_KEY), doc = stored.load();
-let live: Host | undefined;
-const placed = (runtime: string, pod: string) => !!live?.app.deployment().runtimes[runtime]?.pods.includes(pod);
 
 defineViews();
 const started = await start(() => platform);
 if (!started.ok) toast(started.fail.reason, { variant: 'bad', duration: 0 });
 /** The page's host; undefined if it did not start (a toast says why). */
-export const host: Host | undefined = live = started.ok ? started.value : undefined;
+export const host: Host | undefined = started.ok ? started.value : undefined;
 const at = host && doc && URL.createObjectURL(new Blob([JSON.stringify(doc)], { type: 'application/json' }));
 const loaded = host && at ? await host.importUrl(at).finally(() => URL.revokeObjectURL(at)) : { ok: true };
 const first = host ? await bootPages(host, storage, doc, stored.pages(), loaded.ok) : undefined;
 /** The page's pages (ADR-0038): one Platform for the page's life; undefined without a host. */
 export const platform = host && first?.ok ? Platform.create(host.app, host.registry, first.value) : host ? Platform.create(host.app, host.registry) : undefined;
-/** The pages as the nav and docks read them: the Platform's, mirrored (boot-pages.ts). */
-export const pages = pageStore([], placed);
 
 if (host && platform) {
-  mirror(platform, pages, () => host.data());
   host.importUrl = importing(host.importUrl.bind(host), platform);
   let timer: ReturnType<typeof setTimeout> | undefined, elsewhere = !loaded.ok || !first?.ok;
   const write = () => { timer = undefined; if (!elsewhere) stored.save(host.saved(), platform.document().doc); };

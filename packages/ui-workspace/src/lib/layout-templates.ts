@@ -12,7 +12,8 @@ export const TEMPLATES: readonly { id: TemplateId; title: string; positions: num
   { id: 'main-drawer', title: 'Main and drawer', positions: 2, areas: ['main', 'drawer'] },
 ];
 
-export type PanelState = { widget: string; name?: string };
+/** A panel's state: its widget, the pod (or instance) it shows, and, on a page, the slot it shows. */
+export type PanelState = { widget: string; name?: string; slot?: string };
 
 /** Component states of a golden-layout tree in reading order (row left to right, column top to bottom, stack in tab order). */
 export const panelsInOrder = (root: unknown): PanelState[] => {

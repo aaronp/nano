@@ -6,7 +6,7 @@
  * `importUrl`: the file's pages (a bundle's, or a nano.json's old layout migrated), edited as the Import dialog chose
  * (`chosen.pages`), are applied with the app; a plain nano.json's Main filling Main keeps Main's title and icon.
  *
- *   platform.apply(withImported(platform.document().doc, incoming))
+ *   applyPages(platform, withImported(platform.document().doc, incoming))   // the workspace's rules checked first
  *   host.importUrl = importing(host.importUrl.bind(host), platform)
  */
 import type { NanoResult } from '@pritzlaff/nano-core'
@@ -14,8 +14,8 @@ import type { Page, Platform, UIDeployment } from '@pritzlaff/nano-platform'
 import type { Host } from './host.ts'
 import { opened } from './migrate.ts'
 import { showStatus } from './lib/status.ts'
+import { applyPages, MAIN } from './lib/pages.ts'
 
-const MAIN = 'workspace'
 const order = (p: Page) => { const o = (p.meta as { order?: unknown } | undefined)?.order; return typeof o === 'number' ? o : Infinity }
 /** A page as compared: without its place in the order. */
 const body = (p: Page) => { const { order: _, ...meta } = (p.meta ?? {}) as Record<string, unknown>; return JSON.stringify({ ...p, meta }) }
@@ -49,7 +49,7 @@ export const importing = (importUrl: Host['importUrl'], platform: ReturnType<typ
     const legacy = !(typeof file === 'object' && file !== null && 'platform' in file), main = next.pages[MAIN], kept = was.pages[MAIN]?.meta as Record<string, unknown> | undefined
     // a plain nano.json's Main has no title of its own ("Workspace"): filling Main, it keeps Main's title and icon
     if (legacy && main && kept && main !== was.pages[MAIN]) next.pages[MAIN] = { ...main, meta: { ...(main.meta as object), title: kept['title'], icon: kept['icon'] } }
-    const r = platform.apply(next)
+    const r = applyPages(platform, next)
     if (!r.ok) showStatus(document, r.fail.reason)
     return done
   }

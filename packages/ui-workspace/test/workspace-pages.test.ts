@@ -1,9 +1,12 @@
-// Workspace pages shown from the page store: mount and unmount, + beside the title, the nav's edit mode (rename keeps the id, icon, reorder) and Save as.
+// Workspace pages shown from the Platform: mount and unmount, + beside the title, the nav's edit mode (rename keeps the id,
+// icon, reorder by `meta.order`) and Save as, each one `platform.apply`.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
 import { bootWorkspacePages, mountWorkspace } from '../src/components/workspace-pages.ts'
-import { pageStore } from '../src/lib/pages.ts'
+import { moved } from '../src/lib/pages.ts'
+import { Application, AppDeployment, Registry, type NanoResult } from '@pritzlaff/nano-core'
+import { Platform, type Page } from '@pritzlaff/nano-platform'
 
 localStorage.clear()
 document.body.innerHTML = `<app-shell><span slot="title">Nano</span>
@@ -14,9 +17,17 @@ document.body.innerHTML = `<app-shell><span slot="title">Nano</span>
 const template = { template: 'one', order: [{ widget: 'a' }], dock: { root: null } }
 Object.assign(document.querySelector('#workspace')!, { arrangement: () => ({ root: { type: 'row' }, template }) })
 
-const store = pageStore([], () => true)
-bootWorkspacePages(document, store)
-const ids = () => store.list().map(p => p.id)
+const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
+const registry = Registry.create(), app = must(await Application.create(must(AppDeployment.assemble({ pods: {}, runtimes: {} }, registry))))
+const platform = Platform.create(app, registry, { pages: { workspace: { slots: {}, meta: { title: 'Workspace', order: 0 } } } })
+let applies = 0
+platform.listen(() => applies++)
+bootWorkspacePages(document, platform)
+const doc = () => JSON.parse(JSON.stringify(platform.document().doc)) as { pages: Record<string, Page & { meta: Record<string, unknown> }> }
+const page = (id: string) => doc().pages[id]
+/** A page as the nav shows it: its id, title and icon. */
+const row = (id: string) => { const m = page(id)!.meta; return { id, title: m.title, ...(m.icon !== undefined && { icon: m.icon }) } }
+const ids = () => Object.keys(doc().pages).sort((a, b) => a === 'workspace' ? -1 : b === 'workspace' ? 1 : (page(a)!.meta.order as number) - (page(b)!.meta.order as number))
 const routes = () => [...document.querySelectorAll('app-route')].map(r => r.getAttribute('path'))
 const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector<T>(s)!
 const input = () => $<HTMLInputElement>('input[data-rename]')
@@ -26,7 +37,7 @@ const key = (el: Element, k: string) => el.dispatchEvent(new KeyboardEvent('keyd
 const savedOrder = () => [...document.querySelectorAll<HTMLElement>('[data-saved]')].map(r => r.dataset.saved)
 
 test('mountWorkspace adds a nav row and a route before the not-found page, with a dock of Main\'s widgets', () => {
-  mountWorkspace(document, { id: 'lab', title: 'Lab', icon: 'star', slots: [] })
+  mountWorkspace(document, { id: 'lab', title: 'Lab', icon: 'star' })
   const row = $('[data-saved="lab"]')
   expect(row.previousElementSibling?.hasAttribute('data-workspaces')).toBe(true)
   expect(row.querySelector('a')!.getAttribute('href')).toBe('#/lab')
@@ -45,12 +56,13 @@ test('the title holds + and ✎; + makes an empty page, goes there and starts it
   expect($('[slot="title"] [data-edit-nav]').getAttribute('aria-pressed')).toBe('false')
   $('[data-new-workspace]').click()
   expect(location.hash).toBe('#/new-workspace')
-  expect(store.list().slice(1)).toEqual([{ id: 'new-workspace', title: 'New workspace', icon: 'window', slots: [] }])
+  expect(ids().slice(1)).toEqual(['new-workspace'])
+  expect(page('new-workspace')).toEqual({ slots: {}, meta: { title: 'New workspace', icon: 'window', order: 1 } })
   expect(routes()).toEqual(['/workspace', '/new-workspace', '*'])
   expect(input().closest('[data-saved]')!.getAttribute('data-saved')).toBe('new-workspace')
   type('', 'Escape')
   $('[data-new-workspace]').click()
-  expect(store.list().at(-1)).toEqual({ id: 'new-workspace-2', title: 'New workspace', icon: 'window', slots: [] })
+  expect(page('new-workspace-2')).toEqual({ slots: {}, meta: { title: 'New workspace', icon: 'window', order: 2 } })
   type('Desk', 'Escape')
   expect($('[data-saved="new-workspace-2"] [data-name]').textContent).toBe('New workspace')
 })
@@ -86,11 +98,13 @@ test('in edit mode a link click does not navigate; Enter on a focused name opens
   expect(document.activeElement).toBe($('[data-edit-nav]'))
 })
 
-test('a rename changes the title only: the id, route, hash, dock and its key stay (Review Focus 4)', () => {
+test('a rename changes the title only, in one apply: the id, route, hash, dock and its key stay (Review Focus 4)', () => {
   location.hash = '#/new-workspace'
   $('[data-saved="new-workspace"] [data-name]').click()
+  const before = applies
   type('Desk', 'Enter')
-  expect(store.get('new-workspace')?.title).toBe('Desk')
+  expect(applies).toBe(before + 1)
+  expect(page('new-workspace')!.meta.title).toBe('Desk')
   expect(ids()).toEqual(['workspace', 'new-workspace', 'new-workspace-2'])
   expect($('[data-saved="new-workspace"] a').getAttribute('href')).toBe('#/new-workspace')
   expect($('[data-saved="new-workspace"] [data-name]').textContent).toBe('Desk')
@@ -104,7 +118,7 @@ test('a rename changes the title only: the id, route, hash, dock and its key sta
 test('a second page with the same title is fine; Esc or an empty name keeps the old', () => {
   $('[data-saved="new-workspace-2"] [data-name]').click()
   type('Desk', 'Enter')
-  expect(store.list().map(p => p.title)).toEqual(['Workspace', 'Desk', 'Desk'])
+  expect(ids().map(id => page(id)!.meta.title)).toEqual(['Workspace', 'Desk', 'Desk'])
   expect(document.activeElement).toBe($('[data-saved="new-workspace-2"] [data-name]'))
   $('[data-saved="new-workspace-2"] [data-name]').click()
   type('Other', 'Escape')
@@ -112,7 +126,7 @@ test('a second page with the same title is fine; Esc or an empty name keeps the 
   $('[data-saved="new-workspace-2"] [data-name]').click()
   type('  ', 'Enter')
   expect($('[data-saved="new-workspace-2"] [data-name]').textContent).toBe('Desk')
-  expect(store.get('new-workspace-2')).toEqual({ id: 'new-workspace-2', title: 'Desk', icon: 'window', slots: [] })
+  expect(row('new-workspace-2')).toEqual({ id: 'new-workspace-2', title: 'Desk', icon: 'window' })
 })
 
 test('Enter on the icon opens a grid of icons (arrows move, focus leaving closes); choosing one updates the row', () => {
@@ -131,7 +145,7 @@ test('Enter on the icon opens a grid of icons (arrows move, focus leaving closes
   expect(down.defaultPrevented).toBe(true)   // focus stays inside, so no focusout closes it before the click
   pop.querySelector<HTMLElement>('[data-icon="rocket"]')!.click()
   expect(document.querySelector('[role="listbox"]')).toBeNull()
-  expect(store.get('new-workspace')?.icon).toBe('rocket')
+  expect(page('new-workspace')!.meta.icon).toBe('rocket')
   expect($('[data-saved="new-workspace"] a').dataset.icon).toBe('rocket')
 })
 
@@ -149,47 +163,53 @@ test('clicking a focused icon commits it, though removing the grid fires focusou
   }
   rocket.click()
   expect(document.querySelector('[role="listbox"]')).toBeNull()
-  expect(store.get('new-workspace')?.icon).toBe(icon)
+  expect(page('new-workspace')!.meta.icon).toBe(icon)
 })
 
-test('Alt+↓ on a handle moves the page down, by the store\'s index, in the nav, and says so; Main has no handle and cannot move', async () => {
+test('Alt+↓ on a handle moves the page down (its `meta.order` and its neighbour\'s rewritten, one apply), in the nav, and says so; Main has no handle and cannot move', async () => {
+  const before = applies
   $('[data-saved="new-workspace"] [data-handle]').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true }))
+  expect(applies).toBe(before + 1)
   expect(ids()).toEqual(['workspace', 'new-workspace-2', 'new-workspace'])
+  expect([page('workspace')!.meta.order, page('new-workspace-2')!.meta.order, page('new-workspace')!.meta.order]).toEqual([0, 1, 2])
   expect(savedOrder()).toEqual(['new-workspace-2', 'new-workspace'])
   await new Promise(r => setTimeout(r, 60))
   expect($('[aria-live="polite"]').textContent).toBe('Moved Desk down')
   $('[data-saved="new-workspace-2"] [data-handle]').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true }))
   expect(ids()[0]).toBe('workspace')   // up from the first saved page is Main's place: refused
   expect(document.querySelector('[data-workspaces] [data-handle]')).toBeNull()
-  expect(store.set(store.get('workspace')!, 1)).toMatchObject({ ok: false })
+  expect(moved(platform.document().doc, 'workspace', 1)).toBeUndefined()
+  expect(moved(platform.document().doc, 'new-workspace', 0)).toBeUndefined()
 })
 
 test("Main's rename is kept with its icon, and its id and route stay", () => {
   $('[data-workspaces] [data-name]').click()
   type('Home', 'Enter')
-  expect(store.get('workspace')).toMatchObject({ id: 'workspace', title: 'Home' })
+  expect(row('workspace')).toMatchObject({ id: 'workspace', title: 'Home' })
   expect($('[data-workspaces] [data-name]').textContent).toBe('Home')
   expect($('[data-workspaces] a').dataset.icon).toBe('panels')
 })
 
-test('a page added through the store (as a pod would) appears in the nav and routes; a title change relabels; removing unmounts', () => {
-  store.set({ id: 'pod-made', title: 'Pod made', icon: 'star', slots: [] })
+test('a page added through the Platform (as a pod would) appears in the nav and routes; a title change relabels; removing unmounts', () => {
+  const put = (id: string, p?: Page) => { const { [id]: _, ...rest } = platform.document().doc.pages; must(platform.apply({ pages: p ? { ...rest, [id]: p } : rest })) }
+  put('pod-made', { slots: {}, meta: { title: 'Pod made', icon: 'star', order: 9 } })
   expect($('[data-saved="pod-made"] [data-name]').textContent).toBe('Pod made')
   expect(routes()).toContain('/pod-made')
   expect(ids().at(-1)).toBe('pod-made'); expect(savedOrder().at(-1)).toBe('pod-made')
-  store.set({ ...store.get('pod-made')!, title: 'Renamed' })
+  put('pod-made', { slots: {}, meta: { title: 'Renamed', icon: 'star', order: 9 } })
   expect($('[data-saved="pod-made"] [data-name]').textContent).toBe('Renamed')
   expect($('[data-saved="pod-made"] a').getAttribute('href')).toBe('#/pod-made')
   location.hash = '#/pod-made'
-  store.remove('pod-made')
+  put('pod-made')
   expect(document.querySelector('[data-saved="pod-made"]')).toBeNull()
   expect(routes()).not.toContain('/pod-made')
   expect(location.hash).toBe('#/workspace')
 })
 
-test('Save as workspace copies the page into "<title> copy" (same slots, its arrangement as the page\'s `workspace`, a new id) and starts its rename', () => {
+test('Save as workspace copies the page into "<title> copy" (same slots, its arrangement as the page\'s `layout`, a new id, last) and starts its rename', () => {
   $('#workspace').dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true }))
-  expect(store.list().at(-1)).toEqual({ id: 'home-copy', title: 'Home copy', icon: 'panels', slots: [], workspace: { root: { type: 'row' }, template } })
+  expect(ids().at(-1)).toBe('home-copy')
+  expect(page('home-copy')).toEqual({ slots: {}, layout: { root: { type: 'row' }, template }, meta: { title: 'Home copy', icon: 'panels', order: 3 } })
   expect(location.hash).toBe('#/home-copy')
   expect(input().closest('[data-saved]')!.getAttribute('data-saved')).toBe('home-copy')
   type('', 'Escape')
