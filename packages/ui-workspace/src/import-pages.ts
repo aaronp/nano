@@ -39,7 +39,7 @@ const filling = (was: Page, p: Page): Page => {
 export function withImported(current: Outline, incoming: Outline): Outline {
   const pages = { ...current.pages }, at = new Map<string, string>(), added = new Set<string>()   // by incoming id: where it landed; those added
   for (const id of walk(incoming)) {
-    const p = incoming.pages[id]!, same = pages[id]
+    const p = incoming.pages[id]!, same = current.pages[id]   // compared with what was there, never with a page this import added
     if (same && body(same) === body(p)) continue
     const fills = id === MAIN && !!same && Object.values(same.slots).every(s => s.kind === 'view')
     let to = id   // one of the workspace's own routes is taken too

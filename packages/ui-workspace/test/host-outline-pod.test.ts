@@ -119,3 +119,20 @@ test('the approval summary names the pages moved', async () => {
   expect(asked).toEqual(['Move page b; Move page a'])
   await app.close()
 })
+
+test('the approval\'s moved pages are the Outline\'s reported `moved`: a reorder among children, a reparent, a roots-only change', async () => {
+  const { asked, app, outline, pod } = await podApp(async () => true)
+  const moved: string[][] = []
+  outline.listen(c => { moved.push(c.moved) })
+  const p = (...children: string[]) => ({ slots: {}, ...(children.length && { children }) })
+  must(outline.apply({ roots: ['workspace', 'a', 'b'], pages: { workspace: p(), a: p('x', 'y'), x: p(), y: p(), b: p() } }))
+  moved.length = 0
+  for (const next of [
+    { roots: ['workspace', 'a', 'b'], pages: { workspace: p(), a: p('y', 'x'), x: p(), y: p(), b: p() } },
+    { roots: ['workspace', 'a'], pages: { workspace: p(), a: p('y', 'b', 'x'), x: p(), y: p(), b: p() } },
+    { roots: ['workspace', 'b', 'a'], pages: { workspace: p(), a: p('y', 'x'), x: p(), y: p(), b: p() } },
+  ]) must(await pod.apply({ next, base: outline.document().version }))
+  expect(moved.every(m => m.length > 0)).toBe(true)
+  expect(asked.map(t => t.split('; ').filter(s => s.startsWith('Move page ')).map(s => s.slice('Move page '.length)))).toEqual(moved)
+  await app.close()
+})

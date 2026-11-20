@@ -35,7 +35,9 @@ const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' 
 export const metaOf = (p: Page | undefined): Meta => (obj(p?.meta) && obj(p.meta['workspace']) ? p.meta['workspace'] : {}) as Meta
 /** Page `p` with `m` as the workspace's own meta; other clients' meta kept; no `meta.workspace` (nor `meta`) left empty. */
 export const withMeta = (p: Page, m: Meta): Page => {
-  const { workspace: _, ...others } = obj(p.meta) ? p.meta : {}, { meta: _m, ...rest } = p, meta = { ...others, ...(Object.values(m).some((v) => v !== undefined) && { workspace: m }) }
+  const { workspace: _, ...others } = obj(p.meta) ? p.meta : {}, { meta: _m, ...rest } = p
+  const set = Object.values(m).some((v) => v !== undefined)   // an `m` of nothing but undefined is none
+  const meta = { ...others, ...(set && { workspace: m }) }
   return Object.keys(meta).length ? { ...rest, meta } : rest
 }
 

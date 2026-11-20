@@ -20,6 +20,7 @@ import { persisted } from './persist.ts';
 import { showStatus } from './lib/status.ts';
 import { bootPages } from './boot-pages.ts';
 import { importing } from './import-pages.ts';
+import { HOST_PODS } from './host-deploy.ts';
 
 const KEY = 'nano-workspace.document', PAGES_KEY = 'nano-workspace.outline', OLD_PAGES_KEY = 'nano-workspace.platform', SAVE_MS = 300;
 const storage = (() => { try { return localStorage; } catch (e) { const no = () => { throw e; }; return { getItem: no, setItem: no, removeItem: no, key: no, get length() { return no(); } } as unknown as Storage; } })();
@@ -39,6 +40,8 @@ export const outline = host && startWith?.ok ? Outline.create(host.app, host.reg
 
 if (host && outline) {
   host.importUrl = importing(host.importUrl.bind(host), outline);
+  // the lazy pod `outline` built now (ADR-0031), so its `changed` reaches subscribers before anything calls it
+  void host.app.runtime('main').getOrCreate(HOST_PODS[2]);
   let timer: ReturnType<typeof setTimeout> | undefined, elsewhere = !loaded.ok || !first?.ok;
   const write = () => { timer = undefined; if (!elsewhere) stored.save(host.saved(), outline.document().doc); };
   const save = () => { clearTimeout(timer); timer = setTimeout(write, SAVE_MS); };

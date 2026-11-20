@@ -1541,4 +1541,5 @@ Cons:
 ## Decision
 Tree, named the Outline (`@pritzlaff/nano-outline`, document `Outline`, nodes pages). The change report gains `moved`;
 `HostOutline` declares a `changed` event so components follow the tree through nano. Flat documents still parse
-(every page a root). Supersedes ADR-0038's name and flat pages; ADR-0039 stands.
+(every page a root). Supersedes ADR-0038's name and flat pages; ADR-0039 stands. Known limit: the host pod is renamed `platform` → `outline`, so an app's own pod named `outline` now clashes
+with it (a stored document or file holding one is refused on load, kept as it was, until that pod is renamed).

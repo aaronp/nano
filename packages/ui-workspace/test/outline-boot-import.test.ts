@@ -26,3 +26,15 @@ test('an import with a renamed runtime: the bundle\'s pod slots and selectors na
   expect(JSON.parse(JSON.stringify(outline.document().doc.pages['logs']!.slots))).toEqual({ a: { kind: 'pod', pod: 'nano.ui/log@acme.main/l1' }, s: { kind: 'select', select: { runtime: 'acme.main' } } })
   expect(Object.values(outline.resolve('logs')).map(r => r.kind)).toEqual(['pod', 'pod'])
 })
+
+test('an old { app, platform } bundle (flat pages in the old order) imports into the tree: roots appended in that order, the order dropped', async () => {
+  const at = URL.parse('./bundle/nano-ui.js', location.href)!.href
+  const { host, outline } = await import('../src/boot-host.ts')
+  if (!host || !outline) throw new Error('the host did not start')
+  const pages = { pages: { late: { title: 'Late', slots: {}, meta: { workspace: { order: 2, icon: 'star' } } }, early: { title: 'Early', slots: {}, meta: { workspace: { order: 1 } } } } }
+  const url = URL.createObjectURL(new Blob([JSON.stringify({ app: { pods: {}, runtimes: {}, modules: { 'nano.ui': at }, views: {} }, platform: pages })]))
+  expect(await host.importUrl(url)).toMatchObject({ ok: true })
+  const d = JSON.parse(JSON.stringify(outline.document().doc))
+  expect(d.roots.slice(-2)).toEqual(['early', 'late'])
+  expect([d.pages.early, d.pages.late]).toEqual([{ title: 'Early', slots: {} }, { title: 'Late', slots: {}, meta: { workspace: { icon: 'star' } } }])
+})

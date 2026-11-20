@@ -62,3 +62,12 @@ test('a plain nano.json\'s Main filling Main keeps Main\'s title, icon, view slo
   expect(await importing(async () => ({ ok: true, value: undefined }), outline)(url)).toMatchObject({ ok: true })
   expect(written(outline.document().doc)).toEqual({ roots: ['workspace'], pages: { workspace: { slots: { x: view, c: pod }, children: ['kid'], layout: { workspace: { root: 1 }, react: { columns: 3 } }, title: 'Mine', meta: { workspace: { icon: 'star' }, react: { x: 1 } } }, kid: { slots: {} } } })
 })
+
+test('an incoming id that a suffix of this import took is suffixed again, whether its content is the same as that page or not', () => {
+  const third = { slots: {}, title: 'Third' }
+  for (const next of [third, { slots: {}, title: 'Fourth' }]) {
+    const out = withImported(doc({ pages: { workspace: main, trading } }), doc({ roots: ['trading', 'trading-2'], pages: { trading: third, 'trading-2': next } }))
+    expect(ids(out)).toEqual([['workspace', 'Workspace'], ['trading', 'Trading'], ['trading-2', 'Third'], ['trading-2-2', next.title]])
+    expect(out.roots).toEqual(['workspace', 'trading', 'trading-2', 'trading-2-2'])
+  }
+})

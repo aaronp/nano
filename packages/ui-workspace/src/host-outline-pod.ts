@@ -5,8 +5,9 @@
  * (`refusal`, lib/pages.ts: Main dropped or not the first root, a page added on one of its own routes), else asks
  * `approve` (HostUI's through the app, timed by hostProvider) with a summary of the pages and slots added or removed
  * and the pages moved; anything but a yes is `denied`, a yes applies `next` at `base`. The workspace's own edits apply
- * unasked. Once built (its first call), the pod publishes each change the Outline reports as `changed`. Without an
- * Outline (a replayed app's provider) both are not-found.
+ * unasked. Once built, the pod publishes each change the Outline reports as `changed`: boot-host.ts builds it as the
+ * Outline is made (`getOrCreate`); a build that closes stops publishing until it is built again (a restart, or the next
+ * call). Without an Outline (a replayed app's provider) both are not-found.
  *
  *   ns.provider([hostUi, deploy, hostOutline(() => outline, timed(askTheUser))])   // hostProvider (host-deploy.ts)
  *   { outline: outlinePod }   // placed first in `main` by host.ts

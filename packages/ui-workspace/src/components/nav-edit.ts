@@ -6,7 +6,7 @@
  */
 import type { Outline } from '@pritzlaff/nano-outline';
 import { ICONS } from '../lib/icons.ts';
-import { applyPages, move as moved, parentOf, walk } from '../lib/pages.ts';
+import { applyPages, move, parentOf, walk } from '../lib/pages.ts';
 
 const ROW = '[data-workspaces], [data-saved]';
 const nameOf = (row: Element) => row.querySelector('[data-name]')?.textContent ?? '';
@@ -102,9 +102,9 @@ export function navEdit(doc: Document, outline: ReturnType<typeof Outline.create
   doc.body.append(live);
   const index = (id: string) => walk(outline.document().doc).indexOf(id);
   /** Moves a saved page to the place in the tree of the row at `to` (Main's is refused; the Outline's change reorders the nav). */
-  const move = (id: string, to: number) => {
+  const moveTo = (id: string, to: number) => {
     const d = outline.document().doc, at = walk(d)[to], parent = at === undefined ? undefined : parentOf(d, at);
-    const next = at !== undefined && moved(d, id, parent, (parent === undefined ? d.roots : d.pages[parent]!.children!).indexOf(at));
+    const next = at !== undefined && move(d, id, parent, (parent === undefined ? d.roots : d.pages[parent]!.children!).indexOf(at));
     return !!next && applyPages(outline, next).ok;
   };
   const savedRow = (t: EventTarget | null) => (t as Element | null)?.closest?.<HTMLElement>('[data-saved]') ?? null;
@@ -117,7 +117,7 @@ export function navEdit(doc: Document, outline: ReturnType<typeof Outline.create
     if (!handle || !row || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
     e.preventDefault();
     const up = e.key === 'ArrowUp', path = row.dataset.saved!;
-    if (!move(path, index(path) + (up ? -1 : 1))) return;
+    if (!moveTo(path, index(path) + (up ? -1 : 1))) return;
     handle.focus();
     live.textContent = '';   // cleared first so a repeat is announced again
     setTimeout(() => { live.textContent = `Moved ${nameOf(row)} ${up ? 'up' : 'down'}`; }, 50);
@@ -142,7 +142,7 @@ export function navEdit(doc: Document, outline: ReturnType<typeof Outline.create
     const row = savedRow(e.target);
     if (!dragged || !row) return;
     e.preventDefault();   // dropping on a link must not navigate
-    move(dragged, index(row.dataset.saved!));
+    moveTo(dragged, index(row.dataset.saved!));
     dragged = ''; clear();
   });
   doc.addEventListener('dragend', () => { dragged = ''; clear(); });
