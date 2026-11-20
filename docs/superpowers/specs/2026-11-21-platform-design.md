@@ -33,7 +33,7 @@ saves and loads JSON. Non-goals: pages owning pods; the Platform deploying pods 
 
 ```ts
 type UIDeployment = { pages: Record<PageId, Page> }
-type Page = { slots: Record<SlotId, Slot>; layout?: unknown; meta?: unknown }   // layout, meta: the client's, opaque
+type Page = { slots: Record<SlotId, Slot>; title?: string; layout?: unknown; meta?: unknown }   // title: shared (ADR-0039); layout, meta: the client's, opaque, keyed by client
 type Slot =
   | { kind: 'pod';    pod: PodCoord }            // exact: a pick
   | { kind: 'select'; select: SelectorData }     // a query, resolved against the Application

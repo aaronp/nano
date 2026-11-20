@@ -43,3 +43,13 @@ test('readSelector reads only the selector fields, each to its coordinate', () =
   expect([s.implements!.kind, s.implementation!.kind, s.provider!.kind, s.runtime!.kind]).toEqual(['interface', 'implementation', 'namespace', 'runtime'])
   expect(() => readSelector({ implements: 'bad' })).toThrow()
 })
+
+test('a page title is optional, a string, and round-trips', () => {
+  const titled: UIDeployment = { pages: { home: { slots: {}, title: 'Home' }, bare: { slots: {} } } }
+  const r = Platform.parse(JSON.parse(JSON.stringify(titled)))
+  if (!r.ok) throw new Error(r.fail.reason)
+  expect(r.value.pages.home!.title).toBe('Home')
+  expect('title' in r.value.pages.bare!).toBe(false)
+  const bad = Platform.parse({ pages: { home: { slots: {}, title: 3 } } })
+  expect(bad).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+})

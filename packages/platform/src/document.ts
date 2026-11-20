@@ -13,7 +13,7 @@ import { Coord, failure, success, type NanoResult, type PodCoord, type SelectorD
 
 export type Slot = { kind: 'pod'; pod: PodCoord } | { kind: 'select'; select: SelectorData } | { kind: 'view'; view: string }
 /** `layout` and `meta` are the client's: the Platform keeps them and reads neither. */
-export type Page = { slots: Record<string, Slot>; layout?: unknown; meta?: unknown }
+export type Page = { slots: Record<string, Slot>; title?: string; layout?: unknown; meta?: unknown }
 export type UIDeployment = { pages: Record<string, Page> }
 
 const strict = { additionalProperties: false } as const
@@ -27,7 +27,7 @@ const WrittenSlot = Type.Union([
   Type.Object({ kind: Type.Literal('select'), select: WrittenSelector }, strict),
   Type.Object({ kind: Type.Literal('view'), view: Type.String({ minLength: 1 }) }, strict),
 ])
-const WrittenPage = Type.Object({ slots: Type.Record(Type.String(), WrittenSlot), layout: Type.Optional(Type.Unknown()), meta: Type.Optional(Type.Unknown()) }, strict)
+const WrittenPage = Type.Object({ slots: Type.Record(Type.String(), WrittenSlot), title: Type.Optional(Type.String()), layout: Type.Optional(Type.Unknown()), meta: Type.Optional(Type.Unknown()) }, strict)
 /** A UIDeployment written out: its coordinates as strings. */
 export const Written = Type.Object({ pages: Type.Record(Type.String(), WrittenPage) }, strict)
 
