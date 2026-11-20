@@ -11,7 +11,7 @@ know nothing about each other.
   a component in several systems and a "Shared only" filter; select an action and connect it to
   one that fits. `<c-platform-table>` lists every instance (system, component, instance, name, owner) and every kind
   nothing has been made of, with text and pill filters; it is also the dock's "Instances". Below them, a worked example made by `composable.ts` (range → debounce → log, input → map → log).
-- **Runtime:** the drawer's Workspace entries add panels to the dock; each panel places a new instance and
+- **Runtime:** the nav's Workspace entries add panels to the dock; each panel places a new instance and
   removes it when closed.
 
 `bun run build` (then `bun run serve`) builds `public/main.js` with Bun instead of esbuild. Isolated sandboxes (opaque-origin iframes) fetch modules cross-origin, so the host must send `Access-Control-Allow-Origin` (`serve` runs with `--cors`; GitHub Pages sends it). The rest of this

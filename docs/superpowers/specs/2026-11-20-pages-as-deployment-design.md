@@ -1,3 +1,5 @@
+> Parts 2 and 3 are superseded by `2026-11-21-platform-design.md` (ADR-0038).
+
 # Pages as deployment data, explicit pod start, and the picker grid
 
 Revises `2026-11-19-nav-edit-and-layout-picker-design.md` (which stands where not revised) and the "Views and layout"

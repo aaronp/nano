@@ -6,7 +6,7 @@
  */
 import { uiProvider } from './provider.ts'
 
-export { Any, Clock, ClockControl, Debounce, HostDeploy, HostPages, HostUI, Input, Log, MapIface, Nothing, Random } from './interfaces.ts'
+export { Any, Clock, ClockControl, Debounce, HostDeploy, HostUI, Input, Log, MapIface, Nothing, Random } from './interfaces.ts'
 export { clock } from './pods/clock.ts'
 export { simClock } from './pods/sim-clock.ts'
 export { random, seededRandom } from './pods/random.ts'
@@ -16,7 +16,7 @@ export { log } from './pods/log.ts'
 export { map } from './pods/map.ts'
 export { defineViews, views } from './views/define.ts'
 export { circuitOf } from './wiring/model.ts'
-export { pagesOf, type LayoutBox, type LayoutData, type LayoutSlot, type Page, type ViewSlot } from './layout.ts'
+export type { LayoutBox, LayoutData, LayoutSlot } from './layout.ts'
 export { viewFor, type ViewMap, type ViewTarget } from './views/view.ts'
 export { uiProvider }
 export default uiProvider
