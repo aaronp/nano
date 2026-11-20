@@ -4,7 +4,7 @@ import { Coord, Implementation, Pod, provide, success } from '@pritzlaff/nano-co
 import { log, MapIface } from '@pritzlaff/nano-ui'
 import { boot } from '../src/boot.ts'
 import { catalog } from '../src/catalog.ts'
-import { addPage, addSlot, columnsOf, removeSlot, setColumns } from '../src/slots.ts'
+import { addPage, addSlot, columnsOf, removeSlot, setColumns, titleOf } from '../src/slots.ts'
 import { KEYS } from '../src/stored.ts'
 
 const acme = Coord.namespace('acme')
@@ -18,7 +18,7 @@ const memory = (init: Record<string, unknown> = {}) => {
 const read = (s: Storage, k: string) => JSON.parse(s.getItem(k)!)
 const stored = () => memory({
   [KEYS.app]: { pods: { log1: Pod.lazy(log) }, runtimes: { main: { pods: ['log1'], subscriptions: [] } }, modules: { 'nano.ui': '/bundle/nano-ui.js', acme: '/acme.js' }, views: {}, layout: { ring: { show: [] } } },
-  [KEYS.pages]: { pages: { workspace: { slots: { log1: { kind: 'pod', pod: 'nano.ui/log@main/log1' } }, layout: { resolved: true, root: { type: 'row' }, template: 'x' }, meta: { title: 'Workspace', order: 0, icon: 'home' } } } },
+  [KEYS.pages]: { pages: { workspace: { slots: { log1: { kind: 'pod', pod: 'nano.ui/log@main/log1' } }, layout: { workspace: { resolved: true, root: { type: 'row' }, template: 'x' } }, title: 'Workspace', meta: { workspace: { order: 0, icon: 'home' } } } } },
 })
 const loads: string[] = []
 const load = async (u: string) => { loads.push(u); if (u.endsWith('/acme.js')) return acmeModule; throw new Error(`no ${u}`) }
@@ -59,26 +59,27 @@ test('add slot: a lazy pod deployed into the chosen runtime, then its pod slot a
   expect(read(s, KEYS.pages).pages.workspace.slots.map1).toEqual({ kind: 'pod', pod: 'nano.ui/map@main/map1' })
   expect(read(s, KEYS.app).pods.map1).toBeDefined()
   expect(read(s, KEYS.app).modules.acme).toBe('/acme.js')
-  expect(read(s, KEYS.pages).pages.workspace.layout).toEqual({ resolved: true, root: { type: 'row' }, template: 'x' })   // the workspace's keys untouched
+  expect(read(s, KEYS.pages).pages.workspace.layout).toEqual({ workspace: { resolved: true, root: { type: 'row' }, template: 'x' } })   // the workspace's keys untouched
 })
 
 test('remove slot: the slot goes, the pod stays deployed, layout and meta kept', async () => {
   const s = stored(), h = await started(s)
   expect(removeSlot(h, 'workspace', 'log1')).toMatchObject({ ok: true })
-  expect(read(s, KEYS.pages).pages.workspace).toEqual({ slots: {}, layout: { resolved: true, root: { type: 'row' }, template: 'x' }, meta: { title: 'Workspace', order: 0, icon: 'home' } })
+  expect(read(s, KEYS.pages).pages.workspace).toEqual({ slots: {}, layout: { workspace: { resolved: true, root: { type: 'row' }, template: 'x' } }, title: 'Workspace', meta: { workspace: { order: 0, icon: 'home' } } })
   expect(h.app.deployment().pods['log1']).toBeDefined()
 })
 
-test('a new page: an id from its title, meta.title only; columns go in layout.react beside the workspace\'s keys', async () => {
+test('a new page: an id from its title, `title` only; columns go in layout.react beside the workspace\'s keys, on any page', async () => {
   const s = stored(), h = await started(s)
   expect(addPage(h, 'My Page!')).toMatchObject({ ok: true, value: 'my-page' })
   expect(addPage(h, 'My Page')).toMatchObject({ ok: true, value: 'my-page-2' })
-  expect(read(s, KEYS.pages).pages['my-page']).toEqual({ slots: {}, meta: { title: 'My Page!' } })
+  expect(read(s, KEYS.pages).pages['my-page']).toEqual({ slots: {}, title: 'My Page!' })
+  expect(titleOf('my-page', h.platform.document().doc.pages['my-page'])).toBe('My Page!')
+  expect(titleOf('workspace', h.platform.document().doc.pages['workspace'])).toBe('Workspace')
   expect(setColumns(h, 'workspace', 3)).toMatchObject({ ok: true })
-  expect(read(s, KEYS.pages).pages.workspace.layout).toEqual({ resolved: true, root: { type: 'row' }, template: 'x', react: { columns: 3 } })
-  expect(read(s, KEYS.pages).pages.workspace.meta).toEqual({ title: 'Workspace', order: 0, icon: 'home' })
+  expect(read(s, KEYS.pages).pages.workspace.layout).toEqual({ workspace: { resolved: true, root: { type: 'row' }, template: 'x' }, react: { columns: 3 } })
+  expect(read(s, KEYS.pages).pages.workspace.meta).toEqual({ workspace: { order: 0, icon: 'home' } })
   expect(columnsOf(h.platform.document().doc.pages['workspace'])).toBe(3)
-  // a page the workspace has not arranged: layout.react alone would read as the workspace dock's (broken) config, so it is refused
-  expect(setColumns(h, 'my-page', 3)).toMatchObject({ ok: false })
-  expect(columnsOf(h.platform.document().doc.pages['my-page'])).toBe(2)
+  expect(setColumns(h, 'my-page', 4)).toMatchObject({ ok: true })   // a page the workspace has not arranged
+  expect(read(s, KEYS.pages).pages['my-page'].layout).toEqual({ react: { columns: 4 } })
 })

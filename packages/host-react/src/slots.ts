@@ -1,6 +1,6 @@
 /**
  * Page edits, each one `platform.apply`: add a slot (deploy a lazy pod, then apply its `pod` slot), remove a slot, add a
- * page (`meta.title` only), set a page's columns (`layout.react`, beside whatever else the layout holds).
+ * page (its `title`), set a page's columns (`layout.react`, ADR-0039: the other clients' keys kept as they are).
  *
  *   await addSlot(h, 'workspace', 'nano.ui/log', 'main')   // success('log1')
  */
@@ -51,20 +51,16 @@ export const removeSlot = (h: Host, page: string, slot: string) => edit(h, page,
 export function addPage(h: Host, title: string): NanoResult<string> {
   const pages = h.platform.document().doc.pages
   const id = free(title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'page', s => s in pages)
-  const r = h.platform.apply({ pages: { ...pages, [id]: { slots: {}, meta: { title } } } })
+  const r = h.platform.apply({ pages: { ...pages, [id]: { slots: {}, title } } })
   return r.ok ? success(id) : r
 }
 
-export const titleOf = (id: string, p: Page | undefined) => (obj(p?.meta) && typeof p.meta['title'] === 'string' ? p.meta['title'] : id)
+export const titleOf = (id: string, p: Page | undefined) => p?.title ?? id
 export const columnsOf = (p: Page | undefined) => {
   const c = obj(p?.layout) && obj(p.layout['react']) ? p.layout['react']['columns'] : undefined
   return typeof c === 'number' && c >= 1 ? c : 2
 }
 
-/** Page `id`'s columns in `layout.react`. Refused on a page the workspace has not arranged (no golden-layout `resolved`
- * config in its layout): the workspace reads every other layout key as its dock's config, and `{ react }` alone breaks it. */
-export function setColumns(h: Host, id: string, columns: number): NanoResult<void> {
-  const layout = h.platform.document().doc.pages[id]?.layout
-  if (!obj(layout) || !('resolved' in layout)) return failure('invalid-input', 'columns are kept once the workspace has arranged this page')
-  return edit(h, id, p => ({ ...p, layout: { ...layout, react: { columns } } }))
-}
+/** Page `id`'s columns in `layout.react`. */
+export const setColumns = (h: Host, id: string, columns: number): NanoResult<void> =>
+  edit(h, id, p => ({ ...p, layout: { ...(obj(p.layout) ? p.layout : {}), react: { columns } } }))

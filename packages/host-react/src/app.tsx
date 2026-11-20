@@ -1,5 +1,5 @@
 /**
- * The React host: a tab bar of the Platform's pages (titles from `meta.title`), the shown page as a CSS grid of its
+ * The React host: a tab bar of the Platform's pages (titles from `title`), the shown page as a CSS grid of its
  * slots in slot order (its column count in `layout.react`), and a picker that deploys a lazy pod into a runtime and
  * applies its slot. Only the shown page is opened (`platform.open`), again when it or its resolution changes.
  */
