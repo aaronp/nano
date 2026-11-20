@@ -1,5 +1,6 @@
 # Pages in the deployment: one document, one apply
 
+> **Superseded** by `2026-11-21-platform-design.md` (ADR-0038). Never built.
 Revises `2026-11-20-pages-as-deployment-design.md` (which stands where not revised: explicit `start`/`getOrCreate`,
 lazy picks, the picker grid, a reload reopening the same pods, Save layout as a restore point). Supersedes its Part 3
 (`HostPages`) and the store's write API; supersedes ADR-0032 and ADR-0033 (new record ADR-0037).

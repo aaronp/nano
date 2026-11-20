@@ -1318,3 +1318,87 @@ Typed. Ids used as keys and names in data and APIs, and the `runtime` field of e
 (identifiers, not coordinates). `Interface.define` accepts only interface coordinates (`ns.Name`); the slash form
 (`acme/db`) is refused. A sandbox module built with an older nano-core that declares a slash-form interface now fails
 `described()` with `invalid-input`.
+
+---
+id: ADR-0038
+title: Pages are a separate Platform layer with its own deployment
+status: accepted
+date: 2026-11-21
+revisit: 
+tags: platform, presentation, pages
+decision: platform
+---
+
+## Goal
+Pages (groupings of slots, each slot naming a pod) need a home that other clients (a CLI, an API, another UI) can
+share. The first attempts put them in the Application's document (`layout.pages`) with page-specific operations, or
+proposed adding them to core's `AppDeployment`. The impact is whether core's single-responsibility concepts grow a
+presentation concept, and how many operations clients learn.
+
+## Hypothesis
+- We believe: a separate layer (the Platform) owning its own document (the UIDeployment), changed by one `apply`,
+  reading the Application to resolve slots (by pod coordinate, selector, or a pod-less view)
+- Will result in: core untouched, one write verb, any client sharing pages while keeping its own layout and meta
+- Measured by: no core change for pages; the workspace's page edits are all `platform.apply`; a slot resolves across
+  runtimes by coordinate or selector
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| core | Core stays single-purpose | 5 | Application, Runtime and their deployment learn nothing of pages. |
+| simple | Few operations | 4 | One document, one apply; no per-operation API. |
+| portable | Shared by other clients | 4 | A CLI or another UI reads the same pages and slots. |
+| cheap | Arrangement is cheap | 3 | A drag doesn't produce Application events or history. |
+
+## Solution: platform — A separate layer and document
+| criterion | score |
+| --- | --- |
+| core | 5 |
+| simple | 5 |
+| portable | 5 |
+| cheap | 5 |
+
+Pros:
+- Like Argo CD over Kubernetes: built on the system, owns its own model
+- Dangling references are shown, not refused, so the system and pages stay decoupled
+
+Cons:
+- Two documents to persist (a bundle file for Save/Open); the Platform needs the registry to resolve selectors
+
+## Solution: in-app — Pages in AppDeployment, changed by app.apply
+| criterion | score |
+| --- | --- |
+| core | 1 |
+| simple | 4 |
+| portable | 4 |
+| cheap | 2 |
+
+Pros:
+- One document and one apply for everything
+
+Cons:
+- Core grows a presentation concept; every drag is an Application event unless filtered
+
+## Solution: convention — Pages as an opaque convention in layout, with page operations
+| criterion | score |
+| --- | --- |
+| core | 4 |
+| simple | 1 |
+| portable | 2 |
+| cheap | 4 |
+
+Pros:
+- What was built first; core untouched
+
+Cons:
+- setPage, removePage, merge, prune, open…: operations multiply; every client re-implements validation
+
+## Decision
+Platform. Supersedes ADR-0032 and ADR-0033. Slots: `{ kind: 'pod', pod: PodCoord } | { kind: 'select', select:
+SelectorData } | { kind: 'view', view }`; dangling references resolve `missing`; several selector matches show the first;
+Save/Open use a bundle `{ app, platform }`; pods change pages through `HostPlatform { document, apply }` with a
+version check.
