@@ -57,7 +57,8 @@ export function navEdit(doc: Document, save: (row: HTMLElement, title: string, i
   };
   /** The icon grid, anchored under the row's icon. */
   let pop: HTMLElement | null = null;
-  const closePop = () => { pop?.remove(); pop = null; };
+  // cleared first: removing the focused grid fires focusout at once, which must not remove it again
+  const closePop = () => { const p = pop; pop = null; p?.remove(); };
   const pick = (row: HTMLElement, a: HTMLAnchorElement) => {
     const glyph = a.querySelector<HTMLElement>('[data-glyph]')!, p = pop = doc.createElement('div'), r = glyph.getBoundingClientRect();
     p.className = 'icon-pop'; p.setAttribute('role', 'listbox'); p.setAttribute('aria-label', `Icon for ${nameOf(row)}`);

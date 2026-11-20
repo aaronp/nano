@@ -139,6 +139,23 @@ test('Enter on the icon opens a grid of icons (arrows move, focus leaving closes
   expect($('[data-saved="/desk"] a').dataset.icon).toBe('rocket')
 })
 
+test('clicking a focused icon commits it, though removing the grid fires focusout (as Chromium does)', () => {
+  $('[data-saved="/desk"] [data-glyph]').focus(); key(document.activeElement!, 'Enter')
+  const pop = $('[role="listbox"]'), rocket = pop.querySelector<HTMLElement>('[aria-selected="false"]')!, icon = rocket.dataset.icon!
+  rocket.focus()
+  // Chromium: removing the focused grid fires focusout first; a handler that removes it then makes the outer removal throw
+  const remove = pop.remove.bind(pop); let removing = false
+  pop.remove = () => {
+    if (removing) return remove()
+    removing = true; rocket.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null })); removing = false
+    if (!pop.isConnected) throw new DOMException('The node to be removed is no longer a child of this node.', 'NotFoundError')
+    remove()
+  }
+  rocket.click()
+  expect(document.querySelector('[role="listbox"]')).toBeNull()
+  expect(store.list()[0]).toEqual({ path: '/desk', title: 'Desk', icon })
+})
+
 test('Alt+↓ on a handle moves the page down, in the list and the nav, and says so', async () => {
   $('[data-saved="/desk"] [data-handle]').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true }))
   expect(store.list().map(w => w.path)).toEqual(['/desk-2', '/desk'])
