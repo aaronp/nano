@@ -22,3 +22,18 @@ test('a page deleted after boot does not come back with an import that has no la
   expect((host.data().layout as { pages?: unknown } | undefined)?.pages).toBeUndefined()   // main.ts merges only an array
   expect(store.get('trading')).toBeUndefined()
 })
+
+test('an import with pages merges them into the store and leaves none kept: delete one, import a file with no layout, it stays gone', async () => {
+  const at = URL.parse('./bundle/nano-ui.js', location.href)!.href, file = (layout?: object) => URL.createObjectURL(new Blob([JSON.stringify({ pods: {}, runtimes: {}, modules: { 'nano.ui': at }, views: {}, ...(layout && { layout }) })]))
+  const { host, pages: store } = await import('../src/boot-host.ts')
+  if (!host) throw new Error('the host did not start')
+  const notes = { id: 'notes', title: 'Notes', slots: [{ id: 'n', view: 'nano-explorer' }] }, desk = { id: 'mine', title: 'Mine', slots: [] }
+  expect(await host.importUrl(file({ pages: [notes, desk] }))).toMatchObject({ ok: true })
+  expect(store.list().map(p => p.id)).toEqual(['workspace', 'notes', 'mine'])
+  expect((host.data().layout as { pages?: unknown } | undefined)?.pages).toBeUndefined()
+  store.remove('notes')
+  expect(await host.importUrl(file())).toMatchObject({ ok: true })
+  expect(store.list().map(p => p.id)).toEqual(['workspace', 'mine'])
+  expect(await host.importUrl(file({ pages: [notes] }))).toMatchObject({ ok: true })   // the same file again: its page is added back
+  expect(store.list().map(p => p.id)).toEqual(['workspace', 'mine', 'notes'])
+})

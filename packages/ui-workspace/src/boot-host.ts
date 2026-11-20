@@ -9,8 +9,11 @@
  * `layout.pages`, else the old keys (`migrate`), else Main alone, and is the run-time truth for pages from then on. The
  * old docks made their pods as they mounted, so a migrated pod slot's pod is placed now, lazy in `main` under its name
  * (its implementation found by the panel's widget id); one with no implementation is dropped, and a status says so.
- * The kept layout holds no `pages` after boot (the store is their only home; an import's own come in with it). The document is saved, debounced, on each `applied` and page change; pod slots whose pod went are pruned on
- * `applied`. A stored document that fails to load is not saved over this session. Storage the page may not use: the
+
+ * The kept layout holds no `pages`: the store is their only home. A later import that brings `layout.pages` has them
+ * merged into the store (`merge`, refusals shown as statuses) and then dropped from the kept layout, so a page
+ * deleted since cannot come back from a stale copy. The document is saved, debounced, on each `applied` and page
+ * change; pod slots whose pod went are pruned on `applied`. A stored document that fails to load is not saved over this session. Storage the page may not use: the
  * app runs in memory, and the first save says so.
  */
 import { defineViews, pagesOf, type LayoutSlot } from '@pritzlaff/nano-ui';
@@ -57,6 +60,15 @@ if (host) {
     if (names.length) await host.apply(connected({ ...d, pods: { ...d.pods, ...add }, runtimes: { ...d.runtimes, main: { ...main, pods: [...main.pods, ...names] } } }, host.registry, names));
     if (pages.prune(placed)) showStatus(document, 'Some panels of your old pages are gone: what they showed is no longer available.');
   }
+  // After boot, an import's own pages go to the store and out of the kept layout (host.ts holds them only until here).
+  const importUrl = host.importUrl.bind(host);
+  host.importUrl = async (url, chosen) => {
+    const done = await importUrl(url, chosen), kept = host.data().layout;
+    if (!done.ok || !Array.isArray(kept?.pages)) return done;
+    for (const why of pages.merge(pagesOf({ pages: kept.pages }))) showStatus(document, why);
+    await host.apply({ ...host.data(), layout: { ...kept, pages: undefined } });
+    return done;
+  };
   let timer: ReturnType<typeof setTimeout> | undefined;
   const save = () => { clearTimeout(timer); timer = setTimeout(() => { const d = host.saved(); stored.save({ ...d, layout: { ...d.layout, pages: pages.list() } }); }, SAVE_MS); };
   host.app.listen((e) => { if (e.type === 'applied') { pages.prune(placed); if (loaded.ok) save(); } });
