@@ -1,7 +1,7 @@
 // File › Save writes `layout.pages` and, beside them, the legacy `workspace`/`slots`/`geometry`. Opening that file in
 // the same browser: the pages merge (an identical Main is skipped) and the legacy keys are dropped with them, so Main
 // is not replaced (its restore point and window style kept) and no "Workspace" page is added. After New (Main
-// emptied), opening it fills Main from the file.
+// emptied, then showing only its starter view), opening it fills Main from the file.
 import { expect, test } from 'bun:test'
 import { tick } from './host-deploy-setup.ts'
 
@@ -34,13 +34,18 @@ test('save the document, then open it: Main is kept as it was and nothing is dup
   expect(store.list().map(p => p.id)).toEqual(['workspace', 'two'])
   const kept = host!.data().layout ?? {}
   expect(['pages', 'workspace', 'slots', 'geometry'].filter(k => kept[k] !== undefined)).toEqual([])
-  // New empties Main; opening the saved file then fills it from the file's Main, not a workspace-2 beside it
+  // New empties Main; shown, its dock's starter panel (the explorer) writes a view slot back. Opening the saved file
+  // then fills Main from the file's Main (views alone are the starter), not a workspace-2 beside it.
   document.dispatchEvent(new CustomEvent('file:new'))
   for (let i = 0; i < 200 && store.get('workspace')!.slots.length; i++) await tick(5)
   expect(store.get('workspace')!.slots).toEqual([])
+  location.hash = '#/workspace'
+  for (let i = 0; i < 200 && !store.get('workspace')!.slots.length; i++) await tick(5)
+  expect(store.get('workspace')!.slots.map(s => 'view' in s && s.view)).toEqual(['nano-explorer'])   // the starter
   const again = new Promise<void>(r => { let n = 0; host!.app.listen(e => { if (e.type === 'applied' && ++n === 2) r() }) })
   document.dispatchEvent(new CustomEvent('file:example', { detail: { name: 'saved' } }))
-  await again; await tick(20)
-  expect(store.get('workspace')).toEqual(main)
+  await again; await tick(50)
+  expect(store.get('workspace')!.slots).toEqual(main.slots)
+  expect(store.get('workspace')!.title).toBe('Main')
   expect(store.list().map(p => p.id)).toEqual(['workspace', 'two'])
 })

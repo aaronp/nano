@@ -95,8 +95,8 @@ test('merge: a free id is added as it is; a taken id with identical content is s
   expect(s.list()).toEqual([main, trading])
 })
 
-test('merge: a taken id with other content is added as -2, -3…; the incoming workspace is not a Main that has slots', () => {
-  const full = { ...main, slots: [{ id: 'n', view: 'nano-explorer' }] }, s = pageStore([full], placed), other = { ...trading, title: 'Other' }
+test('merge: a taken id with other content is added as -2, -3…; the incoming workspace is not a Main that has pod slots', () => {
+  const full = { ...main, slots: [{ id: 'n', view: 'nano-explorer' }, { id: 'c', runtime: 'main', pod: 'clock1' }] }, s = pageStore([full], placed), other = { ...trading, title: 'Other' }
   s.merge([trading, other, { ...trading, title: 'Third' }])
   expect(s.list().map(p => [p.id, p.title])).toEqual([['workspace', 'Workspace'], ['trading', 'Trading'], ['trading-2', 'Other'], ['trading-3', 'Third']])
   s.merge([{ ...main, title: 'Imported', slots: [{ id: 'a', runtime: 'main', pod: 'clock1' }] }, structuredClone(full)])   // the second is identical to Main: skipped
@@ -105,8 +105,8 @@ test('merge: a taken id with other content is added as -2, -3…; the incoming w
   expect(s.list().length).toBe(5)
 })
 
-test('merge: the incoming workspace fills a Main with no slots (after New): its slots, engine keys and title; no workspace-2', () => {
-  const s = pageStore([{ ...main, workspace: { root: 1 } }], placed), saved = { ...main, title: 'Main', slots: trading.slots, workspace: { root: 2 } }
+test('merge: the incoming workspace fills a Main with no pod slots (after New, its starter view alone): its slots, engine keys and title; no workspace-2', () => {
+  const s = pageStore([{ ...main, slots: [{ id: 'x', view: 'nano-explorer' }], workspace: { root: 1 } }], placed), saved = { ...main, title: 'Main', slots: trading.slots, workspace: { root: 2 } }
   expect(s.merge([saved])).toEqual([])
   expect(s.list()).toEqual([saved])
 })
