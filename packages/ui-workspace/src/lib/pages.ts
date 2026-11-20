@@ -10,7 +10,7 @@
  *   slugPath('Trading', taken).slice(1)             // a new page's id
  */
 import { failure, type NanoResult } from '@pritzlaff/nano-core'
-import type { Page, Platform, UIDeployment } from '@pritzlaff/nano-platform'
+import type { Page, Outline } from '@pritzlaff/nano-outline'
 
 /** Main's id (and route). */
 export const MAIN = 'workspace'
@@ -36,32 +36,32 @@ export const metaOf = (p: Page | undefined): Meta => (obj(p?.meta) && obj(p.meta
 export const withMeta = (p: Page, m: Meta): Page => ({ ...p, meta: { ...(obj(p.meta) ? p.meta : {}), workspace: m } })
 
 /** The page ids in nav order: Main, then by order (a page without one last). */
-export const ordered = (doc: UIDeployment): string[] => {
+export const ordered = (doc: Outline): string[] => {
   const at = (id: string) => metaOf(doc.pages[id]).order ?? Infinity
   return Object.keys(doc.pages).sort((a, b) => (a === MAIN ? -1 : b === MAIN ? 1 : at(a) - at(b) || 0))
 }
 
 /** `doc` with page `id` at place `to` of `ordered(doc)`, each page whose place changed given it as its order;
  * undefined for Main, Main's place, a place past the end or an unknown page. */
-export function moved(doc: UIDeployment, id: string, to: number): UIDeployment | undefined {
+export function moved(doc: Outline, id: string, to: number): Outline | undefined {
   const ids = ordered(doc).filter((x) => x !== id)
   if (id === MAIN || !doc.pages[id] || to < 1 || to > ids.length) return undefined
   ids.splice(to, 0, id)
-  return { pages: Object.fromEntries(Object.entries(doc.pages).map(([p, page]) => {
+  return { ...doc, pages: Object.fromEntries(Object.entries(doc.pages).map(([p, page]) => {
     const i = ids.indexOf(p), m = metaOf(page)
     return [p, m.order === i ? page : withMeta(page, { ...m, order: i })]
   })) }
 }
 
 /** Why `next` breaks the workspace's rules, coming from `was`: Main dropped, or a page added on a fixed route. */
-export function refusal(was: UIDeployment, next: UIDeployment): string | undefined {
+export function refusal(was: Outline, next: Outline): string | undefined {
   if (!next.pages[MAIN]) return `Main (the page ${MAIN}) is not removed`
   const fixed = Object.keys(next.pages).find((id) => FIXED.includes(id) && !(id in was.pages))
   return fixed && `${fixed} is the workspace's own route, not a page`
 }
 
 /** The workspace's own page edit: `next` refused (`invalid-input`) if it breaks the rules, else the Platform's `apply`. */
-export function applyPages(platform: ReturnType<typeof Platform.create>, next: UIDeployment): NanoResult<void> {
+export function applyPages(platform: ReturnType<typeof Outline.create>, next: Outline): NanoResult<void> {
   const why = refusal(platform.document().doc, next)
   return why ? failure('invalid-input', why) : platform.apply(next)
 }

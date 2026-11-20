@@ -2,7 +2,7 @@
 // names its slot (`slot`; a layout from before that: its pod's name, else its widget).
 import { expect, test } from 'bun:test'
 import { Coord } from '@pritzlaff/nano-core'
-import type { Slot } from '@pritzlaff/nano-platform'
+import type { Slot } from '@pritzlaff/nano-outline'
 import { reconcile, slotsOf } from '../src/dock/page-slots.ts'
 
 const pod = (name: string, runtime = 'main'): Slot => ({ kind: 'pod', pod: Coord.pod(Coord.parse('implementation', 'nano.ui/input'), Coord.runtime(runtime), name) })

@@ -1,6 +1,7 @@
 // The stored documents' autosave: flushed on `pagehide`; and once another tab writes the document or its pages (a
 // `storage` event for either key), this tab saves them no more and says to reload, so the last writer does not silently win.
 import { expect } from 'bun:test'
+import { flat } from './flat.ts'
 import { tick } from './host-deploy-setup.ts'
 
 export const KEY = 'nano-workspace.document', PAGES = 'nano-workspace.platform'
@@ -17,7 +18,7 @@ export async function anotherTab(key: string) {
   globalThis.fetch = (async (u: string, ...rest: unknown[]) => blobs.has(u) ? new Response(blobs.get(u)) : (domFetch as Function)(u, ...rest)) as never
   const { host, platform } = await import('../src/boot-host.ts')
   if (!host || !platform) throw new Error('the host did not start')
-  const add = (id: string) => platform.apply({ pages: { ...platform.document().doc.pages, [id]: { slots: {} } } })
+  const add = (id: string) => platform.apply(flat({ ...platform.document().doc.pages, [id]: { slots: {} } }))
   await tick(400)
   add('one')
   expect(stored()).toEqual(['workspace'])   // debounced

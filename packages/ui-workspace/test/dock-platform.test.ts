@@ -3,7 +3,7 @@
 // shows its first match and how many matched, and stays a `select` when the dock rewrites the slots (Review Focus 3).
 import { expect, test } from 'bun:test'
 import { Coord } from '@pritzlaff/nano-core'
-import type { Slot } from '@pritzlaff/nano-platform'
+import type { Slot } from '@pritzlaff/nano-outline'
 import { host, mount, page, place, pod, running, tick, undeploy, until } from './dock-pods-setup.ts'
 
 type GL = { rootItem: { contentItems: { size: number }[] }; emit(e: string): void }
@@ -20,7 +20,7 @@ test('a drag is one platform.apply, of the page\'s layout alone, and no Applicat
   const gl = (dock('workspace') as unknown as { layout: GL }).layout
   gl.rootItem.contentItems[0]!.size = 20; gl.rootItem.contentItems[1]!.size = 80   // the sizes a splitter drag leaves
   gl.emit('stateChanged')   // what golden-layout says when a drag ends
-  expect(changes).toEqual([{ added: [], removed: [], changed: ['workspace'], resolved: [] }])
+  expect(changes).toEqual([{ added: [], removed: [], changed: ['workspace'], moved: [], resolved: [] }])
   expect(JSON.stringify(written('workspace').layout)).not.toBe(was)
   expect(written('workspace').slots).toEqual(slots)
   await tick()

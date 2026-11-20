@@ -5,7 +5,7 @@
  *   await addSlot(h, 'workspace', 'nano.ui/log', 'main')   // success('log1')
  */
 import { AppDeployment, Coord, failure, success, type NanoResult } from '@pritzlaff/nano-core'
-import type { Page } from '@pritzlaff/nano-platform'
+import type { Page } from '@pritzlaff/nano-outline'
 import type { Host } from './boot.ts'
 import { connect } from './connect.ts'
 
@@ -17,7 +17,7 @@ const free = (base: string, taken: (id: string) => boolean) => { let id = base; 
 /** Page `id` replaced by `f` of it, applied. */
 function edit(h: Host, id: string, f: (p: Page) => Page): NanoResult<void> {
   const d = h.platform.document().doc, p = d.pages[id]
-  return p ? h.platform.apply({ pages: { ...d.pages, [id]: f(p) } }) : failure('not-found', `no page ${id}`)
+  return p ? h.platform.apply({ ...d, pages: { ...d.pages, [id]: f(p) } }) : failure('not-found', `no page ${id}`)
 }
 
 /** One add at a time, so no two take one name. */
@@ -49,9 +49,9 @@ export const removeSlot = (h: Host, page: string, slot: string) => edit(h, page,
 
 /** A new empty page titled `title`; its id from the title. */
 export function addPage(h: Host, title: string): NanoResult<string> {
-  const pages = h.platform.document().doc.pages
+  const { roots, pages } = h.platform.document().doc
   const id = free(title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'page', s => s in pages)
-  const r = h.platform.apply({ pages: { ...pages, [id]: { slots: {}, title } } })
+  const r = h.platform.apply({ roots: [...roots, id], pages: { ...pages, [id]: { slots: {}, title } } })
   return r.ok ? success(id) : r
 }
 

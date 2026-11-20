@@ -13,14 +13,14 @@
  *   const stop = podPanel(container.element, 'any', host, dock.pods)
  */
 import { Coord, type AppDeployment } from '@pritzlaff/nano-core'
-import type { Platform, Slot } from '@pritzlaff/nano-platform'
+import type { Outline, Slot } from '@pritzlaff/nano-outline'
 import { viewFor, type ViewTarget } from '@pritzlaff/nano-ui'
 import type { Host } from '../host.ts'
 import { applyPages } from '../lib/pages.ts'
 import { showStatus } from '../lib/status.ts'
 import '../sandbox/sandboxed-view.ts'
 
-type Instance = ReturnType<typeof Platform.create>
+type Instance = ReturnType<typeof Outline.create>
 type Opened = Awaited<ReturnType<Instance['open']>>[string]
 type Slots = Record<string, Slot>
 
@@ -46,7 +46,7 @@ export function pagePods(platform: Instance, id: string, quiet: (f: () => void) 
   /** Page `id` with `slots` rewritten by `f`; a refusal shown. */
   const write = (f: (slots: Slots) => Slots) => {
     const d = platform.document().doc, p = d.pages[id]
-    const r = p && applyPages(platform, { pages: { ...d.pages, [id]: { ...p, slots: f(p.slots) } } })
+    const r = p && applyPages(platform, { ...d, pages: { ...d.pages, [id]: { ...p, slots: f(p.slots) } } })
     if (r && !r.ok) showStatus(document, r.fail.reason)
   }
   return {

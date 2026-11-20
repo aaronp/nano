@@ -17,7 +17,7 @@ import {
   type NanoResult,
   type SchemaDef,
 } from '@pritzlaff/nano-core'
-import { readSelector } from '@pritzlaff/nano-platform'
+import { readSelector } from '@pritzlaff/nano-outline'
 import type { ViewMap } from '@pritzlaff/nano-ui'
 import { checkMsg, type Described, type SchemaJson } from './sandbox/protocol.ts'
 import { READY_MS, type Frame } from './sandbox/stand-in.ts'

@@ -20,7 +20,7 @@
  */
 import { ResolvedLayoutConfig } from 'golden-layout/dist/esm/index.js';
 import { Coord } from '@pritzlaff/nano-core';
-import type { Page, Platform, Slot } from '@pritzlaff/nano-platform';
+import type { Page, Outline, Slot } from '@pritzlaff/nano-outline';
 import type { WorkspaceDock } from '../components/workspace-dock.ts';
 import { requestBus } from '../lib/bus.ts';
 import { panelsInOrder, type PanelState } from '../lib/layout-templates.ts';
@@ -28,7 +28,7 @@ import { applyPages, routeOf } from '../lib/pages.ts';
 import { reconcile, slotOf, slotsOf } from './page-slots.ts';
 import { pagePods } from './page-pods.ts';
 
-type Instance = ReturnType<typeof Platform.create>;
+type Instance = ReturnType<typeof Outline.create>;
 type W = Record<string, unknown>;
 const obj = (v: unknown): v is W => typeof v === 'object' && v !== null && !Array.isArray(v);
 /** Keys beside golden-layout's config in a page's `layout`, and those in its `meta`: `<storage-key>.<key>` in the dock's storage. */
@@ -42,7 +42,7 @@ const text = JSON.stringify;
 /** Page `id` of `platform` replaced by `f` of it, applied; nothing if it is gone. */
 const edit = (platform: Instance, id: string, f: (p: Page) => Page) => {
   const d = platform.document().doc, p = d.pages[id];
-  if (p) applyPages(platform, { pages: { ...d.pages, [id]: f(p) } });
+  if (p) applyPages(platform, { ...d, pages: { ...d.pages, [id]: f(p) } });
 };
 
 /** A Storage over page `id`'s `layout` and `meta`, for a dock with storage-key `key`; `quiet` makes each write (the dock's own). */

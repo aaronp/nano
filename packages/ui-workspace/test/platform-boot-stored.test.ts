@@ -2,6 +2,7 @@
 // the document is saved without them. An import's pages (a plain nano.json's `layout.pages`) are applied to the
 // Platform by the workspace's rules, never kept in the app's layout, so a page deleted since does not come back.
 import { expect, test } from 'bun:test'
+import { flat } from './flat.ts'
 import { Pod } from '@pritzlaff/nano-core'
 import { tick } from './host-deploy-setup.ts'
 
@@ -20,7 +21,7 @@ test('an old stored document migrates once: pages into the Platform (pod slots b
   globalThis.fetch = (async (u: string, ...rest: unknown[]) => blobs.has(u) ? new Response(blobs.get(u)) : (domFetch as Function)(u, ...rest)) as never
   const { host, platform } = await import('../src/boot-host.ts')
   if (!host || !platform) throw new Error('the host did not start')
-  const migrated = { pages: {
+  const migrated = { roots: ['workspace', 'trading'], pages: {
     workspace: { title: 'Workspace', slots: { a: { kind: 'pod', pod: 'nano.ui/log@main/log1' } }, meta: { workspace: { order: 0 } } },
     trading: { title: 'Trading', slots: { n: { kind: 'view', view: 'nano-explorer' } }, meta: { workspace: { icon: 'chart', order: 1 } } },
   } }
@@ -31,7 +32,7 @@ test('an old stored document migrates once: pages into the Platform (pod slots b
   expect(JSON.parse(localStorage.getItem(PAGES)!)).toEqual(migrated)
   // deleted, then a file with no layout imported: it stays gone
   const { trading: _, ...rest } = platform.document().doc.pages
-  expect(platform.apply({ pages: rest })).toMatchObject({ ok: true })
+  expect(platform.apply(flat(rest))).toMatchObject({ ok: true })
   const none = URL.createObjectURL(new Blob([JSON.stringify({ pods: {}, runtimes: {}, modules: { 'nano.ui': at }, views: {} })]))
   expect(await host.importUrl(none)).toMatchObject({ ok: true })
   expect(Object.keys(platform.document().doc.pages)).toEqual(['workspace'])
@@ -47,7 +48,7 @@ test('an import with pages applies them to the Platform and keeps none in the la
   expect(ids()).toEqual(['workspace', 'notes', 'mine'])
   expect((host.data().layout as { pages?: unknown } | undefined)?.pages).toBeUndefined()
   const { notes: _, ...rest } = platform.document().doc.pages
-  platform.apply({ pages: rest })
+  platform.apply(flat(rest))
   expect(await host.importUrl(file())).toMatchObject({ ok: true })
   expect(ids()).toEqual(['workspace', 'mine'])
   expect(await host.importUrl(file({ pages: [notes] }))).toMatchObject({ ok: true })   // the same file again: its page is added back

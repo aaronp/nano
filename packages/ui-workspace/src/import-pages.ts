@@ -12,7 +12,7 @@
  *   host.importUrl = importing(host.importUrl.bind(host), platform)
  */
 import type { NanoResult } from '@pritzlaff/nano-core'
-import type { Page, Platform, UIDeployment } from '@pritzlaff/nano-platform'
+import type { Page, Outline } from '@pritzlaff/nano-outline'
 import type { Host } from './host.ts'
 import { opened } from './migrate.ts'
 import { showStatus } from './lib/status.ts'
@@ -35,7 +35,7 @@ const filling = (was: Page, p: Page): Page => {
 }
 
 /** `current` with `incoming`'s pages, by the workspace's rules. Pure. */
-export function withImported(current: UIDeployment, incoming: UIDeployment): UIDeployment {
+export function withImported(current: Outline, incoming: Outline): Outline {
   const pages = { ...current.pages }
   let last = Math.max(0, ...Object.values(pages).map(order).filter(Number.isFinite))
   for (const [id, p] of Object.entries(incoming.pages).sort(([, a], [, b]) => order(a) - order(b))) {
@@ -46,13 +46,13 @@ export function withImported(current: UIDeployment, incoming: UIDeployment): UID
     for (let n = 2; !fills && (pages[at] || FIXED.includes(at)); n++) at = `${id}-${n}`
     pages[at] = withMeta(fills ? filling(same!, p) : p, { ...metaOf(p), order: fills ? order(same!) : ++last })
   }
-  return { pages }
+  return { roots: [...current.roots, ...Object.keys(pages).filter(id => !(id in current.pages))], pages }
 }
 
-type Chosen = Parameters<Host['importUrl']>[1] & { pages?(p: UIDeployment): UIDeployment }
+type Chosen = Parameters<Host['importUrl']>[1] & { pages?(p: Outline): Outline }
 
 /** `importUrl`, then the file's pages applied (`withImported`); a refusal is a status. */
-export const importing = (importUrl: Host['importUrl'], platform: ReturnType<typeof Platform.create>) =>
+export const importing = (importUrl: Host['importUrl'], platform: ReturnType<typeof Outline.create>) =>
   async (url: string, chosen?: Chosen): Promise<NanoResult<void>> => {
     // ponytail: the file is fetched again here (importApp fetched it for the app); fold into one fetch if it matters
     const file = await fetch(url).then(r => r.json()).catch(() => undefined)

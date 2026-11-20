@@ -24,7 +24,7 @@ const loads: string[] = []
 const load = async (u: string) => { loads.push(u); if (u.endsWith('/acme.js')) return acmeModule; throw new Error(`no ${u}`) }
 const started = async (s: Storage) => { const r = await boot(s, load); if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
-test('boots from the stored app document and UIDeployment: same-origin modules loaded (nano.ui is the page\'s own), pages kept', async () => {
+test('boots from the stored app document and Outline: same-origin modules loaded (nano.ui is the page\'s own), pages kept', async () => {
   const h = await started(stored())
   expect(loads).toEqual(['http://localhost:3000/acme.js'])
   expect(Object.keys(h.app.deployment().pods)).toEqual(['log1'])
@@ -35,7 +35,7 @@ test('boots from the stored app document and UIDeployment: same-origin modules l
 
 test('boots empty from empty storage; refuses a provider on another origin (out of scope)', async () => {
   const h = await started(memory())
-  expect(h.platform.document().doc).toEqual({ pages: {} })
+  expect(h.platform.document().doc).toEqual({ roots: [], pages: {} })
   expect(addPage(h, 'First')).toMatchObject({ ok: true, value: 'first' })
   expect(await addSlot(h, 'first', 'nano.ui/log', 'main')).toMatchObject({ ok: true, value: 'log1' })   // an empty app can still place a pod
   const foreign = memory({ [KEYS.app]: { pods: {}, runtimes: {}, modules: { far: 'https://far.test/x.js' } } })

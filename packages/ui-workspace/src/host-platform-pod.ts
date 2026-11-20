@@ -1,5 +1,5 @@
 /**
- * `workspace.host/platform`: this host's HostPlatform over its Platform (boot-host.ts), the pod `platform` beside `ui` and
+ * `workspace.host/platform`: this host's HostOutline over its Platform (boot-host.ts), the pod `platform` beside `ui` and
  * `deploy` in `main`, never saved. `document` gives the pages, written, at their version, unasked. `apply({ next, base })`
  * is refused when `base` is stale ("the pages changed since"), `next` is malformed or breaks the workspace's rules
  * (`refusal`, lib/pages.ts: Main dropped, a page added on one of its own routes), else asks `approve` (HostUI's
@@ -11,16 +11,16 @@
  *   { platform: platformPod }   // placed first in `main` by host.ts
  */
 import { Coord, Implementation, failure, provide, success, type NanoResult, type Pod } from '@pritzlaff/nano-core'
-import { HostPlatform, Platform, type UIDeployment } from '@pritzlaff/nano-platform'
+import { HostOutline, Outline } from '@pritzlaff/nano-outline'
 import { refusal } from './lib/pages.ts'
 
-type Instance = ReturnType<typeof Platform.create>
+type Instance = ReturnType<typeof Outline.create>
 const PLATFORM = Coord.namespace('workspace.host').implementationId('platform')
 /** The `platform` pod's data: built on its first call. */
 export const platformPod: Pod = { implementation: PLATFORM.toString(), eager: false }
 
 /** "Add page p; remove page q; page r: add slot s, remove slot t", or "No change". */
-function summary(was: UIDeployment, next: UIDeployment): string {
+function summary(was: Outline, next: Outline): string {
   const gone = (a: object, b: object) => Object.keys(a).filter(k => !(k in b))
   const slots = Object.keys(next.pages).filter(p => p in was.pages).flatMap(p => {
     const a = next.pages[p]!.slots, b = was.pages[p]!.slots
@@ -33,15 +33,15 @@ function summary(was: UIDeployment, next: UIDeployment): string {
 export function hostPlatform(platform: () => Instance | undefined, approve: (text: string) => Promise<boolean>) {
   const none = failure('not-found', 'this app keeps no pages')
   return Implementation.define(PLATFORM, {
-    provides: [HostPlatform],
-    make: () => [provide(HostPlatform, {
+    provides: [HostOutline],
+    make: () => [provide(HostOutline, {
       document: async () => { const p = platform(); return p ? success(JSON.parse(JSON.stringify(p.document()))) : none },
       apply: async ({ next, base }): Promise<NanoResult<null>> => {
         const p = platform()
         if (!p) return none
         const at = p.document()
         if (base !== at.version) return failure('invalid-input', 'the pages changed since')
-        const read = Platform.parse(next)
+        const read = Outline.parse(next)
         if (!read.ok) return read
         const why = refusal(at.doc, read.value)
         if (why) return failure('invalid-input', why)

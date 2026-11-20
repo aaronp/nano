@@ -3,7 +3,7 @@
 // plain nano.json does.
 import { expect, test } from 'bun:test'
 import { Pod, type AppDeployment } from '@pritzlaff/nano-core'
-import type { UIDeployment } from '@pritzlaff/nano-platform'
+import type { Outline } from '@pritzlaff/nano-outline'
 import './host-deploy-setup.ts'
 
 const { log } = await import('@pritzlaff/nano-ui')
@@ -20,7 +20,7 @@ test('an import with a renamed runtime: the bundle\'s pod slots and selectors na
   const pages = { pages: { logs: { slots: { a: { kind: 'pod', pod: 'nano.ui/log@main/l1' }, b: { kind: 'pod', pod: 'nano.ui/log@main/l2' }, s: { kind: 'select', select: { runtime: 'main' } } }, meta: { title: 'Logs', order: 0 } } } }
   const url = URL.createObjectURL(new Blob([JSON.stringify({ app, platform: pages })]))
   const names = { main: 'acme.main' }, only = new Set(['l1'])
-  const chosen = { edit: (f: AppDeployment) => renameRuntimes(selectPods(f, only).deployment, names), pages: (p: UIDeployment) => renameRuntimes(selectPods(p, only), names) }
+  const chosen = { edit: (f: AppDeployment) => renameRuntimes(selectPods(f, only).deployment, names), pages: (p: Outline) => renameRuntimes(selectPods(p, only), names) }
   expect(await host.importUrl(url, chosen)).toMatchObject({ ok: true })
   expect(host.data().runtimes['acme.main']!.pods).toEqual(['l1'])
   expect(JSON.parse(JSON.stringify(platform.document().doc.pages['logs']!.slots))).toEqual({ a: { kind: 'pod', pod: 'nano.ui/log@acme.main/l1' }, s: { kind: 'select', select: { runtime: 'acme.main' } } })

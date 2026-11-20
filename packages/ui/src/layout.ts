@@ -1,6 +1,6 @@
 /**
  * The old layout convention, kept for reading old documents: `AppDeployment.layout` held `slots` (placed pods) and
- * their `geometry`. Pages now live in the Platform (`@pritzlaff/nano-platform`); the workspace migrates a legacy
+ * their `geometry`. Pages now live in the Outline (`@pritzlaff/nano-outline`); the workspace migrates a legacy
  * layout into it.
  */
 

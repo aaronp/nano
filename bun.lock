@@ -43,7 +43,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@pritzlaff/nano-core": "workspace:*",
-        "@pritzlaff/nano-platform": "workspace:*",
+        "@pritzlaff/nano-outline": "workspace:*",
         "@pritzlaff/nano-ui": "workspace:*",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
@@ -63,8 +63,8 @@
         "typebox": "^1.4.0",
       },
     },
-    "packages/platform": {
-      "name": "@pritzlaff/nano-platform",
+    "packages/outline": {
+      "name": "@pritzlaff/nano-outline",
       "version": "0.1.0",
       "dependencies": {
         "@pritzlaff/nano-core": "workspace:*",
@@ -90,7 +90,7 @@
       "dependencies": {
         "@pritzlaff/nano-core": "workspace:*",
         "@pritzlaff/nano-elements": "workspace:*",
-        "@pritzlaff/nano-platform": "workspace:*",
+        "@pritzlaff/nano-outline": "workspace:*",
         "@pritzlaff/nano-ui": "workspace:*",
         "golden-layout": "2.6.0",
         "lit": "^3.3.3",
@@ -126,7 +126,7 @@
 
     "@pritzlaff/nano-elements": ["@pritzlaff/nano-elements@workspace:packages/elements"],
 
-    "@pritzlaff/nano-platform": ["@pritzlaff/nano-platform@workspace:packages/platform"],
+    "@pritzlaff/nano-outline": ["@pritzlaff/nano-outline@workspace:packages/outline"],
 
     "@pritzlaff/nano-ui": ["@pritzlaff/nano-ui@workspace:packages/ui"],
 

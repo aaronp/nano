@@ -6,7 +6,7 @@
  *   trusted(renameRuntimes(d, { main: suggestedName(d, 'main') }), 'sandboxed')
  */
 import { Coord, failure, success, type AppDeployment, type NanoResult, type Pod, type Subscription } from '@pritzlaff/nano-core'
-import type { Slot, UIDeployment } from '@pritzlaff/nano-platform'
+import type { Slot, Outline } from '@pritzlaff/nano-outline'
 
 export type Trust = 'sandboxed' | 'trusted'
 
@@ -14,14 +14,14 @@ export type Trust = 'sandboxed' | 'trusted'
 export const validRuntimeId = (s: string) => /^[^/\s#\x00-\x1f\x7f]{1,64}$/.test(s)
 
 /** `p` with each slot edited (`[]` drops it). Pure. */
-const slotsEdited = (p: UIDeployment, edit: (s: Slot) => Slot[]): UIDeployment =>
-  ({ pages: Object.fromEntries(Object.entries(p.pages).map(([id, page]) => [id, { ...page, slots: Object.fromEntries(Object.entries(page.slots).flatMap(([k, s]) => edit(s).map(e => [k, e]))) }])) })
+const slotsEdited = (p: Outline, edit: (s: Slot) => Slot[]): Outline =>
+  ({ ...p, pages: Object.fromEntries(Object.entries(p.pages).map(([id, page]) => [id, { ...page, slots: Object.fromEntries(Object.entries(page.slots).flatMap(([k, s]) => edit(s).map(e => [k, e]))) }])) })
 
 /** `d` with each runtime `k` of `names` renamed `names[k]`: a deployment's `runtimes` keys, or the pages' pod
  * coordinates and selectors' `runtime` (an import's, so its slots name the runtimes it lands in). Pure. */
 export function renameRuntimes(d: AppDeployment, names: Record<string, string>): AppDeployment
-export function renameRuntimes(d: UIDeployment, names: Record<string, string>): UIDeployment
-export function renameRuntimes(d: AppDeployment | UIDeployment, names: Record<string, string>): AppDeployment | UIDeployment {
+export function renameRuntimes(d: Outline, names: Record<string, string>): Outline
+export function renameRuntimes(d: AppDeployment | Outline, names: Record<string, string>): AppDeployment | Outline {
   const to = (id: string) => (Object.hasOwn(names, id) ? names[id]! : id)
   if ('pages' in d) return slotsEdited(d, s => [s.kind === 'pod' ? { ...s, pod: Coord.pod(s.pod.implementation, Coord.runtime(to(s.pod.runtime.id)), s.pod.pod) }
     : s.kind === 'select' && s.select.runtime ? { ...s, select: { ...s.select, runtime: Coord.runtime(to(s.select.runtime.id)) } } : s])
@@ -85,8 +85,8 @@ function text(s: Subscription, keep: Set<string>, missing: string): string {
  * warning when one end is kept), and modules, tags and views follow the kept pods. Policy rules stay as they are. Given
  * pages, their pod slots of the pods not kept go (view and selector slots stay). Pure. */
 export function selectPods(d: AppDeployment, keep: Set<string>): { deployment: AppDeployment; warnings: Warning[] }
-export function selectPods(d: UIDeployment, keep: Set<string>): UIDeployment
-export function selectPods(d: AppDeployment | UIDeployment, keep: Set<string>): { deployment: AppDeployment; warnings: Warning[] } | UIDeployment {
+export function selectPods(d: Outline, keep: Set<string>): Outline
+export function selectPods(d: AppDeployment | Outline, keep: Set<string>): { deployment: AppDeployment; warnings: Warning[] } | Outline {
   if ('pages' in d) return slotsEdited(d, s => s.kind !== 'pod' || keep.has(s.pod.pod) ? [s] : [])
   const kept = <T>(o: Record<string, T> | undefined, by: (k: string) => boolean) => o && Object.fromEntries(Object.entries(o).filter(([k]) => by(k)))
   const pods = kept(d.pods, p => keep.has(p))!, implementations = new Set(Object.values(pods).map(p => p.implementation))

@@ -3,15 +3,16 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: new URL('../../../', import.meta.url).href })
 import { afterEach, expect, mock } from 'bun:test'
+import { flat } from './flat.ts'
 import { Coord } from '@pritzlaff/nano-core'
-import type { Page, Slot } from '@pritzlaff/nano-platform'
+import type { Page, Slot } from '@pritzlaff/nano-outline'
 import type { PanelState } from '../src/lib/layout-templates.ts'
 
 export const pick: { choice: PanelState | null; runtime: string | undefined } = { choice: null, runtime: undefined }   // the picker, stubbed
 mock.module('../src/components/picker.ts', () => ({ pick: async () => pick.choice && { state: pick.choice, runtime: pick.runtime } }))
 mock.module('../src/components/picker-grid.ts', () => ({ pickerGrid: (host: HTMLElement) => new Promise(r => { host.addEventListener('click', () => pick.choice && r({ state: pick.choice, runtime: pick.runtime })) }) }))   // inline: a click picks `choice`
 const { defineViews } = await import('@pritzlaff/nano-ui')
-const { Platform } = await import('@pritzlaff/nano-platform')
+const { Outline } = await import('@pritzlaff/nano-outline')
 const { start } = await import('../src/host.ts')
 await import('../src/components/workspace-dock.ts')
 export const { addPod, implementationTemplates } = await import('../src/dock/panels.ts')
@@ -46,7 +47,7 @@ export const strs = (v: unknown) => JSON.parse(JSON.stringify(v ?? null))
 
 /** The workspace's pages over `h`, from `pages` (Main is `workspace`, empty unless given). */
 export function mount(h: H, pages: Record<string, Page>, open = '') {
-  const platform = Platform.create(h.app, h.registry, { pages: { workspace: page('Main', {}, 0), ...pages } }), bus = createBus(), app = document.createElement('div')
+  const platform = Outline.create(h.app, h.registry, flat({ workspace: page('Main', {}, 0), ...pages })), bus = createBus(), app = document.createElement('div')
   provideBus(app, bus)
   app.innerHTML = `<span slot="title"></span><div class="nav-row" data-workspaces><a href="#/workspace"></a></div>
     <app-route path="/workspace" hidden><workspace-dock id="workspace" storage-key="main" open="${open}"><template data-widget="notes" data-title="Notes"><div>notes</div></template></workspace-dock></app-route>
@@ -65,7 +66,7 @@ export function mount(h: H, pages: Record<string, Page>, open = '') {
   /** Page `id`, written (coordinates as strings). */
   const written = (id: string) => strs(platform.document().doc.pages[id])
   /** Replaces page `id` (as a pod or an import would). */
-  const put = (id: string, p: Page) => { const r = platform.apply({ pages: { ...platform.document().doc.pages, [id]: p } }); if (!r.ok) throw new Error(r.fail.reason) }
+  const put = (id: string, p: Page) => { const r = platform.apply(flat({ ...platform.document().doc.pages, [id]: p })); if (!r.ok) throw new Error(r.fail.reason) }
   return { platform, bus, go, dock, panels, written, put, input: implementationTemplates(h, document).find(t => t.dataset['implementation'] === 'nano.ui/input')!.dataset['widget']! }
 }
 export const starts = (h: H) => { const to: string[] = []; h.app.listen(e => { if (e.type === 'sent' && e.kind === 'start') to.push(e.to) }); return to }

@@ -1,7 +1,7 @@
 // The Import dialog's choices, as pure edits of the fetched nano.json: its runtimes renamed, its pods' isolation by Trust.
 import { expect, test } from 'bun:test'
 import type { AppDeployment } from '@pritzlaff/nano-core'
-import { Platform, type UIDeployment } from '@pritzlaff/nano-platform'
+import { Outline } from '@pritzlaff/nano-outline'
 import { ownProvider, renameRuntimes, selectPods, suggestedName, trusted, validRuntimeId } from '../src/import-plan.ts'
 
 const file = (): AppDeployment => ({
@@ -15,7 +15,7 @@ const file = (): AppDeployment => ({
   layout: { desk: { root: 1 } },
 })
 const written = (v: unknown) => JSON.parse(JSON.stringify(v))
-const pagesOf = (w: unknown): UIDeployment => { const r = Platform.parse(w); if (!r.ok) throw new Error(r.fail.reason); return r.value }
+const pagesOf = (w: unknown): Outline => { const r = Outline.parse(w); if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
 test('renameRuntimes renames the runtime keys; the rest, the layout too, is untouched', () => {
   const d = file(), out = renameRuntimes(d, { main: 'acme.template.main', side: 'side' })
@@ -35,9 +35,9 @@ test("renameRuntimes renames the runtime of imported pages' pod coordinates and 
   const pages = pagesOf({ pages: { p: { slots: { x: { kind: 'view', view: 'nano-explorer' }, a: { kind: 'pod', pod: 'acme.template/timer@main/a' }, b: { kind: 'pod', pod: 'other.x/y@side/b' },
     s: { kind: 'select', select: { runtime: 'main', tags: ['t'] } }, t: { kind: 'select', select: { tags: ['t'] } } }, meta: { title: 'P' } } } })
   const out = renameRuntimes(pages, { main: 'acme.template.main' })
-  expect(written(out)).toEqual({ pages: { p: { slots: { x: { kind: 'view', view: 'nano-explorer' }, a: { kind: 'pod', pod: 'acme.template/timer@acme.template.main/a' }, b: { kind: 'pod', pod: 'other.x/y@side/b' },
+  expect(written(out)).toEqual({ roots: ['p'], pages: { p: { slots: { x: { kind: 'view', view: 'nano-explorer' }, a: { kind: 'pod', pod: 'acme.template/timer@acme.template.main/a' }, b: { kind: 'pod', pod: 'other.x/y@side/b' },
     s: { kind: 'select', select: { runtime: 'acme.template.main', tags: ['t'] } }, t: { kind: 'select', select: { tags: ['t'] } } }, meta: { title: 'P' } } } })
-  expect(Platform.parse(written(out)).ok).toBe(true)
+  expect(Outline.parse(written(out)).ok).toBe(true)
 })
 
 test('suggestedName is the provider namespace of the runtime’s first pod by modules order, then the runtime', () => {
@@ -98,7 +98,7 @@ test('selectPods keeps the ticked pods; drops runtimes left empty, modules no ke
 
 test("selectPods drops an unticked pod's slots from the imported pages too; view and selector slots are kept", () => {
   const pages = pagesOf({ pages: { p: { slots: { todos: { kind: 'pod', pod: 'example.todo/kv@front/todos' }, x: { kind: 'view', view: 'nano-explorer' }, store: { kind: 'pod', pod: 'acme.template/store@main/store' }, s: { kind: 'select', select: { runtime: 'main' } } } } } })
-  expect(written(selectPods(pages, new Set(['todos', 'timer'])))).toEqual({ pages: { p: { slots: { todos: { kind: 'pod', pod: 'example.todo/kv@front/todos' }, x: { kind: 'view', view: 'nano-explorer' }, s: { kind: 'select', select: { runtime: 'main' } } } } } })
+  expect(written(selectPods(pages, new Set(['todos', 'timer'])))).toEqual({ roots: ['p'], pages: { p: { slots: { todos: { kind: 'pod', pod: 'example.todo/kv@front/todos' }, x: { kind: 'view', view: 'nano-explorer' }, s: { kind: 'select', select: { runtime: 'main' } } } } } })
 })
 
 test('selectPods keeps a subscription only with both ends; one end kept is a warning, as text', () => {

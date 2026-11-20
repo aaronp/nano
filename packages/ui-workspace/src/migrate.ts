@@ -1,8 +1,8 @@
 /**
- * Migration into the UIDeployment (ADR-0038), in one place: the keys from before pages were deployment data (the saved
+ * Migration into the Outline (ADR-0038), in one place: the keys from before pages were deployment data (the saved
  * pages' list and each page's dock), a document's `layout.pages`, and the legacy `layout.workspace` (Main's dock) with
  * top-level `slots`/`geometry`. Each is first read as the old page list (`Legacy`, nano-ui's `pagesOf` form, copied here
- * as that goes), then `toPlatform` makes the UIDeployment: a pod slot a `pod` slot whose implementation is the
+ * as that goes), then `toPlatform` makes the Outline: a pod slot a `pod` slot whose implementation is the
  * deployment's (none there: dropped), a view slot a `view` slot, the title its `title`, icon, order and Save layout's
  * restore point in `meta.workspace`, the rest of the dock's state its `layout.workspace` (ADR-0039). `geometry` is
  * dropped (the arrangement is the dock's). `keyed` moves a page from before ADR-0039 (its dock's state at the top of
@@ -13,7 +13,7 @@
  *   opened(file)                                     // a nano.json or a { app, platform } bundle: the app, its pages
  */
 import { Coord, failure, success, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
-import { Platform, type Page, type Slot, type UIDeployment } from '@pritzlaff/nano-platform'
+import { Outline, type Page, type Slot } from '@pritzlaff/nano-outline'
 import { panelsInOrder, type PanelState, type TemplateState } from './lib/layout-templates.ts'
 import { MAIN } from './lib/pages.ts'
 
@@ -58,8 +58,8 @@ export function legacyPages(layout: unknown, d: AppDeployment): Legacy[] {
   return pageOk(page) ? [page] : []
 }
 
-/** `pages` as a UIDeployment, in their order; a pod slot whose pod `d` does not have, and a page or slot whose id or coordinate is bad, is dropped. Pure. */
-export function toPlatform(pages: Legacy[], d: AppDeployment): UIDeployment {
+/** `pages` as an Outline, in their order; a pod slot whose pod `d` does not have, and a page or slot whose id or coordinate is bad, is dropped. Pure. */
+export function toPlatform(pages: Legacy[], d: AppDeployment): Outline {
   const slot = (s: OldSlot): [string, Slot][] => {
     if (!idOk(s.id)) return []
     if ('view' in s) return s.view ? [[s.id, { kind: 'view', view: s.view }]] : []
@@ -71,7 +71,8 @@ export function toPlatform(pages: Legacy[], d: AppDeployment): UIDeployment {
     const restore = Object.fromEntries(Object.entries(w).filter(([k]) => RESTORE.includes(k)))
     return { title: p.title, slots: Object.fromEntries(p.slots.flatMap(slot)), ...(Object.keys(layout).length && { layout: { workspace: layout } }), meta: { workspace: { ...(p.icon !== undefined && { icon: p.icon }), order, ...restore } } }
   }
-  return { pages: Object.fromEntries(pages.filter(p => idOk(p.id)).map((p, i) => [p.id, page(p, i)])) }
+  const kept = pages.filter(p => idOk(p.id))
+  return { roots: [...new Set(kept.map(p => p.id))], pages: Object.fromEntries(kept.map((p, i) => [p.id, page(p, i)])) }
 }
 
 /** `o`'s entries split by whether their key is in `keys`. */
@@ -96,14 +97,14 @@ const stripped = (d: AppDeployment): AppDeployment => {
 }
 
 /** A file as opened: a `{ app, platform }` bundle (File › Save's) as its two parts, a plain nano.json as itself with its old pages migrated. */
-export function opened(file: unknown): NanoResult<{ app: AppDeployment; pages: UIDeployment }> {
+export function opened(file: unknown): NanoResult<{ app: AppDeployment; pages: Outline }> {
   if (obj(file) && obj(file.app) && 'platform' in file) {
-    const pages = Platform.parse(file.platform)
-    return pages.ok ? success({ app: stripped(file.app as AppDeployment), pages: { pages: Object.fromEntries(Object.entries(pages.value.pages).map(([id, p]) => [id, keyed(p)])) } }) : failure('invalid-input', `the file's pages: ${pages.fail.reason}`)
+    const pages = Outline.parse(file.platform)
+    return pages.ok ? success({ app: stripped(file.app as AppDeployment), pages: { ...pages.value, pages: Object.fromEntries(Object.entries(pages.value.pages).map(([id, p]) => [id, keyed(p)])) } }) : failure('invalid-input', `the file's pages: ${pages.fail.reason}`)
   }
   if (!obj(file)) return failure('invalid-input', 'not a nano.json: not an object')
   const d = file as AppDeployment
-  return success({ app: stripped(d), pages: obj(d.pods) ? toPlatform(legacyPages(d.layout, d), d) : { pages: {} } })
+  return success({ app: stripped(d), pages: obj(d.pods) ? toPlatform(legacyPages(d.layout, d), d) : { roots: [], pages: {} } })
 }
 
 const read = (from: Storage, k: string): unknown => { try { return JSON.parse(from.getItem(k) ?? 'null') } catch { return null } }
@@ -135,7 +136,7 @@ export function oldPages(from: Storage): Legacy[] {
   return first.workspace || rest.length || obj(main) ? [first, ...rest] : []
 }
 
-/** Removes every old key (once the UIDeployment holds what they held). Never throws. */
+/** Removes every old key (once the Outline holds what they held). Never throws. */
 export function forgetOld(from: Storage): void {
   const old = (k: string | null) => !!k && [LIST, DOCK].some(o => k === o || k.startsWith(`${o}.`))
   try { for (let i = from.length - 1; i >= 0; i--) if (old(from.key(i))) from.removeItem(from.key(i)!) } catch { /* kept */ }

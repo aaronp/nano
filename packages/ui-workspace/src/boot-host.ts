@@ -12,7 +12,7 @@
  * session. Storage the page may not use: the app runs in memory, and the first save says so.
  */
 import { defineViews } from '@pritzlaff/nano-ui';
-import { Platform } from '@pritzlaff/nano-platform';
+import { Outline } from '@pritzlaff/nano-outline';
 import { toast } from '@pritzlaff/nano-elements';
 import { start, type Host } from './host.ts';
 import { implementationTemplates } from './dock/panels.ts';
@@ -35,7 +35,7 @@ const loaded = host && at ? await host.importUrl(at).finally(() => URL.revokeObj
 const first = host ? await bootPages(host, storage, doc, stored.pages(), loaded.ok) : undefined;
 /** The page's pages (ADR-0038): one Platform for the page's life; undefined without a host. */
 const startWith = first?.ok ? first : host && await bootPages(host, storage, null, null, false);   // pages that failed: Main alone
-export const platform = host && startWith?.ok ? Platform.create(host.app, host.registry, startWith.value) : undefined;
+export const platform = host && startWith?.ok ? Outline.create(host.app, host.registry, startWith.value) : undefined;
 
 if (host && platform) {
   host.importUrl = importing(host.importUrl.bind(host), platform);

@@ -7,7 +7,7 @@
  *   slotsOf([{ widget: 'pod', name: 'log2', slot: 'any' }, { widget: 'notes' }], page.slots, kind)   // { any: <its select>, notes: { kind: 'view', view: 'notes' } }
  *   const { engine, add } = reconcile(page.layout, page.slots)
  */
-import type { Slot } from '@pritzlaff/nano-platform';
+import type { Slot } from '@pritzlaff/nano-outline';
 import { panelsInOrder, type PanelState, type TemplateState } from '../lib/layout-templates.ts';
 
 type Slots = Record<string, Slot>;

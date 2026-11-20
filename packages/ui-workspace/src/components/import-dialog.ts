@@ -9,14 +9,14 @@
  * BACKLOG(7): imports are not remembered; a package by its manifest is not imported.
  */
 import type { AppDeployment } from '@pritzlaff/nano-core';
-import type { UIDeployment } from '@pritzlaff/nano-platform';
+import type { Outline } from '@pritzlaff/nano-outline';
 import { opened } from '../migrate.ts';
 import type { Host } from '../host.ts';
 import { ownProvider, renameRuntimes, selectPods, trusted, validRuntimeId, type Trust } from '../import-plan.ts';
 import { preview } from './import-preview.ts';
 
 /** The dialog's edit of the file: of its app (`edit`) and, the same choices, of its pages (`pages`). */
-type Chosen = { edit(d: AppDeployment): AppDeployment; pages(p: UIDeployment): UIDeployment };
+type Chosen = { edit(d: AppDeployment): AppDeployment; pages(p: Outline): Outline };
 /** How to reach the network and the host: the page's fetch and the host, or stand-ins in tests. */
 export type ImportDeps = { fetchJson(url: string): Promise<unknown>; importUrl(url: string, chosen?: Chosen): Promise<{ ok: boolean }>;
   /** Whether the workspace already has provider `coord` (its pods are not new code: Trust leaves them as the file says). */

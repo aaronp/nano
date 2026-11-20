@@ -3,10 +3,11 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
+import { flat } from './flat.ts'
 import { bootWorkspacePages, mountWorkspace } from '../src/components/workspace-pages.ts'
 import { moved } from '../src/lib/pages.ts'
 import { Application, AppDeployment, Registry, type NanoResult } from '@pritzlaff/nano-core'
-import { Platform, type Page } from '@pritzlaff/nano-platform'
+import { Outline, type Page } from '@pritzlaff/nano-outline'
 
 localStorage.clear()
 document.body.innerHTML = `<app-shell><span slot="title">Nano</span>
@@ -19,7 +20,7 @@ Object.assign(document.querySelector('#workspace')!, { arrangement: () => ({ roo
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const registry = Registry.create(), app = must(await Application.create(must(AppDeployment.assemble({ pods: {}, runtimes: {} }, registry))))
-const platform = Platform.create(app, registry, { pages: { workspace: { title: 'Workspace', slots: {}, meta: { workspace: { order: 0 } } } } })
+const platform = Outline.create(app, registry, flat({ workspace: { title: 'Workspace', slots: {}, meta: { workspace: { order: 0 } } } }))
 let applies = 0
 platform.listen(() => applies++)
 bootWorkspacePages(document, platform)
@@ -191,7 +192,7 @@ test("Main's rename is kept with its icon, and its id and route stay", () => {
 })
 
 test('a page added through the Platform (as a pod would) appears in the nav and routes; a title change relabels; removing unmounts', () => {
-  const put = (id: string, p?: Page) => { const { [id]: _, ...rest } = platform.document().doc.pages; must(platform.apply({ pages: p ? { ...rest, [id]: p } : rest })) }
+  const put = (id: string, p?: Page) => { const { [id]: _, ...rest } = platform.document().doc.pages; must(platform.apply(flat(p ? { ...rest, [id]: p } : rest))) }
   put('pod-made', { title: 'Pod made', slots: {}, meta: { workspace: { icon: 'star', order: 9 } } })
   expect($('[data-saved="pod-made"] [data-name]').textContent).toBe('Pod made')
   expect(routes()).toContain('/pod-made')
@@ -217,7 +218,7 @@ test('Save as workspace copies the page into "<title> copy" (same slots, its arr
 
 test('a new page\'s id avoids every page\'s id, not only mounted routes: another client\'s `inbox` (at /p/inbox) and a page whose route is not mounted stay as they are', () => {
   const inbox = { title: 'Inbox', slots: { n: { kind: 'view' as const, view: 'notes' } }, meta: { other: 1 } }
-  must(platform.apply({ pages: { ...platform.document().doc.pages, inbox } }))
+  must(platform.apply(flat({ ...platform.document().doc.pages, inbox })))
   expect(routes()).toContain('/p/inbox')
   const copy = page('home-copy')
   $('app-route[path="/home-copy"]').remove()   // its route not mounted (yet)
@@ -230,9 +231,9 @@ test('a new page\'s id avoids every page\'s id, not only mounted routes: another
 
 test('a page id holding `"` mounts and unmounts: its selectors are escaped', () => {
   const d = platform.document().doc
-  must(platform.apply({ pages: { ...d.pages, 'q"t': { title: 'Quote', slots: {}, meta: { workspace: { order: 99 } } } } }))
+  must(platform.apply(flat({ ...d.pages, 'q"t': { title: 'Quote', slots: {}, meta: { workspace: { order: 99 } } } })))
   expect(routes()).toContain('/q"t')
-  must(platform.apply({ pages: d.pages }))
+  must(platform.apply(flat(d.pages)))
   expect(routes()).not.toContain('/q"t')
   expect(savedOrder()).not.toContain('q"t')
 })

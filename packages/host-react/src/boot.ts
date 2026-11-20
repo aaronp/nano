@@ -7,11 +7,11 @@
  */
 import { Application, AppDeployment, failure, Registry, success, type NanoResult, type Provider } from '@pritzlaff/nano-core'
 import uiProvider, { views as uiViews, type ViewMap } from '@pritzlaff/nano-ui'
-import { Platform, type UIDeployment } from '@pritzlaff/nano-platform'
+import { Outline } from '@pritzlaff/nano-outline'
 import { KEYS, readStored, writeStored } from './stored.ts'
 
 export type Host = {
-  app: Application; registry: Registry; platform: ReturnType<typeof Platform.create>; views: ViewMap
+  app: Application; registry: Registry; platform: ReturnType<typeof Outline.create>; views: ViewMap
   /** The app document as saved: the live deployment with the stored modules, frames, views and layout. */
   saved(): AppDeployment
   /** Why saving stopped (another tab wrote, or storage refused), once it has. */
@@ -41,7 +41,7 @@ export async function boot(storage: Storage, load: Load = u => import(u), base =
   const stored = readStored(storage), doc: AppDeployment = stored.app ?? { pods: {}, runtimes: {} }
   // An Application made with no runtimes has no registry, so it could never place a pod: start with an empty `main`.
   if (!Object.keys(doc.runtimes).length) doc.runtimes = { main: { pods: [], subscriptions: [] } }
-  const pages = stored.pages === null ? success<UIDeployment>({ pages: {} }) : Platform.parse(stored.pages)
+  const pages = stored.pages === null ? success<Outline>({ roots: [], pages: {} }) : Outline.parse(stored.pages)
   if (!pages.ok) return pages
   const registry = Registry.create(), ui = registry.add(uiProvider)
   if (!ui.ok) return ui
@@ -51,7 +51,7 @@ export async function boot(storage: Storage, load: Load = u => import(u), base =
   if (!runtimes.ok) return runtimes
   const created = await Application.create(runtimes.value)
   if (!created.ok) return created
-  const app = created.value, platform = Platform.create(app, registry, pages.value)
+  const app = created.value, platform = Outline.create(app, registry, pages.value)
   const { modules, frames, views: selectors, layout } = doc
   const saved = (): AppDeployment => ({ ...app.deployment(), ...(modules && { modules }), ...(frames && { frames }), ...(selectors && { views: selectors }), ...(layout !== undefined && { layout }) })
   let stopped: string | undefined

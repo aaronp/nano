@@ -22,7 +22,7 @@ test('a reload restores the pages and pods as saved, nothing started; an undeplo
   const { host, platform } = await import('../src/boot-host.ts')
   if (!host || !platform) throw new Error('the host did not start')
   expect(document.querySelector('dialog')).toBeNull()
-  expect(JSON.parse(JSON.stringify(platform.document().doc))).toEqual(pages)
+  expect(JSON.parse(JSON.stringify(platform.document().doc))).toEqual({ roots: ['workspace', 'two'], ...pages })   // stored flat: every page a root
   expect(Object.keys(host.data().pods)).toEqual(['ui', 'deploy', 'platform', 'log1', 'log2'])
   expect(host.data().layout).toEqual({ ring: { show: [] } })
   for (const [r, p] of [['main', 'log1'], ['side', 'log2']] as const) expect(host.app.runtime(r).status(p)).toEqual({ ok: true, value: 'not started' })
@@ -32,5 +32,5 @@ test('a reload restores the pages and pods as saved, nothing started; an undeplo
   expect(platform.resolve('workspace')['a']).toEqual({ kind: 'missing' })
   for (let i = 0; i < 50 && JSON.parse(localStorage.getItem(KEY)!).pods.log1; i++) await tick(20)
   expect(Object.keys(JSON.parse(localStorage.getItem(KEY)!).pods)).toEqual(['log2'])
-  expect(JSON.parse(localStorage.getItem(PAGES)!)).toEqual(pages)   // the slot kept: it shows "not found" until removed
+  expect(JSON.parse(localStorage.getItem(PAGES)!)).toEqual({ roots: ['workspace', 'two'], ...pages })   // the slot kept: it shows "not found" until removed
 })

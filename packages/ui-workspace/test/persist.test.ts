@@ -2,8 +2,9 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
+import { flat } from './flat.ts'
 import type { AppDeployment } from '@pritzlaff/nano-core'
-import type { UIDeployment } from '@pritzlaff/nano-platform'
+import type { Outline } from '@pritzlaff/nano-outline'
 import { persisted } from '../src/persist.ts'
 
 const memory = () => {
@@ -12,7 +13,7 @@ const memory = () => {
     get length() { return m.size }, key: (i: number) => [...m.keys()][i] ?? null } as unknown as Storage }
 }
 const doc: AppDeployment = { pods: {}, runtimes: { r: { pods: [], subscriptions: [] } } }
-const pages: UIDeployment = { pages: { workspace: { slots: { x: { kind: 'view', view: 'nano-explorer' } }, meta: { title: 'Main', order: 0 } } } }
+const pages: Outline = flat({ workspace: { slots: { x: { kind: 'view', view: 'nano-explorer' } }, meta: { title: 'Main', order: 0 } } })
 
 test('save then load round-trips the document and its pages, each under its key; nothing stored loads as null', () => {
   const { m, storage } = memory(), p = persisted(storage, 'k', 'p')

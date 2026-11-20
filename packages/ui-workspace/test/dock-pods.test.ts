@@ -173,7 +173,7 @@ test('a slot added to a visited page that is hidden opens its pod only when the 
   go('two')
   await until(() => running(h, 'input1'))
   go('workspace')
-  put('two', page('Two', { input1: pod('input1'), input2: pod('input2') }))   // as a pod's HostPlatform apply would
+  put('two', page('Two', { input1: pod('input1'), input2: pod('input2') }))   // as a pod's HostOutline apply would
   await tick(30)
   expect(h.app.runtime('main').status('input2')).toEqual({ ok: true, value: 'not started' })
   go('two')

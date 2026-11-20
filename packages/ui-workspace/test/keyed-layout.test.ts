@@ -3,7 +3,7 @@
 // (Review Focus 2). A page another client made on one of the workspace's routes opens at `/p/<id>` (Review Focus 3).
 import { expect, test } from 'bun:test'
 import type { NanoResult } from '@pritzlaff/nano-core'
-import type { Page } from '@pritzlaff/nano-platform'
+import type { Page } from '@pritzlaff/nano-outline'
 import { host, mount, place, pod, tick, until } from './dock-pods-setup.ts'
 
 const { bootPages } = await import('../src/boot-pages.ts')
@@ -42,7 +42,7 @@ test('an old stored document moves to the new shape at boot, nothing lost; the w
     two: { slots: {}, meta: { title: 'Two', order: 1 } },
   } }
   const booted = must(await bootPages(h, localStorage, null, old))
-  expect(JSON.parse(JSON.stringify(booted))).toEqual({ pages: {
+  expect(JSON.parse(JSON.stringify(booted))).toEqual({ roots: ['workspace', 'lab', 'two'], pages: {
     workspace: { title: 'Home', slots: {}, meta: { workspace: { icon: 'home', order: 0 } } },
     lab: { title: 'Lab', slots: { notes: { kind: 'view', view: 'notes' } }, layout: { workspace: { ...engine, template, 'window-style': 'glass' } },
       meta: { workspace: { icon: 'star', order: 2, saved, 'saved.template': savedTemplate } } },

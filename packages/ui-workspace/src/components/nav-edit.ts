@@ -4,14 +4,14 @@
  * ICONS; a saved row's handle reorders it, by drag or Alt+↑/↓ (announced: `moved`, one apply of each `meta.order` that
  * changes). `save` keeps a row's new title and icon; the Platform's change reorders the nav.
  */
-import type { Platform } from '@pritzlaff/nano-platform';
+import type { Outline } from '@pritzlaff/nano-outline';
 import { ICONS } from '../lib/icons.ts';
 import { applyPages, moved, ordered } from '../lib/pages.ts';
 
 const ROW = '[data-workspaces], [data-saved]';
 const nameOf = (row: Element) => row.querySelector('[data-name]')?.textContent ?? '';
 
-export function navEdit(doc: Document, platform: ReturnType<typeof Platform.create>, save: (row: HTMLElement, title: string, icon: string) => void) {
+export function navEdit(doc: Document, platform: ReturnType<typeof Outline.create>, save: (row: HTMLElement, title: string, icon: string) => void) {
   const editing = () => doc.querySelector('app-shell[data-editing]') !== null;
   platform.listen(() => controls());   // a page changed from elsewhere is relabelled: its controls come back
   const setEditing = (on: boolean) => {

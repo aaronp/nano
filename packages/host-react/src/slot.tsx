@@ -5,10 +5,10 @@
  */
 import { useEffect, useRef } from 'react'
 import { viewFor, type ViewTarget } from '@pritzlaff/nano-ui'
-import type { Platform } from '@pritzlaff/nano-platform'
+import type { Outline } from '@pritzlaff/nano-outline'
 import type { Host } from './boot.ts'
 
-export type Opened = Awaited<ReturnType<ReturnType<typeof Platform.create>['open']>>[string]
+export type Opened = Awaited<ReturnType<ReturnType<typeof Outline.create>['open']>>[string]
 
 function PodView({ h, runtime, pod }: { h: Host; runtime: string; pod: string }) {
   const at = useRef<HTMLDivElement>(null), tag = viewFor(pod, h.saved(), h.views)

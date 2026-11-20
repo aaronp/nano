@@ -10,12 +10,12 @@ const untouched = new Proxy({}, { get() { throw new Error('the host was used') }
 
 test('stored pages saved without Main still boot with Main', async () => {
   const r = must(await bootPages(untouched, localStorage, null, { pages: { two: { slots: {} } } }))
-  expect(strs(r)).toEqual({ pages: { two: { slots: {} }, workspace: { title: 'Workspace', slots: {}, meta: { workspace: { order: 0 } } } } })
+  expect(strs(r)).toEqual({ roots: ['workspace', 'two'], pages: { two: { slots: {} }, workspace: { title: 'Workspace', slots: {}, meta: { workspace: { order: 0 } } } } })
 })
 
 test('a stored document that failed to load: nothing migrated, nothing placed, Main alone', async () => {
   localStorage.setItem('workspace-starter.saved-workspaces', JSON.stringify([{ path: '/t', title: 'T' }]))
   const doc = { pods: {}, runtimes: {}, layout: { pages: [{ id: 'old', title: 'Old', slots: [] }] } }
-  expect(strs(must(await bootPages(untouched, localStorage, doc, null, false)))).toEqual({ pages: { workspace: { title: 'Workspace', slots: {}, meta: { workspace: { order: 0 } } } } })
+  expect(strs(must(await bootPages(untouched, localStorage, doc, null, false)))).toEqual({ roots: ['workspace'], pages: { workspace: { title: 'Workspace', slots: {}, meta: { workspace: { order: 0 } } } } })
   localStorage.clear()
 })

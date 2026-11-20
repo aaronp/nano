@@ -9,7 +9,7 @@
  */
 import { matches, type AppDeployment, type Registry, type SelectorData } from '@pritzlaff/nano-core'
 import { toast } from '@pritzlaff/nano-elements'
-import { targets } from '@pritzlaff/nano-platform'
+import { targets } from '@pritzlaff/nano-outline'
 
 const where = (d: AppDeployment, pod: string) => Object.keys(d.runtimes).find(r => d.runtimes[r]!.pods.includes(pod))
 

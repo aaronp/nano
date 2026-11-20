@@ -1,20 +1,22 @@
 /**
- * The UIDeployment: pages, each a set of slots over the Application plus the client's opaque `layout` and `meta`.
- * Written out (JSON), coordinates and selectors are their strings; `parse` reads them back, refusing a malformed
- * document whole.
+ * The Outline: a tree of pages (`roots`, each page's `children`, ids that never change), each page a set of slots over
+ * the Application plus the client's opaque `layout` and `meta`. Written out (JSON), coordinates and selectors are their
+ * strings; `parse` reads them back, refusing a malformed document whole (a broken tree too: see tree.ts).
  *
- *   const doc: UIDeployment = { pages: { home: { slots: { a: { kind: 'pod', pod: Coord.pod(impl, Coord.runtime('r'), 'a') } } } } }
+ *   const doc: Outline = { roots: ['home'], pages: { home: { slots: { a: { kind: 'pod', pod: Coord.pod(impl, Coord.runtime('r'), 'a') } } } } }
  *   parse(JSON.parse(JSON.stringify(doc)))           // success(doc), coordinates again
+ *   parse({ pages: { a, b } })                        // flat (the Platform's shape): every page a root, in document order
  *   readSelector({ implements: 'acme.Counter' })      // { implements: InterfaceCoord }
  */
 import { Type, type Static } from 'typebox'
 import { Value } from 'typebox/value'
 import { Coord, failure, success, type NanoResult, type PodCoord, type SelectorData } from '@pritzlaff/nano-core'
+import { fault } from './tree.ts'
 
 export type Slot = { kind: 'pod'; pod: PodCoord } | { kind: 'select'; select: SelectorData } | { kind: 'view'; view: string }
-/** `layout` and `meta` are the client's: the Platform keeps them and reads neither. */
-export type Page = { slots: Record<string, Slot>; title?: string; layout?: unknown; meta?: unknown }
-export type UIDeployment = { pages: Record<string, Page> }
+/** `children` are the page's place in the tree; `layout` and `meta` are the client's: the Outline keeps them and reads neither. */
+export type Page = { title?: string; children?: string[]; slots: Record<string, Slot>; layout?: unknown; meta?: unknown }
+export type Outline = { roots: string[]; pages: Record<string, Page> }
 
 const strict = { additionalProperties: false } as const
 const coord = Type.String({ minLength: 1 })
@@ -27,9 +29,10 @@ const WrittenSlot = Type.Union([
   Type.Object({ kind: Type.Literal('select'), select: WrittenSelector }, strict),
   Type.Object({ kind: Type.Literal('view'), view: Type.String({ minLength: 1 }) }, strict),
 ])
-const WrittenPage = Type.Object({ slots: Type.Record(Type.String(), WrittenSlot), title: Type.Optional(Type.String()), layout: Type.Optional(Type.Unknown()), meta: Type.Optional(Type.Unknown()) }, strict)
-/** A UIDeployment written out: its coordinates as strings. */
-export const Written = Type.Object({ pages: Type.Record(Type.String(), WrittenPage) }, strict)
+const ids = Type.Array(Type.String())
+const WrittenPage = Type.Object({ children: Type.Optional(ids), slots: Type.Record(Type.String(), WrittenSlot), title: Type.Optional(Type.String()), layout: Type.Optional(Type.Unknown()), meta: Type.Optional(Type.Unknown()) }, strict)
+/** An Outline written out: its coordinates as strings; without `roots`, every page is a root. */
+export const Written = Type.Object({ roots: Type.Optional(ids), pages: Type.Record(Type.String(), WrittenPage) }, strict)
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const string = (v: unknown, kind: string) => { if (typeof v !== 'string') throw new Error(`bad ${kind} coordinate ${JSON.stringify(v)}`); return v }
@@ -48,13 +51,14 @@ const slot = (s: Static<typeof WrittenSlot>): Slot =>
 /** `/pages/<page>/slots/<slot>/…` as "page p, slot s". */
 const where = (path: string) => { const [, , p, , s] = path.split('/'); return [p && `page ${p}`, s && `slot ${s}`].filter(Boolean).join(', ') || 'the document' }
 
-/** A written UIDeployment read back, its ids (the id rule, as a `RuntimeCoord`'s) and coordinates checked; all of it or a failure naming the page and slot. Never throws. */
-export function parse(json: unknown): NanoResult<UIDeployment> {
+/** A written Outline read back, its ids (the id rule, as a `RuntimeCoord`'s), coordinates and tree checked; all of it or a failure naming the page (and slot). Never throws. */
+export function parse(json: unknown): NanoResult<Outline> {
   const e = Value.Errors(Written, json)[0]
   if (e) return failure('invalid-input', `${where(e.instancePath)}: ${e.message}`)
   const read = <T>(at: string, f: () => T): NanoResult<T> => { try { return success(f()) } catch (x) { return failure('invalid-input', `${at}: ${message(x)}`) } }
   const pages: [string, Page][] = []
-  for (const [id, page] of Object.entries(structuredClone((json as Static<typeof Written>).pages))) {
+  const written = structuredClone(json as Static<typeof Written>)
+  for (const [id, page] of Object.entries(written.pages)) {
     const named = read(`page ${id}`, () => Coord.runtime(id))
     if (!named.ok) return named
     const slots: [string, Slot][] = []
@@ -65,5 +69,7 @@ export function parse(json: unknown): NanoResult<UIDeployment> {
     }
     pages.push([id, { ...page, slots: Object.fromEntries(slots) }])
   }
-  return success({ pages: Object.fromEntries(pages) })
+  const doc: Outline = { roots: written.roots ?? pages.map(([id]) => id), pages: Object.fromEntries(pages) }
+  const why = fault(doc)
+  return why ? failure('invalid-input', why) : success(doc)
 }

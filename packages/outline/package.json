@@ -1,8 +1,8 @@
 {
-  "name": "@pritzlaff/nano-platform",
+  "name": "@pritzlaff/nano-outline",
   "version": "0.1.0",
   "type": "module",
-  "description": "The Platform: pages over an Application, as their own document (the UIDeployment), changed by one apply.",
+  "description": "The Outline: a tree of pages over an Application, as their own document, changed by one apply.",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
     "@pritzlaff/nano-core": "workspace:*",

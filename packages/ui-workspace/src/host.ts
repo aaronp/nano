@@ -1,7 +1,7 @@
 /**
  * The host: the one `Application`, what is loaded (`Loaded`: the deployment with its modules and view selectors, the
  * registry, the default views), and import, apply and save over them. Its own pods are `ui` (HostUI), `deploy` and `platform`
- * (HostDeploy, HostPlatform over `start(platform)`'s Platform: host-deploy.ts, host-platform-pod.ts) in runtime `main`, never saved. A failure is shown with `toast()` and changes nothing.
+ * (HostDeploy, HostOutline over `start(platform)`'s Platform: host-deploy.ts, host-platform-pod.ts) in runtime `main`, never saved. A failure is shown with `toast()` and changes nothing.
  *
  *   const host = (await start()).value
  *   await host.importUrl('/examples/slice/nano.json')   // importApp, then apply

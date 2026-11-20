@@ -1,14 +1,14 @@
 // The workspace's rules for an import's pages (withImported): free ids added last, identical pages skipped, clashing
 // ids suffixed, and an incoming Main filling a Main that shows only views.
 import { expect, test } from 'bun:test'
-import { Platform, type UIDeployment } from '@pritzlaff/nano-platform'
+import { Outline } from '@pritzlaff/nano-outline'
 import { withImported } from '../src/import-pages.ts'
 
-const doc = (w: unknown): UIDeployment => { const r = Platform.parse(w); if (!r.ok) throw new Error(r.fail.reason); return r.value }
+const doc = (w: unknown): Outline => { const r = Outline.parse(w); if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const written = (v: unknown) => JSON.parse(JSON.stringify(v))
 const view = { kind: 'view', view: 'nano-explorer' }, pod = { kind: 'pod', pod: 'example.clock/clock@main/clock1' }
 const main = { slots: { x: view }, title: 'Workspace', meta: { workspace: { order: 0 } } }, trading = { slots: {}, title: 'Trading', meta: { workspace: { order: 0 } } }
-const ids = (d: UIDeployment) => Object.entries(d.pages).map(([id, p]) => [id, p.title, (p.meta as { workspace: { order: number } }).workspace.order])
+const ids = (d: Outline) => Object.entries(d.pages).map(([id, p]) => [id, p.title, (p.meta as { workspace: { order: number } }).workspace.order])
 
 test('a free id is added last; a taken id with identical content (its order aside) is skipped, so a repeat is a no-op', () => {
   const once = withImported(doc({ pages: { workspace: main } }), doc({ pages: { trading } }))
@@ -44,9 +44,9 @@ test('an incoming page on one of the workspace\'s own routes is taken as clashin
 test('a plain nano.json\'s Main filling Main keeps Main\'s title, icon, view slots, layout (the file has none) and other clients\' keys', async () => {
   const { importing } = await import('../src/import-pages.ts')
   const app = { listen: () => () => {}, deployment: () => ({ pods: {}, runtimes: {} }) } as never
-  const platform = Platform.create(app, {} as never, doc({ pages: { workspace: { slots: { x: view }, layout: { workspace: { root: 1 }, react: { columns: 3 } }, title: 'Mine', meta: { workspace: { icon: 'star', order: 0 }, react: { x: 1 } } } } }))
+  const platform = Outline.create(app, {} as never, doc({ pages: { workspace: { slots: { x: view }, layout: { workspace: { root: 1 }, react: { columns: 3 } }, title: 'Mine', meta: { workspace: { icon: 'star', order: 0 }, react: { x: 1 } } } } }))
   const file = { pods: { clock1: { implementation: 'example.clock/clock' } }, runtimes: { main: { pods: ['clock1'], subscriptions: [] } }, layout: { pages: [{ id: 'workspace', title: 'Workspace', slots: [{ id: 'c', runtime: 'main', pod: 'clock1' }] }] } }
   const url = `data:application/json,${encodeURIComponent(JSON.stringify(file))}`
   expect(await importing(async () => ({ ok: true, value: undefined }), platform)(url)).toMatchObject({ ok: true })
-  expect(written(platform.document().doc)).toEqual({ pages: { workspace: { slots: { x: view, c: pod }, layout: { workspace: { root: 1 }, react: { columns: 3 } }, title: 'Mine', meta: { workspace: { icon: 'star', order: 0 }, react: { x: 1 } } } } })
+  expect(written(platform.document().doc)).toEqual({ roots: ['workspace'], pages: { workspace: { slots: { x: view, c: pod }, layout: { workspace: { root: 1 }, react: { columns: 3 } }, title: 'Mine', meta: { workspace: { icon: 'star', order: 0 }, react: { x: 1 } } } } })
 })

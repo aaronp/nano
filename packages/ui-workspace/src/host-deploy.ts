@@ -81,7 +81,7 @@ export function approvalPolicy(approve: Approve, current: () => AppDeployment, m
   } }
 }
 
-/** The host's provider: `ui` (HostUI), `deploy` (HostDeploy, applying to `app()`) and `platform` (HostPlatform over
+/** The host's provider: `ui` (HostUI), `deploy` (HostDeploy, applying to `app()`) and `platform` (HostOutline over
  * `platform()`, asking through `app()`'s `ui`, no answer within 20 s a no; none in a replayed app). */
 export function hostProvider(app: () => Application, platform: Parameters<typeof hostPlatform>[0] = () => undefined) {
   const deploy = Implementation.define(DEPLOY, {

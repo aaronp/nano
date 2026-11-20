@@ -2,13 +2,13 @@
  * The workspace's pages, shown from the Platform's document (ADR-0038): one nav row (a drag handle for edit mode, then
  * its link), one route (`routeOf`) and one dock of Main's widgets per page, in nav order (lib/pages.ts: Main, then order);
  * Main is the page `workspace` at /workspace, its row and dock in index.html. The Platform's changes mount, unmount,
- * relabel and reorder them, whoever made them (this nav, a pod through HostPlatform, an import). A page's id is its
+ * relabel and reorder them, whoever made them (this nav, a pod through HostOutline, an import). A page's id is its
  * route and never changes; a rename changes its `title`. Each dock keeps its page (dock/page-docks.ts: its state
  * the page's `layout`, its panels the page's slots). Beside the app's title, + makes an empty page and ✎ toggles the
  * nav's edit mode (nav-edit.ts); the dock's "Save as workspace…" copies a page (its slots and arrangement) into
  * "<title> copy". Each edit is one `next`, applied by `applyPages` (the workspace's rules checked first).
  */
-import type { Page, Platform, UIDeployment } from '@pritzlaff/nano-platform';
+import type { Page, Outline } from '@pritzlaff/nano-outline';
 import { ICONS } from '../lib/icons.ts';
 import { applyPages, FIXED, metaOf, ordered, routeOf, slugPath, withMeta, MAIN } from '../lib/pages.ts';
 import { showStatus } from '../lib/status.ts';
@@ -19,7 +19,7 @@ import type { Wires } from '../wires/wires.ts';
 
 type Row = { id: string; title: string; icon?: string };
 /** Page `id` of `d` as its nav row shows it. */
-const rowOf = (d: UIDeployment, id: string): Row => { const m = metaOf(d.pages[id]); return { id, title: d.pages[id]?.title ?? id, ...(m.icon !== undefined && { icon: m.icon }) }; };
+const rowOf = (d: Outline, id: string): Row => { const m = metaOf(d.pages[id]); return { id, title: d.pages[id]?.title ?? id, ...(m.icon !== undefined && { icon: m.icon }) }; };
 const MAIN_ICON = 'panels';   // Main's icon until one is chosen
 const mainDock = (doc: Document) => doc.querySelector<WorkspaceDock>('workspace-dock#workspace');
 const idOf = (id: string) => `ws_${id}`;
@@ -74,14 +74,14 @@ export function mountWorkspace(doc: Document, p: Row): void {
 }
 
 /** Shows the Platform's pages, and handles +, edits in the nav and the dock's "Save as workspace…". */
-export function bootWorkspacePages(doc: Document, platform: ReturnType<typeof Platform.create>): void {
+export function bootWorkspacePages(doc: Document, platform: ReturnType<typeof Outline.create>): void {
   doc.querySelector('[slot="title"]')?.append(button(doc, 'newWorkspace', 'New workspace', '+'), button(doc, 'editNav', 'Edit workspaces', '✎'));
   doc.querySelector('[data-edit-nav]')?.setAttribute('aria-pressed', 'false');
   const rows = () => [...doc.querySelectorAll<HTMLElement>('[data-saved]')];
   /** Routes and ids a new page's id avoids: every route, every page's id (one on a fixed route is at /p/<id>), every fixed route. */
   const taken = () => [...[...doc.querySelectorAll('app-route')].map((r) => r.getAttribute('path') ?? ''), ...[...Object.keys(platform.document().doc.pages), ...FIXED].map((id) => `/${id}`)];
 
-  const apply = (next: UIDeployment) => { const r = applyPages(platform, next); if (!r.ok) showStatus(doc, r.fail.reason); return r.ok; };
+  const apply = (next: Outline) => { const r = applyPages(platform, next); if (!r.ok) showStatus(doc, r.fail.reason); return r.ok; };
   /** Makes the nav, routes and docks what the Platform holds: new pages mounted, gone ones unmounted, titles and icons relabelled, order kept. */
   const sync = () => {
     const d = platform.document().doc, [main, ...rest] = ordered(d).map((id) => rowOf(d, id));
@@ -107,14 +107,14 @@ export function bootWorkspacePages(doc: Document, platform: ReturnType<typeof Pl
   keepDocks(doc, platform);
   const edit = navEdit(doc, platform, (row, title, icon) => {
     const d = platform.document().doc, id = row.dataset.saved ?? MAIN, p = d.pages[id];
-    if (p) apply({ pages: { ...d.pages, [id]: withMeta({ ...p, title }, { ...metaOf(p), icon }) } });
+    if (p) apply({ ...d, pages: { ...d.pages, [id]: withMeta({ ...p, title }, { ...metaOf(p), icon }) } });
   });
 
   /** A new page, last: `page` under a new id slugged from `title`; then its rename. */
   const add = (title: string, icon: string | undefined, page: Page) => {
     const id = slugPath(title, taken()).slice(1), d = platform.document().doc;
     const order = Math.max(0, ...Object.values(d.pages).map((p) => metaOf(p).order ?? 0)) + 1;
-    if (!apply({ pages: { ...d.pages, [id]: withMeta({ ...page, title }, { ...(icon !== undefined && { icon }), order }) } })) return;
+    if (!apply({ roots: [...d.roots, id], pages: { ...d.pages, [id]: withMeta({ ...page, title }, { ...(icon !== undefined && { icon }), order }) } })) return;
     location.hash = `#${routeOf(id)}`;
     edit.rename(rows().find((r) => r.dataset.saved === id)!);
   };

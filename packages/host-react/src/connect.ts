@@ -3,7 +3,7 @@
  * when its policy is `rules`, a rule letting the new pod in). None or several: left unwired. Pure.
  */
 import { matches, type AppDeployment, type Registry } from '@pritzlaff/nano-core'
-import { targets } from '@pritzlaff/nano-platform'
+import { targets } from '@pritzlaff/nano-outline'
 
 export function connect(d: AppDeployment, registry: Registry, pod: string): AppDeployment {
   const out = structuredClone(d), target = targets(out, registry)

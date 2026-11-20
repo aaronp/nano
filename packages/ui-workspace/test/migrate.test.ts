@@ -1,4 +1,4 @@
-// Migration into the UIDeployment: the old keys, a document's `layout.pages`, the legacy Main layout, and a file as opened.
+// Migration into the Outline: the old keys, a document's `layout.pages`, the legacy Main layout, and a file as opened.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
@@ -50,7 +50,7 @@ test('toPlatform: pod slots by coordinate (the deployment\'s implementation), vi
     { id: 'two', title: 'Two', slots: [] },
   ], d)
   expect(String((out.pages['workspace']!.slots['clock1'] as { pod: unknown }).pod)).toBe(String(Coord.pod(Coord.parse('implementation', clock), Coord.runtime('main'), 'clock1')))
-  expect(strs(out)).toEqual({ pages: {
+  expect(strs(out)).toEqual({ roots: ['workspace', 'two'], pages: {
     workspace: { title: 'Main', slots: { clock1: { kind: 'pod', pod: 'example.clock/clock@main/clock1' }, x: { kind: 'view', view: 'nano-explorer' } }, layout: { workspace: { root: { type: 'row' }, 'window-style': 'clear' } }, meta: { workspace: { icon: 'home', order: 0, saved, 'saved.template': null } } },
     two: { title: 'Two', slots: {}, meta: { workspace: { order: 1 } } },
   } })
@@ -65,13 +65,13 @@ test('legacyPages: a layout\'s pages; else the legacy Main from its dock\'s pane
 })
 
 test('opened: a bundle as its parts; a plain nano.json without its old pages, migrated; a malformed bundle refused', () => {
-  const pages = { pages: { workspace: { slots: { c: { kind: 'pod', pod: 'example.clock/clock@main/clock1' } } } } }
+  const pages = { roots: ['workspace'], pages: { workspace: { slots: { c: { kind: 'pod', pod: 'example.clock/clock@main/clock1' } } } } }
   const b = opened({ app: { ...d, layout: { desk: 1 } }, platform: pages })
   expect(b.ok && strs(b.value)).toEqual({ app: { ...d, layout: { desk: 1 } }, pages })
   const p = opened({ ...d, layout: { desk: 1, slots: [{ id: 'c', runtime: 'main', pod: 'clock1' }], geometry: {} } })
-  expect(p.ok && strs(p.value)).toEqual({ app: { ...d, layout: { desk: 1 } }, pages: { pages: { workspace: { title: 'Workspace', slots: { c: { kind: 'pod', pod: 'example.clock/clock@main/clock1' } }, meta: { workspace: { order: 0 } } } } } })
+  expect(p.ok && strs(p.value)).toEqual({ app: { ...d, layout: { desk: 1 } }, pages: { roots: ['workspace'], pages: { workspace: { title: 'Workspace', slots: { c: { kind: 'pod', pod: 'example.clock/clock@main/clock1' } }, meta: { workspace: { order: 0 } } } } } })
   const bare = opened({ ...d, layout: { pages: [] } })
-  expect(bare.ok && strs(bare.value)).toEqual({ app: d, pages: { pages: {} } })
+  expect(bare.ok && strs(bare.value)).toEqual({ app: d, pages: { roots: [], pages: {} } })
   for (const bad of [null, 3, 'x']) expect(opened(bad)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   expect(opened({ app: d, platform: { pages: { p: { slots: { s: { kind: 'pod', pod: 'no' } } } } } })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
 })
@@ -80,7 +80,7 @@ test('keyed: an old-shape bundle opened is moved; an unknown layout key stays; m
   const old = { slots: {}, layout: { root: { type: 'row' }, 'window-style': 'glass', react: { columns: 2 } }, meta: { title: 'Old', icon: 'star', order: 1, other: 3 } }
   const moved = { title: 'Old', slots: {}, layout: { react: { columns: 2 }, workspace: { root: { type: 'row' }, 'window-style': 'glass' } }, meta: { other: 3, workspace: { icon: 'star', order: 1 } } }
   const b = opened({ app: d, platform: { pages: { old } } })
-  expect(b.ok && strs(b.value.pages)).toEqual({ pages: { old: moved } })
+  expect(b.ok && strs(b.value.pages)).toEqual({ roots: ['old'], pages: { old: moved } })
   expect(keyed({ slots: {}, meta: { title: 'Meta' }, title: 'Set' })).toEqual({ slots: {}, meta: { title: 'Meta' }, title: 'Set' })
   const only = { slots: {}, layout: { workspace: { root: null } } }
   expect(keyed(only)).toBe(only)

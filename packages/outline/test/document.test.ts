@@ -1,11 +1,11 @@
-// The UIDeployment's written form: coordinates and selectors as strings, read back by `Platform.parse`; malformed refused whole.
+// The Outline's written form: coordinates and selectors as strings, read back by `Outline.parse`; malformed refused whole.
 import { expect, test } from 'bun:test'
 import { Coord } from '@pritzlaff/nano-core'
-import { Platform, readSelector, type UIDeployment } from '../src/index.ts'
+import { Outline, readSelector } from '../src/index.ts'
 
 const acme = Coord.namespace('acme')
-const doc: UIDeployment = { pages: {
-  home: { slots: {
+const doc: Outline = { roots: ['home', 'empty'], pages: {
+  home: { children: [], slots: {
     a: { kind: 'pod', pod: Coord.pod(acme.implementationId('counter'), Coord.runtime('r'), 'c') },
     b: { kind: 'select', select: { implements: acme.interfaceId('Counter'), tags: ['x'], runtime: Coord.runtime('s') } },
     c: { kind: 'view', view: 'nano-systems' },
@@ -17,7 +17,7 @@ test('serialised, coordinates and selectors are strings; parsed, they are coordi
   const written = JSON.parse(JSON.stringify(doc))
   expect(written.pages.home.slots.a.pod).toBe('acme/counter@r/c')
   expect(written.pages.home.slots.b.select).toEqual({ implements: 'acme.Counter', tags: ['x'], runtime: 's' })
-  const r = Platform.parse(written)
+  const r = Outline.parse(written)
   if (!r.ok) throw new Error(r.fail.reason)
   expect(JSON.stringify(r.value)).toBe(JSON.stringify(doc))
   const a = r.value.pages.home!.slots.a!
@@ -25,7 +25,7 @@ test('serialised, coordinates and selectors are strings; parsed, they are coordi
 })
 
 test('malformed input is refused whole, naming the page and slot', () => {
-  const bad = (f: (w: any) => void) => { const w = JSON.parse(JSON.stringify(doc)); f(w); return Platform.parse(w) }
+  const bad = (f: (w: any) => void) => { const w = JSON.parse(JSON.stringify(doc)); f(w); return Outline.parse(w) }
   for (const r of [
     bad(w => { w.pages.home.slots.a.pod = 'nope' }),
     bad(w => { w.pages.home.slots.a.kind = 'other' }),
@@ -33,8 +33,8 @@ test('malformed input is refused whole, naming the page and slot', () => {
     bad(w => { w.pages.home.slots.a.extra = 1 }),
   ]) expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: expect.stringMatching(/page home, slot [ab]/) } })
   expect(bad(w => { w.pages['a/b'] = { slots: {} } })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
-  expect(Platform.parse({ pages: [] })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
-  expect(Platform.parse(null)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+  expect(Outline.parse({ pages: [] })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+  expect(Outline.parse(null)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
 })
 
 test('readSelector reads only the selector fields, each to its coordinate', () => {
@@ -45,11 +45,11 @@ test('readSelector reads only the selector fields, each to its coordinate', () =
 })
 
 test('a page title is optional, a string, and round-trips', () => {
-  const titled: UIDeployment = { pages: { home: { slots: {}, title: 'Home' }, bare: { slots: {} } } }
-  const r = Platform.parse(JSON.parse(JSON.stringify(titled)))
+  const titled: Outline = { roots: ['home', 'bare'], pages: { home: { slots: {}, title: 'Home' }, bare: { slots: {} } } }
+  const r = Outline.parse(JSON.parse(JSON.stringify(titled)))
   if (!r.ok) throw new Error(r.fail.reason)
   expect(r.value.pages.home!.title).toBe('Home')
   expect('title' in r.value.pages.bare!).toBe(false)
-  const bad = Platform.parse({ pages: { home: { slots: {}, title: 3 } } })
+  const bad = Outline.parse({ pages: { home: { slots: {}, title: 3 } } })
   expect(bad).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
 })
