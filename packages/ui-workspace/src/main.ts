@@ -4,11 +4,11 @@
  *
  * On nano-core 0.4 the host (host.ts: the one Application, the nano.ui built-ins, import and save of nano.json) takes
  * the place of composable.ts and nano-app: the docks, the explorer and wiring views and the app bar show its app; the
- * File menu saves `{ app, platform }` (its nano.json and the Platform's pages) and opens or imports either that or a nano.json; `?src=<url>` imports that
+ * File menu saves `{ app, outline }` (its nano.json and the Outline's pages) and opens or imports either that (or the older `{ app, platform }`) or a nano.json; `?src=<url>` imports that
  * nano.json on load, into the stored document boot-host.ts loaded.
  */
 import './boot-theme.ts';
-import { host, platform } from './boot-host.ts';   // before the elements are defined: the docks' palettes list what the host can make
+import { host, outline } from './boot-host.ts';   // before the elements are defined: the docks' palettes list what the host can make
 import { toast } from '@pritzlaff/nano-elements';
 import { clockDriver, timeMachine, type NanoTimeMachine } from '@pritzlaff/nano-ui';
 import './boot-workspace-pages.ts';   // before the shell: it reads its routes as it starts
@@ -38,9 +38,9 @@ import { Coord } from '@pritzlaff/nano-core';
 import type { Page } from '@pritzlaff/nano-outline';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
-if (host && platform) {
-  const h = host, p = platform, target = { app: h.app, registry: h.registry, get calls() { return h.calls(); } };
-  // Main's page (the Platform's): written, never its dock, which shows it once built (it may not be: a deep link elsewhere).
+if (host && outline) {
+  const h = host, p = outline, target = { app: h.app, registry: h.registry, get calls() { return h.calls(); } };
+  // Main's page (the Outline's): written, never its dock, which shows it once built (it may not be: a deep link elsewhere).
   const placedIn = (pod: string) => Object.entries(h.data().runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
   /** The pages with Main's replaced by `edit(Main)`; a refusal shown. */
   const toMain = (edit: (m: Page) => Page) => { const d = p.document().doc, r = applyPages(p, { ...d, pages: { ...d.pages, [MAIN]: edit(d.pages[MAIN]!) } }); if (!r.ok) showStatus(document, r.fail.reason); };
@@ -57,7 +57,7 @@ if (host && platform) {
   const download = (name: string, reconcile = false) => {
     const a = document.createElement('a');
     const saved = h.saved(reconcile), desk = document.querySelector<Desk>('c-desk')?.layout();
-    const file = { app: desk ? { ...saved, layout: { ...saved.layout, desk } } : saved, platform: p.document().doc };   // the pages are the Platform's
+    const file = { app: desk ? { ...saved, layout: { ...saved.layout, desk } } : saved, outline: p.document().doc };   // the pages are the Outline's
     a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' }));
     a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -73,8 +73,8 @@ if (host && platform) {
     new: async () => {
       const d = h.data(), r = await h.apply({ ...d, pods: Object.fromEntries(HOST_PODS.map(p => [p, d.pods[p]!])), runtimes: { main: { pods: [...HOST_PODS], subscriptions: [] } }, tags: {}, views: {}, layout: undefined });
       if (!r.ok) return;
-      toMain(m => { const { icon, order } = metaOf(m), { workspace: _, ...layout } = (m.layout ?? {}) as Record<string, unknown>;   // other clients' layout and meta kept
-        return withMeta({ ...(m.title !== undefined && { title: m.title }), slots: {}, ...(Object.keys(layout).length && { layout }), ...(m.meta !== undefined && { meta: m.meta }) }, { icon, order }); });
+      toMain(m => { const { icon } = metaOf(m), { workspace: _, ...layout } = (m.layout ?? {}) as Record<string, unknown>;   // other clients' layout and meta kept
+        return withMeta({ ...(m.title !== undefined && { title: m.title }), slots: {}, ...(m.children && { children: m.children }), ...(Object.keys(layout).length && { layout }), ...(m.meta !== undefined && { meta: m.meta }) }, { icon }); });
       if (menu) menu.dirty = false;
     },
   };

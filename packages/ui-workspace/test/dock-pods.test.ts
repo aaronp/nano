@@ -1,5 +1,5 @@
 // The docks on their pages with the real host: a dock keeps its page (its engine state in the page's `layout`, its
-// restore point in its `meta`, its panels the page's slots), showing a page opens its pods (`platform.open`, once), and
+// restore point in its `meta`, its panels the page's slots), showing a page opens its pods (`outline.open`, once), and
 // a pick deploys a lazy pod first, then applies its slot.
 import { expect, test } from 'bun:test'
 import { addPod, host, mount, opened, page, pick, place, pod, running, starts, tick, until, type Dock, type H } from './dock-pods-setup.ts'
@@ -8,7 +8,7 @@ test('two pages share a pod: started once, by showing the first page; the second
   const h = await host()
   await place(h, 'main', ['input1'])
   const names = Object.keys(h.data().pods).sort(), started = starts(h), seen = opened(h)
-  const { go, panels } = mount(h, { workspace: page('Main', { a: pod('input1') }, 0), two: page('Two', { b: pod('input1') }) })
+  const { go, panels } = mount(h, { workspace: page('Main', { a: pod('input1') }), two: page('Two', { b: pod('input1') }) })
   await tick()
   expect(h.app.runtime('main').status('input1')).toEqual({ ok: true, value: 'not started' })   // not at boot
   go('workspace')
@@ -81,7 +81,7 @@ test('a slot whose pod fails shows the reason in its panel; the others open', as
   const h = await host()
   await place(h, 'locked', ['x'], 'nano.ui/input', { kind: 'rules', rules: [] })
   await place(h, 'main', ['input1'])
-  const { go, panels } = mount(h, { workspace: page('Main', { x: pod('x', 'locked'), input1: pod('input1') }, 0) })
+  const { go, panels } = mount(h, { workspace: page('Main', { x: pod('x', 'locked'), input1: pod('input1') }) })
   go('workspace')
   await until(() => panels('workspace').length === 2 && panels('workspace').some(p => p.textContent!.includes('no rule allows it')))
   await until(() => running(h, 'input1'))
@@ -90,13 +90,13 @@ test('a slot whose pod fails shows the reason in its panel; the others open', as
 test('a page changed elsewhere (a slot added) shows it in the dock and opens it; one removed goes', async () => {
   const h = await host()
   await place(h, 'main', ['input1', 'input2'])
-  const { go, put, written, panels } = mount(h, { workspace: page('Main', { input1: pod('input1') }, 0) })
+  const { go, put, written, panels } = mount(h, { workspace: page('Main', { input1: pod('input1') }) })
   go('workspace')
   await until(() => panels('workspace').length === 1)
-  put('workspace', page('Main', { input1: pod('input1'), input2: pod('input2'), notes: { kind: 'view', view: 'notes' } }, 0))
+  put('workspace', page('Main', { input1: pod('input1'), input2: pod('input2'), notes: { kind: 'view', view: 'notes' } }))
   await until(() => panels('workspace').length === 3)
   await until(() => running(h, 'input2'))
-  put('workspace', page('Main', { input2: pod('input2') }, 0))
+  put('workspace', page('Main', { input2: pod('input2') }))
   await until(() => panels('workspace').length === 1)
   expect(written('workspace').slots).toEqual({ input2: { kind: 'pod', pod: 'nano.ui/input@main/input2' } })
 })
@@ -104,7 +104,7 @@ test('a page changed elsewhere (a slot added) shows it in the dock and opens it;
 test('closing a panel removes its slot, not its pod', async () => {
   const h = await host()
   await place(h, 'main', ['input1', 'input2'])
-  const { go, written, dock } = mount(h, { workspace: page('Main', { input1: pod('input1'), input2: pod('input2') }, 0) })
+  const { go, written, dock } = mount(h, { workspace: page('Main', { input1: pod('input1'), input2: pod('input2') }) })
   go('workspace')
   await until(() => dock('workspace').querySelectorAll('.dock-panel').length === 2)
   dock('workspace').setTemplate('two-cols')
@@ -117,7 +117,7 @@ test('closing a panel removes its slot, not its pod', async () => {
 test('the dock\'s state is its page\'s: its layout and template in the page\'s `layout.workspace`, its restore point in `meta.workspace`, nothing in localStorage', async () => {
   const h = await host()
   await place(h, 'main', ['input1'])
-  const { go, written, dock } = mount(h, { workspace: page('Main', { input1: pod('input1') }, 0) })
+  const { go, written, dock } = mount(h, { workspace: page('Main', { input1: pod('input1') }) })
   go('workspace')
   await until(() => dock('workspace').querySelectorAll('.dock-panel').length === 1)
   dock('workspace').save()
@@ -128,15 +128,15 @@ test('the dock\'s state is its page\'s: its layout and template in the page\'s `
   expect(localStorage.length).toBe(0)
 })
 
-/** A reload: the pages shown again from the Platform's document, on the same host. */
-const reload = (h: H, from: ReturnType<typeof mount>, open = '') => { const pages = from.platform.document().doc.pages; document.body.innerHTML = ''; return mount(h, pages, open) }
+/** A reload: the pages shown again from the Outline's document, on the same host. */
+const reload = (h: H, from: ReturnType<typeof mount>, open = '') => { const pages = from.outline.document().doc.pages; document.body.innerHTML = ''; return mount(h, pages, open) }
 const swapped = (d: Dock) => { const sel = d.querySelector<HTMLSelectElement>('.tpl-pos select')!; sel.value = sel.options[1]!.value; sel.dispatchEvent(new Event('change')) }
 const order = (d: Dock) => d.arrangement().template?.order.map(p => p?.name)
 
 test('every change is kept (ADR-0036): a move unsaved is there after a reload; Restore returns to what Save kept', async () => {
   const h = await host()
   await place(h, 'main', ['input1', 'input2'])
-  const first = mount(h, { workspace: page('Main', { input1: pod('input1'), input2: pod('input2') }, 0) })
+  const first = mount(h, { workspace: page('Main', { input1: pod('input1'), input2: pod('input2') }) })
   first.go('workspace')
   await until(() => first.panels('workspace').length === 2)
   first.dock('workspace').setTemplate('two-cols')
@@ -183,7 +183,7 @@ test('a slot added to a visited page that is hidden opens its pod only when the 
 test('a view slot this dock has no widget for is kept when the dock rewrites the slots', async () => {
   const h = await host()
   const other = { kind: 'view', view: 'other-front-end-view' } as const
-  const { go, written, dock } = mount(h, { workspace: page('Main', { elsewhere: other, notes: { kind: 'view', view: 'notes' } }, 0) })
+  const { go, written, dock } = mount(h, { workspace: page('Main', { elsewhere: other, notes: { kind: 'view', view: 'notes' } }) })
   go('workspace')
   await until(() => dock('workspace').querySelectorAll('.dock-panel').length === 1)
   dock('workspace').setTemplate('two-cols')   // a dock:layout
@@ -193,7 +193,7 @@ test('a view slot this dock has no widget for is kept when the dock rewrites the
 test('a pod that failed to open is opened on a later apply that lets the host in', async () => {
   const h = await host()
   await place(h, 'locked', ['x'], 'nano.ui/input', { kind: 'rules', rules: [] })
-  const { go, panels } = mount(h, { workspace: page('Main', { x: pod('x', 'locked') }, 0) })
+  const { go, panels } = mount(h, { workspace: page('Main', { x: pod('x', 'locked') }) })
   go('workspace')
   await until(() => panels('workspace')[0]?.textContent === 'no rule allows it')
   const d = h.data()
@@ -204,7 +204,7 @@ test('a pod that failed to open is opened on a later apply that lets the host in
 test('Restore brings back a pod panel closed after Save, and its slot: both are there after a reload (ADR-0036)', async () => {
   const h = await host()
   await place(h, 'main', ['input1', 'input2'])
-  const first = mount(h, { workspace: page('Main', { input1: pod('input1'), input2: pod('input2') }, 0) })
+  const first = mount(h, { workspace: page('Main', { input1: pod('input1'), input2: pod('input2') }) })
   first.go('workspace')
   await until(() => first.panels('workspace').length === 2)
   first.dock('workspace').save()

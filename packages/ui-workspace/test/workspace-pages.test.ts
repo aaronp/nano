@@ -1,11 +1,11 @@
-// Workspace pages shown from the Platform: mount and unmount, + beside the title, the nav's edit mode (rename keeps the id,
-// icon, reorder by `meta.workspace.order`) and Save as, each one `platform.apply`.
+// Workspace pages shown from the Outline: mount and unmount, + beside the title, the nav's edit mode (rename keeps the id,
+// icon, reorder: the tree's order) and Save as (the source's next sibling), each one `outline.apply`.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
 import { flat } from './flat.ts'
 import { bootWorkspacePages, mountWorkspace } from '../src/components/workspace-pages.ts'
-import { moved } from '../src/lib/pages.ts'
+import { move, walk } from '../src/lib/pages.ts'
 import { Application, AppDeployment, Registry, type NanoResult } from '@pritzlaff/nano-core'
 import { Outline, type Page } from '@pritzlaff/nano-outline'
 
@@ -20,15 +20,15 @@ Object.assign(document.querySelector('#workspace')!, { arrangement: () => ({ roo
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const registry = Registry.create(), app = must(await Application.create(must(AppDeployment.assemble({ pods: {}, runtimes: {} }, registry))))
-const platform = Outline.create(app, registry, flat({ workspace: { title: 'Workspace', slots: {}, meta: { workspace: { order: 0 } } } }))
+const outline = Outline.create(app, registry, flat({ workspace: { title: 'Workspace', slots: {} } }))
 let applies = 0
-platform.listen(() => applies++)
-bootWorkspacePages(document, platform)
-const doc = () => JSON.parse(JSON.stringify(platform.document().doc)) as { pages: Record<string, Page & { meta: { workspace: Record<string, unknown> } }> }
+outline.listen(() => applies++)
+bootWorkspacePages(document, outline)
+const doc = () => JSON.parse(JSON.stringify(outline.document().doc)) as { pages: Record<string, Page & { meta: { workspace: Record<string, unknown> } }> }
 const page = (id: string) => doc().pages[id]
 /** A page as the nav shows it: its id, title and icon. */
 const row = (id: string) => { const p = page(id)!, m = p.meta.workspace; return { id, title: p.title, ...(m.icon !== undefined && { icon: m.icon }) } }
-const ids = () => Object.keys(doc().pages).sort((a, b) => a === 'workspace' ? -1 : b === 'workspace' ? 1 : ((page(a)!.meta?.workspace?.order ?? 1e9) as number) - ((page(b)!.meta?.workspace?.order ?? 1e9) as number))
+const ids = () => walk(outline.document().doc)
 const routes = () => [...document.querySelectorAll('app-route')].map(r => r.getAttribute('path'))
 const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector<T>(s)!
 const input = () => $<HTMLInputElement>('input[data-rename]')
@@ -58,12 +58,12 @@ test('the title holds + and ✎; + makes an empty page, goes there and starts it
   $('[data-new-workspace]').click()
   expect(location.hash).toBe('#/new-workspace')
   expect(ids().slice(1)).toEqual(['new-workspace'])
-  expect(page('new-workspace')).toEqual({ title: 'New workspace', slots: {}, meta: { workspace: { icon: 'window', order: 1 } } })
+  expect(page('new-workspace')).toEqual({ title: 'New workspace', slots: {}, meta: { workspace: { icon: 'window' } } })
   expect(routes()).toEqual(['/workspace', '/new-workspace', '*'])
   expect(input().closest('[data-saved]')!.getAttribute('data-saved')).toBe('new-workspace')
   type('', 'Escape')
   $('[data-new-workspace]').click()
-  expect(page('new-workspace-2')).toEqual({ title: 'New workspace', slots: {}, meta: { workspace: { icon: 'window', order: 2 } } })
+  expect(page('new-workspace-2')).toEqual({ title: 'New workspace', slots: {}, meta: { workspace: { icon: 'window' } } })
   type('Desk', 'Escape')
   expect($('[data-saved="new-workspace-2"] [data-name]').textContent).toBe('New workspace')
 })
@@ -167,20 +167,20 @@ test('clicking a focused icon commits it, though removing the grid fires focusou
   expect(page('new-workspace')!.meta.workspace.icon).toBe(icon)
 })
 
-test('Alt+↓ on a handle moves the page down (its order and its neighbour\'s rewritten, one apply), in the nav, and says so; Main has no handle and cannot move', async () => {
+test('Alt+↓ on a handle moves the page down (the roots rewritten, one apply), in the nav, and says so; Main has no handle and cannot move', async () => {
   const before = applies
   $('[data-saved="new-workspace"] [data-handle]').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true }))
   expect(applies).toBe(before + 1)
   expect(ids()).toEqual(['workspace', 'new-workspace-2', 'new-workspace'])
-  expect([page('workspace')!.meta.workspace.order, page('new-workspace-2')!.meta.workspace.order, page('new-workspace')!.meta.workspace.order]).toEqual([0, 1, 2])
+  expect(outline.document().doc.roots).toEqual(['workspace', 'new-workspace-2', 'new-workspace'])
   expect(savedOrder()).toEqual(['new-workspace-2', 'new-workspace'])
   await new Promise(r => setTimeout(r, 60))
   expect($('[aria-live="polite"]').textContent).toBe('Moved Desk down')
   $('[data-saved="new-workspace-2"] [data-handle]').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true }))
   expect(ids()[0]).toBe('workspace')   // up from the first saved page is Main's place: refused
   expect(document.querySelector('[data-workspaces] [data-handle]')).toBeNull()
-  expect(moved(platform.document().doc, 'workspace', 1)).toBeUndefined()
-  expect(moved(platform.document().doc, 'new-workspace', 0)).toBeUndefined()
+  expect(move(outline.document().doc, 'workspace', undefined, 1)).toBeUndefined()
+  expect(move(outline.document().doc, 'new-workspace', undefined, 0)).toBeUndefined()
 })
 
 test("Main's rename is kept with its icon, and its id and route stay", () => {
@@ -191,13 +191,13 @@ test("Main's rename is kept with its icon, and its id and route stay", () => {
   expect($('[data-workspaces] a').dataset.icon).toBe('panels')
 })
 
-test('a page added through the Platform (as a pod would) appears in the nav and routes; a title change relabels; removing unmounts', () => {
-  const put = (id: string, p?: Page) => { const { [id]: _, ...rest } = platform.document().doc.pages; must(platform.apply(flat(p ? { ...rest, [id]: p } : rest))) }
-  put('pod-made', { title: 'Pod made', slots: {}, meta: { workspace: { icon: 'star', order: 9 } } })
+test('a page added through the Outline (as a pod would) appears in the nav and routes; a title change relabels; removing unmounts', () => {
+  const put = (id: string, p?: Page) => { const { [id]: _, ...rest } = outline.document().doc.pages; must(outline.apply(flat(p ? { ...rest, [id]: p } : rest))) }
+  put('pod-made', { title: 'Pod made', slots: {}, meta: { workspace: { icon: 'star' } } })
   expect($('[data-saved="pod-made"] [data-name]').textContent).toBe('Pod made')
   expect(routes()).toContain('/pod-made')
   expect(ids().at(-1)).toBe('pod-made'); expect(savedOrder().at(-1)).toBe('pod-made')
-  put('pod-made', { title: 'Renamed', slots: {}, meta: { workspace: { icon: 'star', order: 9 } } })
+  put('pod-made', { title: 'Renamed', slots: {}, meta: { workspace: { icon: 'star' } } })
   expect($('[data-saved="pod-made"] [data-name]').textContent).toBe('Renamed')
   expect($('[data-saved="pod-made"] a').getAttribute('href')).toBe('#/pod-made')
   location.hash = '#/pod-made'
@@ -207,10 +207,14 @@ test('a page added through the Platform (as a pod would) appears in the nav and 
   expect(location.hash).toBe('#/workspace')
 })
 
-test('Save as workspace copies the page into "<title> copy" (same slots, its arrangement as the page\'s `layout.workspace`, a new id, last) and starts its rename', () => {
+test('Save as workspace copies the page only (not its children) into "<title> copy" (same slots, its arrangement as the page\'s `layout.workspace`, a new id), its next sibling, and starts its rename', () => {
+  const d = outline.document().doc
+  must(outline.apply({ ...d, pages: { ...d.pages, workspace: { ...d.pages['workspace']!, children: ['kid'] }, kid: { slots: {} } } }))
   $('#workspace').dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true }))
-  expect(ids().at(-1)).toBe('home-copy')
-  expect(page('home-copy')).toEqual({ title: 'Home copy', slots: {}, layout: { workspace: { root: { type: 'row' }, template } }, meta: { workspace: { icon: 'panels', order: 3 } } })
+  expect(outline.document().doc.roots.slice(0, 2)).toEqual(['workspace', 'home-copy'])
+  expect(page('home-copy')).toEqual({ title: 'Home copy', slots: {}, layout: { workspace: { root: { type: 'row' }, template } }, meta: { workspace: { icon: 'panels' } } })
+  const now = outline.document().doc, { kid: _, ...rest } = now.pages
+  must(outline.apply({ ...now, pages: { ...rest, workspace: { ...rest['workspace']!, children: [] } } }))
   expect(location.hash).toBe('#/home-copy')
   expect(input().closest('[data-saved]')!.getAttribute('data-saved')).toBe('home-copy')
   type('', 'Escape')
@@ -218,7 +222,7 @@ test('Save as workspace copies the page into "<title> copy" (same slots, its arr
 
 test('a new page\'s id avoids every page\'s id, not only mounted routes: another client\'s `inbox` (at /p/inbox) and a page whose route is not mounted stay as they are', () => {
   const inbox = { title: 'Inbox', slots: { n: { kind: 'view' as const, view: 'notes' } }, meta: { other: 1 } }
-  must(platform.apply(flat({ ...platform.document().doc.pages, inbox })))
+  must(outline.apply(flat({ ...outline.document().doc.pages, inbox })))
   expect(routes()).toContain('/p/inbox')
   const copy = page('home-copy')
   $('app-route[path="/home-copy"]').remove()   // its route not mounted (yet)
@@ -230,10 +234,10 @@ test('a new page\'s id avoids every page\'s id, not only mounted routes: another
 })
 
 test('a page id holding `"` mounts and unmounts: its selectors are escaped', () => {
-  const d = platform.document().doc
-  must(platform.apply(flat({ ...d.pages, 'q"t': { title: 'Quote', slots: {}, meta: { workspace: { order: 99 } } } })))
+  const d = outline.document().doc
+  must(outline.apply(flat({ ...d.pages, 'q"t': { title: 'Quote', slots: {} } })))
   expect(routes()).toContain('/q"t')
-  must(platform.apply(flat(d.pages)))
+  must(outline.apply(flat(d.pages)))
   expect(routes()).not.toContain('/q"t')
   expect(savedOrder()).not.toContain('q"t')
 })

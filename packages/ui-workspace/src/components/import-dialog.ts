@@ -83,7 +83,7 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
   });
   d.addEventListener('input', (e) => { if ((e.target as HTMLElement).dataset?.['runtime']) check(); });
   const reset = () => { button().disabled = true; $('.preview').replaceChildren(); say(''); shown = undefined; got = undefined; };
-  /** The app of `file` (a nano.json, or a `{ app, platform }` bundle's), if it has pods; if not, says so of `name`. */
+  /** The app of `file` (a nano.json, or an `{ app, outline }` or `{ app, platform }` bundle's), if it has pods; if not, says so of `name`. */
   const asDeployment = (file: unknown, name: string): AppDeployment | undefined => {
     const o = opened(file), x = o.ok ? o.value.app : undefined;
     if (!o.ok) say(`${name}: ${o.fail.reason}`);

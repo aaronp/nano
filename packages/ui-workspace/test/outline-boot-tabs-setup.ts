@@ -4,7 +4,7 @@ import { expect } from 'bun:test'
 import { flat } from './flat.ts'
 import { tick } from './host-deploy-setup.ts'
 
-export const KEY = 'nano-workspace.document', PAGES = 'nano-workspace.platform'
+export const KEY = 'nano-workspace.document', PAGES = 'nano-workspace.outline'
 const stored = () => Object.keys(JSON.parse(localStorage.getItem(PAGES)!).pages)
 
 /** Pagehide flushes a pending save; a write from another tab to `key` stops saving here and says so. */
@@ -16,9 +16,9 @@ export async function anotherTab(key: string) {
   const blobs = new Map<string, Blob>(), make = URL.createObjectURL.bind(URL), domFetch = globalThis.fetch
   URL.createObjectURL = (b: Blob) => { const u = make(b); blobs.set(u, b); return u }
   globalThis.fetch = (async (u: string, ...rest: unknown[]) => blobs.has(u) ? new Response(blobs.get(u)) : (domFetch as Function)(u, ...rest)) as never
-  const { host, platform } = await import('../src/boot-host.ts')
-  if (!host || !platform) throw new Error('the host did not start')
-  const add = (id: string) => platform.apply(flat({ ...platform.document().doc.pages, [id]: { slots: {} } }))
+  const { host, outline } = await import('../src/boot-host.ts')
+  if (!host || !outline) throw new Error('the host did not start')
+  const add = (id: string) => outline.apply(flat({ ...outline.document().doc.pages, [id]: { slots: {} } }))
   await tick(400)
   add('one')
   expect(stored()).toEqual(['workspace'])   // debounced

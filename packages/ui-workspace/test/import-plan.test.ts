@@ -140,3 +140,11 @@ test('a home-origin pod stays home-origin under either Trust (it runs as its own
   expect(selectPods(d, new Set(['b'])).deployment.frames).toEqual({ 'other.x': 'https://other.x/frame.html' })
   expect(selectPods(d, new Set(['a'])).deployment.frames).toEqual({})
 })
+
+test('renameRuntimes and selectPods on a tree keep its roots and children', () => {
+  const tree = pagesOf({ roots: ['p'], pages: { p: { slots: { a: { kind: 'pod', pod: 'acme.template/timer@main/a' } }, children: ['q'] }, q: { slots: {} } } })
+  for (const out of [renameRuntimes(tree, { main: 'm2' }), selectPods(tree, new Set())]) {
+    expect(out.roots).toEqual(['p'])
+    expect(out.pages['p']!.children).toEqual(['q'])
+  }
+})

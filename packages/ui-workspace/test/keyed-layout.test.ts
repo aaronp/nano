@@ -42,15 +42,15 @@ test('an old stored document moves to the new shape at boot, nothing lost; the w
     two: { slots: {}, meta: { title: 'Two', order: 1 } },
   } }
   const booted = must(await bootPages(h, localStorage, null, old))
-  expect(JSON.parse(JSON.stringify(booted))).toEqual({ roots: ['workspace', 'lab', 'two'], pages: {
-    workspace: { title: 'Home', slots: {}, meta: { workspace: { icon: 'home', order: 0 } } },
+  expect(JSON.parse(JSON.stringify(booted))).toEqual({ roots: ['workspace', 'two', 'lab'], pages: {   // the old order the roots', dropped
+    workspace: { title: 'Home', slots: {}, meta: { workspace: { icon: 'home' } } },
     lab: { title: 'Lab', slots: { notes: { kind: 'view', view: 'notes' } }, layout: { workspace: { ...engine, template, 'window-style': 'glass' } },
-      meta: { workspace: { icon: 'star', order: 2, saved, 'saved.template': savedTemplate } } },
-    two: { title: 'Two', slots: {}, meta: { workspace: { order: 1 } } },
+      meta: { workspace: { icon: 'star', saved, 'saved.template': savedTemplate } } },
+    two: { title: 'Two', slots: {} },
   } })
   expect(must(await bootPages(h, localStorage, null, booted))).toEqual(booted)   // already moved: left as it is
   const { pages } = booted
-  mount(h, pages)
+  mount(h, Object.fromEntries(booted.roots.map(id => [id, pages[id]!])))
   const row = (id: string) => document.querySelector<HTMLElement>(`[data-saved="${id}"] a`)!
   expect([...document.querySelectorAll<HTMLElement>('[data-saved]')].map(r => r.dataset['saved'])).toEqual(['two', 'lab'])   // order
   expect([row('lab').title, row('lab').dataset['icon']]).toEqual(['Lab', 'star'])   // title, icon

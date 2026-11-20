@@ -1,16 +1,16 @@
 /**
- * The workspace's pages, shown from the Platform's document (ADR-0038): one nav row (a drag handle for edit mode, then
- * its link), one route (`routeOf`) and one dock of Main's widgets per page, in nav order (lib/pages.ts: Main, then order);
- * Main is the page `workspace` at /workspace, its row and dock in index.html. The Platform's changes mount, unmount,
+ * The workspace's pages, shown from the Outline's document (ADR-0038): one nav row (a drag handle for edit mode, then
+ * its link), one route (`routeOf`) and one dock of Main's widgets per page, in the tree's order (lib/pages.ts `walk`; flat for now);
+ * Main is the page `workspace` at /workspace, its row and dock in index.html. The Outline's changes mount, unmount,
  * relabel and reorder them, whoever made them (this nav, a pod through HostOutline, an import). A page's id is its
  * route and never changes; a rename changes its `title`. Each dock keeps its page (dock/page-docks.ts: its state
  * the page's `layout`, its panels the page's slots). Beside the app's title, + makes an empty page and ✎ toggles the
  * nav's edit mode (nav-edit.ts); the dock's "Save as workspace…" copies a page (its slots and arrangement) into
- * "<title> copy". Each edit is one `next`, applied by `applyPages` (the workspace's rules checked first).
+ * "<title> copy", its next sibling. Each edit is one `next`, applied by `applyPages` (the workspace's rules checked first).
  */
 import type { Page, Outline } from '@pritzlaff/nano-outline';
 import { ICONS } from '../lib/icons.ts';
-import { applyPages, FIXED, metaOf, ordered, routeOf, slugPath, withMeta, MAIN } from '../lib/pages.ts';
+import { applyPages, FIXED, metaOf, move, parentOf, routeOf, slugPath, walk, withMeta, MAIN } from '../lib/pages.ts';
 import { showStatus } from '../lib/status.ts';
 import { keepDocks } from '../dock/page-docks.ts';
 import { navEdit } from './nav-edit.ts';
@@ -73,18 +73,18 @@ export function mountWorkspace(doc: Document, p: Row): void {
   if (fallback) fallback.before(route); else mainRoute.parentElement?.append(route);
 }
 
-/** Shows the Platform's pages, and handles +, edits in the nav and the dock's "Save as workspace…". */
-export function bootWorkspacePages(doc: Document, platform: ReturnType<typeof Outline.create>): void {
+/** Shows the Outline's pages, and handles +, edits in the nav and the dock's "Save as workspace…". */
+export function bootWorkspacePages(doc: Document, outline: ReturnType<typeof Outline.create>): void {
   doc.querySelector('[slot="title"]')?.append(button(doc, 'newWorkspace', 'New workspace', '+'), button(doc, 'editNav', 'Edit workspaces', '✎'));
   doc.querySelector('[data-edit-nav]')?.setAttribute('aria-pressed', 'false');
   const rows = () => [...doc.querySelectorAll<HTMLElement>('[data-saved]')];
   /** Routes and ids a new page's id avoids: every route, every page's id (one on a fixed route is at /p/<id>), every fixed route. */
-  const taken = () => [...[...doc.querySelectorAll('app-route')].map((r) => r.getAttribute('path') ?? ''), ...[...Object.keys(platform.document().doc.pages), ...FIXED].map((id) => `/${id}`)];
+  const taken = () => [...[...doc.querySelectorAll('app-route')].map((r) => r.getAttribute('path') ?? ''), ...[...Object.keys(outline.document().doc.pages), ...FIXED].map((id) => `/${id}`)];
 
-  const apply = (next: Outline) => { const r = applyPages(platform, next); if (!r.ok) showStatus(doc, r.fail.reason); return r.ok; };
-  /** Makes the nav, routes and docks what the Platform holds: new pages mounted, gone ones unmounted, titles and icons relabelled, order kept. */
+  const apply = (next: Outline) => { const r = applyPages(outline, next); if (!r.ok) showStatus(doc, r.fail.reason); return r.ok; };
+  /** Makes the nav, routes and docks what the Outline holds: new pages mounted, gone ones unmounted, titles and icons relabelled, order kept. */
   const sync = () => {
-    const d = platform.document().doc, [main, ...rest] = ordered(d).map((id) => rowOf(d, id));
+    const d = outline.document().doc, [main, ...rest] = walk(d).map((id) => rowOf(d, id));
     for (const row of rows()) if (!rest.some((p) => p.id === row.dataset.saved)) {
       const id = row.dataset.saved!;
       row.remove(); [...doc.querySelectorAll('app-route')].find((r) => r.getAttribute('path') === routeOf(id))?.remove();   // by value: no selector to escape
@@ -102,19 +102,20 @@ export function bootWorkspacePages(doc: Document, platform: ReturnType<typeof Ou
     const link = doc.querySelector<HTMLAnchorElement>('[data-workspaces] > a');
     if (link && main && (link.title !== main.title || link.dataset.icon !== (main.icon ?? MAIN_ICON))) label(link, main.title, main.icon ?? MAIN_ICON);
   };
-  platform.listen(sync);
+  outline.listen(sync);
   sync();
-  keepDocks(doc, platform);
-  const edit = navEdit(doc, platform, (row, title, icon) => {
-    const d = platform.document().doc, id = row.dataset.saved ?? MAIN, p = d.pages[id];
+  keepDocks(doc, outline);
+  const edit = navEdit(doc, outline, (row, title, icon) => {
+    const d = outline.document().doc, id = row.dataset.saved ?? MAIN, p = d.pages[id];
     if (p) apply({ ...d, pages: { ...d.pages, [id]: withMeta({ ...p, title }, { ...metaOf(p), icon }) } });
   });
 
-  /** A new page, last: `page` under a new id slugged from `title`; then its rename. */
-  const add = (title: string, icon: string | undefined, page: Page) => {
-    const id = slugPath(title, taken()).slice(1), d = platform.document().doc;
-    const order = Math.max(0, ...Object.values(d.pages).map((p) => metaOf(p).order ?? 0)) + 1;
-    if (!apply({ roots: [...d.roots, id], pages: { ...d.pages, [id]: withMeta({ ...page, title }, { ...(icon !== undefined && { icon }), order }) } })) return;
+  /** A new page, the last root or the next sibling of page `after`: `page` under a new id slugged from `title`; then its rename. */
+  const add = (title: string, icon: string | undefined, page: Page, after?: string) => {
+    const id = slugPath(title, taken()).slice(1), d = outline.document().doc, parent = after === undefined ? undefined : parentOf(d, after);
+    const next: Outline = { roots: [...d.roots, id], pages: { ...d.pages, [id]: withMeta({ ...page, title }, { ...(icon !== undefined && { icon }) }) } };
+    const list = parent === undefined ? d.roots : d.pages[parent]!.children ?? [];
+    if (!apply(after === undefined ? next : move(next, id, parent, list.indexOf(after) + 1)!)) return;
     location.hash = `#${routeOf(id)}`;
     edit.rename(rows().find((r) => r.dataset.saved === id)!);
   };
@@ -123,7 +124,7 @@ export function bootWorkspacePages(doc: Document, platform: ReturnType<typeof Ou
     if ((e.target as Element | null)?.closest?.('[data-new-workspace]')) add('New workspace', 'window', { slots: {} });
   });
   doc.addEventListener('dock:save-as', (e) => {
-    const dock = e.target as WorkspaceDock, at = dock.closest('app-route')?.getAttribute('path'), d = platform.document().doc, id = Object.keys(d.pages).find((p) => routeOf(p) === at);
-    if (id) { const r = rowOf(d, id); add(`${r.title} copy`, r.icon, { slots: d.pages[id]!.slots, layout: { workspace: dock.arrangement() } }); }
+    const dock = e.target as WorkspaceDock, at = dock.closest('app-route')?.getAttribute('path'), d = outline.document().doc, id = Object.keys(d.pages).find((p) => routeOf(p) === at);
+    if (id) { const r = rowOf(d, id); add(`${r.title} copy`, r.icon, { slots: d.pages[id]!.slots, layout: { workspace: dock.arrangement() } }, id); }   // the page only, not its children
   });
 }

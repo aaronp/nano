@@ -1,5 +1,5 @@
 /**
- * Import: fetch a `nano.json` (or File › Save's `{ app, platform }`: its app; the pages are the caller's), load its provider modules, and merge it into what is loaded. The caller applies the
+ * Import: fetch a `nano.json` (or File › Save's `{ app, outline }` or `{ app, platform }`: its app; the pages are the caller's), load its provider modules, and merge it into what is loaded. The caller applies the
  * deployment. Nothing throws, and on failure `loaded` is unchanged. A provider on another origin than this page is
  * foreign: `confirm` is asked once for all of them, then each is probed (`deps.probe`) and loaded, so its views are
  * defined; one of its pods that runs with this page's access (`host` here, `sandbox` through `isolated`) asks `approve` first.
@@ -42,7 +42,7 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
   try {
     const res = await fetch(url)
     if (!res.ok) return failure('invalid-input', `cannot load ${url}: ${res.status}`)
-    const file = opened(await res.json())   // a { app, platform } bundle's app; the old pages out of a nano.json's layout
+    const file = opened(await res.json())   // an { app, outline } (or { app, platform }) bundle's app; the old pages out of a nano.json's layout
     if (!file.ok) return file
     const fetched = file.value.app, incoming = deps.edit ? deps.edit(fetched) : fetched
     // a local file (a blob: URL) is no base: its modules resolve against the page, as saved

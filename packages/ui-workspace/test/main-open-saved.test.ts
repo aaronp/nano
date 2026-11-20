@@ -9,12 +9,12 @@ test('save the bundle, then open it: the same pages, nothing duplicated; after N
   document.body.innerHTML = html.slice(html.indexOf('>', html.indexOf('<body')) + 1, html.lastIndexOf('<script type="module">'))
   location.hash = '#/two'
   const at = URL.parse('./bundle/nano-ui.js', location.href)!.href
-  const pages = { pages: {
-    workspace: { title: 'Main', slots: { x: { kind: 'view', view: 'nano-explorer' } }, layout: { workspace: { root: { type: 'row', content: [] }, 'window-style': 'clear' } }, meta: { workspace: { order: 0, saved: { root: { type: 'column', content: [] } } } } },
-    two: { title: 'Two', slots: {}, meta: { workspace: { order: 1 } } },
+  const pages = { roots: ['workspace'], pages: {
+    workspace: { title: 'Main', slots: { x: { kind: 'view', view: 'nano-explorer' } }, layout: { workspace: { root: { type: 'row', content: [] }, 'window-style': 'clear' } }, meta: { workspace: { saved: { root: { type: 'column', content: [] } } } }, children: ['two'] },
+    two: { title: 'Two', slots: {} },
   } }
   localStorage.setItem('nano-workspace.document', JSON.stringify({ pods: {}, runtimes: {}, modules: { 'nano.ui': at }, views: {} }))
-  localStorage.setItem('nano-workspace.platform', JSON.stringify(pages))
+  localStorage.setItem('nano-workspace.outline', JSON.stringify(pages))
   // happy-dom fetches no blob: URL (a browser does); the saved file is served as an example
   const blobs = new Map<string, Blob>(), make = URL.createObjectURL.bind(URL), domFetch = globalThis.fetch
   let saved: Blob | undefined
@@ -22,15 +22,15 @@ test('save the bundle, then open it: the same pages, nothing duplicated; after N
   globalThis.fetch = (async (u: string, ...rest: unknown[]) => blobs.has(u) ? new Response(blobs.get(u)) : u.endsWith('examples/saved/nano.json') ? new Response(saved) : (domFetch as Function)(u, ...rest)) as never
   HTMLAnchorElement.prototype.click = function () {}   // a download (happy-dom would navigate to it)
   await import('../src/main.ts')
-  const { platform, host } = await import('../src/boot-host.ts')
-  const p = platform!, now = () => JSON.parse(JSON.stringify(p.document().doc))
+  const { outline, host } = await import('../src/boot-host.ts')
+  const p = outline!, now = () => JSON.parse(JSON.stringify(p.document().doc))
   const before = blobs.size
   document.dispatchEvent(new CustomEvent('file:save'))
   saved = [...blobs.values()][before]!
   const file = JSON.parse(await saved.text())
-  expect(Object.keys(file)).toEqual(['app', 'platform'])
+  expect(Object.keys(file)).toEqual(['app', 'outline'])
   const was = now()   // as saved: the shown dock's arrangement written in
-  expect(file.platform).toEqual(was)
+  expect(file.outline).toEqual(was)
   expect(was.pages.workspace).toEqual(pages.pages.workspace)
   const applied = new Promise<void>(r => host!.app.listen(e => { if (e.type === 'applied') r() }))
   document.dispatchEvent(new CustomEvent('file:example', { detail: { name: 'saved' } }))
@@ -50,4 +50,5 @@ test('save the bundle, then open it: the same pages, nothing duplicated; after N
   await again; await tick(50)
   expect(now().pages.workspace).toEqual(pages.pages.workspace)
   expect(Object.keys(now().pages)).toEqual(['workspace', 'two'])
+  expect(now().roots).toEqual(['workspace'])   // Main's child kept, not placed twice
 })

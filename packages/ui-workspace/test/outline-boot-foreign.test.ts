@@ -22,5 +22,5 @@ test('a foreign provider in the stored document is confirmed at boot; cancelled,
   expect(document.querySelector('[data-nano-status]')).not.toBeNull()
   await tick(400)
   expect(localStorage.getItem(KEY)).toBe(stored)
-  expect(localStorage.getItem('nano-workspace.platform')).toBeNull()
+  expect(localStorage.getItem('nano-workspace.outline')).toBeNull()
 })

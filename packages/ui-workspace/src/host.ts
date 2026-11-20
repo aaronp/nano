@@ -1,7 +1,7 @@
 /**
  * The host: the one `Application`, what is loaded (`Loaded`: the deployment with its modules and view selectors, the
- * registry, the default views), and import, apply and save over them. Its own pods are `ui` (HostUI), `deploy` and `platform`
- * (HostDeploy, HostOutline over `start(platform)`'s Platform: host-deploy.ts, host-platform-pod.ts) in runtime `main`, never saved. A failure is shown with `toast()` and changes nothing.
+ * registry, the default views), and import, apply and save over them. Its own pods are `ui` (HostUI), `deploy` and `outline`
+ * (HostDeploy, HostOutline over `start(outline)`'s Outline: host-deploy.ts, host-outline-pod.ts) in runtime `main`, never saved. A failure is shown with `toast()` and changes nothing.
  *
  *   const host = (await start()).value
  *   await host.importUrl('/examples/slice/nano.json')   // importApp, then apply
@@ -17,7 +17,7 @@ import { confirmImports } from './import-confirm.ts'
 import { probe } from './described.ts'
 import { hostUi } from './host-ui.ts'
 import { approvalPolicy, deployPod, hostProvider, HOST_PODS } from './host-deploy.ts'
-import { platformPod } from './host-platform-pod.ts'
+import { outlinePod } from './host-outline-pod.ts'
 import { edgesFor } from './sandbox/edges.ts'
 import { openFrame } from './sandbox/frames.ts'
 import { connected } from './auto-connect.ts'
@@ -46,7 +46,7 @@ export type Host = {
   calls(): OpCall[]
 }
 
-const [HOST, DEPLOY, PLATFORM] = HOST_PODS, MAIN = 'main'
+const [HOST, DEPLOY, OUTLINE] = HOST_PODS, MAIN = 'main'
 /** `d` with `own` taken out of `main` (dropped once empty), still among the pods. Pure. (Import keeps `deploy`'s edges.) */
 function unplaced(d: AppDeployment, own = [HOST]): AppDeployment {
   const out = structuredClone(d), main = out.runtimes[MAIN]
@@ -64,10 +64,10 @@ function withoutHost(d: AppDeployment): AppDeployment {
   return out
 }
 
-/** `d` with the host pods first in `main` (`deploy` and `platform` unless there). Pure. */
+/** `d` with the host pods first in `main` (`deploy` and `outline` unless there). Pure. */
 function placed(d: AppDeployment): AppDeployment {
-  const main = d.runtimes[MAIN] ?? { pods: [], subscriptions: [] }, more = [DEPLOY, PLATFORM].filter(p => !main.pods.includes(p))
-  return { ...d, pods: { [HOST]: Pod.eager(hostUi), [DEPLOY]: deployPod, [PLATFORM]: platformPod, ...d.pods }, runtimes: { ...d.runtimes, [MAIN]: { ...main, pods: [HOST, ...more, ...main.pods] } } }
+  const main = d.runtimes[MAIN] ?? { pods: [], subscriptions: [] }, more = [DEPLOY, OUTLINE].filter(p => !main.pods.includes(p))
+  return { ...d, pods: { [HOST]: Pod.eager(hostUi), [DEPLOY]: deployPod, [OUTLINE]: outlinePod, ...d.pods }, runtimes: { ...d.runtimes, [MAIN]: { ...main, pods: [HOST, ...more, ...main.pods] } } }
 }
 
 /** nano.ui's URL as importApp stores a provider: its path on http(s), else whole (a file: page, in tests). Relative to
@@ -80,10 +80,10 @@ const shown = <T>(r: NanoResult<T>): NanoResult<T> => {
   return r
 }
 
-export async function start(platform?: Parameters<typeof hostProvider>[1]): Promise<NanoResult<Host>> {
+export async function start(outline?: Parameters<typeof hostProvider>[1]): Promise<NanoResult<Host>> {
   // nano.ui is bundle/nano-ui.js under the page: through the import map, the module this file imports.
   const registry = Registry.create()
-  for (const p of [uiProvider, hostProvider(() => live(), platform)]) { const added = registry.add(p); if (!added.ok) return added }
+  for (const p of [uiProvider, hostProvider(() => live(), outline)]) { const added = registry.add(p); if (!added.ok) return added }
   const first = placed({ pods: {}, runtimes: {}, modules: { "nano.ui": nanoUi }, views: {} })
   const runtimes = AppDeployment.assemble(first, registry)
   if (!runtimes.ok) return runtimes

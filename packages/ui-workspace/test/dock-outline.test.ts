@@ -1,4 +1,4 @@
-// The docks on the Platform: a drag is one `platform.apply` and no Application event; a slot whose pod was undeployed
+// The docks on the Outline: a drag is one `outline.apply` and no Application event; a slot whose pod was undeployed
 // stays and shows "not found" with a remove button, and comes back when the pod does (Review Focus 2); a `select` slot
 // shows its first match and how many matched, and stays a `select` when the dock rewrites the slots (Review Focus 3).
 import { expect, test } from 'bun:test'
@@ -8,15 +8,15 @@ import { host, mount, page, place, pod, running, tick, undeploy, until } from '.
 
 type GL = { rootItem: { contentItems: { size: number }[] }; emit(e: string): void }
 
-test('a drag is one platform.apply, of the page\'s layout alone, and no Application `applied`', async () => {
+test('a drag is one outline.apply, of the page\'s layout alone, and no Application `applied`', async () => {
   const h = await host()
   await place(h, 'main', ['input1', 'input2'])
-  const { go, dock, panels, platform, written } = mount(h, { workspace: page('Main', { a: pod('input1'), b: pod('input2') }, 0) })
+  const { go, dock, panels, outline, written } = mount(h, { workspace: page('Main', { a: pod('input1'), b: pod('input2') }) })
   go('workspace')
   await until(() => panels('workspace').length === 2 && running(h, 'input2'))
   await tick()
   const changes: unknown[] = [], events: string[] = [], slots = written('workspace').slots, was = JSON.stringify(written('workspace').layout)
-  platform.listen(c => changes.push(c)); h.app.listen(e => events.push(e.type))
+  outline.listen(c => changes.push(c)); h.app.listen(e => events.push(e.type))
   const gl = (dock('workspace') as unknown as { layout: GL }).layout
   gl.rootItem.contentItems[0]!.size = 20; gl.rootItem.contentItems[1]!.size = 80   // the sizes a splitter drag leaves
   gl.emit('stateChanged')   // what golden-layout says when a drag ends
@@ -30,7 +30,7 @@ test('a drag is one platform.apply, of the page\'s layout alone, and no Applicat
 test('an undeployed pod\'s slot stays and shows "not found" with a remove button; redeployed, it shows again; Remove drops the slot (Review Focus 2)', async () => {
   const h = await host()
   await place(h, 'main', ['input1', 'input2'])
-  const { go, panels, written } = mount(h, { workspace: page('Main', { a: pod('input1'), b: pod('input2') }, 0) })
+  const { go, panels, written } = mount(h, { workspace: page('Main', { a: pod('input1'), b: pod('input2') }) })
   go('workspace')
   await until(() => panels('workspace').length === 2 && running(h, 'input1'))
   await undeploy(h, 'input1')
@@ -54,7 +54,7 @@ test('an undeployed pod\'s slot stays and shows "not found" with a remove button
 
 test('a missing slot is never deployed or started by the dock', async () => {
   const h = await host(), names = Object.keys(h.data().pods)
-  const { go, panels } = mount(h, { workspace: page('Main', { a: pod('nowhere') }, 0) })
+  const { go, panels } = mount(h, { workspace: page('Main', { a: pod('nowhere') }) })
   go('workspace')
   await until(() => panels('workspace')[0]?.textContent?.includes('not found') ?? false)
   await tick()
@@ -67,7 +67,7 @@ test('a select slot matching pods in two runtimes shows the first (by runtime, t
   const h = await host()
   await place(h, 'b', ['inb'])
   await place(h, 'a', ['ina'])
-  const { go, panels } = mount(h, { workspace: page('Main', { any: select, fromA: pod('ina', 'a'), fromB: pod('inb', 'b') }, 0) })
+  const { go, panels } = mount(h, { workspace: page('Main', { any: select, fromA: pod('ina', 'a'), fromB: pod('inb', 'b') }) })
   go('workspace')
   await until(() => panels('workspace').length === 3 && running(h, 'ina', 'a') && running(h, 'inb', 'b'))
   const views = panels('workspace').map(p => (p.firstElementChild as { target?: { runtime: string; pod: string } } | null)?.target)
@@ -78,7 +78,7 @@ test('a select slot matching pods in two runtimes shows the first (by runtime, t
 test('a select slot stays a select when the dock rewrites the slots (a dock:layout)', async () => {
   const h = await host()
   await place(h, 'a', ['ina'])
-  const { go, dock, panels, written } = mount(h, { workspace: page('Main', { any: select, notes: { kind: 'view', view: 'notes' } }, 0) })
+  const { go, dock, panels, written } = mount(h, { workspace: page('Main', { any: select, notes: { kind: 'view', view: 'notes' } }) })
   go('workspace')
   await until(() => panels('workspace').length === 2)
   dock('workspace').setTemplate('two-cols')   // a dock:layout

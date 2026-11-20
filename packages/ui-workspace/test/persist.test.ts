@@ -47,3 +47,15 @@ test('the first save that works removes every old key, once a session; one that 
   m.set('workspace-starter.layout', '{}'); p.save(doc, pages)
   expect(m.has('workspace-starter.layout')).toBe(true)   // once a session
 })
+
+test('the pages are read from the old key when the new one is absent; the old key goes after a good save, not after a failed one', () => {
+  const { m, storage } = memory(), p = persisted(storage, 'k', 'p', 'old')
+  m.set('old', JSON.stringify(pages))
+  expect(p.pages()).toEqual(pages)
+  persisted({ ...storage, setItem() { throw new Error('full') } } as unknown as Storage, 'k', 'p', 'old').save(doc, pages)
+  expect(m.has('old')).toBe(true)
+  p.save(doc, pages)
+  expect(m.has('old')).toBe(false)
+  m.set('old', JSON.stringify(flat({})))
+  expect(p.pages()).toEqual(pages)   // the new key first
+})

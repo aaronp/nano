@@ -1,6 +1,6 @@
 /**
- * What a page's pod panels show (ADR-0038). `pagePods(platform, id, quiet)` holds page `id`'s slots as the Platform last
- * opened them: `open()` is the one way they start (`platform.open`: each slot's first resolved pod got or created,
+ * What a page's pod panels show (ADR-0038). `pagePods(outline, id, quiet)` holds page `id`'s slots as the Outline last
+ * opened them: `open()` is the one way they start (`outline.open`: each slot's first resolved pod got or created,
  * reused if running), called when the page's dock shows and again when its slots or their resolution change (by
  * dock/page-docks.ts); calls while one runs are one more after it. `add` gives a pick (or an explorer's pod) its `pod`
  * slot, the dock's own write; `remove` drops a slot as a change made elsewhere (its panel goes).
@@ -9,7 +9,7 @@
  * to open (tried again on a later apply while its page shows); or "<slot>: not found" with a Remove button (focus
  * then goes to the dock's area), never deploying or starting it. The notes are `role="status"`.
  *
- *   dock.pods = pagePods(platform, 'workspace', quiet); dock.pods.open()
+ *   dock.pods = pagePods(outline, 'workspace', quiet); dock.pods.open()
  *   const stop = podPanel(container.element, 'any', host, dock.pods)
  */
 import { Coord, type AppDeployment } from '@pritzlaff/nano-core'
@@ -33,33 +33,33 @@ export const viewTags = (h: Host, pod: string, impl: string) =>
 
 export type PagePods = ReturnType<typeof pagePods>
 
-export function pagePods(platform: Instance, id: string, quiet: (f: () => void) => void) {
+export function pagePods(outline: Instance, id: string, quiet: (f: () => void) => void) {
   let opened: Record<string, Opened> = {}, running = false, again = false
   const heard = new Set<() => void>()
   const open = (): void => {
     if (running) { again = true; return }
     running = true
-    void platform.open(id).then(r => { opened = r; for (const fn of [...heard]) fn() })
+    void outline.open(id).then(r => { opened = r; for (const fn of [...heard]) fn() })
       .catch((e: unknown) => showStatus(document, `The page's pods did not open: ${e instanceof Error ? e.message : String(e)}`))
       .finally(() => { running = false; if (again) { again = false; open() } })
   }
   /** Page `id` with `slots` rewritten by `f`; a refusal shown. */
   const write = (f: (slots: Slots) => Slots) => {
-    const d = platform.document().doc, p = d.pages[id]
-    const r = p && applyPages(platform, { ...d, pages: { ...d.pages, [id]: { ...p, slots: f(p.slots) } } })
+    const d = outline.document().doc, p = d.pages[id]
+    const r = p && applyPages(outline, { ...d, pages: { ...d.pages, [id]: { ...p, slots: f(p.slots) } } })
     if (r && !r.ok) showStatus(document, r.fail.reason)
   }
   return {
     open,
     /** What slot `slot` showed when last opened, and how many pods it matches now. */
     get(slot: string): { opened?: Opened; matched: number } {
-      const r = platform.resolve(id)[slot]
+      const r = outline.resolve(id)[slot]
       return { opened: opened[slot], matched: r?.kind === 'pod' ? r.pods.length : 0 }
     },
     listen(fn: () => void): () => void { heard.add(fn); return () => { heard.delete(fn) } },
     /** The page's slot showing pod `pod` of runtime `runtime` (its implementation `d`'s): a `pod` slot added (the dock's own write) and opened, if none was; none if `d` does not place it there. */
     add(d: AppDeployment, runtime: string, pod: string): string | undefined {
-      const impl = d.pods[pod]?.implementation, slots = platform.document().doc.pages[id]?.slots
+      const impl = d.pods[pod]?.implementation, slots = outline.document().doc.pages[id]?.slots
       if (!impl || !slots || !d.runtimes[runtime]?.pods.includes(pod)) return undefined
       const at = Coord.pod(Coord.parse('implementation', impl), Coord.runtime(runtime), pod), text = String(at)
       const known = Object.entries(slots).find(([, s]) => s.kind === 'pod' && String(s.pod) === text)?.[0]
@@ -99,7 +99,7 @@ export function podPanel(el: HTMLElement, slot: string, h: Host, pods: PagePods)
       return el.replaceChildren(said('dock-fail', `${slot}: not found`), remove)
     }
     const { runtime: { id: runtime }, pod } = o.pod
-    if (!h.data().pods[pod]) return   // gone since it opened: the Platform's re-resolution opens the page again
+    if (!h.data().pods[pod]) return   // gone since it opened: the Outline's re-resolution opens the page again
     const tag = chosen(h, pod), key = `${tag} ${runtime} ${pod} ${matched}`
     // the target is set once: a new one on every apply would restart the view's listening
     if (key === shown) return

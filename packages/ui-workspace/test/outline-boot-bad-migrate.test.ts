@@ -15,9 +15,9 @@ test('a stored document with a bad slot id and a bad coordinate boots; those slo
   const blobs = new Map<string, Blob>(), make = URL.createObjectURL.bind(URL), domFetch = globalThis.fetch
   URL.createObjectURL = (b: Blob) => { const u = make(b); blobs.set(u, b); return u }
   globalThis.fetch = (async (u: string, ...rest: unknown[]) => blobs.has(u) ? new Response(blobs.get(u)) : (domFetch as Function)(u, ...rest)) as never
-  const { host, platform } = await import('../src/boot-host.ts')
-  if (!host || !platform) throw new Error('the host did not start')
-  expect(JSON.parse(JSON.stringify(platform.document().doc.pages['workspace']!.slots))).toEqual({ ok: { kind: 'pod', pod: 'nano.ui/log@main/log1' } })
+  const { host, outline } = await import('../src/boot-host.ts')
+  if (!host || !outline) throw new Error('the host did not start')
+  expect(JSON.parse(JSON.stringify(outline.document().doc.pages['workspace']!.slots))).toEqual({ ok: { kind: 'pod', pod: 'nano.ui/log@main/log1' } })
   await tick(50)
   expect([...document.querySelectorAll('[data-nano-status]')].map(e => e.textContent).join()).toContain('old pages are gone')
 })

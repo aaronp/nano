@@ -1,19 +1,19 @@
 /**
  * The nav's edit mode: ✎ beside the app's title toggles [data-editing] on <app-shell>, Esc leaves. A workspace row's
  * name, clicked, becomes an input (Enter or blur keeps, Esc cancels, empty keeps the old); its icon opens a grid of
- * ICONS; a saved row's handle reorders it, by drag or Alt+↑/↓ (announced: `moved`, one apply of each `meta.order` that
- * changes). `save` keeps a row's new title and icon; the Platform's change reorders the nav.
+ * ICONS; a saved row's handle moves it to another row's place in the tree, by drag or Alt+↑/↓ (announced; one apply of
+ * the lists that change). `save` keeps a row's new title and icon; the Outline's change reorders the nav.
  */
 import type { Outline } from '@pritzlaff/nano-outline';
 import { ICONS } from '../lib/icons.ts';
-import { applyPages, moved, ordered } from '../lib/pages.ts';
+import { applyPages, move as moved, parentOf, walk } from '../lib/pages.ts';
 
 const ROW = '[data-workspaces], [data-saved]';
 const nameOf = (row: Element) => row.querySelector('[data-name]')?.textContent ?? '';
 
-export function navEdit(doc: Document, platform: ReturnType<typeof Outline.create>, save: (row: HTMLElement, title: string, icon: string) => void) {
+export function navEdit(doc: Document, outline: ReturnType<typeof Outline.create>, save: (row: HTMLElement, title: string, icon: string) => void) {
   const editing = () => doc.querySelector('app-shell[data-editing]') !== null;
-  platform.listen(() => controls());   // a page changed from elsewhere is relabelled: its controls come back
+  outline.listen(() => controls());   // a page changed from elsewhere is relabelled: its controls come back
   const setEditing = (on: boolean) => {
     doc.querySelector('app-shell')?.toggleAttribute('data-editing', on);
     doc.querySelector('[data-edit-nav]')?.setAttribute('aria-pressed', String(on));
@@ -100,9 +100,13 @@ export function navEdit(doc: Document, platform: ReturnType<typeof Outline.creat
   live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite');
   live.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)';
   doc.body.append(live);
-  const index = (id: string) => ordered(platform.document().doc).indexOf(id);
-  /** Moves a saved page to place `to` (Main's is refused; the Platform's change reorders the nav). */
-  const move = (id: string, to: number) => { const next = moved(platform.document().doc, id, to); return !!next && applyPages(platform, next).ok; };
+  const index = (id: string) => walk(outline.document().doc).indexOf(id);
+  /** Moves a saved page to the place in the tree of the row at `to` (Main's is refused; the Outline's change reorders the nav). */
+  const move = (id: string, to: number) => {
+    const d = outline.document().doc, at = walk(d)[to], parent = at === undefined ? undefined : parentOf(d, at);
+    const next = at !== undefined && moved(d, id, parent, (parent === undefined ? d.roots : d.pages[parent]!.children!).indexOf(at));
+    return !!next && applyPages(outline, next).ok;
+  };
   const savedRow = (t: EventTarget | null) => (t as Element | null)?.closest?.<HTMLElement>('[data-saved]') ?? null;
   doc.addEventListener('keydown', (e) => {
     const t = e.target as Element | null;

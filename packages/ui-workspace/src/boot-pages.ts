@@ -1,6 +1,6 @@
 /**
- * The workspace's pages at boot. `bootPages` gives the Outline to start with: the stored one, each page from before
- * ADR-0039 moved under the workspace's keys (`keyed`; boot-host.ts saves it); else, once, migrated (migrate.ts)
+ * The workspace's pages at boot. `bootPages` gives the Outline to start with: the stored one, made a tree with Main the
+ * first root (`treed`: each page from before ADR-0039 keyed, the old order the roots'; boot-host.ts saves it); else, once, migrated (migrate.ts)
  * from the stored document's layout (each page with its old dock's keys), else the old keys, else Main alone. The old
  * docks made their pods as they mounted, so a migrated pod slot's pod is placed now, lazy in `main` under its name
  * (its implementation found by the panel's widget id); one with no implementation, or a page or slot with a bad id or
@@ -13,7 +13,7 @@ import { Outline } from '@pritzlaff/nano-outline'
 import type { Host } from './host.ts'
 import { implementationTemplates } from './dock/panels.ts'
 import { connected } from './auto-connect.ts'
-import { keyed, legacyPages, oldPages, toPlatform, withOldDocks, type Legacy } from './migrate.ts'
+import { legacyPages, oldPages, toOutline, treed, withOldDocks, type Legacy } from './migrate.ts'
 import { showStatus } from './lib/status.ts'
 
 import { MAIN } from './lib/pages.ts'
@@ -41,18 +41,16 @@ async function placeOld(host: Host, old: Legacy[]): Promise<void> {
 export async function bootPages(host: Host, storage: Storage, doc: AppDeployment | null, stored: unknown, loaded = true): Promise<NanoResult<Outline>> {
   const read = stored !== null ? Outline.parse(stored) : success<Outline>({ roots: [], pages: {} })
   if (!read.ok) return read
-  for (const [id, p] of Object.entries(read.value.pages)) read.value.pages[id] = keyed(p)
+  let pages = read.value
   if (stored === null && loaded) {
     const kept = legacyPages(doc?.layout, host.data()), old = kept.length ? withOldDocks(storage, kept) : oldPages(storage)
     await placeOld(host, old)
-    Object.assign(read.value, toPlatform(old, host.data()))
+    pages = toOutline(old, host.data())
     const count = (n: number[]) => n.reduce((a, b) => a + b, 0)
-    if (count(Object.values(read.value.pages).map(p => Object.keys(p.slots).length)) < count(old.map(p => p.slots.length)))
+    if (count(Object.values(pages.pages).map(p => Object.keys(p.slots).length)) < count(old.map(p => p.slots.length)))
       showStatus(document, 'Some panels of your old pages are gone: what they showed is no longer available.')
   }
-  if (!read.value.pages[MAIN]) {   // a document saved without Main still has it
-    read.value.pages[MAIN] = { title: 'Workspace', slots: {}, meta: { workspace: { order: 0 } } }
-    read.value.roots.unshift(MAIN)
-  }
-  return Outline.parse(JSON.parse(JSON.stringify(read.value)))   // what the Outline takes, or a failure (never a throw at boot)
+  // a document saved without Main still has it; one with Main elsewhere than the first root has it moved there (treed)
+  if (!pages.pages[MAIN]) pages = { roots: [MAIN, ...pages.roots], pages: { ...pages.pages, [MAIN]: { title: 'Workspace', slots: {} } } }
+  return Outline.parse(JSON.parse(JSON.stringify(treed(pages))))   // what the Outline takes, or a failure (never a throw at boot)
 }

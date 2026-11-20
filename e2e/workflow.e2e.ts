@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 // SHOTS=<dir> also screenshots each step there.
 const shot = (page: Page, name: string) => process.env['SHOTS'] ? page.screenshot({ path: `${process.env['SHOTS']}/${name}.png` }) : Promise.resolve()
 const dock = (page: Page) => page.locator('workspace-dock#workspace')
-const pods = (page: Page) => page.evaluate(() => Object.keys((document.querySelector('workspace-dock') as any).host.data().pods).filter(p => !['ui', 'deploy', 'platform'].includes(p)).sort())   // the host's own pods (HOST_PODS)
+const pods = (page: Page) => page.evaluate(() => Object.keys((document.querySelector('workspace-dock') as any).host.data().pods).filter(p => !['ui', 'deploy', 'outline'].includes(p)).sort())   // the host's own pods (HOST_PODS)
 const pipes = (page: Page) => page.evaluate(() => (document.querySelector('workspace-dock') as any).host.data().runtimes.main.subscriptions.map((s: any) => `${s.from}>${s.to}`).sort())
 
 /** Drags a cord in <c-wires>'s edit mode from one jack to another, with the mouse, where the jacks are drawn. */
@@ -62,10 +62,10 @@ test('drop four controls, wire them in Connections, save, New, import the file: 
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('dialog').getByRole('button', { name: /Save|OK/ }).click()])
   expect(download.suggestedFilename()).toBe('demo.json')
   const file = (await download.path())!, saved = JSON.parse(readFileSync(file, 'utf8'))
-  // the bundle { app, platform }: the app's pods and pipes, and Main's page (its dock's layout, a pod slot per pod)
+  // the bundle { app, outline }: the app's pods and pipes, and Main's page (its dock's layout, a pod slot per pod)
   expect(Object.keys(saved.app.pods).sort()).toEqual(['debounce1', 'input1', 'log1', 'map1'])
   expect(saved.app.runtimes.main.subscriptions).toHaveLength(3)
-  const main = saved.platform.pages.workspace
+  const main = saved.outline.pages.workspace
   expect(JSON.stringify(main.layout)).toContain('log1')
   const podSlots = Object.values(main.slots as Record<string, { kind: string; pod?: string }>).filter(s => s.kind === 'pod')
   expect(podSlots.map(s => s.pod!.split('/').pop()).sort()).toEqual(['debounce1', 'input1', 'log1', 'map1'])

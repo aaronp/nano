@@ -2,7 +2,7 @@
  * `workspace.host/deploy`: this host's HostDeploy, the pod `deploy` beside `ui` in `main`. It applies to the host's
  * `Application` as its own pod (`caller: 'deploy'`), and the host's deployment policy (`approvalPolicy`) asks the user.
  *
- *   registry.add(hostProvider(() => app, () => platform))      // ui, deploy, and platform (host-platform-pod.ts) over the Platform
+ *   registry.add(hostProvider(() => app, () => outline))       // ui, deploy, and outline (host-outline-pod.ts) over the Outline
  *   Application.create(runtimes, { deploymentPolicy: approvalPolicy(ask, () => app.deployment()) })
  *   addTo(d, { pods, runtimes })   // d with them; an existing pod or runtime name is invalid-input
  */
@@ -10,14 +10,14 @@ import { Coord, Implementation, failure, provide, success, type AppDeployment, t
 import { HostDeploy } from '@pritzlaff/nano-ui'
 import { summary } from './deploy-summary.ts'
 import { hostUi } from './host-ui.ts'
-import { hostPlatform } from './host-platform-pod.ts'
+import { hostOutline } from './host-outline-pod.ts'
 
 type Addition = { pods: Record<string, Pod>; runtimes: Record<string, RuntimeDeployment>; onConflict?: 'error' | 'overwrite' }
 type Removal = { runtimes: string[] }
 
 const ns = Coord.namespace('workspace.host'), DEPLOY = ns.implementationId('deploy')
-/** The host's own pods (`ui`, `deploy`, `platform`): no pod may overwrite them, nor overwrite or remove a runtime placing one. */
-export const HOST_PODS: readonly [string, string, string] = ['ui', 'deploy', 'platform']
+/** The host's own pods (`ui`, `deploy`, `outline`): no pod may overwrite them, nor overwrite or remove a runtime placing one. */
+export const HOST_PODS: readonly [string, string, string] = ['ui', 'deploy', 'outline']
 const hosting = (d: AppDeployment, r: string) => d.runtimes[r]!.pods.some(p => HOST_PODS.includes(p))
 /** The `deploy` pod's data: built on its first call. */
 export const deployPod: Pod = { implementation: DEPLOY.toString(), eager: false }
@@ -81,9 +81,9 @@ export function approvalPolicy(approve: Approve, current: () => AppDeployment, m
   } }
 }
 
-/** The host's provider: `ui` (HostUI), `deploy` (HostDeploy, applying to `app()`) and `platform` (HostOutline over
- * `platform()`, asking through `app()`'s `ui`, no answer within 20 s a no; none in a replayed app). */
-export function hostProvider(app: () => Application, platform: Parameters<typeof hostPlatform>[0] = () => undefined) {
+/** The host's provider: `ui` (HostUI), `deploy` (HostDeploy, applying to `app()`) and `outline` (HostOutline over
+ * `outline()`, asking through `app()`'s `ui`, no answer within 20 s a no; none in a replayed app). */
+export function hostProvider(app: () => Application, outline: Parameters<typeof hostOutline>[0] = () => undefined) {
   const deploy = Implementation.define(DEPLOY, {
     provides: [HostDeploy],
     make: ctx => {
@@ -111,5 +111,5 @@ export function hostProvider(app: () => Application, platform: Parameters<typeof
     const r = await (app().call('main', HOST_PODS[0]) as { approve(a: { title: string }): Promise<NanoResult<unknown>> }).approve({ title })
     return r.ok && r.value === true
   })
-  return ns.provider([hostUi, deploy, hostPlatform(platform, approve)])
+  return ns.provider([hostUi, deploy, hostOutline(outline, approve)])
 }

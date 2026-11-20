@@ -3,7 +3,8 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
 import { Coord, type AppDeployment } from '@pritzlaff/nano-core'
-import { keyed, legacyPages, oldPages, opened, toPlatform, withOldDocks } from '../src/migrate.ts'
+import { Outline } from '@pritzlaff/nano-outline'
+import { keyed, legacyPages, oldPages, opened, toOutline, treed, withOldDocks } from '../src/migrate.ts'
 
 const memory = () => {
   const m = new Map<string, string>()
@@ -43,16 +44,16 @@ test('withOldDocks gives each page its old dock\'s state (layout, template, wind
   ])
 })
 
-test('toPlatform: pod slots by coordinate (the deployment\'s implementation), view slots, title, icon, order and restore point in meta.workspace, the dock state its layout.workspace, the title its title', () => {
+test('toOutline: pod slots by coordinate (the deployment\'s implementation), view slots, title, icon and restore point in meta.workspace, each page a root in order, the dock state its layout.workspace, the title its title', () => {
   const saved = { root: { type: 'column' } }, engine = { root: { type: 'row' }, 'window-style': 'clear', saved, 'saved.template': null }
-  const out = toPlatform([
+  const out = toOutline([
     { id: 'workspace', title: 'Main', icon: 'home', slots: [{ id: 'clock1', runtime: 'main', pod: 'clock1' }, { id: 'x', view: 'nano-explorer' }, { id: 'gone', runtime: 'main', pod: 'gone' }], workspace: engine, geometry: {} },
     { id: 'two', title: 'Two', slots: [] },
   ], d)
   expect(String((out.pages['workspace']!.slots['clock1'] as { pod: unknown }).pod)).toBe(String(Coord.pod(Coord.parse('implementation', clock), Coord.runtime('main'), 'clock1')))
   expect(strs(out)).toEqual({ roots: ['workspace', 'two'], pages: {
-    workspace: { title: 'Main', slots: { clock1: { kind: 'pod', pod: 'example.clock/clock@main/clock1' }, x: { kind: 'view', view: 'nano-explorer' } }, layout: { workspace: { root: { type: 'row' }, 'window-style': 'clear' } }, meta: { workspace: { icon: 'home', order: 0, saved, 'saved.template': null } } },
-    two: { title: 'Two', slots: {}, meta: { workspace: { order: 1 } } },
+    workspace: { title: 'Main', slots: { clock1: { kind: 'pod', pod: 'example.clock/clock@main/clock1' }, x: { kind: 'view', view: 'nano-explorer' } }, layout: { workspace: { root: { type: 'row' }, 'window-style': 'clear' } }, meta: { workspace: { icon: 'home', saved, 'saved.template': null } } },
+    two: { title: 'Two', slots: {} },
   } })
 })
 
@@ -69,7 +70,7 @@ test('opened: a bundle as its parts; a plain nano.json without its old pages, mi
   const b = opened({ app: { ...d, layout: { desk: 1 } }, platform: pages })
   expect(b.ok && strs(b.value)).toEqual({ app: { ...d, layout: { desk: 1 } }, pages })
   const p = opened({ ...d, layout: { desk: 1, slots: [{ id: 'c', runtime: 'main', pod: 'clock1' }], geometry: {} } })
-  expect(p.ok && strs(p.value)).toEqual({ app: { ...d, layout: { desk: 1 } }, pages: { roots: ['workspace'], pages: { workspace: { title: 'Workspace', slots: { c: { kind: 'pod', pod: 'example.clock/clock@main/clock1' } }, meta: { workspace: { order: 0 } } } } } })
+  expect(p.ok && strs(p.value)).toEqual({ app: { ...d, layout: { desk: 1 } }, pages: { roots: ['workspace'], pages: { workspace: { title: 'Workspace', slots: { c: { kind: 'pod', pod: 'example.clock/clock@main/clock1' } } } } } })
   const bare = opened({ ...d, layout: { pages: [] } })
   expect(bare.ok && strs(bare.value)).toEqual({ app: d, pages: { roots: [], pages: {} } })
   for (const bad of [null, 3, 'x']) expect(opened(bad)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
@@ -80,9 +81,29 @@ test('keyed: an old-shape bundle opened is moved; an unknown layout key stays; m
   const old = { slots: {}, layout: { root: { type: 'row' }, 'window-style': 'glass', react: { columns: 2 } }, meta: { title: 'Old', icon: 'star', order: 1, other: 3 } }
   const moved = { title: 'Old', slots: {}, layout: { react: { columns: 2 }, workspace: { root: { type: 'row' }, 'window-style': 'glass' } }, meta: { other: 3, workspace: { icon: 'star', order: 1 } } }
   const b = opened({ app: d, platform: { pages: { old } } })
-  expect(b.ok && strs(b.value.pages)).toEqual({ roots: ['old'], pages: { old: moved } })
+  expect(b.ok && strs(b.value.pages)).toEqual({ roots: ['old'], pages: { old: { ...moved, meta: { other: 3, workspace: { icon: 'star' } } } } })   // and its order is the tree's
   expect(keyed({ slots: {}, meta: { title: 'Meta' }, title: 'Set' })).toEqual({ slots: {}, meta: { title: 'Meta' }, title: 'Set' })
   const only = { slots: {}, layout: { workspace: { root: null } } }
   expect(keyed(only)).toBe(only)
   expect(keyed(moved)).toBe(moved)
+})
+
+const parsed = (w: unknown) => { const r = Outline.parse(w); if (!r.ok) throw new Error(r.fail.reason); return r.value }
+
+test('treed: a flat document or one with meta.workspace.order becomes a tree once: the roots in that order, Main first, the order dropped, nothing else lost', () => {
+  const flatOld = { pages: { b: { slots: {}, meta: { workspace: { order: 2, icon: 'star' }, react: 1 } }, none: { slots: {} }, workspace: { slots: {}, meta: { workspace: { order: 5 } } }, a: { slots: {}, meta: { order: 1 } } } }
+  expect(strs(treed(parsed(flatOld)))).toEqual({ roots: ['workspace', 'a', 'b', 'none'], pages: { b: { slots: {}, meta: { workspace: { icon: 'star' }, react: 1 } }, none: { slots: {} }, workspace: { slots: {} }, a: { slots: {} } } })
+  const tree = parsed({ roots: ['workspace', 'a'], pages: { workspace: { slots: {} }, a: { slots: {}, children: ['b'] }, b: { slots: {} } } })
+  expect(treed(tree)).toEqual(tree)   // a tree already: as it is
+})
+
+test('opened: an { app, outline } bundle, an { app, platform } bundle with the old order and a plain nano.json load into the same tree', () => {
+  const pages = { pages: { workspace: { slots: {}, meta: { workspace: { order: 0 } } }, two: { title: 'Two', slots: {}, meta: { workspace: { order: 2 } } }, one: { title: 'One', slots: {}, meta: { workspace: { order: 1 } } } } }
+  const tree = { roots: ['workspace', 'one', 'two'], pages: { workspace: { slots: {} }, two: { title: 'Two', slots: {} }, one: { title: 'One', slots: {} } } }
+  const old = opened({ app: d, platform: pages }), now = opened({ app: d, outline: tree })
+  expect(old.ok && strs(old.value)).toEqual({ app: d, pages: tree })
+  expect(now.ok && strs(now.value)).toEqual({ app: d, pages: tree })
+  const plain = opened({ ...d, layout: { pages: [{ id: 'one', title: 'One', slots: [] }, { id: 'workspace', title: 'W', slots: [] }] } })
+  expect(plain.ok && plain.value.pages.roots).toEqual(['workspace', 'one'])
+  expect(opened({ app: d, outline: { pages: { p: { slots: { s: { kind: 'pod', pod: 'no' } } } } } })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
 })

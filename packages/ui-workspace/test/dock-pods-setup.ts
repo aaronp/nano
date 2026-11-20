@@ -1,5 +1,5 @@
 // Shared setup of the dock-on-its-page tests: the real host, the picker stubbed, and `mount`, the workspace's pages over
-// a Platform (Main's dock and one per other page, in hidden routes until `go` shows one, as app-shell does).
+// an Outline (Main's dock and one per other page, in hidden routes until `go` shows one, as app-shell does).
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: new URL('../../../', import.meta.url).href })
 import { afterEach, expect, mock } from 'bun:test'
@@ -41,13 +41,13 @@ export const undeploy = async (h: H, name: string) => {
 }
 /** A `pod` slot for `name` in `runtime`. */
 export const pod = (name: string, runtime = 'main', impl = 'nano.ui/input'): Slot => ({ kind: 'pod', pod: Coord.pod(Coord.parse('implementation', impl), Coord.runtime(runtime), name) })
-export const page = (title: string, slots: Record<string, Slot> = {}, order = 1): Page => ({ title, slots, meta: { workspace: { order } } })
+export const page = (title: string, slots: Record<string, Slot> = {}): Page => ({ title, slots })
 export const running = (h: H, name: string, runtime = 'main') => { const s = h.app.runtime(runtime).status(name); return s.ok && s.value === 'running' }
 export const strs = (v: unknown) => JSON.parse(JSON.stringify(v ?? null))
 
 /** The workspace's pages over `h`, from `pages` (Main is `workspace`, empty unless given). */
 export function mount(h: H, pages: Record<string, Page>, open = '') {
-  const platform = Outline.create(h.app, h.registry, flat({ workspace: page('Main', {}, 0), ...pages })), bus = createBus(), app = document.createElement('div')
+  const outline = Outline.create(h.app, h.registry, flat({ workspace: page('Main', {}), ...pages })), bus = createBus(), app = document.createElement('div')
   provideBus(app, bus)
   app.innerHTML = `<span slot="title"></span><div class="nav-row" data-workspaces><a href="#/workspace"></a></div>
     <app-route path="/workspace" hidden><workspace-dock id="workspace" storage-key="main" open="${open}"><template data-widget="notes" data-title="Notes"><div>notes</div></template></workspace-dock></app-route>
@@ -56,7 +56,7 @@ export function mount(h: H, pages: Record<string, Page>, open = '') {
   main.host = h
   main.prepend(...implementationTemplates(h, document))
   document.body.append(app)
-  bootWorkspacePages(document, platform)
+  bootWorkspacePages(document, outline)
   const go = (id: string) => {
     for (const r of document.querySelectorAll<HTMLElement>('app-route')) r.hidden = r.getAttribute('path') !== `/${id}`
     bus.publish('route:changed', { path: `/${id}` }, 'test')
@@ -64,10 +64,10 @@ export function mount(h: H, pages: Record<string, Page>, open = '') {
   const dock = (id: string) => document.querySelector<Dock>(`app-route[path="/${id}"] workspace-dock`)!
   const panels = (id: string) => [...dock(id)?.querySelectorAll<HTMLElement>('.dock-panel') ?? []]   // none while a dock is built again
   /** Page `id`, written (coordinates as strings). */
-  const written = (id: string) => strs(platform.document().doc.pages[id])
+  const written = (id: string) => strs(outline.document().doc.pages[id])
   /** Replaces page `id` (as a pod or an import would). */
-  const put = (id: string, p: Page) => { const r = platform.apply(flat({ ...platform.document().doc.pages, [id]: p })); if (!r.ok) throw new Error(r.fail.reason) }
-  return { platform, bus, go, dock, panels, written, put, input: implementationTemplates(h, document).find(t => t.dataset['implementation'] === 'nano.ui/input')!.dataset['widget']! }
+  const put = (id: string, p: Page) => { const r = outline.apply(flat({ ...outline.document().doc.pages, [id]: p })); if (!r.ok) throw new Error(r.fail.reason) }
+  return { outline, bus, go, dock, panels, written, put, input: implementationTemplates(h, document).find(t => t.dataset['implementation'] === 'nano.ui/input')!.dataset['widget']! }
 }
 export const starts = (h: H) => { const to: string[] = []; h.app.listen(e => { if (e.type === 'sent' && e.kind === 'start') to.push(e.to) }); return to }
 /** Each getOrCreate's `started`, in order. */

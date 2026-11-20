@@ -1,21 +1,18 @@
 /**
- * Migration into the Outline (ADR-0038), in one place: the keys from before pages were deployment data (the saved
- * pages' list and each page's dock), a document's `layout.pages`, and the legacy `layout.workspace` (Main's dock) with
- * top-level `slots`/`geometry`. Each is first read as the old page list (`Legacy`, nano-ui's `pagesOf` form, copied here
- * as that goes), then `toPlatform` makes the Outline: a pod slot a `pod` slot whose implementation is the
- * deployment's (none there: dropped), a view slot a `view` slot, the title its `title`, icon, order and Save layout's
- * restore point in `meta.workspace`, the rest of the dock's state its `layout.workspace` (ADR-0039). `geometry` is
- * dropped (the arrangement is the dock's). `keyed` moves a page from before ADR-0039 (its dock's state at the top of
- * `layout`, the title and the workspace's meta at the top of `meta`) under the workspace's keys, once.
+ * Migration into the Outline (ADR-0038, ADR-0040), in one place: the old keys (the saved pages' list, each page's
+ * dock), a document's `layout.pages`, and the legacy `layout.workspace` with top-level `slots`/`geometry`, each read as
+ * the old page list (`Legacy`), then `toOutline`: each page a root, a pod slot by the deployment's implementation (none:
+ * dropped), the title its `title`, icon and Save layout's restore point in `meta.workspace`, the dock's state its
+ * `layout.workspace` (ADR-0039). `keyed` moves a page from before ADR-0039 under the workspace's keys, `treed` a flat
+ * document or one in the old `meta.workspace.order` into a tree; both once, and as they are when already done.
  *
- *   toPlatform(legacyPages(doc.layout, doc), doc)   // a stored document's pages
- *   keyed(page)                                      // the page under the workspace's keys; a keyed one as it is
- *   opened(file)                                     // a nano.json or a { app, platform } bundle: the app, its pages
+ *   treed(toOutline(legacyPages(doc.layout, doc), doc))   // a stored document's pages
+ *   opened(file)   // a nano.json, or an { app, outline } (before: { app, platform }) bundle: the app, its pages
  */
 import { Coord, failure, success, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
 import { Outline, type Page, type Slot } from '@pritzlaff/nano-outline'
 import { panelsInOrder, type PanelState, type TemplateState } from './lib/layout-templates.ts'
-import { MAIN } from './lib/pages.ts'
+import { MAIN, metaOf, withMeta } from './lib/pages.ts'
 
 type OldSlot = { id: string; runtime: string; pod: string } | { id: string; view: string }
 export type Legacy = { id: string; title: string; icon?: string; slots: OldSlot[]; workspace?: unknown; [k: string]: unknown }
@@ -35,6 +32,9 @@ const panelsOf = (w: Record<string, unknown>) => {
   const t = w.template as TemplateState | undefined
   return obj(t) ? [...(t.order ?? []).filter((p): p is PanelState => !!p), ...(t.parked ?? [])] : panelsInOrder(w.root)
 }
+
+/** `o`'s entries split by whether their key is in `keys`. */
+const split = (o: Record<string, unknown>, keys: string[]) => [false, true].map(b => Object.fromEntries(Object.entries(o).filter(([k]) => keys.includes(k) === b))) as [Record<string, unknown>, Record<string, unknown>]
 
 /** A legacy dock's panels as the old slots (as the old docks read them): a placed pod's panel a pod slot, any other a view slot of its widget; one per id. */
 const slotsOf = (panels: PanelState[], runtimeOf: (pod: string) => string | undefined): OldSlot[] => {
@@ -59,24 +59,20 @@ export function legacyPages(layout: unknown, d: AppDeployment): Legacy[] {
 }
 
 /** `pages` as an Outline, in their order; a pod slot whose pod `d` does not have, and a page or slot whose id or coordinate is bad, is dropped. Pure. */
-export function toPlatform(pages: Legacy[], d: AppDeployment): Outline {
+export function toOutline(pages: Legacy[], d: AppDeployment): Outline {
   const slot = (s: OldSlot): [string, Slot][] => {
     if (!idOk(s.id)) return []
     if ('view' in s) return s.view ? [[s.id, { kind: 'view', view: s.view }]] : []
     const impl = d.pods[s.pod]?.implementation
     try { return impl ? [[s.id, { kind: 'pod', pod: Coord.pod(Coord.parse('implementation', impl), Coord.runtime(s.runtime), s.pod) }]] : [] } catch { return [] }
   }
-  const page = (p: Legacy, order: number): Page => {
-    const w = obj(p.workspace) ? p.workspace : {}, layout = Object.fromEntries(Object.entries(w).filter(([k]) => !RESTORE.includes(k)))
-    const restore = Object.fromEntries(Object.entries(w).filter(([k]) => RESTORE.includes(k)))
-    return { title: p.title, slots: Object.fromEntries(p.slots.flatMap(slot)), ...(Object.keys(layout).length && { layout: { workspace: layout } }), meta: { workspace: { ...(p.icon !== undefined && { icon: p.icon }), order, ...restore } } }
+  const page = (p: Legacy): Page => {
+    const [layout, restore] = split(obj(p.workspace) ? p.workspace : {}, RESTORE), meta = { ...(p.icon !== undefined && { icon: p.icon }), ...restore }
+    return { title: p.title, slots: Object.fromEntries(p.slots.flatMap(slot)), ...(Object.keys(layout).length && { layout: { workspace: layout } }), ...(Object.keys(meta).length && { meta: { workspace: meta } }) }
   }
   const kept = pages.filter(p => idOk(p.id))
-  return { roots: [...new Set(kept.map(p => p.id))], pages: Object.fromEntries(kept.map((p, i) => [p.id, page(p, i)])) }
+  return { roots: [...new Set(kept.map(p => p.id))], pages: Object.fromEntries(kept.map(p => [p.id, page(p)])) }
 }
-
-/** `o`'s entries split by whether their key is in `keys`. */
-const split = (o: Record<string, unknown>, keys: string[]) => [false, true].map(b => Object.fromEntries(Object.entries(o).filter(([k]) => keys.includes(k) === b))) as [Record<string, unknown>, Record<string, unknown>]
 
 /** Page `p` under the workspace's keys (ADR-0039): its dock's state to `layout.workspace`, `meta.title` to `title`, its
  * meta to `meta.workspace`; other keys kept where they are. A page with either `workspace` key, or nothing to move, as it is. */
@@ -96,15 +92,25 @@ const stripped = (d: AppDeployment): AppDeployment => {
   return Object.keys(rest).length ? { ...out, layout: rest } : out
 }
 
-/** A file as opened: a `{ app, platform }` bundle (File › Save's) as its two parts, a plain nano.json as itself with its old pages migrated. */
+/** `p` without the old `meta.workspace.order`. */
+const unordered = (p: Page): Page => { if (!('order' in metaOf(p))) return p; const { order: _, ...w } = metaOf(p); return withMeta(p, w) }
+/** `doc` a tree, once: each page `keyed`, the roots in the old order (Main first, moved there from wherever it is; a page without an order last), the order dropped. */
+export function treed(doc: Outline): Outline {
+  const pages = Object.fromEntries(Object.entries(doc.pages).map(([id, p]) => [id, keyed(p)]))
+  const at = (id: string) => { const o = metaOf(pages[id])['order']; return id === MAIN ? -Infinity : typeof o === 'number' ? o : Infinity }
+  const roots = [...(Object.hasOwn(pages, MAIN) ? [MAIN] : []), ...doc.roots.filter(r => r !== MAIN)].sort((a, b) => at(a) - at(b) || 0)
+  return { roots, pages: Object.fromEntries(Object.entries(pages).map(([id, p]) => [id, unordered(p.children?.includes(MAIN) ? { ...p, children: p.children.filter(c => c !== MAIN) } : p)])) }
+}
+
+/** A file as opened: an `{ app, outline }` bundle (File › Save's; `{ app, platform }` before) as its two parts, a plain nano.json as itself with its old pages migrated; its pages `treed`. */
 export function opened(file: unknown): NanoResult<{ app: AppDeployment; pages: Outline }> {
-  if (obj(file) && obj(file.app) && 'platform' in file) {
-    const pages = Outline.parse(file.platform)
-    return pages.ok ? success({ app: stripped(file.app as AppDeployment), pages: { ...pages.value, pages: Object.fromEntries(Object.entries(pages.value.pages).map(([id, p]) => [id, keyed(p)])) } }) : failure('invalid-input', `the file's pages: ${pages.fail.reason}`)
+  if (obj(file) && obj(file.app) && ('outline' in file || 'platform' in file)) {
+    const pages = Outline.parse('outline' in file ? file.outline : file.platform)
+    return pages.ok ? success({ app: stripped(file.app as AppDeployment), pages: treed(pages.value) }) : failure('invalid-input', `the file's pages: ${pages.fail.reason}`)
   }
   if (!obj(file)) return failure('invalid-input', 'not a nano.json: not an object')
   const d = file as AppDeployment
-  return success({ app: stripped(d), pages: obj(d.pods) ? toPlatform(legacyPages(d.layout, d), d) : { roots: [], pages: {} } })
+  return success({ app: stripped(d), pages: obj(d.pods) ? treed(toOutline(legacyPages(d.layout, d), d)) : { roots: [], pages: {} } })
 }
 
 const read = (from: Storage, k: string): unknown => { try { return JSON.parse(from.getItem(k) ?? 'null') } catch { return null } }
