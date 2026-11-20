@@ -16,6 +16,7 @@ test('pagesOf makes a legacy layout one page', () => {
   const slots = [{ id: 'a', runtime: 'r', pod: 'p' }], geometry = { a: { x: 0, y: 0, w: 1, h: 1 } }
   expect(pagesOf({ slots, geometry, workspace: { k: 1 } })).toEqual([{ id: 'workspace', title: 'Workspace', slots, geometry, workspace: { k: 1 } }])
   expect(pagesOf({ slots })).toEqual([{ id: 'workspace', title: 'Workspace', slots }])
+  expect(pagesOf({ workspace: { k: 1 } })).toEqual([{ id: 'workspace', title: 'Workspace', slots: [], workspace: { k: 1 } }])
   expect(pagesOf({})).toEqual([])
   expect(pagesOf(undefined)).toEqual([])
 })

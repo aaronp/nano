@@ -16,7 +16,7 @@ export { log } from './pods/log.ts'
 export { map } from './pods/map.ts'
 export { defineViews, views } from './views/define.ts'
 export { circuitOf } from './wiring/model.ts'
-export { pagesOf, type LayoutBox, type LayoutData, type LayoutSlot, type Page, type Slot, type ViewSlot } from './layout.ts'
+export { pagesOf, type LayoutBox, type LayoutData, type LayoutSlot, type Page, type ViewSlot } from './layout.ts'
 export { viewFor, type ViewMap, type ViewTarget } from './views/view.ts'
 export { uiProvider }
 export default uiProvider

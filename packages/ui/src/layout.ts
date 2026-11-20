@@ -19,7 +19,7 @@ export type LayoutSlot = { id: string; runtime: string; pod: string }
 export type LayoutBox = { x: number; y: number; w: number; h: number }
 /** A placed view: `view` is a custom-element tag, not a pod's. */
 export type ViewSlot = { id: string; view: string }
-export type Slot = LayoutSlot | ViewSlot
+type Slot = LayoutSlot | ViewSlot
 /** A page of the layout; each engine keeps its own state under its own key. `id` follows core's runtime id rule. */
 export type Page = { id: string; title: string; icon?: string; slots: Slot[]; geometry?: Record<string, LayoutBox>; [engine: string]: unknown }
 /** The neutral part of `AppDeployment.layout`; `geometry` is keyed by slot id. */
@@ -27,8 +27,9 @@ export type LayoutData = { slots?: LayoutSlot[]; geometry?: Record<string, Layou
 
 const str = (v: unknown): v is string => typeof v === 'string'
 const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-// Core's id rule, checked by building a coordinate with it.
-const idOk = (id: unknown) => { try { Coord.pod(Coord.namespace('nano.ui').implementationId('page'), id as string, 'p'); return str(id) } catch { return false } }
+const impl = Coord.namespace('nano.ui').implementationId('page')
+// Core's `Coord` id rule: slightly stricter than the deployment `Id` schema (it rejects `@`).
+const idOk = (id: unknown) => { try { Coord.pod(impl, id as string, 'p'); return str(id) } catch { return false } }
 const slotOk = (s: unknown) => obj(s) && str(s.id) && (str(s.view) || (str(s.runtime) && str(s.pod)))
 const pageOk = (p: unknown): p is Page =>
   obj(p) && idOk(p.id) && str(p.title) && Array.isArray(p.slots) && p.slots.every(slotOk) && (p.icon === undefined || str(p.icon)) && (p.geometry === undefined || obj(p.geometry))
@@ -39,7 +40,7 @@ export function pagesOf(layout: unknown): Page[] {
   if (Array.isArray(layout.pages)) {
     return layout.pages.filter(p => pageOk(p) || (console.warn('nano-ui: dropping a bad page', p), false))
   }
-  if (layout.slots === undefined && layout.geometry === undefined) return []
+  if (layout.slots === undefined && layout.geometry === undefined && layout.workspace === undefined) return []
   const { slots, geometry, workspace } = layout
   const legacy = { id: 'workspace', title: 'Workspace', slots: slots ?? [], ...(geometry !== undefined && { geometry }), ...(workspace !== undefined && { workspace }) }
   return pageOk(legacy) ? [legacy] : (console.warn('nano-ui: dropping a bad legacy layout'), [])
