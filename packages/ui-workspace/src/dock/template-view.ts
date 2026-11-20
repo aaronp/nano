@@ -46,7 +46,7 @@ const ensureStyles = (doc: Document) => {
   doc.head.append(style);
 };
 
-type Positions = { swap(i: number, j: number): void; add(i: number, anchor: HTMLElement): void; remove(i: number): void };
+type Positions = { swap(i: number, j: number): void; add(i: number, anchor: HTMLElement): void; remove(i: number): void; named(): void };
 const button = (doc: Document, className: string, text: string, label: string) => {
   const b = Object.assign(doc.createElement('button'), { type: 'button', className, textContent: text, title: label });
   b.setAttribute('aria-label', label);
@@ -55,7 +55,8 @@ const button = (doc: Document, className: string, text: string, label: string) =
 
 /** Shows `order` in template `t` inside `host`, each panel mounted once: `mount` fills a position's panel element, given a
  * stand-in for golden-layout's item (its container: element, on('destroy'), focus, stateRequestEvent). Choosing a position
- * moves the two in place, then `on.swap`; a `+` calls `on.add`, a ✕ `on.remove`. `set(i, state)` refills position i;
+ * moves the two in place, then `on.swap`; a `+` calls `on.add`, a ✕ `on.remove`; a panel's state changing (its new pod
+ * named: the container's `stateChanged`) `on.named`. `set(i, state)` refills position i;
  * `states()` reads each panel's current state; `dispose()` fires every panel's destroy and removes the grid. */
 export function renderTemplate(host: HTMLElement, t: TemplateId, order: readonly (PanelState | null)[], title: (s: PanelState) => string, mount: (el: HTMLElement, state: PanelState, item: ComponentItem) => void, on: Positions) {
   const doc = host.ownerDocument;
@@ -88,7 +89,7 @@ export function renderTemplate(host: HTMLElement, t: TemplateId, order: readonly
     head.append(button(doc, 'tpl-remove', '✕', `Remove ${title(state)}`));
     head.lastElementChild!.addEventListener('click', () => on.remove(positions.indexOf(pos)));
     const element = pos.appendChild(Object.assign(doc.createElement('div'), { tabIndex: -1 }));
-    const container = { element, initialState: state, focus() {}, stateRequestEvent: undefined, on(e: string, f: () => void) { if (e === 'destroy') destroys.get(pos)!.push(f); } };
+    const container = { element, initialState: state, focus() {}, stateRequestEvent: undefined, on(e: string, f: () => void) { if (e === 'destroy') destroys.get(pos)!.push(f); }, emit(e: string) { if (e === 'stateChanged') on.named(); } };
     containers.set(pos, container);
     mount(element, state, { container: container as unknown as ComponentContainer } as unknown as ComponentItem);
   };

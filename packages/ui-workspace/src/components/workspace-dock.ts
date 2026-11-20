@@ -131,16 +131,14 @@ export class WorkspaceDock extends HTMLElement {
     const left = this.tpl, s = left?.state;
     if (!s && id === 'dock') return true;
     const all = s ? [...s.order.filter((p) => p !== null), ...s.parked] : panelsInOrder(this.kept.root);
-    if (all.some((p) => this.defs.get(p.widget)?.template.dataset['implementation'] && !p.name)) { this.say('Wait until every new pod is made.'); return false; }
+    if (all.some(this.unnamed)) { this.say('Wait until every new pod is made.'); return false; }
     if (id !== 'dock') this.show(s ? relayout(s, id) : { template: id, ...place(all, TEMPLATES.find((x) => x.id === id)!.positions!), dock: this.kept });
-    else { this.load(LayoutConfig.fromResolved(this.kept)); left!.backToDock(this.requireLayout(), (p) => this.split(p)); }
+    else { this.load(LayoutConfig.fromResolved(this.kept)); left!.backToDock(s!, this.requireLayout(), (p) => this.split(p)); }
     return true;
   }
 
   /** The layout to save: golden-layout's config (the kept one while a template shows), with `template` when one does. */
-  arrangement(): { root?: unknown; template?: TemplateState } & Record<string, unknown> {
-    return this.tpl ? { ...this.kept, template: this.tpl.state } : { ...this.kept };
-  }
+  arrangement(): { root?: unknown; template?: TemplateState } & Record<string, unknown> { return this.tpl ? { ...this.kept, template: this.tpl.state } : { ...this.kept }; }
 
   /** Fires `dock:connections`, for whatever wraps the dock (the wiring view). */
   connections() { this.dispatchEvent(new CustomEvent('dock:connections', { bubbles: true, composed: true })); }
@@ -176,8 +174,9 @@ export class WorkspaceDock extends HTMLElement {
   }
   private get templates() { return [...this.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')]; }
   private split(p: PanelState, target?: ComponentItem) { return split(this.requireLayout(), p, p.name ?? this.defs.get(p.widget)?.title ?? p.widget, target); }
-  /** Whether a stored template's panels are all in this palette. */
+  /** Whether a stored template's panels are all in this palette; whether `p` is an implementation's panel whose pod is being made. */
   private known(t: TemplateState) { return [...t.order, ...t.parked].every((s) => !s || this.defs.has(s.widget)); }
+  private unnamed = (p: PanelState) => !!this.defs.get(p.widget)?.template.dataset['implementation'] && !p.name;
 
   /** What mountPanel needs from the dock. */
   private get mounting() { return { doc: this.ownerDocument, defs: this.defs, bus: this.requireBus(), host: this.host, registry: this.registry, send: (t: string, p: unknown) => this.send(t, p) }; }
@@ -190,6 +189,7 @@ export class WorkspaceDock extends HTMLElement {
     this.tpl = showTemplate(this.querySelector<HTMLElement>(':scope > .dock-area')!, s, { title: (p) => (p.widget === 'pod' ? p.name : this.defs.get(p.widget)?.title) ?? p.widget,
       mount: (el, st, item) => { mountPanel(item.container, st, this.mounting); for (const type of ['pointerdown', 'focusin']) el.addEventListener(type, () => this.reportFocus(item)); },
       pick: (anchor, hidden) => pick(anchor, { templates: this.templates, hidden }), bringBack: (to) => this.setTemplate(to),
+      unnamed: this.unnamed, say: (m) => this.say(m), add: (p) => this.addWidget(p.widget, p.name),
       remember: (st) => { templateState(localStorage, this.storageKey).set(st); if (this.tpl) this.changed(); } });
     this.changed();
   }
@@ -197,7 +197,7 @@ export class WorkspaceDock extends HTMLElement {
   private requireBus(): Bus { if (!this.bus) throw new Error('bug: workspace used before it was connected'); return this.bus; }
   /** Loads `config`, sized for the dock's tab bar. */
   private load(config: LayoutConfig) {
-    const left = this.tpl; if (left) { left.dispose(); this.tpl = null; templateState(localStorage, this.storageKey).set(null); this.reportFocus(); }
+    const left = this.tpl; if (left) { left.dispose(true); this.tpl = null; templateState(localStorage, this.storageKey).set(null); this.reportFocus(); }
     this.requireLayout().clearComponentFocus();   // the focused panel is about to go: dock:focus null, not a stale panel
     this.requireLayout().loadLayout({ ...config, dimensions: { ...config.dimensions, headerHeight: HEADER_H } });
     if (left) this.changed();

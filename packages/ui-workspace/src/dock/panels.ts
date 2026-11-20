@@ -108,7 +108,8 @@ export function mountPanel(container: ComponentContainer, state: JsonValue | und
   if (h && impl) {
     let stop = () => {}, gone = false, pod = name
     const show = (p: string) => { pod = p; if (!gone) stop = fill(container.element, `pod:${p}`, h) }
-    if (name) show(name); else void addPod(h, impl).then((p) => { if (p) show(p) })
+    // once named, its state changed: a template position stores it (golden-layout reads it as it saves)
+    if (name) show(name); else void addPod(h, impl).then((p) => { if (p) { show(p); if (!gone) container.emit('stateChanged') } })
     container.stateRequestEvent = () => ({ widget: id, ...(pod && { name: pod }) })
     container.on('destroy', () => { gone = true; stop() })
     send('dock:opened', { widget: id })

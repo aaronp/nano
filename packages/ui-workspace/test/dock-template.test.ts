@@ -48,6 +48,9 @@ test('the notice dismissed stays hidden until the parked count changes', async (
   dock.setTemplate('one')
   expect(notice(dock).textContent).toContain('3 panels hidden')
   expect(notice(dock).hidden).toBe(false)
+  notice(dock).querySelector<HTMLElement>('[aria-label="Dismiss"]')!.click()
+  dock.setTemplate('dock'); dock.setTemplate('one')   // a fresh entry: shown again
+  expect(notice(dock).hidden).toBe(false)
 })
 
 test('an empty position\'s + fills it from the picker, focused; cancelled, nothing changes', async () => {
@@ -90,6 +93,7 @@ test('adding from outside fills the first empty position; with none, the dock co
   dock.addWidget('shown'); await tick()
   expect(dock.template).toBe('two-cols')
   expect(filled(dock)).toBe(2)
+  expect(document.activeElement).toBe(positions(dock)[1]!.querySelector('.dock-panel'))
   dock.addWidget('plain'); await tick()
   expect(dock.template).toBe('dock')
   expect(panelsInOrder(dock.arrangement().root).map(p => p.widget).sort()).toEqual(['plain', 'plain', 'shown'])
