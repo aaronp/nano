@@ -6,8 +6,9 @@ import { afterEach, expect, mock, test } from 'bun:test'
 import type { Page } from '@pritzlaff/nano-ui'
 import type { PanelState } from '../src/lib/layout-templates.ts'
 
-let choice: PanelState | null = null   // the picker, stubbed
-mock.module('../src/components/picker.ts', () => ({ pick: async () => choice }))
+let choice: PanelState | null = null, runtime: string | undefined   // the picker, stubbed
+mock.module('../src/components/picker.ts', () => ({ pick: async () => choice && { state: choice, runtime } }))
+mock.module('../src/components/picker-grid.ts', () => ({ pickerGrid: (host: HTMLElement) => new Promise(r => { host.addEventListener('click', () => choice && r({ state: choice, runtime })) }) }))   // inline: a click picks `choice`
 const { defineViews } = await import('@pritzlaff/nano-ui')
 const { start } = await import('../src/host.ts')
 await import('../src/components/workspace-dock.ts')
@@ -20,7 +21,7 @@ defineViews()
 type H = Extract<Awaited<ReturnType<typeof start>>, { ok: true }>['value']
 type Dock = HTMLElement & { host?: H; setTemplate(id: string): boolean; template: string }
 const until = async (ok: () => boolean) => { for (let i = 0; i < 200 && !ok(); i++) await new Promise(r => setTimeout(r, 5)); expect(ok()).toBe(true) }
-afterEach(() => { document.body.innerHTML = ''; choice = null })
+afterEach(() => { document.body.innerHTML = ''; choice = null; runtime = undefined })
 
 const host = async () => { const r = await start(); if (!r.ok) throw new Error(r.fail.reason); return r.value }
 /** Places `pods` (lazy, of `impl`) in runtime `at`, made with `policy` if new: a stored document as a fresh host loads it. */
@@ -91,6 +92,19 @@ test('a pick deploys a lazy pod in the runtime, adds its slot, and opening it st
   expect(store.get('workspace')!.slots).toEqual([slot('input1')])
   await until(() => started.length === 1 && panels('workspace')[0]!.childElementCount === 1)
   expect(h.app.runtime('main').status('input1')).toEqual({ ok: true, value: 'running' })
+})
+
+test('a pick into a chosen runtime places the pod there', async () => {
+  const h = await host()
+  await place(h, 'edge', ['other'])
+  const { go, store, input } = mount(h, [])
+  go('workspace')
+  choice = { widget: input }; runtime = 'edge'
+  document.querySelector<HTMLElement>('.dock-empty')!.click()
+  await until(() => store.get('workspace')!.slots.length === 1)
+  expect(h.data().runtimes['edge']!.pods).toContain('input1')
+  expect(h.data().runtimes['main']!.pods).not.toContain('input1')
+  expect(store.get('workspace')!.slots).toEqual([slot('input1', 'edge')])
 })
 
 test('addPod in a rules runtime adds the rule letting the host reach the pod, so it can be started', async () => {

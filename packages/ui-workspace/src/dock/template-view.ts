@@ -1,7 +1,7 @@
 /**
  * <workspace-dock>'s template mode: its panels in a fixed CSS grid, one position per template area. A filled position has a
  * thin header (its title, from `title`, a native select of positions, choosing one swaps the two positions, and ✕, which
- * empties it); an empty one is a large `+`. At ≤840px the grid stacks; `main-drawer`'s drawer becomes a slide-over,
+ * empties it); an empty one shows the picker's grid inline. At ≤840px the grid stacks; `main-drawer`'s drawer becomes a slide-over,
  * toggled by a button.
  *
  *   const view = renderTemplate(area, 'two-cols', order, state => title, (el, state, item) => mountPanel(item.container, state, …), { swap, add, remove })
@@ -25,8 +25,7 @@ const CSS = `
 .dock-template .tpl-head { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; font: 12px var(--font); color: var(--muted); border-bottom: 1px solid var(--line); }
 .dock-template .tpl-head span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dock-template .tpl-head button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
-.dock-template .tpl-add { font: 300 48px var(--font); color: var(--muted); background: none; border: 0; cursor: pointer; }
-.dock-template .tpl-add:hover { color: var(--accent); }
+.dock-template .tpl-pos.empty { overflow: auto; }
 .dock-template .tpl-toggle { display: none; }
 .dock-notice { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 4; display: flex; align-items: center; gap: 8px; padding: 6px 10px; font: 12px var(--font); color: var(--fg); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; }
 .dock-notice[hidden] { display: none; }
@@ -47,7 +46,7 @@ const ensureStyles = (doc: Document) => {
   doc.head.append(style);
 };
 
-type Positions = { swap(i: number, j: number): void; add(i: number, anchor: HTMLElement): void; remove(i: number): void; named(): void };
+type Positions = { swap(i: number, j: number): void; add(i: number, host: HTMLElement): void; remove(i: number): void; named(): void };
 const button = (doc: Document, className: string, text: string, label: string) => {
   const b = Object.assign(doc.createElement('button'), { type: 'button', className, textContent: text, title: label });
   b.setAttribute('aria-label', label);
@@ -56,7 +55,7 @@ const button = (doc: Document, className: string, text: string, label: string) =
 
 /** Shows `order` in template `t` inside `host`, each panel mounted once: `mount` fills a position's panel element, given a
  * stand-in for golden-layout's item (its container: element, on('destroy'), focus, stateRequestEvent). Choosing a position
- * moves the two in place, then `on.swap`; a `+` calls `on.add`, a ✕ `on.remove`; a panel's state changing (its new pod
+ * moves the two in place, then `on.swap`; an empty position calls `on.add` with itself, to show the picker's grid in, a ✕ `on.remove`; a panel's state changing (its new pod
  * named: the container's `stateChanged`) `on.named`. `set(i, state)` refills position i;
  * `states()` reads each panel's current state; `dispose()` fires every panel's destroy and removes the grid. */
 export function renderTemplate(host: HTMLElement, t: TemplateId, order: readonly (PanelState | null)[], title: (s: PanelState) => string, mount: (el: HTMLElement, state: PanelState, item: ComponentItem) => void, on: Positions) {
@@ -72,8 +71,7 @@ export function renderTemplate(host: HTMLElement, t: TemplateId, order: readonly
     destroys.set(pos, []); containers.delete(pos); pos.replaceChildren();
     pos.classList.toggle('empty', !state);
     if (!state) {
-      const add = pos.appendChild(button(doc, 'tpl-add', '+', 'Add a panel'));
-      add.addEventListener('click', () => on.add(positions.indexOf(pos), add));
+      on.add(positions.indexOf(pos), pos);
       return;
     }
     const head = pos.appendChild(Object.assign(doc.createElement('header'), { className: 'tpl-head' }));

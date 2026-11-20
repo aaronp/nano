@@ -1,30 +1,33 @@
-// pick(): <nano-picker>, a popover listing what a dock can add, by section, with a filter; resolves with the choice or null.
+// pick(): <nano-picker>, a popover listing what a dock can add, by provider, with a filter and runtime pills; resolves with the choice or null.
+// pickerGrid(): the same content inline, in a place of its own.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { afterEach, expect, test } from 'bun:test'
 
 const { pick } = await import('../src/components/picker.ts')
+const { pickerGrid } = await import('../src/components/picker-grid.ts')
 const { setImportFailures } = await import('../src/lib/import-failures.ts')
 
-const open = (hidden?: { widget: string; name?: string }[]) => {
+const open = (hidden?: { widget: string; name?: string }[], runtimes?: string[]) => {
   document.body.innerHTML = `<button id="plus">+</button><div id="dock">
     <template data-widget="range" data-title="Range" data-catalog></template><template data-widget="log" data-title="Log" data-catalog></template>
     <template data-widget="notes" data-title="Notes"></template>
     <template data-widget="timer" data-title="Timer" data-catalog data-package="nano-template" data-package-url="https://x/manifest.json"></template></div>`
   const templates = () => [...document.querySelectorAll<HTMLTemplateElement>('#dock > template')]
-  const chosen = pick(document.getElementById('plus')!, { templates: templates(), hidden })
+  const chosen = pick(document.getElementById('plus')!, { templates: templates(), hidden, runtimes })
   const p = document.querySelector('nano-picker') as HTMLElement
   const entries = (section: string) => [...p.querySelectorAll<HTMLElement>(`[data-section="${section}"] [data-widget]`)].filter(e => !e.hidden).map(e => e.textContent!.trim())
   return { p, chosen, entries }
 }
 afterEach(() => { document.body.innerHTML = '' })
 
-test('sections and their entries from the given templates; the filter is focused; no Hidden section without hidden panels', () => {
+test('groups by provider (nano.ui, then imports), Views last; entries from the given templates; the filter is focused; no Hidden section without hidden panels', () => {
   const { p, entries } = open()
-  expect(entries('components')).toEqual(['Range', 'Log'])
-  expect(entries('widgets')).toEqual(['Notes'])
-  expect(entries('imported')).toEqual(['Timer'])
-  expect(p.querySelector('[data-section="imported"] h4')!.textContent).toContain('nano-template')
+  expect([...p.querySelectorAll('.np-section')].map(s => (s as HTMLElement).dataset.section)).toEqual(['nano.ui', 'nano-template', 'views'])
+  expect(entries('nano.ui')).toEqual(['Range', 'Log'])
+  expect(entries('views')).toEqual(['Notes'])
+  expect(entries('nano-template')).toEqual(['Timer'])
+  expect(p.querySelector('[data-section="nano-template"] h3')!.textContent).toContain('nano-template')
   expect(p.querySelector('[data-section="hidden"]')).toBeNull()
   expect(document.activeElement).toBe(p.querySelector('input'))
 })
@@ -33,15 +36,16 @@ test('the filter hides entries and sections that do not match', () => {
   const { p, entries } = open()
   const f = p.querySelector('input')!
   f.value = 'no'; f.dispatchEvent(new Event('input'))
-  expect(entries('components')).toEqual([])
-  expect(entries('widgets')).toEqual(['Notes'])
-  expect((p.querySelector('[data-section="components"]') as HTMLElement).hidden).toBe(true)
+  expect(entries('nano.ui')).toEqual([])
+  expect(entries('views')).toEqual(['Notes'])
+  expect((p.querySelector('[data-section="nano.ui"]') as HTMLElement).hidden).toBe(true)
+  expect((p.querySelector('[data-section="nano-template"]') as HTMLElement).hidden).toBe(true)
 })
 
 test('a click resolves with that entry and removes the popover', async () => {
   const { p, chosen } = open()
-  ;(p.querySelector('[data-section="widgets"] [data-widget="notes"]') as HTMLElement).click()
-  expect(await chosen).toEqual({ widget: 'notes' })
+  ;(p.querySelector('[data-section="views"] [data-widget="notes"]') as HTMLElement).click()
+  expect(await chosen).toEqual({ state: { widget: 'notes' } })
   expect(document.querySelector('nano-picker')).toBeNull()
 })
 
@@ -49,7 +53,7 @@ test('a Hidden entry resolves with its widget and name', async () => {
   const { p, chosen, entries } = open([{ widget: 'notes', name: 'Ideas' }])
   expect(entries('hidden')).toEqual(['Ideas'])
   ;(p.querySelector('[data-section="hidden"] [data-widget]') as HTMLElement).click()
-  expect(await chosen).toEqual({ widget: 'notes', name: 'Ideas' })
+  expect(await chosen).toEqual({ state: { widget: 'notes', name: 'Ideas' } })
 })
 
 test('Esc, or a press outside, resolves null and removes the popover', async () => {
@@ -74,8 +78,8 @@ test('✕ on an imported package fires imports:remove with its url; failed impor
   setImportFailures([{ url: 'https://dead/manifest.json', error: 'not found' }])
   document.querySelector('[data-package]')!.remove()
   document.dispatchEvent(new CustomEvent('catalog:changed'))
-  expect(entries('imported')).toEqual([])
-  expect(p.querySelector('[data-section="imported"]')!.textContent).toContain('https://dead/manifest.json: not found')
+  expect(entries('nano-template')).toEqual([])
+  expect(p.querySelector('[data-section="failed"]')!.textContent).toContain('https://dead/manifest.json: not found')
   setImportFailures([])
 })
 
@@ -98,4 +102,62 @@ test('a page change (Back) resolves null and removes the popover', async () => {
   window.dispatchEvent(new Event('hashchange'))
   expect(await chosen).toBeNull()
   expect(document.querySelector('nano-picker')).toBeNull()
+})
+
+const pills = (p: HTMLElement) => [...p.querySelectorAll<HTMLElement>('[role="radiogroup"] [data-runtime]')]
+const checked = (p: HTMLElement) => pills(p).filter(b => b.getAttribute('aria-checked') === 'true').map(b => b.dataset.runtime)
+
+test('the pills list the runtimes; the choice comes back with a provider tile, is remembered, and does not for Views or Hidden', async () => {
+  let { p, chosen } = open([{ widget: 'notes', name: 'Ideas' }], ['main', 'edge'])
+  expect(pills(p).map(b => b.dataset.runtime)).toEqual(['main', 'edge'])
+  expect(checked(p)).toEqual(['main'])
+  pills(p)[1]!.click()
+  expect(checked(p)).toEqual(['edge'])
+  ;(p.querySelector('[data-widget="range"]') as HTMLElement).click()
+  expect(await chosen).toEqual({ state: { widget: 'range' }, runtime: 'edge' })
+  ;({ p, chosen } = open([{ widget: 'notes', name: 'Ideas' }], ['main', 'edge']))
+  expect(checked(p)).toEqual(['edge'])   // the session's last choice
+  ;(p.querySelector('[data-section="views"] [data-widget]') as HTMLElement).click()
+  expect(await chosen).toEqual({ state: { widget: 'notes' } })
+  ;({ p, chosen } = open([{ widget: 'notes', name: 'Ideas' }], ['main', 'edge']))
+  ;(p.querySelector('[data-section="hidden"] [data-widget]') as HTMLElement).click()
+  expect(await chosen).toEqual({ state: { widget: 'notes', name: 'Ideas' } })
+  ;({ p, chosen } = open(undefined, ['main']))   // a choice no longer offered: back to main
+  expect(checked(p)).toEqual(['main'])
+  p.querySelector('input')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await chosen
+  pickerGrid(document.body, { templates: [] }); expect(checked(document.body)).toEqual(['main'])   // no runtimes given: main
+})
+
+test('the pills are disabled while focus is in Views', () => {
+  const { p } = open(undefined, ['main', 'edge'])
+  ;(p.querySelector('[data-section="views"] [data-widget]') as HTMLElement).focus()
+  expect(pills(p).every(b => (b as HTMLButtonElement).disabled)).toBe(true)
+  ;(p.querySelector('[data-widget="range"]') as HTMLElement).focus()
+  expect(pills(p).some(b => (b as HTMLButtonElement).disabled)).toBe(false)
+})
+
+test('the arrow keys move focus between tiles; Down in the filter enters the grid', () => {
+  const { p } = open()
+  const key = (el: Element, k: string) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }))
+  key(p.querySelector('input')!, 'ArrowDown')
+  expect(document.activeElement).toBe(p.querySelector('[data-widget="range"]'))
+  key(document.activeElement!, 'ArrowRight')
+  expect(document.activeElement).toBe(p.querySelector('[data-widget="log"]'))
+  key(document.activeElement!, 'ArrowLeft')
+  expect(document.activeElement).toBe(p.querySelector('[data-widget="range"]'))
+})
+
+test('inline, the grid fills its place, has no Esc or outside-click close, and a pick resolves it', async () => {
+  const host = document.createElement('div'); document.body.append(host)
+  host.innerHTML = '<template data-widget="range" data-title="Range" data-catalog></template>'
+  const chosen = pickerGrid(host, { templates: [...host.querySelectorAll('template')], runtimes: ['main', 'edge'] })
+  expect(document.querySelector('nano-picker')).toBeNull()
+  expect(document.activeElement).not.toBe(host.querySelector('input'))
+  host.querySelector('input')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+  window.dispatchEvent(new Event('hashchange'))
+  expect(host.querySelector('input')).not.toBeNull()
+  pills(host)[1]!.click()
+  ;(host.querySelector('[data-widget="range"]') as HTMLElement).click()
+  expect(await chosen).toEqual({ state: { widget: 'range' }, runtime: 'edge' })
 })

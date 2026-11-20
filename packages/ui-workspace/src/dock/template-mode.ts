@@ -1,6 +1,6 @@
 /**
- * <workspace-dock>'s template mode: a `TemplateState` shown by template-view.ts, kept as it changes. An empty position's
- * `+` opens the picker (parked panels listed first) and fills it; ✕ empties one; while panels are parked a notice above
+ * <workspace-dock>'s template mode: a `TemplateState` shown by template-view.ts, kept as it changes. An empty position
+ * shows the picker's grid (parked panels listed first) and a pick fills it; ✕ empties one; while panels are parked a notice above
  * the layout says how many, with Bring back (and ✕, which hides it until the count changes). An add from outside with
  * no room while a new pod is being made waits for it to be named.
  *
@@ -14,7 +14,8 @@ import { renderTemplate } from './template-view.ts';
 type Needs = {
   title(p: PanelState): string;
   mount(el: HTMLElement, p: PanelState, item: ComponentItem): void;
-  pick(anchor: HTMLElement, hidden: PanelState[]): Promise<PanelState | null>;
+  /** The picker at `anchor` (a popover), or, `inline`, in it (filling it). */
+  pick(anchor: HTMLElement, hidden: PanelState[], inline?: boolean): Promise<PanelState | null>;
   /** Stores the state as it now is (and tells whoever listens). */
   remember(s: TemplateState): void;
   bringBack(to: TemplateId): void;
@@ -48,7 +49,7 @@ export function showTemplate(area: HTMLElement, s: TemplateState, n: Needs) {
   };
   const view = renderTemplate(area, s.template, s.order, n.title, n.mount, {
     swap: () => { s = state(); n.remember(s); },
-    add: (i, anchor) => void n.pick(anchor, s.parked).then((p) => { if (p) { fill(i, p); view.panel(i)?.focus(); } }),
+    add: (i, host) => void n.pick(host, s.parked, true).then((p) => { if (p) { fill(i, p); view.panel(i)?.focus(); } }),
     remove: (i) => { view.set(i, null); changed(); },
     named: () => { changed(); if (!making()) for (const p of waiting.splice(0)) n.add(p); },
   });

@@ -7,7 +7,7 @@
  *     <template data-widget="notes" data-title="Notes"> …any markup or widget… </template>   (one per palette entry)
  *   </workspace-dock>
  * Adding panels: each panel header's `+` opens the picker (picker.ts) and splits that panel for the choice; an empty dock
- * shows one large `+`. The kept layout opens next time. Panels refer to widgets by id, so layouts hold no markup.
+ * shows the grid inline. The kept layout opens next time. Panels refer to widgets by id, so layouts hold no markup.
  * Bus topics (the app bus): dock:opened {widget} · dock:layout {panels} · dock:saved · dock:error {message} ·
  * dock:status {message} (what the last command did). It has no toolbar: its commands are public, for the app bar to call.
  *   windowStyle / setWindowStyle(s): tabs or clear (remembered per dock).
@@ -34,6 +34,7 @@ import { addPod, mountPanel, panelOf, shows } from '../dock/panels.ts';
 import { readSaved, writeSaved } from '../dock/saved.ts';
 import { showTemplate } from '../dock/template-mode.ts';
 import { pick } from './picker.ts';
+import { pickerGrid } from './picker-grid.ts';
 import { requestBus, type Bus } from '../lib/bus.ts';
 import { PALETTE_ID, windowStyle, type WindowStyle, panelIds } from '../lib/dock-layout.ts';
 import { TEMPLATES, panelsInOrder, place, relayout, templateState, type PanelState, type TemplateId, type TemplateState } from '../lib/layout-templates.ts';
@@ -51,7 +52,7 @@ export class WorkspaceDock extends HTMLElement {
   private defs = new Map<string, Def>();
   /** The focused item last reported in dock:focus, so only changes are sent. */
   private focused: ComponentItem | undefined;
-  /** The template shown instead of golden-layout (which is then empty); the large `+` of an empty dock. */
+  /** The template shown instead of golden-layout (which is then empty); the inline picker of an empty dock. */
   private tpl: ReturnType<typeof showTemplate> | null = null;
   private empty: HTMLElement | null = null;
 
@@ -81,7 +82,7 @@ export class WorkspaceDock extends HTMLElement {
     /* empty space (not a panel, its tabs or a splitter being dragged) clears the focus */
     area.addEventListener('pointerdown', (e) => { if (!(e.target as Element).closest('.dock-panel, .lm_header, .lm_splitter')) layout.clearComponentFocus(); });
     this.layout = layout;
-    this.empty = this.plus(area, 'dock-empty');
+    this.empty = area.appendChild(Object.assign(document.createElement('div'), { className: 'dock-empty' })); this.offer();
     const saved = this.readSaved();
     this.load(saved ?? initial(this, this.defs));
     if (saved) this.say('Opened your saved layout.');
@@ -146,7 +147,7 @@ export class WorkspaceDock extends HTMLElement {
   private get system(): string { return this.getAttribute('system') ?? 'host'; }
   private send(topic: string, payload: unknown) { this.requireBus().publish(topic, payload, 'workspace-dock'); }
   private say(message: string) { this.send('dock:status', { message }); }
-  /** Panels or template changed: kept (golden-layout's config: the template keeps itself), the controls re-read; the empty dock's `+` shows when nothing else does. */
+  /** Panels or template changed: kept (golden-layout's config: the template keeps itself), the controls re-read; the empty dock's picker shows when nothing else does. */
   private changed() { writeSaved(this.storage, this.storageKey, this.kept); const panels = this.openIds().length; this.empty!.hidden = !!this.tpl || panels > 0; this.send('dock:layout', { panels }); }
   /** Sends `dock:focus` when the focused panel has changed: its instance, or null if it shows none or none is focused. */
   private reportFocus(item = this.layout?.focusedComponentItem) {
@@ -161,18 +162,18 @@ export class WorkspaceDock extends HTMLElement {
     if (!found) return this.addWidget('pod', pod);
     (found.parentItem as Stack).setActiveComponentItem(found, true);
   }
-  /** A `+` in `parent` that opens the picker and splits `target()`'s panel (else as addWidget does) for the choice, focused. */
+  /** A `+` in `parent` that opens the picker and splits `target()`'s panel (else as addWidget does) for the choice, focused (`put`; `offer`: the empty dock's inline picker, shown again once a pick fills it). */
   private plus(parent: HTMLElement, className: string, target?: () => ComponentItem | undefined) {
     const b = parent.insertBefore(Object.assign(this.ownerDocument.createElement('button'), { type: 'button', className, textContent: '+', title: 'Add a panel' }), parent.firstChild);
     b.setAttribute('aria-label', 'Add a panel');
-    b.addEventListener('click', () => void this.choose(b).then((p) => { const el = p && this.split(p, target?.()).container.element; if (el) { el.tabIndex = -1; el.focus(); } }));
-    return b;
+    b.addEventListener('click', () => void this.choose(b).then((p) => this.put(p, target?.())));
   }
-  /** The picker's choice; an implementation's (a new pod) is first deployed lazy (addPod; Task 6: in the chosen runtime). */
-  private async choose(anchor: HTMLElement, hidden?: PanelState[]): Promise<PanelState | null> {
-    const p = await pick(anchor, { templates: [...this.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')], hidden });
-    const impl = p && !p.name && this.host && this.defs.get(p.widget)?.template.dataset['implementation'], name = impl && await addPod(this.host!, impl, 'main');
-    return !impl ? p : name ? { widget: p!.widget, name } : null;
+  private put(p: PanelState | null, target?: ComponentItem) { const el = p && this.split(p, target).container.element; if (el) { el.tabIndex = -1; el.focus(); } }
+  private offer() { void this.choose(this.empty!, undefined, true).then((p) => { this.offer(); this.put(p); }); }
+  /** The picker's choice (a popover at `anchor`, or inline in it); an implementation's (a new pod) is first deployed lazy in the chosen runtime (addPod). */
+  private async choose(anchor: HTMLElement, hidden?: PanelState[], inline = false): Promise<PanelState | null> {
+    const templates = [...this.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')], runtimes = Object.keys(this.host?.data().runtimes ?? { main: 1 }), c = await (inline ? pickerGrid : pick)(anchor, { templates, hidden, runtimes }), p = c?.state, impl = p && !p.name && this.host && this.defs.get(p.widget)?.template.dataset['implementation'], name = impl && await addPod(this.host!, impl, c.runtime ?? 'main');
+    return !impl ? p ?? null : name ? { widget: p!.widget, name } : null;
   }
   private split(p: PanelState, target?: ComponentItem) { return split(this.requireLayout(), p, p.name ?? this.defs.get(p.widget)?.title ?? p.widget, target); }
   /** Whether a stored template's panels are all in this palette; whether `p` is an implementation's panel whose pod is being made. */
@@ -189,7 +190,7 @@ export class WorkspaceDock extends HTMLElement {
     if (this.tpl) this.tpl.dispose(); else { this.requireLayout().clearComponentFocus(); this.requireLayout().clear(); }
     this.tpl = showTemplate(this.querySelector<HTMLElement>(':scope > .dock-area')!, s, { title: (p) => (p.widget === 'pod' ? p.name : this.defs.get(p.widget)?.title) ?? p.widget,
       mount: (el, st, item) => { mountPanel(item.container, st, this.mounting); for (const type of ['pointerdown', 'focusin']) el.addEventListener(type, () => this.reportFocus(item)); },
-      pick: (anchor, hidden) => this.choose(anchor, hidden), bringBack: (to) => this.setTemplate(to),
+      pick: (anchor, hidden, inline) => this.choose(anchor, hidden, inline), bringBack: (to) => this.setTemplate(to),
       unnamed: this.unnamed, say: (m) => this.say(m), add: (p) => this.addWidget(p.widget, p.name),
       remember: (st) => { templateState(this.storage, this.storageKey).set(st); if (this.tpl) this.changed(); } });
     this.changed();

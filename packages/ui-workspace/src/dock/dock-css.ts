@@ -42,8 +42,7 @@ workspace-dock .dock-area { position: relative; min-height: 0; overflow: hidden;
 /* a header's + (the picker) before maximise and close; an empty dock's one large + */
 .lm_controls > .dock-split { width: auto; height: 11px; padding: 0; font: 16px/11px var(--font); color: var(--muted); background: none; border: 0; cursor: pointer; }
 .lm_controls > .dock-split:hover { color: var(--fg); }
-.dock-empty { position: absolute; inset: 0; z-index: 1; margin: auto; width: 96px; height: 96px; font: 300 64px var(--font); color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: 12px; cursor: pointer; }
-.dock-empty:hover { color: var(--accent); border-color: var(--accent); }
+.dock-empty { position: absolute; inset: 0; z-index: 1; overflow: auto; padding: 12px; box-sizing: border-box; background: var(--bg); }
 .dock-empty[hidden] { display: none; }
 /* Clear: a stack with one panel has no tab bar; its maximise and close float over it on hover.
    Stacked panels keep their tabs. The panel takes the header's room (golden-layout sizes it inline). */

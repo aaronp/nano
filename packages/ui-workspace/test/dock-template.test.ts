@@ -3,7 +3,8 @@ import { expect, mock, test } from 'bun:test'
 import { panelsInOrder, type PanelState } from '../src/lib/layout-templates.ts'
 // the picker, stubbed: it resolves with `choice` and records what it was offered
 let choice: PanelState | null = null, offered: PanelState[] | undefined
-mock.module('../src/components/picker.ts', () => ({ pick: async (_: HTMLElement, o: { hidden?: PanelState[] }) => { offered = o.hidden; return choice } }))
+mock.module('../src/components/picker.ts', () => ({ pick: async (_: HTMLElement, o: { hidden?: PanelState[] }) => { offered = o.hidden; return choice && { state: choice } } }))
+mock.module('../src/components/picker-grid.ts', () => ({ pickerGrid: (host: HTMLElement, o: { hidden?: PanelState[] }) => new Promise(r => { if (host.className === 'dock-empty') return void host.addEventListener('click', () => choice && r({ state: choice })); offered = o.hidden; const b = Object.assign(document.createElement('button'), { className: 'tpl-add' }); host.append(b); b.addEventListener('click', () => choice && r({ state: choice })) }) }))   // inline: a click picks `choice`
 const { mount, tick } = await import('./dock-setup.ts')
 
 const two = async () => { const m = await mount(); m.dock.addWidget('plain'); m.dock.addWidget('plain'); await tick(); return m }

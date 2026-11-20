@@ -1,7 +1,8 @@
 // <workspace-dock>: adding splits the focused panel, else the largest. Ported from retired/test/dock-focus.test.ts.
 import { expect, mock, test } from 'bun:test'
 let choice: { widget: string } | null = null   // the picker, stubbed
-mock.module('../src/components/picker.ts', () => ({ pick: async () => choice }))
+mock.module('../src/components/picker.ts', () => ({ pick: async () => choice && { state: choice } }))
+mock.module('../src/components/picker-grid.ts', () => ({ pickerGrid: (host: HTMLElement) => new Promise(r => { host.addEventListener('click', () => choice && r({ state: choice })) }) }))   // inline: a click picks `choice`
 const { mount, tick } = await import('./dock-setup.ts')
 
 // adding splits the focused panel (else the largest): a new column beside a wide one, a new row below a tall one
