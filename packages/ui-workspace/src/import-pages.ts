@@ -1,8 +1,9 @@
 /**
  * An import's pages into the Platform. `withImported` is the workspace's rule for them (it was the page store's
  * `merge`): a free id is added as it is (last in order); a taken id with identical content skipped, so a repeat is a
- * no-op; a taken id with other content added under the next free `-2`, `-3`…; the incoming Main (`workspace`) fills
- * Main when Main shows only views (after New, say), else it is a page beside it. `importing` wraps the host's
+ * no-op; a taken id with other content, or one of the workspace's own routes (`FIXED`), added under the next free
+ * `-2`, `-3`…; the incoming Main (`workspace`) fills Main when Main shows only views (after New, say), else it is a
+ * page beside it. `importing` wraps the host's
  * `importUrl`: the file's pages (a bundle's, or a nano.json's old layout migrated), edited as the Import dialog chose
  * (`chosen.pages`), are applied with the app; a plain nano.json's Main filling Main keeps Main's title and icon.
  *
@@ -14,7 +15,7 @@ import type { Page, Platform, UIDeployment } from '@pritzlaff/nano-platform'
 import type { Host } from './host.ts'
 import { opened } from './migrate.ts'
 import { showStatus } from './lib/status.ts'
-import { applyPages, MAIN } from './lib/pages.ts'
+import { applyPages, FIXED, MAIN } from './lib/pages.ts'
 
 const order = (p: Page) => { const o = (p.meta as { order?: unknown } | undefined)?.order; return typeof o === 'number' ? o : Infinity }
 /** A page as compared: without its place in the order. */
@@ -28,8 +29,8 @@ export function withImported(current: UIDeployment, incoming: UIDeployment): UID
     const same = pages[id]
     if (same && body(same) === body(p)) continue
     const fills = id === MAIN && !!same && Object.values(same.slots).every(s => s.kind === 'view')
-    let at = id
-    for (let n = 2; !fills && pages[at]; n++) at = `${id}-${n}`
+    let at = id   // one of the workspace's own routes is taken too
+    for (let n = 2; !fills && (pages[at] || FIXED.includes(at)); n++) at = `${id}-${n}`
     pages[at] = { ...p, meta: { ...(p.meta as object), order: fills ? order(same!) : ++last } }
   }
   return { pages }

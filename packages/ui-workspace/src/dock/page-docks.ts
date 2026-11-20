@@ -8,7 +8,8 @@
  * - its `pods` are its page's (dock/page-pods.ts), opened when it is built (its page shown), its panels then added for
  *   the slots its layout lacks;
  * - each `dock:layout` rewrites the page's slots from its panels (`slotsOf`: each slot keeps its kind; only panels
- *   opened or closed add or drop one; view slots this dock has no widget for are kept);
+ *   opened or closed add or drop one; view slots this dock has no widget for are kept); a pod panel back from Save's
+ *   restore point whose slot was dropped since gets its `pod` slot again (its pod placed in one runtime), and opens;
  * - a change made elsewhere, to a page in the Platform's change report: a shown dock gets the slots it lacks added (and
  *   opened); if panels must go or its layout was changed, or its route is hidden, it is built again from its page (now,
  *   or on its next visit). A page whose slots resolve differently (the Application changed) is opened again.
@@ -17,12 +18,13 @@
  *   keepDocks(document, platform)   // workspace-pages.ts, once its docks are mounted
  */
 import { ResolvedLayoutConfig } from 'golden-layout/dist/esm/index.js';
+import { Coord } from '@pritzlaff/nano-core';
 import type { Page, Platform, Slot } from '@pritzlaff/nano-platform';
 import type { WorkspaceDock } from '../components/workspace-dock.ts';
 import { requestBus } from '../lib/bus.ts';
 import { panelsInOrder, type PanelState } from '../lib/layout-templates.ts';
 import { applyPages } from '../lib/pages.ts';
-import { reconcile, slotsOf } from './page-slots.ts';
+import { reconcile, slotOf, slotsOf } from './page-slots.ts';
 import { pagePods } from './page-pods.ts';
 
 type Instance = ReturnType<typeof Platform.create>;
@@ -103,13 +105,22 @@ export function keepDocks(doc: Document, platform: Instance): void {
       d.pods = pagePods(platform, id, quiet);
     }
   };
+  /** The `pod` slot of a pod panel whose slot is not on the page (Restore brought it back): its pod placed in one runtime. */
+  const back = (d: WorkspaceDock, q: PanelState): Slot | undefined => {
+    const data = d.host?.data(), impl = q.name && data?.pods[q.name]?.implementation;
+    const placed = impl ? Object.keys(data.runtimes).filter((r) => data.runtimes[r]!.pods.includes(q.name!)) : [];
+    return placed.length === 1 ? { kind: 'pod', pod: Coord.pod(Coord.parse('implementation', impl as string), Coord.runtime(placed[0]!), q.name!) } : undefined;
+  };
   const layout = () => {
     if (busy) return;
     for (const [d, id] of docks()) {
       if (!built(d)) continue;
       if (!settled.has(d)) { settled.add(d); addPanels(d, id, reconcile(d.arrangement(), pageOf(id)!.slots).add); d.pods?.open(); }
-      const p = pageOf(id)!, now = slotsOf(panels(d), p.slots, kinds(d));
+      const p = pageOf(id)!, kind = kinds(d), now = slotsOf(panels(d), p.slots, kind);
+      const returned = panels(d).flatMap((q) => { const s = !Object.hasOwn(now, slotOf(q)) && kind(q.widget) === 'pod' && back(d, q); return s ? [[slotOf(q), s] as const] : []; });
+      for (const [s, v] of returned) now[s] = v;
       if (text(now) !== text(p.slots)) quiet(() => edit(platform, id, (q) => ({ ...q, slots: now })));
+      if (returned.length) d.pods?.open();
     }
   };
   platform.listen((c) => {

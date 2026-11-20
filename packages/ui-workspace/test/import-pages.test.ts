@@ -28,3 +28,8 @@ test('the incoming Main fills a Main that shows only views (after New): its slot
   expect(written(out.pages['workspace'])).toEqual(saved)
   expect(Object.keys(out.pages)).toEqual(['workspace', 'two'])
 })
+
+test('an incoming page on one of the workspace\'s own routes is taken as clashing: added as -2, the rest of the import kept', () => {
+  const out = withImported(doc({ pages: { workspace: main } }), doc({ pages: { ring: trading, two: { slots: {}, meta: { title: 'Two', order: 1 } } } }))
+  expect(Object.keys(out.pages)).toEqual(['workspace', 'ring-2', 'two'])
+})

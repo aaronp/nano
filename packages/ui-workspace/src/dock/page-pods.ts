@@ -6,7 +6,7 @@
  * slot, the dock's own write; `remove` drops a slot as a change made elsewhere (its panel goes).
  * `podPanel(el, slot, h, pods)` shows slot `slot` in `el`: its pod's chosen view (`nano-sandboxed` for a non-host pod),
  * made again when its view or runtime changes, and "N matched" under it when a selector matched several; why it failed
- * to open (tried again on a later apply); or "not found" with a Remove button, never deploying or starting it.
+ * to open (tried again on a later apply while its page shows); or "not found" with a Remove button, never deploying or starting it.
  *
  *   dock.pods = pagePods(platform, 'workspace', quiet); dock.pods.open()
  *   const stop = podPanel(container.element, 'any', host, dock.pods)
@@ -39,6 +39,7 @@ export function pagePods(platform: Instance, id: string, quiet: (f: () => void) 
     if (running) { again = true; return }
     running = true
     void platform.open(id).then(r => { opened = r; for (const fn of [...heard]) fn() })
+      .catch((e: unknown) => showStatus(document, `The page's pods did not open: ${e instanceof Error ? e.message : String(e)}`))
       .finally(() => { running = false; if (again) { again = false; open() } })
   }
   /** Page `id` with `slots` rewritten by `f`; a refusal shown. */
@@ -55,10 +56,10 @@ export function pagePods(platform: Instance, id: string, quiet: (f: () => void) 
       return { opened: opened[slot], matched: r?.kind === 'pod' ? r.pods.length : 0 }
     },
     listen(fn: () => void): () => void { heard.add(fn); return () => { heard.delete(fn) } },
-    /** The page's slot showing pod `pod` of runtime `runtime` (its implementation `d`'s): a `pod` slot added (the dock's own write) and opened, if none was. */
+    /** The page's slot showing pod `pod` of runtime `runtime` (its implementation `d`'s): a `pod` slot added (the dock's own write) and opened, if none was; none if `d` does not place it there. */
     add(d: AppDeployment, runtime: string, pod: string): string | undefined {
       const impl = d.pods[pod]?.implementation, slots = platform.document().doc.pages[id]?.slots
-      if (!impl || !slots) return undefined
+      if (!impl || !slots || !d.runtimes[runtime]?.pods.includes(pod)) return undefined
       const at = Coord.pod(Coord.parse('implementation', impl), Coord.runtime(runtime), pod), text = String(at)
       const known = Object.entries(slots).find(([, s]) => s.kind === 'pod' && String(s.pod) === text)?.[0]
       if (known) return known
@@ -101,7 +102,8 @@ export function podPanel(el: HTMLElement, slot: string, h: Host, pods: PagePods)
   const off = [pods.listen(render), h.app.listen(e => {
     if (e.type !== 'applied') return
     const o = pods.get(slot).opened
-    if (o && 'fail' in o) pods.open(); else render()   // a failure is tried again: placed, or let in, since
+    // a failure is tried again (placed, or let in, since) while its page shows; a hidden one is opened when it shows again
+    if (o && 'fail' in o) { if (!el.closest<HTMLElement>('app-route')?.hidden) pods.open() } else render()
   })]
   return () => { for (const f of off) f() }
 }

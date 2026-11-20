@@ -66,7 +66,7 @@ export function mount(h: H, pages: Record<string, Page>, open = '') {
   const written = (id: string) => strs(platform.document().doc.pages[id])
   /** Replaces page `id` (as a pod or an import would). */
   const put = (id: string, p: Page) => { const r = platform.apply({ pages: { ...platform.document().doc.pages, [id]: p } }); if (!r.ok) throw new Error(r.fail.reason) }
-  return { platform, go, dock, panels, written, put, input: implementationTemplates(h, document).find(t => t.dataset['implementation'] === 'nano.ui/input')!.dataset['widget']! }
+  return { platform, bus, go, dock, panels, written, put, input: implementationTemplates(h, document).find(t => t.dataset['implementation'] === 'nano.ui/input')!.dataset['widget']! }
 }
 export const starts = (h: H) => { const to: string[] = []; h.app.listen(e => { if (e.type === 'sent' && e.kind === 'start') to.push(e.to) }); return to }
 /** Each getOrCreate's `started`, in order. */

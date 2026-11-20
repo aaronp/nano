@@ -12,11 +12,12 @@
 import { Coord, failure, success, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
 import { Platform, type Page, type Slot, type UIDeployment } from '@pritzlaff/nano-platform'
 import { panelsInOrder, type PanelState, type TemplateState } from './lib/layout-templates.ts'
+import { MAIN } from './lib/pages.ts'
 
 type OldSlot = { id: string; runtime: string; pod: string } | { id: string; view: string }
 export type Legacy = { id: string; title: string; icon?: string; slots: OldSlot[]; workspace?: unknown; [k: string]: unknown }
 
-const MAIN = 'workspace', RESTORE = ['saved', 'saved.template']
+const RESTORE = ['saved', 'saved.template']
 // The keys before pages were deployment data: the saved pages' list and Main's title and icon (saved-workspaces), and
 // Main's dock (index.html's `storage-key`), each saved page's dock under `<dock>.saved.<path>`, each with `.template`.
 const LIST = 'workspace-starter.saved-workspaces', DOCK = 'workspace-starter.layout'

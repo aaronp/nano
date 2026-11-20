@@ -15,7 +15,6 @@ import { panelContent, withMode } from '../lib/panel-content.ts'
 import { panelState, readWidgetId, readWidgetMode, readWidgetName, shownInstance } from '../lib/dock-layout.ts'
 import type { Def } from './palette.ts'
 import { podPanel, type PagePods } from './page-pods.ts'
-export type { PagePods } from './page-pods.ts'
 
 /** The config a built-in starts with, where it needs one. */
 const starts: Record<string, unknown> = { 'nano.ui/map': { code: 'return x' } }

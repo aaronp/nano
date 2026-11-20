@@ -200,3 +200,38 @@ test('a pod that failed to open is opened on a later apply that lets the host in
   expect((await h.apply({ ...d, runtimes: { ...d.runtimes, locked: { ...d.runtimes['locked']!, policy: { kind: 'rules', rules: [{ allow: '*' }] } } } })).ok).toBe(true)
   await until(() => h.app.runtime('locked').status('x').ok && panels('workspace')[0]!.querySelector('.dock-fail') === null)
 })
+
+test('Restore brings back a pod panel closed after Save, and its slot: both are there after a reload (ADR-0036)', async () => {
+  const h = await host()
+  await place(h, 'main', ['input1', 'input2'])
+  const first = mount(h, { workspace: page('Main', { input1: pod('input1'), input2: pod('input2') }, 0) })
+  first.go('workspace')
+  await until(() => first.panels('workspace').length === 2)
+  first.dock('workspace').save()
+  const tab = [...first.dock('workspace').querySelectorAll<HTMLElement>('.lm_tab')].find(t => t.querySelector('.lm_title')?.textContent === 'input1')!
+  tab.querySelector<HTMLElement>('.lm_close_tab')!.click()
+  await until(() => Object.keys(first.written('workspace').slots).join() === 'input2')
+  first.dock('workspace').restore()
+  await until(() => first.panels('workspace').length === 2)
+  await until(() => Object.keys(first.written('workspace').slots).sort().join() === 'input1,input2')
+  expect(first.written('workspace').slots.input1).toEqual({ kind: 'pod', pod: 'nano.ui/input@main/input1' })
+  const again = reload(h, first)
+  again.go('workspace')
+  await until(() => again.panels('workspace').length === 2)
+})
+
+test('opening a pod not placed in the runtime named adds no panel and says so', async () => {
+  const h = await host()
+  await place(h, 'main', ['input1'])
+  const { go, bus, dock, panels, written } = mount(h, {})
+  go('workspace')
+  await tick()
+  const said: string[] = []
+  bus.subscribe('dock:status', m => said.push((m.payload as { message: string }).message))
+  const d = dock('workspace') as Dock & { openPod(pod: string, runtime?: string): void }
+  d.openPod('input1', 'elsewhere'); d.openPod('nope', 'main')
+  await tick()
+  expect(panels('workspace').length).toBe(0)
+  expect(written('workspace').slots).toEqual({})
+  expect(said).toEqual(['input1 is not placed in elsewhere: nothing was opened.', 'nope is not placed in main: nothing was opened.'])
+})

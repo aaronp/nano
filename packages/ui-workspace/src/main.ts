@@ -33,7 +33,7 @@ import { shadowCreate } from './history.ts';
 import { icon } from './icons.ts';
 import { HOST_PODS } from './host-deploy.ts';
 import { showStatus } from './lib/status.ts';
-import { applyPages } from './lib/pages.ts';
+import { applyPages, MAIN } from './lib/pages.ts';
 import { Coord } from '@pritzlaff/nano-core';
 import type { Page } from '@pritzlaff/nano-platform';
 
@@ -41,7 +41,7 @@ if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu
 if (host && platform) {
   const h = host, p = platform, target = { app: h.app, registry: h.registry, get calls() { return h.calls(); } };
   // Main's page (the Platform's): written, never its dock, which shows it once built (it may not be: a deep link elsewhere).
-  const MAIN = 'workspace', placedIn = (pod: string) => Object.entries(h.data().runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
+  const placedIn = (pod: string) => Object.entries(h.data().runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
   /** The pages with Main's replaced by `edit(Main)`; a refusal shown. */
   const toMain = (edit: (m: Page) => Page) => { const d = p.document().doc, r = applyPages(p, { pages: { ...d.pages, [MAIN]: edit(d.pages[MAIN]!) } }); if (!r.ok) showStatus(document, r.fail.reason); };
   setImportHost(host);   // its importUrl applies the file's pages too (boot-host.ts)

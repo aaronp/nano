@@ -30,7 +30,8 @@ import { GoldenLayout, LayoutConfig, type Stack, type ComponentItem, type Conten
 import type { Host } from '../host.ts';
 import { ensureStyles, HEADER_H } from '../dock/dock-css.ts';
 import { initial, readPalette, split, type Def } from '../dock/palette.ts';
-import { addPod, mountPanel, panelOf, shows, type PagePods } from '../dock/panels.ts';
+import { addPod, mountPanel, panelOf, shows } from '../dock/panels.ts';
+import type { PagePods } from '../dock/page-pods.ts';
 import { readSaved, writeSaved } from '../dock/saved.ts';
 import { showTemplate } from '../dock/template-mode.ts';
 import { pick } from './picker.ts';
@@ -157,11 +158,10 @@ export class WorkspaceDock extends HTMLElement {
     const instance = item && shows(item, this.defs);
     this.dispatchEvent(new CustomEvent('dock:focus', { bubbles: true, composed: true, detail: instance ? { system: this.system, instance, widget: this.id } : null }));
   }
-  /** Shows a pod: the panel already showing it, made active and focused; else a new `pod` panel, on its page's slot for it in `runtime`. */
+  /** Shows a pod: the panel already showing it, made active and focused; else a new `pod` panel, on its page's slot for it in `runtime` (none: it says so). */
   openPod(pod: string, runtime?: string) {
-    const found = panelOf(this.layout?.rootItem, pod, this.defs);
-    if (!found) return this.addWidget('pod', pod, runtime && this.host && this.pods?.add(this.host.data(), runtime, pod));
-    (found.parentItem as Stack).setActiveComponentItem(found, true);
+    const found = panelOf(this.layout?.rootItem, pod, this.defs), slot = !found && runtime && this.host && this.pods?.add(this.host.data(), runtime, pod);
+    if (found) (found.parentItem as Stack).setActiveComponentItem(found, true); else if (slot) this.addWidget('pod', pod, slot); else this.say(`${pod} is not placed in ${runtime ?? 'any runtime'}: nothing was opened.`);
   }
   /** A `+` in `parent` that opens the picker and splits `target()`'s panel (else as addWidget does) for the choice, focused (`put`; `offer`: the empty dock's inline picker, shown again once a pick fills it). */
   private plus(parent: HTMLElement, className: string, target?: () => ComponentItem | undefined) {
