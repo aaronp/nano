@@ -14,6 +14,7 @@ plugin({ name: 'served-raft', setup(b) {
   b.onResolve({ filter: /examples\/raft\/index\.js$/ }, () => ({ path: 'raft', namespace: 'served-raft' }))
   b.onLoad({ filter: /.*/, namespace: 'served-raft' }, () => ({ contents: `export * from '${index}'; export { default } from '${index}'`, loader: 'ts' }))
 } })
+const { opened } = await import('../src/migrate.ts')
 // happy-dom's fetch refuses file: URLs
 const domFetch = globalThis.fetch
 beforeAll(() => { globalThis.fetch = (async (u: string) => { const f = Bun.file(new URL(u)), ok = await f.exists(); return { ok, status: ok ? 200 : 404, json: () => f.json() } }) as never })
@@ -28,7 +29,9 @@ test('File › Examples lists Raft, and importing its nano.json places cluster, 
   const d = host.data()
   expect(d.runtimes['raft']!.pods).toEqual(['cluster', 'raft-messaging', 'raft-clock', 'raft-random'])
   expect(d.runtimes['main']!.subscriptions).toContainEqual({ kind: 'call', from: 'cluster', to: 'deploy' })
-  const layout = d.layout as unknown as { slots: { pod: string }[]; ring: { show: string[] } }
-  expect(layout.slots.map(s => s.pod)).toContain('cluster')
+  const layout = d.layout as unknown as { slots?: unknown; ring: { show: string[] } }
+  expect(layout.slots).toBeUndefined()   // its pages are the Platform's (migrate.ts), not the app's layout
+  const file = opened(await Bun.file(new URL('../../../examples/raft/nano.json', import.meta.url)).json())
+  expect(file.ok && Object.keys(file.value.pages.pages['workspace']!.slots)).toContain('cluster')
   expect(layout.ring.show).toEqual(['example.raft/node', 'example.raft/messaging'])
 })

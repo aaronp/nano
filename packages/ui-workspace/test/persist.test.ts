@@ -1,8 +1,9 @@
-// The stored document: load and save it, storage that throws, and the one-time migration of the old keys into pages.
+// The stored documents: the app's and its pages, each under its key; storage that throws; the old keys removed once.
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
 import type { AppDeployment } from '@pritzlaff/nano-core'
+import type { UIDeployment } from '@pritzlaff/nano-platform'
 import { persisted } from '../src/persist.ts'
 
 const memory = () => {
@@ -10,13 +11,17 @@ const memory = () => {
   return { m, storage: { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, v) }, removeItem: (k: string) => { m.delete(k) },
     get length() { return m.size }, key: (i: number) => [...m.keys()][i] ?? null } as unknown as Storage }
 }
-const doc: AppDeployment = { pods: {}, runtimes: { r: { pods: [], subscriptions: [] } }, layout: { pages: [{ id: 'workspace', title: 'Workspace', slots: [] }] } }
+const doc: AppDeployment = { pods: {}, runtimes: { r: { pods: [], subscriptions: [] } } }
+const pages: UIDeployment = { pages: { workspace: { slots: { x: { kind: 'view', view: 'nano-explorer' } }, meta: { title: 'Main', order: 0 } } } }
 
-test('save then load round-trips the document; nothing stored loads as null', () => {
-  const { storage } = memory(), p = persisted(storage, 'k')
+test('save then load round-trips the document and its pages, each under its key; nothing stored loads as null', () => {
+  const { m, storage } = memory(), p = persisted(storage, 'k', 'p')
   expect(p.load()).toBeNull()
-  p.save(doc)
+  expect(p.pages()).toBeNull()
+  p.save(doc, pages)
   expect(p.load()).toEqual(doc)
+  expect(p.pages()).toEqual(pages)
+  expect([...m.keys()].sort()).toEqual(['k', 'p'])
   storage.setItem('k', '{not json')
   expect(p.load()).toBeNull()
 })
@@ -24,65 +29,20 @@ test('save then load round-trips the document; nothing stored loads as null', ()
 test('storage that throws: nothing throws, one status message', () => {
   document.body.innerHTML = ''
   const broken = { getItem() { throw new Error('blocked') }, setItem() { throw new Error('full') }, removeItem() { throw new Error('blocked') } } as unknown as Storage
-  const p = persisted(broken, 'k')
+  const p = persisted(broken, 'k', 'p')
   expect(p.load()).toBeNull()
-  expect(p.migrate(broken)).toEqual([])
-  p.save(doc); p.save(doc)
+  expect(p.pages()).toBeNull()
+  p.save(doc, pages); p.save(doc, pages)
   expect(document.querySelectorAll('[data-nano-status]').length).toBe(1)
 })
 
-test('migrate reads Main, the saved pages, their dock layouts, templates and window styles, and leaves those keys', () => {
-  const { m, storage } = memory()
-  const config = { root: { type: 'row', content: [{ type: 'component', componentState: { widget: 'example.clock/clock', name: 'clock1' } }, { type: 'component', componentState: { widget: 'nano-explorer' } }] } }
-  const template = { template: 'two-cols', order: [{ widget: 'notes' }, null], parked: [{ widget: 'example.clock/clock', name: 'clock2' }], dock: null }
-  m.set('workspace-starter.saved-workspaces', JSON.stringify([{ path: '/trading', title: 'Trading', icon: 'chart' }, { path: '/a/b', title: 'AB', icon: 'box' }]))
-  m.set('workspace-starter.saved-workspaces.main', JSON.stringify({ title: 'Home', icon: 'home' }))
-  m.set('workspace-starter.layout', JSON.stringify(config))
-  m.set('workspace-starter.layout.saved./trading.template', JSON.stringify(template))
-  m.set('workspace-starter.layout.saved./trading.window-style', 'glass')
-  m.set('other', 'kept')
-  const pages = persisted(storage, 'k').migrate(storage)
-  expect(pages).toEqual([
-    { id: 'workspace', title: 'Home', icon: 'home', workspace: config, slots: [{ id: 'clock1', runtime: 'main', pod: 'clock1' }, { id: 'nano-explorer', view: 'nano-explorer' }] },
-    { id: 'trading', title: 'Trading', icon: 'chart', workspace: { template, 'window-style': 'glass' }, slots: [{ id: 'notes', view: 'notes' }, { id: 'clock2', runtime: 'main', pod: 'clock2' }] },
-    { id: 'a-b', title: 'AB', icon: 'box', slots: [] },
-  ])
-  expect(m.size).toBe(6)   // the nav and docks still read them
-  expect(persisted(storage, 'k').migrate(storage)).toEqual(pages)
-})
-
-test('migrate with only the main dock layout gives Main; with nothing, no pages', () => {
-  const { m, storage } = memory()
-  expect(persisted(storage, 'k').migrate(storage)).toEqual([])
-  m.set('workspace-starter.layout.template', JSON.stringify({ template: 'one', order: [{ widget: 'notes' }], parked: [], dock: null }))
-  expect(persisted(storage, 'k').migrate(storage)).toEqual([
-    { id: 'workspace', title: 'Workspace', workspace: { template: { template: 'one', order: [{ widget: 'notes' }], parked: [], dock: null } }, slots: [{ id: 'notes', view: 'notes' }] },
-  ])
-  expect(m.size).toBe(1)
-})
-
-test('given pages, migrate gives each its old dock\'s state (layout, template, window style) as its `workspace`; the first save that works removes every old key, once', () => {
-  const { m, storage } = memory(), p = persisted(storage, 'k')
-  const config = { root: { type: 'row', content: [] } }, template = { template: 'one', order: [null], parked: [], dock: null }
-  m.set('workspace-starter.saved-workspaces', '[]'); m.set('workspace-starter.saved-workspaces.main', '{}')
-  m.set('workspace-starter.layout', JSON.stringify(config)); m.set('workspace-starter.layout.window-style', 'focus')
-  m.set('workspace-starter.layout.saved./lab.template', JSON.stringify(template)); m.set('workspace-starter.layout.saved./gone', '{}')
-  m.set('other', 'kept')
-  const pages = [{ id: 'workspace', title: 'W', slots: [] }, { id: 'lab', title: 'Lab', slots: [], workspace: { root: null } }, { id: 'none', title: 'None', slots: [] }]
-  expect(p.migrate(storage, pages)).toEqual([
-    { id: 'workspace', title: 'W', slots: [], workspace: { ...config, 'window-style': 'focus' } },
-    { id: 'lab', title: 'Lab', slots: [], workspace: { template } },
-    { id: 'none', title: 'None', slots: [] },
-  ])
-  p.save(doc)
-  expect([...m.keys()].sort()).toEqual(['k', 'other'])
-  m.set('workspace-starter.layout', '{}'); p.save(doc)
-  expect(m.has('workspace-starter.layout')).toBe(true)   // once a session
-})
-
-test('a save that fails removes no old key', () => {
-  const { m, storage } = memory()
-  m.set('workspace-starter.layout', '{}')
-  persisted({ ...storage, setItem() { throw new Error('full') } } as unknown as Storage, 'k').save(doc)
+test('the first save that works removes every old key, once a session; one that fails removes none', () => {
+  const { m, storage } = memory(), p = persisted(storage, 'k', 'p')
+  m.set('workspace-starter.saved-workspaces', '[]'); m.set('workspace-starter.layout', '{}'); m.set('workspace-starter.layout.saved./gone', '{}'); m.set('other', 'kept')
+  persisted({ ...storage, setItem() { throw new Error('full') } } as unknown as Storage, 'k', 'p').save(doc, pages)
   expect(m.has('workspace-starter.layout')).toBe(true)
+  p.save(doc, pages)
+  expect([...m.keys()].sort()).toEqual(['k', 'other', 'p'])
+  m.set('workspace-starter.layout', '{}'); p.save(doc, pages)
+  expect(m.has('workspace-starter.layout')).toBe(true)   // once a session
 })

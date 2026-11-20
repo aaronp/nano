@@ -9,11 +9,14 @@
  * BACKLOG(7): imports are not remembered; a package by its manifest is not imported.
  */
 import type { AppDeployment } from '@pritzlaff/nano-core';
+import type { UIDeployment } from '@pritzlaff/nano-platform';
+import { opened } from '../migrate.ts';
 import type { Host } from '../host.ts';
 import { ownProvider, renameRuntimes, selectPods, trusted, validRuntimeId, type Trust } from '../import-plan.ts';
 import { preview } from './import-preview.ts';
 
-type Chosen = { edit(d: AppDeployment): AppDeployment };
+/** The dialog's edit of the file: of its app (`edit`) and, the same choices, of its pages (`pages`). */
+type Chosen = { edit(d: AppDeployment): AppDeployment; pages(p: UIDeployment): UIDeployment };
 /** How to reach the network and the host: the page's fetch and the host, or stand-ins in tests. */
 export type ImportDeps = { fetchJson(url: string): Promise<unknown>; importUrl(url: string, chosen?: Chosen): Promise<{ ok: boolean }>;
   /** Whether the workspace already has provider `coord` (its pods are not new code: Trust leaves them as the file says). */
@@ -80,26 +83,29 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
   });
   d.addEventListener('input', (e) => { if ((e.target as HTMLElement).dataset?.['runtime']) check(); });
   const reset = () => { button().disabled = true; $('.preview').replaceChildren(); say(''); shown = undefined; got = undefined; };
-  /** Whether `x` is a nano.json (it has pods); if not, says so of `name`. */
-  const asDeployment = (x: AppDeployment | undefined, name: string) => {
-    const ok = !!x && typeof x === 'object' && typeof x.pods === 'object' && x.pods !== null;
-    if (!ok) say(`${name} is not a nano.json: it has no pods.`);
-    return ok;
+  /** The app of `file` (a nano.json, or a `{ app, platform }` bundle's), if it has pods; if not, says so of `name`. */
+  const asDeployment = (file: unknown, name: string): AppDeployment | undefined => {
+    const o = opened(file), x = o.ok ? o.value.app : undefined;
+    if (!o.ok) say(`${name}: ${o.fail.reason}`);
+    else if (!x || typeof x !== 'object' || typeof x.pods !== 'object' || x.pods === null) say(`${name} is not a nano.json: it has no pods.`);
+    else return x;
+    return undefined;
   };
   $<HTMLFormElement>('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     url = $<HTMLInputElement>('input[name="url"]').value.trim();
     reset();
-    let file: AppDeployment;
-    try { url = new URL(url, location.href).href; file = (await deps.fetchJson(url)) as AppDeployment; } catch (e) { return say(`Couldn't fetch ${url}: ${(e as Error).message}`); }
-    if (asDeployment(file, url)) show(file);
+    let file: unknown;
+    try { url = new URL(url, location.href).href; file = await deps.fetchJson(url); } catch (e) { return say(`Couldn't fetch ${url}: ${(e as Error).message}`); }
+    const app = asDeployment(file, url);
+    if (app) show(app);
   });
   const load = async (file: File | undefined) => {
     if (!file) return;
     reset();
-    let read: AppDeployment;
-    try { read = JSON.parse(await file.text()) as AppDeployment; } catch (e) { return say(`Couldn't read ${file.name}: ${(e as Error).message}`); }
-    if (!asDeployment(read, file.name)) return;
+    let read: AppDeployment | undefined;
+    try { read = asDeployment(JSON.parse(await file.text()), file.name); } catch (e) { return say(`Couldn't read ${file.name}: ${(e as Error).message}`); }
+    if (!read) return;
     if (url.startsWith('blob:')) URL.revokeObjectURL(url);
     url = URL.createObjectURL(file);   // imported like any URL
     show(read, file.name);
@@ -117,7 +123,7 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
   $('[data-import]').addEventListener('click', async () => {
     button().disabled = true;
     const as = names(), t = trust(), only = kept();
-    const done = await deps.importUrl(url, { edit: f => trusted(renameRuntimes(selectPods(f, only).deployment, as), t, deps.known) });   // a failure is a toast
+    const done = await deps.importUrl(url, { edit: f => trusted(renameRuntimes(selectPods(f, only).deployment, as), t, deps.known), pages: p => renameRuntimes(selectPods(p, only), as) });   // a failure is a toast
     if (!done.ok) { button().disabled = false; return; }
     d.close();
   });

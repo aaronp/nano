@@ -4,11 +4,11 @@
  *
  * On nano-core 0.4 the host (host.ts: the one Application, the nano.ui built-ins, import and save of nano.json) takes
  * the place of composable.ts and nano-app: the docks, the explorer and wiring views and the app bar show its app; the
- * File menu saves its nano.json (its `layout.pages` from the page store) and imports one; `?src=<url>` imports that
+ * File menu saves `{ app, platform }` (its nano.json and the Platform's pages) and opens or imports either that or a nano.json; `?src=<url>` imports that
  * nano.json on load, into the stored document boot-host.ts loaded.
  */
 import './boot-theme.ts';
-import { host, pages } from './boot-host.ts';   // before the elements are defined: the docks' palettes list what the host can make
+import { host, platform } from './boot-host.ts';   // before the elements are defined: the docks' palettes list what the host can make
 import { toast } from '@pritzlaff/nano-elements';
 import { clockDriver, timeMachine, type NanoTimeMachine } from '@pritzlaff/nano-ui';
 import './boot-workspace-pages.ts';   // before the shell: it reads its routes as it starts
@@ -30,35 +30,20 @@ import { defineDesk, type Desk } from './desk/index.ts';
 import { defineMessages } from './messages/index.ts';
 import { bootWiring, hand as handTo } from './boot-wiring.ts';   // after the shell (its bus)
 import { shadowCreate } from './history.ts';
-import { savedLayout, slotsToOpen } from './layout-data.ts';
-import { panelsInOrder, type PanelState, type TemplateState } from './lib/layout-templates.ts';
-import { slotsOf } from './dock/page-slots.ts';
 import { icon } from './icons.ts';
 import { HOST_PODS } from './host-deploy.ts';
 import { showStatus } from './lib/status.ts';
-import type { LayoutSlot, Page } from '@pritzlaff/nano-ui';
+import { Coord } from '@pritzlaff/nano-core';
+import type { Page } from '@pritzlaff/nano-platform';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
-if (host) {
-  const h = host, target = { app: h.app, registry: h.registry, get calls() { return h.calls(); } };
-  // Main's page (the store's): written, never its dock, which shows it once built (it may not be: a deep link elsewhere).
-  const MAIN = 'workspace', main = () => { const { workspace: _, ...p } = pages.get(MAIN)!; return p; };
-  const placedIn = (pod: string) => Object.entries(h.data().runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
-  const set = (p: Page) => { const r = pages.set(p); if (!r.ok) showStatus(document, r.fail.reason); };   // a refusal shown
-  /** Main's page with `slots` after its view slots, or after all of them (`keep`); its engine state kept, so the dock
-   * prunes and adds panels. A never-built Main with neither slots nor state shows these alone: no starting explorer. */
-  const toMain = (slots: LayoutSlot[], keep: 'view' | 'all') => { const m = pages.get(MAIN)!; set({ ...m, slots: [...m.slots.filter(s => keep === 'all' || 'view' in s), ...slots] }); };
-  // An import whose nano.json brings a layout for Main (under its dock's id) becomes Main's arrangement, its panels the slots.
-  const shown = async (r: Promise<{ ok: boolean }>, before: string) => {
-    const done = await r, l = h.data().layout?.[MAIN] as { root?: unknown; template?: TemplateState } | undefined;
-    if (done.ok && l && JSON.stringify(l) !== before) set({ ...main(), workspace: l, slots: slotsOf(l.template ? [...l.template.order.filter((p): p is PanelState => !!p), ...l.template.parked] : panelsInOrder(l.root), placedIn) });
-    // A file from another engine: its neutral slots, a panel each, in order, in place of Main's pod panels.
-    const open = done.ok ? slotsToOpen(h.data(), MAIN) : [];
-    if (open.length) toMain(open.map(pod => ({ id: pod, runtime: placedIn(pod)!, pod })), 'view');
-    return done;
-  };
-  const layoutNow = () => JSON.stringify(h.data().layout?.[MAIN]);
-  setImportHost({ ...host, importUrl: (url, chosen) => { const before = layoutNow(); return shown(host!.importUrl(url, chosen), before) as ReturnType<typeof h.importUrl>; } });
+if (host && platform) {
+  const h = host, p = platform, target = { app: h.app, registry: h.registry, get calls() { return h.calls(); } };
+  // Main's page (the Platform's): written, never its dock, which shows it once built (it may not be: a deep link elsewhere).
+  const MAIN = 'workspace', placedIn = (pod: string) => Object.entries(h.data().runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
+  /** The pages with Main's replaced by `edit(Main)`; a refusal shown. */
+  const toMain = (edit: (m: Page) => Page) => { const d = p.document().doc, r = p.apply({ pages: { ...d.pages, [MAIN]: edit(d.pages[MAIN]!) } }); if (!r.ok) showStatus(document, r.fail.reason); };
+  setImportHost(host);   // its importUrl applies the file's pages too (boot-host.ts)
   for (const dock of document.querySelectorAll<WorkspaceDock>('workspace-dock')) dock.host = host;
   for (const el of document.querySelectorAll<HTMLElement & { target?: unknown; icon?: unknown }>('nano-explorer, nano-wiring')) { el.target ??= target; if (el.localName === 'nano-explorer') el.icon = icon; }
   bootAppBar(host);
@@ -70,11 +55,8 @@ if (host) {
   const menu = document.querySelector<FileMenuEl>('nano-file-menu');
   const download = (name: string, reconcile = false) => {
     const a = document.createElement('a');
-    const saved = h.saved(reconcile), { saved: _p, 'saved.template': _t, 'window-style': _w, ...l } = (pages.get(MAIN)!['workspace'] ?? {}) as Record<string, unknown>;
-    const runtimeOf = (pod: string) => Object.entries(saved.runtimes).find(([, r]) => r.pods.includes(pod))?.[0];
-    const desk = document.querySelector<Desk>('c-desk')?.layout();
-    const was = Object.keys(l).length ? { ...saved, layout: savedLayout(saved, MAIN, l, runtimeOf, desk) } : desk ? { ...saved, layout: { ...saved.layout, desk } } : saved;
-    const file = { ...was, layout: { ...was.layout, pages: pages.list() } };   // the pages are the store's
+    const saved = h.saved(reconcile), desk = document.querySelector<Desk>('c-desk')?.layout();
+    const file = { app: desk ? { ...saved, layout: { ...saved.layout, desk } } : saved, platform: p.document().doc };   // the pages are the Platform's
     a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' }));
     a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -90,13 +72,13 @@ if (host) {
     new: async () => {
       const d = h.data(), r = await h.apply({ ...d, pods: Object.fromEntries(HOST_PODS.map(p => [p, d.pods[p]!])), runtimes: { main: { pods: [...HOST_PODS], subscriptions: [] } }, tags: {}, views: {}, layout: undefined });
       if (!r.ok) return;
-      set({ ...main(), slots: [] });
+      toMain(m => { const { title, icon, order } = (m.meta ?? {}) as Record<string, unknown>; return { slots: {}, meta: { title, icon, order } }; });
       if (menu) menu.dirty = false;
     },
   };
   for (const [c, run] of Object.entries(commands)) document.addEventListener(`file:${c}`, () => void run());
   // File › Examples: an example shipped with the workspace (examples/<name>/nano.json, on this origin), imported as Open does
-  document.addEventListener('file:example', e => { const { name } = (e as CustomEvent<{ name: string }>).detail; void shown(h.importUrl(new URL(`examples/${name}/nano.json`, location.href).href), layoutNow()); });
+  document.addEventListener('file:example', e => { const { name } = (e as CustomEvent<{ name: string }>).detail; void h.importUrl(new URL(`examples/${name}/nano.json`, location.href).href); });
 
   // Connections: <c-wires> around the dock hears its `dock:connections` and tilts the dock to show the cables behind it.
   defineWires();
@@ -106,7 +88,8 @@ if (host) {
     const { name } = (e as CustomEvent<{ kind: string; name: string }>).detail;
     const d = (e.target as Element).querySelector<WorkspaceDock>('workspace-dock') ?? document.querySelector<WorkspaceDock>('workspace-dock'), runtime = placedIn(name);
     if (d?.querySelector(':scope > .dock-area')) d.openPod(name);
-    else if (runtime && !pages.get(MAIN)!.slots.some(s => 'pod' in s && s.pod === name)) toMain([{ id: name, runtime, pod: name }], 'all');   // not built: Main's page
+    else if (runtime && !Object.values(p.document().doc.pages[MAIN]!.slots).some(s => s.kind === 'pod' && s.pod.pod === name))   // not built: Main's page
+      toMain(m => ({ ...m, slots: { ...m.slots, [name]: { kind: 'pod', pod: Coord.pod(Coord.parse('implementation', h.data().pods[name]!.implementation), Coord.runtime(runtime), name) } } }));
   });
 
   // The Desk page: <c-desk> over the app, and a link to the last workspace's Connections.
@@ -138,7 +121,7 @@ if (host) {
   const src = new URL(location.href).searchParams.get('src');
   // Only a URL on this page's origin: a crafted link must not open the import prompt on load.
   if (src && new URL(src, location.href).origin !== location.origin) toast(`${src} is not on this origin`, { variant: 'bad' });
-  else if (src && (await shown(host.importUrl(new URL(src, location.href).href), layoutNow())).ok) {   // a failure is shown as a toast
+  else if (src && (await host.importUrl(new URL(src, location.href).href)).ok) {   // a failure is shown as a toast
     const at = new URL(location.href); at.searchParams.delete('src'); history.replaceState(history.state, '', at);   // imported into the stored document: a reload must not import it again
   }
 }

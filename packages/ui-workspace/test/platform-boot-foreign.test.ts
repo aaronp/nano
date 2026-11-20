@@ -1,5 +1,5 @@
 // Boot from a stored document naming a provider on another origin: the import confirm is asked before its code loads
-// (ADR-0034); Cancel loads nothing, and the stored document is not saved over.
+// (ADR-0034); Cancel loads nothing, and neither the stored document nor its pages are saved over.
 import { expect, test } from 'bun:test'
 import { tick } from './host-deploy-setup.ts'
 
@@ -22,4 +22,5 @@ test('a foreign provider in the stored document is confirmed at boot; cancelled,
   expect(document.querySelector('[data-nano-status]')).not.toBeNull()
   await tick(400)
   expect(localStorage.getItem(KEY)).toBe(stored)
+  expect(localStorage.getItem('nano-workspace.platform')).toBeNull()
 })

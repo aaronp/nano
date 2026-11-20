@@ -1,7 +1,7 @@
 // The Import dialog's choices, as pure edits of the fetched nano.json: its runtimes renamed, its pods' isolation by Trust.
 import { expect, test } from 'bun:test'
 import type { AppDeployment } from '@pritzlaff/nano-core'
-import { pagesOf } from '@pritzlaff/nano-ui'
+import { Platform, type UIDeployment } from '@pritzlaff/nano-platform'
 import { ownProvider, renameRuntimes, selectPods, suggestedName, trusted, validRuntimeId } from '../src/import-plan.ts'
 
 const file = (): AppDeployment => ({
@@ -12,30 +12,32 @@ const file = (): AppDeployment => ({
   },
   runtimes: { main: { pods: ['a'], subscriptions: [] }, side: { pods: ['b', 'c'], subscriptions: [{ kind: 'call', from: 'b', to: 'c' }] } },
   modules: { 'acme.template': './index.js', 'other.x': './x.js' },
-  layout: { workspace: { root: 1 }, slots: [{ id: 'a', runtime: 'main', pod: 'a' }, { id: 'b', runtime: 'side', pod: 'b' }] },
+  layout: { desk: { root: 1 } },
 })
+const written = (v: unknown) => JSON.parse(JSON.stringify(v))
+const pagesOf = (w: unknown): UIDeployment => { const r = Platform.parse(w); if (!r.ok) throw new Error(r.fail.reason); return r.value }
 
-test('renameRuntimes renames the runtime keys and the layout slots naming them; the rest is untouched', () => {
+test('renameRuntimes renames the runtime keys; the rest, the layout too, is untouched', () => {
   const d = file(), out = renameRuntimes(d, { main: 'acme.template.main', side: 'side' })
   expect(Object.keys(out.runtimes)).toEqual(['acme.template.main', 'side'])
   expect(out.runtimes['acme.template.main']).toEqual(d.runtimes.main!)
   expect(out.runtimes.side).toEqual(d.runtimes.side!)
-  expect(out.layout).toEqual({ workspace: { root: 1 }, slots: [{ id: 'a', runtime: 'acme.template.main', pod: 'a' }, { id: 'b', runtime: 'side', pod: 'b' }] })
+  expect(out.layout).toEqual({ desk: { root: 1 } })
   expect(out.pods).toEqual(d.pods)
   expect(d).toEqual(file())   // pure
 })
 
-test('renameRuntimes with no names, or a file without layout, changes nothing', () => {
+test('renameRuntimes with no names changes nothing', () => {
   expect(renameRuntimes(file(), {})).toEqual(file())
-  const { layout: _, ...bare } = file()
-  expect(renameRuntimes(bare, { main: 'm' }).layout).toBeUndefined()
 })
 
-test("renameRuntimes renames the runtime of each imported page's pod slots; view slots are kept, and the pages stay valid", () => {
-  const pages = [{ id: 'p', title: 'P', slots: [{ id: 'x', view: 'nano-explorer' }, { id: 'a', runtime: 'main', pod: 'a' }, { id: 'b', runtime: 'side', pod: 'b' }] }]
-  const out = renameRuntimes({ ...file(), layout: { pages } }, { main: 'acme.template.main' })
-  expect(out.layout).toEqual({ pages: [{ id: 'p', title: 'P', slots: [{ id: 'x', view: 'nano-explorer' }, { id: 'a', runtime: 'acme.template.main', pod: 'a' }, { id: 'b', runtime: 'side', pod: 'b' }] }] })
-  expect(pagesOf(out.layout)).toHaveLength(1)
+test("renameRuntimes renames the runtime of imported pages' pod coordinates and selectors; view slots are kept, and the pages stay valid", () => {
+  const pages = pagesOf({ pages: { p: { slots: { x: { kind: 'view', view: 'nano-explorer' }, a: { kind: 'pod', pod: 'acme.template/timer@main/a' }, b: { kind: 'pod', pod: 'other.x/y@side/b' },
+    s: { kind: 'select', select: { runtime: 'main', tags: ['t'] } }, t: { kind: 'select', select: { tags: ['t'] } } }, meta: { title: 'P' } } } })
+  const out = renameRuntimes(pages, { main: 'acme.template.main' })
+  expect(written(out)).toEqual({ pages: { p: { slots: { x: { kind: 'view', view: 'nano-explorer' }, a: { kind: 'pod', pod: 'acme.template/timer@acme.template.main/a' }, b: { kind: 'pod', pod: 'other.x/y@side/b' },
+    s: { kind: 'select', select: { runtime: 'acme.template.main', tags: ['t'] } }, t: { kind: 'select', select: { tags: ['t'] } } }, meta: { title: 'P' } } } })
+  expect(Platform.parse(written(out)).ok).toBe(true)
 })
 
 test('suggestedName is the provider namespace of the runtime’s first pod by modules order, then the runtime', () => {
@@ -74,14 +76,14 @@ const app = (): AppDeployment => ({
   },
   modules: { 'example.todo': './t.js', 'example.kv': './kv.js', 'acme.template': './a.js' },
   tags: { todos: ['x'], store: ['y'] }, views: { 'example.todo/kv': 'todo-list', 'acme.template/store': 'nano-store' },
-  layout: { slots: [{ id: 'todos', runtime: 'front', pod: 'todos' }, { id: 'store', runtime: 'main', pod: 'store' }], geometry: {} },
+  layout: { desk: {} },
 })
 
 test('selectPods keeping every pod changes nothing and warns of nothing', () => {
   expect(selectPods(app(), new Set(Object.keys(app().pods)))).toEqual({ deployment: app(), warnings: [] })
 })
 
-test('selectPods keeps the ticked pods; drops runtimes left empty, modules no kept pod uses, their slots, tags and views', () => {
+test('selectPods keeps the ticked pods; drops runtimes left empty, modules no kept pod uses, their tags and views', () => {
   const { deployment: d } = selectPods(app(), new Set(['todos', 'timer', 'store']))
   expect(Object.keys(d.pods)).toEqual(['todos', 'timer', 'store'])
   expect(Object.keys(d.runtimes)).toEqual(['front', 'main'])
@@ -89,16 +91,14 @@ test('selectPods keeps the ticked pods; drops runtimes left empty, modules no ke
   expect(d.tags).toEqual({ todos: ['x'], store: ['y'] })
   const { deployment: e } = selectPods(app(), new Set(['todos', 'todoStore', 'timer']))
   expect(e.runtimes['main']).toEqual({ pods: ['timer'], subscriptions: [] })
-  expect((e.layout as { slots: unknown[] }).slots).toEqual([{ id: 'todos', runtime: 'front', pod: 'todos' }])
-  expect(e.layout?.['geometry']).toEqual({})
+  expect(e.layout).toEqual({ desk: {} })
   expect(e.tags).toEqual({ todos: ['x'] })
   expect(e.views).toEqual({ 'example.todo/kv': 'todo-list' })
 })
 
-test("selectPods drops an unticked pod's slots from the imported pages too; view slots are kept", () => {
-  const pages = [{ id: 'p', title: 'P', slots: [{ id: 'todos', runtime: 'front', pod: 'todos' }, { id: 'x', view: 'nano-explorer' }, { id: 'store', runtime: 'main', pod: 'store' }] }]
-  const { deployment: d } = selectPods({ ...app(), layout: { pages } }, new Set(['todos', 'timer']))
-  expect(d.layout).toEqual({ pages: [{ id: 'p', title: 'P', slots: [{ id: 'todos', runtime: 'front', pod: 'todos' }, { id: 'x', view: 'nano-explorer' }] }] })
+test("selectPods drops an unticked pod's slots from the imported pages too; view and selector slots are kept", () => {
+  const pages = pagesOf({ pages: { p: { slots: { todos: { kind: 'pod', pod: 'example.todo/kv@front/todos' }, x: { kind: 'view', view: 'nano-explorer' }, store: { kind: 'pod', pod: 'acme.template/store@main/store' }, s: { kind: 'select', select: { runtime: 'main' } } } } } })
+  expect(written(selectPods(pages, new Set(['todos', 'timer'])))).toEqual({ pages: { p: { slots: { todos: { kind: 'pod', pod: 'example.todo/kv@front/todos' }, x: { kind: 'view', view: 'nano-explorer' }, s: { kind: 'select', select: { runtime: 'main' } } } } } })
 })
 
 test('selectPods keeps a subscription only with both ends; one end kept is a warning, as text', () => {

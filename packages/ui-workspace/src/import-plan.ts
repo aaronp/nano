@@ -5,26 +5,27 @@
  *
  *   trusted(renameRuntimes(d, { main: suggestedName(d, 'main') }), 'sandboxed')
  */
-import { failure, success, type AppDeployment, type NanoResult, type Pod, type Subscription } from '@pritzlaff/nano-core'
-import type { LayoutData, LayoutSlot, Page } from '@pritzlaff/nano-ui'
+import { Coord, failure, success, type AppDeployment, type NanoResult, type Pod, type Subscription } from '@pritzlaff/nano-core'
+import type { Slot, UIDeployment } from '@pritzlaff/nano-platform'
 
 export type Trust = 'sandboxed' | 'trusted'
 
 /** A runtime id (the id rule): no `/`, whitespace or `#`, 1 to 64 characters. */
 export const validRuntimeId = (s: string) => /^[^/\s#\x00-\x1f\x7f]{1,64}$/.test(s)
 
-/** `d.layout` with each pod slot edited (`[]` drops it), in its legacy `slots` and in its `pages` (view slots kept). */
-function podSlots(d: AppDeployment, edit: (s: LayoutSlot) => LayoutSlot[]): AppDeployment['layout'] {
-  const { slots, pages } = (d.layout ?? {}) as LayoutData, each = (s: Page['slots']) => s.flatMap((s): Page['slots'] => 'pod' in s ? edit(s) : [s])
-  return { ...d.layout, ...(Array.isArray(slots) && { slots: each(slots) }), ...(Array.isArray(pages) && { pages: pages.map(p => Array.isArray(p?.slots) ? { ...p, slots: each(p.slots) } : p) }) }
-}
+/** `p` with each slot edited (`[]` drops it). Pure. */
+const slotsEdited = (p: UIDeployment, edit: (s: Slot) => Slot[]): UIDeployment =>
+  ({ pages: Object.fromEntries(Object.entries(p.pages).map(([id, page]) => [id, { ...page, slots: Object.fromEntries(Object.entries(page.slots).flatMap(([k, s]) => edit(s).map(e => [k, e]))) }])) })
 
-/** `d` with each runtime `k` of `names` renamed `names[k]`: the `runtimes` keys and the layout's slots, its pages' too. Pure. */
-export function renameRuntimes(d: AppDeployment, names: Record<string, string>): AppDeployment {
+/** `d` with each runtime `k` of `names` renamed `names[k]`: a deployment's `runtimes` keys, or the pages' pod
+ * coordinates and selectors' `runtime` (an import's, so its slots name the runtimes it lands in). Pure. */
+export function renameRuntimes(d: AppDeployment, names: Record<string, string>): AppDeployment
+export function renameRuntimes(d: UIDeployment, names: Record<string, string>): UIDeployment
+export function renameRuntimes(d: AppDeployment | UIDeployment, names: Record<string, string>): AppDeployment | UIDeployment {
   const to = (id: string) => (Object.hasOwn(names, id) ? names[id]! : id)
-  const out: AppDeployment = { ...d, runtimes: Object.fromEntries(Object.entries(d.runtimes).map(([id, r]) => [to(id), r])) }
-  if (d.layout) out.layout = podSlots(d, s => [{ ...s, runtime: to(s.runtime) }])
-  return out
+  if ('pages' in d) return slotsEdited(d, s => [s.kind === 'pod' ? { ...s, pod: Coord.pod(s.pod.implementation, Coord.runtime(to(s.pod.runtime.id)), s.pod.pod) }
+    : s.kind === 'select' && s.select.runtime ? { ...s, select: { ...s.select, runtime: Coord.runtime(to(s.select.runtime.id)) } } : s])
+  return { ...d, runtimes: Object.fromEntries(Object.entries(d.runtimes).map(([id, r]) => [to(id), r])) }
 }
 
 /** Whether the workspace already has provider `coord` loaded: its pods are not new code, so Trust leaves them be. */
@@ -81,8 +82,12 @@ function text(s: Subscription, keep: Set<string>, missing: string): string {
 }
 
 /** `d` with only the pods in `keep`: a runtime left empty goes, a subscription stays only with both ends (else a
- * warning when one end is kept), and modules, slots, tags and views follow the kept pods. Policy rules stay as they are. Pure. */
-export function selectPods(d: AppDeployment, keep: Set<string>): { deployment: AppDeployment; warnings: Warning[] } {
+ * warning when one end is kept), and modules, tags and views follow the kept pods. Policy rules stay as they are. Given
+ * pages, their pod slots of the pods not kept go (view and selector slots stay). Pure. */
+export function selectPods(d: AppDeployment, keep: Set<string>): { deployment: AppDeployment; warnings: Warning[] }
+export function selectPods(d: UIDeployment, keep: Set<string>): UIDeployment
+export function selectPods(d: AppDeployment | UIDeployment, keep: Set<string>): { deployment: AppDeployment; warnings: Warning[] } | UIDeployment {
+  if ('pages' in d) return slotsEdited(d, s => s.kind !== 'pod' || keep.has(s.pod.pod) ? [s] : [])
   const kept = <T>(o: Record<string, T> | undefined, by: (k: string) => boolean) => o && Object.fromEntries(Object.entries(o).filter(([k]) => by(k)))
   const pods = kept(d.pods, p => keep.has(p))!, implementations = new Set(Object.values(pods).map(p => p.implementation))
   const providers = new Set(Object.values(pods).map(providerOf))
@@ -96,7 +101,6 @@ export function selectPods(d: AppDeployment, keep: Set<string>): { deployment: A
   if (d.frames) out.frames = kept(d.frames, c => providers.has(c))
   if (d.tags) out.tags = kept(d.tags, p => keep.has(p))
   if (d.views) out.views = kept(d.views, k => keep.has(k) || implementations.has(k))
-  if (d.layout) out.layout = podSlots(d, s => keep.has(s.pod) ? [s] : [])
   return { deployment: out, warnings }
 }
 

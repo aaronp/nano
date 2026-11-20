@@ -1,5 +1,5 @@
 /**
- * Import: fetch a `nano.json`, load its provider modules, and merge it into what is loaded. The caller applies the
+ * Import: fetch a `nano.json` (or File › Save's `{ app, platform }`: its app; the pages are the caller's), load its provider modules, and merge it into what is loaded. The caller applies the
  * deployment. Nothing throws, and on failure `loaded` is unchanged. A provider on another origin than this page is
  * foreign: `confirm` is asked once for all of them, then each is probed (`deps.probe`) and loaded, so its views are
  * defined; one of its pods that runs with this page's access (`host` here, `sandbox` through `isolated`) asks `approve` first.
@@ -11,6 +11,7 @@ import type { ViewMap } from '@pritzlaff/nano-ui'
 import { newerCore, type Built } from './built.ts'
 import { gated, isProvider } from './import-gate.ts'
 import { merge, podsOf } from './import-plan.ts'
+import { opened } from './migrate.ts'
 
 export type Loaded = { deployment: AppDeployment; registry: Registry; views: ViewMap }
 /** A provider from another origin, as the confirm prompt lists it. `fullAccess`: the pod runs with this page's access. */
@@ -41,7 +42,9 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
   try {
     const res = await fetch(url)
     if (!res.ok) return failure('invalid-input', `cannot load ${url}: ${res.status}`)
-    const fetched = (await res.json()) as AppDeployment, incoming = deps.edit ? deps.edit(fetched) : fetched
+    const file = opened(await res.json())   // a { app, platform } bundle's app; the old pages out of a nano.json's layout
+    if (!file.ok) return file
+    const fetched = file.value.app, incoming = deps.edit ? deps.edit(fetched) : fetched
     // a local file (a blob: URL) is no base: its modules resolve against the page, as saved
     const base = new URL(url.startsWith('blob:') ? globalThis.location.href : url, globalThis.location?.href), home = page() ?? base.origin
     // Each provider is resolved against the nano.json. Stored: its path when it is on this page's origin (so the same
