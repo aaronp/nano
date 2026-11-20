@@ -173,7 +173,7 @@ test('Alt+↓ on a handle moves the page down (the roots rewritten, one apply), 
   expect(applies).toBe(before + 1)
   expect(ids()).toEqual(['workspace', 'new-workspace-2', 'new-workspace'])
   expect(outline.document().doc.roots).toEqual(['workspace', 'new-workspace-2', 'new-workspace'])
-  expect(savedOrder()).toEqual(['new-workspace-2', 'new-workspace'])
+  expect(savedOrder()).toEqual(['workspace', 'new-workspace-2', 'new-workspace'])
   await new Promise(r => setTimeout(r, 60))
   expect($('[aria-live="polite"]').textContent).toBe('Moved Desk down')
   $('[data-saved="new-workspace-2"] [data-handle]').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true }))

@@ -1,14 +1,16 @@
 /**
  * The nav's edit mode: ✎ beside the app's title toggles [data-editing] on <app-shell>, Esc leaves. A workspace row's
  * name, clicked, becomes an input (Enter or blur keeps, Esc cancels, empty keeps the old); its icon opens a grid of
- * ICONS; a saved row's handle moves it to another row's place in the tree, by drag or Alt+↑/↓ (announced; one apply of
- * the lists that change). `save` keeps a row's new title and icon; the Outline's change reorders the nav.
+ * ICONS; a row's Remove (not Main's) removes its page and the pages under it (`without`, after asking if there are any;
+ * pods are left alone; focus goes to the row shown before it). `save` keeps a row's new title and icon; the Outline's
+ * change relabels the nav. Moves are nav-moves.ts's, rows and toggles nav-tree.ts's.
  */
 import type { Outline } from '@pritzlaff/nano-outline';
 import { ICONS } from '../lib/icons.ts';
-import { applyPages, move, parentOf, walk } from '../lib/pages.ts';
+import { applyPages, subtree, without } from '../lib/pages.ts';
+import { askConfirm } from './name-dialog.ts';
 
-const ROW = '[data-workspaces], [data-saved]';
+const ROW = '[data-saved]';
 const nameOf = (row: Element) => row.querySelector('[data-name]')?.textContent ?? '';
 
 export function navEdit(doc: Document, outline: ReturnType<typeof Outline.create>, save: (row: HTMLElement, title: string, icon: string) => void) {
@@ -85,66 +87,31 @@ export function navEdit(doc: Document, outline: ReturnType<typeof Outline.create
   const open = (t: Element, row: HTMLElement, a: HTMLAnchorElement) => {
     if (t.closest('[data-name]')) rename(row); else if (t.closest('[data-glyph]')) pick(row, a);
   };
+  const remove = async (row: HTMLElement) => {
+    const id = row.dataset.saved!, n = subtree(outline.document().doc, id).length - 1;
+    if (n && !(await askConfirm(doc, `Remove ${nameOf(row)} and its ${n} page${n === 1 ? '' : 's'}?`, 'Remove'))) return;
+    let before = row.previousElementSibling as HTMLElement | null;
+    while (before?.hidden) before = before.previousElementSibling as HTMLElement | null;
+    const next = without(outline.document().doc, id);
+    if (next && applyPages(outline, next).ok) before?.querySelector<HTMLElement>('[data-name]')?.focus();
+  };
   doc.addEventListener('click', (e) => {
     const t = e.target as Element | null;
     if (pop && !pop.contains(t)) closePop();
     if (t?.closest?.('[data-edit-nav]')) return setEditing(!editing());
+    const gone = t?.closest?.('[data-remove]')?.closest<HTMLElement>(ROW);
+    if (gone && editing()) return void remove(gone);
     const row = t?.closest?.<HTMLElement>(ROW), a = t?.closest?.<HTMLAnchorElement>('a');
     if (!editing() || !row || !a || !row.contains(a)) return;
     e.preventDefault();   // in edit mode a workspace link edits, it does not navigate
     open(t!, row, a);
   });
 
-  // Reorder: Alt+↑/↓ on a focused handle, or drag a handle onto another saved row. Main stays first.
-  const live = doc.createElement('div');
-  live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite');
-  live.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)';
-  doc.body.append(live);
-  const index = (id: string) => walk(outline.document().doc).indexOf(id);
-  /** Moves a saved page to the place in the tree of the row at `to` (Main's is refused; the Outline's change reorders the nav). */
-  const moveTo = (id: string, to: number) => {
-    const d = outline.document().doc, at = walk(d)[to], parent = at === undefined ? undefined : parentOf(d, at);
-    const next = at !== undefined && move(d, id, parent, (parent === undefined ? d.roots : d.pages[parent]!.children!).indexOf(at));
-    return !!next && applyPages(outline, next).ok;
-  };
-  const savedRow = (t: EventTarget | null) => (t as Element | null)?.closest?.<HTMLElement>('[data-saved]') ?? null;
   doc.addEventListener('keydown', (e) => {
     const t = e.target as Element | null;
     if (e.key === 'Escape' && editing() && !e.defaultPrevented && !t?.closest?.('dialog')) { closePop(); setEditing(false); return; }
     const ctl = t?.closest?.('[data-glyph][role="button"], [data-name][role="button"]'), own = ctl?.closest<HTMLElement>(ROW);
-    if (ctl && own && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); return open(ctl, own, ctl.closest('a')!); }
-    const handle = (e.target as Element | null)?.closest?.<HTMLElement>('[data-handle]'), row = savedRow(handle ?? null);
-    if (!handle || !row || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
-    e.preventDefault();
-    const up = e.key === 'ArrowUp', path = row.dataset.saved!;
-    if (!moveTo(path, index(path) + (up ? -1 : 1))) return;
-    handle.focus();
-    live.textContent = '';   // cleared first so a repeat is announced again
-    setTimeout(() => { live.textContent = `Moved ${nameOf(row)} ${up ? 'up' : 'down'}`; }, 50);
+    if (ctl && own && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(ctl, own, ctl.closest('a')!); }
   });
-  let dragged = '';
-  const clear = () => { for (const x of doc.querySelectorAll('[data-drop]')) x.removeAttribute('data-drop'); };
-  doc.addEventListener('dragstart', (e) => {
-    const row = savedRow((e.target as Element | null)?.closest?.('[data-handle]') ?? null);
-    if (!row) return;
-    dragged = row.dataset.saved!;
-    e.dataTransfer?.setData('text/plain', dragged);
-    e.dataTransfer?.setDragImage(row, 0, 0);
-  });
-  doc.addEventListener('dragover', (e) => {
-    const row = savedRow(e.target);
-    if (!dragged || !row) return;
-    e.preventDefault(); clear();
-    // it lands where the target is: above it from below, below it from above
-    if (row.dataset.saved !== dragged) row.dataset.drop = index(dragged) > index(row.dataset.saved!) ? 'before' : 'after';
-  });
-  doc.addEventListener('drop', (e) => {
-    const row = savedRow(e.target);
-    if (!dragged || !row) return;
-    e.preventDefault();   // dropping on a link must not navigate
-    moveTo(dragged, index(row.dataset.saved!));
-    dragged = ''; clear();
-  });
-  doc.addEventListener('dragend', () => { dragged = ''; clear(); });
   return { rename };
 }

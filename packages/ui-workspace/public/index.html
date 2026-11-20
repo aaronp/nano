@@ -38,7 +38,7 @@
   <nano-profile name="profile" slot="actions"></nano-profile>
 
   <!-- Navigation: one link per <app-route> below, in order. -->
-  <!-- Workspaces: Main, then the saved pages (boot-workspace-pages.ts adds their rows and routes, and + and ✎ beside the title: a new page, and the nav's edit mode). -->
+  <!-- Workspaces: Main's row, then the other pages' as the Outline's tree (components/workspace-pages.ts fills Main's row like the others and adds theirs and their routes, and + and ✎ beside the title: a new page, and the nav's edit mode). -->
   <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspaces</a></div>
   <div slot="drawer-footer" class="drawer-foot"><theme-picker layout="icons" themes="warm,blueprint,enterprise,shadcn"></theme-picker><span>Nano · v0.1</span></div>
   <status-line slot="footer"></status-line>

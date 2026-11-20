@@ -34,8 +34,15 @@ app-shell[data-editing] .nav-row > a :is([data-name], [data-glyph]):focus-visibl
 .icon-pop button[aria-selected='true'] { border-color: var(--accent); color: var(--accent); }
 .icon-pop button:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: 1px; }
 .icon-pop svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* The tree: a row indented by its level; a leaf's toggle keeps its space; Add child and Remove only in edit mode. */
+.nav-row { padding-inline-start: calc(14px + var(--level, 0) * 16px); }
+.nav-row[hidden] { display: none; }
+.nav-row [data-toggle] { width: 18px; border: 0; background: none; color: var(--muted); }
+.nav-row [data-toggle][hidden] { display: block; visibility: hidden; }
+app-shell:not([data-editing]) .nav-row :is([data-add-child], [data-remove]) { display: none; }
 /* The drawer as an icon rail: only the row's link icon shows. */
 app-shell[collapsed]:not([narrow]) .nav-row button { display: none; }
+app-shell[collapsed]:not([narrow]) .nav-row { padding-inline-start: 14px; }
 
 /* A workspace page: the dock. */
 .ws-page { display: flex; height: 100%; min-height: 0; }
@@ -134,6 +141,7 @@ html[data-theme='retro'] .page-head a { color: #FFFF9E; }
 /* Dragging a saved workspace: a line where it will land. */
 .nav-row[data-drop='before'] { box-shadow: 0 -2px 0 var(--nano-accent, var(--focus, #36c)); }
 .nav-row[data-drop='after'] { box-shadow: 0 2px 0 var(--nano-accent, var(--focus, #36c)); }
+.nav-row[data-drop='inside'] { outline: 2px solid var(--nano-accent, var(--focus, #36c)); outline-offset: -2px; }
 .wiring-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .wiring-page > c-desk, .wiring-page > c-messages, .wiring-page > nano-ring { flex: 1; min-height: 0; }
 .wiring-page > c-messages { overflow: auto; }

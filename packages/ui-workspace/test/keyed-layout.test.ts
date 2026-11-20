@@ -52,7 +52,7 @@ test('an old stored document moves to the new shape at boot, nothing lost; the w
   const { pages } = booted
   mount(h, Object.fromEntries(booted.roots.map(id => [id, pages[id]!])))
   const row = (id: string) => document.querySelector<HTMLElement>(`[data-saved="${id}"] a`)!
-  expect([...document.querySelectorAll<HTMLElement>('[data-saved]')].map(r => r.dataset['saved'])).toEqual(['two', 'lab'])   // order
+  expect([...document.querySelectorAll<HTMLElement>('[data-saved]')].map(r => r.dataset['saved'])).toEqual(['workspace', 'two', 'lab'])   // order (Main's row synced too)
   expect([row('lab').title, row('lab').dataset['icon']]).toEqual(['Lab', 'star'])   // title, icon
   const s = document.querySelector<Stored>('app-route[path="/lab"] workspace-dock')!.storage
   expect(JSON.parse(s.getItem('lab')!).root).toEqual(root)   // dock arrangement
