@@ -2,7 +2,8 @@
  * `<nano-ring>`: the app as rings (ring.ts): each shown pod as its own view, the time machine's messages in flight as
  * dots between them. With the cursor in the past and still for 200 ms, the views are bound to an app rebuilt to it
  * (`shadowAt` through `create`), inert, and the rings are that app's deployment; at Live, the live app again. A pod with
- * no view (none in `views` or nano-ui's map) is just its label. A dot click seeks to its message.
+ * no view (none in `views` or nano-ui's map) is just its label. A dot click seeks to its message. Hidden (its page's
+ * route not shown), it renders nothing: no view is mounted, so none starts a lazy pod.
  *
  *   ring.app = app; ring.registry = registry; ring.tm = tm; ring.store = store
  *   ring.create = d => Application.create(…, { deploymentPolicy: DeploymentPolicies.allowAll() })   // a shadow's own app
@@ -46,10 +47,13 @@ export class NanoRing extends LitElement {
   private timer?: ReturnType<typeof setTimeout>
   private still?: number
   private build = 0   // the latest rebuild; an older one's app is closed when it lands
+  // shown or hidden (its page's route): render again, so a hidden ring mounts no view and a view starts no lazy pod
+  private shown = false
+  private resized = new ResizeObserver(() => { if (this.checkVisibility() !== this.shown) this.requestUpdate() })
 
   constructor() { super(); this.tooLong = false }
-  connectedCallback() { super.connectedCallback(); this.watch() }
-  disconnectedCallback() { super.disconnectedCallback(); for (const off of this.offs.splice(0)) off(); this.toLive() }
+  connectedCallback() { super.connectedCallback(); this.resized.observe(this); this.watch() }
+  disconnectedCallback() { super.disconnectedCallback(); this.resized.disconnect(); for (const off of this.offs.splice(0)) off(); this.toLive() }
   willUpdate(changed: Map<string, unknown>) {
     if (changed.has('store') || changed.has('tm')) { this.tooLong = false; this.toLive() }
     if (changed.has('app') || changed.has('tm')) this.watch()
@@ -102,7 +106,8 @@ export class NanoRing extends LitElement {
 
   render() {
     const { app, registry, tm } = this
-    if (!app || !registry) return html``
+    this.shown = this.checkVisibility()
+    if (!app || !registry || !this.shown) return html``
     const bound = this.shadow ?? app, past = !!this.shadow, d = bound.deployment(), l = ringLayout(d, { size: SIZE, show: this.show })
     const tooLong = !!tm && this.tooLong && ringSource(tm.mode, tm.cursor >= tm.span.to, false) === 'too-long'
     const home = (pod: string, rt: string | null) => rt ?? Object.keys(d.runtimes).find(r => d.runtimes[r]!.pods.includes(pod))!
