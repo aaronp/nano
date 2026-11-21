@@ -6,6 +6,7 @@
  * `reveal` opens the parents of where it went; the Outline's change reorders the nav.
  */
 import type { Outline } from '@pritzlaff/nano-outline';
+import type { Host } from '@pritzlaff/nano-host';
 import { applyPages, childrenOf, move, parentOf, subtree } from '../lib/pages.ts';
 
 type Zone = 'before' | 'inside' | 'after';
@@ -41,7 +42,7 @@ const zoneOf = (e: MouseEvent, row: HTMLElement): Zone => {
   return y < 0.25 ? 'before' : y > 0.75 ? 'after' : 'inside';
 };
 
-export function navMoves(doc: Document, outline: ReturnType<typeof Outline.create>, reveal: (id: string) => void) {
+export function navMoves(doc: Document, outline: Host['outline'], reveal: (id: string) => void) {
   const live = doc.createElement('div');
   live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite');
   live.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)';

@@ -20,7 +20,7 @@ import { applyPages } from '../lib/pages.ts'
 import { showStatus } from '../lib/status.ts'
 import '../sandbox/sandboxed-view.ts'
 
-type Instance = ReturnType<typeof Outline.create>
+type Instance = Host['outline']
 type Opened = Awaited<ReturnType<Instance['open']>>[string]
 type Slots = Record<string, Slot>
 

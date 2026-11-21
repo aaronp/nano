@@ -1,3 +1,7 @@
+import type { AppDeployment, Registry } from '@pritzlaff/nano-core'
+import { toast } from '@pritzlaff/nano-elements'
+import { connect, type Host } from '@pritzlaff/nano-host'
+
 /** A small dismissible message for the person (`role="status"`), one at a time: what start-up or autosave could not do. */
 export function showStatus(doc: Document, text: string) {
   let el = doc.querySelector<HTMLElement>('[data-nano-status]')
@@ -11,4 +15,18 @@ export function showStatus(doc: Document, text: string) {
   // the region exists empty first, so a screen reader announces the text set on the next frame
   const msg = el.firstElementChild!, set = () => { msg.textContent = text }
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(set); else setTimeout(set, 16)
+}
+
+/** The host core's `connect`, each note a toast: what was connected, and (a warning) what could not be. */
+export function connected(d: AppDeployment, registry: Registry, pods: readonly string[]): AppDeployment {
+  const r = connect(d, registry, pods)
+  for (const n of r.notes) void toast(n, { variant: n.startsWith('connected') ? 'good' : 'warn' })
+  return r.deployment
+}
+
+/** The host core's `deploy`, a refusal a toast, and what its pod still needs (`connect`'s notes once connected) a warning. */
+export async function deployed(h: Host, implementation: string, runtime: string): ReturnType<Host['deploy']> {
+  const r = await h.deploy(implementation, runtime)
+  if (!r.ok) void toast(r.fail.reason, { variant: 'bad' }); else connected(h.app.deployment(), h.registry, [r.value])
+  return r
 }

@@ -1,9 +1,9 @@
 // Shared setup of the dock-on-its-page tests: the real host, the picker stubbed, and `mount`, the workspace's pages over
-// an Outline (Main's dock and one per other page, in hidden routes until `go` shows one, as app-shell does).
+// the host core's live outline (Main's dock and one per other page, in hidden routes until `go` shows one, as app-shell does).
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register({ url: new URL('../../../', import.meta.url).href })
 import { afterEach, expect, mock } from 'bun:test'
-import { flat } from './flat.ts'
+import { flat, liveOutline } from './flat.ts'
 import { Coord } from '@pritzlaff/nano-core'
 import type { Page, Slot } from '@pritzlaff/nano-outline'
 import type { PanelState } from '../src/lib/layout-templates.ts'
@@ -12,10 +12,9 @@ export const pick: { choice: PanelState | null; runtime: string | undefined } = 
 mock.module('../src/components/picker.ts', () => ({ pick: async () => pick.choice && { state: pick.choice, runtime: pick.runtime } }))
 mock.module('../src/components/picker-grid.ts', () => ({ pickerGrid: (host: HTMLElement) => new Promise(r => { host.addEventListener('click', () => pick.choice && r({ state: pick.choice, runtime: pick.runtime })) }) }))   // inline: a click picks `choice`
 const { defineViews } = await import('@pritzlaff/nano-ui')
-const { Outline } = await import('@pritzlaff/nano-outline')
 const { start } = await import('../src/host.ts')
 await import('../src/components/workspace-dock.ts')
-export const { addPod, implementationTemplates } = await import('../src/dock/panels.ts')
+export const { implementationTemplates } = await import('../src/dock/panels.ts')
 const { createBus, provideBus } = await import('../src/lib/bus.ts')
 const { bootWorkspacePages } = await import('../src/components/workspace-pages.ts')
 defineViews()
@@ -47,7 +46,8 @@ export const strs = (v: unknown) => JSON.parse(JSON.stringify(v ?? null))
 
 /** The workspace's pages over `h`, from `pages` (Main is `workspace`, empty unless given). */
 export function mount(h: H, pages: Record<string, Page>, open = '') {
-  const outline = Outline.create(h.app, h.registry, flat({ workspace: page('Main', {}), ...pages })), bus = createBus(), app = document.createElement('div')
+  // a fresh live outline per mount, as a reload makes one (the host's own would keep the last mount's listeners)
+  const outline = liveOutline(h.app, h.registry, flat({ workspace: page('Main', {}), ...pages })), bus = createBus(), app = document.createElement('div')
   provideBus(app, bus)
   app.innerHTML = `<span slot="title"></span><div class="nav-row" data-workspaces><a href="#/p/workspace"></a></div>
     <app-route path="/p/workspace" hidden><workspace-dock id="workspace" storage-key="main" open="${open}"><template data-widget="notes" data-title="Notes"><div>notes</div></template></workspace-dock></app-route>

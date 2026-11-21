@@ -4,6 +4,7 @@
 import { expect, test } from 'bun:test'
 import { Outline } from '@pritzlaff/nano-outline'
 import { withImported } from '../src/import-pages.ts'
+import { liveOutline } from './flat.ts'
 
 const doc = (w: unknown): Outline => { const r = Outline.parse(w); if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const written = (v: unknown) => JSON.parse(JSON.stringify(v))
@@ -56,7 +57,7 @@ test('an incoming page `ring` is just a page: added as ring, the rest of the imp
 test('a plain nano.json\'s Main filling Main keeps Main\'s title, icon, tool slots, children, layout (the file has none) and other clients\' keys', async () => {
   const { importing } = await import('../src/import-pages.ts')
   const app = { listen: () => () => {}, deployment: () => ({ pods: {}, runtimes: {} }) } as never
-  const outline = Outline.create(app, {} as never, doc({ roots: ['workspace'], pages: { workspace: { slots: { x: view }, children: ['kid'], layout: { workspace: { root: 1 }, react: { columns: 3 } }, title: 'Mine', meta: { workspace: { icon: 'star' }, react: { x: 1 } } }, kid: { slots: {} } } }))
+  const outline = liveOutline(app, {} as never, doc({ roots: ['workspace'], pages: { workspace: { slots: { x: view }, children: ['kid'], layout: { workspace: { root: 1 }, react: { columns: 3 } }, title: 'Mine', meta: { workspace: { icon: 'star' }, react: { x: 1 } } }, kid: { slots: {} } } }))
   const file = { pods: { clock1: { implementation: 'example.clock/clock' } }, runtimes: { main: { pods: ['clock1'], subscriptions: [] } }, layout: { pages: [{ id: 'workspace', title: 'Workspace', slots: [{ id: 'c', runtime: 'main', pod: 'clock1' }] }] } }
   const url = `data:application/json,${encodeURIComponent(JSON.stringify(file))}`
   expect(await importing(async () => ({ ok: true, value: undefined }), outline)(url)).toMatchObject({ ok: true })

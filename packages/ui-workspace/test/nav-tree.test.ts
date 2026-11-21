@@ -6,7 +6,8 @@ import { expect, test } from 'bun:test'
 import { bootWorkspacePages } from '../src/components/workspace-pages.ts'
 import { walk } from '../src/lib/pages.ts'
 import { Application, AppDeployment, Registry, type NanoResult } from '@pritzlaff/nano-core'
-import { Outline, type Page } from '@pritzlaff/nano-outline'
+import type { Outline, Page } from '@pritzlaff/nano-outline'
+import { liveOutline } from './flat.ts'
 
 localStorage.clear()
 location.hash = '#/p/workspace'
@@ -24,7 +25,7 @@ const pages: Record<string, Page> = {
   lab: { title: 'Lab', slots: notes, children: ['a'] }, a: { title: 'A', slots: {}, children: ['b'] }, b: { title: 'B', slots: {} },
   two: { title: 'Two', slots: {} },
 }
-const outline = Outline.create(app, registry, { roots: ['workspace', 'lab', 'two'], pages })
+const outline = liveOutline(app, registry, { roots: ['workspace', 'lab', 'two'], pages })
 let applies = 0
 outline.listen(() => applies++)
 bootWorkspacePages(document, outline)

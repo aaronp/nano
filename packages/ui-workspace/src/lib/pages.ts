@@ -11,6 +11,7 @@
  */
 import { failure, type NanoResult } from '@pritzlaff/nano-core'
 import type { Page, Outline } from '@pritzlaff/nano-outline'
+import { movePage, removePage, type Host } from '@pritzlaff/nano-host'
 
 /** Main's id (and route). */
 export const MAIN = 'workspace'
@@ -47,28 +48,12 @@ export const childrenOf = (doc: Outline, parent: string | undefined): string[] =
 export const parentOf = (doc: Outline, id: string): string | undefined => Object.keys(doc.pages).find((p) => doc.pages[p]!.children?.includes(id))
 /** Page `id` and every page below it, in tree order. */
 export const subtree = (doc: Outline, id: string): string[] => walk(doc, [id])
-/** `doc` with only the listed ids (roots, children) that `keep`; a page whose list is unchanged kept as it is. */
-const unlisted = (doc: Outline, keep: (id: string) => boolean): Outline => ({ roots: doc.roots.filter(keep), pages: Object.fromEntries(Object.entries(doc.pages).map(([id, p]) => {
-  const c = p.children?.filter(keep)
-  return [id, c && c.length !== p.children!.length ? { ...p, children: c } : p]
-})) })
+/** The host core's `movePage`, behind the Main rule: undefined for Main or for Main's place (index 0 of the roots). */
+export const move = (doc: Outline, id: string, parent: string | undefined, index: number): Outline | undefined =>
+  id === MAIN || (parent === undefined && index < 1) ? undefined : movePage(doc, id, parent, index)
 
-/** `doc` with page `id` at `index` of `parent`'s children (undefined: the roots), counted without it; undefined for
- * Main, Main's place, an unknown page or parent, a parent in `id`'s subtree or an index past the end. */
-export function move(doc: Outline, id: string, parent: string | undefined, index: number): Outline | undefined {
-  if (id === MAIN || !Object.hasOwn(doc.pages, id) || (parent !== undefined && (!Object.hasOwn(doc.pages, parent) || subtree(doc, id).includes(parent)))) return undefined
-  const out = unlisted(doc, (x) => x !== id), list = childrenOf(out, parent)
-  if (index < (parent === undefined ? 1 : 0) || index > list.length) return undefined
-  const to = [...list.slice(0, index), id, ...list.slice(index)]
-  return parent === undefined ? { ...out, roots: to } : { ...out, pages: { ...out.pages, [parent]: { ...out.pages[parent]!, children: to } } }
-}
-
-/** `doc` without page `id` and its subtree (from the pages and its parent's list); undefined for Main or an unknown page. */
-export function without(doc: Outline, id: string): Outline | undefined {
-  if (id === MAIN || !Object.hasOwn(doc.pages, id)) return undefined
-  const gone = new Set(subtree(doc, id)), out = unlisted(doc, (x) => !gone.has(x))
-  return { ...out, pages: Object.fromEntries(Object.entries(out.pages).filter(([p]) => !gone.has(p))) }
-}
+/** The host core's `removePage` (the page and its subtree), behind the Main rule: undefined for Main. */
+export const without = (doc: Outline, id: string): Outline | undefined => (id === MAIN ? undefined : removePage(doc, id))
 
 /** Why `next` breaks the workspace's rules: Main dropped or not the first root. */
 export function refusal(next: Outline): string | undefined {
@@ -78,7 +63,7 @@ export function refusal(next: Outline): string | undefined {
 }
 
 /** The workspace's own page edit: `next` refused (`invalid-input`) if it breaks the rules, else the Outline's `apply`. */
-export function applyPages(outline: ReturnType<typeof Outline.create>, next: Outline): NanoResult<void> {
+export function applyPages(outline: Host['outline'], next: Outline): NanoResult<void> {
   const why = refusal(next)
   return why ? failure('invalid-input', why) : outline.apply(next)
 }

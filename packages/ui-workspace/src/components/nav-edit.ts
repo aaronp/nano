@@ -6,6 +6,7 @@
  * change relabels the nav. Moves are nav-moves.ts's, rows and toggles nav-tree.ts's.
  */
 import type { Outline } from '@pritzlaff/nano-outline';
+import type { Host } from '@pritzlaff/nano-host';
 import { ICONS } from '../lib/icons.ts';
 import { applyPages, subtree, without } from '../lib/pages.ts';
 import { askConfirm } from './name-dialog.ts';
@@ -13,7 +14,7 @@ import { askConfirm } from './name-dialog.ts';
 const ROW = '[data-saved]';
 const nameOf = (row: Element) => row.querySelector('[data-name]')?.textContent ?? '';
 
-export function navEdit(doc: Document, outline: ReturnType<typeof Outline.create>, save: (row: HTMLElement, title: string, icon: string) => void) {
+export function navEdit(doc: Document, outline: Host['outline'], save: (row: HTMLElement, title: string, icon: string) => void) {
   const editing = () => doc.querySelector('app-shell[data-editing]') !== null;
   outline.listen(() => controls());   // a page changed from elsewhere is relabelled: its controls come back
   const setEditing = (on: boolean) => {

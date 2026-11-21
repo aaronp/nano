@@ -2,7 +2,7 @@
 // restore point in its `meta`, its panels the page's slots), showing a page opens its pods (`outline.open`, once), and
 // a pick deploys a lazy pod first, then applies its slot.
 import { expect, test } from 'bun:test'
-import { addPod, host, mount, opened, page, pick, place, pod, running, starts, tick, until, type Dock, type H } from './dock-pods-setup.ts'
+import { host, mount, opened, page, pick, place, pod, running, starts, tick, until, type Dock, type H } from './dock-pods-setup.ts'
 
 test('two pages share a pod: started once, by showing the first page; the second reuses it; showing a page again opens nothing; no new names', async () => {
   const h = await host()
@@ -50,6 +50,16 @@ test('a pick into a chosen runtime places the pod there', async () => {
   expect(written('workspace').slots).toEqual({ input1: { kind: 'pod', pod: 'nano.ui/input@edge/input1' } })
 })
 
+test('a picked map starts from its config schema\'s default (the host core\'s deploy; the workspace keeps no table of starts)', async () => {
+  const h = await host()
+  const { go, written } = mount(h, {})
+  go('workspace')
+  pick.choice = { widget: 'nano-ui-map' }
+  document.querySelector<HTMLElement>('.dock-empty')!.click()
+  await until(() => Object.keys(written('workspace').slots).length === 1)
+  expect(h.data().pods['map1']).toEqual({ implementation: 'nano.ui/map', eager: false, config: { code: 'return x' } })
+})
+
 test('a pick into a runtime that has since gone places nothing', async () => {
   const h = await host()
   const { go, written, input } = mount(h, {})
@@ -61,18 +71,17 @@ test('a pick into a runtime that has since gone places nothing', async () => {
   expect(written('workspace').slots).toEqual({})
 })
 
-test('addPod in a rules runtime adds the rule letting the host reach the pod, so it can be started', async () => {
+test('host.deploy in a rules runtime adds the rule letting the host reach the pod, so it can be started', async () => {
   const h = await host()
   await place(h, 'locked', ['other'], 'nano.ui/input', { kind: 'rules', rules: [{ deny: '*' }] })
-  const name = await addPod(h, 'nano.ui/input', 'locked')
-  expect(name).toBe('input1')
+  expect(await h.deploy('nano.ui/input', 'locked')).toEqual({ ok: true, value: 'input1' })
   expect(h.data().runtimes['locked']!.policy).toEqual({ kind: 'rules', rules: [{ allow: ['call', 'subscribe', 'start'], from: 'host', outside: true, toPod: 'input1' }, { deny: '*' }] })
   expect((await h.app.runtime('locked').getOrCreate('input1')).ok).toBe(true)
 })
 
 test('concurrent adds of one implementation take distinct names', async () => {
   const h = await host()
-  const names = await Promise.all([addPod(h, 'nano.ui/input', 'main'), addPod(h, 'nano.ui/input', 'main')])
+  const names = (await Promise.all([h.deploy('nano.ui/input', 'main'), h.deploy('nano.ui/input', 'main')])).map(r => r.ok && r.value)
   expect(new Set(names).size).toBe(2)
   expect(names.every(n => n && n in h.data().pods)).toBe(true)
 })

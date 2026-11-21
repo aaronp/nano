@@ -6,6 +6,7 @@
  * parents, as a route change does for the current page's.
  */
 import type { Outline } from '@pritzlaff/nano-outline';
+import type { Host } from '@pritzlaff/nano-host';
 import { ICONS } from '../lib/icons.ts';
 import { MAIN, parentOf, routeOf } from '../lib/pages.ts';
 
@@ -33,7 +34,7 @@ export const fill = (doc: Document, row: HTMLElement, p: Row) => {
     button(doc, 'addChild', `Add a page under ${p.title}`, '+'), ...(main ? [] : [button(doc, 'remove', `Remove ${p.title}`, '✕')]));
 };
 
-export function navTree(doc: Document, outline: ReturnType<typeof Outline.create>) {
+export function navTree(doc: Document, outline: Host['outline']) {
   const shut = new Set<string>();
   const show = () => {
     const d = outline.document().doc, rows = new Map([...doc.querySelectorAll<HTMLElement>('[data-saved]')].map((r) => [r.dataset.saved!, r]));

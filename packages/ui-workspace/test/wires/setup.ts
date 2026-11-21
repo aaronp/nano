@@ -1,9 +1,11 @@
 // A real app on nano-core 0.4: nano.ui's pods, with r (input) → d (debounce) → l (log) piped and a map m unpiped, and a
-// stand-in for the page's Host (its app, registry, deployment and apply).
+// stand-in for the page's Host (its app, registry, deployment, apply and the host core's deploy).
 import { Application, AppDeployment, Registry, Pod, port, type Interface, type NanoResult } from '@pritzlaff/nano-core'
 import uiProvider, { Debounce, debounce, input, Input, Log, log, map, MapIface } from '@pritzlaff/nano-ui'
 import type { Host } from '../../src/host.ts'
 import { wireId, snapshotOf, buildModel } from '../../src/wires/model.ts'
+import { picker } from '../../../host/src/pick.ts'
+import { liveOutline } from '../flat.ts'
 
 export const tick = () => new Promise(r => setTimeout(r, 0))
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
@@ -24,7 +26,8 @@ export { Debounce, Input, Log, MapIface }
 export async function setup() {
   const reg = registry()
   const app = must(await Application.create(must(AppDeployment.assemble(deployment(), reg))))
-  const host = { app, registry: reg, data: () => app.deployment(), document: () => ({ app: app.deployment(), outline: { roots: [], pages: {} } }), apply: (n: AppDeployment) => app.apply(n) } as unknown as Host
+  const host = { app, registry: reg, data: () => app.deployment(), document: () => ({ app: app.deployment(), outline: { roots: [], pages: {} } }), apply: (n: AppDeployment) => app.apply(n),
+    deploy: picker(app, reg, liveOutline(app, reg)).deploy } as unknown as Host
   return { host, app, s1: { id: wireId('main', p1) }, s2: { id: wireId('main', p2) } }
 }
 

@@ -9,7 +9,7 @@
  */
 import { html, render } from 'lit'
 import type { Host } from './host.ts'
-import { connected } from './auto-connect.ts'
+import { connected } from './lib/status.ts'
 import { defineAppBar, type AppBarEl } from './components/app-bar.ts'
 import { defineWorkspaceControls } from './components/workspace-controls.ts'
 import { chosen, viewTags } from './dock/page-pods.ts'

@@ -11,9 +11,8 @@
 import { type AppDeployment, type Pod, type Registry } from '@pritzlaff/nano-core'
 import { Outline } from '@pritzlaff/nano-outline'
 import type { HostDocument } from '@pritzlaff/nano-host'
-import { connected } from './auto-connect.ts'
 import { hostLayout, legacyPages, oldPages, toOutline, treed, withOldDocks, type Legacy } from './migrate.ts'
-import { showStatus } from './lib/status.ts'
+import { connected, showStatus } from './lib/status.ts'
 import { MAIN } from './lib/pages.ts'
 
 /** The widget id of the old panel showing `pod`, anywhere in `v` (a page's engine state). */

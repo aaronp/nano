@@ -21,6 +21,7 @@
 import { ResolvedLayoutConfig } from 'golden-layout/dist/esm/index.js';
 import { Coord } from '@pritzlaff/nano-core';
 import type { Page, Outline, Slot } from '@pritzlaff/nano-outline';
+import type { Host } from '@pritzlaff/nano-host';
 import type { WorkspaceDock } from '../components/workspace-dock.ts';
 import { requestBus } from '../lib/bus.ts';
 import { panelsInOrder, type PanelState } from '../lib/layout-templates.ts';
@@ -30,7 +31,7 @@ import { pagePods } from './page-pods.ts';
 import { widgetKinds } from './palette.ts';
 import { widgetOf } from '../lib/tools.ts';
 
-type Instance = ReturnType<typeof Outline.create>;
+type Instance = Host['outline'];
 type W = Record<string, unknown>;
 const obj = (v: unknown): v is W => typeof v === 'object' && v !== null && !Array.isArray(v);
 /** Keys beside golden-layout's config in a page's `layout`, and those in its `meta`: `<storage-key>.<key>` in the dock's storage. */

@@ -20,9 +20,9 @@ import { probe } from './described.ts'
 import { approvalPolicy, hostPods, hostProvider, HOST_PODS, placed, unplaced, withoutHost } from './host-deploy.ts'
 import { edgesFor } from './sandbox/edges.ts'
 import { openFrame } from './sandbox/frames.ts'
-import { connected } from './auto-connect.ts'
 import { framesOf } from './sandbox/sandboxed-view.ts'
 import { standIn, type Frame } from './sandbox/stand-in.ts'
+import { connected, deployed } from './lib/status.ts'
 import { recording, type History } from './history.ts'
 import { observeCalls, type OpCall } from './observed-calls.ts'
 
@@ -116,7 +116,7 @@ export async function start(storage: Storage = memory(), opts: Pick<Parameters<t
   const data = (): AppDeployment => ({ ...h.app.deployment(), ...code() })
   const apply = async (next: AppDeployment) => shown(await h.apply(next))
   return { ok: true, value: {
-    ...h, apply, data, history, defaults: () => ({ ...views }), calls: () => observed.calls(),
+    ...h, apply, deploy: (impl, runtime) => deployed(h, impl, runtime), data, history, defaults: () => ({ ...views }), calls: () => observed.calls(),
     saved: reconcile => {
       const doc = h.document(), { modules, frames } = doc.app
       return reconcile ? { ...doc, app: { ...withoutHost(observed.reconciled()), ...(modules && { modules }), ...(frames && { frames }) } } : doc

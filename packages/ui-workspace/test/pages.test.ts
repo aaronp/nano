@@ -2,9 +2,9 @@
 // is the first root; an apply that drops Main, moves it from first root, or adds a fixed route is refused before it
 // reaches the Outline.
 import { expect, test } from 'bun:test'
-import { flat } from './flat.ts'
+import { flat, liveOutline } from './flat.ts'
 import { Application, AppDeployment, Registry, type NanoResult } from '@pritzlaff/nano-core'
-import { Outline, type Page } from '@pritzlaff/nano-outline'
+import type { Outline, Page } from '@pritzlaff/nano-outline'
 import { applyPages, move, parentOf, refusal, routeOf, slugPath, subtree, walk, without } from '../src/lib/pages.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
@@ -41,7 +41,7 @@ test('without: a page and its subtree gone, from the pages and its parent\'s lis
 
 test('refusal and applyPages: Main dropped, not a root or not first, is refused, unapplied', async () => {
   const registry = Registry.create(), app = must(await Application.create(must(AppDeployment.assemble({ pods: {}, runtimes: {} }, registry))))
-  const outline = Outline.create(app, registry, flat({ workspace: p() }))
+  const outline = liveOutline(app, registry, flat({ workspace: p() }))
   expect(refusal(flat({}))).toBe('Main (the page workspace) is not removed')
   expect(refusal({ ...doc, roots: ['a', 'workspace', 'd'] })).toBe('Main (the page workspace) stays the first page')
   expect(refusal({ roots: ['a', 'd'], pages: { ...doc.pages, a: p('b', 'workspace') } })).toBe('Main (the page workspace) stays the first page')
@@ -53,7 +53,7 @@ test('refusal and applyPages: Main dropped, not a root or not first, is refused,
 
 test('any page id is allowed (ids are only unique): ring, desk, inbox; every page is at /p/<id>', async () => {
   const registry = Registry.create(), app = must(await Application.create(must(AppDeployment.assemble({ pods: {}, runtimes: {} }, registry))))
-  const outline = Outline.create(app, registry, flat({ workspace: p() }))
+  const outline = liveOutline(app, registry, flat({ workspace: p() }))
   for (const id of ['ring', 'desk', 'inbox']) {
     expect(applyPages(outline, flat({ ...outline.document().doc.pages, [id]: p() }))).toEqual({ ok: true, value: undefined })
     expect(routeOf(id)).toBe(`/p/${id}`)

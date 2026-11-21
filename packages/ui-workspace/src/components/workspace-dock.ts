@@ -22,7 +22,7 @@
  * instance or nothing is focused (empty space clicked, the panel closed, the page changed: `route:changed` on the bus).
  * Light DOM, because golden-layout positions its drag proxy in document.body.
  * `host` (the page's Host) and `pods` (its page's, dock/page-pods.ts), given before it connects: a `pod` panel shows a slot
- * of its page (the explorer's pod, and a pick deployed lazy first by addPod, get their slot first). `storage` (default
+ * of its page (the explorer's pod, and a pick deployed lazy first by `host.deploy`, get their slot first). `storage` (default
  * localStorage) keeps its state under `storage-key`; a page's dock gets its page's (dock/page-docks.ts).
  * In a hidden <app-route> it is built when the route first shows.
  */
@@ -30,7 +30,7 @@ import { GoldenLayout, LayoutConfig, type Stack, type ComponentItem, type Conten
 import type { Host } from '../host.ts';
 import { ensureStyles, HEADER_H } from '../dock/dock-css.ts';
 import { initial, readPalette, split, type Def } from '../dock/palette.ts';
-import { addPod, mountPanel, panelOf, shows } from '../dock/panels.ts';
+import { mountPanel, panelOf, shows } from '../dock/panels.ts';
 import type { PagePods } from '../dock/page-pods.ts';
 import { readSaved, writeSaved } from '../dock/saved.ts';
 import { showTemplate } from '../dock/template-mode.ts';
@@ -171,9 +171,9 @@ export class WorkspaceDock extends HTMLElement {
   }
   private put(p: PanelState | null, target?: ComponentItem) { const el = p && this.split(p, target).container.element; if (el) { el.tabIndex = -1; el.focus(); } }
   private offer() { void this.choose((e) => pickerGrid(this.empty!, e)).then((p) => { this.offer(); this.put(p); }); }
-  /** The picker's choice (`show`: a popover, or a grid inline); an implementation's (a new pod) is first deployed lazy in the chosen runtime (addPod), then given its slot. */
+  /** The picker's choice (`show`: a popover, or a grid inline); an implementation's (a new pod) is first deployed lazy in the chosen runtime (`host.deploy`), then given its slot. */
   private async choose(show: (e: Parameters<typeof pick>[1]) => ReturnType<typeof pick>, hidden?: PanelState[]): Promise<PanelState | null> {
-    const templates = [...this.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')], runtimes = Object.keys(this.host?.data().runtimes ?? { main: 1 }), c = await show({ templates, hidden, runtimes }), p = c?.state, impl = p && !p.name && this.host && this.defs.get(p.widget)?.template.dataset['implementation'], gone = impl && c.runtime !== undefined && !(c.runtime in this.host!.data().runtimes), name = impl && !gone && await addPod(this.host!, impl, c.runtime ?? 'main'), slot = name && this.pods?.add(this.host!.data(), c.runtime ?? 'main', name);
+    const templates = [...this.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')], runtimes = Object.keys(this.host?.data().runtimes ?? { main: 1 }), c = await show({ templates, hidden, runtimes }), p = c?.state, impl = p && !p.name && this.host && this.defs.get(p.widget)?.template.dataset['implementation'], gone = impl && c.runtime !== undefined && !(c.runtime in this.host!.data().runtimes), made = impl && !gone && await this.host!.deploy(impl, c.runtime ?? 'main'), name = made && made.ok && made.value, slot = name && this.pods?.add(this.host!.data(), c.runtime ?? 'main', name);
     return !impl ? p ?? null : name ? { widget: p!.widget, name, ...(slot && { slot }) } : (gone && this.say(`Runtime ${c.runtime} is no longer there: nothing was added.`), null);   // a pill that went stale
   }
   private split(p: PanelState, target?: ComponentItem) { return split(this.requireLayout(), p, p.name ?? this.defs.get(p.widget)?.title ?? p.widget, target); }

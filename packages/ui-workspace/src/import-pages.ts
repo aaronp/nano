@@ -62,7 +62,7 @@ export function withImported(current: Outline, incoming: Outline): Outline {
 type Chosen = Parameters<Host['importUrl']>[1] & { pages?(p: Outline): Outline }
 
 /** `importUrl`, then the file's pages applied (`withImported`); a refusal is a status. */
-export const importing = (importUrl: Host['importUrl'], outline: ReturnType<typeof Outline.create>) =>
+export const importing = (importUrl: Host['importUrl'], outline: Host['outline']) =>
   async (url: string, chosen?: Chosen): Promise<NanoResult<void>> => {
     // ponytail: the file is fetched again here (importApp fetched it for the app); fold into one fetch if it matters
     const file = await fetch(url).then(r => r.json()).catch(() => undefined)

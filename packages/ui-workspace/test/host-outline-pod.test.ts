@@ -1,9 +1,10 @@
 // HostOutline in the workspace: the pod `outline` over the Outline. `document` is unasked; `apply` with a stale base
 // is refused before anyone is asked, with the current base it is asked (naming the pages and slots), then applied.
 import { expect, jest, test } from 'bun:test'
-import { flat } from './flat.ts'
+import { flat, liveOutline } from './flat.ts'
 import { Application, AppDeployment, Coord, Pod, Registry, type NanoResult } from '@pritzlaff/nano-core'
-import { HostOutline, Outline } from '@pritzlaff/nano-outline'
+import { HostOutline } from '@pritzlaff/nano-outline'
+import type { Host } from '@pritzlaff/nano-host'
 import './host-deploy-setup.ts'
 
 const { hostOutline, outlinePod } = await import('../src/host-outline-pod.ts')
@@ -17,11 +18,11 @@ const ns = Coord.namespace('workspace.host')
 
 async function podApp(answer: () => Promise<boolean>) {
   const asked: string[] = [], registry = Registry.create()
-  let outline: ReturnType<typeof Outline.create> | undefined
+  let outline: Host['outline'] | undefined
   registry.add(ns.provider([hostOutline(() => outline, t => { asked.push(t); return answer() })]))
   const d: AppDeployment = { pods: { outline: outlinePod }, runtimes: { main: { pods: ['outline'], subscriptions: [] } } }
   const app = must(await Application.create(must(AppDeployment.assemble(d, registry))))
-  outline = Outline.create(app, registry, flat({ workspace: { slots: { x: { kind: 'tool', tool: 'systems' } } } }))
+  outline = liveOutline(app, registry, flat({ workspace: { slots: { x: { kind: 'tool', tool: 'systems' } } } }))
   return { asked, app, outline, pod: app.call('main', 'outline') as unknown as PodApi }
 }
 
@@ -61,7 +62,7 @@ test('removing Main is refused, unasked; a page `ring` is accepted', async () =>
 })
 
 test('the pages changing while the approval waits: the yes is refused, as stale', async () => {
-  let outline: ReturnType<typeof Outline.create> | undefined
+  let outline: Host['outline'] | undefined
   const { app, outline: p, pod } = await podApp(async () => { outline!.apply(flat({ ...outline!.document().doc.pages, mine: { slots: {} } })); return true })
   outline = p
   expect(await pod.apply({ next: { pages: { workspace: { slots: {} }, theirs: { slots: {} } } }, base: 0 })).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'the pages changed since' } })
@@ -71,11 +72,11 @@ test('the pages changing while the approval waits: the yes is refused, as stale'
 
 test('through hostProvider, the ask is the ui pod\'s dialog, and no answer within 20 s is a no', async () => {
   const registry = Registry.create()
-  let app: Application | undefined, outline: ReturnType<typeof Outline.create> | undefined
+  let app: Application | undefined, outline: Host['outline'] | undefined
   registry.add(hostProvider(() => app!, () => outline))
   const d: AppDeployment = { pods: { ui: Pod.eager(hostUi), outline: outlinePod }, runtimes: { main: { pods: ['ui', 'outline'], subscriptions: [] } } }
   app = must(await Application.create(must(AppDeployment.assemble(d, registry))))
-  outline = Outline.create(app, registry)
+  outline = liveOutline(app, registry)
   jest.useFakeTimers()
   try {
     const r = (app.call('main', 'outline') as unknown as PodApi).apply({ next: { pages: { workspace: { slots: {} }, trading: { slots: {} } } }, base: 0 })

@@ -17,13 +17,15 @@ import { picker } from './pick.ts'
 export type Host = {
   app: Application; registry: Registry
   /** Each loaded module's namespace, by its key in `modules` (a web host reads `views` there). */
-  exports: Record<string, Record<string, unknown>>
+  exports: { [module: string]: Record<string, unknown> }
   /** The host document as saved: the live system without the host pods, its modules and frames, the outline, `host`. */
   document(): HostDocument
   /** The live outline: `document`, `apply(next, { base })`, `listen` ({ added, removed, changed, moved, resolved }), `resolve(page)`, `open(page)`. */
   outline: ReturnType<typeof live>
   /** A lazy pod of `implementation` deployed into `runtime` (the host let in, its dependencies connected), then its `pod` slot on `page`: the slot's id. */
   pick(page: string, implementation: string, runtime: string): Promise<NanoResult<string>>
+  /** A lazy pod of `implementation` deployed into `runtime` as a pick deploys it (pick.ts), and no slot: its name. */
+  deploy(implementation: string, runtime: string): Promise<NanoResult<string>>
   /** `next`'s modules the registry lacks loaded (the host's loader, as at boot), then `next` applied to `app`; its
    * `modules` and `frames` (each kept when absent) are the document's from then on. A failed load applies and records nothing. */
   apply(next: AppDeployment): Promise<NanoResult<void>>
@@ -114,7 +116,7 @@ async function boot(storage: Storage, opts: Opts): Promise<NanoResult<Host>> {
     if (!r.ok) ({ modules, frames } = was)
     return r
   }
-  return success({ app, registry, exports, document, outline, apply, pick: picker(app, registry, outline), stopped: () => stopped, setHost(patch) { host = { ...host, ...patch }; save() } })
+  return success({ app, registry, exports, document, outline, apply, ...picker(app, registry, outline), stopped: () => stopped, setHost(patch) { host = { ...host, ...patch }; save() } })
 }
 
 /** `Host.boot(storage, opts)`. */

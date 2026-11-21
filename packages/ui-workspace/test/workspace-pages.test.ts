@@ -3,11 +3,11 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 import { expect, test } from 'bun:test'
-import { flat } from './flat.ts'
+import { flat, liveOutline } from './flat.ts'
 import { bootWorkspacePages, mountWorkspace } from '../src/components/workspace-pages.ts'
 import { move, walk } from '../src/lib/pages.ts'
 import { Application, AppDeployment, Registry, type NanoResult } from '@pritzlaff/nano-core'
-import { Outline, type Page } from '@pritzlaff/nano-outline'
+import type { Outline, Page } from '@pritzlaff/nano-outline'
 
 localStorage.clear()
 document.body.innerHTML = `<app-shell><span slot="title">Nano</span>
@@ -20,7 +20,7 @@ Object.assign(document.querySelector('#workspace')!, { arrangement: () => ({ roo
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const registry = Registry.create(), app = must(await Application.create(must(AppDeployment.assemble({ pods: {}, runtimes: {} }, registry))))
-const outline = Outline.create(app, registry, flat({ workspace: { title: 'Workspace', slots: {} } }))
+const outline = liveOutline(app, registry, flat({ workspace: { title: 'Workspace', slots: {} } }))
 let applies = 0
 outline.listen(() => applies++)
 bootWorkspacePages(document, outline)

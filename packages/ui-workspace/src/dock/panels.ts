@@ -7,17 +7,12 @@
  */
 import type { ComponentContainer, ComponentItem, ContentItem, JsonValue } from 'golden-layout/dist/esm/index.js'
 import type { Host } from '../host.ts'
-import { AppDeployment } from '@pritzlaff/nano-core'
-import { connected } from '../auto-connect.ts'
 import { icon as explorerIcon } from '../icons.ts'
 import { provideBus, type Bus } from '../lib/bus.ts'
 import { panelContent, withMode } from '../lib/panel-content.ts'
 import { panelState, readWidgetId, readWidgetMode, readWidgetName, shownInstance } from '../lib/dock-layout.ts'
 import type { Def } from './palette.ts'
 import { podPanel, type PagePods } from './page-pods.ts'
-
-/** The config a built-in starts with, where it needs one. */
-const starts: Record<string, unknown> = { 'nano.ui/map': { code: 'return x' } }
 
 /**
  * A palette template per implementation the host can make (what composable.ts's catalog was): `data-implementation`
@@ -33,30 +28,6 @@ export function implementationTemplates(h: Host, doc: Document): HTMLTemplateEle
     if (p.coord !== 'nano.ui') { t.dataset['package'] = p.coord; t.dataset['packageUrl'] = h.data().modules?.[p.coord] ?? '' }
     return t
   }))
-}
-
-/** The adds in flight, one after another: each reads `data()` after the last applied, so no two take one name. */
-let adding: Promise<unknown> = Promise.resolve()
-/** Places a lazy pod of `coord` in `runtime` (ADR-0035: the page showing it starts it), named `<kind><n>` with the first
- * free n, its dependencies connected; in a `rules` runtime, after a rule letting the host reach it (as `edit`'s `create`
- * lets its caller in). Its name, once applied. Calls run one at a time. */
-export function addPod(h: Host, coord: string, runtime: string): Promise<string | undefined> {
-  const run = adding.then(() => make(h, coord, runtime))
-  adding = run.catch(() => {})
-  return run
-}
-async function make(h: Host, coord: string, runtime: string): Promise<string | undefined> {
-  const d = h.data(), kind = coord.slice(coord.indexOf('/') + 1), impl = h.registry.implementation(coord)
-  if (!impl) return undefined
-  let n = 1
-  while (`${kind}${n}` in d.pods) n++
-  const name = `${kind}${n}`, e = AppDeployment.edit(d, h.registry)
-  e.place(impl, { pod: name, in: runtime })
-  const out = e.deployment(), r = out.runtimes[runtime]!
-  if (starts[coord] !== undefined) out.pods[name]!.config = starts[coord]
-  if (r.policy?.kind === 'rules') r.policy.rules.unshift({ allow: ['call', 'subscribe', 'start'], from: 'host', outside: true, toPod: name })
-  const applied = await h.apply(connected(out, h.registry, [name]))
-  return applied.ok ? name : undefined
 }
 
 type Mounting = { doc: Document; defs: ReadonlyMap<string, Def>; bus: Bus; host?: Host; registry?: unknown; pods?: PagePods; send(topic: string, payload: unknown): void }
@@ -86,12 +57,12 @@ export function mountPanel(container: ComponentContainer, state: JsonValue | und
     el.target = { app: h.app, registry: h.registry, get calls() { return h.calls() } }
   }
   if (h && pods && id === 'pod' && (slot ?? name)) container.on('destroy', podPanel(container.element, (slot ?? name)!, h, pods))
-  // an implementation's panel shows the slot it names; unnamed (picks deploy first), it makes a pod in main and its slot
+  // an implementation's panel shows the slot it names; unnamed (picks deploy first), it deploys a pod in main (host.deploy) and its slot
   if (h && impl) {
     let stop = () => {}, gone = false, pod = name, at = slot ?? name
     const show = (s: string) => { at = s; if (!gone && pods) stop = podPanel(container.element, s, h, pods) }
     if (at) show(at)
-    else void addPod(h, impl, 'main').then((p) => { const s = p && pods?.add(h.data(), 'main', p); pod = p; if (s) { show(s); if (!gone) container.emit('stateChanged') } })
+    else void h.deploy(impl, 'main').then((r) => { const p = r.ok ? r.value : undefined, s = p && pods?.add(h.data(), 'main', p); pod = p; if (s) { show(s); if (!gone) container.emit('stateChanged') } })
     container.stateRequestEvent = () => ({ widget: id, ...(pod && { name: pod }), ...(at && { slot: at }) })
     container.on('destroy', () => { gone = true; stop() })
     return send('dock:opened', { widget: id })

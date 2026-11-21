@@ -10,6 +10,7 @@
  * "<title> copy", its next sibling. Each edit is one `next`, applied by `applyPages` (the workspace's rules checked first).
  */
 import type { Page, Outline } from '@pritzlaff/nano-outline';
+import type { Host } from '@pritzlaff/nano-host';
 import { applyPages, childrenOf, metaOf, move, parentOf, routeOf, slugPath, walk, withMeta, MAIN } from '../lib/pages.ts';
 import { showStatus } from '../lib/status.ts';
 import { keepDocks } from '../dock/page-docks.ts';
@@ -51,7 +52,7 @@ export function mountWorkspace(doc: Document, p: Row): void {
 }
 
 /** Shows the Outline's pages, and handles +, edits in the nav and the dock's "Save as workspace…". */
-export function bootWorkspacePages(doc: Document, outline: ReturnType<typeof Outline.create>): void {
+export function bootWorkspacePages(doc: Document, outline: Host['outline']): void {
   doc.querySelector('[slot="title"]')?.append(button(doc, 'newWorkspace', 'New workspace', '+'), button(doc, 'editNav', 'Edit workspaces', '✎'));
   doc.querySelector('[data-edit-nav]')?.setAttribute('aria-pressed', 'false');
   const rows = () => [...doc.querySelectorAll<HTMLElement>('[data-saved]')];

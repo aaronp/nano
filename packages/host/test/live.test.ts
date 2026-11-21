@@ -1,5 +1,5 @@
 // The host core's live outline (open, re-resolve on `applied`, saving on a change) and `pick` (a lazy pod the host can
-// reach in a `rules` runtime, its dependencies connected, then a `pod` slot; a failed deploy adds no slot).
+// reach in a `rules` runtime, its dependencies connected, then a `pod` slot; a failed deploy adds no slot), and `deploy` (no slot).
 import { expect, test } from 'bun:test'
 import { Type } from 'typebox'
 import { Implementation, Interface, Op, Pod, Provider, Schema, provide, success, type AppDeployment } from '@pritzlaff/nano-core'
@@ -91,4 +91,13 @@ test('a pick whose deploy fails, or of an unknown implementation or page, adds n
   expect(Object.keys(h.outline.document().doc.pages['home']!.slots)).toEqual(['c1'])
   expect(Object.keys(h.app.deployment().pods)).toEqual(['c1'])
   expect(s.getItem(KEY)).toBe(before)
+})
+
+test('deploy: a lazy pod as a pick makes it, connected, with no slot; its name', async () => {
+  const { h, s } = await boot()
+  expect(await h.deploy('acme/user', 'main')).toEqual(success('user1'))
+  expect(h.app.deployment().runtimes['main']!.subscriptions).toEqual([{ kind: 'call', from: 'user1', to: 'c1' }])
+  expect(Object.keys(h.outline.document().doc.pages['home']!.slots)).toEqual(['c1'])
+  expect(saved(s).app.pods.user1).toEqual({ implementation: 'acme/user', eager: false })
+  expect(await h.deploy('acme/nope', 'main')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
 })

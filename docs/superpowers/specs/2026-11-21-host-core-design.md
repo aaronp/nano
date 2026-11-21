@@ -150,3 +150,9 @@ the measure of what the host core took.
   where "which code runs" changes, as `outline.apply` is for pages.
 - **`opts.load(modules, base, app)`**: the host's loader also receives the app document, so a trust prompt can show each
   foreign pod's isolation (ADR-0034).
+- **`host.deploy(implementation, runtime)`**: the system step of a pick (free name, the implementation's starting-config
+  default, host access in a `rules` runtime, one at a time, auto-connect), its pod's name, no slot; `host.pick` is
+  `deploy` then `addSlot`. The workspace's wires editor (the rack, also on `#/desk`) and its dock's picks deploy with it.
+- **`connect(deployment, registry, pods)`**: pure, exported by the host core; several pods, a dependency already met by
+  an existing call edge skipped, `{ deployment, notes }`. It replaces the workspace's `auto-connect.ts` (its import,
+  Change implementation and old-page migration use it); `deploy` uses it.
