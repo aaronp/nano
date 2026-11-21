@@ -17,16 +17,19 @@ export function showStatus(doc: Document, text: string) {
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(set); else setTimeout(set, 16)
 }
 
+const toasts = (notes: readonly string[]) => { for (const n of notes) void toast(n, { variant: n.startsWith('connected') ? 'good' : 'warn' }) }
+
 /** The host core's `connect`, each note a toast: what was connected, and (a warning) what could not be. */
 export function connected(d: AppDeployment, registry: Registry, pods: readonly string[]): AppDeployment {
   const r = connect(d, registry, pods)
-  for (const n of r.notes) void toast(n, { variant: n.startsWith('connected') ? 'good' : 'warn' })
+  toasts(r.notes)
   return r.deployment
 }
 
-/** The host core's `deploy`, a refusal a toast, and what its pod still needs (`connect`'s notes once connected) a warning. */
+/** The host core's `deploy`, shown: a refusal a toast, and each of its notes (what was connected; a warning, what could not be). */
 export async function deployed(h: Host, implementation: string, runtime: string): ReturnType<Host['deploy']> {
   const r = await h.deploy(implementation, runtime)
-  if (!r.ok) void toast(r.fail.reason, { variant: 'bad' }); else connected(h.app.deployment(), h.registry, [r.value])
+  toasts(r.ok ? r.value.notes : [])
+  if (!r.ok) void toast(r.fail.reason, { variant: 'bad' })
   return r
 }

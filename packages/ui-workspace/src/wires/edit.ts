@@ -51,7 +51,7 @@ export function removeComponent(el: Wires, instance: string) {
 }
 /** Adds a lazy pod of `kind` (an implementation) to runtime main, under a fresh name; returns the name, or null if refused. */
 export async function create(el: Wires, kind: string) {
-  const r = el.host && await el.host.deploy(kind, 'main'), name = r && r.ok ? r.value : null
+  const r = el.host && await el.host.deploy(kind, 'main'), name = r && r.ok ? r.value.name : null
   if (!name) el.fail('Could not add a ' + kind)
   return name
 }

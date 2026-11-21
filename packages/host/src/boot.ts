@@ -24,8 +24,9 @@ export type Host = {
   outline: ReturnType<typeof live>
   /** A lazy pod of `implementation` deployed into `runtime` (the host let in, its dependencies connected), then its `pod` slot on `page`: the slot's id. */
   pick(page: string, implementation: string, runtime: string): Promise<NanoResult<string>>
-  /** A lazy pod of `implementation` deployed into `runtime` as a pick deploys it (pick.ts), and no slot: its name. */
-  deploy(implementation: string, runtime: string): Promise<NanoResult<string>>
+  /** A lazy pod of `implementation` deployed into `runtime` as a pick deploys it (pick.ts), and no slot: its name and
+   * `connect`'s notes ("connected a → b (I)", and what it still needs). */
+  deploy(implementation: string, runtime: string): Promise<NanoResult<{ name: string; notes: string[] }>>
   /** `next`'s modules the registry lacks loaded (the host's loader, as at boot), then `next` applied to `app`; its
    * `modules` and `frames` (each kept when absent) are the document's from then on. A failed load applies and records nothing. */
   apply(next: AppDeployment): Promise<NanoResult<void>>

@@ -60,6 +60,18 @@ test('a picked map starts from its config schema\'s default (the host core\'s de
   expect(h.data().pods['map1']).toEqual({ implementation: 'nano.ui/map', eager: false, config: { code: 'return x' } })
 })
 
+test('a pick shows what its pod was connected to: "connected <pod> → <dep> (<interface>)", from host.deploy\'s notes', async () => {
+  const h = await host()
+  await place(h, 'main', ['clk'], 'nano.ui/clock')
+  const { go, written } = mount(h, {})
+  go('workspace')
+  pick.choice = { widget: 'nano-ui-debounce' }
+  document.querySelector<HTMLElement>('.dock-empty')!.click()
+  await until(() => Object.keys(written('workspace').slots).length === 1)
+  const toaster = document.querySelector('nano-toaster') as HTMLElement & { toasts: { title: string }[] }
+  await until(() => !!toaster?.toasts.some(t => t.title === 'connected debounce1 → clk (nano.ui.Clock)'))
+})
+
 test('a pick into a runtime that has since gone places nothing', async () => {
   const h = await host()
   const { go, written, input } = mount(h, {})
@@ -74,14 +86,14 @@ test('a pick into a runtime that has since gone places nothing', async () => {
 test('host.deploy in a rules runtime adds the rule letting the host reach the pod, so it can be started', async () => {
   const h = await host()
   await place(h, 'locked', ['other'], 'nano.ui/input', { kind: 'rules', rules: [{ deny: '*' }] })
-  expect(await h.deploy('nano.ui/input', 'locked')).toEqual({ ok: true, value: 'input1' })
+  expect(await h.deploy('nano.ui/input', 'locked')).toEqual({ ok: true, value: { name: 'input1', notes: [] } })
   expect(h.data().runtimes['locked']!.policy).toEqual({ kind: 'rules', rules: [{ allow: ['call', 'subscribe', 'start'], from: 'host', outside: true, toPod: 'input1' }, { deny: '*' }] })
   expect((await h.app.runtime('locked').getOrCreate('input1')).ok).toBe(true)
 })
 
 test('concurrent adds of one implementation take distinct names', async () => {
   const h = await host()
-  const names = (await Promise.all([h.deploy('nano.ui/input', 'main'), h.deploy('nano.ui/input', 'main')])).map(r => r.ok && r.value)
+  const names = (await Promise.all([h.deploy('nano.ui/input', 'main'), h.deploy('nano.ui/input', 'main')])).map(r => r.ok && r.value.name)
   expect(new Set(names).size).toBe(2)
   expect(names.every(n => n && n in h.data().pods)).toBe(true)
 })

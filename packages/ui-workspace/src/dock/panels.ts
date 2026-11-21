@@ -62,7 +62,7 @@ export function mountPanel(container: ComponentContainer, state: JsonValue | und
     let stop = () => {}, gone = false, pod = name, at = slot ?? name
     const show = (s: string) => { at = s; if (!gone && pods) stop = podPanel(container.element, s, h, pods) }
     if (at) show(at)
-    else void h.deploy(impl, 'main').then((r) => { const p = r.ok ? r.value : undefined, s = p && pods?.add(h.data(), 'main', p); pod = p; if (s) { show(s); if (!gone) container.emit('stateChanged') } })
+    else void h.deploy(impl, 'main').then((r) => { const p = r.ok ? r.value.name : undefined, s = p && pods?.add(h.data(), 'main', p); pod = p; if (s) { show(s); if (!gone) container.emit('stateChanged') } })
     container.stateRequestEvent = () => ({ widget: id, ...(pod && { name: pod }), ...(at && { slot: at }) })
     container.on('destroy', () => { gone = true; stop() })
     return send('dock:opened', { widget: id })

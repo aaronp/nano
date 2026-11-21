@@ -93,9 +93,10 @@ test('a pick whose deploy fails, or of an unknown implementation or page, adds n
   expect(s.getItem(KEY)).toBe(before)
 })
 
-test('deploy: a lazy pod as a pick makes it, connected, with no slot; its name', async () => {
+test('deploy: a lazy pod as a pick makes it, connected, with no slot; its name and connect\'s notes', async () => {
   const { h, s } = await boot()
-  expect(await h.deploy('acme/user', 'main')).toEqual(success('user1'))
+  expect(await h.deploy('acme/user', 'main')).toEqual(success({ name: 'user1', notes: ['connected user1 → c1 (acme.Counter)'] }))
+  expect(await h.deploy('acme/counter', 'main')).toEqual(success({ name: 'counter1', notes: [] }))
   expect(h.app.deployment().runtimes['main']!.subscriptions).toEqual([{ kind: 'call', from: 'user1', to: 'c1' }])
   expect(Object.keys(h.outline.document().doc.pages['home']!.slots)).toEqual(['c1'])
   expect(saved(s).app.pods.user1).toEqual({ implementation: 'acme/user', eager: false })
