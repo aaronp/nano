@@ -18,7 +18,7 @@ document.body.innerHTML = `<app-shell><span slot="title">Nano</span>
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const registry = Registry.create(), app = must(await Application.create(must(AppDeployment.assemble({ pods: {}, runtimes: {} }, registry))))
-const notes = { n: { kind: 'view' as const, view: 'notes' } }
+const notes = { n: { kind: 'tool' as const, tool: 'notes' } }
 const pages: Record<string, Page> = {
   workspace: { title: 'Main', slots: {}, children: ['kid'] }, kid: { title: 'Kid', slots: {} },
   lab: { title: 'Lab', slots: notes, children: ['a'] }, a: { title: 'A', slots: {}, children: ['b'] }, b: { title: 'B', slots: {} },

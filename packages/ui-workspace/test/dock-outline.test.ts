@@ -78,10 +78,10 @@ test('a select slot matching pods in two runtimes shows the first (by runtime, t
 test('a select slot stays a select when the dock rewrites the slots (a dock:layout)', async () => {
   const h = await host()
   await place(h, 'a', ['ina'])
-  const { go, dock, panels, written } = mount(h, { workspace: page('Main', { any: select, notes: { kind: 'view', view: 'notes' } }) })
+  const { go, dock, panels, written } = mount(h, { workspace: page('Main', { any: select, notes: { kind: 'tool', tool: 'notes' } }) })
   go('workspace')
   await until(() => panels('workspace').length === 2)
   dock('workspace').setTemplate('two-cols')   // a dock:layout
   dock('workspace').setTemplate('dock')
-  expect(written('workspace').slots).toEqual({ any: { kind: 'select', select: { implements: 'nano.ui.Input' } }, notes: { kind: 'view', view: 'notes' } })
+  expect(written('workspace').slots).toEqual({ any: { kind: 'select', select: { implements: 'nano.ui.Input' } }, notes: { kind: 'tool', tool: 'notes' } })
 })

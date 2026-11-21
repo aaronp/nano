@@ -1,13 +1,13 @@
 // The workspace's rules for an import's pages (withImported): free ids added (incoming roots appended to the roots),
 // identical pages skipped, clashing ids suffixed (in the incoming lists too), an incoming Main filling a Main that shows
-// only views (keeping Main's children), and an incoming child of a page kept as identical appended to its children.
+// only tools (keeping Main's children), and an incoming child of a page kept as identical appended to its children.
 import { expect, test } from 'bun:test'
 import { Outline } from '@pritzlaff/nano-outline'
 import { withImported } from '../src/import-pages.ts'
 
 const doc = (w: unknown): Outline => { const r = Outline.parse(w); if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const written = (v: unknown) => JSON.parse(JSON.stringify(v))
-const view = { kind: 'view', view: 'nano-explorer' }, pod = { kind: 'pod', pod: 'example.clock/clock@main/clock1' }
+const view = { kind: 'tool', tool: 'systems' }, pod = { kind: 'pod', pod: 'example.clock/clock@main/clock1' }
 const main = { slots: { x: view }, title: 'Workspace' }, trading = { slots: {}, title: 'Trading' }
 const ids = (d: Outline) => Object.entries(d.pages).map(([id, p]) => [id, p.title])
 const lists = (o: Outline): Record<string, string[]> => ({ roots: o.roots, ...Object.fromEntries(Object.entries(o.pages).flatMap(([id, q]) => q.children?.length ? [[id, q.children]] : [])) })
@@ -26,7 +26,7 @@ test('a taken id with other content is added as -2, -3…, in the file\'s tree o
   expect(lists(out)).toEqual({ roots: ['workspace', 'trading', 't2', 'trading-2'], 'trading-2': ['workspace-2'] })
 })
 
-test('the incoming Main fills a Main that shows only views (after New): its slots, layout and meta; Main keeps its children, the file Main\'s appended', () => {
+test('the incoming Main fills a Main that shows only tools (after New): its slots, layout and meta; Main keeps its children, the file Main\'s appended', () => {
   const saved = { slots: { c: pod }, layout: { workspace: { root: 2 } }, title: 'Main', children: ['fresh'] }
   const out = withImported(doc({ roots: ['workspace'], pages: { workspace: { ...main, layout: { workspace: { root: 1 } }, children: ['two'] }, two: { slots: {}, title: 'Two' } } }),
     doc({ roots: ['workspace'], pages: { workspace: saved, fresh: { slots: {}, title: 'Fresh' } } }))
@@ -53,7 +53,7 @@ test('an incoming page `ring` is just a page: added as ring, the rest of the imp
   expect(out.roots).toEqual(['workspace', 'ring', 'two'])
 })
 
-test('a plain nano.json\'s Main filling Main keeps Main\'s title, icon, view slots, children, layout (the file has none) and other clients\' keys', async () => {
+test('a plain nano.json\'s Main filling Main keeps Main\'s title, icon, tool slots, children, layout (the file has none) and other clients\' keys', async () => {
   const { importing } = await import('../src/import-pages.ts')
   const app = { listen: () => () => {}, deployment: () => ({ pods: {}, runtimes: {} }) } as never
   const outline = Outline.create(app, {} as never, doc({ roots: ['workspace'], pages: { workspace: { slots: { x: view }, children: ['kid'], layout: { workspace: { root: 1 }, react: { columns: 3 } }, title: 'Mine', meta: { workspace: { icon: 'star' }, react: { x: 1 } } }, kid: { slots: {} } } }))

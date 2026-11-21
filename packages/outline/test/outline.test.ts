@@ -5,7 +5,7 @@ import {
   Application, AppDeployment, Coord, Implementation, Interface, Op, Pod, Provider, Registry, Schema, provide, success,
   type NanoResult,
 } from '@pritzlaff/nano-core'
-import { Outline } from '../src/index.ts'
+import { Outline, resolve } from '../src/index.ts'
 
 const Num = Schema.define(Type.Integer(), 'Num')
 const Counter = Interface.define('acme.Counter', { inc: Op.action(Num, Num) })
@@ -69,10 +69,10 @@ describe('resolve', () => {
     const app = await live()
     const p = Outline.create(app, registry, page({
       a: { kind: 'pod', pod: at('r', 'a') }, wrongRuntime: { kind: 'pod', pod: at('s', 'a') },
-      wrongImpl: { kind: 'pod', pod: at('r', 'a', acme.implementationId('broken')) }, v: { kind: 'view', view: 'nano-systems' },
+      wrongImpl: { kind: 'pod', pod: at('r', 'a', acme.implementationId('broken')) }, v: { kind: 'tool', tool: 'systems' },
     }))
     expect(strs(p.resolve('home'))).toEqual({ a: { kind: 'pod', pods: ['acme/counter@r/a'] }, wrongRuntime: { kind: 'missing' },
-      wrongImpl: { kind: 'missing' }, v: { kind: 'view', view: 'nano-systems' } })
+      wrongImpl: { kind: 'missing' }, v: { kind: 'tool', tool: 'systems' } })
     ok(await app.apply({ ...base, pods: { b: base.pods.b!, x: base.pods.x! }, runtimes: { ...base.runtimes, r: { pods: ['x'], subscriptions: [] } } }))
     expect(p.resolve('home').a).toEqual({ kind: 'missing' })
     expect(p.resolve('nowhere')).toEqual({})
@@ -92,13 +92,13 @@ describe('open', () => {
   test('starts a lazy pod once, reuses it after, and gives the Fail of one that cannot start', async () => {
     const app = await live()
     const p = Outline.create(app, registry, page({ a: { kind: 'pod', pod: at('r', 'a') }, x: { kind: 'pod', pod: at('r', 'x', acme.implementationId('broken')) },
-      gone: { kind: 'pod', pod: at('r', 'nobody') }, v: { kind: 'view', view: 'nano-systems' } }))
+      gone: { kind: 'pod', pod: at('r', 'nobody') }, v: { kind: 'tool', tool: 'systems' } }))
     builds = 0
     const first = await p.open('home')
     expect(strs(first.a)).toEqual({ pod: 'acme/counter@r/a', started: true })
     expect(first.x).toMatchObject({ fail: { reason: expect.stringContaining('cannot build') } })
     expect(first.gone).toEqual({ kind: 'missing' })
-    expect(first.v).toEqual({ kind: 'view', view: 'nano-systems' })
+    expect(first.v).toEqual({ kind: 'tool', tool: 'systems' })
     expect(app.runtime('s').status('b')).toEqual(success('not started'))
     expect(strs((await p.open('home')).a)).toEqual({ pod: 'acme/counter@r/a', started: false })
     expect(builds).toBe(1)
@@ -112,4 +112,16 @@ test('the Application applied: the pages whose resolution changed are reported, 
   p.listen(c => heard.push(c))
   ok(await app.apply({ ...base, pods: { b: base.pods.b!, x: base.pods.x! }, runtimes: { ...base.runtimes, r: { pods: ['x'], subscriptions: [] } } }))
   expect(heard).toEqual([{ added: [], removed: [], changed: [], moved: [], resolved: ['ra'] }])
+})
+
+test('the pure resolve equals the instance\'s: pod, select (zero, one, several across runtimes), missing and tool', async () => {
+  const app = await live()
+  const doc = page({ a: { kind: 'pod', pod: at('r', 'a') }, gone: { kind: 'pod', pod: at('r', 'nobody') }, t: { kind: 'tool', tool: 'systems' },
+    none: { kind: 'select', select: { tags: ['nope'] } }, one: { kind: 'select', select: { implementation: impl, runtime: Coord.runtime('s') } },
+    many: { kind: 'select', select: { implements: acme.interfaceId('Counter') } } })
+  const p = Outline.create(app, registry, doc), pure = resolve(doc, 'home', app.deployment(), registry)
+  expect(strs(pure)).toEqual(strs(p.resolve('home')))
+  expect(strs(pure)).toEqual({ a: { kind: 'pod', pods: ['acme/counter@r/a'] }, gone: { kind: 'missing' }, t: { kind: 'tool', tool: 'systems' },
+    none: { kind: 'missing' }, one: { kind: 'pod', pods: ['acme/counter@s/b'] }, many: { kind: 'pod', pods: ['acme/counter@r/a', 'acme/broken@r/x', 'acme/counter@s/b'] } })
+  expect(resolve(doc, 'nowhere', app.deployment(), registry)).toEqual({})
 })

@@ -23,7 +23,7 @@ test('an old stored document migrates once: pages into the Outline (pod slots by
   if (!host || !outline) throw new Error('the host did not start')
   const migrated = { roots: ['workspace', 'trading'], pages: {
     workspace: { title: 'Workspace', slots: { a: { kind: 'pod', pod: 'nano.ui/log@main/log1' } } },
-    trading: { title: 'Trading', slots: { n: { kind: 'view', view: 'nano-explorer' } }, meta: { workspace: { icon: 'chart' } } },
+    trading: { title: 'Trading', slots: { n: { kind: 'tool', tool: 'systems' } }, meta: { workspace: { icon: 'chart' } } },
   } }
   expect(strs(outline.document().doc)).toEqual(migrated)
   expect(host.data().layout).toEqual({ ring: { show: [] } })   // other keys kept, no pages

@@ -6,6 +6,7 @@
  *   const doc: Outline = { roots: ['home'], pages: { home: { slots: { a: { kind: 'pod', pod: Coord.pod(impl, Coord.runtime('r'), 'a') } } } } }
  *   parse(JSON.parse(JSON.stringify(doc)))           // success(doc), coordinates again
  *   parse({ pages: { a, b } })                        // flat (the Platform's shape): every page a root, in document order
+ *   parse({ pages: { a: { slots: { x: { kind: 'view', view: 'nano-explorer' } } } } })   // legacy: x read as { kind: 'tool', tool: 'nano-explorer' }
  *   readSelector({ implements: 'acme.Counter' })      // { implements: InterfaceCoord }
  */
 import { Type, type Static } from 'typebox'
@@ -13,7 +14,7 @@ import { Value } from 'typebox/value'
 import { Coord, failure, success, type NanoResult, type PodCoord, type SelectorData } from '@pritzlaff/nano-core'
 import { fault } from './tree.ts'
 
-export type Slot = { kind: 'pod'; pod: PodCoord } | { kind: 'select'; select: SelectorData } | { kind: 'view'; view: string }
+export type Slot = { kind: 'pod'; pod: PodCoord } | { kind: 'select'; select: SelectorData } | { kind: 'tool'; tool: string }
 /** `children` are the page's place in the tree; `layout` and `meta` are the client's: the Outline keeps them and reads neither. */
 export type Page = { title?: string; children?: string[]; slots: Record<string, Slot>; layout?: unknown; meta?: unknown }
 export type Outline = { roots: string[]; pages: Record<string, Page> }
@@ -27,6 +28,8 @@ const WrittenSelector = Type.Object({
 const WrittenSlot = Type.Union([
   Type.Object({ kind: Type.Literal('pod'), pod: coord }, strict),
   Type.Object({ kind: Type.Literal('select'), select: WrittenSelector }, strict),
+  Type.Object({ kind: Type.Literal('tool'), tool: Type.String({ minLength: 1 }) }, strict),
+  // legacy (until the removal date, spec §6): read as a tool slot of the same id, never written
   Type.Object({ kind: Type.Literal('view'), view: Type.String({ minLength: 1 }) }, strict),
 ])
 const ids = Type.Array(Type.String())
@@ -46,7 +49,7 @@ export function readSelector({ implements: i, tags, implementation: m, provider:
 }
 
 const slot = (s: Static<typeof WrittenSlot>): Slot =>
-  s.kind === 'pod' ? { kind: 'pod', pod: Coord.parse('pod', s.pod) } : s.kind === 'select' ? { kind: 'select', select: readSelector(s.select) } : { kind: 'view', view: s.view }
+  s.kind === 'pod' ? { kind: 'pod', pod: Coord.parse('pod', s.pod) } : s.kind === 'select' ? { kind: 'select', select: readSelector(s.select) } : { kind: 'tool', tool: s.kind === 'tool' ? s.tool : s.view }
 
 /** `/pages/<page>/slots/<slot>/…` as "page p, slot s". */
 const where = (path: string) => { const [, , p, , s] = path.split('/'); return [p && `page ${p}`, s && `slot ${s}`].filter(Boolean).join(', ') || 'the document' }

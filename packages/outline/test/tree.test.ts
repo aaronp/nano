@@ -67,12 +67,12 @@ test('the report names pages moved: reorder, reparent, roots only; a parent whos
 
 test('a moved page keeps its id, slots, resolution and open', async () => {
   const doc = tree(['a', 'b'], { a: ['v'] })
-  doc.pages.v!.slots = { s: { kind: 'view', view: 'nano-systems' } }
+  doc.pages.v!.slots = { s: { kind: 'tool', tool: 'systems' } }
   const p = Outline.create(await live(), registry, doc)
   const next = tree(['a', 'b'], { b: ['v'] })
   ok(p.apply({ ...next, pages: { ...next.pages, v: doc.pages.v! } }))
-  expect(p.resolve('v')).toEqual({ s: { kind: 'view', view: 'nano-systems' } })
-  expect(await p.open('v')).toEqual({ s: { kind: 'view', view: 'nano-systems' } })
+  expect(p.resolve('v')).toEqual({ s: { kind: 'tool', tool: 'systems' } })
+  expect(await p.open('v')).toEqual({ s: { kind: 'tool', tool: 'systems' } })
 })
 
 test('HostOutline declares a changed event beside document and apply', () => {

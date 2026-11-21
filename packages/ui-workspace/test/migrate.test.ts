@@ -44,7 +44,7 @@ test('withOldDocks gives each page its old dock\'s state (layout, template, wind
   ])
 })
 
-test('toOutline: pod slots by coordinate (the deployment\'s implementation), view slots, title, icon and restore point in meta.workspace, each page a root in order, the dock state its layout.workspace, the title its title', () => {
+test('toOutline: pod slots by coordinate (the deployment\'s implementation), tool slots (a widget id read as its tool), title, icon and restore point in meta.workspace, each page a root in order, the dock state its layout.workspace, the title its title', () => {
   const saved = { root: { type: 'column' } }, engine = { root: { type: 'row' }, 'window-style': 'clear', saved, 'saved.template': null }
   const out = toOutline([
     { id: 'workspace', title: 'Main', icon: 'home', slots: [{ id: 'clock1', runtime: 'main', pod: 'clock1' }, { id: 'x', view: 'nano-explorer' }, { id: 'gone', runtime: 'main', pod: 'gone' }], workspace: engine, geometry: {} },
@@ -52,7 +52,7 @@ test('toOutline: pod slots by coordinate (the deployment\'s implementation), vie
   ], d)
   expect(String((out.pages['workspace']!.slots['clock1'] as { pod: unknown }).pod)).toBe(String(Coord.pod(Coord.parse('implementation', clock), Coord.runtime('main'), 'clock1')))
   expect(strs(out)).toEqual({ roots: ['workspace', 'two'], pages: {
-    workspace: { title: 'Main', slots: { clock1: { kind: 'pod', pod: 'example.clock/clock@main/clock1' }, x: { kind: 'view', view: 'nano-explorer' } }, layout: { workspace: { root: { type: 'row' }, 'window-style': 'clear' } }, meta: { workspace: { icon: 'home', saved, 'saved.template': null } } },
+    workspace: { title: 'Main', slots: { clock1: { kind: 'pod', pod: 'example.clock/clock@main/clock1' }, x: { kind: 'tool', tool: 'systems' } }, layout: { workspace: { root: { type: 'row' }, 'window-style': 'clear' } }, meta: { workspace: { icon: 'home', saved, 'saved.template': null } } },
     two: { title: 'Two', slots: {} },
   } })
 })

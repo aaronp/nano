@@ -93,7 +93,7 @@ test('a page changed elsewhere (a slot added) shows it in the dock and opens it;
   const { go, put, written, panels } = mount(h, { workspace: page('Main', { input1: pod('input1') }) })
   go('workspace')
   await until(() => panels('workspace').length === 1)
-  put('workspace', page('Main', { input1: pod('input1'), input2: pod('input2'), notes: { kind: 'view', view: 'notes' } }))
+  put('workspace', page('Main', { input1: pod('input1'), input2: pod('input2'), notes: { kind: 'tool', tool: 'notes' } }))
   await until(() => panels('workspace').length === 3)
   await until(() => running(h, 'input2'))
   put('workspace', page('Main', { input2: pod('input2') }))
@@ -157,7 +157,7 @@ test('Main\'s starting panel closed without saving stays closed after a reload',
   const first = mount(h, {}, 'notes')
   first.go('workspace')
   await until(() => first.panels('workspace').length === 1)
-  expect(first.written('workspace').slots).toEqual({ notes: { kind: 'view', view: 'notes' } })
+  expect(first.written('workspace').slots).toEqual({ notes: { kind: 'tool', tool: 'notes' } })
   first.dock('workspace').querySelector<HTMLElement>('.lm_close_tab')!.click()
   await until(() => Object.keys(first.written('workspace').slots).length === 0)
   const again = reload(h, first, 'notes')
@@ -180,14 +180,14 @@ test('a slot added to a visited page that is hidden opens its pod only when the 
   await until(() => running(h, 'input2') && panels('two').length === 2)
 })
 
-test('a view slot this dock has no widget for is kept when the dock rewrites the slots', async () => {
+test('a tool slot this dock has no widget for is kept when the dock rewrites the slots', async () => {
   const h = await host()
-  const other = { kind: 'view', view: 'other-front-end-view' } as const
-  const { go, written, dock } = mount(h, { workspace: page('Main', { elsewhere: other, notes: { kind: 'view', view: 'notes' } }) })
+  const other = { kind: 'tool', tool: 'other-front-end-view' } as const
+  const { go, written, dock } = mount(h, { workspace: page('Main', { elsewhere: other, notes: { kind: 'tool', tool: 'notes' } }) })
   go('workspace')
   await until(() => dock('workspace').querySelectorAll('.dock-panel').length === 1)
   dock('workspace').setTemplate('two-cols')   // a dock:layout
-  expect(written('workspace').slots).toEqual({ elsewhere: other, notes: { kind: 'view', view: 'notes' } })
+  expect(written('workspace').slots).toEqual({ elsewhere: other, notes: { kind: 'tool', tool: 'notes' } })
 })
 
 test('a pod that failed to open is opened on a later apply that lets the host in', async () => {

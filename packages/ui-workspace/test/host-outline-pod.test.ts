@@ -21,13 +21,13 @@ async function podApp(answer: () => Promise<boolean>) {
   registry.add(ns.provider([hostOutline(() => outline, t => { asked.push(t); return answer() })]))
   const d: AppDeployment = { pods: { outline: outlinePod }, runtimes: { main: { pods: ['outline'], subscriptions: [] } } }
   const app = must(await Application.create(must(AppDeployment.assemble(d, registry))))
-  outline = Outline.create(app, registry, flat({ workspace: { slots: { x: { kind: 'view', view: 'nano-explorer' } } } }))
+  outline = Outline.create(app, registry, flat({ workspace: { slots: { x: { kind: 'tool', tool: 'systems' } } } }))
   return { asked, app, outline, pod: app.call('main', 'outline') as unknown as PodApi }
 }
 
 test('document is the pages, written, at their version, unasked', async () => {
   const { asked, app, pod } = await podApp(async () => true)
-  expect(must(await pod.document(null))).toEqual({ doc: { roots: ['workspace'], pages: { workspace: { slots: { x: { kind: 'view', view: 'nano-explorer' } } } } }, version: 0 })
+  expect(must(await pod.document(null))).toEqual({ doc: { roots: ['workspace'], pages: { workspace: { slots: { x: { kind: 'tool', tool: 'systems' } } } } }, version: 0 })
   expect(asked).toEqual([])
   await app.close()
 })
@@ -35,11 +35,11 @@ test('document is the pages, written, at their version, unasked', async () => {
 test('apply with a stale base is refused, unasked; with the current base it is asked, a no changes nothing, a yes applies', async () => {
   let yes = false
   const { asked, app, outline, pod } = await podApp(async () => yes)
-  const at = must(await pod.document(null)), next: Written = { pages: { ...at.doc.pages, notes: { slots: { n: { kind: 'view', view: 'notes' } } } } }
+  const at = must(await pod.document(null)), next: Written = { pages: { ...at.doc.pages, notes: { slots: { n: { kind: 'tool', tool: 'notes' } } } } }
   outline.apply(flat({ ...outline.document().doc.pages, other: { slots: {} } }))   // the workspace's own edit, since
   expect(await pod.apply({ next, base: at.version })).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'the pages changed since' } })
   expect(asked).toEqual([])
-  const now = must(await pod.document(null)), again: Written = { pages: { ...now.doc.pages, notes: { slots: { n: { kind: 'view', view: 'notes' } } }, workspace: { slots: {} } } }
+  const now = must(await pod.document(null)), again: Written = { pages: { ...now.doc.pages, notes: { slots: { n: { kind: 'tool', tool: 'notes' } } }, workspace: { slots: {} } } }
   expect(await pod.apply({ next: again, base: now.version })).toMatchObject({ ok: false, fail: { type: 'denied' } })
   expect(asked).toEqual(['Add page notes; page workspace: remove slot x'])
   expect(Object.keys(outline.document().doc.pages)).toEqual(['workspace', 'other'])
@@ -134,5 +134,15 @@ test('the approval\'s moved pages are the Outline\'s reported `moved`: a reorder
   ]) must(await pod.apply({ next, base: outline.document().version }))
   expect(moved.every(m => m.length > 0)).toBe(true)
   expect(asked.map(t => t.split('; ').filter(s => s.startsWith('Move page ')).map(s => s.slice('Move page '.length)))).toEqual(moved)
+  await app.close()
+})
+
+test('a pod applying a legacy view slot gets it back as a tool slot: nothing writes view', async () => {
+  const { app, pod } = await podApp(async () => true)
+  const at = must(await pod.document(null))
+  must(await pod.apply({ next: { pages: { ...at.doc.pages, old: { slots: { v: { kind: 'view', view: 'notes' } } } } }, base: at.version }))
+  const now = must(await pod.document(null))
+  expect(now.doc.pages['old']!.slots).toEqual({ v: { kind: 'tool', tool: 'notes' } })
+  expect(JSON.stringify(now)).not.toContain('view')
   await app.close()
 })

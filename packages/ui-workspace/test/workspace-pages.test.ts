@@ -221,7 +221,7 @@ test('Save as workspace copies the page only (not its children) into "<title> co
 })
 
 test('a new page\'s id avoids every page\'s id, not only mounted routes: another client\'s `inbox` (at /p/inbox) and a page whose route is not mounted stay as they are', () => {
-  const inbox = { title: 'Inbox', slots: { n: { kind: 'view' as const, view: 'notes' } }, meta: { other: 1 } }
+  const inbox = { title: 'Inbox', slots: { n: { kind: 'tool' as const, tool: 'notes' } }, meta: { other: 1 } }
   must(outline.apply(flat({ ...outline.document().doc.pages, inbox })))
   expect(routes()).toContain('/p/inbox')
   const copy = page('home-copy')

@@ -9,7 +9,7 @@
  * - its `pods` are its page's (dock/page-pods.ts), opened when it is built (its page shown), its panels then added for
  *   the slots its layout lacks;
  * - each `dock:layout` rewrites the page's slots from its panels (`slotsOf`: each slot keeps its kind; only panels
- *   opened or closed add or drop one; view slots this dock has no widget for are kept); a pod panel back from Save's
+ *   opened or closed add or drop one; tool slots this dock has no widget for are kept); a pod panel back from Save's
  *   restore point whose slot was dropped since gets its `pod` slot again (its pod placed in one runtime), and opens;
  * - a change made elsewhere, to a page in the Outline's change report: a shown dock gets the slots it lacks added (and
  *   opened); if panels must go or its layout was changed, or its route is hidden, it is built again from its page (now,
@@ -27,6 +27,7 @@ import { panelsInOrder, type PanelState } from '../lib/layout-templates.ts';
 import { applyPages, routeOf } from '../lib/pages.ts';
 import { reconcile, slotOf, slotsOf } from './page-slots.ts';
 import { pagePods } from './page-pods.ts';
+import { widgetOf } from '../lib/tools.ts';
 
 type Instance = ReturnType<typeof Outline.create>;
 type W = Record<string, unknown>;
@@ -81,18 +82,15 @@ export function keepDocks(doc: Document, outline: Instance): void {
   const hidden = (d: WorkspaceDock) => !!d.closest<HTMLElement>('app-route')?.hidden;
   const layoutOf = (id: string) => text(mine(pageOf(id)?.layout));
   const panels = (d: WorkspaceDock) => { const a = d.arrangement(); return a.template ? [...a.template.order.filter((p): p is PanelState => !!p), ...a.template.parked] : panelsInOrder(a.root); };
-  /** Each palette widget of dock `d`: a pod's or a view; undefined, not in its palette. */
-  const kinds = (d: WorkspaceDock) => {
-    const of = new Map([...d.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')].map((t) => [t.dataset['widget']!, t.dataset['implementation'] ? 'pod' as const : 'view' as const]));
-    return (w: string) => (w === 'pod' ? 'pod' as const : of.get(w));
-  };
-  /** Panels for slots `list` of page `id`: a pod's (named by the pod it resolves to now, if any), or a view's. */
+  /** Each palette widget of dock `d`: a pod's or a tool's; undefined, not in its palette. */
+  const kinds = (d: WorkspaceDock) => { const of = new Map([...d.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')].map((t) => [t.dataset['widget']!, t.dataset['implementation'] ? 'pod' as const : 'tool' as const])); return (w: string) => (w === 'pod' ? 'pod' as const : of.get(w)); };
+  /** Panels for slots `list` of page `id`: a pod's (named by the pod it resolves to now, if any), or a tool's widget. */
   const addPanels = (d: WorkspaceDock, id: string, list: [string, Slot][]) => quiet(() => {
     const r = outline.resolve(id);
     for (const [s, v] of list) try {
       const to = r[s];
-      if (v.kind === 'view') d.addWidget(v.view, undefined, s); else d.addWidget('pod', to?.kind === 'pod' ? to.pods[0]!.pod : undefined, s);
-    } catch { /* a view this dock does not have */ }
+      if (v.kind === 'tool') d.addWidget(widgetOf(v.tool), undefined, s); else d.addWidget('pod', to?.kind === 'pod' ? to.pods[0]!.pod : undefined, s);
+    } catch { /* a tool this dock does not have */ }
   });
   /** Built again from its page: now if its route shows, else on its next visit. */
   const rebuild = (d: WorkspaceDock) => {
@@ -137,7 +135,7 @@ export function keepDocks(doc: Document, outline: Instance): void {
       if (c.resolved.includes(id)) { if (hidden(d)) rebuild(d); else d.pods?.open(); }
       if (!c.added.includes(id) && !c.changed.includes(id)) continue;
       const was = d.arrangement(), { engine, add } = reconcile(was, pageOf(id)!.slots), kind = kinds(d);
-      const same = text(engine) === text(was), missing = add.filter(([, s]) => s.kind !== 'view' || kind(s.view));   // a view it has no widget for stays unshown
+      const same = text(engine) === text(was), missing = add.filter(([, s]) => s.kind !== 'tool' || kind(widgetOf(s.tool)));   // a tool it has no widget for stays unshown
       if (!moved && same && !missing.length) continue;
       if (!moved && same && !hidden(d)) { addPanels(d, id, missing); d.pods?.open(); }
       else rebuild(d);

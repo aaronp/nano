@@ -13,7 +13,7 @@ const memory = () => {
     get length() { return m.size }, key: (i: number) => [...m.keys()][i] ?? null } as unknown as Storage }
 }
 const doc: AppDeployment = { pods: {}, runtimes: { r: { pods: [], subscriptions: [] } } }
-const pages: Outline = flat({ workspace: { slots: { x: { kind: 'view', view: 'nano-explorer' } }, meta: { title: 'Main', order: 0 } } })
+const pages: Outline = flat({ workspace: { slots: { x: { kind: 'tool', tool: 'systems' } }, meta: { title: 'Main', order: 0 } } })
 
 test('save then load round-trips the document and its pages, each under its key; nothing stored loads as null', () => {
   const { m, storage } = memory(), p = persisted(storage, 'k', 'p')

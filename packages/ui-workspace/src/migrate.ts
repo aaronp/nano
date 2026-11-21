@@ -13,6 +13,7 @@ import { Coord, failure, success, type AppDeployment, type NanoResult } from '@p
 import { Outline, type Page, type Slot } from '@pritzlaff/nano-outline'
 import { panelsInOrder, type PanelState, type TemplateState } from './lib/layout-templates.ts'
 import { MAIN, metaOf, withMeta } from './lib/pages.ts'
+import { toolOf, tooled } from './lib/tools.ts'
 
 type OldSlot = { id: string; runtime: string; pod: string } | { id: string; view: string }
 export type Legacy = { id: string; title: string; icon?: string; slots: OldSlot[]; workspace?: unknown; [k: string]: unknown }
@@ -23,8 +24,7 @@ const ENGINE = ['root', 'openPopouts', 'dimensions', 'settings', 'header', 'reso
 // The keys before pages were deployment data: the saved pages' list and Main's title and icon (saved-workspaces), and
 // Main's dock (index.html's `storage-key`), each saved page's dock under `<dock>.saved.<path>`, each with `.template`.
 const LIST = 'workspace-starter.saved-workspaces', DOCK = 'workspace-starter.layout'
-const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-const str = (v: unknown): v is string => typeof v === 'string'
+const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v), str = (v: unknown): v is string => typeof v === 'string'
 const idOk = (id: unknown) => { try { return str(id) && !!Coord.runtime(id) } catch { return false } }
 const slotOk = (s: unknown) => obj(s) && str(s.id) && (str(s.view) || (str(s.runtime) && str(s.pod)))
 const pageOk = (p: unknown): p is Legacy => obj(p) && idOk(p.id) && str(p.title) && Array.isArray(p.slots) && p.slots.every(slotOk) && (p.icon === undefined || str(p.icon))
@@ -62,7 +62,7 @@ export function legacyPages(layout: unknown, d: AppDeployment): Legacy[] {
 export function toOutline(pages: Legacy[], d: AppDeployment): Outline {
   const slot = (s: OldSlot): [string, Slot][] => {
     if (!idOk(s.id)) return []
-    if ('view' in s) return s.view ? [[s.id, { kind: 'view', view: s.view }]] : []
+    if ('view' in s) return s.view ? [[s.id, { kind: 'tool', tool: toolOf(s.view) }]] : []
     const impl = d.pods[s.pod]?.implementation
     try { return impl ? [[s.id, { kind: 'pod', pod: Coord.pod(Coord.parse('implementation', impl), Coord.runtime(s.runtime), s.pod) }]] : [] } catch { return [] }
   }
@@ -94,9 +94,9 @@ const stripped = (d: AppDeployment): AppDeployment => {
 
 /** `p` without the old `meta.workspace.order`. */
 const unordered = (p: Page): Page => { if (!('order' in metaOf(p))) return p; const { order: _, ...w } = metaOf(p); return withMeta(p, w) }
-/** `doc` a tree, once: each page `keyed`, the roots in the old order (Main first, moved there from wherever it is; a page without an order last), the order and empty `children` dropped. */
+/** `doc` a tree, once: each page `keyed` and `tooled` (a widget id read as its tool's), the roots in the old order (Main first, moved there from wherever it is; a page without an order last), the order and empty `children` dropped. */
 export function treed(doc: Outline): Outline {
-  const pages = Object.fromEntries(Object.entries(doc.pages).map(([id, p]) => [id, keyed(p)]))
+  const pages = Object.fromEntries(Object.entries(doc.pages).map(([id, p]) => [id, keyed(tooled(p))]))
   const at = (id: string) => { const o = metaOf(pages[id])['order']; return id === MAIN ? -Infinity : typeof o === 'number' ? o : Infinity }
   const roots = [...(Object.hasOwn(pages, MAIN) ? [MAIN] : []), ...doc.roots.filter(r => r !== MAIN)].sort((a, b) => at(a) - at(b) || 0)
   const kids = (p: Page): Page => { const { children = [], ...rest } = p, c = children.filter(x => x !== MAIN); return c.length ? { ...rest, children: c } : rest }   // no Main, no empty list

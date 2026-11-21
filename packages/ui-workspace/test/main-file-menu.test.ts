@@ -8,7 +8,7 @@ test('a deep link to another page: Save writes the bundle, New empties Main and 
   document.body.innerHTML = html.slice(html.indexOf('>', html.indexOf('<body')) + 1, html.lastIndexOf('<script type="module">'))
   location.hash = '#/two'
   const at = URL.parse('./bundle/nano-ui.js', location.href)!.href, layout = { root: { type: 'row', content: [] }, 'window-style': 'focus' }
-  const pages = { roots: ['workspace', 'two'], pages: { workspace: { title: 'Main', slots: { notes: { kind: 'view', view: 'notes' } }, layout: { workspace: layout, react: { columns: 3 } }, meta: { workspace: { icon: 'home' } } }, two: { title: 'Two', slots: {} } } }
+  const pages = { roots: ['workspace', 'two'], pages: { workspace: { title: 'Main', slots: { notes: { kind: 'tool', tool: 'notes' } }, layout: { workspace: layout, react: { columns: 3 } }, meta: { workspace: { icon: 'home' } } }, two: { title: 'Two', slots: {} } } }
   const app = { pods: {}, runtimes: {}, modules: { 'nano.ui': at }, views: {} }
   localStorage.setItem('nano-workspace.document', JSON.stringify(app)); localStorage.setItem('nano-workspace.outline', JSON.stringify(pages))
   // happy-dom fetches no blob: URL (a browser does); the downloads are kept

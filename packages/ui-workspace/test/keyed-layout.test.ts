@@ -37,14 +37,14 @@ test('an old stored document moves to the new shape at boot, nothing lost; the w
   const engine = { root, settings: {}, header: {}, dimensions: {}, openPopouts: [], resolved: true }
   const old = { pages: {
     workspace: { slots: {}, meta: { title: 'Home', icon: 'home', order: 0 } },
-    lab: { slots: { notes: { kind: 'view', view: 'notes' } }, layout: { ...engine, template, 'window-style': 'glass' },
+    lab: { slots: { notes: { kind: 'tool', tool: 'notes' } }, layout: { ...engine, template, 'window-style': 'glass' },
       meta: { title: 'Lab', icon: 'star', order: 2, saved, 'saved.template': savedTemplate } },
     two: { slots: {}, meta: { title: 'Two', order: 1 } },
   } }
   const booted = must(await bootPages(h, localStorage, null, old))
   expect(JSON.parse(JSON.stringify(booted))).toEqual({ roots: ['workspace', 'two', 'lab'], pages: {   // the old order the roots', dropped
     workspace: { title: 'Home', slots: {}, meta: { workspace: { icon: 'home' } } },
-    lab: { title: 'Lab', slots: { notes: { kind: 'view', view: 'notes' } }, layout: { workspace: { ...engine, template, 'window-style': 'glass' } },
+    lab: { title: 'Lab', slots: { notes: { kind: 'tool', tool: 'notes' } }, layout: { workspace: { ...engine, template, 'window-style': 'glass' } },
       meta: { workspace: { icon: 'star', saved, 'saved.template': savedTemplate } } },
     two: { title: 'Two', slots: {} },
   } })
@@ -65,7 +65,7 @@ test('an old stored document moves to the new shape at boot, nothing lost; the w
 test('a page `ring` made by another client opens at /p/ring; the Ring page still works (Review Focus 3)', async () => {
   const h = await host()
   document.body.innerHTML = '<app-route path="/ring" hidden><nano-ring-stub></nano-ring-stub></app-route>'
-  const stored = { pages: { workspace: { slots: {} }, ring: { title: 'Ring', slots: { notes: { kind: 'view', view: 'notes' } } } } }
+  const stored = { pages: { workspace: { slots: {} }, ring: { title: 'Ring', slots: { notes: { kind: 'tool', tool: 'notes' } } } } }
   const { pages } = must(await bootPages(h, localStorage, null, stored))
   const { go } = mount(h, pages)
   const routes = [...document.querySelectorAll('app-route')].map(r => r.getAttribute('path'))

@@ -13,7 +13,7 @@ test('a reload restores the pages and pods as saved, nothing started; an undeplo
   const at = URL.parse('./bundle/nano-ui.js', location.href)!.href
   const app: AppDeployment = { pods: { log1: Pod.lazy(log), log2: Pod.lazy(log) }, runtimes: { main: { pods: ['log1'], subscriptions: [] }, side: { pods: ['log2'], subscriptions: [] } }, modules: { 'nano.ui': at }, views: {}, layout: { ring: { show: [] } } }
   const pages = { pages: {
-    workspace: { title: 'Main', slots: { a: { kind: 'pod', pod: 'nano.ui/log@main/log1' }, x: { kind: 'view', view: 'nano-explorer' } }, layout: { workspace: { root: { type: 'row' } } }, meta: { workspace: { order: 0, saved: { root: null } } } },
+    workspace: { title: 'Main', slots: { a: { kind: 'pod', pod: 'nano.ui/log@main/log1' }, x: { kind: 'tool', tool: 'systems' } }, layout: { workspace: { root: { type: 'row' } } }, meta: { workspace: { order: 0, saved: { root: null } } } },
     two: { title: 'Two', slots: { b: { kind: 'pod', pod: 'nano.ui/log@side/log2' }, any: { kind: 'select', select: { runtime: 'side' } } }, meta: { workspace: { icon: 'star', order: 1 } } },
   } }
   localStorage.setItem(KEY, JSON.stringify(app)); localStorage.setItem(OLD, JSON.stringify(pages))

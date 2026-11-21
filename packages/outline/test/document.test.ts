@@ -8,7 +8,7 @@ const doc: Outline = { roots: ['home', 'empty'], pages: {
   home: { children: [], slots: {
     a: { kind: 'pod', pod: Coord.pod(acme.implementationId('counter'), Coord.runtime('r'), 'c') },
     b: { kind: 'select', select: { implements: acme.interfaceId('Counter'), tags: ['x'], runtime: Coord.runtime('s') } },
-    c: { kind: 'view', view: 'nano-systems' },
+    c: { kind: 'tool', tool: 'systems' },
   }, layout: { engine: 1 }, meta: { title: 'Home' } },
   empty: { slots: {} },
 } }
@@ -52,4 +52,12 @@ test('a page title is optional, a string, and round-trips', () => {
   expect('title' in r.value.pages.bare!).toBe(false)
   const bad = Outline.parse({ pages: { home: { slots: {}, title: 3 } } })
   expect(bad).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+})
+
+test('a legacy view slot reads as a tool slot of the same id; nothing writes view', () => {
+  const r = Outline.parse({ pages: { home: { slots: { x: { kind: 'view', view: 'nano-explorer' } } } } })
+  if (!r.ok) throw new Error(r.fail.reason)
+  expect(r.value.pages.home!.slots.x).toEqual({ kind: 'tool', tool: 'nano-explorer' })
+  expect(JSON.stringify(r.value)).not.toContain('view')
+  expect(Outline.parse({ pages: { home: { slots: { x: { kind: 'tool', tool: '' } } } } })).toMatchObject({ ok: false })
 })

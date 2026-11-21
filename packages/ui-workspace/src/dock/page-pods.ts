@@ -84,7 +84,7 @@ export function podPanel(el: HTMLElement, slot: string, h: Host, pods: PagePods)
   let shown = ''
   const render = () => {
     const { opened: o, matched } = pods.get(slot)
-    if (!o || ('kind' in o && o.kind === 'view')) return
+    if (!o || ('kind' in o && o.kind === 'tool')) return
     if ('fail' in o) { shown = ''; return el.replaceChildren(note('dock-fail', o.fail.reason)) }
     if ('kind' in o) {
       shown = ''

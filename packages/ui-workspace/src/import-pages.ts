@@ -3,11 +3,11 @@
  * `merge`), in the file's tree order: a free id is added as it is; a taken id with identical content (its `children`
  * aside) skipped, so a repeat is a no-op; a taken id with other content,
  * added under the next free `-2`, `-3`… (renamed in the file's lists too); the incoming Main (`workspace`) fills Main
- * when Main shows only views (after New, say), else it is a page beside it. Places: an added page keeps its incoming
+ * when Main shows only tools (after New, say), else it is a page beside it. Places: an added page keeps its incoming
  * parent; one whose parent was skipped as identical, or is the filled Main, is appended to that page's children (Main
  * keeps its own); incoming roots added are appended to the roots. `importing` wraps the host's
  * `importUrl`: the file's pages (a bundle's, or a nano.json's old layout migrated), edited as the Import dialog chose
- * (`chosen.pages`), are applied with the app; a plain nano.json's Main filling Main keeps Main's title, icon and view
+ * (`chosen.pages`), are applied with the app; a plain nano.json's Main filling Main keeps Main's title, icon and tool
  * slots (and its layout, when the file's Main has none).
  *
  *   applyPages(outline, withImported(outline.document().doc, incoming))   // the workspace's rules checked first
@@ -41,7 +41,7 @@ export function withImported(current: Outline, incoming: Outline): Outline {
   for (const id of walk(incoming)) {
     const p = incoming.pages[id]!, same = current.pages[id]   // compared with what was there, never with a page this import added
     if (same && body(same) === body(p)) continue
-    const fills = id === MAIN && !!same && Object.values(same.slots).every(s => s.kind === 'view')
+    const fills = id === MAIN && !!same && Object.values(same.slots).every(s => s.kind === 'tool')
     let to = id
     for (let n = 2; !fills && pages[to]; n++) to = `${id}-${n}`
     pages[to] = fills ? { ...filling(same!, p), ...(same!.children && { children: same!.children }) } : p
@@ -71,11 +71,11 @@ export const importing = (importUrl: Host['importUrl'], outline: ReturnType<type
     if (!read?.ok) return done
     const was = outline.document().doc, next = withImported(was, chosen?.pages ? chosen.pages(read.value.pages) : read.value.pages)
     const legacy = !(typeof file === 'object' && file !== null && ('outline' in file || 'platform' in file)), main = next.pages[MAIN], prev = was.pages[MAIN]
-    // a plain nano.json's Main has no title of its own ("Workspace"): filling Main, it keeps Main's title, icon, view slots (the explorer) and, without its own, layout
+    // a plain nano.json's Main has no title of its own ("Workspace"): filling Main, it keeps Main's title, icon, tool slots (the explorer) and, without its own, layout
     if (legacy && main && prev && main !== prev) {
-      const views = Object.fromEntries(Object.entries(prev.slots).filter(([, s]) => s.kind === 'view'))
+      const tools = Object.fromEntries(Object.entries(prev.slots).filter(([, s]) => s.kind === 'tool'))
       const engine = (p: Page) => (obj(p.layout) ? p.layout['workspace'] : undefined)
-      next.pages[MAIN] = withMeta({ ...main, ...(prev.title !== undefined && { title: prev.title }), slots: { ...views, ...main.slots }, ...(engine(main) === undefined && engine(prev) !== undefined && { layout: { ...(obj(main.layout) && main.layout), workspace: engine(prev) } }) },
+      next.pages[MAIN] = withMeta({ ...main, ...(prev.title !== undefined && { title: prev.title }), slots: { ...tools, ...main.slots }, ...(engine(main) === undefined && engine(prev) !== undefined && { layout: { ...(obj(main.layout) && main.layout), workspace: engine(prev) } }) },
         { ...metaOf(main), icon: metaOf(prev).icon })
     }
     const r = applyPages(outline, next)

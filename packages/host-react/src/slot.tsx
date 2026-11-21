@@ -1,6 +1,6 @@
 /**
  * One slot as its page last opened it: a pod through its view (the deployment's selector, else its implementation's
- * default tag, else nano-pod-view), a client's `view` slot as "not available here", a `missing` slot as "not found"
+ * default tag, else nano-pod-view), a `tool` slot as "<tool>: not available here", a `missing` slot as "not found"
  * with Remove, a pod that would not start with its reason.
  */
 import { useEffect, useRef } from 'react'
@@ -25,7 +25,7 @@ export function SlotCell({ h, id, opened, remove }: { h: Host; id: string; opene
   const body = !opened ? <p className="note">opening…</p>
     : 'fail' in opened ? <p className="note bad" role="status">{opened.fail.reason}</p>
     : 'pod' in opened ? <PodView h={h} runtime={opened.pod.runtime.id} pod={opened.pod.pod} />
-    : opened.kind === 'view' ? <p className="note">{opened.view}: not available here</p>
+    : opened.kind === 'tool' ? <p className="note">{opened.tool}: not available here</p>
     : <p className="note bad" role="status">{id}: not found <button type="button" onClick={remove} aria-label={`Remove slot ${id}`}>Remove</button></p>
   return (
     <section className="slot" aria-label={id}>

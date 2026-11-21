@@ -4,11 +4,12 @@
  * dock's panels; `reconcile` drops engine entries that have no slot and returns the slots the engine lacks, to be split
  * in. dock/page-docks.ts applies them.
  *
- *   slotsOf([{ widget: 'pod', name: 'log2', slot: 'any' }, { widget: 'notes' }], page.slots, kind)   // { any: <its select>, notes: { kind: 'view', view: 'notes' } }
+ *   slotsOf([{ widget: 'pod', name: 'log2', slot: 'any' }, { widget: 'nano-explorer' }], page.slots, kind)   // { any: <its select>, 'nano-explorer': { kind: 'tool', tool: 'systems' } }
  *   const { engine, add } = reconcile(page.layout, page.slots)
  */
 import type { Slot } from '@pritzlaff/nano-outline';
 import { panelsInOrder, type PanelState, type TemplateState } from '../lib/layout-templates.ts';
+import { toolOf, widgetOf } from '../lib/tools.ts';
 
 type Slots = Record<string, Slot>;
 type Item = { type?: string; content?: Item[]; activeItemIndex?: number; componentState?: unknown };
@@ -20,13 +21,13 @@ const shown = (p: PanelState, slots: Slots) => Object.hasOwn(slots, slotOf(p));
 
 /**
  * The page's `slots` as a dock's panels have them, in the page's order: each slot a panel shows, kept as it is (a
- * `select` stays one); a view slot whose widget the dock lacks (`kind` undefined), kept; a slot no panel shows, dropped
- * (its panel was closed); a newly opened view panel's slot added. A pod panel adds none: a pick applies its slot first.
+ * `select` stays one); a tool slot whose widget (lib/tools.ts) the dock lacks (`kind` undefined), kept; a slot no panel
+ * shows, dropped (its panel was closed); a newly opened tool panel's slot added. A pod panel adds none: a pick applies its slot first.
  */
-export function slotsOf(panels: PanelState[], slots: Slots, kind: (widget: string) => 'pod' | 'view' | undefined): Slots {
+export function slotsOf(panels: PanelState[], slots: Slots, kind: (widget: string) => 'pod' | 'tool' | undefined): Slots {
   const ids = new Set(panels.map(slotOf));
-  const kept = Object.entries(slots).filter(([id, s]) => ids.has(id) || (s.kind === 'view' && !kind(s.view)));
-  const added = panels.filter((p) => !Object.hasOwn(slots, slotOf(p)) && kind(p.widget) === 'view').map((p): [string, Slot] => [slotOf(p), { kind: 'view', view: p.widget }]);
+  const kept = Object.entries(slots).filter(([id, s]) => ids.has(id) || (s.kind === 'tool' && !kind(widgetOf(s.tool))));
+  const added = panels.filter((p) => !Object.hasOwn(slots, slotOf(p)) && kind(p.widget) === 'tool').map((p): [string, Slot] => [slotOf(p), { kind: 'tool', tool: toolOf(p.widget) }]);
   return Object.fromEntries([...kept, ...added]);
 }
 
