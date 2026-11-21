@@ -8,7 +8,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register()
 export const { ClockControl } = await import('@pritzlaff/nano-ui')
 export const { Cluster, Ledger, RaftNode } = await import('../interfaces.ts')
 export const { advance, must, openRaft, settle } = await import('../test-host.ts')
-export const { glyphModel, ledgerModel } = await import('./model.ts')
+export const { glyphModel, gridModel, ledgerModel } = await import('./model.ts')
 await import('../index.ts')
 export const wait = async () => { for (let i = 0; i < 5; i++) await settle() }
 export const mount = async <E extends HTMLElement>(tag: string, app: Application, runtime: string, pod: string) => {

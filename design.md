@@ -6,7 +6,7 @@ Spec: `docs/superpowers/specs/2026-11-14-pods-runtimes-application-design.md`, a
 `docs/superpowers/specs/2026-11-14-values-and-application-design.md` for what it does not revise. Decisions:
 `docs/decisions.md` (cited as D<n>; D70 on are this model, D90 on are pods, runtimes and an application). Worked
 examples: `examples/external-signer`, `examples/messenger` (each with its `nano.json`), `examples/etl`,
-`examples/migration`, `examples/slice` (loading a provider of its own: `shout`), `examples/typing` (input → debounce → map → log, the debounce on a clock pod, File › Examples), `examples/raft` (a cluster that elects a leader, File › Examples).
+`examples/migration`, `examples/slice` (loading a provider of its own: `shout`), `examples/typing` (input → debounce → map → log, the debounce on a clock pod, File › Examples), `examples/raft` (a cluster that elects a leader, File › Examples; its views draw a ring and a log grid, `gridModel`).
 
 Nano is an event-driven RPC and pub/sub system made of plain values and one live `Application`. Everything is a
 synchronous value except the `Application`, which alone runs effects (D70).

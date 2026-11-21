@@ -41,3 +41,9 @@ export function detailModel(s: Node, now: number): { rows: [string, string][]; p
 export const ledgerModel = (p: Persistent, commitIndex: number) => ({ currentTerm: p.currentTerm, votedFor: p.votedFor, rows: p.log.map(e => ({
   index: e.index, term: e.term, value: typeof e.value === 'string' ? e.value : JSON.stringify(e.value), at: e.at.toFixed(1), committed: e.index <= commitIndex,
 })) })
+
+/** The log grid: a row per node, a column per log index (at least 10); a cell is its entry's term and whether it is committed, or null. */
+export function gridModel(rows: { id: string; p: Persistent; commitIndex: number }[]): { columns: number; rows: { id: string; cells: ({ term: number; committed: boolean } | null)[] }[] } {
+  const columns = Math.max(10, ...rows.map(r => r.p.log.length))
+  return { columns, rows: rows.map(r => ({ id: r.id, cells: Array.from({ length: columns }, (_, i) => { const e = r.p.log[i]; return e ? { term: e.term, committed: e.index <= r.commitIndex } : null }) })) }
+}

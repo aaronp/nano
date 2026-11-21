@@ -2,7 +2,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { type Application } from '@pritzlaff/nano-core'
 import type { Persistent } from '../core/types.ts'
-import { ClockControl, Cluster, Ledger, RaftNode, advance, must, openRaft, glyphModel, ledgerModel, wait, mount, cluster, status } from './views-setup.ts'
+import { ClockControl, Cluster, Ledger, RaftNode, advance, must, openRaft, glyphModel, gridModel, ledgerModel, wait, mount, cluster, status } from './views-setup.ts'
 
 let app: Application
 afterEach(async () => { document.body.innerHTML = ''; await app?.close() })
@@ -141,4 +141,38 @@ test('an idle peer dot is faint, a pending one hollow and bright, a granted one 
   const dot = el.shadowRoot!.querySelector('.dot')!
   expect(dot.getAttribute('stroke-opacity')).toBe(dot.classList.contains('idle') ? '0.2' : '1')
   expect(dot.getAttribute('fill')).toBe(dot.classList.contains('granted') ? dot.getAttribute('stroke') : 'none')
+})
+test('raft-cluster draws the chosen cluster: a ring of nodes and the log grid, following a request; swapping and removing', async () => {
+  app = await cluster()
+  const el = await mount('raft-cluster', app, 'raft', 'cluster'), root = el.shadowRoot!
+  const sub = (tag: string) => root.querySelector(tag) as HTMLElement & { updateComplete: Promise<boolean> }
+  const settleAll = async () => { await wait(); await el.updateComplete; await sub('raft-ring').updateComplete; await sub('raft-log').updateComplete }
+  await settleAll()
+  expect([...root.querySelectorAll('li button')].map(b => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([['example', 'true']])
+  const ring = sub('raft-ring').shadowRoot!, log = sub('raft-log').shadowRoot!
+  expect(ring.querySelectorAll('raft-node')).toHaveLength(3)
+  expect([...ring.querySelectorAll('.at > div')].map(d => d.textContent)).toEqual(['example-1', 'example-2', 'example-3'])
+  expect([...log.querySelectorAll('tr')].map(r => r.querySelector('th')!.textContent)).toEqual(['', 'example-1', 'example-2', 'example-3'])
+  expect(log.querySelectorAll('tr')[0]!.querySelectorAll('th')).toHaveLength(11)
+  const leader = (await Promise.all(['example-1', 'example-2', 'example-3'].map(id => status(app, id)))).find(n => n.role === 'leader')!.id
+  must(await app.call(leader, `${leader}-raft`)[RaftNode.ops.request.name]!('hi'))
+  await advance(app, 300); await settleAll()
+  const row = [...log.querySelectorAll('tr')].find(r => r.querySelector('th')!.textContent === leader)!
+  expect(row.querySelector('td')!.textContent).not.toBe('')
+  expect(row.querySelector('td')!.className).toBe('committed')
+  // a second cluster, chosen by create; the first one's nodes are no longer followed
+  ;(root.querySelector('[name=name]') as HTMLInputElement).value = 'other'
+  ;(root.querySelector('[name=create]') as HTMLButtonElement).click(); await settleAll()
+  expect([...root.querySelectorAll('li button')].map(b => b.getAttribute('aria-pressed'))).toEqual(['false', 'true'])
+  expect([...sub('raft-log').shadowRoot!.querySelectorAll('tr th:first-child')].map(x => x.textContent)).toEqual(['', 'other-1', 'other-2', 'other-3'])
+  must(await app.call(leader, `${leader}-raft`)[RaftNode.ops.request.name]!('again')); await advance(app, 300); await settleAll()
+  expect(sub('raft-log').shadowRoot!.querySelectorAll('tr')).toHaveLength(4)   // no stale example row
+  // removing the chosen one falls back to the first left; removing the last draws nothing
+  ;(root.querySelector('[name=remove]') as HTMLButtonElement).click(); await settleAll()
+  expect([...root.querySelectorAll('li button')].map(b => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([['example', 'true']])
+  expect(sub('raft-ring').shadowRoot!.querySelectorAll('raft-node')).toHaveLength(3)
+  ;(root.querySelector('[name=name]') as HTMLInputElement).value = 'example'
+  ;(root.querySelector('[name=remove]') as HTMLButtonElement).click(); await settleAll()
+  expect(sub('raft-ring').shadowRoot!.querySelectorAll('raft-node')).toHaveLength(0)
+  expect(sub('raft-log').shadowRoot!.querySelectorAll('tr')).toHaveLength(0)
 })
