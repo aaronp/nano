@@ -30,14 +30,14 @@ function documentOf(app: unknown, outline: unknown, host: unknown): NanoResult<H
   return success({ app: rest, outline: pages.value, ...(Object.keys(h).length && { host: h as HostDocument['host'] }) })
 }
 
-/** The stored document: the one key, else the old forms (`old`: the old keys are still there, for the host's `Migrate` hook, once loaded). */
+/** The stored document: the one key, else the old forms (`old`: for the host's `Migrate` hook, once loaded). */
 export function stored(s: Storage): NanoResult<{ doc: HostDocument; old: boolean }> {
   const now = json(text(s, KEY), KEY)
   if (!now.ok) return now
   if (now.value !== null) {
     if (!obj(now.value)) return failure('invalid-input', `${KEY} is not a host document`)
     const doc = documentOf(now.value['app'], now.value['outline'], now.value['host'])
-    return doc.ok ? success({ doc: doc.value, old: OLD.some(k => text(s, k) !== null) }) : doc
+    return doc.ok ? success({ doc: doc.value, old: false }) : doc
   }
   const [appKey, outlineKey, platformKey] = OLD, pagesKey = text(s, outlineKey) === null ? platformKey : outlineKey
   const app = json(text(s, appKey), appKey), pages = json(text(s, pagesKey), pagesKey)

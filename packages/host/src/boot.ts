@@ -97,7 +97,7 @@ async function boot(storage: Storage, opts: Opts): Promise<NanoResult<Host>> {
   const document = (): HostDocument => ({ app: { ...unplaced(app.deployment()), ...(modules && { modules }), ...(frames && { frames }) }, outline: outline.document().doc, ...(host && { host }) })
   let stopped: string | undefined
   const stop = (reason: string) => { if (stopped) return; stopped = reason; opts.onStop?.() }
-  const save = () => { if (stopped) return; const failed = write(storage, document(), !read.value.old || !!opts.migrate); if (failed) stop(`not saved: ${failed}`) }
+  const save = () => { if (stopped) return; const failed = write(storage, document()); if (failed) stop(`not saved: ${failed}`) }
   /** `host.views` without the overrides for pods that are gone. */
   const prune = () => { const pods = app.deployment().pods; if (host?.views) host = { ...host, views: Object.fromEntries(Object.entries(host.views).filter(([p]) => p in pods)) } }
   app.listen(e => { if (e.type === 'applied') { prune(); save() } })
