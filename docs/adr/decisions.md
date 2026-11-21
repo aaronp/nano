@@ -1543,3 +1543,73 @@ Tree, named the Outline (`@pritzlaff/nano-outline`, document `Outline`, nodes pa
 `HostOutline` declares a `changed` event so components follow the tree through nano. Flat documents still parse
 (every page a root). Supersedes ADR-0038's name and flat pages; ADR-0039 stands. Known limit: the host pod is renamed `platform` → `outline`, so an app's own pod named `outline` now clashes
 with it (a stored document or file holding one is refused on load, kept as it was, until that pod is renamed).
+
+---
+id: ADR-0041
+title: A shared host core, and presentation out of core's document
+status: accepted
+date: 2026-11-21
+revisit: 
+tags: host, outline, core, presentation
+parent: ADR-0040
+decision: host-core
+---
+
+## Goal
+A second host showed ~205 of its ~310 lines restating the workspace, and review found the model still mixed layers:
+core's document carried presentation (`views`, `layout`), the Outline held the live app, pages shared a route
+namespace with the app's screens, and imports merged trees by special rules. The impact is whether layers own one
+kind of data each and whether hosts share their mechanics.
+
+## Hypothesis
+- We believe: a framework-free host core owning one host document `{ app, outline, host }` and the live mechanics
+  (boot, save, pick, page edits, open); core keeping only the system and where its code comes from; a pure Outline
+- Will result in: core and the Outline as stable data plus functions, and hosts that only draw
+- Measured by: the React host shrinks to its drawing; the workspace loses its reserved-id and merge rules
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| layers | One kind of data per layer | 5 | Core: system and code location; Outline: structure; hosts: presentation. |
+| shared | Shared mechanics | 4 | What every host does is written once. |
+| simple | Fewer special rules | 4 | Rules that exist only from collisions or merges go. |
+| change | Migration cost | 2 | Breaking changes are staged and old data still opens. |
+
+## Solution: host-core — Host core; presentation out of core; pure Outline
+| criterion | score |
+| --- | --- |
+| layers | 5 |
+| shared | 5 |
+| simple | 4 |
+| change | 2 |
+
+Pros:
+- Each layer is data plus functions; hosts share boot, storage, picks, edits, opening
+
+Cons:
+- A breaking core change (0.5.0), a new package, eight staged plans, legacy readers for a release
+
+## Solution: in-host — Keep mechanics in each host; core and Outline as they are
+| criterion | score |
+| --- | --- |
+| layers | 2 |
+| shared | 1 |
+| simple | 2 |
+| change | 5 |
+
+Pros:
+- No change
+
+Cons:
+- Every host restates ~200 lines; presentation stays in core's document
+
+## Decision
+Host core (`@pritzlaff/nano-host`, `HostDocument`, `Host.boot`), with the host's own loader and trust hooks; core
+exports `Registry.load(modules, base)` and later refuses `views`/`layout` (0.5.0); the Outline keeps data, `parse` and
+a pure `resolve`, slots `pod | select | tool`; every page at `#/p/<id>`; File › Open replaces (store and reload, after
+asking); Import, Examples and `?src=` add a file as a new root page; examples are `nano.json` + `outline.json`;
+legacy readers removed a release later. Supersedes ADR-0039's reserved-id remap and ADR-0038's view slots.
