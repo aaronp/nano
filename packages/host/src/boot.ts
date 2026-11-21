@@ -97,7 +97,7 @@ async function boot(storage: Storage, opts: Opts): Promise<NanoResult<Host>> {
   const document = (): HostDocument => ({ app: { ...unplaced(app.deployment()), ...(modules && { modules }), ...(frames && { frames }) }, outline: outline.document().doc, ...(host && { host }) })
   let stopped: string | undefined
   const stop = (reason: string) => { if (stopped) return; stopped = reason; opts.onStop?.() }
-  const save = () => { if (stopped) return; const failed = write(storage, document()); if (failed) stop(`not saved: ${failed}`) }
+  const save = () => { if (stopped) return; const failed = write(storage, document(), !read.value.old || !!opts.migrate); if (failed) stop(`not saved: ${failed}`) }
   /** `host.views` without the overrides for pods that are gone. */
   const prune = () => { const pods = app.deployment().pods; if (host?.views) host = { ...host, views: Object.fromEntries(Object.entries(host.views).filter(([p]) => p in pods)) } }
   app.listen(e => { if (e.type === 'applied') { prune(); save() } })
@@ -107,12 +107,13 @@ async function boot(storage: Storage, opts: Opts): Promise<NanoResult<Host>> {
   prune(); save()
   // ponytail: applies are not queued here: two at once can interleave their loads and recorded code, and a failed apply
   // leaves what it loaded in the registry (a Registry has no remove); queue them if hosts apply concurrently.
+  const theirs = new Set((opts.providers ?? []).map(p => p.coord))   // the host's own providers are never stored
   async function apply(next: AppDeployment): Promise<NanoResult<void>> {
     const got = await load(next)
     if (!got.ok) return got
     // recorded before the apply, so its `applied` saves them and an isolated pod built in it finds its code
     const was = { modules, frames }
-    modules = next.modules ?? modules; frames = next.frames ?? frames
+    modules = next.modules ? Object.fromEntries(Object.entries(next.modules).filter(([k]) => !theirs.has(k))) : modules; frames = next.frames ?? frames
     const r = await app.apply(next)
     if (!r.ok) ({ modules, frames } = was)
     return r

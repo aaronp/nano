@@ -81,7 +81,7 @@ test('given the slice imported, then the explorer lists in, wait, up, out and Sa
   expect(saved.host).toEqual({ views: { up: 'nano-pod-view' }, layout })   // kept by the host, so it round-trips below
   const file: AppDeployment = await Bun.file(new URL(slice)).json()
   // stored resolved, so a saved nano.json loads from anywhere on the origin
-  expect(saved.app.modules).toEqual({ 'nano.ui': new URL('./bundle/nano-ui.js', page).href, 'example.slice': new URL('./shout.js', slice).href })
+  expect(saved.app.modules).toEqual({ 'example.slice': new URL('./shout.js', slice).href })
   expect(saved.app.pods).toEqual(file.pods)
   expect(saved.app.runtimes).toEqual(file.runtimes)
   expect(host.saved(true)).toEqual(saved)   // Reconcile and save: no call seen, nothing to add

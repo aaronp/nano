@@ -49,7 +49,7 @@ export class NanoRing extends LitElement {
   private build = 0   // the latest rebuild; an older one's app is closed when it lands
   // shown or hidden (its page's route): render again, so a hidden ring mounts no view and a view starts no lazy pod
   private shown = false
-  private resized = new ResizeObserver(() => { if (this.checkVisibility() !== this.shown) this.requestUpdate() })
+  private resized = new ResizeObserver(() => { if ((this.checkVisibility?.() ?? true) !== this.shown) this.requestUpdate() })
 
   constructor() { super(); this.tooLong = false }
   connectedCallback() { super.connectedCallback(); this.resized.observe(this); this.watch() }
@@ -106,7 +106,7 @@ export class NanoRing extends LitElement {
 
   render() {
     const { app, registry, tm } = this
-    this.shown = this.checkVisibility()
+    this.shown = (this.checkVisibility?.() ?? true)
     if (!app || !registry || !this.shown) return html``
     const bound = this.shadow ?? app, past = !!this.shadow, d = bound.deployment(), l = ringLayout(d, { size: SIZE, show: this.show })
     const tooLong = !!tm && this.tooLong && ringSource(tm.mode, tm.cursor >= tm.span.to, false) === 'too-long'

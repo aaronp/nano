@@ -26,7 +26,7 @@ export function picker(app: Application, registry: Registry, outline: ReturnType
     e.place(found, { pod: name, in: runtime })
     const out = e.deployment(), r = out.runtimes[runtime]!
     const start = (found.config as { default?: unknown } | undefined)?.default
-    if (start !== undefined) out.pods[name]!.config = start
+    if (start !== undefined) out.pods[name]!.config = structuredClone(start)
     if (r.policy?.kind === 'rules') r.policy.rules.unshift({ allow: ['call', 'subscribe', 'start'], from: 'host', outside: true, toPod: name })
     const { deployment, notes } = connect(out, registry, [name]), applied = await app.apply(deployment)
     return applied.ok ? success({ name, notes }) : applied

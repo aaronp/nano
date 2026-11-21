@@ -65,18 +65,16 @@ test('a view override for a pod that is gone is dropped at boot', async () => {
 
 test('a second boot reads only the new key', async () => {
   const s = memory({ [OLD.app]: app, [OLD.outline]: tree })
-  await boot(s)
+  await boot(s, { migrate: d => d })
   s.m.set(OLD.app, JSON.stringify({ pods: {}, runtimes: {} })); s.m.set(OLD.outline, JSON.stringify({ roots: [], pages: {} }))
-  let hooked = false
-  const h = await boot(s, { migrate: d => { hooked = true; return d } })
+  const h = await boot(s, { migrate: d => d })   // the stale old keys are offered to the hook, not read over the one key
   expect(strs(h.document())).toEqual(expected)
-  expect(hooked).toBe(false)
 })
 
 test('storage that refuses writes: the old keys kept unchanged, and saving stops, said once', async () => {
   const s = memory({ [OLD.app]: app, [OLD.outline]: tree }, 'writes')
   let stops = 0
-  const h = await boot(s, { onStop: () => stops++ })
+  const h = await boot(s, { migrate: d => d, onStop: () => stops++ })
   expect(h.stopped()).toMatch(/^not saved: quota exceeded/)
   expect([...s.m]).toEqual([[OLD.app, JSON.stringify(app)], [OLD.outline, JSON.stringify(tree)]])
   expect((await h.app.apply({ ...h.app.deployment(), pods: {}, runtimes: { main: { pods: [], subscriptions: [] } } })).ok).toBe(true)
@@ -101,7 +99,7 @@ test('the another-tab guard: a write to the new key or an old one elsewhere stop
   for (const key of [KEY, OLD.outline]) {
     const s = memory()
     let stops = 0
-    const h = await boot(s, { onStop: () => stops++ })
+    const h = await boot(s, { migrate: d => d, onStop: () => stops++ })
     const saved = s.m.get(KEY)
     dispatchEvent(Object.assign(new Event('storage'), { key: 'unrelated' }))
     expect(h.stopped()).toBeUndefined()
@@ -146,4 +144,30 @@ test('saving: on applied and on setHost; a view override for a pod that is gone 
   expect((await h.app.apply({ ...h.app.deployment(), pods: {}, runtimes: { main: { pods: [], subscriptions: [] } } })).ok).toBe(true)
   expect(JSON.parse(s.m.get(KEY)!)).toMatchObject({ app: { pods: {} }, host: { views: {}, layout: { react: { columns: 3 } } } })
   expect(h.stopped()).toBeUndefined()
+})
+
+test('old keys read with no hook are kept, so a later boot with the hook migrates them', async () => {
+  const s = memory({ [OLD.app]: { ...system, layout: { pages: ['old'] } } })
+  const h = await boot(s)
+  h.setHost({ views: { t1: 'x' } })
+  expect([...s.m.keys()]).toEqual([OLD.app, KEY])
+  const again = await boot(s, { migrate: d => ({ ...d, host: { layout: { migrated: true } } }) })
+  expect(strs(again.document()).host).toEqual({ layout: { migrated: true } })
+  expect([...s.m.keys()]).toEqual([KEY])
+})
+
+test('apply never records the host\'s own providers in modules', async () => {
+  const h = await boot(memory({ [KEY]: { app: system, outline: tree } }), { providers: [own] })
+  const r = await h.apply({ ...h.document().app, modules: { acme: './acme.ts', own: './not-there.ts' } })
+  expect(r.ok).toBe(true)
+  expect(strs(h.document().app.modules)).toEqual({ acme: './acme.ts' })
+})
+
+test('a save removes only the old keys that are present (a removal fires `storage` in other tabs)', async () => {
+  const s = memory({ [OLD.app]: system, [OLD.outline]: tree }), removed: string[] = []
+  const was = s.removeItem.bind(s); s.removeItem = (k: string) => { removed.push(k); was(k) }
+  const h = await boot(s, { migrate: d => d })
+  expect(removed.sort()).toEqual([OLD.app, OLD.outline])
+  removed.length = 0; h.setHost({ views: {} })
+  expect(removed).toEqual([])
 })

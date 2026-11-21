@@ -102,3 +102,12 @@ test('deploy: a lazy pod as a pick makes it, connected, with no slot; its name a
   expect(saved(s).app.pods.user1).toEqual({ implementation: 'acme/user', eager: false })
   expect(await h.deploy('acme/nope', 'main')).toMatchObject({ ok: false, fail: { type: 'not-found' } })
 })
+
+test('two picks of an implementation with a config default share no config object', async () => {
+  const { h } = await boot(memory({ [KEY]: { app, outline: { roots: ['home'], pages: { home: { slots: {} } } } } }))
+  await h.pick('home', 'acme/step', 'main'); await h.pick('home', 'acme/step', 'main')
+  const pods = h.app.deployment().pods as Record<string, { config?: { by: number } }>
+  pods['step1']!.config!.by = 9
+  expect(pods['step2']!.config).toEqual({ by: 2 })
+  expect(h.registry.implementation('acme/step')!.config).toMatchObject({ default: { by: 2 } })
+})
