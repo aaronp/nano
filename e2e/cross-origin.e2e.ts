@@ -37,15 +37,17 @@ test('the template from another origin, Sandboxed: its pods isolated-sandbox in 
   await expect(page.locator('dialog[open]')).toHaveCount(0)
 })
 
-test('the template from another origin, Trusted: host pods, its view before anything ran, and a picked timer that counts', async ({ page }) => {
+test('the template from another origin, Trusted: host pods, its view once approved, and a picked timer that counts', async ({ page }) => {
   const got = await importTemplate(page, 'Trusted')
   for (const p of ['timer', 'picker', 'store']) expect(got.pods[p].isolation ?? 'host').toBe('host')
   const dock = page.locator('workspace-dock#workspace')
 
-  // (a) the imported timer's panel is its own view, not the generic one, before any of its pods built
+  // (a) opening the timer's panel starts its pod, so its foreign code asks to run in this page; approved, the panel is
+  // its own view, not the generic one
   await dock.locator('nano-explorer').getByText('timer', { exact: true }).first().dblclick()
+  const ask = page.locator('dialog[open]').filter({ hasText: /Run acme\.template.* in this page\?/ })
+  await ask.getByRole('button', { name: 'Approve' }).click()
   await expect(dock.locator('nano-timer').first()).toBeVisible()
-  await expect(page.locator('dialog[open]')).toHaveCount(0)   // nothing asked to run yet
 
   // (b) a timer from the picker's imported provider group (a panel header's +), with no pipes: Start, and it counts
   const before = await dock.locator('nano-timer').count()

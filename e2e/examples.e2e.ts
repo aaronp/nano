@@ -31,6 +31,14 @@ async function open(page: Page, url: string) {
   await expect(d).toHaveCount(0)
 }
 
+/** Unticks every runtime, once Fetch has listed them. */
+async function uncheckAll(d: ReturnType<Page['locator']>) {
+  await expect(d.locator('input[data-select-runtime]').first()).toBeVisible()
+  for (const box of await d.locator('input[data-select-runtime]').all()) await box.uncheck()
+}
+/** How far the page scrolls sideways: 0 when nothing is wider than the window. */
+const sideways = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+
 async function say(room: ReturnType<Page['locator']>, text: string) {
   await room.getByRole('textbox', { name: 'Message' }).fill(text)
   await room.getByRole('button', { name: 'Send' }).click()
@@ -129,7 +137,7 @@ async function openAllUnticked(page: Page) {
   await d.getByLabel('nano.json URL').fill('/examples/nano.json')
   await d.getByRole('button', { name: 'Fetch' }).click()
   await d.getByRole('radio', { name: /^Trusted/ }).check()
-  for (const box of await d.locator('input[data-select-runtime]').all()) await box.uncheck()
+  await uncheckAll(d)
   await expect(d.getByRole('button', { name: 'Import', exact: true })).toBeDisabled()
   return d
 }
@@ -167,7 +175,7 @@ test('make serve-examples, imported from its own origin: every example is offere
     await expect(d.getByLabel(`Import runtime ${r}`, { exact: true })).toBeVisible()
   await expect(d).toContainText('localhost:4310')   // the foreign-origin notice
   await d.getByRole('radio', { name: /^Trusted/ }).check()
-  for (const box of await d.locator('input[data-select-runtime]').all()) await box.uncheck()
+  await uncheckAll(d)
   for (const r of ['example.chat.backend', 'example.chat.room']) await d.getByLabel(`Import runtime ${r}`, { exact: true }).check()
   await d.getByRole('button', { name: 'Import', exact: true }).click()
   await expect(d).toHaveCount(0)
@@ -185,7 +193,7 @@ test('imported Sandboxed (the default), the pods start at once and their own vie
   const d = page.getByRole('dialog', { name: 'Import components' })
   await d.getByLabel('nano.json URL').fill('http://localhost:4310/nano.json')
   await d.getByRole('button', { name: 'Fetch' }).click()
-  for (const box of await d.locator('input[data-select-runtime]').all()) await box.uncheck()
+  await uncheckAll(d)
   for (const r of ['example.chat.backend', 'example.chat.room']) await d.getByLabel(`Import runtime ${r}`, { exact: true }).check()
   await d.getByRole('button', { name: 'Import', exact: true }).click()
   await expect(d).toHaveCount(0)
@@ -225,8 +233,7 @@ async function openSandboxed(page: Page, want: RegExp) {
   const d = page.getByRole('dialog', { name: 'Import components' })
   await d.getByLabel('nano.json URL').fill('http://localhost:4310/nano.json')
   await d.getByRole('button', { name: 'Fetch' }).click()
-  await expect(d.locator('input[data-select-runtime]').first()).toBeVisible()
-  for (const box of await d.locator('input[data-select-runtime]').all()) await box.uncheck()
+  await uncheckAll(d)
   for (const box of await d.locator('input[data-select-runtime]').all()) if (want.test((await box.getAttribute('data-select-runtime')) ?? '')) await box.check()
   await d.getByRole('button', { name: 'Import', exact: true }).click()
   await expect(d).toHaveCount(0)
@@ -369,10 +376,12 @@ test('Settings shows each runtime\'s policy rules in order, the frame permission
 })
 
 test('the chat, a message sent: its declared, observed messaging.post → chatStore.put is drawn op to op in Connections and listed under messaging in Systems', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
   await start(page)
   await open(page, '/examples/chat/nano.json')
   await say(room(page, 'alice'), 'hi bob')
   await expect(room(page, 'bob').locator('li')).toHaveText([/hi bob/])
+  expect(await sideways(page)).toBe(0)   // alice's controls in the app bar don't widen the page
   await page.getByRole('button', { name: 'Connections' }).first().click()
   await expect(page.locator('c-wires')).toHaveAttribute('flipped', '')
   const edge = page.locator('c-wires [data-call="example.chat.backend|messaging|chatStore"] [data-op-call]')
@@ -389,6 +398,7 @@ test('the chat, a message sent: its declared, observed messaging.post → chatSt
   await page.screenshot({ path: test.info().outputPath('op-calls.png') })
   await page.locator('c-wires').getByRole('button', { name: 'Back to the workspace' }).click()
   await expect(page.locator('c-wires')).not.toHaveAttribute('flipped', '')
+  expect(await sideways(page)).toBe(0)
   await dock(page).locator('nano-explorer li[data-id="p:example.chat.backend:messaging"] > .line').click()
   await expect(dock(page).locator('nano-explorer .details')).toContainText('post → chatStore.put')
 })

@@ -91,10 +91,10 @@ test('drop four controls, wire them in Connections, save, New, import the file: 
   await expect(dock(page).locator('nano-log')).toContainText('two', { timeout: 3000 })
   await shot(page, '5-imported')
 
-  await page.goto('/#/wiring')
-  await expect(page.locator('c-circuit').locator('path[data-cable]')).toHaveCount(3)
+  await page.getByRole('button', { name: 'Connections' }).first().click()
+  await expect(page.locator('c-wires [data-wire]')).toHaveCount(3)
   await page.waitForTimeout(800)
-  await shot(page, '6-wiring-page')
+  await shot(page, '6-connections')
 })
 
 test('opens a file with slots but no workspace state: a panel per slot', async ({ page }) => {
