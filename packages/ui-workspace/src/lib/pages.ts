@@ -27,7 +27,8 @@ export const slugPath = (title: string, taken: readonly string[]): string => {
 export const routeOf = (id: string): string => `/p/${id}`
 
 type Meta = { icon?: string; [k: string]: unknown }
-const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+/** A plain object (not null, not an array). */
+export const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 /** A page's own meta of the workspace (`meta.workspace`: icon, Save layout's restore point); `{}` if it is none. */
 export const metaOf = (p: Page | undefined): Meta => (obj(p?.meta) && obj(p.meta['workspace']) ? p.meta['workspace'] : {}) as Meta
 /** Page `p` with `m` as the workspace's own meta; other clients' meta kept; no `meta.workspace` (nor `meta`) left empty. */

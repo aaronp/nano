@@ -137,12 +137,13 @@ test('the approval\'s moved pages are the Outline\'s reported `moved`: a reorder
   await app.close()
 })
 
-test('a pod applying a legacy view slot gets it back as a tool slot: nothing writes view', async () => {
-  const { app, pod } = await podApp(async () => true)
+test('a pod applying a legacy view slot, or a tool slot naming a widget, gets it back as its tool id: nothing writes view', async () => {
+  const { asked, app, pod } = await podApp(async () => true)
   const at = must(await pod.document(null))
-  must(await pod.apply({ next: { pages: { ...at.doc.pages, old: { slots: { v: { kind: 'view', view: 'notes' } } } } }, base: at.version }))
+  must(await pod.apply({ next: { pages: { ...at.doc.pages, old: { slots: { v: { kind: 'view', view: 'nano-explorer' }, w: { kind: 'tool', tool: 'nano-wiring' }, n: { kind: 'view', view: 'notes' } } } } }, base: at.version }))
+  expect(asked).toEqual(['Add page old'])
   const now = must(await pod.document(null))
-  expect(now.doc.pages['old']!.slots).toEqual({ v: { kind: 'tool', tool: 'notes' } })
+  expect(now.doc.pages['old']!.slots).toEqual({ v: { kind: 'tool', tool: 'systems' }, w: { kind: 'tool', tool: 'wiring' }, n: { kind: 'tool', tool: 'notes' } })
   expect(JSON.stringify(now)).not.toContain('view')
   await app.close()
 })

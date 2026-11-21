@@ -110,3 +110,8 @@ test('opened: an { app, outline } bundle, an { app, platform } bundle with the o
   expect(plain.ok && plain.value.pages.roots).toEqual(['workspace', 'one'])
   expect(opened({ app: d, outline: { pages: { p: { slots: { s: { kind: 'pod', pod: 'no' } } } } } })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
 })
+
+test('opened: an { app, outline } bundle\'s view slot (a widget id) is its tool\'s slot', () => {
+  const o = opened({ app: d, outline: { roots: ['workspace'], pages: { workspace: { slots: { x: { kind: 'view', view: 'nano-explorer' }, n: { kind: 'view', view: 'notes' } } } } } })
+  expect(o.ok && strs(o.value.pages.pages['workspace']!.slots)).toEqual({ x: { kind: 'tool', tool: 'systems' }, n: { kind: 'tool', tool: 'notes' } })
+})

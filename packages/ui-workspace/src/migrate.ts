@@ -12,7 +12,7 @@
 import { Coord, failure, success, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
 import { Outline, type Page, type Slot } from '@pritzlaff/nano-outline'
 import { panelsInOrder, type PanelState, type TemplateState } from './lib/layout-templates.ts'
-import { MAIN, metaOf, withMeta } from './lib/pages.ts'
+import { MAIN, metaOf, obj, withMeta } from './lib/pages.ts'
 import { toolOf, tooled } from './lib/tools.ts'
 
 type OldSlot = { id: string; runtime: string; pod: string } | { id: string; view: string }
@@ -24,7 +24,7 @@ const ENGINE = ['root', 'openPopouts', 'dimensions', 'settings', 'header', 'reso
 // The keys before pages were deployment data: the saved pages' list and Main's title and icon (saved-workspaces), and
 // Main's dock (index.html's `storage-key`), each saved page's dock under `<dock>.saved.<path>`, each with `.template`.
 const LIST = 'workspace-starter.saved-workspaces', DOCK = 'workspace-starter.layout'
-const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v), str = (v: unknown): v is string => typeof v === 'string'
+const str = (v: unknown): v is string => typeof v === 'string'
 const idOk = (id: unknown) => { try { return str(id) && !!Coord.runtime(id) } catch { return false } }
 const slotOk = (s: unknown) => obj(s) && str(s.id) && (str(s.view) || (str(s.runtime) && str(s.pod)))
 const pageOk = (p: unknown): p is Legacy => obj(p) && idOk(p.id) && str(p.title) && Array.isArray(p.slots) && p.slots.every(slotOk) && (p.icon === undefined || str(p.icon))

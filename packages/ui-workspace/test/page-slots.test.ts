@@ -20,8 +20,10 @@ test('slotsOf: each slot a panel shows kept as it is (a select stays a select); 
   expect(Object.keys(got)).toEqual(['a', 'any', 'clock1', 'notes', 'elsewhere', 'fresh'])
 })
 
-test('slotsOf: a tool panel\'s slot names its tool (the table), not its widget; a tool slot whose widget the dock has is dropped with its panel', () => {
-  expect(slotsOf([{ widget: 'nano-explorer' }], {}, kind)).toEqual({ 'nano-explorer': tool('systems') })
+test('slotsOf: a new tool panel\'s slot names its tool (the table), its id the tool\'s; an existing slot keeps its id; a tool slot whose widget the dock has is dropped with its panel', () => {
+  expect(slotsOf([{ widget: 'nano-explorer' }], {}, kind)).toEqual({ systems: tool('systems') })
+  expect(slotsOf([{ widget: 'nano-explorer' }], { 'nano-explorer': tool('systems') }, kind)).toEqual({ 'nano-explorer': tool('systems') })
+  expect(reconcile({ root: comp('nano-explorer') }, { 'nano-explorer': tool('systems') }).add).toEqual([])
   expect(slotsOf([], { x: tool('systems'), y: tool('elsewhere') }, kind)).toEqual({ y: tool('elsewhere') })
 })
 

@@ -44,7 +44,7 @@ test('save the bundle, then open it: the same pages, nothing duplicated; after N
   expect(now().pages.workspace.slots).toEqual({})
   location.hash = '#/p/workspace'
   for (let i = 0; i < 200 && !Object.keys(p.document().doc.pages['workspace']!.slots).length; i++) await tick(5)
-  expect(now().pages.workspace.slots).toEqual({ 'nano-explorer': { kind: 'tool', tool: 'systems' } })   // the starter
+  expect(now().pages.workspace.slots).toEqual({ systems: { kind: 'tool', tool: 'systems' } })   // the starter, its slot id the tool's
   const again = new Promise<void>(r => host!.app.listen(e => { if (e.type === 'applied') r() }))
   document.dispatchEvent(new CustomEvent('file:example', { detail: { name: 'saved' } }))
   await again; await tick(50)

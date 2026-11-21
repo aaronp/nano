@@ -1,7 +1,7 @@
 // A reload (Review Focus 1): the stored app document and its pages boot the same pages, layouts and pods; nothing is
 // made or started for a page not shown. A pod undeployed since leaves its slot in the pages (it resolves missing).
 // The pages stored flat under the old key, in the old `meta.workspace.order` (Review Focus 2), boot as the same tree,
-// saved under the new key, the old one removed.
+// saved under the new key, the old one removed; its view slot (a widget id) as its tool's.
 import { expect, test } from 'bun:test'
 import { Pod, type AppDeployment } from '@pritzlaff/nano-core'
 import { tick } from './host-deploy-setup.ts'
@@ -13,7 +13,7 @@ test('a reload restores the pages and pods as saved, nothing started; an undeplo
   const at = URL.parse('./bundle/nano-ui.js', location.href)!.href
   const app: AppDeployment = { pods: { log1: Pod.lazy(log), log2: Pod.lazy(log) }, runtimes: { main: { pods: ['log1'], subscriptions: [] }, side: { pods: ['log2'], subscriptions: [] } }, modules: { 'nano.ui': at }, views: {}, layout: { ring: { show: [] } } }
   const pages = { pages: {
-    workspace: { title: 'Main', slots: { a: { kind: 'pod', pod: 'nano.ui/log@main/log1' }, x: { kind: 'tool', tool: 'systems' } }, layout: { workspace: { root: { type: 'row' } } }, meta: { workspace: { order: 0, saved: { root: null } } } },
+    workspace: { title: 'Main', slots: { a: { kind: 'pod', pod: 'nano.ui/log@main/log1' }, x: { kind: 'view', view: 'nano-explorer' } }, layout: { workspace: { root: { type: 'row' } } }, meta: { workspace: { order: 0, saved: { root: null } } } },
     two: { title: 'Two', slots: { b: { kind: 'pod', pod: 'nano.ui/log@side/log2' }, any: { kind: 'select', select: { runtime: 'side' } } }, meta: { workspace: { icon: 'star', order: 1 } } },
   } }
   localStorage.setItem(KEY, JSON.stringify(app)); localStorage.setItem(OLD, JSON.stringify(pages))
@@ -24,7 +24,7 @@ test('a reload restores the pages and pods as saved, nothing started; an undeplo
   const { host, outline } = await import('../src/boot-host.ts')
   if (!host || !outline) throw new Error('the host did not start')
   expect(document.querySelector('dialog')).toBeNull()
-  const tree = { roots: ['workspace', 'two'], pages: { workspace: { ...pages.pages.workspace, meta: { workspace: { saved: { root: null } } } }, two: { ...pages.pages.two, meta: { workspace: { icon: 'star' } } } } }
+  const tree = { roots: ['workspace', 'two'], pages: { workspace: { ...pages.pages.workspace, slots: { ...pages.pages.workspace.slots, x: { kind: 'tool', tool: 'systems' } }, meta: { workspace: { saved: { root: null } } } }, two: { ...pages.pages.two, meta: { workspace: { icon: 'star' } } } } }
   expect(JSON.parse(JSON.stringify(outline.document().doc))).toEqual(tree)   // stored flat: every page a root, in the old order, the order dropped
   expect(Object.keys(host.data().pods)).toEqual(['ui', 'deploy', 'outline', 'log1', 'log2'])
   expect(host.data().layout).toEqual({ ring: { show: [] } })

@@ -27,6 +27,7 @@ import { panelsInOrder, type PanelState } from '../lib/layout-templates.ts';
 import { applyPages, routeOf } from '../lib/pages.ts';
 import { reconcile, slotOf, slotsOf } from './page-slots.ts';
 import { pagePods } from './page-pods.ts';
+import { widgetKinds } from './palette.ts';
 import { widgetOf } from '../lib/tools.ts';
 
 type Instance = ReturnType<typeof Outline.create>;
@@ -82,8 +83,6 @@ export function keepDocks(doc: Document, outline: Instance): void {
   const hidden = (d: WorkspaceDock) => !!d.closest<HTMLElement>('app-route')?.hidden;
   const layoutOf = (id: string) => text(mine(pageOf(id)?.layout));
   const panels = (d: WorkspaceDock) => { const a = d.arrangement(); return a.template ? [...a.template.order.filter((p): p is PanelState => !!p), ...a.template.parked] : panelsInOrder(a.root); };
-  /** Each palette widget of dock `d`: a pod's or a tool's; undefined, not in its palette. */
-  const kinds = (d: WorkspaceDock) => { const of = new Map([...d.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')].map((t) => [t.dataset['widget']!, t.dataset['implementation'] ? 'pod' as const : 'tool' as const])); return (w: string) => (w === 'pod' ? 'pod' as const : of.get(w)); };
   /** Panels for slots `list` of page `id`: a pod's (named by the pod it resolves to now, if any), or a tool's widget. */
   const addPanels = (d: WorkspaceDock, id: string, list: [string, Slot][]) => quiet(() => {
     const r = outline.resolve(id);
@@ -117,7 +116,7 @@ export function keepDocks(doc: Document, outline: Instance): void {
     for (const [d, id] of docks()) {
       if (!built(d)) continue;
       if (!settled.has(d)) { settled.add(d); addPanels(d, id, reconcile(d.arrangement(), pageOf(id)!.slots).add); d.pods?.open(); }
-      const p = pageOf(id)!, kind = kinds(d), now = slotsOf(panels(d), p.slots, kind);
+      const p = pageOf(id)!, kind = widgetKinds(d), now = slotsOf(panels(d), p.slots, kind);
       const returned = panels(d).flatMap((q) => { const s = !Object.hasOwn(now, slotOf(q)) && kind(q.widget) === 'pod' && back(d, q); return s ? [[slotOf(q), s] as const] : []; });
       for (const [s, v] of returned) now[s] = v;
       if (text(now) !== text(p.slots)) quiet(() => edit(outline, id, (q) => ({ ...q, slots: now })));
@@ -134,7 +133,7 @@ export function keepDocks(doc: Document, outline: Instance): void {
       if (busy || !built(d) || !settled.has(d)) continue;
       if (c.resolved.includes(id)) { if (hidden(d)) rebuild(d); else d.pods?.open(); }
       if (!c.added.includes(id) && !c.changed.includes(id)) continue;
-      const was = d.arrangement(), { engine, add } = reconcile(was, pageOf(id)!.slots), kind = kinds(d);
+      const was = d.arrangement(), { engine, add } = reconcile(was, pageOf(id)!.slots), kind = widgetKinds(d);
       const same = text(engine) === text(was), missing = add.filter(([, s]) => s.kind !== 'tool' || kind(widgetOf(s.tool)));   // a tool it has no widget for stays unshown
       if (!moved && same && !missing.length) continue;
       if (!moved && same && !hidden(d)) { addPanels(d, id, missing); d.pods?.open(); }

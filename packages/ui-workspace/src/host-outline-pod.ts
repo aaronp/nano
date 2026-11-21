@@ -5,9 +5,10 @@
  * (`refusal`, lib/pages.ts: Main dropped or not the first root), else asks
  * `approve` (HostUI's through the app, timed by hostProvider) with a summary of the pages and slots added or removed
  * and the pages moved; anything but a yes is `denied`, a yes applies `next` at `base`. The workspace's own edits apply
- * unasked. Once built, the pod publishes each change the Outline reports as `changed`: boot-host.ts builds it as the
- * Outline is made (`getOrCreate`), and again on each `restarted` (a restart does not rebuild a lazy pod); a build that
- * closes stops publishing until it is built again. Without an Outline (a replayed app's provider) both are not-found.
+ * unasked. A tool slot naming a widget (a legacy `view`'s) is applied as its tool's (`tooled`). Once built, the pod
+ * publishes each change the Outline reports as `changed`: boot-host.ts builds it as the Outline is made (`getOrCreate`),
+ * and again on each `restarted` (a restart does not rebuild a lazy pod); a build that closes stops publishing until it
+ * is built again. Without an Outline (a replayed app's provider) both are not-found.
  *
  *   ns.provider([hostUi, deploy, hostOutline(() => outline, timed(askTheUser))])   // hostProvider (host-deploy.ts)
  *   { outline: outlinePod }   // placed first in `main` by host.ts
@@ -15,6 +16,7 @@
 import { Coord, Implementation, failure, provide, success, type NanoResult, type Pod } from '@pritzlaff/nano-core'
 import { HostOutline, Outline } from '@pritzlaff/nano-outline'
 import { parentOf, refusal, walk } from './lib/pages.ts'
+import { tooled } from './lib/tools.ts'
 
 type Instance = ReturnType<typeof Outline.create>
 const OUTLINE = Coord.namespace('workspace.host').implementationId('outline')
@@ -69,11 +71,12 @@ export function hostOutline(outline: () => Instance | undefined, approve: (text:
           if (base !== at.version) return failure('invalid-input', 'the pages changed since')
           const read = Outline.parse(next)
           if (!read.ok) return read
-          const why = refusal(read.value)
+          const doc = { ...read.value, pages: Object.fromEntries(Object.entries(read.value.pages).map(([id, page]) => [id, tooled(page)])) }   // a widget id (a legacy view's) as its tool's
+          const why = refusal(doc)
           if (why) return failure('invalid-input', why)
-          const text = summary(at.doc, read.value)
+          const text = summary(at.doc, doc)
           if (!await approve(text).catch(() => false)) return failure('denied', `not approved: ${text}`)
-          const r = p.apply(read.value, { base })
+          const r = p.apply(doc, { base })
           return r.ok ? success(null) : r
         },
       })]

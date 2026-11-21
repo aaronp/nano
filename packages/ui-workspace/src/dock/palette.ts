@@ -22,6 +22,12 @@ export function readPalette(el: HTMLElement): Map<string, Def> {
   return defs;
 }
 
+/** Each palette widget of `el` (its templates now): a pod's (`pod`, or one naming an implementation) or a tool's; undefined, not in its palette. */
+export function widgetKinds(el: HTMLElement): (widget: string) => 'pod' | 'tool' | undefined {
+  const of = new Map([...el.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')].map((t) => [t.dataset['widget']!, t.dataset['implementation'] ? 'pod' as const : 'tool' as const]));
+  return (w) => (w === 'pod' ? 'pod' : of.get(w));
+}
+
 /** The starting layout: the widgets `open` names (else the first), arranged as `arrangement` says (else a row). */
 export function initial(el: HTMLElement, defs: ReadonlyMap<string, Def>): LayoutConfig {
   const open = (el.getAttribute('open') ?? [...defs.keys()].slice(0, 1).join(',')).split(',').map((x) => x.trim()).filter(Boolean);

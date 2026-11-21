@@ -4,7 +4,7 @@
  * dock's panels; `reconcile` drops engine entries that have no slot and returns the slots the engine lacks, to be split
  * in. dock/page-docks.ts applies them.
  *
- *   slotsOf([{ widget: 'pod', name: 'log2', slot: 'any' }, { widget: 'nano-explorer' }], page.slots, kind)   // { any: <its select>, 'nano-explorer': { kind: 'tool', tool: 'systems' } }
+ *   slotsOf([{ widget: 'pod', name: 'log2', slot: 'any' }, { widget: 'nano-explorer' }], page.slots, kind)   // { any: <its select>, systems: { kind: 'tool', tool: 'systems' } }
  *   const { engine, add } = reconcile(page.layout, page.slots)
  */
 import type { Slot } from '@pritzlaff/nano-outline';
@@ -15,19 +15,22 @@ type Slots = Record<string, Slot>;
 type Item = { type?: string; content?: Item[]; activeItemIndex?: number; componentState?: unknown };
 const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
-/** The slot a panel shows: its `slot`; in a layout from before panels carried it, its pod's name, else its widget. */
-export const slotOf = (p: PanelState): string => p.slot ?? p.name ?? p.widget;
-const shown = (p: PanelState, slots: Slots) => Object.hasOwn(slots, slotOf(p));
+/**
+ * The slot a panel shows: its `slot`; else (a new panel, or one from before panels carried it) its pod's name, else its
+ * widget where `slots` has a slot of that id (an existing slot keeps its id), else its widget's tool id (lib/tools.ts).
+ */
+export const slotOf = (p: PanelState, slots: Slots = {}): string => p.slot ?? p.name ?? (Object.hasOwn(slots, p.widget) ? p.widget : toolOf(p.widget));
+const shown = (p: PanelState, slots: Slots) => Object.hasOwn(slots, slotOf(p, slots));
 
 /**
  * The page's `slots` as a dock's panels have them, in the page's order: each slot a panel shows, kept as it is (a
  * `select` stays one); a tool slot whose widget (lib/tools.ts) the dock lacks (`kind` undefined), kept; a slot no panel
- * shows, dropped (its panel was closed); a newly opened tool panel's slot added. A pod panel adds none: a pick applies its slot first.
+ * shows, dropped (its panel was closed); a newly opened tool panel's slot added (its id the tool's). A pod panel adds none: a pick applies its slot first.
  */
 export function slotsOf(panels: PanelState[], slots: Slots, kind: (widget: string) => 'pod' | 'tool' | undefined): Slots {
-  const ids = new Set(panels.map(slotOf));
+  const ids = new Set(panels.map((p) => slotOf(p, slots)));
   const kept = Object.entries(slots).filter(([id, s]) => ids.has(id) || (s.kind === 'tool' && !kind(widgetOf(s.tool))));
-  const added = panels.filter((p) => !Object.hasOwn(slots, slotOf(p)) && kind(p.widget) === 'tool').map((p): [string, Slot] => [slotOf(p), { kind: 'tool', tool: toolOf(p.widget) }]);
+  const added = panels.filter((p) => !Object.hasOwn(slots, slotOf(p, slots)) && kind(p.widget) === 'tool').map((p): [string, Slot] => [slotOf(p, slots), { kind: 'tool', tool: toolOf(p.widget) }]);
   return Object.fromEntries([...kept, ...added]);
 }
 
@@ -46,6 +49,6 @@ export function reconcile(engine: unknown, slots: Slots): { engine: unknown; add
   if ('root' in e) e['root'] = prune(e['root'] as Item, slots);
   if (t) e['template'] = { ...t, order: t.order.map((p) => (p && shown(p, slots) ? p : null)), parked: t.parked.filter((p) => shown(p, slots)),
     ...(obj(t.dock) && 'root' in t.dock && { dock: { ...t.dock, root: prune(t.dock['root'] as Item, slots) } }) };
-  const panels = new Set((t ? [...t.order.filter((p): p is PanelState => !!p), ...t.parked] : panelsInOrder(e['root'])).map(slotOf));
+  const panels = new Set((t ? [...t.order.filter((p): p is PanelState => !!p), ...t.parked] : panelsInOrder(e['root'])).map((p) => slotOf(p, slots)));
   return { engine: e, add: Object.entries(slots).filter(([id]) => !panels.has(id)) };
 }
