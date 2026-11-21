@@ -71,7 +71,7 @@ test('narrow: the buttons fold into a ⋯ menu', async () => {
   const { el, calls } = await mount(true)
   expect(qa(el, '.view button')).toHaveLength(2)
   const more = q(el, 'button[aria-label="More workspace actions"]')
-  expect(qa(el, 'button:not([role])')).toHaveLength(2 + 1 + 6)   // the six sit hidden in the panel
+  expect(qa(el, 'button:not([role])')).toHaveLength(2 + 1 + 1 + 6)   // View, Layout, ⋯, and the six hidden in the panel
   expect(q(el, '.panel').hasAttribute('hidden')).toBe(true)
   more.click(); await settle(el)
   expect(more.getAttribute('aria-expanded')).toBe('true')
@@ -83,8 +83,12 @@ test('narrow: the buttons fold into a ⋯ menu', async () => {
   expect(more.getAttribute('aria-expanded')).toBe('false')
 })
 
-test('layout picker: eight radios, all enabled, current checked, click switches', async () => {
+test('Layout menu: eight radios, all enabled, current checked, click switches and closes', async () => {
   const { el, calls } = await mount()
+  const menu = q(el, 'button[aria-controls="layouts"]')
+  expect(menu.textContent).toBe('Layout'); expect(q(el, '#layouts').hidden).toBe(true)
+  menu.click(); await settle(el)
+  expect(menu.getAttribute('aria-expanded')).toBe('true'); expect(q(el, '#layouts').hidden).toBe(false)
   const rs = qa(el, '[role="radiogroup"][aria-label="Layout"] [role="radio"]')
   expect(rs).toHaveLength(8)
   expect(rs.filter(r => r.getAttribute('aria-checked') === 'true').map(r => r.getAttribute('aria-label'))).toEqual(['Dynamic'])
@@ -92,15 +96,25 @@ test('layout picker: eight radios, all enabled, current checked, click switches'
   expect(rs.map(r => r.title)).toEqual(rs.map(r => r.getAttribute('aria-label')!))
   rs.find(r => r.getAttribute('aria-label') === 'Two columns')!.click(); await settle(el)
   expect(calls).toEqual([['setTemplate', 'two-cols']])
+  expect(q(el, '#layouts').hidden).toBe(true)
   expect(qa(el, '.view')).toHaveLength(0)
   expect(qa(el, '[role="radio"][aria-checked="true"]').map(r => r.getAttribute('aria-label'))).toEqual(['Two columns'])
 })
 
-test('narrow: the layout row is the first child of the menu panel', async () => {
+test('narrow: the Layout menu stays beside ⋯, not inside it', async () => {
   const { el } = await mount(true)
-  const row = q(el, '[role="radiogroup"]')
-  expect(row.parentElement).toBe(q(el, '.panel')); expect(q(el, '.panel').firstElementChild).toBe(row)
   expect(qa(el, '[role="radiogroup"]')).toHaveLength(1)
+  expect(q(el, '#panel').contains(q(el, '[role="radiogroup"]'))).toBe(false)
+})
+
+test('Escape closes the Layout menu; opening ⋯ closes it', async () => {
+  const { el } = await mount(true)
+  const menu = q(el, 'button[aria-controls="layouts"]'), more = q(el, 'button[aria-label="More workspace actions"]')
+  menu.click(); await settle(el)
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await settle(el)
+  expect(menu.getAttribute('aria-expanded')).toBe('false')
+  menu.click(); await settle(el); more.click(); await settle(el)
+  expect(menu.getAttribute('aria-expanded')).toBe('false'); expect(more.getAttribute('aria-expanded')).toBe('true')
 })
 
 test('each thumbnail draws one rect per position', async () => {

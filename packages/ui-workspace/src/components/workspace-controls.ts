@@ -1,4 +1,4 @@
-// <nano-workspace-controls dock="<id>">: the controls of one workspace dock (layout, window style, connections, the Desk page,
+// <nano-workspace-controls dock="<id>">: the controls of one workspace dock (a Layout menu, window style, connections, the Desk page,
 // save, restore, reset), the element the app bar shows while that dock's page is shown. It drives the dock by id; nothing here is persisted.
 // BACKLOG(5): it was also a nano-runes component (WorkspaceControls) in the host registry; now only the element.
 import { LitElement, css, html, svg } from 'lit'
@@ -32,15 +32,17 @@ const R: Record<TemplateId, number[][]> = {
 const NARROW = '(max-width: 840px)'
 
 export class WorkspaceControlsEl extends LitElement {
-  static properties = { dock: {}, open: { state: true }, narrow: { state: true } }
+  static properties = { dock: {}, open: { state: true }, layouts: { state: true }, narrow: { state: true } }
   static styles = [base, css`
     :host { display: inline-flex; align-items: center; gap: 4px; position: relative; color: inherit }
     button { font: inherit; color: inherit; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px }
     button:hover { background: color-mix(in srgb, currentColor 12%, transparent) }
     button:focus-visible { outline: 2px solid var(--nano-accent, #8FB3FF); outline-offset: 2px }
     svg { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }
-    .layout { display: inline-flex; gap: 2px }
-    .layout button[aria-checked="true"] { background: color-mix(in srgb, currentColor 22%, transparent) }
+    .menu { position: relative; display: inline-flex }
+    .menu > button { padding: 4px 10px }
+    .menu .panel { left: 0; right: auto }
+    .layout button[aria-checked="true"] { background: var(--nano-surface-2, #222933) }
     .layout svg { width: 24px; height: 16px; fill: currentColor; stroke: none }
     .view { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); border-radius: 8px }
     .view button { padding: 2px 8px }
@@ -48,25 +50,26 @@ export class WorkspaceControlsEl extends LitElement {
     .panel { position: absolute; right: 0; top: calc(100% + 4px); z-index: 10; min-width: 12rem; display: flex; flex-direction: column; padding: 4px;
       background: var(--nano-surface, #131820); border: 1px solid var(--nano-border, #2A303C); border-radius: 8px }
     .panel[hidden] { display: none }
-    .panel button { color: var(--nano-fg, #E6EAF0) }
+    .panel button { color: var(--nano-fg, #E6EAF0); justify-content: flex-start }
     .panel button:hover { background: var(--nano-surface-2, #222933) }`]
   declare dock: string
   declare open: boolean
+  declare layouts: boolean
   declare narrow: boolean
   #mq?: MediaQueryList
   #off?: Unsubscribe
-  constructor() { super(); this.dock = ''; this.open = false; this.narrow = false }
+  constructor() { super(); this.dock = ''; this.open = false; this.layouts = false; this.narrow = false }
   #dock() {
     const d = document.getElementById(this.dock) as Dock | null
     if (!d) throw new Error(`no dock ${this.dock}`)
     return d
   }
-  #outside = (e: Event) => { if (this.open && !e.composedPath().includes(this)) this.open = false }
+  #outside = (e: Event) => { if (!e.composedPath().includes(this)) this.open = this.layouts = false }
   #match = () => { this.narrow = !!this.#mq?.matches; if (!this.narrow) this.open = false }
 
   firstUpdated() {
-    this.addEventListener('keydown', e => { if (e.key === 'Escape' && this.open) this.#close(true) })
-    this.addEventListener('focusout', e => { if (this.open && e.relatedTarget instanceof Node && !this.contains(e.relatedTarget)) this.open = false })
+    this.addEventListener('keydown', e => { if (e.key === 'Escape' && this.layouts) this.#closeLayouts(); else if (e.key === 'Escape' && this.open) this.#close(true) })
+    this.addEventListener('focusout', e => { if (e.relatedTarget instanceof Node && !this.contains(e.relatedTarget)) this.open = this.layouts = false })
   }
   connectedCallback() {
     super.connectedCallback()
@@ -82,13 +85,15 @@ export class WorkspaceControlsEl extends LitElement {
   }
 
   #close(refocus: boolean) { this.open = false; if (refocus) void this.updateComplete.then(() => this.renderRoot.querySelector<HTMLElement>('.more')?.focus()) }
+  #closeLayouts() { this.layouts = false; void this.updateComplete.then(() => this.renderRoot.querySelector<HTMLElement>('.menu > button')?.focus()) }
   // the Desk is a page of its own, not a dock command
   #run(c: Command) { if (c === 'desk') location.hash = '#/desk'; else this.#dock()[c]() }
   #cmd = (c: Command, label: string, text: boolean) => html`<button aria-label=${label} title=${label} @click=${() => { this.#close(false); this.#run(c) }}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[c]}</svg>${text ? label : ''}</button>`
 
   #layouts(d: Dock | null) {
-    return html`<span class="layout" role="radiogroup" aria-label="Layout">${TEMPLATES.map(t => html`<button role="radio" aria-label=${t.title} aria-checked=${(d?.template ?? 'dock') === t.id ? 'true' : 'false'} title=${t.title}
-        @click=${() => { this.#dock().setTemplate(t.id); this.requestUpdate() }}><svg viewBox="0 0 24 16" aria-hidden="true">${R[t.id].map(([x, y, w, h]) => svg`<rect x=${x} y=${y} width=${w} height=${h} rx="1"/>`)}</svg></button>`)}</span>`
+    return html`<span class="menu"><button aria-controls="layouts" aria-expanded=${this.layouts ? 'true' : 'false'} @click=${() => { this.layouts = !this.layouts; this.open = false }}>Layout</button>
+      <div id="layouts" class="panel layout" role="radiogroup" aria-label="Layout" ?hidden=${!this.layouts}>${TEMPLATES.map(t => html`<button role="radio" aria-label=${t.title} aria-checked=${(d?.template ?? 'dock') === t.id ? 'true' : 'false'} title=${t.title}
+        @click=${() => { this.#dock().setTemplate(t.id); this.#closeLayouts() }}><svg viewBox="0 0 24 16" aria-hidden="true">${R[t.id].map(([x, y, w, h]) => svg`<rect x=${x} y=${y} width=${w} height=${h} rx="1"/>`)}</svg>${t.title}</button>`)}</div></span>`
   }
 
   render() {
@@ -97,11 +102,11 @@ export class WorkspaceControlsEl extends LitElement {
     const free = (d?.template ?? 'dock') === 'dock'
     const view = html`<span class="view" role="group" aria-label="View">${WINDOW_STYLES.map(w =>
         html`<button aria-pressed=${style === w.id ? 'true' : 'false'} @click=${() => { this.#dock().setWindowStyle(w.id); this.requestUpdate() }}>${w.title}</button>`)}</span>`
-    return html`${this.narrow ? '' : this.#layouts(d)}${free ? view : ''}
+    return html`${this.#layouts(d)}${free ? view : ''}
       ${this.narrow
         ? html`<button class="more" aria-label="More workspace actions" title="More workspace actions" aria-controls="panel" aria-expanded=${this.open ? 'true' : 'false'}
-              @click=${() => { this.open = !this.open }}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.more}</svg></button>
-            <div id="panel" class="panel" role="group" aria-label="Workspace actions" ?hidden=${!this.open}>${this.#layouts(d)}${COMMANDS.map(([c, l]) => this.#cmd(c, l, true))}</div>`
+              @click=${() => { this.open = !this.open; this.layouts = false }}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.more}</svg></button>
+            <div id="panel" class="panel" role="group" aria-label="Workspace actions" ?hidden=${!this.open}>${COMMANDS.map(([c, l]) => this.#cmd(c, l, true))}</div>`
         : COMMANDS.map(([c, l]) => this.#cmd(c, l, false))}`
   }
 }
