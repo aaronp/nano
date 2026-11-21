@@ -41,7 +41,7 @@ const NodeStatus = Schema.define(Type.Object({
 }), 'NodeStatus')
 
 const ClusterSpec = Schema.define(Type.Object({
-  name: Type.String({ pattern: '^[a-z][a-z0-9-]*$' }), size: Type.Union([Type.Literal(3), Type.Literal(5)]), seed: Type.Integer(),
+  name: Type.String(), size: Type.Union([Type.Literal(3), Type.Literal(5)]), seed: Type.Integer(),
   heartbeatMs: Type.Optional(Type.Integer({ minimum: 10, maximum: 60000 })),
 }), 'ClusterSpec')
 const ClusterName = Schema.define(Type.Object({ name: Type.String() }), 'ClusterName')

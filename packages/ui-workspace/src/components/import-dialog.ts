@@ -8,7 +8,7 @@
  * shown as a toast and changes nothing).
  * BACKLOG(7): imports are not remembered; a package by its manifest is not imported.
  */
-import type { AppDeployment } from '@pritzlaff/nano-core';
+import { failure, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core';
 import type { Outline } from '@pritzlaff/nano-outline';
 import { opened } from '../migrate.ts';
 import type { Host } from '../host.ts';
@@ -18,7 +18,7 @@ import { preview } from './import-preview.ts';
 /** The dialog's edit of the file: of its app (`edit`) and, the same choices, of its pages (`pages`). */
 type Chosen = { edit(d: AppDeployment): AppDeployment; pages(p: Outline): Outline };
 /** How to reach the network and the host: the page's fetch and the host, or stand-ins in tests. */
-export type ImportDeps = { fetchJson(url: string): Promise<unknown>; importUrl(url: string, chosen?: Chosen): Promise<{ ok: boolean }>;
+export type ImportDeps = { fetchJson(url: string): Promise<unknown>; importUrl(url: string, chosen?: Chosen): Promise<NanoResult<void>>;
   /** Whether the workspace already has provider `coord` (its pods are not new code: Trust leaves them as the file says). */
   known(coord: string): boolean };
 let host: Host | undefined;
@@ -26,7 +26,7 @@ let host: Host | undefined;
 export const setImportHost = (h: Host) => { host = h; };
 export const pageDeps: ImportDeps = {
   fetchJson: async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); },
-  importUrl: (url, chosen) => (host ? host.importUrl(url, chosen) : Promise.resolve({ ok: false })),
+  importUrl: (url, chosen) => (host ? host.importUrl(url, chosen) : Promise.resolve(failure('threw', 'the host is not started'))),
   known: (coord) => ownProvider(!!host?.registry.provider(coord), host?.data().modules?.[coord]),
 };
 
@@ -123,8 +123,8 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
   $('[data-import]').addEventListener('click', async () => {
     button().disabled = true;
     const as = names(), t = trust(), only = kept();
-    const done = await deps.importUrl(url, { edit: f => trusted(renameRuntimes(selectPods(f, only).deployment, as), t, deps.known), pages: p => renameRuntimes(selectPods(p, only), as) });   // a failure is a toast
-    if (!done.ok) { button().disabled = false; return; }
+    const done = await deps.importUrl(url, { edit: f => trusted(renameRuntimes(selectPods(f, only).deployment, as), t, deps.known), pages: p => renameRuntimes(selectPods(p, only), as) });   // a failure is a toast, which the modal dialog covers: its reason shows here too
+    if (!done.ok) { button().disabled = false; say(done.fail.reason); return; }
     d.close();
   });
   d.addEventListener('close', () => d.remove());

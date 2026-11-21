@@ -145,3 +145,9 @@ describe('seconds-scale timing', () => {
     expect(n.electionAlarm).toBeLessThanOrEqual(6000)
   })
 })
+
+test('given a cluster name that is not lowercase letters, digits and hyphens, then create refuses it and deploys nothing', async () => {
+  app = await openRaft()
+  for (const name of ['Bad', '1x', 'a b', '']) expect((await app.call('raft', 'cluster').create({ name, size: 3, seed: 1 })).ok).toBe(false)
+  expect(must(await app.call('raft', 'cluster').list(null))).toEqual([])
+})
