@@ -1,13 +1,14 @@
 /**
  * The React host: a row of tabs per level of the Outline's tree along the path to the shown page (titles from `title`), the shown page as a CSS grid of its
  * slots in slot order (its column count in `layout.react`), and a picker that deploys a lazy pod into a runtime and
- * applies its slot. Only the shown page is opened (`outline.open`), again when it or its resolution changes.
+ * applies its slot (`host.pick`). Only the shown page is opened (`outline.open`), again when it or its resolution changes.
  */
 import { useEffect, useState } from 'react'
-import type { Host } from './boot.ts'
+import type { ViewMap } from '@pritzlaff/nano-ui'
+import { removeSlot, type Host } from '@pritzlaff/nano-host'
 import { catalog } from './catalog.ts'
 import { SlotCell, type Opened } from './slot.tsx'
-import { addPage, addSlot, columnsOf, levels, removeSlot, setColumns, titleOf } from './slots.ts'
+import { columnsOf, edit, levels, newPage, setColumns, titleOf } from './pages.ts'
 
 /** Re-renders on every Outline change; the pages it names. */
 function useChanges(h: Host): [number, string[]] {
@@ -16,10 +17,10 @@ function useChanges(h: Host): [number, string[]] {
   return seen
 }
 
-function Picker({ h, page, say }: { h: Host; page: string; say(s: string): void }) {
-  const items = catalog(h), runtimes = [...new Set(['main', ...Object.keys(h.app.deployment().runtimes)])]
+function Picker({ h, views, page, say }: { h: Host; views: ViewMap; page: string; say(s: string): void }) {
+  const items = catalog(h.registry, views), runtimes = [...new Set(['main', ...Object.keys(h.app.deployment().runtimes)])]
   const [impl, setImpl] = useState(items[0]?.implementation ?? ''), [runtime, setRuntime] = useState('main')
-  const add = async () => { const r = await addSlot(h, page, impl, runtime); say(r.ok ? `added ${r.value}` : r.fail.reason) }
+  const add = async () => { const r = await h.pick(page, impl, runtime); say(r.ok ? `added ${r.value}` : r.fail.reason) }
   return (
     <form className="picker" onSubmit={e => { e.preventDefault(); void add() }}>
       <label>Implementation <select value={impl} onChange={e => setImpl(e.target.value)}>
@@ -32,7 +33,7 @@ function Picker({ h, page, say }: { h: Host; page: string; say(s: string): void 
   )
 }
 
-export function App({ h }: { h: Host }) {
+export function App({ h, views }: { h: Host; views: ViewMap }) {
   const [n, touched] = useChanges(h), doc = h.outline.document().doc, first = doc.roots[0] ?? ''
   const [chosen, setChosen] = useState(first), page = doc.pages[chosen] ? chosen : first
   const [opened, setOpened] = useState<Record<string, Opened>>({}), [note, say] = useState('')
@@ -45,10 +46,10 @@ export function App({ h }: { h: Host }) {
     return () => { live = false }
   }, [h, page, opens])
   const shown = doc.pages[page], columns = columnsOf(shown)
-  const newPage = (top: boolean) => {
+  const ask = (top: boolean) => {
     const title = prompt('Page title')?.trim()
     if (!title) return
-    const r = addPage(h, title, top ? undefined : page || undefined)
+    const r = newPage(h, title, top ? undefined : page || undefined)
     if (r.ok) setChosen(r.value); else say(r.fail.reason)
   }
   return (
@@ -57,18 +58,18 @@ export function App({ h }: { h: Host }) {
         {row.ids.map(id => <button key={id} role="tab" aria-selected={id === row.at} onClick={() => setChosen(id)}>{titleOf(id, doc.pages[id])}</button>)}
       </nav>)}
       <nav aria-label="Add a page">
-        <button type="button" onClick={() => newPage(false)} aria-label="New child page" disabled={!page}>+</button>
-        <button type="button" onClick={() => newPage(true)} aria-label="New top page">+ top</button>
+        <button type="button" onClick={() => ask(false)} aria-label="New child page" disabled={!page}>+</button>
+        <button type="button" onClick={() => ask(true)} aria-label="New top page">+ top</button>
       </nav>
       {shown ? <main role="tabpanel" aria-label={titleOf(page, shown)}>
         <div className="bar">
-          <Picker key={page} h={h} page={page} say={say} />
+          <Picker key={page} h={h} views={views} page={page} say={say} />
           <label>Columns <select value={columns} onChange={e => { const r = setColumns(h, page, Number(e.target.value)); if (!r.ok) say(r.fail.reason) }}>
             {[1, 2, 3, 4].map(c => <option key={c} value={c}>{c}</option>)}
           </select></label>
         </div>
         <div className="grid" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
-          {Object.keys(shown.slots).map(s => <SlotCell key={s} h={h} id={s} opened={opened[s]} remove={() => { const r = removeSlot(h, page, s); if (!r.ok) say(r.fail.reason) }} />)}
+          {Object.keys(shown.slots).map(s => <SlotCell key={s} h={h} views={views} id={s} opened={opened[s]} remove={() => { const r = edit(h, o => removeSlot(o, page, s)); if (!r.ok) say(r.fail.reason) }} />)}
         </div>
         {!Object.keys(shown.slots).length && <p className="note">No slots yet: add one above.</p>}
       </main> : <p className="note">No pages yet: + makes one.</p>}

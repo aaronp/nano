@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@pritzlaff/nano-core": "workspace:*",
+    "@pritzlaff/nano-host": "workspace:*",
     "@pritzlaff/nano-outline": "workspace:*",
     "@pritzlaff/nano-ui": "workspace:*",
     "react": "^19.1.0",

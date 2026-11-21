@@ -124,3 +124,26 @@ each page with `children`. /react/ now follows the tree: one row of tabs per lev
 "+" adds a child of the shown page, "+ top" a root. It reads `nano-workspace.outline`, else the old
 `nano-workspace.platform`, writes only the former, and its another-tab guard watches both keys. Mentions of the Platform above
 are as written then.
+
+## Update: on the host core (plan 4, Task 3)
+
+host-react is rebuilt on `@pritzlaff/nano-host` (ADR-0041). `stored.ts`, `connect.ts` and `slots.ts` are gone; `boot.ts`
+shrank to `Host.boot` with nano.ui as a host provider and the same-origin rule as its own `load` (a wrapper over core's
+`Registry.load`: a module on another origin still fails the boot); `pages.ts` holds what stayed (the tabs per level,
+title, columns, and a small `edit(h, f)` applying a host-core page edit on the live outline's version).
+
+What moved to the host core: items 1–5 (loading via `opts.load`/`exports`, boot, the host fields as `host`, storage under
+one key `nano-host.document` with migration from the old keys and the another-tab guard), 7–9 (`host.pick`: the lazy pod,
+its starting config now the implementation's config schema `default`, the host rule, auto-connect), 10–12 (`addSlot`,
+`removeSlot`, `addPage` as pure edits) and 18 (the `open` result type is derived from `Host['outline']['open']`). Item 14's
+re-open on change stays in `app.tsx` (the live outline's `listen`), 15–17 stay as they were.
+
+Views: the override is `document().host.views`; nano-ui's `viewFor` still reads `deployment.views` until plan 5, so
+`slot.tsx` passes it `{ ...app.deployment(), views: host.views }`. Columns stay in `layout.react` on the page, written
+through `host.outline.apply`.
+
+Interim (ruled): until plan 5 the workspace writes the old `nano-workspace.*` keys and /react/ the new one; they share
+data only at /react/'s first boot, through migration.
+
+Lines (`wc -l` on `src/*.ts` and `src/*.tsx`): **320 before** (boot 64, slots 75, stored 25, connect 19, catalog 10,
+app 78, slot 36, main 13), **206 after** (boot 27, pages 40, catalog 11, app 79, slot 36, main 13).

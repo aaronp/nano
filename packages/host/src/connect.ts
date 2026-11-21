@@ -1,7 +1,7 @@
 /**
  * A new pod's dependencies, each wired to the one other placed pod matching it (a call edge in that pod's runtime, and,
- * when its policy is `rules`, a rule letting the new pod in). None or several: left unwired. Pure. (host-react's
- * connect.ts and the workspace's auto-connect.ts do the same until they move onto the host core.)
+ * when its policy is `rules`, a rule letting the new pod in). None or several: left unwired. Pure. (The workspace's
+ * auto-connect.ts does the same until it moves onto the host core.)
  */
 import { matches, type AppDeployment, type Registry } from '@pritzlaff/nano-core'
 import { targets } from '@pritzlaff/nano-outline'
