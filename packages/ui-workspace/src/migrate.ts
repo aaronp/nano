@@ -94,12 +94,13 @@ const stripped = (d: AppDeployment): AppDeployment => {
 
 /** `p` without the old `meta.workspace.order`. */
 const unordered = (p: Page): Page => { if (!('order' in metaOf(p))) return p; const { order: _, ...w } = metaOf(p); return withMeta(p, w) }
-/** `doc` a tree, once: each page `keyed`, the roots in the old order (Main first, moved there from wherever it is; a page without an order last), the order dropped. */
+/** `doc` a tree, once: each page `keyed`, the roots in the old order (Main first, moved there from wherever it is; a page without an order last), the order and empty `children` dropped. */
 export function treed(doc: Outline): Outline {
   const pages = Object.fromEntries(Object.entries(doc.pages).map(([id, p]) => [id, keyed(p)]))
   const at = (id: string) => { const o = metaOf(pages[id])['order']; return id === MAIN ? -Infinity : typeof o === 'number' ? o : Infinity }
   const roots = [...(Object.hasOwn(pages, MAIN) ? [MAIN] : []), ...doc.roots.filter(r => r !== MAIN)].sort((a, b) => at(a) - at(b) || 0)
-  return { roots, pages: Object.fromEntries(Object.entries(pages).map(([id, p]) => [id, unordered(p.children?.includes(MAIN) ? { ...p, children: p.children.filter(c => c !== MAIN) } : p)])) }
+  const kids = (p: Page): Page => { const { children = [], ...rest } = p, c = children.filter(x => x !== MAIN); return c.length ? { ...rest, children: c } : rest }   // no Main, no empty list
+  return { roots, pages: Object.fromEntries(Object.entries(pages).map(([id, p]) => [id, unordered(kids(p))])) }
 }
 
 /** A file as opened: an `{ app, outline }` bundle (File › Save's; `{ app, platform }` before) as its two parts, a plain nano.json as itself with its old pages migrated; its pages `treed`. */

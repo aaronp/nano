@@ -23,6 +23,7 @@ export const fill = (doc: Document, row: HTMLElement, p: Row) => {
   const main = p.id === MAIN, icon = p.icon ?? (main ? 'panels' : 'window'), was = row.querySelector<HTMLAnchorElement>(':scope > a');
   if (row.dataset.saved === p.id && was?.dataset.icon === icon && was.title === p.title) return;
   const a = doc.createElement('a'), handle = button(doc, 'handle', `Move ${p.title}`, '⠿');
+  handle.setAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight');
   a.href = `#${routeOf(p.id)}`; a.dataset.icon = icon; a.title = p.title;
   a.innerHTML = `<span data-glyph><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${Object.hasOwn(ICONS, icon) ? ICONS[icon] : ''}"/></svg></span><span data-name></span><span data-depth class="visually-hidden"></span>`;
   a.querySelector('[data-name]')!.textContent = p.title;

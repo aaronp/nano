@@ -1,7 +1,7 @@
 /**
  * Boot: the stored app document's providers (nano.ui is this page's own; the rest same-origin modules, their `views`
- * kept), assembled into the one Application, and the Platform over the stored pages. Both documents are saved on each
- * `applied` and Platform change, unless another tab (the workspace, say) wrote them since: then this tab stops saving.
+ * kept), assembled into the one Application, and the Outline over the stored pages. Both documents are saved on each
+ * `applied` and Outline change, unless another tab (the workspace, say) wrote them since: then this tab stops saving.
  *
  *   const h = await boot(localStorage)        // NanoResult<Host>
  */
@@ -11,7 +11,7 @@ import { Outline } from '@pritzlaff/nano-outline'
 import { KEYS, readStored, writeStored } from './stored.ts'
 
 export type Host = {
-  app: Application; registry: Registry; platform: ReturnType<typeof Outline.create>; views: ViewMap
+  app: Application; registry: Registry; outline: ReturnType<typeof Outline.create>; views: ViewMap
   /** The app document as saved: the live deployment with the stored modules, frames, views and layout. */
   saved(): AppDeployment
   /** Why saving stopped (another tab wrote, or storage refused), once it has. */
@@ -51,14 +51,14 @@ export async function boot(storage: Storage, load: Load = u => import(u), base =
   if (!runtimes.ok) return runtimes
   const created = await Application.create(runtimes.value)
   if (!created.ok) return created
-  const app = created.value, platform = Outline.create(app, registry, pages.value)
+  const app = created.value, outline = Outline.create(app, registry, pages.value)
   const { modules, frames, views: selectors, layout } = doc
   const saved = (): AppDeployment => ({ ...app.deployment(), ...(modules && { modules }), ...(frames && { frames }), ...(selectors && { views: selectors }), ...(layout !== undefined && { layout }) })
   let stopped: string | undefined
   const stop = (reason: string) => { stopped ??= reason; onStop?.() }
-  const save = () => { if (stopped) return; const failed = writeStored(storage, saved(), platform.document().doc); if (failed) stop(`not saved: ${failed}`) }
+  const save = () => { if (stopped) return; const failed = writeStored(storage, saved(), outline.document().doc); if (failed) stop(`not saved: ${failed}`) }
   app.listen(e => { if (e.type === 'applied') save() })
-  platform.listen(save)
+  outline.listen(save)
   globalThis.addEventListener?.('storage', e => { const k = (e as StorageEvent).key; if (k === KEYS.app || k === KEYS.pages || k === KEYS.old) stop('changed in another tab: reload to continue') })
-  return success({ app, registry, platform, views: views.value, saved, stopped: () => stopped })
+  return success({ app, registry, outline, views: views.value, saved, stopped: () => stopped })
 }

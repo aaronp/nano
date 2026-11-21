@@ -1,5 +1,5 @@
 /**
- * Page edits, each one `platform.apply`: add a slot (deploy a lazy pod, then apply its `pod` slot), remove a slot, add a
+ * Page edits, each one `outline.apply`: add a slot (deploy a lazy pod, then apply its `pod` slot), remove a slot, add a
  * page (its `title`), set a page's columns (`layout.react`, ADR-0039: the other clients' keys kept as they are).
  *
  *   await addSlot(h, 'workspace', 'nano.ui/log', 'main')   // success('log1')
@@ -16,8 +16,8 @@ const free = (base: string, taken: (id: string) => boolean) => { let id = base; 
 
 /** Page `id` replaced by `f` of it, applied. */
 function edit(h: Host, id: string, f: (p: Page) => Page): NanoResult<void> {
-  const d = h.platform.document().doc, p = d.pages[id]
-  return p ? h.platform.apply({ ...d, pages: { ...d.pages, [id]: f(p) } }) : failure('not-found', `no page ${id}`)
+  const d = h.outline.document().doc, p = d.pages[id]
+  return p ? h.outline.apply({ ...d, pages: { ...d.pages, [id]: f(p) } }) : failure('not-found', `no page ${id}`)
 }
 
 /** One add at a time, so no two take one name. */
@@ -49,11 +49,11 @@ export const removeSlot = (h: Host, page: string, slot: string) => edit(h, page,
 
 /** A new empty page titled `title`, a child of page `parent` or (none) a root; its id from the title. */
 export function addPage(h: Host, title: string, parent?: string): NanoResult<string> {
-  const { roots, pages } = h.platform.document().doc, up = parent === undefined ? undefined : pages[parent]
+  const { roots, pages } = h.outline.document().doc, up = parent === undefined ? undefined : pages[parent]
   if (parent !== undefined && !up) return failure('not-found', `no page ${parent}`)
   const id = free(title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'page', s => s in pages)
   const made = { ...pages, [id]: { slots: {}, title } }
-  const r = h.platform.apply(parent !== undefined && up ? { roots, pages: { ...made, [parent]: { ...up, children: [...(up.children ?? []), id] } } } : { roots: [...roots, id], pages: made })
+  const r = h.outline.apply(parent !== undefined && up ? { roots, pages: { ...made, [parent]: { ...up, children: [...(up.children ?? []), id] } } } : { roots: [...roots, id], pages: made })
   return r.ok ? success(id) : r
 }
 

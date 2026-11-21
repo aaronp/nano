@@ -95,6 +95,9 @@ test('treed: a flat document or one with meta.workspace.order becomes a tree onc
   expect(strs(treed(parsed(flatOld)))).toEqual({ roots: ['workspace', 'a', 'b', 'none'], pages: { b: { slots: {}, meta: { workspace: { icon: 'star' }, react: 1 } }, none: { slots: {} }, workspace: { slots: {} }, a: { slots: {} } } })
   const tree = parsed({ roots: ['workspace', 'a'], pages: { workspace: { slots: {} }, a: { slots: {}, children: ['b'] }, b: { slots: {} } } })
   expect(treed(tree)).toEqual(tree)   // a tree already: as it is
+  const under = treed(parsed({ roots: ['a'], pages: { a: { slots: {}, children: ['workspace'] }, workspace: { slots: {} } } }))
+  expect(under.roots).toEqual(['workspace', 'a'])
+  expect(Object.keys(under.pages['a']!)).toEqual(['slots'])   // Main moved out: no empty children list left
 })
 
 test('opened: an { app, outline } bundle, an { app, platform } bundle with the old order and a plain nano.json load into the same tree', () => {

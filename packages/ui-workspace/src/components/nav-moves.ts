@@ -1,7 +1,7 @@
 /**
  * The nav's moves (ADR-0040), each one `applyPages` of a `move` (lib/pages.ts), announced in a live region. A row's
  * handle, focused: Alt+↑/↓ moves its page among its siblings, Alt+→ makes it the last child of the sibling above,
- * Alt+← moves it out to follow its parent. Dragged: dropped on a row's middle it is that page's last child, near its
+ * Alt+← moves it out to follow its parent; a refused move says so ("Lab can't move up"). Dragged: dropped on a row's middle it is that page's last child, near its
  * top or bottom edge before or after it, at its level; never into its own subtree, nor before Main (Main has no handle).
  * `reveal` opens the parents of where it went; the Outline's change reorders the nav.
  */
@@ -10,6 +10,7 @@ import { applyPages, childrenOf, move, parentOf, subtree } from '../lib/pages.ts
 
 type Zone = 'before' | 'inside' | 'after';
 const titleOf = (d: Outline, id: string) => d.pages[id]?.title ?? id;
+const WAY: Record<string, string> = { ArrowUp: 'up', ArrowDown: 'down', ArrowRight: 'in', ArrowLeft: 'out' };
 
 /** Where key `key` takes page `id`: the next document (undefined if refused) and what is said. */
 function byKey(d: Outline, id: string, key: string): [Outline | undefined, string] | undefined {
@@ -45,11 +46,13 @@ export function navMoves(doc: Document, outline: ReturnType<typeof Outline.creat
   live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite');
   live.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)';
   doc.body.append(live);
-  const apply = (id: string, next: Outline | undefined, said: string) => {
-    if (!next || !applyPages(outline, next).ok) return false;
-    reveal(id);
+  const say = (said: string) => {
     live.textContent = '';   // cleared first so a repeat is announced again
     setTimeout(() => { live.textContent = said; }, 50);
+  };
+  const apply = (id: string, next: Outline | undefined, said: string) => {
+    if (!next || !applyPages(outline, next).ok) return false;
+    reveal(id); say(said);
     return true;
   };
   const rowOf = (t: EventTarget | null) => (t as Element | null)?.closest?.<HTMLElement>('[data-saved]') ?? null;
@@ -58,8 +61,9 @@ export function navMoves(doc: Document, outline: ReturnType<typeof Outline.creat
     const handle = (e.target as Element | null)?.closest?.<HTMLElement>('[data-handle]'), id = rowOf(handle ?? null)?.dataset.saved;
     if (!handle || id === undefined || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || !e.key.startsWith('Arrow')) return;
     e.preventDefault();
-    const to = byKey(outline.document().doc, id, e.key);
+    const d = outline.document().doc, to = byKey(d, id, e.key);
     if (to && apply(id, ...to)) handle.focus();
+    else if (WAY[e.key]) say(`${titleOf(d, id)} can't move ${WAY[e.key]}`);
   });
 
   let dragged: string | undefined;

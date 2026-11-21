@@ -1,5 +1,5 @@
 /**
- * Builds the React host into the workspace's public/react/ (served at /react/): main.js (React and the Platform bundled
+ * Builds the React host into the workspace's public/react/ (served at /react/): main.js (React and the Outline bundled
  * in; nano-core, nano-ui, nano-elements, lit and typebox left to the page's import map, the workspace's shared copies)
  * and index.html.
  */

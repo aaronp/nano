@@ -27,7 +27,8 @@ const storage = (() => { try { return localStorage; } catch (e) { const no = () 
 const stored = persisted(storage, KEY, PAGES_KEY, OLD_PAGES_KEY), doc = stored.load();
 
 defineViews();
-const started = await start(() => outline);
+let made: ReturnType<typeof Outline.create> | undefined;   // the pod reads it, maybe before `outline` is made (the stored import): undefined then
+const started = await start(() => made);
 if (!started.ok) toast(started.fail.reason, { variant: 'bad', duration: 0 });
 /** The page's host; undefined if it did not start (a toast says why). */
 export const host: Host | undefined = started.ok ? started.value : undefined;
@@ -36,12 +37,14 @@ const loaded = host && at ? await host.importUrl(at).finally(() => URL.revokeObj
 const first = host ? await bootPages(host, storage, doc, stored.pages(), loaded.ok) : undefined;
 /** The page's pages (ADR-0040): one Outline for the page's life; undefined without a host. */
 const startWith = first?.ok ? first : host && await bootPages(host, storage, null, null, false);   // pages that failed: Main alone
-export const outline = host && startWith?.ok ? Outline.create(host.app, host.registry, startWith.value) : undefined;
+export const outline = made = host && startWith?.ok ? Outline.create(host.app, host.registry, startWith.value) : undefined;
 
 if (host && outline) {
   host.importUrl = importing(host.importUrl.bind(host), outline);
-  // the lazy pod `outline` built now (ADR-0031), so its `changed` reaches subscribers before anything calls it
-  void host.app.runtime('main').getOrCreate(HOST_PODS[2]);
+  // the lazy pod `outline` built now (ADR-0031), and again after each restart (Reset), so its `changed` reaches subscribers before anything calls it
+  const [, , OUTLINE] = HOST_PODS, build = () => void host.app.runtime('main').getOrCreate(OUTLINE);
+  build();
+  host.app.listen((e) => { if (e.type === 'restarted' && e.pod === OUTLINE) build(); });
   let timer: ReturnType<typeof setTimeout> | undefined, elsewhere = !loaded.ok || !first?.ok;
   const write = () => { timer = undefined; if (!elsewhere) stored.save(host.saved(), outline.document().doc); };
   const save = () => { clearTimeout(timer); timer = setTimeout(write, SAVE_MS); };

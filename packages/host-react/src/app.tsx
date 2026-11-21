@@ -1,7 +1,7 @@
 /**
  * The React host: a row of tabs per level of the Outline's tree along the path to the shown page (titles from `title`), the shown page as a CSS grid of its
  * slots in slot order (its column count in `layout.react`), and a picker that deploys a lazy pod into a runtime and
- * applies its slot. Only the shown page is opened (`platform.open`), again when it or its resolution changes.
+ * applies its slot. Only the shown page is opened (`outline.open`), again when it or its resolution changes.
  */
 import { useEffect, useState } from 'react'
 import type { Host } from './boot.ts'
@@ -9,10 +9,10 @@ import { catalog } from './catalog.ts'
 import { SlotCell, type Opened } from './slot.tsx'
 import { addPage, addSlot, columnsOf, levels, removeSlot, setColumns, titleOf } from './slots.ts'
 
-/** Re-renders on every Platform change; the pages it names. */
+/** Re-renders on every Outline change; the pages it names. */
 function useChanges(h: Host): [number, string[]] {
   const [seen, set] = useState<[number, string[]]>([0, []])
-  useEffect(() => h.platform.listen(c => set(([n]) => [n + 1, [...c.added, ...c.changed, ...c.resolved]])), [h])
+  useEffect(() => h.outline.listen(c => set(([n]) => [n + 1, [...c.added, ...c.changed, ...c.resolved]])), [h])
   return seen
 }
 
@@ -33,7 +33,7 @@ function Picker({ h, page, say }: { h: Host; page: string; say(s: string): void 
 }
 
 export function App({ h }: { h: Host }) {
-  const [n, touched] = useChanges(h), doc = h.platform.document().doc, first = doc.roots[0] ?? ''
+  const [n, touched] = useChanges(h), doc = h.outline.document().doc, first = doc.roots[0] ?? ''
   const [chosen, setChosen] = useState(first), page = doc.pages[chosen] ? chosen : first
   const [opened, setOpened] = useState<Record<string, Opened>>({}), [note, say] = useState('')
   const [opens, setOpens] = useState(0)
@@ -41,7 +41,7 @@ export function App({ h }: { h: Host }) {
   useEffect(() => {
     let live = true
     setOpened({})
-    if (page) void h.platform.open(page).then(r => { if (live) setOpened(r) })
+    if (page) void h.outline.open(page).then(r => { if (live) setOpened(r) })
     return () => { live = false }
   }, [h, page, opens])
   const shown = doc.pages[page], columns = columnsOf(shown)

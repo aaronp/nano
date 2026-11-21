@@ -85,8 +85,9 @@ test('Alt+→ nests a page as the last child of the sibling above; Alt+← moves
   expect(kids('lab')).toEqual(['two', 'a'])
   expect(document.activeElement).toBe(handle())
   await wait(); expect(live()).toBe('Moved Two up')
-  alt('two', 'ArrowUp')   // already first: refused
+  alt('two', 'ArrowUp')   // already first: refused, and said
   expect(kids('lab')).toEqual(['two', 'a'])
+  await wait(); expect(live()).toBe("Two can't move up")
   alt('two', 'ArrowDown'); expect(kids('lab')).toEqual(['a', 'two'])
   expect(document.activeElement).toBe(handle())
   alt('two', 'ArrowLeft')
@@ -95,6 +96,8 @@ test('Alt+→ nests a page as the last child of the sibling above; Alt+← moves
   await wait(); expect(live()).toBe('Moved Two out of Lab')
   alt('two', 'ArrowLeft')   // a root: refused
   expect(d().roots).toEqual(['workspace', 'lab', 'two'])
+  await wait(); expect(live()).toBe("Two can't move out")
+  expect(handle()!.getAttribute('aria-keyshortcuts')).toBe('Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight')
   alt('lab', 'ArrowUp')   // Main's place: refused
   expect(d().roots[0]).toBe('workspace')
 })
