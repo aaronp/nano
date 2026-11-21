@@ -38,6 +38,14 @@
         "@happy-dom/global-registrator": "^21.0.4",
       },
     },
+    "packages/host": {
+      "name": "@pritzlaff/nano-host",
+      "version": "0.1.0",
+      "dependencies": {
+        "@pritzlaff/nano-core": "workspace:*",
+        "@pritzlaff/nano-outline": "workspace:*",
+      },
+    },
     "packages/host-react": {
       "name": "@composable/host-react",
       "version": "0.1.0",
@@ -125,6 +133,8 @@
     "@pritzlaff/nano-core": ["@pritzlaff/nano-core@workspace:packages/nano"],
 
     "@pritzlaff/nano-elements": ["@pritzlaff/nano-elements@workspace:packages/elements"],
+
+    "@pritzlaff/nano-host": ["@pritzlaff/nano-host@workspace:packages/host"],
 
     "@pritzlaff/nano-outline": ["@pritzlaff/nano-outline@workspace:packages/outline"],
 

@@ -1,0 +1,11 @@
+{
+  "name": "@pritzlaff/nano-host",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "The host core: the host document under one key, booted into the one Application; framework-free, shared by every host.",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@pritzlaff/nano-core": "workspace:*",
+    "@pritzlaff/nano-outline": "workspace:*"
+  }
+}
