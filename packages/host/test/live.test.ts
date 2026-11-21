@@ -10,7 +10,8 @@ const Counter = Interface.define('acme.Counter', { inc: Op.action(Num, Num) })
 let builds = 0
 const counter = Implementation.define('acme/counter', { provides: [Counter], make: async () => { builds++; return [provide(Counter, { inc: async (n: number) => success(n + 1) })] } })
 const user = Implementation.define('acme/user', { provides: [], dependencies: { counter: Counter }, make: async () => [] })
-const acme = Provider.define('acme', [counter, user])
+const step = Implementation.define('acme/step', { provides: [], config: Schema.define(Type.Object({ by: Type.Integer() }, { default: { by: 2 } }), 'Step'), make: async () => [] })
+const acme = Provider.define('acme', [counter, user, step])
 
 const KEY = 'nano-host.document'
 const memory = (init: Record<string, unknown> = {}) => {
@@ -73,8 +74,10 @@ test('pick: a lazy pod in a `rules` runtime the host can then reach, then its `p
   expect(saved(s).app.pods.counter1).toEqual({ implementation: 'acme/counter', eager: false })
 })
 
-test('pick connects the new pod\'s dependency to the one pod matching it', async () => {
+test('pick connects the new pod\'s dependency to the one pod matching it; a config schema\'s default is the pod\'s config', async () => {
   const { h } = await boot()
+  expect(await h.pick('home', 'acme/step', 'main')).toEqual(success('step1'))
+  expect(h.app.deployment().pods['step1']!.config).toEqual({ by: 2 })
   expect(await h.pick('home', 'acme/user', 'main')).toEqual(success('user1'))
   expect(h.app.deployment().runtimes['main']!.subscriptions).toEqual([{ kind: 'call', from: 'user1', to: 'c1' }])
 })

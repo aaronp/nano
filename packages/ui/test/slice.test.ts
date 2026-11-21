@@ -34,6 +34,13 @@ describe('the nano.ui slice', () => {
     expect(await app.call('main', 'out').entries(null)).toEqual(success(['HI']))
   })
 
+  test('map\'s config schema declares its starting config (a host\'s pick uses it): the identity', async () => {
+    const start = (map.config as { default?: unknown }).default
+    expect(start).toEqual({ code: 'return x' })
+    const app = await open({ pods: { up: Pod.lazy(map, { config: start }) }, runtimes: { main: { pods: ['up'], subscriptions: [] } } })
+    expect(await app.call('main', 'up').map(7)).toEqual(success(7))
+  })
+
   test('given a map whose code does not parse, when it is called, then it fails with threw and the app keeps running', async () => {
     const app = await open(slice('return ('))
     expect(await app.call('main', 'up').map(1)).toMatchObject({ ok: false, fail: { type: 'threw' } })

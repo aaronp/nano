@@ -61,4 +61,4 @@ export const addSlot = (o: Outline, page: string, slot: Slot) => withPage(o, pag
 })
 
 export const removeSlot = (o: Outline, page: string, slot: string) =>
-  withPage(o, page, ({ slots: { [slot]: gone, ...rest }, ...p }) => (gone ? { ...p, slots: rest } : undefined))
+  withPage(o, page, p => { if (!Object.hasOwn(p.slots, slot)) return undefined; const { [slot]: _, ...rest } = p.slots; return { ...p, slots: rest } })

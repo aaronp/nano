@@ -58,5 +58,6 @@ test('addSlot / removeSlot: a slot under a free id (the pod\'s name, the tool, `
   expect(Object.keys(valid(removeSlot(three, 'b', 't1')).pages['b']!.slots)).toEqual(['t1-2', 'systems'])
   expect(addSlot(tree, 'nope', { kind: 'tool', tool: 'x' })).toBeUndefined()
   expect(removeSlot(three, 'b', 'nope')).toBeUndefined()
+  expect(removeSlot(three, 'b', 'toString')).toBeUndefined()   // not its own slot
   expect(removeSlot(three, 'nope', 't1')).toBeUndefined()
 })
