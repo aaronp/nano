@@ -156,3 +156,6 @@ the measure of what the host core took.
 - **`connect(deployment, registry, pods)`**: pure, exported by the host core; several pods, a dependency already met by
   an existing call edge skipped, `{ deployment, notes }`. It replaces the workspace's `auto-connect.ts` (its import,
   Change implementation and old-page migration use it); `deploy` uses it.
+- **`host.deploy(implementation, runtime)` → `{ name, notes }`**: the system step without a slot (a free name, the
+  starting config, host access, auto-connect); `notes` are `connect`'s (connected and still-needed), so a host can show
+  them. `host.pick` is `deploy` then `addSlot`. **`connect(deployment, registry, pods)`** (pure) is exported.
