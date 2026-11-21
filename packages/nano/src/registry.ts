@@ -101,7 +101,9 @@ async function load(modules: Record<string, string>, base: string | URL): Promis
     try { mod = await import(new URL(path, base).href) }
     catch (e) { return failure('not-found', `${ns} (${path}): ${e instanceof Error ? e.message : String(e)}`) }
     const p = mod.default
-    const added = p && typeof p === 'object' ? registry.add(p as Provider) : failure('invalid-input', `${path} has no default Provider`)
+    // `add` throws on a default export that isn't shaped like a Provider, so shape-check first.
+    const q = p as Partial<Provider> | null
+    const added = q && typeof q.coord === 'string' && q.implementations instanceof Map ? registry.add(q as Provider) : failure('invalid-input', `${path} has no default Provider`)
     if (!added.ok) return added
     exports[ns] = mod
   }
