@@ -5,7 +5,7 @@ import { base } from '@pritzlaff/nano-elements'
 import { Clock, type ViewTarget } from '@pritzlaff/nano-ui'
 import type { Node } from '../core/types.ts'
 import { RaftNode } from '../interfaces.ts'
-import { callNodeOp, type NodeOp } from './detail.ts'
+import { NODE_OPS, callNodeOp, type NodeOp } from './detail.ts'
 import { glyphModel } from './model.ts'
 
 const COLOUR = { follower: '#8b949e', candidate: '#F5A524', leader: '#7EE787' }
@@ -21,13 +21,13 @@ class RaftNodeView extends LitElement {
   declare menu?: { x: number; y: number }
   declare error?: string
   private n = 0
-  private close = (e: Event) => { if (!(e instanceof KeyboardEvent) || e.key === 'Escape') this.menu = undefined }
+  private close = (e: Event) => { if (e instanceof KeyboardEvent ? e.key === 'Escape' : !(e.type === 'contextmenu' && e.composedPath().includes(this))) this.menu = undefined }
   private stop?: () => void
   private watching?: ViewTarget
   constructor() { super(); this.now = 0; this.open = false }
 
-  connectedCallback() { super.connectedCallback(); this.watch(); window.addEventListener('click', this.close); window.addEventListener('keydown', this.close) }
-  disconnectedCallback() { super.disconnectedCallback(); window.removeEventListener('click', this.close); window.removeEventListener('keydown', this.close); this.stop?.(); this.stop = this.watching = undefined }
+  connectedCallback() { super.connectedCallback(); this.watch(); window.addEventListener('click', this.close); window.addEventListener('keydown', this.close); window.addEventListener('contextmenu', this.close) }
+  disconnectedCallback() { super.disconnectedCallback(); window.removeEventListener('click', this.close); window.removeEventListener('keydown', this.close); window.removeEventListener('contextmenu', this.close); this.stop?.(); this.stop = this.watching = undefined }
   willUpdate(changed: Map<string, unknown>) { if (changed.has('target')) this.watch() }
 
   private watch() {
@@ -61,13 +61,13 @@ class RaftNodeView extends LitElement {
     const m = glyphModel(this.status, this.now), c = COLOUR[m.role], k = TAU * R
     const dots = m.peers.map((p, i) => { const a = TAU * i / m.peers.length - Math.PI / 2
       return svg`<circle class="dot ${p.state}" cx=${60 + 52 * Math.cos(a)} cy=${60 + 52 * Math.sin(a)} r="5" stroke=${c} stroke-opacity=${p.state === 'idle' ? 0.2 : 1} fill=${p.state === 'granted' ? c : 'none'}><title>${p.id}: ${p.state}</title></circle>` })
-    return html`<svg viewBox="0 0 120 120" opacity=${m.stopped ? 0.35 : 1} @click=${() => { this.open = true }} @contextmenu=${(e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); this.menu = { x: e.clientX, y: e.clientY } }}>
+    return html`<svg viewBox="0 0 120 120" opacity=${m.stopped ? 0.35 : 1} @click=${() => { this.open = true }} @contextmenu=${(e: MouseEvent) => { e.preventDefault(); this.error = undefined; this.menu = { x: e.clientX, y: e.clientY } }}>
         <circle cx="60" cy="60" r=${R} fill="none" stroke=${c} stroke-opacity="0.25" stroke-width="6"/>
         <circle class="arc" cx="60" cy="60" r=${R} fill="none" stroke=${c} stroke-width="6" stroke-dasharray="${m.arc * k} ${k}" transform="rotate(-90 60 60)"/>
         <text x="60" y="68">${m.term}</text>${dots}</svg>
-      ${this.menu ? html`<div class="menu" role="menu" style="left: ${this.menu.x}px; top: ${this.menu.y}px">${this.menuItem('stop', 'stop')}${this.menuItem('resume', 'resume')}${this.menuItem('restart', 'restart')}${this.menuItem('time out', 'timeOut')}${this.menuItem('request', 'request')}</div>` : ''}
+      ${this.menu ? html`<div class="menu" role="menu" style="left: ${this.menu.x}px; top: ${this.menu.y}px">${NODE_OPS.map(([label, op]) => this.menuItem(label, op))}</div>` : ''}
       ${this.error ? html`<p class="alert bad" role="alert">${this.error}</p>` : ''}
-      ${this.open ? html`<dialog @cancel=${() => { this.open = false }} @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this.open = false }}>
+      ${this.open ? html`<dialog @click=${(e: Event) => { if (e.target === e.currentTarget) this.open = false }} @cancel=${() => { this.open = false }} @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this.open = false }}>
         <div class="row"><strong>${this.status.id}</strong><button class="btn small" type="button" aria-label="close" @click=${() => { this.open = false }}>✕</button></div>
         <raft-detail .target=${this.target} .status=${this.status} .now=${this.now}></raft-detail></dialog>` : ''}`
   }

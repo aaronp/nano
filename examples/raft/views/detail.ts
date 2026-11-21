@@ -7,6 +7,7 @@ import { RaftNode } from '../interfaces.ts'
 import { detailModel } from './model.ts'
 
 export type NodeOp = 'stop' | 'resume' | 'restart' | 'timeOut' | 'request'
+export const NODE_OPS: [string, NodeOp][] = [['stop', 'stop'], ['resume', 'resume'], ['restart', 'restart'], ['time out', 'timeOut'], ['request', 'request']]
 /** Calls a node op on the target (the detail's buttons and the node's menu share it); resolves to the refusal's reason, if any. */
 export async function callNodeOp(t: ViewTarget, op: NodeOp, value: string): Promise<string | undefined> {
   const r = await t.app.call(t.runtime, t.pod)[RaftNode.ops[op].name]!(op === 'request' ? value : null)
@@ -32,7 +33,7 @@ class RaftDetail extends LitElement {
       <table class="rows">${m.rows.map(([k, v]) => html`<tr><th>${k}</th><td>${v}</td></tr>`)}</table>
       <table class="peers"><tr><th>peer</th><th>next</th><th>match</th><th>vote granted</th><th>RPC due</th><th>heartbeat due</th></tr>
         ${m.peers.map(p => html`<tr><td>${p.peer}</td><td>${p.next}</td><td>${p.match}</td><td>${p.granted ? 'yes' : 'no'}</td><td>${p.rpcDue}</td><td>${p.heartbeatDue}</td></tr>`)}</table>
-      <div class="row">${button('stop', 'stop')}${button('resume', 'resume')}${button('restart', 'restart')}${button('time out', 'timeOut')}${button('request', 'request')}</div>
+      <div class="row">${NODE_OPS.map(([label, op]) => button(label, op))}</div>
       ${this.error ? html`<p class="alert bad" role="alert">${this.error}</p>` : ''}</div>`
   }
 }

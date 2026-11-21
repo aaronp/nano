@@ -68,8 +68,26 @@ test('a right-click opens the ops menu; each item calls its op and closes the me
   await pick('restart'); expect((await status(app, 'example-1')).role).toBe('follower')
   await pick('request'); expect(root.querySelector('[role=alert]')).not.toBeNull()   // a follower refuses
   root.querySelector('svg')!.dispatchEvent(new MouseEvent('contextmenu', { cancelable: true })); await el.updateComplete
+  expect(root.querySelector('[role=alert]')).toBeNull()   // opening the menu clears it
+  root.querySelector('svg')!.dispatchEvent(new MouseEvent('contextmenu', { cancelable: true })); await el.updateComplete
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await el.updateComplete
   expect(root.querySelector('[role=menu]')).toBeNull()
+})
+test('a click on the dialog backdrop closes it; a click outside closes the menu; one menu at a time', async () => {
+  app = await cluster()
+  const a = await mount('raft-node', app, 'example-1', 'example-1-raft'), b = await mount('raft-node', app, 'example-2', 'example-2-raft')
+  const ctx = async (el: typeof a) => { el.shadowRoot!.querySelector('svg')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, composed: true, cancelable: true })); await a.updateComplete; await b.updateComplete }
+  const menu = (el: typeof a) => el.shadowRoot!.querySelector('[role=menu]')
+  await ctx(a); expect(menu(a)).not.toBeNull()
+  await ctx(b); expect(menu(a)).toBeNull(); expect(menu(b)).not.toBeNull()
+  document.body.dispatchEvent(new MouseEvent('click', { bubbles: true })); await b.updateComplete
+  expect(menu(b)).toBeNull()
+  a.shadowRoot!.querySelector('svg')!.dispatchEvent(new Event('click')); await a.updateComplete
+  const dialog = a.shadowRoot!.querySelector('dialog')!
+  dialog.querySelector('raft-detail')!.dispatchEvent(new Event('click', { bubbles: true })); await a.updateComplete
+  expect(a.shadowRoot!.querySelector('dialog')).not.toBeNull()   // a click inside stays
+  dialog.dispatchEvent(new Event('click')); await a.updateComplete
+  expect(a.shadowRoot!.querySelector('dialog')).toBeNull()
 })
 test('raft-ledger follows the ledger as the leader takes a request', async () => {
   app = await cluster()
