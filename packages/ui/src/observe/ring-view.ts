@@ -2,7 +2,7 @@
  * `<nano-ring>`: the app as rings (ring.ts): each shown pod as its own view, the time machine's messages in flight as
  * dots between them. With the cursor in the past and still for 200 ms, the views are bound to an app rebuilt to it
  * (`shadowAt` through `create`), inert, and the rings are that app's deployment; at Live, the live app again. A pod with
- * no view (none in `views`, nano-ui's map or the deployment's own) is just its label. A dot click seeks to its message.
+ * no view (none in `views` or nano-ui's map) is just its label. A dot click seeks to its message.
  *
  *   ring.app = app; ring.registry = registry; ring.tm = tm; ring.store = store
  *   ring.create = d => Application.create(…, { deploymentPolicy: DeploymentPolicies.allowAll() })   // a shadow's own app
@@ -92,7 +92,7 @@ export class NanoRing extends LitElement {
   /** The pod's view element, kept across renders, its target set when it changes; none for a pod with no view. */
   private view(d: AppDeployment, pod: string, runtime: string, app: Application, registry: Registry) {
     const map = { ...defaults, ...this.views }, tag = viewFor(pod, d, map), key = `${pod} ${tag}`
-    if (tag === 'nano-pod-view' && d.views?.[pod] !== tag && map[d.pods[pod]?.implementation ?? ''] !== tag) return ''
+    if (tag === 'nano-pod-view' && map[d.pods[pod]?.implementation ?? ''] !== tag) return ''
     let el = this.els.get(key)
     if (!el) this.els.set(key, el = document.createElement(tag) as View)
     const t = el.target

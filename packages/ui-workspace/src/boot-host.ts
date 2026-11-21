@@ -1,66 +1,51 @@
 /**
- * The host on nano-core 0.4, started before the elements are defined (where composable.ts was): the one Application
+ * The host on the host core, started before the elements are defined (where composable.ts was): the one Application
  * (host.ts), nano-ui's views, and a palette template per implementation the host can make, before the dock's
  * hand-written ones, so the docks (and the picker they open) list them when they upgrade. An import that registers
  * new providers adds their templates to every dock, and an open picker hears `catalog:changed`.
  *
- * It boots from the stored document (persist.ts), the app's own (ADR-0034): imported as any file is, so nano.ui and
- * same-origin providers ask nothing and a foreign provider is confirmed first. Its pages are the Outline's (ADR-0040):
- * `outline`, made once for the page's life, from the stored pages, else migrated once (boot-pages.ts), and changed only
- * by its `apply`; an import's pages are applied with it (import-pages.ts); the nav and docks show it. Both documents
- * are saved, debounced (flushed on `pagehide`), on each `applied` and page change. A stored document or pages that fail to load, or that another tab has written since, are not saved over this
- * session. Storage the page may not use: the app runs in memory, and the first save says so.
+ * It boots from the host document under `nano-host.document` (the host core's one key, shared with the React host;
+ * the old keys read once through its migration and the workspace's `oldForms`, then removed after a good save), its
+ * code loaded through the gate (ADR-0034). Its pages are the host core's live outline (`outline`), Main recreated
+ * first if missing (`settled`); an import's pages are applied with it (import-pages.ts); the nav and docks show it.
+ * Each change is saved by the host core. A stored document that fails to load is kept: the workspace then runs in
+ * memory this session, and says so; so it does when another tab writes the document, or storage refuses.
  */
 import { defineViews } from '@pritzlaff/nano-ui';
-import { Outline } from '@pritzlaff/nano-outline';
 import { toast } from '@pritzlaff/nano-elements';
 import { start, type Host } from './host.ts';
 import { implementationTemplates } from './dock/panels.ts';
-import { persisted } from './persist.ts';
 import { showStatus } from './lib/status.ts';
-import { bootPages } from './boot-pages.ts';
+import { oldForms, settled } from './boot-pages.ts';
 import { importing } from './import-pages.ts';
 import { HOST_PODS } from './host-deploy.ts';
+import { forgetOld } from './migrate.ts';
 
-const KEY = 'nano-workspace.document', PAGES_KEY = 'nano-workspace.outline', OLD_PAGES_KEY = 'nano-workspace.platform', SAVE_MS = 300;
 const storage = (() => { try { return localStorage; } catch (e) { const no = () => { throw e; }; return { getItem: no, setItem: no, removeItem: no, key: no, get length() { return no(); } } as unknown as Storage; } })();
-const stored = persisted(storage, KEY, PAGES_KEY, OLD_PAGES_KEY), doc = stored.load();
+/** Why saving stopped, as the page says it. */
+const tell = (why: string | undefined) => why && showStatus(document, why.startsWith('not saved')
+  ? `Your workspace is not being saved (${why.slice('not saved: '.length)}); it runs in memory until this page closes.`
+  : 'Your workspace changed in another tab: reload this page to continue. Changes here are no longer saved.');
 
 defineViews();
-let made: ReturnType<typeof Outline.create> | undefined;   // the pod reads it, maybe before `outline` is made (the stored import): undefined then
-const started = await start(() => made);
+let booted: Host | undefined;
+const stored = await start(storage, { migrate: oldForms, onStop: () => tell(booted?.stopped()) });
+const started = stored.ok ? stored : await start();   // in memory
+if (!stored.ok) showStatus(document, `Your saved workspace did not load (${stored.fail.reason}); changes are not saved this session, so it is kept as it was.`);
 if (!started.ok) toast(started.fail.reason, { variant: 'bad', duration: 0 });
 /** The page's host; undefined if it did not start (a toast says why). */
-export const host: Host | undefined = started.ok ? started.value : undefined;
-const at = host && doc && URL.createObjectURL(new Blob([JSON.stringify(doc)], { type: 'application/json' }));
-const loaded = host && at ? await host.importUrl(at).finally(() => URL.revokeObjectURL(at)) : { ok: true };
-const first = host ? await bootPages(host, storage, doc, stored.pages(), loaded.ok) : undefined;
-/** The page's pages (ADR-0040): one Outline for the page's life; undefined without a host. */
-const startWith = first?.ok ? first : host && await bootPages(host, storage, null, null, false);   // pages that failed: Main alone
-export const outline = made = host && startWith?.ok ? Outline.create(host.app, host.registry, startWith.value) : undefined;
+export const host: Host | undefined = booted = started.ok ? started.value : undefined;
+/** The page's pages (ADR-0040): the host core's live outline; undefined without a host. */
+export const outline = host?.outline;
 
 if (host && outline) {
+  outline.apply(settled(outline.document().doc));
+  if (stored.ok) { if (host.stopped()) tell(host.stopped()); else forgetOld(storage); }   // the old dock keys, once the one key holds them
   host.importUrl = importing(host.importUrl.bind(host), outline);
   // the lazy pod `outline` built now (ADR-0031), and again after each restart (Reset), so its `changed` reaches subscribers before anything calls it
   const [, , OUTLINE] = HOST_PODS, build = () => void host.app.runtime('main').getOrCreate(OUTLINE);
   build();
   host.app.listen((e) => { if (e.type === 'restarted' && e.pod === OUTLINE) build(); });
-  let timer: ReturnType<typeof setTimeout> | undefined, elsewhere = !loaded.ok || !first?.ok;
-  const write = () => { timer = undefined; if (!elsewhere) stored.save(host.saved(), outline.document().doc); };
-  const save = () => { clearTimeout(timer); timer = setTimeout(write, SAVE_MS); };
-  addEventListener('pagehide', () => { if (timer !== undefined) { clearTimeout(timer); write(); } });
-  // Another tab saved the document or its pages: this tab's copy is stale, so it saves no more (the last writer would win).
-  addEventListener('storage', (e) => {
-    const k = (e as StorageEvent).key;
-    if ((k !== KEY && k !== PAGES_KEY) || elsewhere) return;
-    elsewhere = true; clearTimeout(timer);
-    showStatus(document, 'Your workspace changed in another tab: reload this page to continue. Changes here are no longer saved.');
-  });
-  host.app.listen((e) => { if (e.type === 'applied') save(); });
-  outline.listen(save);
-  if (!loaded.ok) showStatus(document, 'Your saved workspace did not load (see the message); changes are not saved this session, so it is kept as it was.');
-  else if (first && !first.ok) showStatus(document, `Your saved pages did not load (${first.fail.reason}); changes are not saved this session, so they are kept as they were.`);
-  else save();
 }
 
 if (host) {

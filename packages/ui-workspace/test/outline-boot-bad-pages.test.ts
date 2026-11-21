@@ -1,4 +1,5 @@
-// Stored pages that fail to parse: the Outline still boots with Main (not an empty document), so File › New works.
+// Stored pages that fail to parse: the workspace runs in memory with Main (not an empty document), so File › New
+// works, and the stored pages are kept as they were.
 import { expect, test } from 'bun:test'
 import { tick } from './host-deploy-setup.ts'
 
@@ -14,9 +15,11 @@ test('unparseable stored pages: the Outline has Main, a status says so, and File
   expect(Object.keys(outline.document().doc.pages)).toEqual(['workspace'])
   expect(outline.document().doc.pages['workspace']).toMatchObject({ title: 'Workspace' })
   await tick(50)
-  expect([...document.querySelectorAll('[data-nano-status]')].map(e => e.textContent).join()).toContain('saved pages did not load')
+  expect([...document.querySelectorAll('[data-nano-status]')].map(e => e.textContent).join()).toContain('stored outline')   // why: the stored pages
   document.dispatchEvent(new CustomEvent('file:new'))
   await tick(50)
   expect(errors).toEqual([])
   expect(Object.keys(outline.document().doc.pages)).toEqual(['workspace'])
+  expect(localStorage.getItem('nano-workspace.outline')).toBe(JSON.stringify({ pages: { 'bad id': { slots: {} } } }))   // kept as it was
+  expect(localStorage.getItem('nano-host.document')).toBeNull()
 })

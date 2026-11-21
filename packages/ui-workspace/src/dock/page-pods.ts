@@ -25,8 +25,8 @@ type Opened = Awaited<ReturnType<Instance['open']>>[string]
 type Slots = Record<string, Slot>
 
 const away = (h: Host, pod: string) => (h.data().pods[pod]?.isolation ?? 'host') !== 'host'
-/** A pod's view tag: its selector, else `nano-sandboxed` for a non-host pod, else its implementation's default. */
-export const chosen = (h: Host, pod: string) => (away(h, pod) && !customElements.get(h.data().views?.[pod] ?? '') ? 'nano-sandboxed' : viewFor(pod, h.data(), h.defaults()))
+/** A pod's view tag: its override (`host.views`), else `nano-sandboxed` for a non-host pod, else its implementation's default. */
+export const chosen = (h: Host, pod: string) => { const views = h.document().host?.views ?? {}; return away(h, pod) && !customElements.get(views[pod] ?? '') ? 'nano-sandboxed' : viewFor(pod, h.data(), h.defaults(), views) }
 /** The tags a pod's view can be. */
 export const viewTags = (h: Host, pod: string, impl: string) =>
   [...new Set([away(h, pod) && 'nano-sandboxed', h.defaults()[impl], 'nano-pod-view'].filter((x): x is string => !!x))]

@@ -6,8 +6,7 @@
  * `layout.workspace` (ADR-0039). `keyed` moves a page from before ADR-0039 under the workspace's keys, `treed` a flat
  * document or one in the old `meta.workspace.order` into a tree; both once, and as they are when already done.
  *
- *   treed(toOutline(legacyPages(doc.layout, doc), doc))   // a stored document's pages
- *   opened(file)   // a nano.json, or an { app, outline } (before: { app, platform }) bundle: the app, its pages
+ *   opened(file)   // a nano.json, or a HostDocument (before: { app, outline }, { app, platform }): the app, its pages
  */
 import { Coord, failure, success, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
 import { Outline, type Page, type Slot } from '@pritzlaff/nano-outline'
@@ -85,12 +84,12 @@ export function keyed(p: Page): Page {
   return { ...p, ...(move && { title: title as string }), ...(moves(engine) && { layout: { ...others, workspace: engine } }), ...((move || moves(mine)) && { meta: { ...kept, workspace: mine } }) }
 }
 
-/** `d` without the old pages in its layout (`pages`, `workspace`, `slots`, `geometry`); no layout once nothing is left. */
-const stripped = (d: AppDeployment): AppDeployment => {
-  if (!obj(d.layout)) return d
-  const { pages: _p, workspace: _w, slots: _s, geometry: _g, ...rest } = d.layout, { layout: _, ...out } = d
-  return Object.keys(rest).length ? { ...out, layout: rest } : out
-}
+/** An app document's old `layout` as the host document's (`host.layout`): the old pages (`pages`, `workspace`, `slots`,
+ * `geometry`) out, the rest (the Desk, the Ring filter) the workspace's, under its key; none once nothing is left. */
+export const hostLayout = (layout: unknown): Record<string, unknown> | undefined =>
+  (({ pages: _p, workspace: _w, slots: _s, geometry: _g, ...rest }) => Object.keys(rest).length ? { workspace: rest } : undefined)(obj(layout) ? layout : {})
+/** `d` with its `layout` read as `hostLayout`'s: what an import merges and keeps in `host`. */
+const stripped = (d: AppDeployment): AppDeployment => { const { layout, ...out } = d, l = hostLayout(layout); return l ? { ...out, layout: l } : out }
 
 /** `p` without the old `meta.workspace.order`. */
 const unordered = (p: Page): Page => { if (!('order' in metaOf(p))) return p; const { order: _, ...w } = metaOf(p); return withMeta(p, w) }
@@ -103,22 +102,23 @@ export function treed(doc: Outline): Outline {
   return { roots, pages: Object.fromEntries(Object.entries(pages).map(([id, p]) => [id, unordered(kids(p))])) }
 }
 
-/** A file as opened: an `{ app, outline }` bundle (File › Save's; `{ app, platform }` before) as its two parts, a plain nano.json as itself with its old pages migrated; its pages `treed`. */
+/** A file as opened: a `HostDocument` (File › Save's; `{ app, platform }` before) as its app, carrying its `host` part
+ * as `views` and `layout`, and its pages; a plain nano.json as itself with its old pages migrated; its pages `treed`. */
 export function opened(file: unknown): NanoResult<{ app: AppDeployment; pages: Outline }> {
   if (obj(file) && obj(file.app) && ('outline' in file || 'platform' in file)) {
     const pages = Outline.parse('outline' in file ? file.outline : file.platform)
-    return pages.ok ? success({ app: stripped(file.app as AppDeployment), pages: treed(pages.value) }) : failure('invalid-input', `the file's pages: ${pages.fail.reason}`)
+    const host = obj(file.host) ? { ...(obj(file.host.views) && { views: file.host.views as Record<string, string> }), ...(obj(file.host.layout) && { layout: file.host.layout }) } : {}
+    return pages.ok ? success({ app: { ...stripped(file.app as AppDeployment), ...host }, pages: treed(pages.value) }) : failure('invalid-input', `the file's pages: ${pages.fail.reason}`)
   }
   if (!obj(file)) return failure('invalid-input', 'not a nano.json: not an object')
   const d = file as AppDeployment
   return success({ app: stripped(d), pages: obj(d.pods) ? treed(toOutline(legacyPages(d.layout, d), d)) : { roots: [], pages: {} } })
 }
 
-const read = (from: Storage, k: string): unknown => { try { return JSON.parse(from.getItem(k) ?? 'null') } catch { return null } }
-const style = (from: Storage, dock: string) => { try { return from.getItem(`${dock}.window-style`) } catch { return null } }
+const read = (from: Storage, k: string, raw = false): unknown => { try { const t = from.getItem(k); return raw ? t : JSON.parse(t ?? 'null') } catch { return null } }
 /** A dock's old state (layout, template, window style) as a page's `workspace`, if it had any. */
 const dockState = (from: Storage, dock: string) => {
-  const config = read(from, dock), template = read(from, `${dock}.template`), s = style(from, dock)
+  const config = read(from, dock), template = read(from, `${dock}.template`), s = read(from, `${dock}.window-style`, true) as string | null
   return obj(config) || obj(template) || s ? { ...(obj(config) && config), ...(obj(template) && { template }), ...(s && { 'window-style': s }) } : undefined
 }
 
@@ -143,7 +143,7 @@ export function oldPages(from: Storage): Legacy[] {
   return first.workspace || rest.length || obj(main) ? [first, ...rest] : []
 }
 
-/** Removes every old key (once the Outline holds what they held). Never throws. */
+/** Removes every old dock key (once the host document holds what they held). Never throws. */
 export function forgetOld(from: Storage): void {
   const old = (k: string | null) => !!k && [LIST, DOCK].some(o => k === o || k.startsWith(`${o}.`))
   try { for (let i = from.length - 1; i >= 0; i--) if (old(from.key(i))) from.removeItem(from.key(i)!) } catch { /* kept */ }

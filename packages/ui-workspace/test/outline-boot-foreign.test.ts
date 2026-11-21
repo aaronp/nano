@@ -1,11 +1,11 @@
 // Boot from a stored document naming a provider on another origin: the import confirm is asked before its code loads
-// (ADR-0034); Cancel loads nothing, and neither the stored document nor its pages are saved over.
+// (ADR-0034), each of its pods with its isolation; Cancel loads nothing, and the stored document is not saved over.
 import { expect, test } from 'bun:test'
 import { tick } from './host-deploy-setup.ts'
 
 test('a foreign provider in the stored document is confirmed at boot; cancelled, nothing loads and nothing is saved over', async () => {
-  const KEY = 'nano-workspace.document', at = URL.parse('./bundle/nano-ui.js', location.href)!.href
-  const stored = JSON.stringify({ pods: {}, runtimes: {}, modules: { 'nano.ui': at, 'evil.x': 'https://evil.test/x.js' }, views: {} })
+  const KEY = 'nano-host.document', at = URL.parse('./bundle/nano-ui.js', location.href)!.href
+  const stored = JSON.stringify({ app: { pods: { e: { implementation: 'evil.x/e', eager: false } }, runtimes: { main: { pods: ['e'], subscriptions: [] } }, modules: { 'nano.ui': at, 'evil.x': 'https://evil.test/x.js' } }, outline: { roots: [], pages: {} } })
   localStorage.setItem(KEY, stored)
   // happy-dom fetches no blob: URL (a browser does): the boot reads the stored document through one
   const blobs = new Map<string, Blob>(), make = URL.createObjectURL.bind(URL), domFetch = globalThis.fetch
@@ -16,11 +16,11 @@ test('a foreign provider in the stored document is confirmed at boot; cancelled,
   const dialog = document.querySelector('dialog')!
   expect(dialog.textContent).toContain('Import from another origin?')
   expect(dialog.textContent).toContain('https://evil.test/x.js')
+  expect(dialog.textContent).toContain('runs with this workspace’s full access')   // its pod, as the stored document places it
   ;[...dialog.querySelectorAll('button')].find(b => b.textContent === 'Cancel')!.click()
   const { host } = await booting
   expect(host!.registry.provider('evil.x')).toBeUndefined()
   expect(document.querySelector('[data-nano-status]')).not.toBeNull()
   await tick(400)
   expect(localStorage.getItem(KEY)).toBe(stored)
-  expect(localStorage.getItem('nano-workspace.outline')).toBeNull()
 })

@@ -34,7 +34,7 @@ const page = { title: 'Home', slots: { t1: { kind: 'pod', pod: 'acme/thing@main/
 const tree = { roots: ['home'], pages: { home: page } }
 const expected: HostDocument = strs({ app: { ...system }, outline: tree, host: { views: app.views, layout: app.layout } })
 
-test('every old form boots to the same HostDocument, saved under the one key, the old keys kept as they were (until plan 5)', async () => {
+test('every old form boots to the same HostDocument, saved under the one key, the old keys removed after that good save', async () => {
   const forms = {
     keys: memory({ [OLD.app]: app, [OLD.outline]: tree, [OLD.platform]: { pages: {} } }),   // the Outline's key wins over the platform's
     platform: memory({ [OLD.app]: app, [OLD.platform]: { pages: { home: page } } }),          // flat: every page a root
@@ -42,10 +42,9 @@ test('every old form boots to the same HostDocument, saved under the one key, th
   }
   const hooked: string[] = []
   for (const [name, s] of Object.entries(forms)) {
-    const before = Object.fromEntries(Object.values(OLD).flatMap(k => s.m.has(k) ? [[k, s.m.get(k)!]] : []))
     const h = await boot(s, { migrate: d => { hooked.push(name); return d } })
     expect(strs(h.document())).toEqual(expected)
-    expect(Object.fromEntries([...s.m].filter(([k]) => k !== KEY))).toEqual(before)
+    expect([...s.m.keys()]).toEqual([KEY])
     expect(JSON.parse(s.m.get(KEY)!)).toEqual(expected)
   }
   expect(hooked).toEqual(['keys', 'platform'])   // the host's hook sees the old forms only

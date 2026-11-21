@@ -2,4 +2,4 @@
 import { test } from 'bun:test'
 import { anotherTab, KEY } from './outline-boot-tabs-setup.ts'
 
-test('pagehide flushes a pending save; a write from another tab to the document stops saving here and says so', () => anotherTab(KEY))
+test('a write from another tab to the host document stops saving here and says so', () => anotherTab(KEY))

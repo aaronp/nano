@@ -9,16 +9,16 @@ import { failure, Registry } from '@pritzlaff/nano-core'
 import uiProvider, { views as uiViews, type ViewMap } from '@pritzlaff/nano-ui'
 import { Host } from '@pritzlaff/nano-host'
 
-type Load = typeof Registry.load
+type Load = NonNullable<Parameters<typeof Host.boot>[1]['load']>
 
 /** `load`, refusing any module on another origin than `base`'s. */
-const sameOrigin = (load: Load): Load => async (modules, base) => {
+const sameOrigin = (load: Load): Load => async (modules, base, app) => {
   const home = new URL(base).origin
   for (const [coord, ref] of Object.entries(modules)) {
     const url = new URL(ref, base)
     if (url.origin !== home) return failure('invalid-input', `${coord}: ${url.origin} is another origin, not loaded by this host`)
   }
-  return load(modules, base)
+  return load(modules, base, app)
 }
 
 export const boot = (storage: Storage, { load = Registry.load, base = globalThis.location.href, onStop }: { load?: Load; base?: string; onStop?: () => void } = {}) =>

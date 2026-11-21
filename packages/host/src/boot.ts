@@ -6,6 +6,7 @@
  *   const h = (await Host.boot(localStorage, { base: location.href, providers: [ui] })).value
  *   h.document()                       // the HostDocument as saved: no host pods
  *   h.setHost({ views: { t1: 'x' } })  // saved
+ *   await h.apply({ ...h.document().app, modules: { ...m, acme: './acme.js' } })   // acme loaded, the system applied, saved
  */
 import { AppDeployment, Application, failure, Registry, success, type NanoResult, type Pod, type Provider } from '@pritzlaff/nano-core'
 import { KEY, OLD, write, type HostDocument } from './document.ts'
@@ -23,6 +24,9 @@ export type Host = {
   outline: ReturnType<typeof live>
   /** A lazy pod of `implementation` deployed into `runtime` (the host let in, its dependencies connected), then its `pod` slot on `page`: the slot's id. */
   pick(page: string, implementation: string, runtime: string): Promise<NanoResult<string>>
+  /** `next`'s modules the registry lacks loaded (the host's loader, as at boot), then `next` applied to `app`; its
+   * `modules` and `frames` (each kept when absent) are the document's from then on. A failed load applies and records nothing. */
+  apply(next: AppDeployment): Promise<NanoResult<void>>
   /** Writes `host.views`/`host.layout` (each replaced as given) and saves. */
   setHost(patch: NonNullable<HostDocument['host']>): void
   /** Why saving stopped (another tab wrote, or storage refused), once it has. */
@@ -30,8 +34,9 @@ export type Host = {
 }
 type Opts = {
   base: string | URL
-  /** The host's loader (default: core's plain `Registry.load`, for trusted documents), asked once with the modules its own providers lack. */
-  load?: typeof Registry.load
+  /** The host's loader (default: core's plain `Registry.load`, for trusted documents), asked with the modules the
+   * registry lacks and the app document naming them (so a gated loader can say what each provider's pods run as). */
+  load?: (modules: Record<string, string>, base: string | URL, app: AppDeployment) => ReturnType<typeof Registry.load>
   /** The host's own; a module whose key (its provider's coordinate) names one of them is not loaded. */
   providers?: Provider[]
   create?: Parameters<typeof Application.create>[1]
@@ -45,15 +50,23 @@ const MAIN = 'main'
 async function boot(storage: Storage, opts: Opts): Promise<NanoResult<Host>> {
   const read = stored(storage)
   if (!read.ok) return read
-  const registry = Registry.create()
+  const registry = Registry.create(), exports: Host['exports'] = {}
   for (const p of opts.providers ?? []) { const added = registry.add(p); if (!added.ok) return added }
-  // One call to the host's loader (a gated one asks once); what it loaded joins the host's registry.
-  const loaded = await (opts.load ?? Registry.load)(Object.fromEntries(Object.entries(read.value.doc.app.modules ?? {}).filter(([k]) => !registry.provider(k))), opts.base)
+  /** One call to the host's loader (a gated one asks once) for what `d` names and the registry lacks; what it loaded joins the registry. */
+  const load = async (d: AppDeployment): Promise<NanoResult<void>> => {
+    const lacking = Object.fromEntries(Object.entries(d.modules ?? {}).filter(([k]) => !registry.provider(k)))
+    if (!Object.keys(lacking).length) return success(undefined)
+    const loaded = await (opts.load ?? Registry.load)(lacking, opts.base, d)
+    if (!loaded.ok) return loaded
+    for (const { coord } of loaded.value.registry.manifest().providers) { const added = registry.add(loaded.value.registry.provider(coord)!); if (!added.ok) return added }
+    Object.assign(exports, loaded.value.exports)
+    return success(undefined)
+  }
+  const loaded = await load(read.value.doc.app)
   if (!loaded.ok) return loaded
-  for (const { coord } of loaded.value.registry.manifest().providers) { const added = registry.add(loaded.value.registry.provider(coord)!); if (!added.ok) return added }
   // The host's own old forms, read once its registry can name implementations: a pure data edit.
   const doc = read.value.old && opts.migrate ? opts.migrate(read.value.doc, storage, registry) : read.value.doc
-  const { app: { modules, frames, ...system } } = doc
+  let { app: { modules, frames, ...system } } = doc
   let host = doc.host
 
   const own = Object.keys(opts.hostPods ?? {}), mine = (p: string) => own.includes(p)
@@ -89,7 +102,17 @@ async function boot(storage: Storage, opts: Opts): Promise<NanoResult<Host>> {
   const watched: string[] = [KEY, ...OLD]
   globalThis.addEventListener?.('storage', e => { if (watched.includes((e as StorageEvent).key ?? '')) stop('changed in another tab: reload to continue') })
   prune(); save()
-  return success({ app, registry, exports: loaded.value.exports, document, outline, pick: picker(app, registry, outline), stopped: () => stopped, setHost(patch) { host = { ...host, ...patch }; save() } })
+  async function apply(next: AppDeployment): Promise<NanoResult<void>> {
+    const got = await load(next)
+    if (!got.ok) return got
+    // recorded before the apply, so its `applied` saves them and an isolated pod built in it finds its code
+    const was = { modules, frames }
+    modules = next.modules ?? modules; frames = next.frames ?? frames
+    const r = await app.apply(next)
+    if (!r.ok) ({ modules, frames } = was)
+    return r
+  }
+  return success({ app, registry, exports, document, outline, apply, pick: picker(app, registry, outline), stopped: () => stopped, setHost(patch) { host = { ...host, ...patch }; save() } })
 }
 
 /** `Host.boot(storage, opts)`. */

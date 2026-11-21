@@ -1,22 +1,21 @@
 /**
- * The workspace's pages at boot. `bootPages` gives the Outline to start with: the stored one, made a tree with Main the
- * first root (`treed`: each page from before ADR-0039 keyed, the old order the roots'; boot-host.ts saves it); else, once, migrated (migrate.ts)
- * from the stored document's layout (each page with its old dock's keys), else the old keys, else Main alone. The old
- * docks made their pods as they mounted, so a migrated pod slot's pod is placed now, lazy in `main` under its name
- * (its implementation found by the panel's widget id); one with no implementation, or a page or slot with a bad id or
- * coordinate, is dropped, and a status says so.
+ * The workspace's pages at boot, on the host core. `oldForms` is its `migrate` hook (the host core calls it once, for
+ * a document read from the old keys, with the registry): with no stored pages, the old ones (the document's
+ * `layout.pages` or legacy Main, each with its old dock's keys, else the old saved pages) as the Outline, each old
+ * dock's pod placed lazy in `main` under its name (its implementation found by the panel's widget id; none: dropped,
+ * and a status says so); and the old `layout` read as `host.layout` (`hostLayout`). A pure data edit but for that status.
+ * `settled` is the workspace's rule after any boot: Main there and the first root, the pages a tree (`treed`).
  *
- *   const doc = await bootPages(host, localStorage, storedDoc, stored.pages())
+ *   Host.boot(storage, { migrate: oldForms, ... });  outline.apply(settled(outline.document().doc))
  */
-import { success, type AppDeployment, type NanoResult, type Pod } from '@pritzlaff/nano-core'
+import { type AppDeployment, type Pod, type Registry } from '@pritzlaff/nano-core'
 import { Outline } from '@pritzlaff/nano-outline'
-import type { Host } from './host.ts'
-import { implementationTemplates } from './dock/panels.ts'
+import type { HostDocument } from '@pritzlaff/nano-host'
 import { connected } from './auto-connect.ts'
-import { legacyPages, oldPages, toOutline, treed, withOldDocks, type Legacy } from './migrate.ts'
+import { hostLayout, legacyPages, oldPages, toOutline, treed, withOldDocks, type Legacy } from './migrate.ts'
 import { showStatus } from './lib/status.ts'
-
 import { MAIN } from './lib/pages.ts'
+
 /** The widget id of the old panel showing `pod`, anywhere in `v` (a page's engine state). */
 const widgetOf = (v: unknown, pod: string): string | undefined => {
   if (typeof v !== 'object' || v === null) return undefined
@@ -25,32 +24,36 @@ const widgetOf = (v: unknown, pod: string): string | undefined => {
   for (const x of Object.values(o)) { const w = widgetOf(x, pod); if (w) return w }
   return undefined
 }
+/** An implementation's palette widget id (as dock/panels.ts names its template). */
+const widgetId = (coord: string) => coord.toLowerCase().replace(/[^a-z0-9]+/g, '-')
 
-/** The old pages' pods not in the deployment, placed lazy in `main` when their widget names an implementation. */
-async function placeOld(host: Host, old: Legacy[]): Promise<void> {
-  const missing = old.flatMap(p => p.slots).flatMap(s => 'pod' in s && !host.data().pods[s.pod] ? [s.pod] : [])
-  if (!missing.length) return
-  const impl = new Map(implementationTemplates(host, document).map(t => [t.dataset['widget'], t.dataset['implementation']!]))
+/** `d` with the old pages' pods it lacks placed lazy in `main` when their widget names an implementation. Pure. */
+function placeOld(d: AppDeployment, registry: Registry, old: Legacy[]): AppDeployment {
+  const impl = new Map(registry.manifest().implementations.map(i => [widgetId(i.coord), i.coord]))
   const add: Record<string, Pod> = {}
-  for (const pod of missing) { const c = impl.get(widgetOf(old, pod)); if (c) add[pod] = { implementation: c, eager: false } }
-  const d = host.data(), main = d.runtimes['main']!, names = Object.keys(add)
-  if (names.length) await host.apply(connected({ ...d, pods: { ...d.pods, ...add }, runtimes: { ...d.runtimes, main: { ...main, pods: [...main.pods, ...names] } } }, host.registry, names))
+  for (const s of old.flatMap(p => p.slots)) if ('pod' in s && !d.pods[s.pod]) { const c = impl.get(widgetOf(old, s.pod) ?? ''); if (c) add[s.pod] = { implementation: c, eager: false } }
+  const names = Object.keys(add), main = d.runtimes['main'] ?? { pods: [], subscriptions: [] }
+  return names.length ? connected({ ...d, pods: { ...d.pods, ...add }, runtimes: { ...d.runtimes, main: { ...main, pods: [...main.pods, ...names] } } }, registry, names) : d
 }
 
-/** The pages to boot with; `loaded`: whether the stored document loaded (if not, nothing is migrated, and nothing placed). */
-export async function bootPages(host: Host, storage: Storage, doc: AppDeployment | null, stored: unknown, loaded = true): Promise<NanoResult<Outline>> {
-  const read = stored !== null ? Outline.parse(stored) : success<Outline>({ roots: [], pages: {} })
-  if (!read.ok) return read
-  let pages = read.value
-  if (stored === null && loaded) {
-    const kept = legacyPages(doc?.layout, host.data()), old = kept.length ? withOldDocks(storage, kept) : oldPages(storage)
-    await placeOld(host, old)
-    pages = toOutline(old, host.data())
+/** The host core's `migrate` hook: the workspace's old forms read into `doc`. */
+export function oldForms(doc: HostDocument, storage: Storage, registry: Registry): HostDocument {
+  let { app, outline } = doc
+  const { layout, ...host } = doc.host ?? {}, l = hostLayout(layout)
+  if (!Object.keys(outline.pages).length) {
+    const kept = legacyPages(layout, app), old = kept.length ? withOldDocks(storage, kept) : oldPages(storage)
+    app = placeOld(app, registry, old)
+    outline = toOutline(old, app)
     const count = (n: number[]) => n.reduce((a, b) => a + b, 0)
-    if (count(Object.values(pages.pages).map(p => Object.keys(p.slots).length)) < count(old.map(p => p.slots.length)))
+    if (count(Object.values(outline.pages).map(p => Object.keys(p.slots).length)) < count(old.map(p => p.slots.length)))
       showStatus(document, 'Some panels of your old pages are gone: what they showed is no longer available.')
   }
-  // a document saved without Main still has it; one with Main elsewhere than the first root has it moved there (treed)
-  if (!pages.pages[MAIN]) pages = { roots: [MAIN, ...pages.roots], pages: { ...pages.pages, [MAIN]: { title: 'Workspace', slots: {} } } }
-  return Outline.parse(JSON.parse(JSON.stringify(treed(pages))))   // what the Outline takes, or a failure (never a throw at boot)
+  return { app, outline, ...((l || Object.keys(host).length) && { host: { ...host, ...(l && { layout: l }) } }) }
+}
+
+/** `doc` by the workspace's rule: Main there (recreated if missing) and the first root, a tree (`treed`), parsed. */
+export function settled(doc: Outline): Outline {
+  const pages = doc.pages[MAIN] ? doc : { roots: [MAIN, ...doc.roots], pages: { ...doc.pages, [MAIN]: { title: 'Workspace', slots: {} } } }
+  const r = Outline.parse(JSON.parse(JSON.stringify(treed(pages))))
+  return r.ok ? r.value : doc
 }

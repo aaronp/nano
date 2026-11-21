@@ -1,5 +1,5 @@
-// The File menu with Main's dock never built (a deep link to another page): Save writes `{ app, outline }` (the app's
-// nano.json and the Outline's pages), and New empties Main's page (its title kept) without touching its dock.
+// The File menu with Main's dock never built (a deep link to another page): Save writes the host document (the app's
+// nano.json, the Outline's pages and the host part), and New empties Main's page (its title kept) without touching its dock.
 import { expect, test } from 'bun:test'
 import { tick } from './host-deploy-setup.ts'
 
@@ -24,7 +24,8 @@ test('a deep link to another page: Save writes the bundle, New empties Main and 
   const before = blobs.size
   document.dispatchEvent(new CustomEvent('file:save'))
   const file = JSON.parse(await [...blobs.values()][before]!.text())
-  expect(file.app).toMatchObject(app)
+  const { views: _, ...system } = app
+  expect(file.app).toMatchObject(system)   // the host document's app: its views are `host.views`
   expect(file.outline).toEqual(JSON.parse(JSON.stringify(outline!.document().doc)))   // the Outline's pages (the shown dock's arrangement written in)
   expect(file.outline.pages.workspace).toEqual(pages.pages.workspace)
   document.dispatchEvent(new CustomEvent('file:new'))

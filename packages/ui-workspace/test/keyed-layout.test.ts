@@ -6,8 +6,11 @@ import type { NanoResult } from '@pritzlaff/nano-core'
 import type { Page } from '@pritzlaff/nano-outline'
 import { host, mount, place, pod, tick, until } from './dock-pods-setup.ts'
 
-const { bootPages } = await import('../src/boot-pages.ts')
+const { settled } = await import('../src/boot-pages.ts')
+const { Outline } = await import('@pritzlaff/nano-outline')
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
+/** Stored pages as the workspace boots them: read, then settled. */
+const bootPages = (_h: unknown, _s: Storage, _d: null, stored: unknown) => Promise.resolve(Outline.parse(stored)).then(r => r.ok ? { ok: true as const, value: settled(r.value) } : r)
 type GL = { emit(e: string): void }
 type Stored = HTMLElement & { storage: Storage }
 

@@ -38,6 +38,6 @@ await all()
 if (watching) {
   let timer: ReturnType<typeof setTimeout> | undefined
   const again = () => { clearTimeout(timer); timer = setTimeout(() => void all().catch(e => console.error(e)), 100) }
-  for (const d of ['packages/ui-workspace/src', 'packages/host-react/src', 'packages/outline/src', 'packages/ui/src', 'packages/nano/src', 'packages/elements/src', 'examples/slice', 'examples/todo', 'examples/chat', 'examples/auth', 'examples/originkey', 'examples/drift', 'examples/kv', 'templates/nano-template/src'])
+  for (const d of ['packages/ui-workspace/src', 'packages/host-react/src', 'packages/host/src', 'packages/outline/src', 'packages/ui/src', 'packages/nano/src', 'packages/elements/src', 'examples/slice', 'examples/todo', 'examples/chat', 'examples/auth', 'examples/originkey', 'examples/drift', 'examples/kv', 'templates/nano-template/src'])
     watch(join(repo, d), { recursive: true }, again)
 }

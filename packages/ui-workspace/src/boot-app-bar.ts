@@ -4,7 +4,8 @@
  * implementation. A page change drops the pod's.
  *
  * On nano-core 0.4 (BACKLOG(5)): the app gateway is gone, so this hands the bar its element; a pod's controls are the
- * host's (the View and Change implementation pickers), each change an `apply` through the host.
+ * host's (the View and Change implementation pickers): a view is the pod's override in `host.views` (then the system
+ * applied again, unchanged, so what shows the pod hears `applied`), an implementation an `apply` through the host.
  */
 import { html, render } from 'lit'
 import type { Host } from './host.ts'
@@ -42,7 +43,7 @@ function podControls(h: Host, pod: string): Element {
     const impls = h.registry.manifest().implementations.filter(i => same(i.provides) === mine).map(i => i.coord)
     render(html`<b>${pod}</b>
       <small>View</small><nano-select label="View" .options=${viewTags(h, pod, p.implementation)} .value=${chosen(h, pod)}
-        @change=${(e: Event) => h.apply({ ...d, views: { ...d.views, [pod]: value(e) } })}></nano-select>
+        @change=${(e: Event) => { h.setHost({ views: { ...h.document().host?.views, [pod]: value(e) } }); void h.apply(h.data()) }}></nano-select>
       <small>Implementation</small><nano-select label="Change implementation" .options=${impls} .value=${p.implementation}
         @change=${(e: Event) => swap(value(e))}></nano-select>`, el)
   }

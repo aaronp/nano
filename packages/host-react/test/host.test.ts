@@ -59,7 +59,7 @@ test('views and the catalog: nano.ui\'s and each module\'s; a pod\'s override fr
   const h = await started(stored()), views = viewsOf(h), c = catalog(h.registry, views)
   expect(c.find(e => e.implementation === 'nano.ui/log')).toEqual({ implementation: 'nano.ui/log', provider: 'nano.ui', title: 'log', tag: 'nano-log' })
   expect(c.find(e => e.implementation === 'acme/shout')).toMatchObject({ provider: 'acme', tag: 'acme-shout' })
-  expect(viewFor('log1', { ...h.app.deployment(), views: h.document().host?.views ?? {} }, views)).toBe('my-log')
+  expect(viewFor('log1', h.app.deployment(), views, h.document().host?.views)).toBe('my-log')
 })
 
 test('a pick: a lazy pod in the chosen runtime, its slot on the page, nothing started; the workspace\'s layout kept', async () => {

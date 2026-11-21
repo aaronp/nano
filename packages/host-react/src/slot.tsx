@@ -10,8 +10,7 @@ import type { Host } from '@pritzlaff/nano-host'
 export type Opened = Awaited<ReturnType<Host['outline']['open']>>[string]
 
 function PodView({ h, views, runtime, pod }: { h: Host; views: ViewMap; runtime: string; pod: string }) {
-  // The override is the host document's `host.views`; viewFor reads it as `deployment.views` until plan 5.
-  const at = useRef<HTMLDivElement>(null), tag = viewFor(pod, { ...h.app.deployment(), views: h.document().host?.views ?? {} }, views)
+  const at = useRef<HTMLDivElement>(null), tag = viewFor(pod, h.app.deployment(), views, h.document().host?.views)
   useEffect(() => {
     const target: ViewTarget = { app: h.app, registry: h.registry, runtime, pod }
     const el = Object.assign(document.createElement(tag), { target })

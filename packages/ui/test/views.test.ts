@@ -5,18 +5,18 @@ import { debounce, input, log, map, views, viewFor } from '../src/index.ts'
 import { must, sleep, slice, open, mount, text } from './views-setup.ts'
 
 describe('pod views', () => {
-  test('viewFor: the deployment selector wins, then the implementation default, then nano-pod-view', async () => {
+  test('viewFor: the pod\'s override wins, then the implementation default, then nano-pod-view', async () => {
     const { app } = await open()
-    const d = { ...app.deployment(), views: { up: 'nano-log' } }
-    expect(viewFor('up', d, views)).toBe('nano-log')
-    expect(viewFor('out', d, views)).toBe('nano-log')
+    const d = app.deployment(), overrides = { up: 'nano-log' }
+    expect(viewFor('up', d, views, overrides)).toBe('nano-log')
+    expect(viewFor('out', d, views, overrides)).toBe('nano-log')
     expect(viewFor('in', d, views)).toBe('nano-input')
     expect(viewFor('in', d, {})).toBe('nano-pod-view')
   })
 
-  test('viewFor: a selector naming an undefined tag falls back to nano-pod-view', async () => {
+  test('viewFor: an override naming an undefined tag falls back to nano-pod-view', async () => {
     const { app } = await open()
-    expect(viewFor('up', { ...app.deployment(), views: { up: 'no-such-view' } }, {})).toBe('nano-pod-view')
+    expect(viewFor('up', app.deployment(), {}, { up: 'no-such-view' })).toBe('nano-pod-view')
   })
 
   test('given nano-input and nano-log on the slice, when "hi" is entered, then nano-log shows HI', async () => {

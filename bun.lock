@@ -102,6 +102,7 @@
       "dependencies": {
         "@pritzlaff/nano-core": "workspace:*",
         "@pritzlaff/nano-elements": "workspace:*",
+        "@pritzlaff/nano-host": "workspace:*",
         "@pritzlaff/nano-outline": "workspace:*",
         "@pritzlaff/nano-ui": "workspace:*",
         "golden-layout": "2.6.0",

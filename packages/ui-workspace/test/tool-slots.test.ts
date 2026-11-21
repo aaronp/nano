@@ -24,10 +24,10 @@ test('stored view slots load as tool slots and show the same widgets; nothing wr
   expect(shown()).toBe(true)
   await tick(50)
   expect(JSON.parse(JSON.stringify(outline!.document().doc.pages['workspace']!.slots))).toEqual(slots)   // the dock's rewrite keeps them
-  for (let i = 0; i < 50 && !localStorage.getItem('nano-workspace.outline')?.includes('"tool"'); i++) await tick(20)
+  for (let i = 0; i < 50 && !localStorage.getItem('nano-host.document')?.includes('"tool"'); i++) await tick(20)
   const before = blobs.size
   document.dispatchEvent(new CustomEvent('file:save'))
-  for (const written of [localStorage.getItem('nano-workspace.outline')!, await [...blobs.values()][before]!.text()]) {
+  for (const written of [localStorage.getItem('nano-host.document')!, await [...blobs.values()][before]!.text()]) {
     expect(written).toMatch(/"kind":\s*"tool"/)
     expect(written).not.toMatch(/"view"/)
   }

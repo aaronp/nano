@@ -24,7 +24,7 @@ export { Debounce, Input, Log, MapIface }
 export async function setup() {
   const reg = registry()
   const app = must(await Application.create(must(AppDeployment.assemble(deployment(), reg))))
-  const host = { app, registry: reg, data: () => app.deployment(), apply: (n: AppDeployment) => app.apply(n) } as unknown as Host
+  const host = { app, registry: reg, data: () => app.deployment(), document: () => ({ app: app.deployment(), outline: { roots: [], pages: {} } }), apply: (n: AppDeployment) => app.apply(n) } as unknown as Host
   return { host, app, s1: { id: wireId('main', p1) }, s2: { id: wireId('main', p2) } }
 }
 

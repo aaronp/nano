@@ -1,10 +1,10 @@
 // A reload (Review Focus 1): the stored app document and its pages boot the same pages, layouts and pods; nothing is
 // made or started for a page not shown. A pod undeployed since leaves its slot in the pages (it resolves missing).
 // The pages stored flat under the old key, in the old `meta.workspace.order` (Review Focus 2), boot as the same tree,
-// saved under the new key, the old one removed; its view slot (a widget id) as its tool's.
+// saved under the one key, the old ones removed; its view slot (a widget id) as its tool's.
 import { expect, test } from 'bun:test'
 import { Pod, type AppDeployment } from '@pritzlaff/nano-core'
-import { tick } from './host-deploy-setup.ts'
+import './host-deploy-setup.ts'
 
 const { log } = await import('@pritzlaff/nano-ui')
 const KEY = 'nano-workspace.document', OLD = 'nano-workspace.platform', PAGES = 'nano-workspace.outline'
@@ -27,14 +27,14 @@ test('a reload restores the pages and pods as saved, nothing started; an undeplo
   const tree = { roots: ['workspace', 'two'], pages: { workspace: { ...pages.pages.workspace, slots: { ...pages.pages.workspace.slots, x: { kind: 'tool', tool: 'systems' } }, meta: { workspace: { saved: { root: null } } } }, two: { ...pages.pages.two, meta: { workspace: { icon: 'star' } } } } }
   expect(JSON.parse(JSON.stringify(outline.document().doc))).toEqual(tree)   // stored flat: every page a root, in the old order, the order dropped
   expect(Object.keys(host.data().pods)).toEqual(['ui', 'deploy', 'outline', 'log1', 'log2'])
-  expect(host.data().layout).toEqual({ ring: { show: [] } })
+  expect(host.document().host?.layout).toEqual({ workspace: { ring: { show: [] } } })
   for (const [r, p] of [['main', 'log1'], ['side', 'log2']] as const) expect(host.app.runtime(r).status(p)).toEqual({ ok: true, value: 'not started' })
   expect(Object.keys(outline.resolve('two'))).toEqual(['b', 'any'])
   const d = host.data()
   expect(await host.apply({ ...d, pods: Object.fromEntries(Object.entries(d.pods).filter(([p]) => p !== 'log1')), runtimes: { ...d.runtimes, main: { ...d.runtimes['main']!, pods: d.runtimes['main']!.pods.filter(p => p !== 'log1') } } })).toMatchObject({ ok: true })
   expect(outline.resolve('workspace')['a']).toEqual({ kind: 'missing' })
-  for (let i = 0; i < 50 && JSON.parse(localStorage.getItem(KEY)!).pods.log1; i++) await tick(20)
-  expect(Object.keys(JSON.parse(localStorage.getItem(KEY)!).pods)).toEqual(['log2'])
-  expect(JSON.parse(localStorage.getItem(PAGES)!)).toEqual(tree)   // the slot kept: it shows "not found" until removed
-  expect(localStorage.getItem(OLD)).toBeNull()
+  const stored = JSON.parse(localStorage.getItem('nano-host.document')!)
+  expect(Object.keys(stored.app.pods)).toEqual(['log2'])
+  expect(stored.outline).toEqual(tree)   // the slot kept: it shows "not found" until removed
+  for (const k of [KEY, OLD, PAGES]) expect(localStorage.getItem(k)).toBeNull()
 })

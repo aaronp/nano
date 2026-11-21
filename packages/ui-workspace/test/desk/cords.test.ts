@@ -26,7 +26,7 @@ async function chat(calls: OpPair[] = []) {
     runtimes: { room: { pods: ['alice'], subscriptions: [] }, backend: { pods: ['store'], subscriptions: [{ kind: 'call', from: 'alice', to: 'store' }] } },
   }
   const app = must(await Application.create(must(AppDeployment.assemble(d, reg))))
-  return mount({ app, registry: reg, data: () => app.deployment(), apply: (n: AppDeployment) => app.apply(n), calls: () => calls } as unknown as Host)
+  return mount({ app, registry: reg, data: () => app.deployment(), document: () => ({ app: app.deployment(), outline: { roots: [], pages: {} } }), apply: (n: AppDeployment) => app.apply(n), calls: () => calls } as unknown as Host)
 }
 const pair = (source: string | null): OpPair => ({ runtime: 'backend', from: 'alice', to: 'store', source, target: port(Log, Log.ops.log), declared: true, seen: true })
 

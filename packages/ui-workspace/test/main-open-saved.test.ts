@@ -28,7 +28,7 @@ test('save the bundle, then open it: the same pages, nothing duplicated; after N
   document.dispatchEvent(new CustomEvent('file:save'))
   saved = [...blobs.values()][before]!
   const file = JSON.parse(await saved.text())
-  expect(Object.keys(file)).toEqual(['app', 'outline'])
+  expect(Object.keys(file)).toEqual(['app', 'outline', 'host'])   // the HostDocument
   const was = now()   // as saved: the shown dock's arrangement written in
   expect(file.outline).toEqual(was)
   expect(was.pages.workspace).toEqual(pages.pages.workspace)
@@ -36,7 +36,7 @@ test('save the bundle, then open it: the same pages, nothing duplicated; after N
   document.dispatchEvent(new CustomEvent('file:example', { detail: { name: 'saved' } }))
   await applied; await tick(20)
   expect(now()).toEqual(was)   // identical pages skipped
-  expect(host!.data().layout).toEqual(file.app.layout)
+  expect(host!.document().host?.layout).toEqual(file.host.layout)
   // New empties Main; shown, its dock's starter panel (the explorer) writes a tool slot back. Opening the saved file
   // then fills Main from the file's Main (tools alone are the starter), not a workspace-2 beside it.
   document.dispatchEvent(new CustomEvent('file:new'))

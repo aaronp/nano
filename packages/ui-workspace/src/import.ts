@@ -6,7 +6,7 @@
  *
  *   const r = await importApp('/apps/slice/nano.json', loaded, { load: u => import(u), probe, confirm, approve })
  */
-import { failure, success, type AppDeployment, type NanoResult, type Provider, type Registry } from '@pritzlaff/nano-core'
+import { failure, Registry, success, type AppDeployment, type NanoResult, type Provider } from '@pritzlaff/nano-core'
 import type { ViewMap } from '@pritzlaff/nano-ui'
 import { newerCore, type Built } from './built.ts'
 import { gated, isProvider } from './import-gate.ts'
@@ -16,7 +16,7 @@ import { opened } from './migrate.ts'
 export type Loaded = { deployment: AppDeployment; registry: Registry; views: ViewMap }
 /** A provider from another origin, as the confirm prompt lists it. `fullAccess`: the pod runs with this page's access. */
 export type Foreign = { coord: string; url: string; origin: string; pods: { name: string; isolation: string; fullAccess: boolean }[] }
-type Deps = {
+export type Deps = {
   load(url: string): Promise<unknown>
   probe(url: string): Promise<NanoResult<{ provider: Provider; views: ViewMap; built?: Built }>>
   confirm(list: Foreign[]): Promise<boolean>
@@ -38,6 +38,46 @@ export function foreignOrigin(stored: string | undefined): string | undefined {
 
 const why = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
+/** Each of `refs` (coord, resolved URL) loaded: one on `home` imported; from another origin, `confirm` asked once for
+ * them all (with their pods in `d`), then each probed and gated, loaded now only when one of its pods runs with this
+ * page's access. Each provider with its views. */
+async function loadModules(refs: (readonly [string, URL])[], d: AppDeployment, home: string, deps: Deps): Promise<NanoResult<{ coord: string; provider: Provider; views: ViewMap }[]>> {
+  const foreign: Foreign[] = refs.filter(([, u]) => u.origin !== home)
+    .map(([coord, u]) => ({ coord, url: u.href, origin: u.origin, pods: podsOf(d, coord, p => p.isolation ?? 'host') }))
+  if (foreign.length && !await deps.confirm(foreign)) return failure('invalid-input', 'import cancelled')
+  const out: { coord: string; provider: Provider; views: ViewMap }[] = []
+  for (const [coord, u] of refs) {
+    const at = u.href
+    if (u.origin !== home) {   // probed in a frame, loaded (confirmed) for its views, and run in this page only once approved
+      const probed = await deps.probe(at)
+      if (!probed.ok) return probed
+      if (!isProvider(probed.value.provider, coord)) return failure('invalid-input', `${at} has no default Provider ${coord}`)
+      const [p, load] = gated(probed.value.provider, at, u.origin, deps)
+      // a provider whose pods are all isolated-sandbox never runs in this page
+      if (foreign.find(f => f.coord === coord)?.pods.some(p => p.fullAccess))
+        try { await load() } catch (e) { return failure('invalid-input', `cannot load ${at}: ${why(e)}`) }
+      out.push({ coord, provider: p, views: probed.value.views })
+      const w = newerCore(coord, probed.value.built); if (w) deps.warn?.(w)
+      continue
+    }
+    let mod: { default?: unknown; views?: ViewMap; built?: Built }
+    try { mod = (await deps.load(at)) as typeof mod } catch (e) { return failure('invalid-input', `cannot load ${at}: ${why(e)}`) }
+    if (!isProvider(mod?.default, coord)) return failure('invalid-input', `${at} has no default Provider ${coord}`)
+    out.push({ coord, provider: mod.default, views: { ...mod.views } })
+    const w = newerCore(coord, mod.built); if (w) deps.warn?.(w)
+  }
+  return success(out)
+}
+
+/** The host core's loader (`Host.boot`'s `load`) on `loadModules`: the modules resolved against `base`; each one's views as its export. */
+export const gatedLoad = (deps: Deps) => async (modules: Record<string, string>, base: string | URL, d: AppDeployment) => {
+  const got = await loadModules(Object.entries(modules).map(([c, ref]) => [c, new URL(ref, base)] as const), d, page() ?? new URL(base).origin, deps)
+  if (!got.ok) return got
+  const registry = Registry.create()
+  for (const { provider } of got.value) { const added = registry.add(provider); if (!added.ok) return added }
+  return success({ registry, exports: Object.fromEntries(got.value.map(g => [g.coord, { views: g.views }])) })
+}
+
 export async function importApp(url: string, loaded: Loaded, deps: Deps): Promise<NanoResult<Loaded>> {
   try {
     const res = await fetch(url)
@@ -55,40 +95,13 @@ export async function importApp(url: string, loaded: Loaded, deps: Deps): Promis
     incoming.modules = Object.fromEntries(refs.map(([coord, u]) => [coord, !away(u) && /^https?:$/.test(u.protocol) && !u.pathname.startsWith('//') ? u.pathname + u.search : u.href]))
     // a provider's own page (its home-origin pods' frame): always whole, as the origin is the point
     if (incoming.frames) incoming.frames = Object.fromEntries(Object.entries(incoming.frames).map(([c, ref]) => [c, new URL(ref, base).href]))
-    const todo = refs.filter(([coord]) => !loaded.registry.provider(coord))   // already loaded; merge still checks the stored URL matches
-    const foreign: Foreign[] = todo.filter(([, u]) => away(u))
-      .map(([coord, u]) => ({ coord, url: u.href, origin: u.origin, pods: podsOf(incoming, coord, p => p.isolation ?? 'host') }))
     const deployment = merge(loaded.deployment, incoming)   // a clash is refused before anyone is asked
     if (!deployment.ok) return deployment
-    if (foreign.length && !await deps.confirm(foreign)) return failure('invalid-input', 'import cancelled')
-    const fresh: Provider[] = []
-    const views: ViewMap = { ...loaded.views }
-    for (const [coord, u] of todo) {
-      const at = u.href
-      if (away(u)) {   // probed in a frame, loaded (confirmed) for its views, and run in this page only once approved
-        const probed = await deps.probe(at)
-        if (!probed.ok) return probed
-        if (!isProvider(probed.value.provider, coord)) return failure('invalid-input', `${at} has no default Provider ${coord}`)
-        const [p, load] = gated(probed.value.provider, at, u.origin, deps)
-        // Loaded now (for its views) only when a pod of it would run with this page's access, as the confirm said;
-        // a provider whose pods are all isolated-sandbox never runs in this page.
-        if (foreign.find(f => f.coord === coord)?.pods.some(p => p.fullAccess))
-          try { await load() } catch (e) { return failure('invalid-input', `cannot load ${at}: ${why(e)}`) }
-        fresh.push(p)
-        Object.assign(views, probed.value.views)
-        const w = newerCore(coord, probed.value.built); if (w) deps.warn?.(w)
-        continue
-      }
-      let mod: { default?: unknown; views?: ViewMap; built?: Built }
-      try { mod = (await deps.load(at)) as typeof mod } catch (e) { return failure('invalid-input', `cannot load ${at}: ${why(e)}`) }
-      if (!isProvider(mod?.default, coord)) return failure('invalid-input', `${at} has no default Provider ${coord}`)
-      fresh.push(mod.default)
-      Object.assign(views, mod.views)
-      const w = newerCore(coord, mod.built); if (w) deps.warn?.(w)
-    }
+    const got = await loadModules(refs.filter(([coord]) => !loaded.registry.provider(coord)), incoming, home, deps)   // already loaded: merge checked the stored URL matches
+    if (!got.ok) return got
     // The registry cannot be copied, so it is added to only here, after everything else succeeded.
-    for (const p of fresh) { const added = loaded.registry.add(p); if (!added.ok) return added }
-    return success({ deployment: deployment.value, registry: loaded.registry, views })
+    for (const { provider } of got.value) { const added = loaded.registry.add(provider); if (!added.ok) return added }
+    return success({ deployment: deployment.value, registry: loaded.registry, views: Object.assign({ ...loaded.views }, ...got.value.map(g => g.views)) })
   } catch (e) {
     return failure('invalid-input', `cannot import ${url}: ${why(e)}`)
   }

@@ -29,8 +29,8 @@ test('File › Examples lists Raft, and importing its nano.json places cluster, 
   const d = host.data()
   expect(d.runtimes['raft']!.pods).toEqual(['cluster', 'raft-messaging', 'raft-clock', 'raft-random'])
   expect(d.runtimes['main']!.subscriptions).toContainEqual({ kind: 'call', from: 'cluster', to: 'deploy' })
-  const layout = d.layout as unknown as { slots?: unknown; ring: { show: string[] } }
-  expect(layout.slots).toBeUndefined()   // its pages are the Outline's (migrate.ts), not the app's layout
+  const layout = host.document().host?.layout?.['workspace'] as { slots?: unknown; ring: { show: string[] } }   // the workspace's, in the host document
+  expect(layout.slots).toBeUndefined()   // its pages are the Outline's (migrate.ts), not the layout
   const file = opened(await Bun.file(new URL('../../../examples/raft/nano.json', import.meta.url)).json())
   expect(file.ok && Object.keys(file.value.pages.pages['workspace']!.slots)).toContain('cluster')
   expect(layout.ring.show).toEqual(['example.raft/node', 'example.raft/messaging'])

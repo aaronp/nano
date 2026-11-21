@@ -65,12 +65,15 @@ test('legacyPages: a layout\'s pages; else the legacy Main from its dock\'s pane
   expect(legacyPages({ desk: {} }, d)).toEqual([])
 })
 
-test('opened: a bundle as its parts; a plain nano.json without its old pages, migrated; a malformed bundle refused', () => {
+test('opened: a bundle as its parts (an old layout as the workspace\'s, a host part as views and layout); a plain nano.json without its old pages, migrated; a malformed bundle refused', () => {
   const pages = { roots: ['workspace'], pages: { workspace: { slots: { c: { kind: 'pod', pod: 'example.clock/clock@main/clock1' } } } } }
   const b = opened({ app: { ...d, layout: { desk: 1 } }, platform: pages })
-  expect(b.ok && strs(b.value)).toEqual({ app: { ...d, layout: { desk: 1 } }, pages })
+  expect(b.ok && strs(b.value)).toEqual({ app: { ...d, layout: { workspace: { desk: 1 } } }, pages })
+  const host = { views: { clock1: 'x-clock' }, layout: { workspace: { desk: 2 }, react: { k: 1 } } }
+  const h = opened({ app: d, outline: pages, host })
+  expect(h.ok && strs(h.value)).toEqual({ app: { ...d, ...host }, pages })
   const p = opened({ ...d, layout: { desk: 1, slots: [{ id: 'c', runtime: 'main', pod: 'clock1' }], geometry: {} } })
-  expect(p.ok && strs(p.value)).toEqual({ app: { ...d, layout: { desk: 1 } }, pages: { roots: ['workspace'], pages: { workspace: { title: 'Workspace', slots: { c: { kind: 'pod', pod: 'example.clock/clock@main/clock1' } } } } } })
+  expect(p.ok && strs(p.value)).toEqual({ app: { ...d, layout: { workspace: { desk: 1 } } }, pages: { roots: ['workspace'], pages: { workspace: { title: 'Workspace', slots: { c: { kind: 'pod', pod: 'example.clock/clock@main/clock1' } } } } } })
   const bare = opened({ ...d, layout: { pages: [] } })
   expect(bare.ok && strs(bare.value)).toEqual({ app: d, pages: { roots: [], pages: {} } })
   for (const bad of [null, 3, 'x']) expect(opened(bad)).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })

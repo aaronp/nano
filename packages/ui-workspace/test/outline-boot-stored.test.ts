@@ -1,13 +1,13 @@
 // An old stored document (its pages in `layout.pages`, no stored pages) migrates once: the Outline holds the pages and
-// the document is saved without them. An import's pages (a plain nano.json's `layout.pages`) are applied to the
+// the host document is saved without them, the old key removed. An import's pages (a plain nano.json's `layout.pages`) are applied to the
 // Outline by the workspace's rules, never kept in the app's layout, so a page deleted since does not come back.
 import { expect, test } from 'bun:test'
 import { flat } from './flat.ts'
 import { Pod } from '@pritzlaff/nano-core'
-import { tick } from './host-deploy-setup.ts'
+import './host-deploy-setup.ts'
 
 const { log } = await import('@pritzlaff/nano-ui')
-const KEY = 'nano-workspace.document', PAGES = 'nano-workspace.outline'
+const KEY = 'nano-workspace.document'
 const strs = (v: unknown) => JSON.parse(JSON.stringify(v))
 
 test('an old stored document migrates once: pages into the Outline (pod slots by coordinate), the document saved without them', async () => {
@@ -26,10 +26,11 @@ test('an old stored document migrates once: pages into the Outline (pod slots by
     trading: { title: 'Trading', slots: { n: { kind: 'tool', tool: 'systems' } }, meta: { workspace: { icon: 'chart' } } },
   } }
   expect(strs(outline.document().doc)).toEqual(migrated)
-  expect(host.data().layout).toEqual({ ring: { show: [] } })   // other keys kept, no pages
-  for (let i = 0; i < 50 && !localStorage.getItem(PAGES); i++) await tick(20)
-  expect(JSON.parse(localStorage.getItem(KEY)!).layout).toEqual({ ring: { show: [] } })
-  expect(JSON.parse(localStorage.getItem(PAGES)!)).toEqual(migrated)
+  expect(host.document().host?.layout).toEqual({ workspace: { ring: { show: [] } } })   // other keys kept, the workspace's; no pages
+  const stored = JSON.parse(localStorage.getItem('nano-host.document')!)
+  expect(stored.host.layout).toEqual({ workspace: { ring: { show: [] } } })
+  expect(stored.outline).toEqual(migrated)
+  expect(localStorage.getItem(KEY)).toBeNull()
   // deleted, then a file with no layout imported: it stays gone
   const { trading: _, ...rest } = outline.document().doc.pages
   expect(outline.apply(flat(rest))).toMatchObject({ ok: true })
@@ -46,7 +47,7 @@ test('an import with pages applies them to the Outline and keeps none in the lay
   const ids = () => Object.keys(outline.document().doc.pages)
   expect(await host.importUrl(file({ pages: [notes, mine] }))).toMatchObject({ ok: true })
   expect(ids()).toEqual(['workspace', 'notes', 'mine'])
-  expect((host.data().layout as { pages?: unknown } | undefined)?.pages).toBeUndefined()
+  expect((host.document().host?.layout as { pages?: unknown } | undefined)?.pages).toBeUndefined()
   const { notes: _, ...rest } = outline.document().doc.pages
   outline.apply(flat(rest))
   expect(await host.importUrl(file())).toMatchObject({ ok: true })

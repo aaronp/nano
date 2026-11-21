@@ -1,8 +1,8 @@
 // First boot with nothing stored: the old saved pages migrate, and a pod panel's pod (made by the old docks as they
 // mounted) is placed lazy in `main` under its name, so its slot survives the next `applied`; a panel whose widget
-// names no implementation is dropped, with a status. The old keys go with the first save, so it happens once.
+// names no implementation is dropped, with a status. The old keys go once the first save worked, so it happens once.
 import { expect, test } from 'bun:test'
-import { tick } from './host-deploy-setup.ts'
+import './host-deploy-setup.ts'
 
 test('a migrated pod panel\'s pod is placed lazy and its slot kept; one with no implementation is dropped', async () => {
   const panel = (widget: string, name: string) => ({ type: 'component', componentState: { widget, name } })
@@ -18,9 +18,7 @@ test('a migrated pod panel\'s pod is placed lazy and its slot kept; one with no 
   expect(await host.apply(host.data())).toMatchObject({ ok: true })
   expect(outline.resolve('t')['log7']!.kind).toBe('pod')
   expect(JSON.parse(JSON.stringify(outline.document().doc.pages['t']))).toEqual({ title: 'T', slots: { log7: { kind: 'pod', pod: 'nano.ui/log@main/log7' } }, layout: { workspace: { root: { type: 'row', content: [{ type: 'component', componentState: { widget: 'nano-ui-log', name: 'log7' } }, { type: 'component', componentState: { widget: 'gone-widget', name: 'ghost1' } }] } } }, meta: { workspace: { icon: 'star' } } })
-  expect(localStorage.getItem('workspace-starter.saved-workspaces')).not.toBeNull()
-  await tick(400)
-  expect(JSON.parse(localStorage.getItem('nano-workspace.outline')!).pages.t.slots).toEqual({ log7: { kind: 'pod', pod: 'nano.ui/log@main/log7' } })
+  expect(JSON.parse(localStorage.getItem('nano-host.document')!).outline.pages.t.slots).toEqual({ log7: { kind: 'pod', pod: 'nano.ui/log@main/log7' } })
   expect(localStorage.getItem('workspace-starter.saved-workspaces')).toBeNull()
   expect(localStorage.getItem('workspace-starter.layout.saved./t')).toBeNull()
 })

@@ -2,10 +2,10 @@
  * Entry point. The theme is applied first (boot-theme), then components register and upgrade the page.
  * The workspace registers last.
  *
- * On nano-core 0.4 the host (host.ts: the one Application, the nano.ui built-ins, import and save of nano.json) takes
- * the place of composable.ts and nano-app: the docks, the explorer and wiring views and the app bar show its app; the
- * File menu saves `{ app, outline }` (its nano.json and the Outline's pages) and opens or imports either that (or the older `{ app, platform }`) or a nano.json; `?src=<url>` imports that
- * nano.json on load, into the stored document boot-host.ts loaded.
+ * The host (host.ts, on the host core: the one Application, the nano.ui built-ins, import and save) takes the place of
+ * composable.ts and nano-app: the docks, the explorer and wiring views and the app bar show its app; the File menu
+ * saves the host document (`{ app, outline, host }`) and opens or imports either that (or the older `{ app, outline }`,
+ * `{ app, platform }`) or a nano.json; `?src=<url>` imports that nano.json on load, into the stored document.
  */
 import './boot-theme.ts';
 import { host, outline } from './boot-host.ts';   // before the elements are defined: the docks' palettes list what the host can make
@@ -34,6 +34,7 @@ import { icon } from './icons.ts';
 import { HOST_PODS } from './host-deploy.ts';
 import { showStatus } from './lib/status.ts';
 import { applyPages, MAIN, metaOf, withMeta } from './lib/pages.ts';
+import { workspaceLayout as mine } from './host.ts';
 import { Coord } from '@pritzlaff/nano-core';
 import type { Page } from '@pritzlaff/nano-outline';
 
@@ -51,13 +52,13 @@ if (host && outline) {
   defineSettings();
   for (const el of document.querySelectorAll<SettingsView>('nano-settings')) el.host = host;
 
-  // The File menu: Save and Download (Reconcile and save: with the calls seen, host.saved(true)) write the app's nano.json (without the host's own pod), with the dock's
-  // arrangement as its `layout` under the dock's id; Open and Import import one (and show its layout); New empties it.
+  // The File menu: Save and Download (Reconcile and save: with the calls seen, host.saved(true)) write the host document
+  // (without the host's own pods), the Desk's arrangement in its `host.layout.workspace.desk`; Open and Import import one; New empties it.
   const menu = document.querySelector<FileMenuEl>('nano-file-menu');
   const download = (name: string, reconcile = false) => {
     const a = document.createElement('a');
-    const saved = h.saved(reconcile), desk = document.querySelector<Desk>('c-desk')?.layout();
-    const file = { app: desk ? { ...saved, layout: { ...saved.layout, desk } } : saved, outline: p.document().doc };   // the pages are the Outline's
+    const saved = h.saved(reconcile), desk = document.querySelector<Desk>('c-desk')?.layout(), layout = saved.host?.layout;
+    const file = desk ? { ...saved, host: { ...saved.host, layout: { ...layout, workspace: { ...mine(h), desk } } } } : saved;
     a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' }));
     a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -68,11 +69,13 @@ if (host && outline) {
     save: () => download('nano.json'), reconcile: () => download('nano.json', true), download: () => download('nano.json'),
     'save-as': async () => { const name = await askName(document, 'nano'); if (name) download(`${name}.json`); },
     open: () => openImportDialog(document), import: () => openImportDialog(document),
-    // New: an apply of an empty deployment (the host's own pods stay; providers stay loaded), and Main's page emptied
-    // (its dock's starting layout shows). BACKLOG(8): the old New also started a working copy.
+    // New: an apply of an empty deployment (the host's own pods stay; providers stay loaded), the workspace's views and
+    // layout cleared (other clients' kept), and Main's page emptied (its dock's starting layout shows). BACKLOG(8): the old New also started a working copy.
     new: async () => {
-      const d = h.data(), r = await h.apply({ ...d, pods: Object.fromEntries(HOST_PODS.map(p => [p, d.pods[p]!])), runtimes: { main: { pods: [...HOST_PODS], subscriptions: [] } }, tags: {}, views: {}, layout: undefined });
+      const d = h.data(), r = await h.apply({ ...d, pods: Object.fromEntries(HOST_PODS.map(p => [p, d.pods[p]!])), runtimes: { main: { pods: [...HOST_PODS], subscriptions: [] } }, tags: {} });
       if (!r.ok) return;
+      const { workspace: _w, ...others } = h.document().host?.layout ?? {};
+      h.setHost({ views: {}, layout: others });
       toMain(m => { const { icon } = metaOf(m), { workspace: _, ...layout } = (m.layout ?? {}) as Record<string, unknown>;   // other clients' layout and meta kept
         return withMeta({ ...(m.title !== undefined && { title: m.title }), slots: {}, ...(m.children && { children: m.children }), ...(Object.keys(layout).length && { layout }), ...(m.meta !== undefined && { meta: m.meta }) }, { icon }); });
       if (menu) menu.dirty = false;
@@ -104,8 +107,8 @@ if (host && outline) {
   let tm = await timeMachine(h.history), driver = clockDriver(h.app, h.registry, tm);
   const bars = document.querySelectorAll<NanoTimeMachine>('nano-time-machine');
   defineMessages();
-  // The Ring's filter: the implementations in the deployment's `layout.ring.show`, read when drawn (absent: every pod).
-  const show = (_pod: string, impl: string) => { const s = (h.data().layout?.ring as { show?: unknown } | undefined)?.show; return !Array.isArray(s) || s.includes(impl); };
+  // The Ring's filter: the implementations in `host.layout.workspace.ring.show`, read when drawn (absent: every pod).
+  const show = (_pod: string, impl: string) => { const s = (mine(h)['ring'] as { show?: unknown } | undefined)?.show; return !Array.isArray(s) || s.includes(impl); };
   const ring = { app: h.app, registry: h.registry, create: shadowCreate(h.registry), show };
   // the host's view map (as the dock's panels use), handed again on each apply: an import brings its modules' views
   const hand = () => handTo(document, { tm, store: h.history.store, driver }, { ...ring, views: h.defaults() });
