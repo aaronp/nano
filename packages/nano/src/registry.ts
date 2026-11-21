@@ -87,5 +87,26 @@ function create(): Registry {
   }
 }
 
-/** `Registry.create()`. */
-export const Registry = { create }
+/**
+ * `Registry.load(modules, base)`: import each module (a URL relative to `base`), add its default `Provider` to a new
+ * registry, and return each module's namespace under its key. The first failure is the result, never a throw:
+ * `not-found` (the import failed), `invalid-input` (no default Provider, or the registry refused it).
+ * The modules are code that will run: load only trusted ones.
+ */
+async function load(modules: Record<string, string>, base: string | URL): Promise<NanoResult<{ registry: Registry; exports: Record<string, Record<string, unknown>> }>> {
+  const registry = create()
+  const exports: Record<string, Record<string, unknown>> = {}
+  for (const [ns, path] of Object.entries(modules)) {
+    let mod: Record<string, unknown>
+    try { mod = await import(new URL(path, base).href) }
+    catch (e) { return failure('not-found', `${ns} (${path}): ${e instanceof Error ? e.message : String(e)}`) }
+    const p = mod.default
+    const added = p && typeof p === 'object' ? registry.add(p as Provider) : failure('invalid-input', `${path} has no default Provider`)
+    if (!added.ok) return added
+    exports[ns] = mod
+  }
+  return success({ registry, exports })
+}
+
+/** `Registry.create()`; `Registry.load(modules, base)`. */
+export const Registry = { create, load }

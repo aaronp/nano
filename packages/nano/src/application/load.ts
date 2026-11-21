@@ -26,13 +26,8 @@ export async function loaded(url: string | URL): Promise<NanoResult<{ deployment
   const { pods: _p, runtimes: _r, tags: _t, ...host } = d
   const top = AppDeployment.assemble({ ...host, pods: {}, runtimes: {} }, Registry.create())
   if (!top.ok) return failure('invalid-input', `${url}: ${top.fail.reason}`)
-  const registry = Registry.create()
-  for (const [ns, path] of Object.entries(deployment?.modules ?? {})) {
-    let provider: unknown
-    try { provider = (await import(new URL(path, url).href)).default }
-    catch (e) { return failure('not-found', `${ns} (${path}): ${why(e)}`) }
-    const added = provider && typeof provider === 'object' ? registry.add(provider as never) : failure('invalid-input', `${path} has no default Provider`)
-    if (!added.ok) return added
-  }
+  const loadedModules = await Registry.load(deployment.modules ?? {}, url)
+  if (!loadedModules.ok) return loadedModules
+  const { registry } = loadedModules.value
   return success({ deployment, registry })
 }
