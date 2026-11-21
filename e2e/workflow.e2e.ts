@@ -21,7 +21,7 @@ async function patch(page: Page, from: string, to: string) {
 }
 
 test('drop four controls, wire them in Connections, save, New, import the file: the same app, working', async ({ page }) => {
-  await page.goto('/#/workspace')
+  await page.goto('/#/p/workspace')
   await page.evaluate(() => localStorage.clear())
   await page.reload()
   await expect(dock(page).locator('nano-explorer')).toBeVisible()
@@ -98,7 +98,7 @@ test('drop four controls, wire them in Connections, save, New, import the file: 
 })
 
 test('opens a file with slots but no workspace state: a panel per slot', async ({ page }) => {
-  await page.goto('/#/workspace')
+  await page.goto('/#/p/workspace')
   await page.evaluate(() => localStorage.clear())
   await page.reload()
   const file = { pods: { in1: { implementation: 'nano.ui/input', eager: false }, out1: { implementation: 'nano.ui/log', eager: false } },

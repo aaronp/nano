@@ -8,13 +8,13 @@ import { HOST_ENTRIES } from '../src/components/profile-menu.ts'
 
 const tick = () => new Promise(r => setTimeout(r, 5))
 const setup = () => {
-  document.body.innerHTML = `<div id="shell"><app-route path="/workspace"><workspace-dock></workspace-dock></app-route>
-    <app-route path="/desk"><a href="#/workspace" data-connections hidden>Connections</a><a href="#/workspace" data-connections hidden>Connections</a><c-desk></c-desk></app-route></div>`
+  document.body.innerHTML = `<div id="shell"><app-route path="/p/workspace"><workspace-dock></workspace-dock></app-route>
+    <app-route path="/desk"><a href="#/p/workspace" data-connections hidden>Connections</a><a href="#/p/workspace" data-connections hidden>Connections</a><c-desk></c-desk></app-route></div>`
   const bus = createBus()
   provideBus(document.getElementById('shell')!, bus)
   let flips = 0
   Object.assign(document.querySelector('workspace-dock')!, { connections: () => { flips++ } })
-  bootWiring(document, async () => [{ id: '/workspace' }, { id: '/lab' }])
+  bootWiring(document, async () => [{ id: '/p/workspace' }, { id: '/lab' }])
   const go = async (path: string) => { bus.publish('route:changed', { path }, 'test'); await tick() }
   return { go, flips: () => flips, link: document.querySelector('a[data-connections]') as HTMLAnchorElement }
 }
@@ -36,33 +36,33 @@ const frame = () => new Promise(r => requestAnimationFrame(() => r(null)))
 
 test('Connections flips the dock once, when the target route is shown', async () => {
   const t = setup()
-  await t.go('/workspace'); await t.go('/desk')
+  await t.go('/p/workspace'); await t.go('/desk')
   t.link.click(); t.link.click()   // a double click does not stack
   expect(t.flips()).toBe(0)
-  await t.go('/workspace'); await frame(); await tick()
+  await t.go('/p/workspace'); await frame(); await tick()
   expect(t.flips()).toBe(1)
-  await t.go('/desk'); await t.go('/workspace'); await frame()
+  await t.go('/desk'); await t.go('/p/workspace'); await frame()
   expect(t.flips()).toBe(1)
 })
 
 test('Connections leaves an already-flipped dock alone', async () => {
   const t = setup()
-  document.querySelector('app-route[path="/workspace"]')!.insertAdjacentHTML('beforeend', '<c-wires></c-wires>')
+  document.querySelector('app-route[path="/p/workspace"]')!.insertAdjacentHTML('beforeend', '<c-wires></c-wires>')
   Object.assign(document.querySelector('c-wires')!, { flipped: true })
-  await t.go('/workspace'); await t.go('/desk')
+  await t.go('/p/workspace'); await t.go('/desk')
   t.link.click()
-  await t.go('/workspace'); await frame(); await tick()
+  await t.go('/p/workspace'); await frame(); await tick()
   expect(t.flips()).toBe(0)
 })
 
 test('a modified click does not arm, and an unrelated navigation spends the arm', async () => {
   const t = setup()
-  await t.go('/workspace'); await t.go('/desk')
+  await t.go('/p/workspace'); await t.go('/desk')
   t.link.dispatchEvent(new MouseEvent('click', { ctrlKey: true, button: 0 }))
-  await t.go('/workspace'); await frame()
+  await t.go('/p/workspace'); await frame()
   expect(t.flips()).toBe(0)
   await t.go('/desk'); t.link.click()
-  await t.go('/settings'); await t.go('/workspace'); await frame()
+  await t.go('/settings'); await t.go('/p/workspace'); await frame()
   expect(t.flips()).toBe(0)
 })
 
@@ -85,10 +85,10 @@ test('the Desk, Messages and Ring page navs are Connections | Desk | Messages | 
 
 test('arriving at /desk keeps the Connections link', async () => {
   const t = setup()
-  await t.go('/workspace'); await t.go('/desk')
+  await t.go('/p/workspace'); await t.go('/desk')
   const links = [...document.querySelectorAll<HTMLAnchorElement>('a[data-connections]')]
   expect(links.length).toBe(2)
-  for (const l of links) { expect(l.hidden).toBe(false); expect(l.getAttribute('href')).toBe('#/workspace') }
+  for (const l of links) { expect(l.hidden).toBe(false); expect(l.getAttribute('href')).toBe('#/p/workspace') }
 })
 
 test('Messages and the Ring are not screens: Connections points at the last workspace from there too', async () => {

@@ -50,13 +50,13 @@ test('apply with a stale base is refused, unasked; with the current base it is a
   await app.close()
 })
 
-test('removing Main or adding a page on one of the workspace\'s own routes is refused, unasked', async () => {
+test('removing Main is refused, unasked; a page `ring` is accepted', async () => {
   const { asked, app, outline, pod } = await podApp(async () => true)
   expect(await pod.apply({ next: { pages: { other: { slots: {} } } }, base: 0 })).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: 'Main (the page workspace) is not removed' } })
-  for (const id of ['ring', 'settings', 'inbox'])
-    expect(await pod.apply({ next: { pages: { workspace: { slots: {} }, [id]: { slots: {} } } }, base: 0 })).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: `${id} is the workspace's own route, not a page` } })
   expect(asked).toEqual([])
   expect(Object.keys(outline.document().doc.pages)).toEqual(['workspace'])
+  expect(await pod.apply({ next: { pages: { workspace: { slots: {} }, ring: { slots: {} } } }, base: 0 })).toMatchObject({ ok: true })
+  expect(Object.keys(outline.document().doc.pages)).toEqual(['workspace', 'ring'])
   await app.close()
 })
 

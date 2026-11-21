@@ -97,7 +97,7 @@ if (host && outline) {
   // The Desk page: <c-desk> over the app, and a link to the last workspace's Connections.
   defineDesk();
   for (const d of document.querySelectorAll<Desk>('c-desk')) d.host = host;
-  bootWiring(document, async () => [{ id: '/workspace' }]);
+  bootWiring(document, async () => [{ id: '/p/workspace' }]);
 
   // The page's one time machine over host.history, and its clock driver, handed to every <nano-time-machine>. Reset
   // makes both afresh: a time machine's index does not survive the history being cleared.

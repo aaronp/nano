@@ -10,7 +10,7 @@
  * "<title> copy", its next sibling. Each edit is one `next`, applied by `applyPages` (the workspace's rules checked first).
  */
 import type { Page, Outline } from '@pritzlaff/nano-outline';
-import { applyPages, childrenOf, FIXED, metaOf, move, parentOf, routeOf, slugPath, walk, withMeta, MAIN } from '../lib/pages.ts';
+import { applyPages, childrenOf, metaOf, move, parentOf, routeOf, slugPath, walk, withMeta, MAIN } from '../lib/pages.ts';
 import { showStatus } from '../lib/status.ts';
 import { keepDocks } from '../dock/page-docks.ts';
 import { navEdit } from './nav-edit.ts';
@@ -55,8 +55,8 @@ export function bootWorkspacePages(doc: Document, outline: ReturnType<typeof Out
   doc.querySelector('[slot="title"]')?.append(button(doc, 'newWorkspace', 'New workspace', '+'), button(doc, 'editNav', 'Edit workspaces', '✎'));
   doc.querySelector('[data-edit-nav]')?.setAttribute('aria-pressed', 'false');
   const rows = () => [...doc.querySelectorAll<HTMLElement>('[data-saved]')];
-  /** Routes and ids a new page's id avoids: every route, every page's id (one on a fixed route is at /p/<id>), every fixed route. */
-  const taken = () => [...[...doc.querySelectorAll('app-route')].map((r) => r.getAttribute('path') ?? ''), ...[...Object.keys(outline.document().doc.pages), ...FIXED].map((id) => `/${id}`)];
+  /** The ids a new page's id avoids (as `/<id>`): every page's. */
+  const taken = () => Object.keys(outline.document().doc.pages).map((id) => `/${id}`);
 
   const apply = (next: Outline) => { const r = applyPages(outline, next); if (!r.ok) showStatus(doc, r.fail.reason); return r.ok; };
   const tree = navTree(doc, outline);
@@ -66,7 +66,7 @@ export function bootWorkspacePages(doc: Document, outline: ReturnType<typeof Out
     for (const row of rows()) if (!pages.some((p) => p.id === row.dataset.saved)) {
       const id = row.dataset.saved!;
       row.remove(); [...doc.querySelectorAll('app-route')].find((r) => r.getAttribute('path') === routeOf(id))?.remove();   // by value: no selector to escape
-      if (location.hash === `#${routeOf(id)}`) location.hash = `#/${MAIN}`;
+      if (location.hash === `#${routeOf(id)}`) location.hash = `#${routeOf(MAIN)}`;
     }
     let prev: Element | null = null;
     for (const p of pages) {

@@ -39,12 +39,12 @@
 
   <!-- Navigation: one link per <app-route> below, in order. -->
   <!-- Workspaces: Main's row, then the other pages' as the Outline's tree (components/workspace-pages.ts fills Main's row like the others and adds theirs and their routes, and + and ✎ beside the title: a new page, and the nav's edit mode). -->
-  <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspaces</a></div>
+  <div slot="nav" class="nav-row" data-workspaces><a href="#/p/workspace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM12 4v16M12 12h9"/></svg>Workspaces</a></div>
   <div slot="drawer-footer" class="drawer-foot"><theme-picker layout="icons" themes="warm,blueprint,enterprise,shadcn"></theme-picker><span>Nano · v0.1</span></div>
   <status-line slot="footer"></status-line>
 
   <!-- Workspace: a golden-layout dock. Each <template> is a widget the picker can add. -->
-  <app-route path="/workspace" bleed>
+  <app-route path="/p/workspace" bleed>
     <!-- <c-wires> tilts the live dock to show the connections behind it. -->
     <div class="ws-page">
     <c-wires>
@@ -100,7 +100,7 @@
   <!-- Desk: the system as runtimes of pod columns; Connections flips the last workspace's dock. -->
   <app-route path="/desk" bleed>
     <div class="wiring-page">
-      <nav class="wiring-views" aria-label="Wiring view"><a href="#/workspace" data-connections hidden>Connections</a><a href="#/desk" aria-current="page">Desk</a><a href="#/messages">Messages</a><a href="#/ring">Ring</a></nav>
+      <nav class="wiring-views" aria-label="Wiring view"><a href="#/p/workspace" data-connections hidden>Connections</a><a href="#/desk" aria-current="page">Desk</a><a href="#/messages">Messages</a><a href="#/ring">Ring</a></nav>
       <nano-time-machine></nano-time-machine>
       <c-desk></c-desk>
     </div>
@@ -109,7 +109,7 @@
   <!-- Messages: the recording as a searchable table, on the same time machine as the Desk. -->
   <app-route path="/messages" bleed>
     <div class="wiring-page">
-      <nav class="wiring-views" aria-label="Wiring view"><a href="#/workspace" data-connections hidden>Connections</a><a href="#/desk">Desk</a><a href="#/messages" aria-current="page">Messages</a><a href="#/ring">Ring</a></nav>
+      <nav class="wiring-views" aria-label="Wiring view"><a href="#/p/workspace" data-connections hidden>Connections</a><a href="#/desk">Desk</a><a href="#/messages" aria-current="page">Messages</a><a href="#/ring">Ring</a></nav>
       <nano-time-machine></nano-time-machine>
       <c-messages></c-messages>
     </div>
@@ -118,7 +118,7 @@
   <!-- Ring: one ring per runtime, each pod as its view, messages between them; scrubbed back, the state at the cursor. -->
   <app-route path="/ring" bleed>
     <div class="wiring-page">
-      <nav class="wiring-views" aria-label="Wiring view"><a href="#/workspace" data-connections hidden>Connections</a><a href="#/desk">Desk</a><a href="#/messages">Messages</a><a href="#/ring" aria-current="page">Ring</a></nav>
+      <nav class="wiring-views" aria-label="Wiring view"><a href="#/p/workspace" data-connections hidden>Connections</a><a href="#/desk">Desk</a><a href="#/messages">Messages</a><a href="#/ring" aria-current="page">Ring</a></nav>
       <nano-time-machine></nano-time-machine>
       <nano-ring></nano-ring>
     </div>
@@ -138,7 +138,7 @@
   </app-route>
 
   <app-route path="*">
-    <header class="page-head"><h1>Page not found</h1><p>Nothing lives at this address. <a href="#/workspace">Go to the workspace</a>.</p></header>
+    <header class="page-head"><h1>Page not found</h1><p>Nothing lives at this address. <a href="#/p/workspace">Go to the workspace</a>.</p></header>
   </app-route>
 </app-shell>
 <script type="module">

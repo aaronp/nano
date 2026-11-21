@@ -49,8 +49,8 @@ export const strs = (v: unknown) => JSON.parse(JSON.stringify(v ?? null))
 export function mount(h: H, pages: Record<string, Page>, open = '') {
   const outline = Outline.create(h.app, h.registry, flat({ workspace: page('Main', {}), ...pages })), bus = createBus(), app = document.createElement('div')
   provideBus(app, bus)
-  app.innerHTML = `<span slot="title"></span><div class="nav-row" data-workspaces><a href="#/workspace"></a></div>
-    <app-route path="/workspace" hidden><workspace-dock id="workspace" storage-key="main" open="${open}"><template data-widget="notes" data-title="Notes"><div>notes</div></template></workspace-dock></app-route>
+  app.innerHTML = `<span slot="title"></span><div class="nav-row" data-workspaces><a href="#/p/workspace"></a></div>
+    <app-route path="/p/workspace" hidden><workspace-dock id="workspace" storage-key="main" open="${open}"><template data-widget="notes" data-title="Notes"><div>notes</div></template></workspace-dock></app-route>
     <app-route path="*" hidden></app-route>`
   const main = app.querySelector<Dock>('workspace-dock')!
   main.host = h
@@ -58,10 +58,10 @@ export function mount(h: H, pages: Record<string, Page>, open = '') {
   document.body.append(app)
   bootWorkspacePages(document, outline)
   const go = (id: string) => {
-    for (const r of document.querySelectorAll<HTMLElement>('app-route')) r.hidden = r.getAttribute('path') !== `/${id}`
-    bus.publish('route:changed', { path: `/${id}` }, 'test')
+    for (const r of document.querySelectorAll<HTMLElement>('app-route')) r.hidden = r.getAttribute('path') !== `/p/${id}`
+    bus.publish('route:changed', { path: `/p/${id}` }, 'test')
   }
-  const dock = (id: string) => document.querySelector<Dock>(`app-route[path="/${id}"] workspace-dock`)!
+  const dock = (id: string) => document.querySelector<Dock>(`app-route[path="/p/${id}"] workspace-dock`)!
   const panels = (id: string) => [...dock(id)?.querySelectorAll<HTMLElement>('.dock-panel') ?? []]   // none while a dock is built again
   /** Page `id`, written (coordinates as strings). */
   const written = (id: string) => strs(outline.document().doc.pages[id])

@@ -1,7 +1,7 @@
 /**
  * An import's pages into the Outline. `withImported` is the workspace's rule for them (it was the page store's
  * `merge`), in the file's tree order: a free id is added as it is; a taken id with identical content (its `children`
- * aside) skipped, so a repeat is a no-op; a taken id with other content, or one of the workspace's own routes (`FIXED`),
+ * aside) skipped, so a repeat is a no-op; a taken id with other content,
  * added under the next free `-2`, `-3`… (renamed in the file's lists too); the incoming Main (`workspace`) fills Main
  * when Main shows only views (after New, say), else it is a page beside it. Places: an added page keeps its incoming
  * parent; one whose parent was skipped as identical, or is the filled Main, is appended to that page's children (Main
@@ -18,7 +18,7 @@ import type { Page, Outline } from '@pritzlaff/nano-outline'
 import type { Host } from './host.ts'
 import { opened } from './migrate.ts'
 import { showStatus } from './lib/status.ts'
-import { applyPages, FIXED, MAIN, metaOf, walk, withMeta } from './lib/pages.ts'
+import { applyPages, MAIN, metaOf, walk, withMeta } from './lib/pages.ts'
 
 /** A page as compared: without its place in the tree. */
 const body = (p: Page) => JSON.stringify({ ...p, children: undefined })
@@ -42,8 +42,8 @@ export function withImported(current: Outline, incoming: Outline): Outline {
     const p = incoming.pages[id]!, same = current.pages[id]   // compared with what was there, never with a page this import added
     if (same && body(same) === body(p)) continue
     const fills = id === MAIN && !!same && Object.values(same.slots).every(s => s.kind === 'view')
-    let to = id   // one of the workspace's own routes is taken too
-    for (let n = 2; !fills && (pages[to] || FIXED.includes(to)); n++) to = `${id}-${n}`
+    let to = id
+    for (let n = 2; !fills && pages[to]; n++) to = `${id}-${n}`
     pages[to] = fills ? { ...filling(same!, p), ...(same!.children && { children: same!.children }) } : p
     if (!fills) added.add(id)
     at.set(id, to)

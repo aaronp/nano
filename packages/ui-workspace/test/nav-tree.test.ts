@@ -9,10 +9,10 @@ import { Application, AppDeployment, Registry, type NanoResult } from '@pritzlaf
 import { Outline, type Page } from '@pritzlaff/nano-outline'
 
 localStorage.clear()
-location.hash = '#/workspace'
+location.hash = '#/p/workspace'
 document.body.innerHTML = `<app-shell><span slot="title">Nano</span>
-  <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace">Workspaces</a></div>
-  <app-route path="/workspace"><div class="ws-page"><c-wires>
+  <div slot="nav" class="nav-row" data-workspaces><a href="#/p/workspace">Workspaces</a></div>
+  <app-route path="/p/workspace"><div class="ws-page"><c-wires>
     <workspace-dock id="workspace" storage-key="main"><template data-widget="a"></template></workspace-dock>
   </c-wires></div></app-route><app-route path="*"></app-route></app-shell>`
 
@@ -66,7 +66,7 @@ test('a toggle collapses and expands its subtree, locally (no apply); a collapse
   expect(shown()).toEqual(['workspace', 'kid', 'lab', 'a', 'b', 'two'])
   row('a').querySelector<HTMLElement>('[data-toggle]')!.click(); t.click()
   expect(shown()).toEqual(['workspace', 'kid', 'lab', 'two'])
-  go('#/b')
+  go('#/p/b')
   expect(shown()).toEqual(['workspace', 'kid', 'lab', 'a', 'b', 'two'])
   expect(t.getAttribute('aria-expanded')).toBe('true')
   expect(applies).toBe(before)
@@ -103,12 +103,12 @@ test('Alt+→ nests a page as the last child of the sibling above; Alt+← moves
 })
 
 test("a move keeps the page's id, route, slots and dock (Review Focus 1)", () => {
-  const dock = $('app-route[path="/lab"] workspace-dock')
+  const dock = $('app-route[path="/p/lab"] workspace-dock')
   alt('lab', 'ArrowRight')   // into Main
   expect(kids('workspace')).toEqual(['kid', 'lab'])
   expect(d().pages['lab']!.slots).toEqual(notes)
-  expect(row('lab').querySelector('a')!.getAttribute('href')).toBe('#/lab')
-  expect($('app-route[path="/lab"] workspace-dock')).toBe(dock)
+  expect(row('lab').querySelector('a')!.getAttribute('href')).toBe('#/p/lab')
+  expect($('app-route[path="/p/lab"] workspace-dock')).toBe(dock)
   expect(dock.id).toBe('ws_lab')
   alt('lab', 'ArrowLeft')
   expect(d().roots).toEqual(['workspace', 'lab', 'two'])
@@ -163,8 +163,8 @@ test('in edit mode, Add child makes an empty page the last child of its row, ope
   expect(add.getAttribute('aria-label')).toBe('Add a page under A')
   add.click()
   expect(kids('a')).toEqual(['b', 'new-workspace'])
-  expect(location.hash).toBe('#/new-workspace')
-  expect(routes()).toContain('/new-workspace')
+  expect(location.hash).toBe('#/p/new-workspace')
+  expect(routes()).toContain('/p/new-workspace')
   expect(row('new-workspace').hidden).toBe(false)
   expect($('input[data-rename]').closest('[data-saved]')!.getAttribute('data-saved')).toBe('new-workspace')
   $<HTMLInputElement>('input[data-rename]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
@@ -179,13 +179,13 @@ test('Remove: a leaf goes at once; Main offers none', () => {
   expect(r.getAttribute('aria-label')).toBe('Remove New workspace')
   r.click()
   expect(d().pages['new-workspace-2']).toBeUndefined()
-  expect(routes()).not.toContain('/new-workspace-2')
+  expect(routes()).not.toContain('/p/new-workspace-2')
   expect(document.activeElement).toBe(row('two').querySelector('[data-name]'))   // the row before it
 })
 
 test('Remove of a page with children asks, then removes its subtree, its routes, pods left alone; its route goes to Main (Review Focus 3)', async () => {
   const deployed = JSON.stringify(app.deployment())
-  go('#/b')
+  go('#/p/b')
   row('lab').querySelector<HTMLElement>('[data-remove]')!.click()
   const dialog = () => document.querySelector('dialog')
   expect(dialog()!.textContent).toContain('Remove Lab and its 3 pages?')
@@ -195,8 +195,8 @@ test('Remove of a page with children asks, then removes its subtree, its routes,
   dialog()!.querySelector<HTMLElement>('[data-ok]')!.click(); await wait()
   expect(Object.keys(d().pages).sort()).toEqual(['kid', 'two', 'workspace'])
   expect(order()).toEqual(['workspace', 'kid', 'two'])
-  expect(routes()).toEqual(['/workspace', '/kid', '/two', '*'])
-  expect(location.hash).toBe('#/workspace')
+  expect(routes()).toEqual(['/p/workspace', '/p/kid', '/p/two', '*'])
+  expect(location.hash).toBe('#/p/workspace')
   expect(JSON.stringify(app.deployment())).toBe(deployed)
   expect(document.activeElement).toBe(row('kid').querySelector('[data-name]'))
 })

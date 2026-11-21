@@ -2,7 +2,7 @@
  * `workspace.host/outline`: this host's HostOutline over its Outline (boot-host.ts), the pod `outline` beside `ui` and
  * `deploy` in `main`, never saved. `document` gives the pages, written, at their version, unasked. `apply({ next, base })`
  * is refused when `base` is stale ("the pages changed since"), `next` is malformed or breaks the workspace's rules
- * (`refusal`, lib/pages.ts: Main dropped or not the first root, a page added on one of its own routes), else asks
+ * (`refusal`, lib/pages.ts: Main dropped or not the first root), else asks
  * `approve` (HostUI's through the app, timed by hostProvider) with a summary of the pages and slots added or removed
  * and the pages moved; anything but a yes is `denied`, a yes applies `next` at `base`. The workspace's own edits apply
  * unasked. Once built, the pod publishes each change the Outline reports as `changed`: boot-host.ts builds it as the
@@ -69,7 +69,7 @@ export function hostOutline(outline: () => Instance | undefined, approve: (text:
           if (base !== at.version) return failure('invalid-input', 'the pages changed since')
           const read = Outline.parse(next)
           if (!read.ok) return read
-          const why = refusal(at.doc, read.value)
+          const why = refusal(read.value)
           if (why) return failure('invalid-input', why)
           const text = summary(at.doc, read.value)
           if (!await approve(text).catch(() => false)) return failure('denied', `not approved: ${text}`)

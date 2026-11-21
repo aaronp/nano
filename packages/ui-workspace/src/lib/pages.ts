@@ -1,8 +1,7 @@
 /**
  * The workspace's rules for its pages, which are the Outline's (ADR-0040): Main (`MAIN`) is always there and the first
  * root (it may have children); a page's id never changes (a rename sets its `title`, a move edits lists) and is its
- * route (`routeOf`: `/p/<id>` for one of the workspace's own routes, `FIXED`, which another client may have used; the
- * workspace never makes one); order is the tree (`walk`); the rest are in the workspace's own meta (`meta.workspace`,
+ * route (`routeOf`: `/p/<id>`); order is the tree (`walk`); the rest are in the workspace's own meta (`meta.workspace`,
  * ADR-0039: `icon`, Save layout's restore point). The workspace builds each page edit as a `next` and gives it to
  * `applyPages`, which checks these rules (`refusal`, as the pod `outline` does) before the Outline's `apply`.
  *
@@ -15,8 +14,6 @@ import type { Page, Outline } from '@pritzlaff/nano-outline'
 
 /** Main's id (and route). */
 export const MAIN = 'workspace'
-/** The workspace's own routes: never a page's id. */
-export const FIXED = ['ring', 'desk', 'settings', 'systems', 'messages', 'components', 'themes', 'inbox']
 
 /** A route for a title: `/` + lower-case dashes, `-2`, `-3`… until it is not in `taken`. A page's id is this without the `/`. */
 export const slugPath = (title: string, taken: readonly string[]): string => {
@@ -26,8 +23,8 @@ export const slugPath = (title: string, taken: readonly string[]): string => {
   return path
 }
 
-/** A page's route: `/<id>`, or `/p/<id>` for an id that is one of the workspace's own routes. */
-export const routeOf = (id: string): string => (FIXED.includes(id) ? `/p/${id}` : `/${id}`)
+/** A page's route: `/p/<id>`, so it never meets one of the app's own screens. */
+export const routeOf = (id: string): string => `/p/${id}`
 
 type Meta = { icon?: string; [k: string]: unknown }
 const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -72,16 +69,15 @@ export function without(doc: Outline, id: string): Outline | undefined {
   return { ...out, pages: Object.fromEntries(Object.entries(out.pages).filter(([p]) => !gone.has(p))) }
 }
 
-/** Why `next` breaks the workspace's rules, coming from `was`: Main dropped, not the first root, or a page added on a fixed route. */
-export function refusal(was: Outline, next: Outline): string | undefined {
+/** Why `next` breaks the workspace's rules: Main dropped or not the first root. */
+export function refusal(next: Outline): string | undefined {
   if (!next.pages[MAIN]) return `Main (the page ${MAIN}) is not removed`
   if (next.roots[0] !== MAIN) return `Main (the page ${MAIN}) stays the first page`
-  const fixed = Object.keys(next.pages).find((id) => FIXED.includes(id) && !(id in was.pages))
-  return fixed && `${fixed} is the workspace's own route, not a page`
+  return undefined
 }
 
 /** The workspace's own page edit: `next` refused (`invalid-input`) if it breaks the rules, else the Outline's `apply`. */
 export function applyPages(outline: ReturnType<typeof Outline.create>, next: Outline): NanoResult<void> {
-  const why = refusal(outline.document().doc, next)
+  const why = refusal(next)
   return why ? failure('invalid-input', why) : outline.apply(next)
 }

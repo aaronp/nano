@@ -5,7 +5,7 @@ import { expect, test } from 'bun:test'
 import { flat } from './flat.ts'
 import { Application, AppDeployment, Registry, type NanoResult } from '@pritzlaff/nano-core'
 import { Outline, type Page } from '@pritzlaff/nano-outline'
-import { applyPages, move, parentOf, refusal, slugPath, subtree, walk, without } from '../src/lib/pages.ts'
+import { applyPages, move, parentOf, refusal, routeOf, slugPath, subtree, walk, without } from '../src/lib/pages.ts'
 
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
 const p = (...children: string[]): Page => ({ slots: {}, ...(children.length && { children }) })
@@ -39,18 +39,26 @@ test('without: a page and its subtree gone, from the pages and its parent\'s lis
   expect(without(doc, 'gone')).toBeUndefined()
 })
 
-test('refusal and applyPages: Main dropped, not a root or not first, or a fixed route added, is refused, unapplied; a fixed route already there is kept', async () => {
+test('refusal and applyPages: Main dropped, not a root or not first, is refused, unapplied', async () => {
   const registry = Registry.create(), app = must(await Application.create(must(AppDeployment.assemble({ pods: {}, runtimes: {} }, registry))))
   const outline = Outline.create(app, registry, flat({ workspace: p() }))
-  expect(refusal(outline.document().doc, flat({}))).toBe('Main (the page workspace) is not removed')
-  expect(refusal(doc, { ...doc, roots: ['a', 'workspace', 'd'] })).toBe('Main (the page workspace) stays the first page')
-  expect(refusal(doc, { roots: ['a', 'd'], pages: { ...doc.pages, a: p('b', 'workspace') } })).toBe('Main (the page workspace) stays the first page')
-  for (const id of ['ring', 'desk', 'settings', 'systems', 'messages', 'components', 'themes', 'inbox'])
-    expect(applyPages(outline, flat({ workspace: p(), [id]: p() }))).toMatchObject({ ok: false, fail: { type: 'invalid-input', reason: `${id} is the workspace's own route, not a page` } })
+  expect(refusal(flat({}))).toBe('Main (the page workspace) is not removed')
+  expect(refusal({ ...doc, roots: ['a', 'workspace', 'd'] })).toBe('Main (the page workspace) stays the first page')
+  expect(refusal({ roots: ['a', 'd'], pages: { ...doc.pages, a: p('b', 'workspace') } })).toBe('Main (the page workspace) stays the first page')
   expect(applyPages(outline, { roots: ['two', 'workspace'], pages: { workspace: p(), two: p() } })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
   expect(outline.document().version).toBe(0)
-  expect(refusal(flat({ workspace: p(), ring: p() }), flat({ workspace: p(), ring: { slots: {}, title: 'R' } }))).toBeUndefined()
   expect(applyPages(outline, { roots: ['workspace'], pages: { workspace: p('two'), two: p() } })).toEqual({ ok: true, value: undefined })
+  await app.close()
+})
+
+test('any page id is allowed (ids are only unique): ring, desk, inbox; every page is at /p/<id>', async () => {
+  const registry = Registry.create(), app = must(await Application.create(must(AppDeployment.assemble({ pods: {}, runtimes: {} }, registry))))
+  const outline = Outline.create(app, registry, flat({ workspace: p() }))
+  for (const id of ['ring', 'desk', 'inbox']) {
+    expect(applyPages(outline, flat({ ...outline.document().doc.pages, [id]: p() }))).toEqual({ ok: true, value: undefined })
+    expect(routeOf(id)).toBe(`/p/${id}`)
+  }
+  expect(routeOf('workspace')).toBe('/p/workspace')
   await app.close()
 })
 

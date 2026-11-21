@@ -13,7 +13,7 @@ const room = (page: Page, who: string, at = dock(page)) => at.locator('chat-room
 const runtimes = (page: Page) => page.evaluate(() => Object.keys((document.querySelector('workspace-dock') as any).host.data().runtimes).sort())
 
 async function start(page: Page) {
-  await page.goto('/#/workspace')
+  await page.goto('/#/p/workspace')
   await page.evaluate(() => localStorage.clear())
   await page.reload()
   await expect(dock(page).locator('nano-explorer')).toBeVisible()
@@ -66,10 +66,10 @@ test('todo and chat import side by side: no runtime clash', async ({ page }) => 
   expect(names).toEqual(expect.arrayContaining(['example.chat.backend', 'example.chat.room', 'example.todo.backend', 'example.todo.frontend']))
   // Main shows a pod now (todo's), so the second file's Main is a page beside it, workspace-2 (the workspace's own rule)
   const chat = page.locator('workspace-dock#ws_workspace-2')
-  await page.goto('/#/workspace-2')
+  await page.goto('/#/p/workspace-2')
   await expect(chat.locator('chat-room')).toHaveCount(2)
   // todos is still on Main, from the explorer
-  await page.goto('/#/workspace')
+  await page.goto('/#/p/workspace')
   const node = dock(page).locator('nano-explorer').getByText('todos', { exact: true })   // the dock's Systems panel
   await expect(node).toHaveCount(1)
   await node.click()   // selects: its details, with Open view
@@ -79,7 +79,7 @@ test('todo and chat import side by side: no runtime clash', async ({ page }) => 
   await list.getByRole('textbox', { name: 'New todo' }).fill('eggs')
   await list.getByRole('button', { name: 'Add' }).click()
   await expect(list.locator('li')).toHaveText([/eggs/])
-  await page.goto('/#/workspace-2')
+  await page.goto('/#/p/workspace-2')
   await say(room(page, 'alice', chat), 'still here')
   await expect(room(page, 'bob', chat).locator('li')).toHaveText([/alice.*still here/])
 })

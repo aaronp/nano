@@ -7,7 +7,7 @@ import { tick } from './host-deploy-setup.ts'
 test('save the bundle, then open it: the same pages, nothing duplicated; after New, opening it fills Main', async () => {
   const html = await Bun.file(new URL('../public/index.html', import.meta.url)).text()
   document.body.innerHTML = html.slice(html.indexOf('>', html.indexOf('<body')) + 1, html.lastIndexOf('<script type="module">'))
-  location.hash = '#/two'
+  location.hash = '#/p/two'
   const at = URL.parse('./bundle/nano-ui.js', location.href)!.href
   const pages = { roots: ['workspace'], pages: {
     workspace: { title: 'Main', slots: { x: { kind: 'view', view: 'nano-explorer' } }, layout: { workspace: { root: { type: 'row', content: [] }, 'window-style': 'clear' } }, meta: { workspace: { saved: { root: { type: 'column', content: [] } } } }, children: ['two'] },
@@ -42,7 +42,7 @@ test('save the bundle, then open it: the same pages, nothing duplicated; after N
   document.dispatchEvent(new CustomEvent('file:new'))
   for (let i = 0; i < 200 && Object.keys(p.document().doc.pages['workspace']!.slots).length; i++) await tick(5)
   expect(now().pages.workspace.slots).toEqual({})
-  location.hash = '#/workspace'
+  location.hash = '#/p/workspace'
   for (let i = 0; i < 200 && !Object.keys(p.document().doc.pages['workspace']!.slots).length; i++) await tick(5)
   expect(now().pages.workspace.slots).toEqual({ 'nano-explorer': { kind: 'view', view: 'nano-explorer' } })   // the starter
   const again = new Promise<void>(r => host!.app.listen(e => { if (e.type === 'applied') r() }))

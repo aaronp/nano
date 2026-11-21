@@ -55,7 +55,7 @@ test('clicking Clear calls setStyle', async () => {
 
 test('Desk opens the Desk page, beside Connections', async () => {
   const { el, calls } = await mount()
-  location.hash = '#/workspace'
+  location.hash = '#/p/workspace'
   q(el, 'button[aria-label="Desk"]').click(); await settle(el)
   expect(location.hash).toBe('#/desk')
   expect(calls).toEqual([])

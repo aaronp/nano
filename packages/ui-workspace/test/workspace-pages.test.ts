@@ -11,8 +11,8 @@ import { Outline, type Page } from '@pritzlaff/nano-outline'
 
 localStorage.clear()
 document.body.innerHTML = `<app-shell><span slot="title">Nano</span>
-  <div slot="nav" class="nav-row" data-workspaces><a href="#/workspace">Workspaces</a></div>
-  <app-route path="/workspace"><div class="ws-page"><c-wires>
+  <div slot="nav" class="nav-row" data-workspaces><a href="#/p/workspace">Workspaces</a></div>
+  <app-route path="/p/workspace"><div class="ws-page"><c-wires>
     <workspace-dock id="workspace" storage-key="main"><template data-widget="a"></template><template data-widget="b"></template></workspace-dock>
   </c-wires></div></app-route><app-route path="*"></app-route></app-shell>`
 const template = { template: 'one', order: [{ widget: 'a' }], dock: { root: null } }
@@ -41,25 +41,25 @@ test('mountWorkspace adds a nav row and a route before the not-found page, with 
   mountWorkspace(document, { id: 'lab', title: 'Lab', icon: 'star' })
   const row = $('[data-saved="lab"]')
   expect(row.previousElementSibling?.hasAttribute('data-workspaces')).toBe(true)
-  expect(row.querySelector('a')!.getAttribute('href')).toBe('#/lab')
+  expect(row.querySelector('a')!.getAttribute('href')).toBe('#/p/lab')
   expect(row.querySelector('[data-handle]')!.getAttribute('aria-label')).toBe('Move Lab')
   expect(row.querySelector('[data-duplicate], [data-edit]')).toBeNull()
-  expect(routes()).toEqual(['/workspace', '/lab', '*'])
-  const dock = $('app-route[path="/lab"] workspace-dock')
+  expect(routes()).toEqual(['/p/workspace', '/p/lab', '*'])
+  const dock = $('app-route[path="/p/lab"] workspace-dock')
   expect(dock.id).toBe('ws_lab')
   expect(dock.getAttribute('storage-key')).toBe('lab')
   expect([...dock.querySelectorAll('template')].map(t => t.dataset.widget)).toEqual(['a', 'b'])
-  row.remove(); $('app-route[path="/lab"]').remove()
+  row.remove(); $('app-route[path="/p/lab"]').remove()
 })
 
 test('the title holds + and ✎; + makes an empty page, goes there and starts its rename; a second is numbered', () => {
   expect($('[slot="title"] [data-new-workspace]').getAttribute('aria-label')).toBe('New workspace')
   expect($('[slot="title"] [data-edit-nav]').getAttribute('aria-pressed')).toBe('false')
   $('[data-new-workspace]').click()
-  expect(location.hash).toBe('#/new-workspace')
+  expect(location.hash).toBe('#/p/new-workspace')
   expect(ids().slice(1)).toEqual(['new-workspace'])
   expect(page('new-workspace')).toEqual({ title: 'New workspace', slots: {}, meta: { workspace: { icon: 'window' } } })
-  expect(routes()).toEqual(['/workspace', '/new-workspace', '*'])
+  expect(routes()).toEqual(['/p/workspace', '/p/new-workspace', '*'])
   expect(input().closest('[data-saved]')!.getAttribute('data-saved')).toBe('new-workspace')
   type('', 'Escape')
   $('[data-new-workspace]').click()
@@ -100,20 +100,20 @@ test('in edit mode a link click does not navigate; Enter on a focused name opens
 })
 
 test('a rename changes the title only, in one apply: the id, route, hash, dock and its key stay (Review Focus 4)', () => {
-  location.hash = '#/new-workspace'
+  location.hash = '#/p/new-workspace'
   $('[data-saved="new-workspace"] [data-name]').click()
   const before = applies
   type('Desk', 'Enter')
   expect(applies).toBe(before + 1)
   expect(page('new-workspace')!.title).toBe('Desk')
   expect(ids()).toEqual(['workspace', 'new-workspace', 'new-workspace-2'])
-  expect($('[data-saved="new-workspace"] a').getAttribute('href')).toBe('#/new-workspace')
+  expect($('[data-saved="new-workspace"] a').getAttribute('href')).toBe('#/p/new-workspace')
   expect($('[data-saved="new-workspace"] [data-name]').textContent).toBe('Desk')
-  expect(routes()).toEqual(['/workspace', '/new-workspace', '/new-workspace-2', '*'])
-  const dock = $('app-route[path="/new-workspace"] workspace-dock')
+  expect(routes()).toEqual(['/p/workspace', '/p/new-workspace', '/p/new-workspace-2', '*'])
+  const dock = $('app-route[path="/p/new-workspace"] workspace-dock')
   expect(dock.getAttribute('storage-key')).toBe('new-workspace')
   expect(dock.id).toBe('ws_new-workspace')
-  expect(location.hash).toBe('#/new-workspace')
+  expect(location.hash).toBe('#/p/new-workspace')
 })
 
 test('a second page with the same title is fine; Esc or an empty name keeps the old', () => {
@@ -195,16 +195,16 @@ test('a page added through the Outline (as a pod would) appears in the nav and r
   const put = (id: string, p?: Page) => { const { [id]: _, ...rest } = outline.document().doc.pages; must(outline.apply(flat(p ? { ...rest, [id]: p } : rest))) }
   put('pod-made', { title: 'Pod made', slots: {}, meta: { workspace: { icon: 'star' } } })
   expect($('[data-saved="pod-made"] [data-name]').textContent).toBe('Pod made')
-  expect(routes()).toContain('/pod-made')
+  expect(routes()).toContain('/p/pod-made')
   expect(ids().at(-1)).toBe('pod-made'); expect(savedOrder().at(-1)).toBe('pod-made')
   put('pod-made', { title: 'Renamed', slots: {}, meta: { workspace: { icon: 'star' } } })
   expect($('[data-saved="pod-made"] [data-name]').textContent).toBe('Renamed')
-  expect($('[data-saved="pod-made"] a').getAttribute('href')).toBe('#/pod-made')
-  location.hash = '#/pod-made'
+  expect($('[data-saved="pod-made"] a').getAttribute('href')).toBe('#/p/pod-made')
+  location.hash = '#/p/pod-made'
   put('pod-made')
   expect(document.querySelector('[data-saved="pod-made"]')).toBeNull()
-  expect(routes()).not.toContain('/pod-made')
-  expect(location.hash).toBe('#/workspace')
+  expect(routes()).not.toContain('/p/pod-made')
+  expect(location.hash).toBe('#/p/workspace')
 })
 
 test('Save as workspace copies the page only (not its children) into "<title> copy" (same slots, its arrangement as the page\'s `layout.workspace`, a new id), its next sibling, and starts its rename', () => {
@@ -215,7 +215,7 @@ test('Save as workspace copies the page only (not its children) into "<title> co
   expect(page('home-copy')).toEqual({ title: 'Home copy', slots: {}, layout: { workspace: { root: { type: 'row' }, template } }, meta: { workspace: { icon: 'panels' } } })
   const now = outline.document().doc, { kid: _, ...rest } = now.pages
   must(outline.apply({ ...now, pages: { ...rest, workspace: { ...rest['workspace']!, children: [] } } }))
-  expect(location.hash).toBe('#/home-copy')
+  expect(location.hash).toBe('#/p/home-copy')
   expect(input().closest('[data-saved]')!.getAttribute('data-saved')).toBe('home-copy')
   type('', 'Escape')
 })
@@ -225,10 +225,10 @@ test('a new page\'s id avoids every page\'s id, not only mounted routes: another
   must(outline.apply(flat({ ...outline.document().doc.pages, inbox })))
   expect(routes()).toContain('/p/inbox')
   const copy = page('home-copy')
-  $('app-route[path="/home-copy"]').remove()   // its route not mounted (yet)
+  $('app-route[path="/p/home-copy"]').remove()   // its route not mounted (yet)
   $('#workspace').dispatchEvent(new CustomEvent('dock:save-as', { bubbles: true }))
   type('', 'Escape')
-  expect(location.hash).toBe('#/home-copy-2')
+  expect(location.hash).toBe('#/p/home-copy-2')
   expect(page('home-copy')).toEqual(copy)
   expect(page('inbox') as unknown).toEqual(inbox)
 })
@@ -236,8 +236,8 @@ test('a new page\'s id avoids every page\'s id, not only mounted routes: another
 test('a page id holding `"` mounts and unmounts: its selectors are escaped', () => {
   const d = outline.document().doc
   must(outline.apply(flat({ ...d.pages, 'q"t': { title: 'Quote', slots: {} } })))
-  expect(routes()).toContain('/q"t')
+  expect(routes()).toContain('/p/q"t')
   must(outline.apply(flat(d.pages)))
-  expect(routes()).not.toContain('/q"t')
+  expect(routes()).not.toContain('/p/q"t')
   expect(savedOrder()).not.toContain('q"t')
 })

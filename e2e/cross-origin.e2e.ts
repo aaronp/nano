@@ -6,7 +6,7 @@ import { expect, test, type Page } from '@playwright/test'
 const data = (page: Page) => page.evaluate(() => (document.querySelector('workspace-dock') as any).host.data())
 
 async function importTemplate(page: Page, trust: 'Sandboxed' | 'Trusted') {
-  await page.goto('/#/workspace')
+  await page.goto('/#/p/workspace')
   await page.evaluate(() => localStorage.clear())
   await page.reload()
   await expect(page.locator('workspace-dock#workspace nano-explorer')).toBeVisible()

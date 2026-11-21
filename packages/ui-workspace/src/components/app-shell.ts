@@ -6,7 +6,7 @@
  *     <nano-file-menu slot="title-actions">      beside the title
  *     <nano-app-bar name="app" slot="title-actions"> after it: the page's or focused panel's controls (the app bar sits above the content, so their menus aren't covered)
  *     <nano-profile name="profile" slot="actions"></nano-profile> app bar controls (right side)
- *     <a slot="nav" href="#/workspace">Workspace</a>       one per page, in order (icons welcome)
+ *     <a slot="nav" href="#/p/workspace">Workspace</a>       one per page, in order (icons welcome)
  *     <a slot="nav" data-sub href="…">…</a>        a sub-item listed under the item before it
  *     <div slot="drawer-footer">…</div>            bottom of the drawer
  *     <span slot="footer">…</span>                 status bar
@@ -22,7 +22,7 @@
 import { LitElement, html } from 'lit';
 import { appShellStyles } from './app-shell-styles.ts';
 import { createBus, provideBus, type Bus, type Unsubscribe } from '../lib/bus.ts';
-import { isCurrent, resolveRoute } from '../lib/routes.ts';
+import { isCurrent, resolveRoute, rewriteHash } from '../lib/routes.ts';
 
 export class AppRoute extends HTMLElement {}
 
@@ -71,7 +71,9 @@ export class AppShell extends LitElement {
 
   private applyRoute = () => {
     const routes = this.routes();
-    const path = resolveRoute(location.hash, routes.map((r) => r.getAttribute('path') ?? ''));
+    const paths = routes.map((r) => r.getAttribute('path') ?? ''), hash = rewriteHash(location.hash, paths);
+    if (hash !== location.hash) history.replaceState(history.state, '', hash);   // Back is not polluted
+    const path = resolveRoute(hash, paths);
     for (const r of routes) r.hidden = r.getAttribute('path') !== path;
     if (path !== this.route) {
       this.route = path;

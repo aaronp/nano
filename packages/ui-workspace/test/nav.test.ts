@@ -53,3 +53,15 @@ test('a nav row (a saved workspace) is current by its own link; leaving clears i
   location.hash = '#/lab'; window.dispatchEvent(new HashChangeEvent('hashchange')); await shell.updateComplete; await tick()
   expect(row.hasAttribute('aria-current')).toBe(false)
 })
+
+test('old bookmarks land on the page: #/<page> and #/workspace become #/p/<page>; an app screen keeps its route even with a page of that name', async () => {
+  document.body.innerHTML = `<app-shell><app-route path="/p/workspace"></app-route><app-route path="/p/lab"></app-route><app-route path="/p/ring"></app-route><app-route path="/ring"></app-route><app-route path="*"></app-route></app-shell>`
+  const shell = document.querySelector('app-shell') as HTMLElement & { updateComplete: Promise<boolean> }
+  const shown = () => [...document.querySelectorAll('app-route:not([hidden])')].map(r => r.getAttribute('path'))
+  await shell.updateComplete; await tick()
+  for (const [from, to, route] of [['#/workspace', '#/p/workspace', '/p/workspace'], ['#/lab', '#/p/lab', '/p/lab'], ['#/ring', '#/ring', '/ring'], ['#/p/ring', '#/p/ring', '/p/ring'], ['#/nowhere', '#/nowhere', '*']] as const) {
+    location.hash = from; window.dispatchEvent(new HashChangeEvent('hashchange')); await tick()
+    expect(location.hash).toBe(to)
+    expect(shown()).toEqual([route])
+  }
+})

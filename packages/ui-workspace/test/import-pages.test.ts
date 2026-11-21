@@ -47,10 +47,10 @@ test('an incoming Main filling Main keeps Main\'s other clients\' layout and met
     { title: 'Main', slots: { c: pod }, layout: { workspace: { root: 2 }, react: { columns: 3 } }, meta: { workspace: { icon: 'star' }, react: { x: 1 } } })
 })
 
-test('an incoming page on one of the workspace\'s own routes is taken as clashing: added as -2, the rest of the import kept', () => {
+test('an incoming page `ring` is just a page: added as ring, the rest of the import kept', () => {
   const out = withImported(doc({ pages: { workspace: main } }), doc({ pages: { ring: trading, two: { slots: {}, title: 'Two' } } }))
-  expect(Object.keys(out.pages)).toEqual(['workspace', 'ring-2', 'two'])
-  expect(out.roots).toEqual(['workspace', 'ring-2', 'two'])
+  expect(Object.keys(out.pages)).toEqual(['workspace', 'ring', 'two'])
+  expect(out.roots).toEqual(['workspace', 'ring', 'two'])
 })
 
 test('a plain nano.json\'s Main filling Main keeps Main\'s title, icon, view slots, children, layout (the file has none) and other clients\' keys', async () => {

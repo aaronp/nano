@@ -54,7 +54,7 @@ test('an old stored document moves to the new shape at boot, nothing lost; the w
   const row = (id: string) => document.querySelector<HTMLElement>(`[data-saved="${id}"] a`)!
   expect([...document.querySelectorAll<HTMLElement>('[data-saved]')].map(r => r.dataset['saved'])).toEqual(['workspace', 'two', 'lab'])   // order (Main's row synced too)
   expect([row('lab').title, row('lab').dataset['icon']]).toEqual(['Lab', 'star'])   // title, icon
-  const s = document.querySelector<Stored>('app-route[path="/lab"] workspace-dock')!.storage
+  const s = document.querySelector<Stored>('app-route[path="/p/lab"] workspace-dock')!.storage
   expect(JSON.parse(s.getItem('lab')!).root).toEqual(root)   // dock arrangement
   expect(JSON.parse(s.getItem('lab.template')!)).toEqual(template)
   expect(s.getItem('lab.window-style')).toBe('glass')
@@ -73,7 +73,7 @@ test('a page `ring` made by another client opens at /p/ring; the Ring page still
   expect(routes).toContain('/p/ring')
   expect(document.querySelector('app-route[path="/ring"] nano-ring-stub')).not.toBeNull()   // the Ring's own route, untouched
   expect(document.querySelector('[data-saved="ring"] a')!.getAttribute('href')).toBe('#/p/ring')
-  go('p/ring')
+  go('ring')
   const panels = () => document.querySelectorAll('app-route[path="/p/ring"] workspace-dock .dock-panel').length
   await until(() => panels() === 1)
 })
