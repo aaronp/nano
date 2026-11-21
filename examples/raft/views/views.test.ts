@@ -19,12 +19,15 @@ test('raft-node renders its glyph from the model and follows the node', async ()
   expect(el.shadowRoot!.querySelector('text')!.textContent).toBe(String((await status(app, 'example-1')).p.currentTerm))
   expect(Number(el.shadowRoot!.querySelector('text')!.textContent)).toBeGreaterThan(Number(before))
 })
-test('a click opens the detail panel; its buttons call the node ops', async () => {
+test('a click opens the detail dialog; its buttons call the node ops', async () => {
   app = await cluster()
   const el = await mount('raft-node', app, 'example-1', 'example-1-raft')
   el.shadowRoot!.querySelector('svg')!.dispatchEvent(new Event('click'))
   await el.updateComplete; await wait()
-  const detail = el.shadowRoot!.querySelector('raft-detail') as HTMLElement & { updateComplete: Promise<boolean> }
+  const dialog = el.shadowRoot!.querySelector('dialog')!
+  expect(dialog.hasAttribute('open')).toBe(true)
+  expect(dialog.querySelector('strong')!.textContent).toBe('example-1')
+  const detail = dialog.querySelector('raft-detail') as HTMLElement & { updateComplete: Promise<boolean> }
   await detail.updateComplete
   expect([...detail.shadowRoot!.querySelectorAll('.rows th')].map(x => x.textContent)).toEqual(['state', 'currentTerm', 'votedFor', 'commitIndex', 'election alarm'])
   expect(detail.shadowRoot!.querySelectorAll('.peers tr')).toHaveLength(3)   // header + 2 peers
@@ -37,6 +40,36 @@ test('a click opens the detail panel; its buttons call the node ops', async () =
   await press('request')   // a follower refuses: the panel says why
   await detail.updateComplete
   expect(detail.shadowRoot!.querySelector('[role=alert]')).not.toBeNull()
+})
+test('Escape and the close button close the dialog', async () => {
+  app = await cluster()
+  const el = await mount('raft-node', app, 'example-1', 'example-1-raft')
+  const svg = () => el.shadowRoot!.querySelector('svg')!, dialog = () => el.shadowRoot!.querySelector('dialog')
+  svg().dispatchEvent(new Event('click')); await el.updateComplete
+  dialog()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await el.updateComplete
+  expect(dialog()).toBeNull()
+  svg().dispatchEvent(new Event('click')); await el.updateComplete
+  ;(dialog()!.querySelector('button[aria-label=close]') as HTMLButtonElement).click(); await el.updateComplete
+  expect(dialog()).toBeNull()
+})
+test('a right-click opens the ops menu; each item calls its op and closes the menu', async () => {
+  app = await cluster()
+  const el = await mount('raft-node', app, 'example-1', 'example-1-raft'), root = el.shadowRoot!
+  const pick = async (label: string) => {
+    root.querySelector('svg')!.dispatchEvent(new MouseEvent('contextmenu', { cancelable: true })); await el.updateComplete
+    expect([...root.querySelectorAll('[role=menu] [role=menuitem]')].map(b => b.textContent)).toEqual(['stop', 'resume', 'restart', 'time out', 'request'])
+    ;([...root.querySelectorAll('[role=menuitem]')].find(b => b.textContent === label) as HTMLButtonElement).click(); await wait(); await el.updateComplete
+    expect(root.querySelector('[role=menu]')).toBeNull()
+  }
+  await pick('stop'); expect((await status(app, 'example-1')).stopped).toBe(true)
+  await pick('resume'); expect((await status(app, 'example-1')).stopped).toBe(false)
+  const term = (await status(app, 'example-1')).p.currentTerm
+  await pick('time out'); expect((await status(app, 'example-1')).p.currentTerm).toBe(term + 1)
+  await pick('restart'); expect((await status(app, 'example-1')).role).toBe('follower')
+  await pick('request'); expect(root.querySelector('[role=alert]')).not.toBeNull()   // a follower refuses
+  root.querySelector('svg')!.dispatchEvent(new MouseEvent('contextmenu', { cancelable: true })); await el.updateComplete
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await el.updateComplete
+  expect(root.querySelector('[role=menu]')).toBeNull()
 })
 test('raft-ledger follows the ledger as the leader takes a request', async () => {
   app = await cluster()

@@ -6,6 +6,13 @@ import type { Node } from '../core/types.ts'
 import { RaftNode } from '../interfaces.ts'
 import { detailModel } from './model.ts'
 
+export type NodeOp = 'stop' | 'resume' | 'restart' | 'timeOut' | 'request'
+/** Calls a node op on the target (the detail's buttons and the node's menu share it); resolves to the refusal's reason, if any. */
+export async function callNodeOp(t: ViewTarget, op: NodeOp, value: string): Promise<string | undefined> {
+  const r = await t.app.call(t.runtime, t.pod)[RaftNode.ops[op].name]!(op === 'request' ? value : null)
+  return r.ok ? undefined : r.fail.reason
+}
+
 class RaftDetail extends LitElement {
   static properties = { target: { attribute: false }, status: { attribute: false }, now: { attribute: false }, error: { state: true } }
   static styles = [base, kit, css`table { border-collapse: collapse; font-size: 12px } td, th { padding: 2px 8px; text-align: left } .row { flex-wrap: wrap }`]
@@ -16,15 +23,11 @@ class RaftDetail extends LitElement {
   private n = 0
   constructor() { super(); this.now = 0 }
 
-  private act(op: 'stop' | 'resume' | 'restart' | 'timeOut' | 'request') {
-    const t = this.target!
-    const call = t.app.call(t.runtime, t.pod)[RaftNode.ops[op].name]!
-    void call(op === 'request' ? `v${++this.n}` : null).then(r => { this.error = r.ok ? undefined : r.fail.reason })
-  }
+  private act(op: NodeOp) { void callNodeOp(this.target!, op, `v${++this.n}`).then(e => { this.error = e }) }
   render() {
     if (!this.status) return html``
     const m = detailModel(this.status, this.now)
-    const button = (label: string, op: Parameters<RaftDetail['act']>[0]) => html`<button class="btn small" type="button" @click=${() => this.act(op)}>${label}</button>`
+    const button = (label: string, op: NodeOp) => html`<button class="btn small" type="button" @click=${() => this.act(op)}>${label}</button>`
     return html`<div class="col">
       <table class="rows">${m.rows.map(([k, v]) => html`<tr><th>${k}</th><td>${v}</td></tr>`)}</table>
       <table class="peers"><tr><th>peer</th><th>next</th><th>match</th><th>vote granted</th><th>RPC due</th><th>heartbeat due</th></tr>
