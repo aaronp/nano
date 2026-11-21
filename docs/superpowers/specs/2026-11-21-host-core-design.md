@@ -142,3 +142,11 @@ the measure of what the host core took.
 - **Names approved**: `@pritzlaff/nano-host`, `HostDocument`, `Host.boot`, `Registry.load(modules, base)`, the Outline's
   pure `resolve(outline, page, deployment, registry)`, the `tool` slot kind. The spec's earlier "?src= replaces"
   (§5) is superseded by this; Open (File › Open) replaces, after asking, by storing and reloading.
+
+## Decided by the user (plan 5)
+
+- **`host.apply(app)`**: the host core's apply of an app document. It loads modules the registry lacks (through the
+  host's loader), applies the system, and records `modules`/`frames` as the document's code locations. The one place
+  where "which code runs" changes, as `outline.apply` is for pages.
+- **`opts.load(modules, base, app)`**: the host's loader also receives the app document, so a trust prompt can show each
+  foreign pod's isolation (ADR-0034).
