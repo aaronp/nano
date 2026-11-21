@@ -6,25 +6,49 @@
  *   Application.create(runtimes, { deploymentPolicy: approvalPolicy(ask, () => app.deployment()) })
  *   addTo(d, { pods, runtimes })   // d with them; an existing pod or runtime name is invalid-input
  */
-import { Coord, Implementation, failure, provide, success, type AppDeployment, type Application, type DeploymentPolicy, type NanoResult, type Pod, type RuntimeDeployment } from '@pritzlaff/nano-core'
+import { Coord, Implementation, Pod as Pods, failure, provide, success, type AppDeployment, type Application, type DeploymentPolicy, type NanoResult, type Pod, type RuntimeDeployment } from '@pritzlaff/nano-core'
 import { HostDeploy } from '@pritzlaff/nano-ui'
 import { summary } from './deploy-summary.ts'
 import { hostUi } from './host-ui.ts'
-import { hostOutline } from './host-outline-pod.ts'
+import { hostOutline, outlinePod } from './host-outline-pod.ts'
 
 type Addition = { pods: Record<string, Pod>; runtimes: Record<string, RuntimeDeployment>; onConflict?: 'error' | 'overwrite' }
 type Removal = { runtimes: string[] }
 
-const ns = Coord.namespace('workspace.host'), DEPLOY = ns.implementationId('deploy')
+const ns = Coord.namespace('workspace.host'), DEPLOY_IMPL = ns.implementationId('deploy')
 /** The host's own pods (`ui`, `deploy`, `outline`): no pod may overwrite them, nor overwrite or remove a runtime placing one. */
 export const HOST_PODS: readonly [string, string, string] = ['ui', 'deploy', 'outline']
 const hosting = (d: AppDeployment, r: string) => d.runtimes[r]!.pods.some(p => HOST_PODS.includes(p))
 /** The `deploy` pod's data: built on its first call. */
-export const deployPod: Pod = { implementation: DEPLOY.toString(), eager: false }
+export const deployPod: Pod = { implementation: DEPLOY_IMPL.toString(), eager: false }
 /** Well under the app's call timeout (30 s): the pod's call into `deploy` started its timer before this apply was queued,
  * and time waiting in the apply queue counts against it too, so a late yes must not apply after the pod saw a timeout.
  * An unanswered ask must not hold the apply queue for good either. */
 const APPROVAL_MS = 20_000
+
+const [HOST, DEPLOY, OUTLINE] = HOST_PODS, MAIN = 'main'
+/** `d` with `own` taken out of `main` (dropped once empty), still among the pods. Pure. (Import keeps `deploy`'s edges.) */
+export function unplaced(d: AppDeployment, own = [HOST]): AppDeployment {
+  const out = structuredClone(d), main = out.runtimes[MAIN]
+  if (main) {
+    main.pods = main.pods.filter(p => !own.includes(p))
+    main.subscriptions = main.subscriptions.filter(s => !own.includes(s.from) && !own.includes(s.to))
+    if (!main.pods.length && !main.subscriptions.length) delete out.runtimes[MAIN]
+  }
+  return out
+}
+/** `d` without the host's own pods. Pure. */
+export function withoutHost(d: AppDeployment): AppDeployment {
+  const out = unplaced(d, [...HOST_PODS]); for (const p of HOST_PODS) { delete out.pods[p]; delete out.tags?.[p] }
+  return out
+}
+/** The host's own pods' data, as `Host.boot` places them. */
+export const hostPods: Record<string, Pod> = { [HOST]: Pods.eager(hostUi), [DEPLOY]: deployPod, [OUTLINE]: outlinePod }
+/** `d` with the host pods first in `main` (`deploy` and `outline` unless there). Pure. */
+export function placed(d: AppDeployment): AppDeployment {
+  const main = d.runtimes[MAIN] ?? { pods: [], subscriptions: [] }, more = [DEPLOY, OUTLINE].filter(p => !main.pods.includes(p))
+  return { ...d, pods: { ...hostPods, ...d.pods }, runtimes: { ...d.runtimes, [MAIN]: { ...main, pods: [HOST, ...more, ...main.pods] } } }
+}
 
 /** `out` without those of `was` (pods once placed) that no runtime places now, nor their edges, tags and views. */
 function orphansDropped(out: AppDeployment, was: string[]): AppDeployment {
@@ -84,7 +108,7 @@ export function approvalPolicy(approve: Approve, current: () => AppDeployment, m
 /** The host's provider: `ui` (HostUI), `deploy` (HostDeploy, applying to `app()`) and `outline` (HostOutline over
  * `outline()`, asking through `app()`'s `ui`, no answer within 20 s a no; none in a replayed app). */
 export function hostProvider(app: () => Application, outline: Parameters<typeof hostOutline>[0] = () => undefined) {
-  const deploy = Implementation.define(DEPLOY, {
+  const deploy = Implementation.define(DEPLOY_IMPL, {
     provides: [HostDeploy],
     make: ctx => {
       // One call at a time: a second, while the first waits for approval, would be computed from the deployment without

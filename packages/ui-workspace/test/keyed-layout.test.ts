@@ -9,8 +9,6 @@ import { host, mount, place, pod, tick, until } from './dock-pods-setup.ts'
 const { settled } = await import('../src/boot-pages.ts')
 const { Outline } = await import('@pritzlaff/nano-outline')
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.fail.reason); return r.value }
-/** Stored pages as the workspace boots them: read, then settled. */
-const bootPages = (_h: unknown, _s: Storage, _d: null, stored: unknown) => Promise.resolve(Outline.parse(stored)).then(r => r.ok ? { ok: true as const, value: settled(r.value) } : r)
 type GL = { emit(e: string): void }
 type Stored = HTMLElement & { storage: Storage }
 
@@ -44,14 +42,14 @@ test('an old stored document moves to the new shape at boot, nothing lost; the w
       meta: { title: 'Lab', icon: 'star', order: 2, saved, 'saved.template': savedTemplate } },
     two: { slots: {}, meta: { title: 'Two', order: 1 } },
   } }
-  const booted = must(await bootPages(h, localStorage, null, old))
+  const booted = settled(must(Outline.parse(old)))
   expect(JSON.parse(JSON.stringify(booted))).toEqual({ roots: ['workspace', 'two', 'lab'], pages: {   // the old order the roots', dropped
     workspace: { title: 'Home', slots: {}, meta: { workspace: { icon: 'home' } } },
     lab: { title: 'Lab', slots: { notes: { kind: 'tool', tool: 'notes' } }, layout: { workspace: { ...engine, template, 'window-style': 'glass' } },
       meta: { workspace: { icon: 'star', saved, 'saved.template': savedTemplate } } },
     two: { title: 'Two', slots: {} },
   } })
-  expect(must(await bootPages(h, localStorage, null, booted))).toEqual(booted)   // already moved: left as it is
+  expect(settled(must(Outline.parse(booted)))).toEqual(booted)   // already moved: left as it is
   const { pages } = booted
   mount(h, Object.fromEntries(booted.roots.map(id => [id, pages[id]!])))
   const row = (id: string) => document.querySelector<HTMLElement>(`[data-saved="${id}"] a`)!
@@ -69,7 +67,7 @@ test('a page `ring` made by another client opens at /p/ring; the Ring page still
   const h = await host()
   document.body.innerHTML = '<app-route path="/ring" hidden><nano-ring-stub></nano-ring-stub></app-route>'
   const stored = { pages: { workspace: { slots: {} }, ring: { title: 'Ring', slots: { notes: { kind: 'tool', tool: 'notes' } } } } }
-  const { pages } = must(await bootPages(h, localStorage, null, stored))
+  const { pages } = settled(must(Outline.parse(stored)))
   const { go } = mount(h, pages)
   const routes = [...document.querySelectorAll('app-route')].map(r => r.getAttribute('path'))
   expect(routes.filter(p => p === '/ring')).toHaveLength(1)

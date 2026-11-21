@@ -102,6 +102,8 @@ async function boot(storage: Storage, opts: Opts): Promise<NanoResult<Host>> {
   const watched: string[] = [KEY, ...OLD]
   globalThis.addEventListener?.('storage', e => { if (watched.includes((e as StorageEvent).key ?? '')) stop('changed in another tab: reload to continue') })
   prune(); save()
+  // ponytail: applies are not queued here: two at once can interleave their loads and recorded code, and a failed apply
+  // leaves what it loaded in the registry (a Registry has no remove); queue them if hosts apply concurrently.
   async function apply(next: AppDeployment): Promise<NanoResult<void>> {
     const got = await load(next)
     if (!got.ok) return got
