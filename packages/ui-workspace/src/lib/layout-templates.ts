@@ -2,7 +2,7 @@
 export type TemplateId = 'dock' | 'one' | 'two-cols' | 'two-rows' | 'main-two' | 'three-cols' | 'grid' | 'main-drawer';
 
 export const TEMPLATES: readonly { id: TemplateId; title: string; positions: number | null; areas: string[] }[] = [
-  { id: 'dock', title: 'Free dock', positions: null, areas: [] },
+  { id: 'dock', title: 'Dynamic', positions: null, areas: [] },
   { id: 'one', title: 'Single panel', positions: 1, areas: ['1'] },
   { id: 'two-cols', title: 'Two columns', positions: 2, areas: ['1', '2'] },
   { id: 'two-rows', title: 'Two rows', positions: 2, areas: ['1', '2'] },

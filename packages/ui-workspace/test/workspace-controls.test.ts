@@ -87,7 +87,7 @@ test('layout picker: eight radios, all enabled, current checked, click switches'
   const { el, calls } = await mount()
   const rs = qa(el, '[role="radiogroup"][aria-label="Layout"] [role="radio"]')
   expect(rs).toHaveLength(8)
-  expect(rs.filter(r => r.getAttribute('aria-checked') === 'true').map(r => r.getAttribute('aria-label'))).toEqual(['Free dock'])
+  expect(rs.filter(r => r.getAttribute('aria-checked') === 'true').map(r => r.getAttribute('aria-label'))).toEqual(['Dynamic'])
   expect(rs.filter(r => (r as HTMLButtonElement).disabled)).toEqual([])
   expect(rs.map(r => r.title)).toEqual(rs.map(r => r.getAttribute('aria-label')!))
   rs.find(r => r.getAttribute('aria-label') === 'Two columns')!.click(); await settle(el)

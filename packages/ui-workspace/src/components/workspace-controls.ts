@@ -22,9 +22,9 @@ const ICONS: Record<Command | 'more', ReturnType<typeof svg>> = {
   more: svg`<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`,
 }
 const COMMANDS: [Command, string][] = [['connections', 'Connections'], ['desk', 'Desk'], ['saveAs', 'Save as workspace…'], ['save', 'Save layout'], ['restore', 'Restore'], ['reset', 'Reset']]
-// one rect [x, y, w, h] per position on a 24x16 canvas, in the template's areas order (the free dock: a split, a stack)
+// one rect [x, y, w, h] per position on a 24x16 canvas, in the template's areas order (Dynamic, golden-layout: a tab strip over a panel)
 const R: Record<TemplateId, number[][]> = {
-  dock: [[1, 1, 10, 14], [13, 1, 10, 6], [13, 9, 10, 6]], one: [[1, 1, 22, 14]],
+  dock: [[1, 1, 7, 3], [9, 1, 7, 3], [1, 5, 22, 10]], one: [[1, 1, 22, 14]],
   'two-cols': [[1, 1, 10, 14], [13, 1, 10, 14]], 'two-rows': [[1, 1, 22, 6], [1, 9, 22, 6]],
   'main-two': [[1, 1, 14, 14], [17, 1, 6, 6], [17, 9, 6, 6]], 'three-cols': [[1, 1, 6, 14], [9, 1, 6, 14], [17, 1, 6, 14]],
   grid: [[1, 1, 10, 6], [13, 1, 10, 6], [1, 9, 10, 6], [13, 9, 10, 6]], 'main-drawer': [[1, 1, 14, 14], [17, 1, 6, 14]],
