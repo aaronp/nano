@@ -45,6 +45,9 @@
         "@pritzlaff/nano-core": "workspace:*",
         "@pritzlaff/nano-outline": "workspace:*",
       },
+      "devDependencies": {
+        "typebox": "^1.4.0",
+      },
     },
     "packages/host-react": {
       "name": "@composable/host-react",

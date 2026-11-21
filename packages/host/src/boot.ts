@@ -1,7 +1,7 @@
 /**
  * `Host.boot(storage, opts)`: the host document read (migrate.ts), its modules loaded by the host's loader beside the
  * host's own providers, in one registry, the one Application created with the host's pods first in `main`, and the
- * document saved under the one key on each `applied` and host change, until another tab writes it or storage refuses.
+ * document saved under the one key on each `applied`, outline and host change, until another tab writes it or storage refuses.
  *
  *   const h = (await Host.boot(localStorage, { base: location.href, providers: [ui] })).value
  *   h.document()                       // the HostDocument as saved: no host pods
@@ -10,6 +10,8 @@
 import { AppDeployment, Application, failure, Registry, success, type NanoResult, type Pod, type Provider } from '@pritzlaff/nano-core'
 import { KEY, OLD, write, type HostDocument } from './document.ts'
 import { stored, type Migrate } from './migrate.ts'
+import { live } from './outline-live.ts'
+import { picker } from './pick.ts'
 
 export type Host = {
   app: Application; registry: Registry
@@ -17,6 +19,10 @@ export type Host = {
   exports: Record<string, Record<string, unknown>>
   /** The host document as saved: the live system without the host pods, its modules and frames, the outline, `host`. */
   document(): HostDocument
+  /** The live outline: `document`, `apply(next, { base })`, `listen` ({ added, removed, changed, moved, resolved }), `resolve(page)`, `open(page)`. */
+  outline: ReturnType<typeof live>
+  /** A lazy pod of `implementation` deployed into `runtime` (the host let in, its dependencies connected), then its `pod` slot on `page`: the slot's id. */
+  pick(page: string, implementation: string, runtime: string): Promise<NanoResult<string>>
   /** Writes `host.views`/`host.layout` (each replaced as given) and saves. */
   setHost(patch: NonNullable<HostDocument['host']>): void
   /** Why saving stopped (another tab wrote, or storage refused), once it has. */
@@ -47,7 +53,7 @@ async function boot(storage: Storage, opts: Opts): Promise<NanoResult<Host>> {
   for (const { coord } of loaded.value.registry.manifest().providers) { const added = registry.add(loaded.value.registry.provider(coord)!); if (!added.ok) return added }
   // The host's own old forms, read once its registry can name implementations: a pure data edit.
   const doc = read.value.old && opts.migrate ? opts.migrate(read.value.doc, storage, registry) : read.value.doc
-  const { app: { modules, frames, ...system }, outline } = doc
+  const { app: { modules, frames, ...system } } = doc
   let host = doc.host
 
   const own = Object.keys(opts.hostPods ?? {}), mine = (p: string) => own.includes(p)
@@ -59,7 +65,7 @@ async function boot(storage: Storage, opts: Opts): Promise<NanoResult<Host>> {
   if (!runtimes.ok) return runtimes
   const created = await Application.create(runtimes.value, opts.create)
   if (!created.ok) return created
-  const app = created.value
+  const app = created.value, outline = live(app, registry, doc.outline)
 
   /** `d` without the host pods, and without `main` when boot made it and nothing else is in it. */
   const unplaced = (d: AppDeployment): AppDeployment => {
@@ -72,17 +78,18 @@ async function boot(storage: Storage, opts: Opts): Promise<NanoResult<Host>> {
     }
     return { pods: keep(d.pods), runtimes, ...(d.tags && { tags: keep(d.tags) }) }
   }
-  const document = (): HostDocument => ({ app: { ...unplaced(app.deployment()), ...(modules && { modules }), ...(frames && { frames }) }, outline, ...(host && { host }) })
+  const document = (): HostDocument => ({ app: { ...unplaced(app.deployment()), ...(modules && { modules }), ...(frames && { frames }) }, outline: outline.document().doc, ...(host && { host }) })
   let stopped: string | undefined
   const stop = (reason: string) => { if (stopped) return; stopped = reason; opts.onStop?.() }
   const save = () => { if (stopped) return; const failed = write(storage, document()); if (failed) stop(`not saved: ${failed}`) }
   /** `host.views` without the overrides for pods that are gone. */
   const prune = () => { const pods = app.deployment().pods; if (host?.views) host = { ...host, views: Object.fromEntries(Object.entries(host.views).filter(([p]) => p in pods)) } }
   app.listen(e => { if (e.type === 'applied') { prune(); save() } })
+  outline.listen(c => { if (!c.resolved.length) save() })
   const watched: string[] = [KEY, ...OLD]
   globalThis.addEventListener?.('storage', e => { if (watched.includes((e as StorageEvent).key ?? '')) stop('changed in another tab: reload to continue') })
   prune(); save()
-  return success({ app, registry, exports: loaded.value.exports, document, stopped: () => stopped, setHost(patch) { host = { ...host, ...patch }; save() } })
+  return success({ app, registry, exports: loaded.value.exports, document, outline, pick: picker(app, registry, outline), stopped: () => stopped, setHost(patch) { host = { ...host, ...patch }; save() } })
 }
 
 /** `Host.boot(storage, opts)`. */
