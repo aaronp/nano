@@ -1,15 +1,15 @@
 /**
  * Reading the host document (spec §6): the one key, else the old forms (the workspace's `nano-workspace.document` and
  * `nano-workspace.outline`, else `nano-workspace.platform`, a flat outline read as every page a root), then the host's
- * own hook for its own old forms. `views` and `layout` inside an app document move to `host`. Storage that throws reads
+ * own hook for its own old forms (boot.ts calls it once the modules are loaded, with the registry). `views` and `layout` inside an app document move to `host`. Storage that throws reads
  * as empty; a document that is there but unreadable is a failure, so it is never saved over.
  * Legacy: the old forms go the release after this one (spec §6).
  */
-import { failure, success, type AppDeployment, type NanoResult } from '@pritzlaff/nano-core'
+import { failure, success, type AppDeployment, type NanoResult, type Registry } from '@pritzlaff/nano-core'
 import { Outline } from '@pritzlaff/nano-outline'
 import { KEY, OLD, type HostDocument } from './document.ts'
 
-export type Migrate = (doc: HostDocument, storage: Storage) => HostDocument
+export type Migrate = (doc: HostDocument, storage: Storage, registry: Registry) => HostDocument
 
 const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const text = (s: Storage, k: string) => { try { return s.getItem(k) } catch { return null } }
@@ -30,15 +30,19 @@ function documentOf(app: unknown, outline: unknown, host: unknown): NanoResult<H
   return success({ app: rest, outline: pages.value, ...(Object.keys(h).length && { host: h as HostDocument['host'] }) })
 }
 
-/** The stored document: the one key, else the old forms through `migrate`. */
-export function stored(s: Storage, migrate?: Migrate): NanoResult<HostDocument> {
+/** The stored document: the one key, else the old forms (`old`: for the host's `Migrate` hook, once loaded). */
+export function stored(s: Storage): NanoResult<{ doc: HostDocument; old: boolean }> {
   const now = json(text(s, KEY), KEY)
   if (!now.ok) return now
-  if (now.value !== null) return obj(now.value) ? documentOf(now.value['app'], now.value['outline'], now.value['host']) : failure('invalid-input', `${KEY} is not a host document`)
+  if (now.value !== null) {
+    if (!obj(now.value)) return failure('invalid-input', `${KEY} is not a host document`)
+    const doc = documentOf(now.value['app'], now.value['outline'], now.value['host'])
+    return doc.ok ? success({ doc: doc.value, old: false }) : doc
+  }
   const [appKey, outlineKey, platformKey] = OLD, pagesKey = text(s, outlineKey) === null ? platformKey : outlineKey
   const app = json(text(s, appKey), appKey), pages = json(text(s, pagesKey), pagesKey)
   if (!app.ok) return app
   if (!pages.ok) return pages
   const doc = documentOf(app.value, pages.value, undefined)
-  return doc.ok && migrate ? success(migrate(doc.value, s)) : doc
+  return doc.ok ? success({ doc: doc.value, old: true }) : doc
 }

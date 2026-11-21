@@ -26,6 +26,7 @@ type Opts = {
   base: string | URL
   /** The host's loader (default: core's plain `Registry.load`, for trusted documents), asked once with the modules its own providers lack. */
   load?: typeof Registry.load
+  /** The host's own; a module whose key (its provider's coordinate) names one of them is not loaded. */
   providers?: Provider[]
   create?: Parameters<typeof Application.create>[1]
   /** Placed first in `main`, never saved. */
@@ -36,16 +37,18 @@ type Opts = {
 const MAIN = 'main'
 
 async function boot(storage: Storage, opts: Opts): Promise<NanoResult<Host>> {
-  const read = stored(storage, opts.migrate)
+  const read = stored(storage)
   if (!read.ok) return read
-  const { app: { modules, frames, ...system }, outline } = read.value
-  let host = read.value.host
   const registry = Registry.create()
   for (const p of opts.providers ?? []) { const added = registry.add(p); if (!added.ok) return added }
   // One call to the host's loader (a gated one asks once); what it loaded joins the host's registry.
-  const loaded = await (opts.load ?? Registry.load)(Object.fromEntries(Object.entries(modules ?? {}).filter(([k]) => !registry.provider(k))), opts.base)
+  const loaded = await (opts.load ?? Registry.load)(Object.fromEntries(Object.entries(read.value.doc.app.modules ?? {}).filter(([k]) => !registry.provider(k))), opts.base)
   if (!loaded.ok) return loaded
   for (const { coord } of loaded.value.registry.manifest().providers) { const added = registry.add(loaded.value.registry.provider(coord)!); if (!added.ok) return added }
+  // The host's own old forms, read once its registry can name implementations: a pure data edit.
+  const doc = read.value.old && opts.migrate ? opts.migrate(read.value.doc, storage, registry) : read.value.doc
+  const { app: { modules, frames, ...system }, outline } = doc
+  let host = doc.host
 
   const own = Object.keys(opts.hostPods ?? {}), mine = (p: string) => own.includes(p)
   const taken = own.find(p => p in system.pods)
@@ -73,15 +76,12 @@ async function boot(storage: Storage, opts: Opts): Promise<NanoResult<Host>> {
   let stopped: string | undefined
   const stop = (reason: string) => { if (stopped) return; stopped = reason; opts.onStop?.() }
   const save = () => { if (stopped) return; const failed = write(storage, document()); if (failed) stop(`not saved: ${failed}`) }
-  app.listen(e => {
-    if (e.type !== 'applied') return
-    const pods = app.deployment().pods
-    if (host?.views) host = { ...host, views: Object.fromEntries(Object.entries(host.views).filter(([p]) => p in pods)) }
-    save()
-  })
+  /** `host.views` without the overrides for pods that are gone. */
+  const prune = () => { const pods = app.deployment().pods; if (host?.views) host = { ...host, views: Object.fromEntries(Object.entries(host.views).filter(([p]) => p in pods)) } }
+  app.listen(e => { if (e.type === 'applied') { prune(); save() } })
   const watched: string[] = [KEY, ...OLD]
   globalThis.addEventListener?.('storage', e => { if (watched.includes((e as StorageEvent).key ?? '')) stop('changed in another tab: reload to continue') })
-  save()
+  prune(); save()
   return success({ app, registry, exports: loaded.value.exports, document, stopped: () => stopped, setHost(patch) { host = { ...host, ...patch }; save() } })
 }
 

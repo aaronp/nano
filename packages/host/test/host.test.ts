@@ -34,7 +34,7 @@ const page = { title: 'Home', slots: { t1: { kind: 'pod', pod: 'acme/thing@main/
 const tree = { roots: ['home'], pages: { home: page } }
 const expected: HostDocument = strs({ app: { ...system }, outline: tree, host: { views: app.views, layout: app.layout } })
 
-test('every old form boots to the same HostDocument, saved under the one key, the old keys gone after the save', async () => {
+test('every old form boots to the same HostDocument, saved under the one key, the old keys kept as they were (until plan 5)', async () => {
   const forms = {
     keys: memory({ [OLD.app]: app, [OLD.outline]: tree, [OLD.platform]: { pages: {} } }),   // the Outline's key wins over the platform's
     platform: memory({ [OLD.app]: app, [OLD.platform]: { pages: { home: page } } }),          // flat: every page a root
@@ -42,12 +42,26 @@ test('every old form boots to the same HostDocument, saved under the one key, th
   }
   const hooked: string[] = []
   for (const [name, s] of Object.entries(forms)) {
+    const before = Object.fromEntries(Object.values(OLD).flatMap(k => s.m.has(k) ? [[k, s.m.get(k)!]] : []))
     const h = await boot(s, { migrate: d => { hooked.push(name); return d } })
     expect(strs(h.document())).toEqual(expected)
-    expect([...s.m.keys()]).toEqual([KEY])
+    expect(Object.fromEntries([...s.m].filter(([k]) => k !== KEY))).toEqual(before)
     expect(JSON.parse(s.m.get(KEY)!)).toEqual(expected)
   }
   expect(hooked).toEqual(['keys', 'platform'])   // the host's hook sees the old forms only
+})
+
+test('the hook runs after loading, given the registry: it can name the loaded implementations', async () => {
+  const s = memory({ [OLD.app]: system, [OLD.outline]: tree })
+  let known: unknown
+  const h = await boot(s, { providers: [own], migrate: (d, _s, registry) => { known = [registry.implementation('acme/thing')?.coord, registry.implementation('own/ui')?.coord]; return { ...d, host: { layout: { hooked: true } } } } })
+  expect(known).toEqual(['acme/thing', 'own/ui'])
+  expect(strs(h.document()).host).toEqual({ layout: { hooked: true } })
+})
+
+test('a view override for a pod that is gone is dropped at boot', async () => {
+  const s = memory({ [KEY]: { app: system, outline: tree, host: { views: { t1: 'a', gone: 'b' } } } })
+  expect(strs((await boot(s)).document()).host).toEqual({ views: { t1: 'a' } })
 })
 
 test('a second boot reads only the new key', async () => {
@@ -60,12 +74,12 @@ test('a second boot reads only the new key', async () => {
   expect(hooked).toBe(false)
 })
 
-test('the old keys go only after a good save: storage that refuses writes keeps them, and saving stops, said once', async () => {
+test('storage that refuses writes: the old keys kept unchanged, and saving stops, said once', async () => {
   const s = memory({ [OLD.app]: app, [OLD.outline]: tree }, 'writes')
   let stops = 0
   const h = await boot(s, { onStop: () => stops++ })
   expect(h.stopped()).toMatch(/^not saved: quota exceeded/)
-  expect([...s.m.keys()]).toEqual([OLD.app, OLD.outline])
+  expect([...s.m]).toEqual([[OLD.app, JSON.stringify(app)], [OLD.outline, JSON.stringify(tree)]])
   expect((await h.app.apply({ ...h.app.deployment(), pods: {}, runtimes: { main: { pods: [], subscriptions: [] } } })).ok).toBe(true)
   expect(stops).toBe(1)
 })
