@@ -30,7 +30,9 @@ function pageControls(route: Element | null): Element | null {
 function podControls(h: Host, pod: string): Element {
   const el = document.createElement('span')
   el.className = 'pod-controls'
-  el.style.cssText = 'display:flex;align-items:center;gap:8px;padding-left:12px;border-left:1px solid color-mix(in srgb, currentColor 25%, transparent)'
+  // the part of the bar that gives way: it shrinks and scrolls sideways when the bar is full (its pickers open as
+  // popovers, so scrolling clips nothing), and the page never grows wider than the window
+  el.style.cssText = 'display:flex;align-items:center;gap:8px;padding-left:12px;border-left:1px solid color-mix(in srgb, currentColor 25%, transparent);min-width:0;overflow-x:auto;scrollbar-width:thin'
   const swap = (coord: string) => {
     const d = h.data(), p = d.pods[pod]!, keeps = h.registry.implementation(coord)?.config?.check(p.config)
     return h.apply(connected({ ...d, pods: { ...d.pods, [pod]: { implementation: coord, eager: p.eager, ...(keeps && { config: p.config }) } } }, h.registry, [pod]))
