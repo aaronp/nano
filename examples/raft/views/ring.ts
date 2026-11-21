@@ -8,7 +8,7 @@ import { gridModel } from './model.ts'
 
 class RaftRingView extends LitElement {
   static properties = { target: { attribute: false }, ids: { attribute: false } }
-  static styles = [base, css`.ring { position: relative; width: 420px; height: 420px; margin: 8px 0 } .at { position: absolute; transform: translate(-50%, -50%); text-align: center; font-size: 12px }`]
+  static styles = [base, css`.ring { position: relative; width: 420px; height: 420px; margin: 8px 0 } .at { position: absolute; margin: -60px 0 0 -60px; text-align: center; font-size: 12px }`]
   declare target?: ViewTarget
   declare ids: string[]
   private targets: ViewTarget[] = []
@@ -32,13 +32,16 @@ class RaftLogView extends LitElement {
   declare ids: string[]
   declare rows: { id: string; p: Persistent; commitIndex: number }[]
   private stop?: () => void
+  private watching?: { t?: ViewTarget; ids: string[] }
   constructor() { super(); this.ids = []; this.rows = [] }
-  disconnectedCallback() { super.disconnectedCallback(); this.stop?.(); this.stop = undefined }
+  disconnectedCallback() { super.disconnectedCallback(); this.stop?.(); this.stop = this.watching = undefined }
   connectedCallback() { super.connectedCallback(); this.watch() }
   willUpdate(changed: Map<string, unknown>) { if (changed.has('target') || changed.has('ids')) this.watch() }
   private watch() {
-    this.stop?.(); this.stop = undefined
-    const t = this.target, ids = this.ids, ok = () => this.ids === ids && this.target === t
+    const t = this.target, ids = this.ids
+    if (this.watching?.t === t && this.watching?.ids === ids && this.isConnected) return
+    this.stop?.(); this.stop = undefined; this.watching = { t, ids }
+    const ok = () => this.ids === ids && this.target === t
     this.rows = []
     if (!t || !this.isConnected) return
     const have = new Map<string, { p?: Persistent; commitIndex: number }>(), offs: (() => void)[] = []

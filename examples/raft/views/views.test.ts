@@ -176,3 +176,13 @@ test('raft-cluster draws the chosen cluster: a ring of nodes and the log grid, f
   expect(sub('raft-ring').shadowRoot!.querySelectorAll('raft-node')).toHaveLength(0)
   expect(sub('raft-log').shadowRoot!.querySelectorAll('tr')).toHaveLength(0)
 })
+test('choosing a cluster in the list puts its name in the form, so Remove acts on what is shown', async () => {
+  app = await cluster()
+  const el = await mount('raft-cluster', app, 'raft', 'cluster'), root = el.shadowRoot!
+  ;(root.querySelector('[name=name]') as HTMLInputElement).value = 'other'
+  ;(root.querySelector('[name=create]') as HTMLButtonElement).click(); await wait(); await el.updateComplete
+  ;(root.querySelector('li button') as HTMLButtonElement).click(); await el.updateComplete   // example
+  expect((root.querySelector('[name=name]') as HTMLInputElement).value).toBe('example')
+  ;(root.querySelector('[name=remove]') as HTMLButtonElement).click(); await wait(); await el.updateComplete
+  expect([...root.querySelectorAll('li button')].map(b => b.textContent)).toEqual(['other'])
+})

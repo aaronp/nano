@@ -29,7 +29,7 @@ class RaftClusterView extends LitElement {
     this.loaded = key; this.loadedFor = t
     this.ids = []
     if (!t || !name) return
-    try { void t.app.runtime(`${name}-1`).get(RaftNode, { pod: `${name}-1-raft` }).status().then(s => { if (this.loaded === key) this.ids = [s.id, ...s.peers].sort() }, () => {}) } catch { /* no such cluster: nothing drawn */ }
+    try { void t.app.runtime(`${name}-1`).get(RaftNode, { pod: `${name}-1-raft` }).status().then(s => { if (this.loaded === key && this.loadedFor === t) this.ids = [s.id, ...s.peers].sort() }, () => { if (this.loadedFor === t) this.loaded = undefined }) } catch { /* no such cluster: nothing drawn */ }
   }
 
   private pod(t: ViewTarget) { return t.app.runtime(t.runtime).get(Cluster, { pod: t.pod }) }
@@ -57,7 +57,7 @@ class RaftClusterView extends LitElement {
         <button class="btn" name="create" type="button" @click=${() => void this.run(() => this.pod(t).create({ name: this.field('name'), size: Number(this.field('size')) as 3 | 5, seed: Number(this.field('seed')), heartbeatMs: Number(this.field('heartbeat')) }), () => { this.chosen = this.field('name') })}>Create</button>
         <button class="btn" name="remove" type="button" @click=${() => void this.run(() => this.pod(t).remove({ name: this.field('name') }), () => { if (this.chosen === this.field('name')) this.chosen = undefined })}>Remove</button></div>
       ${this.error ? html`<p class="alert bad" role="alert">${this.error}</p>` : ''}
-      <ul>${this.names.map(n => html`<li><button class="btn" type="button" aria-pressed=${n === this.shown} @click=${() => { this.chosen = n }}>${n}</button></li>`)}</ul>
+      <ul>${this.names.map(n => html`<li><button class="btn" type="button" aria-pressed=${n === this.shown} @click=${() => { this.chosen = n; (this.renderRoot.querySelector('[name=name]') as HTMLInputElement).value = n }}>${n}</button></li>`)}</ul>
       <raft-ring .target=${t} .ids=${this.ids}></raft-ring><raft-log .target=${t} .ids=${this.ids}></raft-log></div>`
   }
 }

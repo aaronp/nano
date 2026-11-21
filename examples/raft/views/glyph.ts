@@ -13,7 +13,7 @@ const R = 40, TAU = 2 * Math.PI
 
 class RaftNodeView extends LitElement {
   static properties = { target: { attribute: false }, status: { state: true }, now: { state: true }, open: { state: true }, menu: { state: true }, error: { state: true } }
-  static styles = [base, css`svg { cursor: pointer; width: 120px; height: 120px } dialog { color: inherit; background: Canvas } .menu { position: fixed; display: flex; flex-direction: column; background: Canvas; border: 1px solid currentColor; z-index: 10 } text { fill: currentColor; text-anchor: middle; font-size: 22px }`]
+  static styles = [base, css`svg { cursor: pointer; width: 120px; height: 120px } dialog { color: inherit; background: Canvas; padding: 0 } .pad { padding: 1em } .menu { position: fixed; display: flex; flex-direction: column; background: Canvas; border: 1px solid currentColor; z-index: 10 } text { fill: currentColor; text-anchor: middle; font-size: 22px }`]
   declare target?: ViewTarget
   declare status?: Node
   declare now: number
@@ -68,8 +68,8 @@ class RaftNodeView extends LitElement {
       ${this.menu ? html`<div class="menu" role="menu" style="left: ${this.menu.x}px; top: ${this.menu.y}px">${NODE_OPS.map(([label, op]) => this.menuItem(label, op))}</div>` : ''}
       ${this.error ? html`<p class="alert bad" role="alert">${this.error}</p>` : ''}
       ${this.open ? html`<dialog @click=${(e: Event) => { if (e.target === e.currentTarget) this.open = false }} @cancel=${() => { this.open = false }} @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this.open = false }}>
-        <div class="row"><strong>${this.status.id}</strong><button class="btn small" type="button" aria-label="close" @click=${() => { this.open = false }}>✕</button></div>
-        <raft-detail .target=${this.target} .status=${this.status} .now=${this.now}></raft-detail></dialog>` : ''}`
+        <div class="pad"><div class="row"><strong>${this.status.id}</strong><button class="btn small" type="button" aria-label="close" @click=${() => { this.open = false }}>✕</button></div>
+        <raft-detail .target=${this.target} .status=${this.status} .now=${this.now}></raft-detail></div></dialog>` : ''}`
   }
 }
 if (!customElements.get('raft-node')) customElements.define('raft-node', RaftNodeView)
