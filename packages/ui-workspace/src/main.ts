@@ -18,7 +18,7 @@ import './components/gallery.ts';
 import './components/theme-picker.ts';
 import './components/profile-menu.ts';
 import { FileMenuEl } from './components/file-menu.ts';
-import { askName, askNew } from './components/name-dialog.ts';
+import { askConfirm, askName, askNew } from './components/name-dialog.ts';
 import './widgets/widgets.ts';
 import './widgets/notes-panel.ts';
 import './components/workspace-dock.ts';
@@ -35,6 +35,7 @@ import { showStatus } from './lib/status.ts';
 import { applyPages, MAIN } from './lib/pages.ts';
 import { workspaceLayout as mine } from './host.ts';
 import { Coord } from '@pritzlaff/nano-core';
+import { removeFrom } from './host-deploy.ts';
 import type { Page } from '@pritzlaff/nano-outline';
 
 if (!customElements.get('nano-file-menu')) customElements.define('nano-file-menu', FileMenuEl);
@@ -48,6 +49,14 @@ if (host && outline) {
   for (const dock of document.querySelectorAll<WorkspaceDock>('workspace-dock')) dock.host = host;
   for (const el of document.querySelectorAll<HTMLElement & { target?: unknown; icon?: unknown }>('nano-explorer, nano-wiring')) { el.target ??= target; if (el.localName === 'nano-explorer') el.icon = icon; }
   bootAppBar(host);
+  // The explorer's Delete runtime: asked first (the pods that go with it, and those that stay, placed elsewhere), then removed.
+  document.addEventListener('nano-delete', async (e) => {
+    const { runtime } = (e as CustomEvent<{ runtime: string }>).detail, d = h.data(), r = removeFrom(d, { runtimes: [runtime] });
+    if (!r.ok) return void toast(r.fail.reason, { variant: 'bad' });
+    const [go, stay] = [d.runtimes[runtime]!.pods.filter(x => !r.value.pods[x]), d.runtimes[runtime]!.pods.filter(x => r.value.pods[x])];
+    const said = `Delete runtime ${runtime}?${go.length ? ` Its pods ${go.join(', ')} go with it.` : ''}${stay.length ? ` ${stay.join(', ')} stay: placed elsewhere.` : ''}`;
+    if (await askConfirm(document, said, 'Delete')) { const n = await h.apply(r.value); if (!n.ok) toast(n.fail.reason, { variant: 'bad' }); }
+  });
   defineSettings();
   for (const el of document.querySelectorAll<SettingsView>('nano-settings')) el.host = host;
 
