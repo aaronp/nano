@@ -37,9 +37,27 @@ test('a click opens the detail dialog; its buttons call the node ops', async () 
   const term = (await status(app, 'example-1')).p.currentTerm
   await press('time out'); expect((await status(app, 'example-1')).p.currentTerm).toBe(term + 1)
   await press('restart'); expect((await status(app, 'example-1')).role).toBe('follower')
-  await press('request')   // a follower refuses: the panel says why
   await detail.updateComplete
-  expect(detail.shadowRoot!.querySelector('[role=alert]')).not.toBeNull()
+  const req = [...detail.shadowRoot!.querySelectorAll('button')].find(b => b.textContent === 'request')!
+  expect(req.disabled).toBe(true)   // a follower takes no request: the text and the button wait for a leader
+  expect(detail.shadowRoot!.querySelector('textarea')!.disabled).toBe(true)
+})
+test("the glyph says its role; a leader's detail sends the request text as its value", async () => {
+  app = await cluster()
+  const ids = ['example-1', 'example-2', 'example-3'], all = await Promise.all(ids.map(id => status(app, id)))
+  const leader = all.find(n => n.role === 'leader')!.id, follower = all.find(n => n.role === 'follower')!.id
+  const f = await mount('raft-node', app, follower, `${follower}-raft`)
+  expect(f.shadowRoot!.querySelector('.role')!.textContent).toBe('follower')
+  const el = await mount('raft-node', app, leader, `${leader}-raft`)
+  expect(el.shadowRoot!.querySelector('.role')!.textContent).toBe('leader')
+  el.shadowRoot!.querySelector('svg')!.dispatchEvent(new Event('click')); await el.updateComplete; await wait()
+  const detail = el.shadowRoot!.querySelector('raft-detail') as HTMLElement & { updateComplete: Promise<boolean> }
+  await detail.updateComplete
+  const text = detail.shadowRoot!.querySelector('textarea')!
+  expect(text.disabled).toBe(false)
+  text.value = 'set x = 1'; text.dispatchEvent(new Event('input'))
+  ;[...detail.shadowRoot!.querySelectorAll('button')].find(b => b.textContent === 'request')!.click(); await wait()
+  expect((await status(app, leader)).p.log.map(e => e.value)).toContain('set x = 1')
 })
 test('Escape and the close button close the dialog', async () => {
   app = await cluster()
@@ -66,9 +84,8 @@ test('a right-click opens the ops menu; each item calls its op and closes the me
   const term = (await status(app, 'example-1')).p.currentTerm
   await pick('time out'); expect((await status(app, 'example-1')).p.currentTerm).toBe(term + 1)
   await pick('restart'); expect((await status(app, 'example-1')).role).toBe('follower')
-  await pick('request'); expect(root.querySelector('[role=alert]')).not.toBeNull()   // a follower refuses
   root.querySelector('svg')!.dispatchEvent(new MouseEvent('contextmenu', { cancelable: true })); await el.updateComplete
-  expect(root.querySelector('[role=alert]')).toBeNull()   // opening the menu clears it
+  expect(([...root.querySelectorAll('[role=menuitem]')].find(b => b.textContent === 'request') as HTMLButtonElement).disabled).toBe(true)   // a follower takes no request
   root.querySelector('svg')!.dispatchEvent(new MouseEvent('contextmenu', { cancelable: true })); await el.updateComplete
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await el.updateComplete
   expect(root.querySelector('[role=menu]')).toBeNull()

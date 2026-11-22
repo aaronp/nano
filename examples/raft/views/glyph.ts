@@ -1,5 +1,5 @@
 // `<raft-node>`: the node glyph of raft.github.io: a circle with the term, coloured by role, an arc of election time
-// left and a dot per peer (hollow while a reply is pending, filled once a vote was granted). A click opens its detail in a dialog, a right-click its ops in a menu.
+// left, a dot per peer (hollow while a reply is pending, filled once a vote was granted) and its role beneath. A click opens its detail in a dialog, a right-click its ops in a menu.
 import { LitElement, css, html, svg } from 'lit'
 import { base } from '@pritzlaff/nano-elements'
 import { Clock, type ViewTarget } from '@pritzlaff/nano-ui'
@@ -13,7 +13,7 @@ const R = 40, TAU = 2 * Math.PI
 
 class RaftNodeView extends LitElement {
   static properties = { target: { attribute: false }, status: { state: true }, now: { state: true }, open: { state: true }, menu: { state: true }, error: { state: true } }
-  static styles = [base, css`svg { cursor: pointer; width: 120px; height: 120px } dialog { color: inherit; background: Canvas; padding: 0 } .pad { padding: 1em } .menu { position: fixed; display: flex; flex-direction: column; background: Canvas; border: 1px solid currentColor; z-index: 10 } text { fill: currentColor; text-anchor: middle; font-size: 22px }`]
+  static styles = [base, css`svg { cursor: pointer; width: 120px; height: 120px } dialog { color: inherit; background: Canvas; padding: 0 } .pad { padding: 1em } .menu { position: fixed; display: flex; flex-direction: column; background: Canvas; border: 1px solid currentColor; z-index: 10 } text { fill: currentColor; text-anchor: middle; font-size: 22px } .role { text-align: center; font-size: 12px; font-weight: 600 }`]
   declare target?: ViewTarget
   declare status?: Node
   declare now: number
@@ -65,7 +65,7 @@ class RaftNodeView extends LitElement {
     if (d && !d.hasAttribute('open')) { if (d.showModal) d.showModal(); else d.setAttribute('open', '') }
   }
   private pick(op: NodeOp) { this.menu = undefined; void callNodeOp(this.target!, op, `v${++this.n}`).then(e => { this.error = e }) }
-  private menuItem = (label: string, op: NodeOp) => html`<button class="btn small" role="menuitem" type="button" @click=${() => this.pick(op)}>${label}</button>`
+  private menuItem = (label: string, op: NodeOp) => html`<button class="btn small" role="menuitem" type="button" ?disabled=${op === 'request' && this.status?.role !== 'leader'} @click=${() => this.pick(op)}>${label}</button>`
   render() {
     if (!this.status) return html``
     const m = glyphModel(this.status, this.now), c = COLOUR[m.role]
@@ -75,6 +75,7 @@ class RaftNodeView extends LitElement {
         <circle cx="60" cy="60" r=${R} fill="none" stroke=${c} stroke-opacity="0.25" stroke-width="6"/>
         <circle class="arc" cx="60" cy="60" r=${R} fill="none" stroke=${c} stroke-width="6" stroke-dasharray=${this.dash(this.status)} transform="rotate(-90 60 60)"/>
         <text x="60" y="68">${m.term}</text>${dots}</svg>
+      <div class="role">${m.role}</div>
       ${this.menu ? html`<div class="menu" role="menu" style="left: ${this.menu.x}px; top: ${this.menu.y}px">${NODE_OPS.map(([label, op]) => this.menuItem(label, op))}</div>` : ''}
       ${this.error ? html`<p class="alert bad" role="alert">${this.error}</p>` : ''}
       ${this.open ? html`<dialog @click=${(e: Event) => { if (e.target === e.currentTarget) this.open = false }} @cancel=${() => { this.open = false }} @keydown=${(e: KeyboardEvent) => { if (e.key === 'Escape') this.open = false }}>
