@@ -30,7 +30,7 @@ import { GoldenLayout, LayoutConfig, type Stack, type ComponentItem, type Conten
 import type { Host } from '../host.ts';
 import { ensureStyles, HEADER_H } from '../dock/dock-css.ts';
 import { initial, readPalette, split, type Def } from '../dock/palette.ts';
-import { mountPanel, panelOf, shows } from '../dock/panels.ts';
+import { mountPanel, panelOf, podsIn, shows } from '../dock/panels.ts';
 import type { PagePods } from '../dock/page-pods.ts';
 import { readSaved, writeSaved } from '../dock/saved.ts';
 import { showTemplate } from '../dock/template-mode.ts';
@@ -173,8 +173,8 @@ export class WorkspaceDock extends HTMLElement {
   private offer() { void this.choose((e) => pickerGrid(this.empty!, e)).then((p) => { this.offer(); this.put(p); }); }
   /** The picker's choice (`show`: a popover, or a grid inline); an implementation's (a new pod) is first deployed lazy in the chosen runtime (`host.deploy`), then given its slot. */
   private async choose(show: (e: Parameters<typeof pick>[1]) => ReturnType<typeof pick>, hidden?: PanelState[]): Promise<PanelState | null> {
-    const dock = this, c = await show({ get templates() { return [...dock.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')]; }, hidden, get runtimes() { return Object.keys(dock.host?.data().runtimes ?? { main: 1 }); } }), p = c?.state, impl = p && !p.name && this.host && this.defs.get(p.widget)?.template.dataset['implementation'], gone = impl && c.runtime !== undefined && !(c.runtime in this.host!.data().runtimes), made = impl && !gone && await this.host!.deploy(impl, c.runtime ?? 'main'), name = made && made.ok && made.value.name, slot = name && this.pods?.add(this.host!.data(), c.runtime ?? 'main', name);
-    return !impl ? p ?? null : name ? { widget: p!.widget, name, ...(slot && { slot }) } : (gone && this.say(`Runtime ${c.runtime} is no longer there: nothing was added.`), null);   // a pill that went stale
+    const dock = this, c = await show({ get templates() { return [...dock.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')]; }, hidden, get runtimes() { return Object.keys(dock.host?.data().runtimes ?? { main: 1 }); }, get pods() { return dock.host && podsIn(dock.host); } }), p = c?.state, impl = p && !p.name && this.host && this.defs.get(p.widget)?.template.dataset['implementation'], gone = impl && c.runtime !== undefined && !(c.runtime in this.host!.data().runtimes), made = impl && !gone && await this.host!.deploy(impl, c.runtime ?? 'main'), name = made && made.ok && made.value.name, slot = name && this.pods?.add(this.host!.data(), c.runtime ?? 'main', name);
+    return p?.name && c?.runtime !== undefined ? (this.openPod(p.name, c.runtime), null) : !impl ? p ?? null : name ? { widget: p!.widget, name, ...(slot && { slot }) } : (gone && this.say(`Runtime ${c.runtime} is no longer there: nothing was added.`), null);   // a pill that went stale
   }
   private split(p: PanelState, target?: ComponentItem) { return split(this.requireLayout(), p, p.name ?? this.defs.get(p.widget)?.title ?? p.widget, target); }
   /** Whether a stored template's panels are all in this palette; whether `p` is an implementation's panel whose pod is being made. */

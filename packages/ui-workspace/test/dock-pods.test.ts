@@ -2,7 +2,7 @@
 // restore point in its `meta`, its panels the page's slots), showing a page opens its pods (`outline.open`, once), and
 // a pick deploys a lazy pod first, then applies its slot.
 import { expect, test } from 'bun:test'
-import { host, mount, opened, page, pick, place, pod, running, starts, tick, until, type Dock, type H } from './dock-pods-setup.ts'
+import { host, mount, opened, page, pick, place, pod, running, seen, starts, tick, until, type Dock, type H } from './dock-pods-setup.ts'
 
 test('two pages share a pod: started once, by showing the first page; the second reuses it; showing a page again opens nothing; no new names', async () => {
   const h = await host()
@@ -255,4 +255,45 @@ test('opening a pod not placed in the runtime named adds no panel and says so', 
   expect(panels('workspace').length).toBe(0)
   expect(written('workspace').slots).toEqual({})
   expect(said).toEqual(['input1 is not placed in elsewhere: nothing was opened.', 'nope is not placed in main: nothing was opened.'])
+})
+
+test('a pick of an existing pod gives it its slot and deploys nothing', async () => {
+  const h = await host()
+  await place(h, 'main', ['a'])
+  const names = Object.keys(h.data().pods), { go, written, input } = mount(h, {})
+  go('workspace')
+  pick.choice = { widget: input, name: 'a' }; pick.runtime = 'main'
+  document.querySelector<HTMLElement>('.dock-empty')!.click()
+  await until(() => Object.keys(written('workspace').slots).length === 1)
+  expect(written('workspace').slots).toEqual({ a: { kind: 'pod', pod: 'nano.ui/input@main/a' } })
+  expect(Object.keys(h.data().pods)).toEqual(names)
+  await until(() => running(h, 'a'))
+})
+
+test('picking a pod already on the page focuses its panel', async () => {
+  const h = await host()
+  await place(h, 'main', ['a'])
+  const { go, written, input, panels } = mount(h, {})
+  go('workspace')
+  pick.choice = { widget: input, name: 'a' }; pick.runtime = 'main'
+  for (let i = 0; i < 2; i++) { document.querySelector<HTMLElement>('.dock-empty')!.click(); await tick(50) }
+  await until(() => panels('workspace').length === 1)
+  expect(Object.keys(written('workspace').slots)).toEqual(['a'])
+  expect(panels('workspace').length).toBe(1)
+})
+
+test('the dock lists an implementation\'s pods in a runtime, running or not', async () => {
+  const h = await host()
+  await place(h, 'main', ['a'])
+  const { go, input, panels } = mount(h, {})
+  go('workspace')
+  pick.choice = { widget: input }
+  document.querySelector<HTMLElement>('.dock-empty')!.click()
+  await until(() => !!seen.entries?.pods)
+  const impls = (r = 'main') => seen.entries!.pods!('nano.ui/input', r).filter(p => p.name === 'a')
+  expect(impls()).toEqual([{ name: 'a', running: false }])
+  await h.app.runtime('main').getOrCreate('a')
+  expect(impls()).toEqual([{ name: 'a', running: true }])
+  expect(impls('nowhere')).toEqual([])
+  void panels
 })

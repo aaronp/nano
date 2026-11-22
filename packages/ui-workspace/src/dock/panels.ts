@@ -84,3 +84,6 @@ export const shows = (item: ComponentItem, defs: ReadonlyMap<string, Def>) => po
 export const panelOf = (item: ContentItem | undefined, pod: string, defs: ReadonlyMap<string, Def>): ComponentItem | undefined => !item ? undefined
   : item.isComponent ? (podOf(item as ComponentItem, defs) === pod ? item as ComponentItem : undefined)
   : item.contentItems.map(i => panelOf(i, pod, defs)).find(Boolean)
+/** The picker's pods of an implementation in a runtime, each running or not (a runtime that is gone: none). */
+export const podsIn = (h: Host) => (implementation: string, runtime: string) => (h.data().runtimes[runtime]?.pods ?? []).filter((p) => h.data().pods[p]?.implementation === implementation)
+  .map((name) => { const s = h.app.runtime(runtime).status(name); return { name, running: s.ok && s.value === 'running' }; });

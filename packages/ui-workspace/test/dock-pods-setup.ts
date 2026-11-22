@@ -10,7 +10,8 @@ import type { PanelState } from '../src/lib/layout-templates.ts'
 
 export const pick: { choice: PanelState | null; runtime: string | undefined } = { choice: null, runtime: undefined }   // the picker, stubbed
 mock.module('../src/components/picker.ts', () => ({ pick: async () => pick.choice && { state: pick.choice, runtime: pick.runtime } }))
-mock.module('../src/components/picker-grid.ts', () => ({ pickerGrid: (host: HTMLElement) => new Promise(r => { host.addEventListener('click', () => pick.choice && r({ state: pick.choice, runtime: pick.runtime })) }) }))   // inline: a click picks `choice`
+export const seen: { entries?: { pods?(implementation: string, runtime: string): { name: string; running: boolean }[] } } = {}   // the entries the inline picker was last given
+mock.module('../src/components/picker-grid.ts', () => ({ pickerGrid: (host: HTMLElement, entries: never) => new Promise(r => { seen.entries = entries; host.addEventListener('click', () => pick.choice && r({ state: pick.choice, runtime: pick.runtime })) }) }))   // inline: a click picks `choice`
 const { defineViews } = await import('@pritzlaff/nano-ui')
 const { start } = await import('../src/host.ts')
 await import('../src/components/workspace-dock.ts')
