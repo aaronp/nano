@@ -23,7 +23,8 @@ export function pickerGrid(host: HTMLElement, entries: Entries): Promise<{ state
   bar.setAttribute('role', 'radiogroup'); bar.setAttribute('aria-label', 'Runtime');
   const mark = () => { for (const b of bar.querySelectorAll<HTMLElement>('[data-runtime]')) { const on = b.dataset['runtime'] === runtime; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; } };
   let shown = '';   // the runtimes the pills were made for: they are rebuilt only when these change, so a click or arrow keeps its focus
-  const pills = () => { const rs = entries.runtimes; if (!rs.includes(runtime)) runtime = rs.includes('main') ? 'main' : rs[0]!; if (shown === rs.join('\0')) return mark(); shown = rs.join('\0'); bar.replaceChildren(Object.assign(doc.createElement('span'), { textContent: 'Runtime:' }), ...rs.map((r) => {
+  const pills = () => { const rs = entries.runtimes; if (!rs.includes(runtime)) runtime = rs.includes('main') ? 'main' : rs[0]!; if (shown === rs.join('\0')) return mark();
+    shown = rs.join('\0'); bar.replaceChildren(Object.assign(doc.createElement('span'), { textContent: 'Runtime:' }), ...rs.map((r) => {
     const b = Object.assign(doc.createElement('button'), { type: 'button', textContent: r });
     b.dataset['runtime'] = r; b.setAttribute('role', 'radio');
     b.addEventListener('click', () => { runtime = last = r; mark(); build(); });
@@ -65,7 +66,7 @@ export function pickerGrid(host: HTMLElement, entries: Entries): Promise<{ state
 
   const applyFilter = () => {
     const q = filter.value.trim().toLowerCase();
-    for (const b of list.querySelectorAll<HTMLElement>('[data-widget]')) b.hidden = !b.textContent!.toLowerCase().includes(q);
+    for (const b of list.querySelectorAll<HTMLElement>('[data-widget]')) b.hidden = !(b.textContent! + (b.closest('.np-impl')?.firstElementChild?.textContent ?? '')).toLowerCase().includes(q);   // a pod's group label matches too
     for (const g of list.querySelectorAll<HTMLElement>('.np-impl')) g.hidden = ![...g.querySelectorAll<HTMLElement>('[data-widget]')].some((b) => !b.hidden);
     for (const s of list.querySelectorAll<HTMLElement>('.np-section')) s.hidden = !!s.querySelector('[data-widget]') && ![...s.querySelectorAll<HTMLElement>('[data-widget]')].some((b) => !b.hidden);
   };

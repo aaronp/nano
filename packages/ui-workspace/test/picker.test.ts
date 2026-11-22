@@ -231,3 +231,10 @@ test('the runtime pill re-lists the pods; the filter matches pod names', () => {
   const f = host.querySelector('input')!; f.value = 'b'; f.dispatchEvent(new Event('input'))
   expect(texts(host, '[data-widget]')).toEqual(['b ○'])
 })
+
+test('the filter matches an implementation\'s own name: its whole pod group stays', () => {
+  const { host } = podsOpen()
+  const f = host.querySelector('input')!; f.value = 'input'; f.dispatchEvent(new Event('input'))
+  expect((host.querySelector('[data-pods-of]') as HTMLElement).hidden).toBe(false)
+  expect(texts(host, '[data-widget]')).toEqual(['a ●', 'b ○', '+ new'])
+})
