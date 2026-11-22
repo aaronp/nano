@@ -7,7 +7,7 @@
 import { importFailures } from '../lib/import-failures.ts';
 import type { PanelState } from '../lib/layout-templates.ts';
 
-type Entries = { templates: HTMLTemplateElement[]; hidden?: PanelState[]; runtimes: string[] };
+type Entries = { templates: HTMLTemplateElement[]; hidden?: PanelState[]; runtimes: string[]; pods?(implementation: string, runtime: string): { name: string; running: boolean }[] };
 let last: string | undefined;   // the runtime chosen this session (not persisted)
 
 /** Fills `host` with the grid; resolves with the chosen tile (and the runtime, for a provider's), never null: closing is the popover's. */
@@ -22,17 +22,18 @@ export function pickerGrid(host: HTMLElement, entries: Entries): Promise<{ state
   const bar = Object.assign(doc.createElement('div'), { className: 'np-runtimes' }), list = doc.createElement('div');
   bar.setAttribute('role', 'radiogroup'); bar.setAttribute('aria-label', 'Runtime');
   const mark = () => { for (const b of bar.querySelectorAll<HTMLElement>('[data-runtime]')) { const on = b.dataset['runtime'] === runtime; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; } };
-  const pills = () => { const rs = entries.runtimes; if (!rs.includes(runtime)) runtime = rs.includes('main') ? 'main' : rs[0]!; bar.replaceChildren(Object.assign(doc.createElement('span'), { textContent: 'Runtime:' }), ...rs.map((r) => {
+  let shown = '';   // the runtimes the pills were made for: they are rebuilt only when these change, so a click or arrow keeps its focus
+  const pills = () => { const rs = entries.runtimes; if (!rs.includes(runtime)) runtime = rs.includes('main') ? 'main' : rs[0]!; if (shown === rs.join('\0')) return mark(); shown = rs.join('\0'); bar.replaceChildren(Object.assign(doc.createElement('span'), { textContent: 'Runtime:' }), ...rs.map((r) => {
     const b = Object.assign(doc.createElement('button'), { type: 'button', textContent: r });
     b.dataset['runtime'] = r; b.setAttribute('role', 'radio');
-    b.addEventListener('click', () => { runtime = last = r; mark(); });
+    b.addEventListener('click', () => { runtime = last = r; mark(); build(); });
     return b;
   })); mark(); };
   bar.addEventListener('keydown', (e) => {   // the radio pattern: arrows choose the neighbour
     const bs = [...bar.querySelectorAll<HTMLButtonElement>('[data-runtime]')].filter((b) => !b.disabled), d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
     const to = d && bs[bs.findIndex((b) => b.dataset['runtime'] === runtime) + d];
     if (!to) return;
-    e.preventDefault(); runtime = last = to.dataset['runtime']!; mark(); to.focus();
+    e.preventDefault(); runtime = last = to.dataset['runtime']!; mark(); build(); to.focus();
   });
   body.append(filter, bar, list);
 
@@ -48,12 +49,24 @@ export function pickerGrid(host: HTMLElement, entries: Entries): Promise<{ state
     if (name !== undefined) b.dataset['name'] = name;
     return b;
   };
-  const ofTemplate = (t: HTMLTemplateElement) => tile(t.dataset['widget']!, t.dataset['title'] ?? t.dataset['widget']!);
+  const ofTemplate = (t: HTMLTemplateElement) => {
+    const w = t.dataset['widget']!, label = t.dataset['title'] ?? w, i = t.dataset['implementation'], ps = i ? entries.pods?.(i, runtime) : undefined;
+    if (!i || !ps?.length) return tile(w, label);
+    const g = Object.assign(doc.createElement('div'), { className: 'np-impl' });   // an implementation's pods in this runtime, then a new one
+    g.dataset['podsOf'] = w;
+    g.append(Object.assign(doc.createElement('span'), { textContent: label }), ...ps.map((p) => {
+      const b = tile(w, `${p.name} ${p.running ? '●' : '○'}`, p.name);
+      b.setAttribute('aria-label', `${p.name}, ${p.running ? 'running' : 'not started'}`);
+      return b;
+    }), tile(w, '+ new'));
+    return g;
+  };
   const title = (widget: string) => entries.templates.find((t) => t.dataset['widget'] === widget)?.dataset['title'] ?? widget;
 
   const applyFilter = () => {
     const q = filter.value.trim().toLowerCase();
     for (const b of list.querySelectorAll<HTMLElement>('[data-widget]')) b.hidden = !b.textContent!.toLowerCase().includes(q);
+    for (const g of list.querySelectorAll<HTMLElement>('.np-impl')) g.hidden = ![...g.querySelectorAll<HTMLElement>('[data-widget]')].some((b) => !b.hidden);
     for (const s of list.querySelectorAll<HTMLElement>('.np-section')) s.hidden = !!s.querySelector('[data-widget]') && ![...s.querySelectorAll<HTMLElement>('[data-widget]')].some((b) => !b.hidden);
   };
   /** (Re)builds the groups from the templates still in the page, and the failed imports. */

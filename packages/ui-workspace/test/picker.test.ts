@@ -151,8 +151,8 @@ test('the arrow keys move focus between tiles; Down in the filter enters the gri
 
 test('inline, the grid fills its place, has no Esc or outside-click close, and a pick resolves it', async () => {
   const host = document.createElement('div'); document.body.append(host)
-  host.innerHTML = '<template data-widget="range" data-title="Range" data-catalog></template>'
-  const chosen = pickerGrid(host, { templates: [...host.querySelectorAll('template')], runtimes: ['main', 'edge'] })
+  document.body.insertAdjacentHTML('beforeend', '<template data-widget="range" data-title="Range" data-catalog></template>')   // beside the host: a rebuild keeps only connected templates
+  const chosen = pickerGrid(host, { templates: [...document.querySelectorAll('template')], runtimes: ['main', 'edge'] })
   expect(document.querySelector('nano-picker')).toBeNull()
   expect(document.activeElement).not.toBe(host.querySelector('input'))
   host.querySelector('input')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
@@ -196,4 +196,38 @@ test('an open grid shows what arrives on catalog:changed: a new provider\'s tile
   document.dispatchEvent(new CustomEvent('catalog:changed', { detail: { name: 'example.raft' } }))
   expect(document.querySelector('[data-section="example.raft"] [data-widget="example-raft-cluster"]')).not.toBeNull()
   expect([...document.querySelectorAll<HTMLElement>('[data-runtime]')].map(b => b.dataset['runtime'])).toEqual(['main', 'raft'])
+})
+
+const podsOpen = () => {
+  document.body.innerHTML = '<div id="dock"><template data-widget="nano-ui-input" data-title="input" data-catalog data-implementation="nano.ui/input"></template><template data-widget="range" data-title="Range" data-catalog></template></div><div id="place"></div>'
+  const host = document.getElementById('place')!
+  const chosen = pickerGrid(host, { templates: [...document.querySelectorAll<HTMLTemplateElement>('#dock > template')], runtimes: ['main', 'edge'],
+    pods: (i, r) => i === 'nano.ui/input' && r === 'main' ? [{ name: 'a', running: true }, { name: 'b', running: false }] : [] })
+  pills(host)[0]!.click()
+  return { host, chosen }
+}
+const texts = (host: Element, sel: string) => [...host.querySelectorAll<HTMLElement>(sel)].filter(e => !e.hidden).map(e => e.textContent)
+
+test('an implementation with pods in the runtime shows them under its tile, and "+ new"', async () => {
+  const { host, chosen } = podsOpen()
+  const g = host.querySelector('[data-pods-of="nano-ui-input"]')!
+  expect(g.querySelector('span')!.textContent).toBe('input')
+  expect(texts(g, '[data-widget]')).toEqual(['a ●', 'b ○', '+ new'])
+  expect(g.querySelector<HTMLElement>('[data-widget]:last-child')!.dataset['name']).toBeUndefined()
+  expect(g.querySelector('[data-name="a"]')!.getAttribute('aria-label')).toBe('a, running')
+  expect(g.querySelector('[data-name="b"]')!.getAttribute('aria-label')).toBe('b, not started')
+  ;(g.querySelector('[data-name="a"]') as HTMLElement).click()
+  expect(await chosen).toEqual({ state: { widget: 'nano-ui-input', name: 'a' }, runtime: 'main' })
+})
+
+test('the runtime pill re-lists the pods; the filter matches pod names', () => {
+  const { host } = podsOpen()
+  const key = (el: Element, k: string) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }))
+  pills(host)[0]!.focus(); key(pills(host)[0]!, 'ArrowRight')
+  expect(host.querySelectorAll('[data-name]').length).toBe(0)
+  expect(host.querySelector('[data-widget="nano-ui-input"]')).not.toBeNull()
+  expect(document.activeElement).toBe(pills(host)[1]!)
+  pills(host)[0]!.click()
+  const f = host.querySelector('input')!; f.value = 'b'; f.dispatchEvent(new Event('input'))
+  expect(texts(host, '[data-widget]')).toEqual(['b ○'])
 })
