@@ -186,3 +186,14 @@ test('Up and Down move by a row of tiles', () => {
     key(tile('C'), 'ArrowUp'); expect(document.activeElement).toBe(tile('A'))
   } finally { if (was) Object.defineProperty(HTMLElement.prototype, 'offsetTop', was); else delete (HTMLElement.prototype as { offsetTop?: number }).offsetTop }
 })
+
+test('an open grid shows what arrives on catalog:changed: a new provider\'s tiles and runtime', () => {
+  document.body.innerHTML = '<div id="dock"><template data-widget="range" data-title="Range" data-catalog></template></div><div id="place"></div>'
+  const dock = document.getElementById('dock')!, runtimes = ['main']
+  void pickerGrid(document.getElementById('place')!, { get templates() { return [...dock.querySelectorAll('template')] }, get runtimes() { return runtimes } })
+  dock.insertAdjacentHTML('beforeend', '<template data-widget="example-raft-cluster" data-title="cluster" data-catalog data-package="example.raft"></template>')
+  runtimes.push('raft')
+  document.dispatchEvent(new CustomEvent('catalog:changed', { detail: { name: 'example.raft' } }))
+  expect(document.querySelector('[data-section="example.raft"] [data-widget="example-raft-cluster"]')).not.toBeNull()
+  expect([...document.querySelectorAll<HTMLElement>('[data-runtime]')].map(b => b.dataset['runtime'])).toEqual(['main', 'raft'])
+})

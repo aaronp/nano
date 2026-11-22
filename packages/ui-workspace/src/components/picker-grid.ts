@@ -11,28 +11,29 @@ type Entries = { templates: HTMLTemplateElement[]; hidden?: PanelState[]; runtim
 let last: string | undefined;   // the runtime chosen this session (not persisted)
 
 /** Fills `host` with the grid; resolves with the chosen tile (and the runtime, for a provider's), never null: closing is the popover's. */
-export function pickerGrid(host: HTMLElement, { templates, hidden, runtimes }: Entries): Promise<{ state: PanelState; runtime?: string } | null> {
+export function pickerGrid(host: HTMLElement, entries: Entries): Promise<{ state: PanelState; runtime?: string } | null> {
   const doc = host.ownerDocument, body = Object.assign(doc.createElement('div'), { className: 'np-body' });
   body.setAttribute('role', 'group'); body.setAttribute('aria-label', 'Add a panel');
-  let runtime = last !== undefined && runtimes.includes(last) ? last : runtimes.includes('main') ? 'main' : runtimes[0]!;
+  // entries are read again on each rebuild (catalog:changed: an import's tiles and runtimes, while the picker is open)
+  const { hidden } = entries, start = entries.runtimes;
+  let runtime = last !== undefined && start.includes(last) ? last : start.includes('main') ? 'main' : start[0]!;
   const filter = Object.assign(doc.createElement('input'), { type: 'search', className: 'np-filter', placeholder: 'Filter' });
   filter.setAttribute('aria-label', 'Filter components');
   const bar = Object.assign(doc.createElement('div'), { className: 'np-runtimes' }), list = doc.createElement('div');
   bar.setAttribute('role', 'radiogroup'); bar.setAttribute('aria-label', 'Runtime');
   const mark = () => { for (const b of bar.querySelectorAll<HTMLElement>('[data-runtime]')) { const on = b.dataset['runtime'] === runtime; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; } };
-  bar.append(Object.assign(doc.createElement('span'), { textContent: 'Runtime:' }), ...runtimes.map((r) => {
+  const pills = () => { const rs = entries.runtimes; if (!rs.includes(runtime)) runtime = rs.includes('main') ? 'main' : rs[0]!; bar.replaceChildren(Object.assign(doc.createElement('span'), { textContent: 'Runtime:' }), ...rs.map((r) => {
     const b = Object.assign(doc.createElement('button'), { type: 'button', textContent: r });
     b.dataset['runtime'] = r; b.setAttribute('role', 'radio');
     b.addEventListener('click', () => { runtime = last = r; mark(); });
     return b;
-  }));
+  })); mark(); };
   bar.addEventListener('keydown', (e) => {   // the radio pattern: arrows choose the neighbour
     const bs = [...bar.querySelectorAll<HTMLButtonElement>('[data-runtime]')].filter((b) => !b.disabled), d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
     const to = d && bs[bs.findIndex((b) => b.dataset['runtime'] === runtime) + d];
     if (!to) return;
     e.preventDefault(); runtime = last = to.dataset['runtime']!; mark(); to.focus();
   });
-  mark();
   body.append(filter, bar, list);
 
   const section = (id: string, kind: string, title: string) => {
@@ -48,7 +49,7 @@ export function pickerGrid(host: HTMLElement, { templates, hidden, runtimes }: E
     return b;
   };
   const ofTemplate = (t: HTMLTemplateElement) => tile(t.dataset['widget']!, t.dataset['title'] ?? t.dataset['widget']!);
-  const title = (widget: string) => templates.find((t) => t.dataset['widget'] === widget)?.dataset['title'] ?? widget;
+  const title = (widget: string) => entries.templates.find((t) => t.dataset['widget'] === widget)?.dataset['title'] ?? widget;
 
   const applyFilter = () => {
     const q = filter.value.trim().toLowerCase();
@@ -57,7 +58,8 @@ export function pickerGrid(host: HTMLElement, { templates, hidden, runtimes }: E
   };
   /** (Re)builds the groups from the templates still in the page, and the failed imports. */
   const build = () => {
-    const ts = templates.filter((t) => t.isConnected), sections: HTMLElement[] = [], groups = new Map<string, HTMLTemplateElement[]>(), views: HTMLTemplateElement[] = [];
+    pills();
+    const ts = entries.templates.filter((t) => t.isConnected), sections: HTMLElement[] = [], groups = new Map<string, HTMLTemplateElement[]>(), views: HTMLTemplateElement[] = [];
     if (hidden?.length) {
       const s = section('hidden', 'hidden', 'Hidden');
       s.append(...hidden.map((h) => tile(h.widget, h.name ?? title(h.widget), h.name)));
