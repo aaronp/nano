@@ -1,10 +1,9 @@
 // File › Save, then Open (Review Focus 5): the bundle opens to the same pages. In the same browser, the pages are
-// applied by the workspace's rules (an identical Main is skipped), so nothing is duplicated; after New (Main emptied,
-// then showing only its starter tool), opening it fills Main from the file.
+// applied by the workspace's rules (an identical Main is skipped), so nothing is duplicated.
 import { expect, test } from 'bun:test'
 import { tick } from './host-deploy-setup.ts'
 
-test('save the bundle, then open it: the same pages, nothing duplicated; after New, opening it fills Main', async () => {
+test('save the bundle, then open it: the same pages, nothing duplicated', async () => {
   const html = await Bun.file(new URL('../public/index.html', import.meta.url)).text()
   document.body.innerHTML = html.slice(html.indexOf('>', html.indexOf('<body')) + 1, html.lastIndexOf('<script type="module">'))
   location.hash = '#/p/two'
@@ -37,18 +36,4 @@ test('save the bundle, then open it: the same pages, nothing duplicated; after N
   await applied; await tick(20)
   expect(now()).toEqual(was)   // identical pages skipped
   expect(host!.document().host?.layout).toEqual(file.host.layout)
-  // New empties Main; shown, its dock's starter panel (the explorer) writes a tool slot back. Opening the saved file
-  // then fills Main from the file's Main (tools alone are the starter), not a workspace-2 beside it.
-  document.dispatchEvent(new CustomEvent('file:new'))
-  for (let i = 0; i < 200 && Object.keys(p.document().doc.pages['workspace']!.slots).length; i++) await tick(5)
-  expect(now().pages.workspace.slots).toEqual({})
-  location.hash = '#/p/workspace'
-  for (let i = 0; i < 200 && !Object.keys(p.document().doc.pages['workspace']!.slots).length; i++) await tick(5)
-  expect(now().pages.workspace.slots).toEqual({ systems: { kind: 'tool', tool: 'systems' } })   // the starter, its slot id the tool's
-  const again = new Promise<void>(r => host!.app.listen(e => { if (e.type === 'applied') r() }))
-  document.dispatchEvent(new CustomEvent('file:example', { detail: { name: 'saved' } }))
-  await again; await tick(50)
-  expect(now().pages.workspace).toEqual(pages.pages.workspace)
-  expect(Object.keys(now().pages)).toEqual(['workspace', 'two'])
-  expect(now().roots).toEqual(['workspace'])   // Main's child kept, not placed twice
 })

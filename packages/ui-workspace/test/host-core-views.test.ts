@@ -1,6 +1,5 @@
 // Review Focus 4: the app bar's view picker writes `host.views`; the Ring filter and the Desk read
-// `host.layout.workspace`; File › Save writes the HostDocument (the Desk's arrangement in it), and opening that file
-// brings its views and layout back.
+// `host.layout.workspace`; File › Save writes the HostDocument (the Desk's arrangement in it).
 import { expect, test } from 'bun:test'
 import { tick } from './host-deploy-setup.ts'
 
@@ -44,13 +43,4 @@ test('views, the Ring filter, the Desk and Save/Open on host', async () => {
   expect(file.host.layout.workspace.ring).toEqual({ show: ['nano.ui/log'] })
   expect(file.host.layout.workspace.desk).toBeDefined()
   expect(file.app.views).toBeUndefined()
-  // New clears the workspace's views and layout (another client's kept); opening the saved file brings them back
-  document.dispatchEvent(new CustomEvent('file:new'))
-  await tick(50)
-  expect(h.document().host?.layout).toEqual({ react: { k: 1 } })
-  const applied = new Promise<void>(r => h.app.listen(e => { if (e.type === 'applied') r() }))
-  document.dispatchEvent(new CustomEvent('file:example', { detail: { name: 'saved' } }))
-  await applied; await tick(20)
-  expect(h.document().host?.views).toEqual({ log1: 'nano-pod-view' })
-  expect((h.document().host?.layout as { workspace: { ring: unknown } }).workspace.ring).toEqual({ show: ['nano.ui/log'] })
 })

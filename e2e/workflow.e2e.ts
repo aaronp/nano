@@ -71,9 +71,10 @@ test('drop four controls, wire them in Connections, save, New, import the file: 
   expect(podSlots.map(s => s.pod!.split('/').pop()).sort()).toEqual(['debounce1', 'input1', 'log1', 'map1'])
   await shot(page, '3-saved')
 
-  // 4. File › New: nothing but the starting dock
+  // 4. File › New, asked: the page reloads with nothing but the starting dock
   await page.getByRole('button', { name: 'File', exact: true }).click()
   await page.getByRole('button', { name: 'New', exact: true }).click()
+  await Promise.all([page.waitForEvent('load'), page.getByRole('dialog', { name: 'New workspace' }).getByRole('button', { name: 'Start new', exact: true }).click()])
   await expect.poll(() => pods(page)).toEqual([])
   await expect(dock(page).locator('nano-log')).toHaveCount(0)
   await shot(page, '4-new')

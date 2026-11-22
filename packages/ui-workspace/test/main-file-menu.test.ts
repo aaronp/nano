@@ -1,9 +1,9 @@
 // The File menu with Main's dock never built (a deep link to another page): Save writes the host document (the app's
-// nano.json, the Outline's pages and the host part), and New empties Main's page (its title kept) without touching its dock.
+// nano.json, the Outline's pages and the host part), and New asks (Cancel, or a download first), then reloads to clear it.
 import { expect, test } from 'bun:test'
 import { tick } from './host-deploy-setup.ts'
 
-test('a deep link to another page: Save writes the bundle, New empties Main and does not throw', async () => {
+test('a deep link to another page: Save writes the bundle; New asks, offers a download, then reloads', async () => {
   const html = await Bun.file(new URL('../public/index.html', import.meta.url)).text()
   document.body.innerHTML = html.slice(html.indexOf('>', html.indexOf('<body')) + 1, html.lastIndexOf('<script type="module">'))
   location.hash = '#/two'
@@ -28,9 +28,22 @@ test('a deep link to another page: Save writes the bundle, New empties Main and 
   expect(file.app).toMatchObject(system)   // the host document's app: its views are `host.views`
   expect(file.outline).toEqual(JSON.parse(JSON.stringify(outline!.document().doc)))   // the Outline's pages (the shown dock's arrangement written in)
   expect(file.outline.pages.workspace).toEqual(pages.pages.workspace)
-  document.dispatchEvent(new CustomEvent('file:new'))
-  await tick(50)
-  expect(JSON.parse(JSON.stringify(outline!.document().doc.pages['workspace']))).toEqual({ title: 'Main', slots: {}, layout: { react: { columns: 3 } }, meta: { workspace: { icon: 'home' } } })   // other clients' layout kept
+  let reloads = 0
+  ;(location as unknown as { reload(): void }).reload = () => { reloads++ }
+  const answer = async (label: string) => {
+    document.dispatchEvent(new CustomEvent('file:new'))
+    await tick(5)
+    const d = document.querySelector('dialog[aria-label="New workspace"]')!
+    ;[...d.querySelectorAll('button')].find(b => b.textContent === label)!.click()
+    await tick(320)
+  }
+  await answer('Cancel')
+  expect([sessionStorage.getItem('nano-host.wipe'), reloads]).toEqual([null, 0])   // cancelled: nothing cleared
+  const downloads = blobs.size
+  await answer('Download, then start new')
+  expect(blobs.size).toBe(downloads + 1)   // the copy, first
+  expect(JSON.parse(await [...blobs.values()].at(-1)!.text()).outline.pages.workspace).toEqual(pages.pages.workspace)
+  expect([sessionStorage.getItem('nano-host.wipe'), reloads]).toEqual(['1', 1])
   expect(errors).toEqual([])
   expect(document.querySelector('workspace-dock#workspace > .dock-area')).toBeNull()
 })

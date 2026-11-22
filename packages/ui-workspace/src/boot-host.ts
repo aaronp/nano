@@ -27,6 +27,11 @@ const tell = (why: string | undefined) => why && showStatus(document, why.starts
   ? `Your workspace is not being saved (${why.slice('not saved: '.length)}); it runs in memory until this page closes.`
   : 'Your workspace changed in another tab: reload this page to continue. Changes here are no longer saved.');
 
+/** File › New (main.ts) sets it, then reloads: the stored document and its old forms are cleared before boot reads them,
+ * so nothing written while the old page unloads survives. The theme is kept: it is the browser's, not the workspace's. */
+export const WIPE = 'nano-host.wipe';
+// ponytail: the host core's key and old keys, spelled here; export them from @pritzlaff/nano-host if a second host needs a wipe
+try { if (sessionStorage.getItem(WIPE)) { sessionStorage.removeItem(WIPE); for (const k of ['nano-host.document', 'nano-workspace.document', 'nano-workspace.outline', 'nano-workspace.platform']) storage.removeItem(k); forgetOld(storage); } } catch { /* storage refused: boot reads what is there */ }
 defineViews();
 let booted: Host | undefined;
 const stored = await start(storage, { migrate: oldForms, onStop: () => tell(booted?.stopped()) });
