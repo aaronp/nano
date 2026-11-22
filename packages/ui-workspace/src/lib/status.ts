@@ -17,7 +17,8 @@ export function showStatus(doc: Document, text: string) {
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(set); else setTimeout(set, 16)
 }
 
-const toasts = (notes: readonly string[]) => { for (const n of notes) void toast(n, { variant: n.startsWith('connected') ? 'good' : 'warn' }) }
+// "no pod yet" is no fault (a pod made later meets it): plain, not a warning
+const toasts = (notes: readonly string[]) => { for (const n of notes) void toast(n, { variant: n.startsWith('connected') ? 'good' : n.includes(': no pod yet (') ? undefined : 'warn' }) }
 
 /** The host core's `connect`, each note a toast: what was connected, and (a warning) what could not be. */
 export function connected(d: AppDeployment, registry: Registry, pods: readonly string[]): AppDeployment {

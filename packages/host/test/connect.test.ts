@@ -23,11 +23,20 @@ test('a dependency already met is left alone', async () => {
   expect(connect(await file(), registry, ['alice', 'messaging'])).toEqual({ deployment: await file(), notes: [] })
 })
 
+test('no pod placed: an implementation that could provide it is named, as no fault; none at all: nothing provides it', async () => {
+  const none = structuredClone(await file())
+  none.runtimes['example.chat.backend']!.subscriptions = []
+  delete none.pods['messaging']; none.runtimes['example.chat.backend']!.pods = ['chatStore']
+  expect(connect(none, registry, ['alice']).notes).toEqual(['alice needs example.messaging.Messaging: no pod yet (example.messaging/kv provides it)'])
+  const bare = Registry.create(); for (const p of [kv, chat]) bare.add(p)
+  expect(connect(none, bare, ['alice']).notes).toEqual(['alice needs example.messaging.Messaging: nothing provides it'])
+})
+
 test('no provider, or two, changes nothing and says so', async () => {
   const d = await file(), none = structuredClone(d)
   none.runtimes['example.chat.backend']!.subscriptions = []
   delete none.pods['messaging']; none.runtimes['example.chat.backend']!.pods = ['chatStore']
-  expect(connect(none, registry, ['alice']).notes).toEqual(['alice needs example.messaging.Messaging: nothing provides it'])
+  expect(connect(none, registry, ['alice']).deployment).toEqual(none)
   const two = structuredClone(d)
   two.pods['messaging2'] = { implementation: 'example.messaging/kv', eager: false }
   two.runtimes['example.chat.room']!.pods.push('participant1', 'messaging2')
