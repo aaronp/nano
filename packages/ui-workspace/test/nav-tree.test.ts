@@ -201,3 +201,13 @@ test('Remove of a page with children asks, then removes its subtree, its routes,
   expect(JSON.stringify(app.deployment())).toBe(deployed)
   expect(document.activeElement).toBe(row('kid').querySelector('[data-name]'))
 })
+
+test("Main's row offers + for a new top-level page (it has no Add child)", () => {
+  const main = row('workspace')
+  expect(main.querySelector('[data-add-child]')).toBeNull()
+  const before = d().roots.length
+  main.querySelector<HTMLElement>('[data-new-workspace]')!.click()
+  expect(d().roots.length).toBe(before + 1)
+  expect(kids('workspace')).toEqual(['kid'])
+  document.querySelector<HTMLInputElement>('input[data-rename]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+})

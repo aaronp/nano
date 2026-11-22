@@ -23,7 +23,12 @@ a[slot='nav'][data-sub] svg { width: 16px; height: 16px; }
 /* Edit mode: a saved row's handle, and the name and icon to click. */
 .nav-row [data-handle] { display: none; border: 0; background: none; color: var(--muted); cursor: grab; }
 app-shell[data-editing] .nav-row [data-handle] { display: block; }
+app-shell[data-editing] .nav-row { gap: 4px; }   /* the buttons sit close, so the name keeps room */
+app-shell[data-editing] .nav-row > a { gap: 8px; margin-inline-start: 4px; }
+app-shell[data-editing] .nav-row [data-handle] { width: 14px; padding: 0; }
+app-shell[data-editing] .nav-row [data-toggle][hidden] { display: none; }
 .nav-row [data-glyph] { display: flex; flex: none; }
+.nav-row [data-name] { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 app-shell[data-editing] .nav-row > a :is([data-name], [data-glyph]) { cursor: pointer; border-radius: 4px; outline: 1px dashed var(--line); outline-offset: 2px; }
 app-shell[data-editing] .nav-row > a :is([data-name], [data-glyph]):focus-visible { outline: 2px solid var(--focus); }
 .nav-row input[data-rename] { flex: 1; min-width: 0; font: inherit; padding: 2px 6px; border: var(--card-border); border-radius: 6px; background: var(--surface-2); color: var(--fg); }
@@ -40,7 +45,9 @@ app-shell[data-editing] .nav-row > a :is([data-name], [data-glyph]):focus-visibl
 .nav-row .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .nav-row [data-toggle] { width: 18px; border: 0; background: none; color: var(--muted); }
 .nav-row [data-toggle][hidden] { display: block; visibility: hidden; }
-app-shell:not([data-editing]) .nav-row :is([data-add-child], [data-remove]) { display: none; }
+app-shell:not([data-editing]) .nav-row :is([data-add-child], [data-new-workspace], [data-remove]) { display: none; }
+/* While a row's name is edited, its input takes the row: the row's buttons and icon step aside. */
+.nav-row:has(input[data-rename]) :is(button, [data-glyph]) { display: none; }
 /* The drawer as an icon rail: only the row's link icon shows. */
 app-shell[collapsed]:not([narrow]) .nav-row button { display: none; }
 app-shell[collapsed]:not([narrow]) .nav-row { padding-inline-start: 14px; }

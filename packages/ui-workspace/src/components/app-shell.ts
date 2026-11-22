@@ -97,7 +97,7 @@ export class AppShell extends LitElement {
     // the app bar's page: the nav link (top-level, or in a nav row) for the route; the rail's tooltips are the labels
     let page: AppShell['page'] = null;
     for (const a of this.querySelectorAll<HTMLAnchorElement>(':scope > a[slot="nav"], :scope > [slot="nav"] a[href]')) {
-      const label = ((a.querySelector('[data-name]') ?? a).textContent ?? '').trim();   // a nav row's name, not its hidden level
+      const label = (a.querySelector('[data-name]')?.textContent ?? (a.title || a.textContent) ?? '').trim();   // a nav row's name, not its hidden level (its title while the name is an input)
       if (label && !a.title) a.title = label;
       if (!page && isCurrent(a.getAttribute('href'), this.route))
         page = { href: a.getAttribute('href')!, label, icon: a.querySelector('svg')?.cloneNode(true) ?? null };

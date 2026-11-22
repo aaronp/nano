@@ -1,6 +1,6 @@
 /**
  * The nav's rows as the Outline's tree (ADR-0040). A page's row (`fill`) holds its drag handle (not Main's), its toggle,
- * its link (icon and name) and, shown in edit mode, Add child and Remove (not Main's). `navTree` gives each row its
+ * its link (icon and name) and, shown in edit mode, Add child and Remove (Main's row: + a new top-level page, no Remove). `navTree` gives each row its
  * level (`data-level`, 1 for a root; app.css indents by `--level`; screen readers hear it, ", level N", hidden in the link) and keeps which parents are collapsed: local UI
  * state, never in the document. `show` hides the rows under a collapsed parent; `reveal(id)` opens page `id`'s
  * parents, as a route change does for the current page's.
@@ -31,7 +31,7 @@ export const fill = (doc: Document, row: HTMLElement, p: Row) => {
   handle.draggable = true;
   row.dataset.saved = p.id;
   row.replaceChildren(...(main ? [] : [handle]), button(doc, 'toggle', `Pages under ${p.title}`, '▾'), a,
-    button(doc, 'addChild', `Add a page under ${p.title}`, '+'), ...(main ? [] : [button(doc, 'remove', `Remove ${p.title}`, '✕')]));
+    main ? button(doc, 'newWorkspace', 'New workspace', '+') : button(doc, 'addChild', `Add a page under ${p.title}`, '+'), ...(main ? [] : [button(doc, 'remove', `Remove ${p.title}`, '✕')]));
 };
 
 export function navTree(doc: Document, outline: Host['outline']) {
