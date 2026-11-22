@@ -55,7 +55,9 @@ if (host && outline) {
     if (!r.ok) return void toast(r.fail.reason, { variant: 'bad' });
     const [go, stay] = [d.runtimes[runtime]!.pods.filter(x => !r.value.pods[x]), d.runtimes[runtime]!.pods.filter(x => r.value.pods[x])];
     const said = `Delete runtime ${runtime}?${go.length ? ` Its pods ${go.join(', ')} go with it.` : ''}${stay.length ? ` ${stay.join(', ')} stay: placed elsewhere.` : ''}`;
-    if (await askConfirm(document, said, 'Delete')) { const n = await h.apply(r.value); if (!n.ok) toast(n.fail.reason, { variant: 'bad' }); }
+    if (!await askConfirm(document, said, 'Delete')) return;
+    const now = removeFrom(h.data(), { runtimes: [runtime] }), n = now.ok ? await h.apply(now.value) : now;   // from the deployment as it is now: a change made while the dialog was open stays
+    if (!n.ok) toast(n.fail.reason, { variant: 'bad' });
   });
   defineSettings();
   for (const el of document.querySelectorAll<SettingsView>('nano-settings')) el.host = host;

@@ -58,7 +58,7 @@ describe('the explorer', () => {
     test('kind chips and namespace chips narrow the tree', async () => {
       const el = await mount(await open(slice)); await settle(el)
       await set(el, { kinds: new Set(['pod']) })
-      expect(ids(el).some(i => i!.startsWith('i:') || i!.startsWith('m:'))).toBe(false)
+      expect(ids(el).some(i => /(^|\|)[im]:/.test(i!))).toBe(false)
       expect(ids(el)).toContain('r:main')
       await set(el, { namespaces: new Set(['nope']) })   // unknown namespace: ignored
       expect(ids(el)).toContain('r:main')

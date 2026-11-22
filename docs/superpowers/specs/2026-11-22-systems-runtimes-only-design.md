@@ -16,7 +16,7 @@ rejected, the explorer is shared by hosts and does not know which pods are a hos
 - **The workspace** handles `nano-delete`: `removeFrom(h.data(), { runtimes: [r] })` (`host-deploy.ts`); refused
   (main: it places the host's own pods) → its reason as a toast, no modal. Else `askConfirm` (`name-dialog.ts`):
   "Delete runtime raft? Its pods cluster, raft-messaging, … go with it." (and "… stay: placed elsewhere" for pods
-  another runtime places), Cancel focused; Delete → `h.apply(next)`; a failure a toast. The selection clears.
+  another runtime places), Cancel focused; Delete → `removeFrom` again on the deployment as it is then, applied; a failure a toast. The explorer's details then say "<runtime> is no longer deployed." (as built: the selection is kept, not cleared).
 - Pages' slots for removed pods stay (they show "not found" with Remove, as today); the module stays loaded.
 
 Constraints: files ≤150 lines; new exports named in design.md and approved by the user.
