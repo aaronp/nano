@@ -159,28 +159,29 @@ export class WorkspaceDock extends HTMLElement {
     this.dispatchEvent(new CustomEvent('dock:focus', { bubbles: true, composed: true, detail: instance ? { system: this.system, instance, widget: this.id } : null }));
   }
   /** Shows a pod: the panel already showing it, made active and focused; else a new `pod` panel, on its page's slot for it in `runtime` (none: it says so). */
-  openPod(pod: string, runtime?: string) {
+  openPod(pod: string, runtime?: string) { const p = this.placed('pod', pod, runtime, `${pod} is not placed in ${runtime ?? 'any runtime'}: nothing was opened.`); if (p) this.addWidget(p.widget, p.name, p.slot); }
+  /** Pod `pod` of `runtime` as a `widget` panel on its page's slot for it; null when a panel here shows it (made active and focused) or none is placed there (`gone` said). */
+  private placed(widget: string, pod: string, runtime: string | undefined, gone: string): PanelState | null {
     const found = panelOf(this.layout?.rootItem, pod, this.defs), slot = !found && runtime && this.host && this.pods?.add(this.host.data(), runtime, pod);
-    if (found) (found.parentItem as Stack).setActiveComponentItem(found, true); else if (slot) this.addWidget('pod', pod, slot); else this.say(`${pod} is not placed in ${runtime ?? 'any runtime'}: nothing was opened.`);
-  }
+    if (found) { (found.parentItem as Stack).setActiveComponentItem(found, true); this.focusOn(found.container.element); } else if (!slot) this.say(gone); return slot ? { widget, name: pod, slot } : null; }
   /** A `+` in `parent` that opens the picker and splits `target()`'s panel (else as addWidget does) for the choice, focused (`put`; `offer`: the empty dock's inline picker, shown again once a pick fills it). */
   private plus(parent: HTMLElement, className: string, target?: () => ComponentItem | undefined) {
     const b = parent.insertBefore(Object.assign(this.ownerDocument.createElement('button'), { type: 'button', className, textContent: '+', title: 'Add a panel' }), parent.firstChild);
     b.setAttribute('aria-label', 'Add a panel');
     b.addEventListener('click', () => void this.choose((e) => pick(b, e)).then((p) => this.put(p, target?.())));
   }
-  private put(p: PanelState | null, target?: ComponentItem) { const el = p && this.split(p, target).container.element; if (el) { el.tabIndex = -1; el.focus(); } }
+  private put(p: PanelState | null, target?: ComponentItem) { if (p) this.focusOn(this.split(p, target).container.element); }
+  private focusOn(el: HTMLElement) { el.tabIndex = -1; el.focus(); }
   private offer() { void this.choose((e) => pickerGrid(this.empty!, e)).then((p) => { this.offer(); this.put(p); }); }
-  /** The picker's choice (`show`: a popover, or a grid inline); an implementation's (a new pod) is first deployed lazy in the chosen runtime (`host.deploy`), then given its slot. */
+  /** The picker's choice (`show`: a popover, or a grid inline); an implementation's new pod is first deployed lazy in the chosen runtime (`host.deploy`), then given its slot; an existing pod, its slot (`placed`). */
   private async choose(show: (e: Parameters<typeof pick>[1]) => ReturnType<typeof pick>, hidden?: PanelState[]): Promise<PanelState | null> {
     const dock = this, c = await show({ get templates() { return [...dock.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')]; }, hidden, get runtimes() { return Object.keys(dock.host?.data().runtimes ?? { main: 1 }); }, get pods() { return dock.host && podsIn(dock.host); } }), p = c?.state, impl = p && !p.name && this.host && this.defs.get(p.widget)?.template.dataset['implementation'], gone = impl && c.runtime !== undefined && !(c.runtime in this.host!.data().runtimes), made = impl && !gone && await this.host!.deploy(impl, c.runtime ?? 'main'), name = made && made.ok && made.value.name, slot = name && this.pods?.add(this.host!.data(), c.runtime ?? 'main', name);
-    return p?.name && c?.runtime !== undefined ? (this.openPod(p.name, c.runtime), null) : !impl ? p ?? null : name ? { widget: p!.widget, name, ...(slot && { slot }) } : (gone && this.say(`Runtime ${c.runtime} is no longer there: nothing was added.`), null);   // a pill that went stale
+    return p?.name && c?.runtime !== undefined ? this.placed(p.widget, p.name, c.runtime, `Runtime ${c.runtime} is no longer there: nothing was added.`) : !impl ? p ?? null : name ? { widget: p!.widget, name, ...(slot && { slot }) } : (gone && this.say(`Runtime ${c.runtime} is no longer there: nothing was added.`), null);   // a pill that went stale
   }
   private split(p: PanelState, target?: ComponentItem) { return split(this.requireLayout(), p, p.name ?? this.defs.get(p.widget)?.title ?? p.widget, target); }
   /** Whether a stored template's panels are all in this palette; whether `p` is an implementation's panel whose pod is being made. */
   private known(t: TemplateState) { return [...t.order, ...t.parked].every((s) => !s || this.defs.has(s.widget)); }
   private unnamed = (p: PanelState) => !!this.defs.get(p.widget)?.template.dataset['implementation'] && !p.name;
-
   /** What mountPanel needs from the dock. */
   private get mounting() { return { doc: this.ownerDocument, defs: this.defs, bus: this.requireBus(), host: this.host, registry: this.registry, pods: this.pods, send: (t: string, p: unknown) => this.send(t, p) }; }
   /** golden-layout's config: the kept one while a template shows. */
@@ -192,7 +193,7 @@ export class WorkspaceDock extends HTMLElement {
     this.tpl = showTemplate(this.querySelector<HTMLElement>(':scope > .dock-area')!, s, { title: (p) => (p.widget === 'pod' ? p.name : this.defs.get(p.widget)?.title) ?? p.widget,
       mount: (el, st, item) => { mountPanel(item.container, st, this.mounting); for (const type of ['pointerdown', 'focusin']) el.addEventListener(type, () => this.reportFocus(item)); },
       pick: (host, hidden) => this.choose((e) => pickerGrid(host, e), hidden), bringBack: (to) => this.setTemplate(to),
-      unnamed: this.unnamed, say: (m) => this.say(m), add: (p) => this.addWidget(p.widget, p.name, p.slot),
+      unnamed: this.unnamed, say: (m) => this.say(m), add: (p) => this.addWidget(p.widget, p.name, p.slot), pod: (p) => p.widget === 'pod' || this.defs.get(p.widget)?.template.dataset['implementation'] ? p.name : undefined,
       remember: (st) => { templateState(this.storage, this.storageKey).set(st); if (this.tpl) this.changed(); } });
     this.changed();
   }
@@ -219,7 +220,6 @@ export class WorkspaceDock extends HTMLElement {
   /** Back to the restore point (its template too). */
   restore() { const key = `${this.storageKey}.saved`, saved = this.readSaved(key), t = templateState(this.storage, key).get(); if (!saved) return this.say('No saved layout yet.');
     this.load(saved); this.say('Layout restored.'); if (t && this.known(t)) this.show({ ...t, dock: this.kept }); else this.changed(); }
-
   reset() { this.load(initial(this, this.defs)); this.say('Back to the starting layout.'); }
 }
 

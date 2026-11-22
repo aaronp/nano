@@ -270,22 +270,99 @@ test('a pick of an existing pod gives it its slot and deploys nothing', async ()
   await until(() => running(h, 'a'))
 })
 
-test('picking a pod already on the page focuses its panel', async () => {
+const said = (bus: ReturnType<typeof mount>['bus']) => { const m: string[] = []; bus.subscribe('dock:status', e => m.push((e.payload as { message: string }).message)); return m }
+const header = (panel: HTMLElement) => panel.closest('.lm_stack')!.querySelector<HTMLElement>('.dock-split')!
+const rect = (w: number, h: number) => ({ width: w, height: h, x: 0, y: 0, top: 0, left: 0, right: w, bottom: h, toJSON() {} }) as DOMRect
+const sized = (size: (el: Element) => DOMRect) => { const orig = Element.prototype.getBoundingClientRect; Element.prototype.getBoundingClientRect = function (this: Element) { return size(this) }; return () => { Element.prototype.getBoundingClientRect = orig } }
+
+test('picking a pod already on the page (through a panel\'s +) focuses its panel and adds none', async () => {
   const h = await host()
   await place(h, 'main', ['a'])
-  const { go, written, input, panels } = mount(h, {})
+  const { go, written, input, panels } = mount(h, { workspace: page('Main', { notes: { kind: 'tool', tool: 'notes' }, a: pod('a') }) })
   go('workspace')
+  await until(() => panels('workspace').length === 2)
+  const notes = panels('workspace').find(p => p.textContent === 'notes')!, a = panels('workspace').find(p => p !== notes)!
   pick.choice = { widget: input, name: 'a' }; pick.runtime = 'main'
-  for (let i = 0; i < 2; i++) { document.querySelector<HTMLElement>('.dock-empty')!.click(); await tick(50) }
-  await until(() => panels('workspace').length === 1)
-  expect(Object.keys(written('workspace').slots)).toEqual(['a'])
-  expect(panels('workspace').length).toBe(1)
+  header(notes).click(); await tick(50)
+  expect(panels('workspace').length).toBe(2)
+  expect(Object.keys(written('workspace').slots).sort()).toEqual(['a', 'notes'])
+  expect(a.contains(document.activeElement)).toBe(true)
+})
+
+test('a panel header\'s + picking an existing pod splits that panel, the new one focused', async () => {
+  const h = await host()
+  await place(h, 'main', ['a', 'b'])
+  const { go, input, panels, written } = mount(h, { workspace: page('Main', { notes: { kind: 'tool', tool: 'notes' }, b: pod('b') }) })
+  const wide = sized(() => rect(800, 400))
+  go('workspace')
+  await until(() => panels('workspace').length === 2)
+  wide()
+  const notes = panels('workspace').find(p => p.textContent === 'notes')!, b = panels('workspace').find(p => p !== notes)!
+  notes.dispatchEvent(new Event('pointerdown', { bubbles: true }))   // focused: a plain add would split it
+  pick.choice = { widget: input, name: 'a' }; pick.runtime = 'main'
+  const tall = sized(() => rect(400, 800))
+  header(b).click(); await tick(50)
+  tall()
+  await until(() => panels('workspace').length === 3)
+  const added = panels('workspace').find(p => p !== notes && p !== b)!, column = added.closest('.lm_row > .lm_column')!
+  expect(column.contains(b)).toBe(true); expect(column.contains(notes)).toBe(false)
+  expect(added.contains(document.activeElement)).toBe(true)
+  expect(written('workspace').slots.a).toEqual({ kind: 'pod', pod: 'nano.ui/input@main/a' })
+})
+
+const spots = (d: Dock) => [...d.querySelectorAll<HTMLElement>('.tpl-pos')]
+
+test('in a template, an existing pod picked in an empty position that is not the first fills that position, focused', async () => {
+  const h = await host()
+  await place(h, 'main', ['a'])
+  const { go, input, dock, written } = mount(h, {})
+  go('workspace')
+  await tick()
+  dock('workspace').setTemplate('three-cols')
+  pick.choice = { widget: input, name: 'a' }; pick.runtime = 'main'
+  spots(dock('workspace'))[1]!.click()
+  await until(() => !!spots(dock('workspace'))[1]!.querySelector('.dock-panel'))
+  expect(dock('workspace').arrangement().template!.order.map(p => p?.name)).toEqual([undefined, 'a', undefined])
+  expect(spots(dock('workspace'))[0]!.querySelector('.dock-panel')).toBeNull()
+  expect(spots(dock('workspace'))[1]!.contains(document.activeElement)).toBe(true)
+  expect(written('workspace').slots).toEqual({ a: { kind: 'pod', pod: 'nano.ui/input@main/a' } })
+})
+
+test('in a template, picking a pod already shown focuses its panel, adds none, and the position still picks', async () => {
+  const h = await host()
+  await place(h, 'main', ['a'])
+  const { go, input, dock, bus } = mount(h, { workspace: page('Main', { a: pod('a') }) })
+  go('workspace')
+  await until(() => dock('workspace').querySelectorAll('.dock-panel').length === 1)
+  dock('workspace').setTemplate('two-cols')
+  const m = said(bus)
+  pick.choice = { widget: input, name: 'a' }; pick.runtime = 'main'
+  spots(dock('workspace'))[1]!.click(); await tick(50)
+  expect(dock('workspace').querySelectorAll('.dock-panel').length).toBe(1)
+  expect(spots(dock('workspace'))[0]!.contains(document.activeElement)).toBe(true)
+  expect(m).toContain('a is already shown.')
+  pick.choice = { widget: 'notes' }; pick.runtime = undefined
+  spots(dock('workspace'))[1]!.click()
+  await until(() => !!spots(dock('workspace'))[1]!.querySelector('.dock-panel'))
+})
+
+test('an existing pod picked in a runtime that has since gone places nothing, and says so', async () => {
+  const h = await host()
+  await place(h, 'main', ['a'])
+  const { go, input, bus, written, panels } = mount(h, {})
+  go('workspace')
+  const m = said(bus)
+  pick.choice = { widget: input, name: 'a' }; pick.runtime = 'gone'
+  document.querySelector<HTMLElement>('.dock-empty')!.click(); await tick(50)
+  expect(panels('workspace').length).toBe(0)
+  expect(written('workspace').slots).toEqual({})
+  expect(m).toContain('Runtime gone is no longer there: nothing was added.')
 })
 
 test('the dock lists an implementation\'s pods in a runtime, running or not', async () => {
   const h = await host()
   await place(h, 'main', ['a'])
-  const { go, input, panels } = mount(h, {})
+  const { go, input } = mount(h, {})
   go('workspace')
   pick.choice = { widget: input }
   document.querySelector<HTMLElement>('.dock-empty')!.click()
@@ -295,5 +372,4 @@ test('the dock lists an implementation\'s pods in a runtime, running or not', as
   await h.app.runtime('main').getOrCreate('a')
   expect(impls()).toEqual([{ name: 'a', running: true }])
   expect(impls('nowhere')).toEqual([])
-  void panels
 })

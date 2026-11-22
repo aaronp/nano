@@ -199,7 +199,7 @@ test('an open grid shows what arrives on catalog:changed: a new provider\'s tile
 })
 
 const podsOpen = () => {
-  document.body.innerHTML = '<div id="dock"><template data-widget="nano-ui-input" data-title="input" data-catalog data-implementation="nano.ui/input"></template><template data-widget="range" data-title="Range" data-catalog></template></div><div id="place"></div>'
+  document.body.innerHTML = '<div id="dock"><template data-widget="nano-ui-input" data-title="input" data-catalog data-implementation="nano.ui/input"></template><template data-widget="range" data-title="Range" data-catalog data-package="other"></template></div><div id="place"></div>'
   const host = document.getElementById('place')!
   const chosen = pickerGrid(host, { templates: [...document.querySelectorAll<HTMLTemplateElement>('#dock > template')], runtimes: ['main', 'edge'],
     pods: (i, r) => i === 'nano.ui/input' && r === 'main' ? [{ name: 'a', running: true }, { name: 'b', running: false }] : [] })
@@ -220,7 +220,7 @@ test('an implementation with pods in the runtime shows them under its tile, and 
   expect(await chosen).toEqual({ state: { widget: 'nano-ui-input', name: 'a' }, runtime: 'main' })
 })
 
-test('the runtime pill re-lists the pods; the filter matches pod names', () => {
+test('the runtime pill re-lists the pods; the filter matches pod names, a provider with none hidden', () => {
   const { host } = podsOpen()
   const key = (el: Element, k: string) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }))
   pills(host)[0]!.focus(); key(pills(host)[0]!, 'ArrowRight')
@@ -230,6 +230,7 @@ test('the runtime pill re-lists the pods; the filter matches pod names', () => {
   pills(host)[0]!.click()
   const f = host.querySelector('input')!; f.value = 'b'; f.dispatchEvent(new Event('input'))
   expect(texts(host, '[data-widget]')).toEqual(['b ○'])
+  expect((host.querySelector('[data-section="other"]') as HTMLElement).hidden).toBe(true)
 })
 
 test('the filter matches an implementation\'s own name: its whole pod group stays', () => {

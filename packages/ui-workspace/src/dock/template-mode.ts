@@ -4,7 +4,7 @@
  * the layout says how many, with Bring back (and ✕, which hides it until the count changes). An add from outside with
  * no room while a new pod is being made waits for it to be named.
  *
- *   const mode = showTemplate(area, state, { title, mount, pick, remember, bringBack, unnamed, say, add })
+ *   const mode = showTemplate(area, state, { title, mount, pick, remember, bringBack, unnamed, say, add, pod })
  *   mode.state; mode.add(panel); mode.backToDock(state, layout, panel => split(…)); mode.dispose(true)
  */
 import type { ComponentItem, ContentItem, GoldenLayout } from 'golden-layout/dist/esm/index.js';
@@ -24,6 +24,8 @@ type Needs = {
   say(message: string): void;
   /** Adds `p` as from outside (a deferred add, once the new pod is named). */
   add(p: PanelState): void;
+  /** The pod a panel shows, if it is a pod's (whatever its widget). */
+  pod(p: PanelState): string | undefined;
 };
 
 const same = (a: PanelState, b: PanelState) => a.widget === b.widget && a.name === b.name;
@@ -47,12 +49,15 @@ export function showTemplate(area: HTMLElement, s: TemplateState, n: Needs) {
     if (at >= 0) s = { ...s, parked: s.parked.filter((_, j) => j !== at) };
     view.set(i, p); changed();
   };
+  /** The position (other than `skip`) showing `p`, or its pod under any widget; -1 if none. */
+  const shownAt = (p: PanelState, skip = -1) => !p.name ? -1 : view.states().findIndex((q, j) => j !== skip && !!q && (same(q, p) || (!!n.pod(p) && n.pod(q) === n.pod(p))));
   const view = renderTemplate(area, s.template, s.order, n.title, n.mount, {
     swap: () => { s = state(); n.remember(s); },
     add: (i, host) => { const offered = s.parked; void n.pick(host, s.parked).then((p) => {
       if (!p) return;
-      // a Hidden tile offered here that another position has since taken: nothing is filled, the place offers the grid again
-      if (p.name && offered.some((q) => same(q, p)) && !s.parked.some((q) => same(q, p))) { view.set(i, null); return n.say(`${n.title(p)} is already shown.`); }
+      // shown in another position (a Hidden tile taken since, or a pod picked): that panel focused, the place offers the grid again
+      const at = shownAt(p, i);
+      if (at >= 0 || (p.name && offered.some((q) => same(q, p)) && !s.parked.some((q) => same(q, p)))) { view.set(i, null); view.panel(at)?.focus(); return n.say(`${n.pod(p) ?? n.title(p)} is already shown.`); }
       fill(i, p); view.panel(i)?.focus();
     }); },
     remove: (i) => { view.set(i, null); changed(); },
@@ -71,8 +76,7 @@ export function showTemplate(area: HTMLElement, s: TemplateState, n: Needs) {
     /** A panel added from outside: the position showing it, else the first empty one filled, focused; with neither, it
      * waits while a new pod is being made (and says so); else false. */
     add(p: PanelState): boolean {
-      const order = view.states(), shown = p.name ? order.findIndex((q) => q && same(q, p)) : -1;
-      const i = shown >= 0 ? shown : order.indexOf(null);
+      const shown = shownAt(p), i = shown >= 0 ? shown : view.states().indexOf(null);
       if (i < 0 && !making()) return false;
       if (i < 0) { waiting.push(p); n.say(`Adding ${n.title(p)} once the new pod is made.`); return true; }
       if (shown < 0) fill(i, p);
