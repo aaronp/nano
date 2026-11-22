@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'bun:test'
 import { Application, AppDeployment, Registry, Implementation, Pod, provide } from '@pritzlaff/nano-core'
 import uiProvider, { debounce, log } from '../src/index.ts'
-import { ns, must, Store, slice, open, El, mount, tree, settle, text } from './explorer-setup.ts'
+import { api, ns, must, Store, slice, open, El, mount, tree, settle, text } from './explorer-setup.ts'
 
 describe('the explorer', () => {
   describe('the shared filter', () => {
@@ -62,8 +62,9 @@ describe('the explorer', () => {
       expect(ids(el)).toContain('r:main')
       await set(el, { namespaces: new Set(['nope']) })   // unknown namespace: ignored
       expect(ids(el)).toContain('r:main')
-      await set(el, { namespaces: new Set(['acme']) })
-      expect(ids(el)).not.toContain('r:main')
+      const both = await mount(await open({ ...slice, pods: { ...slice.pods, api: Pod.lazy(api) }, runtimes: { ...slice.runtimes, other: { pods: ['api'], subscriptions: [] } } })); await settle(both)
+      await set(both, { namespaces: new Set(['acme']) })
+      expect(ids(both)).toContain('p:other:api'); expect(ids(both)).not.toContain('p:main:in')
     })
     test("the selection's details stay when a filter hides it", async () => {
       const el = await mount(await open(slice)); await settle(el); await reveal(el)
