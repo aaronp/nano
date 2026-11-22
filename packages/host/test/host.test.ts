@@ -139,6 +139,20 @@ test('host pods: placed first in main, left out of document() and storage; a doc
   expect(await Host.boot(clash, { base, providers: [own], hostPods: { ui: Pod.lazy(ui) } })).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
 })
 
+test("a pod's call into a host pod is saved and wired again at boot; a host without that pod drops it", async () => {
+  const client = Implementation.define('own/client', { provides: [], dependencies: { ui: Ui }, make: async () => [] })
+  const mine = Provider.define('own', [ui, client]), hostPods = { ui: Pod.lazy(ui) }
+  const s = memory(), h = await boot(s, { providers: [mine], hostPods })
+  const d = h.app.deployment()
+  expect((await h.app.apply({ ...d, pods: { ...d.pods, c1: Pod.lazy(client) }, runtimes: { ...d.runtimes, r: { pods: ['c1'], subscriptions: [] },
+    main: { ...d.runtimes['main']!, subscriptions: [{ kind: 'call', from: 'c1', to: 'ui' }] } } })).ok).toBe(true)
+  expect(JSON.parse(s.m.get(KEY)!).app.runtimes.main).toEqual({ pods: [], subscriptions: [{ kind: 'call', from: 'c1', to: 'ui' }] })
+  const again = await boot(s, { providers: [mine], hostPods })
+  expect(again.app.deployment().runtimes['main']!.subscriptions).toEqual([{ kind: 'call', from: 'c1', to: 'ui' }])
+  const other = await boot(memory({ [KEY]: JSON.parse(s.m.get(KEY)!) }), { providers: [mine] })   // another host: no pod ui
+  expect(other.app.deployment().runtimes['main']).toEqual({ pods: [], subscriptions: [] })
+})
+
 test('saving: on applied and on setHost; a view override for a pod that is gone is dropped', async () => {
   const s = memory({ [KEY]: { app: system, outline: tree, host: { views: { t1: 'acme-big' }, layout: { react: { columns: 2 } } } } }), h = await boot(s)
   h.setHost({ layout: { react: { columns: 3 } } })

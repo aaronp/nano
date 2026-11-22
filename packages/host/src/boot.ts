@@ -75,7 +75,10 @@ async function boot(storage: Storage, opts: Opts): Promise<NanoResult<Host>> {
   const own = Object.keys(opts.hostPods ?? {}), mine = (p: string) => own.includes(p)
   const taken = own.find(p => p in system.pods)
   if (taken) return failure('invalid-input', `the stored document has a pod ${taken}, the host's own`)
-  const made = !system.runtimes[MAIN], main = system.runtimes[MAIN] ?? { pods: [], subscriptions: [] }
+  const made = !system.runtimes[MAIN], kept = system.runtimes[MAIN] ?? { pods: [], subscriptions: [] }
+  // a call into another host's own pod (named nowhere in the document, not placed here) goes; one into this host's stays
+  const gone = (p: string) => !(p in system.pods) && !mine(p)
+  const main = { ...kept, subscriptions: kept.subscriptions.filter(s => !gone(s.from) && !gone(s.to)) }
   const placed = { ...system, pods: { ...opts.hostPods, ...system.pods }, runtimes: { ...system.runtimes, [MAIN]: { ...main, pods: [...own, ...main.pods] } } }
   const runtimes = AppDeployment.assemble(placed, registry)
   if (!runtimes.ok) return runtimes
@@ -83,12 +86,12 @@ async function boot(storage: Storage, opts: Opts): Promise<NanoResult<Host>> {
   if (!created.ok) return created
   const app = created.value, outline = live(app, registry, doc.outline)
 
-  /** `d` without the host pods, and without `main` when boot made it and nothing else is in it. */
+  /** `d` without the host pods and their own edges (a pod's calls into them kept), and without `main` when boot made it and nothing else is in it. */
   const unplaced = (d: AppDeployment): AppDeployment => {
     const keep = <T>(o: Record<string, T> = {}) => Object.fromEntries(Object.entries(o).filter(([p]) => !mine(p)))
     const runtimes = { ...d.runtimes }, m = runtimes[MAIN]
     if (m) {
-      const pods = m.pods.filter(p => !mine(p)), subscriptions = m.subscriptions.filter(s => !mine(s.from) && !mine(s.to))
+      const pods = m.pods.filter(p => !mine(p)), subscriptions = m.subscriptions.filter(s => !mine(s.from))   // a pod's call into a host pod is its wiring: kept
       if (made && !pods.length && !subscriptions.length) delete runtimes[MAIN]
       else runtimes[MAIN] = { ...m, pods, subscriptions }
     }
