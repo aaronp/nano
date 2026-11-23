@@ -11,9 +11,9 @@
     "test-nano": "nano-app nano.json"
   },
   "dependencies": {
-    "@pritzlaff/nano-core": "^0.4.0",
-    "@pritzlaff/nano-elements": "^0.4.0",
-    "@pritzlaff/nano-ui": "^0.4.0",
+    "@pritzlaff/nano-core": "^0.5.0",
+    "@pritzlaff/nano-elements": "^0.5.0",
+    "@pritzlaff/nano-ui": "^0.5.0",
     "lit": "^3.0.0",
     "typebox": "^1.4.0"
   },

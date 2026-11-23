@@ -3,9 +3,10 @@ import { join } from 'node:path';
 
 /**
  * Run `build` now, then again after each change under `<project>/src` (recursive, 200 ms of quiet; one build at a time, one more if a
- * change landed meanwhile), telling `rebuilt` or `build-failed <first stderr line>`. Without a `src/` it only builds once.
+ * change landed meanwhile), telling `rebuilt` or `build-failed <first stderr line>` (the latter also logged). Without a `src/` it only builds once.
  */
-export function watch(project: string, build: string[], tell: (event: string) => void): () => void {
+export function watch(project: string, build: string[], notify: (event: string) => void): () => void {
+  const tell = (e: string) => { if (e.startsWith('build-failed')) console.error(`nano-app: ${e}`); notify(e) }
   let timer: ReturnType<typeof setTimeout> | undefined, running = false, again = false;
   const run = async () => {
     if (running) { again = true; return; }
