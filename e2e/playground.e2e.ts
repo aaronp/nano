@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
+// Needs the docs built into packages/ui-workspace/public/docs first (`make docs-build`): the Playwright web server doesn't build them.
+
 // Expected lines copied exactly from examples/tutorial/01-plain.test.ts and 05-runtime.test.ts (those are bun:test files).
 const LINES: Record<string, string[]> = {
   '01-plain': ['2 + 3 = 5', '1 / 0: cannot divide by zero'],
@@ -35,16 +37,17 @@ test('an edit changes the output; Reset restores the original', async ({ page })
   await expect(out.locator('div')).toHaveText(LINES['01-plain']!)
 })
 
-const failing: [string, string, string][] = [
-  ['a throw', "export async function main() { throw new Error('boom') }", 'boom'],
-  ['a frame that cannot read the page', 'export async function main(log) { log(String(!!window.parent.document)) }', ''],
+const failing: [string, string, RegExp][] = [
+  ['a throw', "export async function main() { throw new Error('boom') }", /^boom$/],
+  ['a frame that cannot read the page', 'export async function main(log) { log(String(!!window.parent.document)) }', /Blocked a frame with origin "null" from accessing a cross-origin frame/],
 ]
 for (const [name, code, text] of failing) test(`${name} shows an error line`, async ({ page }) => {
   const { editor, run, out } = await open(page, '01-plain')
   await replaceCode(page, editor, code)
   await run.click()
-  await expect(out.locator('div.err')).toHaveCount(1)
-  await expect(out.locator('div.err')).toContainText(text)
+  await expect(out.locator('div')).toHaveCount(1)
+  await expect(out.locator('div.err')).toHaveText(text)
+  await expect(out).not.toContainText('true')
 })
 
 test('a run that never ends is stopped after 5 seconds', async ({ page }) => {
