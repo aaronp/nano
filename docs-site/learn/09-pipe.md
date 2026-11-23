@@ -25,3 +25,5 @@ runtime main: calculator->history (acme.calc.Calculator/calculated to acme.calc.
 ```
 
 So define the data once (`Calculated`) and use that one value on both sides.
+
+Next, [NanoContext](/learn/10-context): what `make` is given.

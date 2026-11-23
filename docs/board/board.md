@@ -303,6 +303,20 @@ calculator does that for division by zero; step 6 of the docs will show it. Wort
 public, or whether a method may return a `NanoResult`. A question, not a proposal.
 ```
 
+### The builder asks for a body for each event
+- id: t-24
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T20:00:00.000Z
+
+```md
+Found writing steps 10–15 of the docs. A builder's `make` must return a method for every op, events too
+(`Lift` is `Interface.Type<I>`), so a calculator that publishes `calculated` through `ctx.publish` still writes
+`async *calculated() {}` with a comment saying it yields nothing. `Implementation.define`'s plain object makes event
+methods optional (`Plain` in implementation.ts). Steps 7, 9, 10, 14 and 15 carry the stub. Worth deciding whether the
+builder should match. A question, not a proposal.
+```
+
 ## Doing
 
 ## Done
