@@ -44,7 +44,8 @@ export class NanoWiring extends LitElement {
     this.watching = t
     this.off = t.app.listen(e => {
       if (e.type === 'applied') this.load(t)
-      else if (e.type === 'sent') this.light(e.kind === 'call' ? `${e.runtime}|${e.from}|${e.to}|call|` : `${e.runtime}|${e.from}|${e.to}|${e.port}|`)
+      else if (e.type === 'sent' && e.kind !== 'start') this.light(   // a start is no edge
+        e.kind === 'call' ? `${e.runtime}|${e.from}|${e.to}|call|` : `${e.runtime}|${e.from}|${e.to}|${e.port}|`)
     })
     this.load(t)
   }

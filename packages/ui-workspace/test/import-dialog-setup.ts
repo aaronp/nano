@@ -19,7 +19,7 @@ export function open(url: string, known = (_: string) => false, file = template)
   const calls: { url: string; chosen?: Chosen }[] = []
   const d = openImportDialog(document, {
     fetchJson: async () => file(), known,
-    importUrl: async (u: string, chosen?: Chosen) => { calls.push({ url: u, ...(chosen && { chosen }) }); return { ok: true } },
+    importUrl: async (u: string, chosen?: Chosen) => { calls.push({ url: u, ...(chosen && { chosen }) }); return { ok: true as const, value: undefined } },
   })
   const q = <T extends Element>(s: string) => d.querySelector(s) as T
   const fetched = async () => {

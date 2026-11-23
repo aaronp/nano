@@ -14,5 +14,11 @@ export const resolveRoute = (hash: string, paths: readonly string[]): string => 
   throw new Error(`no <app-route> matches ${want} and there is no path="*" fallback`);
 };
 
-/** Is this nav link for the route being shown? (The shell never marks links that add something, data-dock-add.) */
+/** An old bookmark's hash made a page's: `#/<id>` (`#/workspace` too) is `#/p/<id>` when `/p/<id>` is declared and `/<id>` is not (an app screen keeps its route). */
+export const rewriteHash = (hash: string, paths: readonly string[]): string => {
+  const want = hash.replace(/^#/, '');
+  return want && !paths.includes(want) && paths.includes(`/p${want}`) ? `#/p${want}` : hash;
+};
+
+/** Is this nav link for the route being shown? */
 export const isCurrent = (href: string | null, route: string): boolean => href === `#${route}`;

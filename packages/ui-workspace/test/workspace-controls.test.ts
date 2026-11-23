@@ -15,8 +15,10 @@ const qa = (el: El, s: string) => [...el.shadowRoot!.querySelectorAll(s)] as HTM
 const stubDock = () => {
   const calls: unknown[][] = []
   const d = document.createElement('div') as any
-  d.id = 'd1'; d.windowStyle = 'tabs'
-  for (const m of ['connections', 'saveAs', 'save', 'restore', 'reset']) d[m] = () => calls.push([m])
+  d.id = 'd1'; d.windowStyle = 'tabs'; d.template = 'dock'; d.panels = 2
+  d.arrangement = () => ({ root: { type: 'row', content: Array.from({ length: d.panels }, (_, i) => ({ type: 'component', componentState: { widget: `w${i}` } })) } })
+  d.setTemplate = (id: string) => { calls.push(['setTemplate', id]); d.template = id; return true }
+  for (const m of ['connections', 'saveAs', 'save', 'restore', 'reset', 'closeAll']) d[m] = () => calls.push([m])
   d.setWindowStyle = (s: string) => { calls.push(['setWindowStyle', s]); d.windowStyle = s }
   document.body.append(d)
   return calls
@@ -33,12 +35,12 @@ afterEach(() => { document.body.innerHTML = '' })
 
 // BACKLOG(5): 'the controls drive their dock' tested the nano-runes component (retired/test/workspace-controls.test.ts).
 
-test('the element shows View Tabs | Clear and six labelled icon buttons', async () => {
+test('the element shows View Tabs | Clear and seven labelled icon buttons', async () => {
   const { el } = await mount()
   const view = qa(el, '.view button')
   expect(view.map(b => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([['Tabs', 'true'], ['Clear', 'false']])
-  const icons = qa(el, 'button[aria-label]')
-  expect(icons.map(b => b.getAttribute('aria-label'))).toEqual(['Connections', 'Desk', 'Save as workspace…', 'Save layout', 'Restore', 'Reset'])
+  const icons = qa(el, 'button[aria-label]:not([role])')
+  expect(icons.map(b => b.getAttribute('aria-label'))).toEqual(['Connections', 'Desk', 'Save as workspace…', 'Save layout', 'Restore', 'Reset', 'Close all'])
   for (const b of icons) { expect(b.getAttribute('title')).toBe(b.getAttribute('aria-label')); expect(b.querySelector('svg')).not.toBeNull() }
 })
 
@@ -53,7 +55,7 @@ test('clicking Clear calls setStyle', async () => {
 
 test('Desk opens the Desk page, beside Connections', async () => {
   const { el, calls } = await mount()
-  location.hash = '#/workspace'
+  location.hash = '#/p/workspace'
   q(el, 'button[aria-label="Desk"]').click(); await settle(el)
   expect(location.hash).toBe('#/desk')
   expect(calls).toEqual([])
@@ -69,14 +71,54 @@ test('narrow: the buttons fold into a ⋯ menu', async () => {
   const { el, calls } = await mount(true)
   expect(qa(el, '.view button')).toHaveLength(2)
   const more = q(el, 'button[aria-label="More workspace actions"]')
-  expect(qa(el, 'button')).toHaveLength(2 + 1 + 6)   // the six sit hidden in the panel
+  expect(qa(el, 'button:not([role])')).toHaveLength(2 + 1 + 1 + 7)   // View, Layout, ⋯, and the seven hidden in the panel
   expect(q(el, '.panel').hasAttribute('hidden')).toBe(true)
   more.click(); await settle(el)
   expect(more.getAttribute('aria-expanded')).toBe('true')
-  expect(qa(el, '.panel button').map(b => b.textContent!.trim())).toEqual(['Connections', 'Desk', 'Save as workspace…', 'Save layout', 'Restore', 'Reset'])
-  qa(el, '.panel button')[4]!.click(); await settle(el)
+  expect(qa(el, '.panel button:not([role])').map(b => b.textContent!.trim())).toEqual(['Connections', 'Desk', 'Save as workspace…', 'Save layout', 'Restore', 'Reset', 'Close all'])
+  qa(el, '.panel button:not([role])')[4]!.click(); await settle(el)
   expect(calls).toEqual([['restore']]); expect(more.getAttribute('aria-expanded')).toBe('false')
   more.click(); await settle(el)
   el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await settle(el)
   expect(more.getAttribute('aria-expanded')).toBe('false')
+})
+
+test('Layout menu: eight radios, all enabled, current checked, click switches and closes', async () => {
+  const { el, calls } = await mount()
+  const menu = q(el, 'button[aria-controls="layouts"]')
+  expect(menu.textContent).toBe('Layout'); expect(q(el, '#layouts').hidden).toBe(true)
+  menu.click(); await settle(el)
+  expect(menu.getAttribute('aria-expanded')).toBe('true'); expect(q(el, '#layouts').hidden).toBe(false)
+  const rs = qa(el, '[role="radiogroup"][aria-label="Layout"] [role="radio"]')
+  expect(rs).toHaveLength(8)
+  expect(rs.filter(r => r.getAttribute('aria-checked') === 'true').map(r => r.getAttribute('aria-label'))).toEqual(['Dynamic'])
+  expect(rs.filter(r => (r as HTMLButtonElement).disabled)).toEqual([])
+  expect(rs.map(r => r.title)).toEqual(rs.map(r => r.getAttribute('aria-label')!))
+  rs.find(r => r.getAttribute('aria-label') === 'Two columns')!.click(); await settle(el)
+  expect(calls).toEqual([['setTemplate', 'two-cols']])
+  expect(q(el, '#layouts').hidden).toBe(true)
+  expect(qa(el, '.view')).toHaveLength(0)
+  expect(qa(el, '[role="radio"][aria-checked="true"]').map(r => r.getAttribute('aria-label'))).toEqual(['Two columns'])
+})
+
+test('narrow: the Layout menu stays beside ⋯, not inside it', async () => {
+  const { el } = await mount(true)
+  expect(qa(el, '[role="radiogroup"]')).toHaveLength(1)
+  expect(q(el, '#panel').contains(q(el, '[role="radiogroup"]'))).toBe(false)
+})
+
+test('Escape closes the Layout menu; opening ⋯ closes it', async () => {
+  const { el } = await mount(true)
+  const menu = q(el, 'button[aria-controls="layouts"]'), more = q(el, 'button[aria-label="More workspace actions"]')
+  menu.click(); await settle(el)
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await settle(el)
+  expect(menu.getAttribute('aria-expanded')).toBe('false')
+  menu.click(); await settle(el); more.click(); await settle(el)
+  expect(menu.getAttribute('aria-expanded')).toBe('false'); expect(more.getAttribute('aria-expanded')).toBe('true')
+})
+
+test('each thumbnail draws one rect per position', async () => {
+  const { el } = await mount()
+  const { TEMPLATES } = await import('../src/lib/layout-templates.ts')
+  for (const t of TEMPLATES.filter(t => t.positions)) expect(q(el, `[aria-label="${t.title}"]`).querySelectorAll('rect').length).toBe(t.positions!)
 })

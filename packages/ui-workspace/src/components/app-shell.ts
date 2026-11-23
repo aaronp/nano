@@ -6,7 +6,7 @@
  *     <nano-file-menu slot="title-actions">      beside the title
  *     <nano-app-bar name="app" slot="title-actions"> after it: the page's or focused panel's controls (the app bar sits above the content, so their menus aren't covered)
  *     <nano-profile name="profile" slot="actions"></nano-profile> app bar controls (right side)
- *     <a slot="nav" href="#/workspace">Workspace</a>       one per page, in order (icons welcome)
+ *     <a slot="nav" href="#/p/workspace">Workspace</a>       one per page, in order (icons welcome)
  *     <a slot="nav" data-sub href="…">…</a>        a sub-item listed under the item before it
  *     <div slot="drawer-footer">…</div>            bottom of the drawer
  *     <span slot="footer">…</span>                 status bar
@@ -22,7 +22,7 @@
 import { LitElement, html } from 'lit';
 import { appShellStyles } from './app-shell-styles.ts';
 import { createBus, provideBus, type Bus, type Unsubscribe } from '../lib/bus.ts';
-import { isCurrent, resolveRoute } from '../lib/routes.ts';
+import { isCurrent, resolveRoute, rewriteHash } from '../lib/routes.ts';
 
 export class AppRoute extends HTMLElement {}
 
@@ -71,7 +71,9 @@ export class AppShell extends LitElement {
 
   private applyRoute = () => {
     const routes = this.routes();
-    const path = resolveRoute(location.hash, routes.map((r) => r.getAttribute('path') ?? ''));
+    const paths = routes.map((r) => r.getAttribute('path') ?? ''), hash = rewriteHash(location.hash, paths);
+    if (hash !== location.hash) history.replaceState(history.state, '', hash);   // Back is not polluted
+    const path = resolveRoute(hash, paths);
     for (const r of routes) r.hidden = r.getAttribute('path') !== path;
     if (path !== this.route) {
       this.route = path;
@@ -83,16 +85,21 @@ export class AppShell extends LitElement {
 
   private markNav() {
     for (const a of this.querySelectorAll<HTMLAnchorElement>(':scope > a[slot="nav"]')) {
-      // a sub-item that is a page (a workspace) can be current; one that adds something (data-dock-add) never is
-      if (!a.hasAttribute('data-dock-add') && isCurrent(a.getAttribute('href'), this.route)) a.setAttribute('aria-current', 'page');
+      if (isCurrent(a.getAttribute('href'), this.route)) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
+    }
+    // a nav row (a workspace's: its link and buttons) is current by its own link, unless a top-level item already is
+    const marked = this.querySelector(':scope > a[slot="nav"][aria-current]') !== null;
+    for (const row of this.querySelectorAll(':scope > [slot="nav"]:not(a)')) {
+      if (!marked && isCurrent(row.querySelector(':scope > a[href]')?.getAttribute('href') ?? null, this.route)) row.setAttribute('aria-current', 'page');
+      else row.removeAttribute('aria-current');
     }
     // the app bar's page: the nav link (top-level, or in a nav row) for the route; the rail's tooltips are the labels
     let page: AppShell['page'] = null;
     for (const a of this.querySelectorAll<HTMLAnchorElement>(':scope > a[slot="nav"], :scope > [slot="nav"] a[href]')) {
-      const label = (a.textContent ?? '').trim();
+      const label = (a.querySelector('[data-name]')?.textContent ?? (a.title || a.textContent) ?? '').trim();   // a nav row's name, not its hidden level (its title while the name is an input)
       if (label && !a.title) a.title = label;
-      if (!page && !a.hasAttribute('data-dock-add') && isCurrent(a.getAttribute('href'), this.route))
+      if (!page && isCurrent(a.getAttribute('href'), this.route))
         page = { href: a.getAttribute('href')!, label, icon: a.querySelector('svg')?.cloneNode(true) ?? null };
     }
     if (page?.href !== this.page?.href || page?.label !== this.page?.label) this.page = page;

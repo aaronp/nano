@@ -1,7 +1,7 @@
 /**
  * The nano.ui default views, and `defineViews`, which defines their five tags (and `nano-pod-view`, `nano-explorer`, `nano-wiring`, `nano-time-machine`, `nano-ring`, `nano-filter`) once.
  *
- *   defineViews(); viewFor(pod, { ...app.deployment(), views: selectors }, views)
+ *   defineViews(); viewFor(pod, app.deployment(), views, overrides)
  */
 import { NanoLog, NanoMap } from './faces.ts'
 import { NanoDebounce } from './debounce.ts'

@@ -2,7 +2,7 @@
  * The view contract: a view is a custom element over one pod, with a `target: ViewTarget` property. It reaches its pod
  * only through `target.app.call(target.runtime, target.pod)` and `target.app.listen`. `viewFor` picks the tag.
  *
- *   viewFor('up', { ...app.deployment(), views }, defaults)   // the selector, else the default, else 'nano-pod-view'
+ *   viewFor('up', app.deployment(), defaults, overrides)   // the pod's override, else the default, else 'nano-pod-view'
  */
 import { LitElement, html } from 'lit'
 import type { AppDeployment, AppEvent, Application, Registry } from '@pritzlaff/nano-core'
@@ -14,9 +14,10 @@ export type ViewMap = Record<string, string>
 
 const defined = (tag: string | undefined) => (tag && customElements.get(tag) ? tag : undefined)
 
-export function viewFor(pod: string, deployment: AppDeployment, defaults: ViewMap): string {
+/** `overrides`: pod → tag (a host's, e.g. the host document's `host.views`). */
+export function viewFor(pod: string, deployment: AppDeployment, defaults: ViewMap, overrides: Record<string, string> = {}): string {
   const impl = deployment.pods[pod]?.implementation
-  return defined(deployment.views?.[pod]) ?? defined(impl === undefined ? undefined : defaults[impl]) ?? 'nano-pod-view'
+  return defined(overrides[pod]) ?? defined(impl === undefined ? undefined : defaults[impl]) ?? 'nano-pod-view'
 }
 
 /**

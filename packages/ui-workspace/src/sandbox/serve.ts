@@ -49,7 +49,7 @@ export function serve(port: MessagePort, load: (url: string, coord: string) => P
       : async (input: unknown) => { const r = await ask(id => ({ type: 'view-call', id, op, input: input ?? null })); if (r.ok) return r.value; throw Object.assign(new Error(`${r.fail.type}: ${r.fail.reason}`), { fail: r.fail }) } })
     const one: ReturnType<Application['runtime']> = {
       call: client, get: ((api: never, where?: { pod?: string }) => where?.pod === m.pod ? own(api) : thrown()) as never, subscribe: viewOn as never, resolve: () => ({ ok: false, reason: refused.type, fail: refused, getOrThrow: thrown }), listen: () => () => {},
-      status: () => failure(refused.type, refused.reason),
+      status: () => failure(refused.type, refused.reason), start: no, getOrCreate: no,
     }
     return {
       ...one, runtime: () => one, call: (...at) => client(at[at.length - 1]!), deployment: () => structuredClone(deployment),

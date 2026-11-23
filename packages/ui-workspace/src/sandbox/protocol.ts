@@ -5,7 +5,7 @@
  *   const m = checkMsg(e.data)                  // a Msg, or why not (over 1 MiB, a bad shape, a regex in a schema)
  *   describeProvider(acme, { 'acme/s': 'x-s' }) // coords, interfaces with ops and schemas, dependencies, config, views
  */
-import { isNanoResult, type NanoResult, type Provider, type SchemaDef, type SelectorData } from '@pritzlaff/nano-core'
+import { isNanoResult, type NanoResult, type Provider, type Manifest, type SchemaDef } from '@pritzlaff/nano-core'
 import type { Edge } from './edges.ts'
 import { isMode, isThemeId, type Mode, type ThemeId } from '../lib/themes.ts'
 
@@ -43,7 +43,7 @@ export type SchemaJson = { type: string; schema: Record<string, unknown> }
 type DescribedOp = { name: string; kind: 'action' | 'event'; input?: SchemaJson; output?: SchemaJson; description?: string }
 type DescribedImpl = {
   coord: string; description?: string; provides: { coord: string; ops: DescribedOp[] }[]
-  dependencies: Record<string, SelectorData>; config?: SchemaJson
+  dependencies: Manifest['implementations'][number]['dependencies']; config?: SchemaJson   // each selector written out: strings
 }
 /** A provider as data, with the view tag of each implementation that has one. */
 /** `built`: the module's stamp (the nano-core it was built with), when it has one. */
@@ -59,7 +59,7 @@ export const describeProvider = (p: Provider, views: Record<string, string>): De
       name: o.name, kind: o.kind, ...(o.input && { input: json(o.input) }), ...(o.output && { output: json(o.output) }),
       ...(o.description !== undefined && { description: o.description }),
     })) })),
-    dependencies: structuredClone(i.dependencies) as Record<string, SelectorData>, ...(i.config && { config: json(i.config) }),
+    dependencies: JSON.parse(JSON.stringify(i.dependencies)), ...(i.config && { config: json(i.config) }),
   })),
 })
 

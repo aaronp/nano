@@ -41,3 +41,20 @@ export function detailModel(s: Node, now: number): { rows: [string, string][]; p
 export const ledgerModel = (p: Persistent, commitIndex: number) => ({ currentTerm: p.currentTerm, votedFor: p.votedFor, rows: p.log.map(e => ({
   index: e.index, term: e.term, value: typeof e.value === 'string' ? e.value : JSON.stringify(e.value), at: e.at.toFixed(1), committed: e.index <= commitIndex,
 })) })
+
+/** The log grid: a row per node, a column per log index (at least 10); a cell is its entry's term and whether it is committed, or null. */
+export function gridModel(rows: { id: string; p: Persistent; commitIndex: number }[]): { columns: number; rows: { id: string; cells: ({ term: number; committed: boolean } | null)[] }[] } {
+  const columns = Math.max(10, ...rows.map(r => r.p.log.length))
+  return { columns, rows: rows.map(r => ({ id: r.id, cells: Array.from({ length: columns }, (_, i) => { const e = r.p.log[i]; return e ? { term: e.term, committed: e.index <= r.commitIndex } : null }) })) }
+}
+
+/**
+ * The sim clock's pace as a view sees it, from each `fired` (its sim `at`, the real `wall` ms it arrived): `rate` sim ms
+ * per real ms, measured over windows of at least 500 real ms (1 until the first); a gap over 2 s (a pause) starts a new
+ * window and keeps the rate. A view's guess of now is `sim + (wall now - wall) * rate`, put right by the next `fired`.
+ */
+export function paced(p: { sim: number; wall: number; rate: number; from: { sim: number; wall: number } } | undefined, sim: number, wall: number) {
+  if (!p || wall - p.wall > 2000) return { sim, wall, rate: p?.rate ?? 1, from: { sim, wall } }
+  const span = wall - p.from.wall, ok = span >= 500 && sim >= p.from.sim
+  return { sim, wall, rate: ok ? (sim - p.from.sim) / span : p.rate, from: ok ? { sim, wall } : p.from }
+}

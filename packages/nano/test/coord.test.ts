@@ -11,13 +11,13 @@ describe('Coord', () => {
     expect(String(store)).toBe('example.kv.KeyValueStore')
     expect(String(memory)).toBe('aws.kv/dynamo')
     expect(String(Coord.port(store, 'get'))).toBe('example.kv.KeyValueStore/get')
-    expect(String(Coord.pod(memory, 'main', 'store'))).toBe('aws.kv/dynamo@main/store')
+    expect(String(Coord.pod(memory, Coord.runtime('main'), 'store'))).toBe('aws.kv/dynamo@main/store')
     expect(store.ns).toBe(kv)
-    expect(Coord.pod(memory, 'main', 'store').implementation).toBe(memory)
+    expect(Coord.pod(memory, Coord.runtime('main'), 'store').implementation).toBe(memory)
   })
 
   test('parse reads each kind back to an equal coordinate', () => {
-    for (const c of [kv, store, memory, Coord.port(store, 'get'), Coord.pod(memory, 'main', 'store')])
+    for (const c of [kv, store, memory, Coord.port(store, 'get'), Coord.pod(memory, Coord.runtime('main'), 'store')])
       expect(String(Coord.parse(c.kind, String(c)))).toBe(String(c))
     expect(Coord.parse('port', 'example.kv.KeyValueStore/get').interface.name).toBe('KeyValueStore')
   })
@@ -30,7 +30,7 @@ describe('Coord', () => {
   test('bad parts throw', () => {
     expect(() => Coord.namespace('9kv')).toThrow('bad namespace')
     expect(() => kv.interfaceId('Key Value')).toThrow('bad name')
-    expect(() => Coord.pod(memory, 'main', '')).toThrow('bad pod')
+    expect(() => Coord.pod(memory, Coord.runtime('main'), '')).toThrow('bad pod')
     expect(() => Coord.parse('pod', 'aws.kv/dynamo')).toThrow('bad pod coordinate')
   })
 

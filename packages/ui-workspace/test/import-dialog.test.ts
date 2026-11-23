@@ -67,3 +67,16 @@ test('given a provider coordinate with a slash (acme/mem), then the notice flags
   t.choose('trusted')
   expect([...t.q<HTMLElement>('.foreign').querySelectorAll('strong')].map(s => s.textContent)).toEqual(['db'])
 })
+
+test('given an import that fails, then its reason shows inside the dialog and Import is enabled again', async () => {
+  const { failure } = await import('@pritzlaff/nano-core')
+  const { openImportDialog } = await import('../src/components/import-dialog.ts')
+  const d = openImportDialog(document, { fetchJson: async () => template(), known: () => false, importUrl: async () => failure('invalid-input', 'a malformed message: nope') })
+  d.querySelector<HTMLInputElement>('input[name="url"]')!.value = 'http://host.test/t/nano.json'
+  d.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+  for (let i = 0; i < 5; i++) await Promise.resolve()
+  d.querySelector<HTMLButtonElement>('[data-import]')!.click()
+  for (let i = 0; i < 5; i++) await Promise.resolve()
+  expect(d.querySelector('[role="alert"]')!.textContent).toContain('a malformed message: nope')
+  expect(d.querySelector<HTMLButtonElement>('[data-import]')!.disabled).toBe(false)
+})

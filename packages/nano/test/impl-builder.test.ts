@@ -36,9 +36,9 @@ async function open(label: string, config: unknown) {
 test('each form is an Implementation: coordinate, provides, dependencies and config as data', () => {
   expect(counter.coord).toBe('acme/counter')
   expect(counter.provides).toEqual([Counter])
-  expect(labelled.dependencies).toEqual({ counter: { implements: 'acme.Counter' } })
+  expect(JSON.parse(JSON.stringify(labelled.dependencies))).toEqual({ counter: { implements: 'acme.Counter' } })
   expect(labelled.config?.check({ prefix: 'x' })).toBe(true)
-  expect(created.dependencies).toEqual(labelled.dependencies)
+  expect(JSON.stringify(created.dependencies)).toBe(JSON.stringify(labelled.dependencies))
   expect(both.provides.map(i => i.coord)).toEqual(['acme.Counter', 'acme.Label'])
 })
 

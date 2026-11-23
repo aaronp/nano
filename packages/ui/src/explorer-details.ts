@@ -1,7 +1,7 @@
 /**
  * The explorer's details pane: what one selected node is, from the live deployment and the registry. Ids name the
  * node: `r:<runtime>`, `p:<runtime>:<pod>`, `s:<runtime>:<pod>:<i>` (that pod's i-th subscription), `i:<interface>`,
- * `m:<implementation>`, `o:<interface>/<op>`. `go(id)` selects another node (a link); `open(where)` asks the host for a pod's view.
+ * `m:<implementation>`, `o:<interface>/<op>`. `go(id)` selects another node (a link); `open(where)` asks the host for a pod's view; `remove(runtime)` asks it to delete a runtime.
  */
 import { html, nothing, type TemplateResult } from 'lit'
 import type { AppDeployment, Registry, Subscription } from '@pritzlaff/nano-core'
@@ -9,7 +9,7 @@ import type { AppDeployment, Registry, Subscription } from '@pritzlaff/nano-core
 export type Where = { runtime: string; pod: string }
 /** An op-level call (ui-workspace's OpCall, structurally): `from`'s op `source` (null: unknown) calls `to`'s `target`. */
 export type Called = { runtime: string; from: string; to: string; source: string | null; target: string; declared: boolean; seen: boolean }
-type Ctx = { d: AppDeployment; registry: Registry; status(runtime: string, pod: string): string; calls?: Called[]; go(id: string): void; open(w: Where): void }
+type Ctx = { d: AppDeployment; registry: Registry; status(runtime: string, pod: string): string; calls?: Called[]; go(id: string): void; open(w: Where): void; remove(runtime: string): void }
 
 const op = (port: string) => port.slice(port.lastIndexOf('/') + 1)
 const row = (k: string, v: unknown) => html`<dt>${k}</dt><dd>${v}</dd>`
@@ -36,7 +36,7 @@ function pod(c: Ctx, runtime: string, name: string) {
   const subs = Object.entries(c.d.runtimes).flatMap(([r, rt]) => rt.subscriptions.map(s => ({ r, s })))
   const calls = subs.filter(({ s }) => s.kind === 'call' && s.from === name).map(({ s }) => s.to)
   const needs = Object.entries(impl?.dependencies ?? {}).map(([role, sel]) => {
-    const to = calls.find(t => { const i = c.registry.implementation(c.d.pods[t]?.implementation ?? ''); return !sel.implements || i?.provides.some(x => x.coord === sel.implements) })
+    const to = calls.find(t => { const i = c.registry.implementation(c.d.pods[t]?.implementation ?? ''); return !sel.implements || i?.provides.some(x => x.coord === String(sel.implements)) })
     return html`${role} (${sel.implements ?? 'any'}) → ${to ? podLink(c, to) : html`<span class="warn">not connected</span>`}`
   })
   return html`<h3>pod ${name}</h3><dl>
@@ -60,7 +60,7 @@ function runtime(c: Ctx, id: string) {
     ${row('call edges', list(r.subscriptions.flatMap(s => s.kind === 'call' ? [html`${podLink(c, s.from)} → ${podLink(c, s.to)}`] : [])))}
     ${row('pipes', list(r.subscriptions.flatMap(s => s.kind === 'pipe' ? [pipeText(s)] : [])))}
     ${row('policy', !r.policy ? 'none (everything allowed)' : r.policy.kind === 'rules' ? `${r.policy.rules.length} rules (see Settings)` : r.policy.kind)}
-  </dl>`
+  </dl><button class="btn" @click=${() => c.remove(id)}>Delete runtime</button>`
 }
 
 type Shape = { type?: string; properties?: Record<string, unknown>; items?: Shape; anyOf?: Shape[]; const?: unknown }
@@ -111,7 +111,7 @@ function implementation(c: Ctx, coord: string) {
   return html`<h3>implementation ${coord}</h3>${m.description ? html`<p>${m.description}</p>` : nothing}<dl>
     ${row('provider', m.provider)}
     ${row('provides', list(m.provides.map(i => link(c, `i:${i.coord}`, i.coord))))}
-    ${row('needs', list(Object.entries(m.dependencies).map(([role, s]) => html`${role}: ${s.implements ? link(c, `i:${s.implements}`, s.implements) : JSON.stringify(s)}`)))}
+    ${row('needs', list(Object.entries(m.dependencies).map(([role, s]) => html`${role}: ${s.implements ? link(c, `i:${s.implements}`, String(s.implements)) : JSON.stringify(s)}`)))}
     ${row('pods', list(Object.entries(c.d.pods).filter(([, p]) => p.implementation === coord).map(([n]) => podLink(c, n))))}
   </dl>`
 }

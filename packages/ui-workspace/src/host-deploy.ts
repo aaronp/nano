@@ -2,28 +2,53 @@
  * `workspace.host/deploy`: this host's HostDeploy, the pod `deploy` beside `ui` in `main`. It applies to the host's
  * `Application` as its own pod (`caller: 'deploy'`), and the host's deployment policy (`approvalPolicy`) asks the user.
  *
- *   registry.add(hostProvider(() => app))                       // ui and deploy
+ *   registry.add(hostProvider(() => app, () => outline))       // ui, deploy, and outline (host-outline-pod.ts) over the Outline
  *   Application.create(runtimes, { deploymentPolicy: approvalPolicy(ask, () => app.deployment()) })
  *   addTo(d, { pods, runtimes })   // d with them; an existing pod or runtime name is invalid-input
  */
-import { Coord, Implementation, failure, provide, success, type AppDeployment, type Application, type DeploymentPolicy, type NanoResult, type Pod, type RuntimeDeployment } from '@pritzlaff/nano-core'
+import { Coord, Implementation, Pod as Pods, failure, provide, success, type AppDeployment, type Application, type DeploymentPolicy, type NanoResult, type Pod, type RuntimeDeployment } from '@pritzlaff/nano-core'
 import { HostDeploy } from '@pritzlaff/nano-ui'
 import { summary } from './deploy-summary.ts'
 import { hostUi } from './host-ui.ts'
+import { hostOutline, outlinePod } from './host-outline-pod.ts'
 
 type Addition = { pods: Record<string, Pod>; runtimes: Record<string, RuntimeDeployment>; onConflict?: 'error' | 'overwrite' }
 type Removal = { runtimes: string[] }
 
-const ns = Coord.namespace('workspace.host'), DEPLOY = ns.implementationId('deploy')
-/** The host's own pods (`ui`, `deploy`): no pod may overwrite them, nor overwrite or remove a runtime placing one. */
-export const HOST_PODS: readonly [string, string] = ['ui', 'deploy']
+const ns = Coord.namespace('workspace.host'), DEPLOY_IMPL = ns.implementationId('deploy')
+/** The host's own pods (`ui`, `deploy`, `outline`): no pod may overwrite them, nor overwrite or remove a runtime placing one. */
+export const HOST_PODS: readonly [string, string, string] = ['ui', 'deploy', 'outline']
 const hosting = (d: AppDeployment, r: string) => d.runtimes[r]!.pods.some(p => HOST_PODS.includes(p))
 /** The `deploy` pod's data: built on its first call. */
-export const deployPod: Pod = { implementation: DEPLOY.toString(), eager: false }
+export const deployPod: Pod = { implementation: DEPLOY_IMPL.toString(), eager: false }
 /** Well under the app's call timeout (30 s): the pod's call into `deploy` started its timer before this apply was queued,
  * and time waiting in the apply queue counts against it too, so a late yes must not apply after the pod saw a timeout.
  * An unanswered ask must not hold the apply queue for good either. */
 const APPROVAL_MS = 20_000
+
+const [HOST, DEPLOY, OUTLINE] = HOST_PODS, MAIN = 'main'
+/** `d` with `own` taken out of `main` (dropped once empty), still among the pods. Pure. (Import keeps `deploy`'s edges.) */
+export function unplaced(d: AppDeployment, own = [HOST]): AppDeployment {
+  const out = structuredClone(d), main = out.runtimes[MAIN]
+  if (main) {
+    main.pods = main.pods.filter(p => !own.includes(p))
+    main.subscriptions = main.subscriptions.filter(s => !own.includes(s.from) && !own.includes(s.to))
+    if (!main.pods.length && !main.subscriptions.length) delete out.runtimes[MAIN]
+  }
+  return out
+}
+/** `d` without the host's own pods. Pure. */
+export function withoutHost(d: AppDeployment): AppDeployment {
+  const out = unplaced(d, [...HOST_PODS]); for (const p of HOST_PODS) { delete out.pods[p]; delete out.tags?.[p] }
+  return out
+}
+/** The host's own pods' data, as `Host.boot` places them. */
+export const hostPods: Record<string, Pod> = { [HOST]: Pods.eager(hostUi), [DEPLOY]: deployPod, [OUTLINE]: outlinePod }
+/** `d` with the host pods first in `main` (`deploy` and `outline` unless there). Pure. */
+export function placed(d: AppDeployment): AppDeployment {
+  const main = d.runtimes[MAIN] ?? { pods: [], subscriptions: [] }, more = [DEPLOY, OUTLINE].filter(p => !main.pods.includes(p))
+  return { ...d, pods: { ...hostPods, ...d.pods }, runtimes: { ...d.runtimes, [MAIN]: { ...main, pods: [HOST, ...more, ...main.pods] } } }
+}
 
 /** `out` without those of `was` (pods once placed) that no runtime places now, nor their edges, tags and views. */
 function orphansDropped(out: AppDeployment, was: string[]): AppDeployment {
@@ -61,22 +86,29 @@ export function removeFrom(d: AppDeployment, rm: Removal): NanoResult<AppDeploym
   return success(orphansDropped(out, rm.runtimes.flatMap(r => d.runtimes[r]!.pods)))
 }
 
+type Approve = (text: string) => Promise<boolean>
+/** `approve`, where anything but a yes within `ms` (a throw, a no, no answer) is false. */
+const timed = (approve: Approve, ms = APPROVAL_MS): Approve => async text => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), ms) })
+  return (await Promise.race([approve(text).catch(() => false), late]).finally(() => clearTimeout(timer))) === true
+}
+
 /** The host's deployment policy: the host's own applies are allowed; a pod's asks `approve(summary)`, and anything but
  * a yes within `ms` (a throw, a no, no answer) refuses. `current` is the deployment the summary compares with. */
-export function approvalPolicy(approve: (text: string) => Promise<boolean>, current: () => AppDeployment, ms = APPROVAL_MS): DeploymentPolicy {
+export function approvalPolicy(approve: Approve, current: () => AppDeployment, ms = APPROVAL_MS): DeploymentPolicy {
+  const ask = timed(approve, ms)
   return { async isAllowed({ caller, deployment }) {
     if (caller === 'host') return { approved: true }
     const text = summary(current(), deployment)
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const late = new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), ms) })
-    const yes = await Promise.race([approve(text).catch(() => false), late]).finally(() => clearTimeout(timer))
-    return yes === true ? { approved: true } : { approved: false, reason: `not approved: ${text}` }
+    return await ask(text) ? { approved: true } : { approved: false, reason: `not approved: ${text}` }
   } }
 }
 
-/** The host's provider: `ui` (HostUI) and `deploy` (HostDeploy, applying to `app()`). */
-export function hostProvider(app: () => Application) {
-  const deploy = Implementation.define(DEPLOY, {
+/** The host's provider: `ui` (HostUI), `deploy` (HostDeploy, applying to `app()`) and `outline` (HostOutline over
+ * `outline()`, asking through `app()`'s `ui`, no answer within 20 s a no; none in a replayed app). */
+export function hostProvider(app: () => Application, outline: Parameters<typeof hostOutline>[0] = () => undefined) {
+  const deploy = Implementation.define(DEPLOY_IMPL, {
     provides: [HostDeploy],
     make: ctx => {
       // One call at a time: a second, while the first waits for approval, would be computed from the deployment without
@@ -99,5 +131,9 @@ export function hostProvider(app: () => Application) {
       })]
     },
   })
-  return ns.provider([hostUi, deploy])
+  const approve = timed(async title => {
+    const r = await (app().call('main', HOST_PODS[0]) as { approve(a: { title: string }): Promise<NanoResult<unknown>> }).approve({ title })
+    return r.ok && r.value === true
+  })
+  return ns.provider([hostUi, deploy, hostOutline(outline, approve)])
 }

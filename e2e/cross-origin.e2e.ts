@@ -1,12 +1,12 @@
 // The template imported from another origin (http://localhost:5174) in one Import click: the dialog shows where its
 // providers come from and is the consent. Sandboxed (the default) lands its pods isolated-sandbox in acme.template.main;
-// Trusted lands them host, their views defined, and a timer added from the drawer counts its own ticks.
+// Trusted lands them host, their views defined, and a timer added from the picker counts its own ticks.
 import { expect, test, type Page } from '@playwright/test'
 
 const data = (page: Page) => page.evaluate(() => (document.querySelector('workspace-dock') as any).host.data())
 
 async function importTemplate(page: Page, trust: 'Sandboxed' | 'Trusted') {
-  await page.goto('/#/workspace')
+  await page.goto('/#/p/workspace')
   await page.evaluate(() => localStorage.clear())
   await page.reload()
   await expect(page.locator('workspace-dock#workspace nano-explorer')).toBeVisible()
@@ -37,19 +37,22 @@ test('the template from another origin, Sandboxed: its pods isolated-sandbox in 
   await expect(page.locator('dialog[open]')).toHaveCount(0)
 })
 
-test('the template from another origin, Trusted: host pods, its view before anything ran, and a drawer timer that counts', async ({ page }) => {
+test('the template from another origin, Trusted: host pods, its view once approved, and a picked timer that counts', async ({ page }) => {
   const got = await importTemplate(page, 'Trusted')
   for (const p of ['timer', 'picker', 'store']) expect(got.pods[p].isolation ?? 'host').toBe('host')
   const dock = page.locator('workspace-dock#workspace')
 
-  // (a) the imported timer's panel is its own view, not the generic one, before any of its pods built
+  // (a) opening the timer's panel starts its pod, so its foreign code asks to run in this page; approved, the panel is
+  // its own view, not the generic one
   await dock.locator('nano-explorer').getByText('timer', { exact: true }).first().dblclick()
+  const ask = page.locator('dialog[open]').filter({ hasText: /Run acme\.template.* in this page\?/ })
+  await ask.getByRole('button', { name: 'Approve' }).click()
   await expect(dock.locator('nano-timer').first()).toBeVisible()
-  await expect(page.locator('dialog[open]')).toHaveCount(0)   // nothing asked to run yet
 
-  // (b) a timer from the drawer's Imported section, with no pipes: Start, and it counts
+  // (b) a timer from the picker's imported provider group (a panel header's +), with no pipes: Start, and it counts
   const before = await dock.locator('nano-timer').count()
-  await page.locator('component-drawer').getByRole('link', { name: 'timer', exact: true }).click()
+  await dock.getByRole('button', { name: 'Add a panel' }).first().click()
+  await page.locator('nano-picker [data-kind="provider"]:not([data-section="nano.ui"])').getByRole('button', { name: 'timer', exact: true }).click()
   const approve = async () => {   // running it in this page asks first
     const yes = page.locator('dialog[open]').getByRole('button', { name: 'Approve' })
     while (await yes.isVisible().catch(() => false) || await yes.waitFor({ timeout: 1000 }).then(() => true, () => false)) await yes.click()

@@ -139,3 +139,31 @@ test('scrubbing back draws the deployment at the cursor, not the live one', asyn
   expect(pods()).toEqual(['input', 'debounce', 'map', 'log', 'clock'])
   expect(el.shadowRoot!.querySelector('text')!.textContent).toBe('main')
 })
+
+test('a hidden ring mounts no view and starts no lazy pod; shown, it mounts them; hidden again, it unmounts them', async () => {
+  const file: AppDeployment = await Bun.file(new URL('../../../../examples/typing/nano.json', import.meta.url)).json()
+  const app = must(await create({ ...file, pods: { ...file.pods, log: { ...file.pods['log']!, eager: false }, clock: { ...file.pods['clock']!, implementation: 'nano.ui/sim-clock' } } }))
+  const built: string[] = []
+  app.listen(e => { if (e.type === 'built') built.push(e.pod) })
+  const real = globalThis.ResizeObserver
+  let resized = () => {}
+  globalThis.ResizeObserver = class { constructor(fn: () => void) { resized = fn } observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver
+  // the workspace's app-route[hidden] is display: none (happy-dom has no UA rule for [hidden])
+  const route = document.createElement('div'), el = document.createElement('nano-ring') as Ring
+  globalThis.ResizeObserver = real
+  route.style.display = 'none'
+  route.append(el)
+  Object.assign(el, { app, registry, create })
+  document.body.replaceChildren(route)
+  cleanup = async () => { route.remove(); await app.close() }
+  await el.updateComplete; await settle()
+  expect(views(el).length).toBe(0)
+  expect(built).not.toContain('log')
+  route.style.display = ''; resized()
+  await el.updateComplete; await settle()
+  expect(views(el).map(v => v.wrap.dataset.pod)).toEqual(['input', 'debounce', 'map', 'log', 'clock'])
+  expect(built).toContain('log')
+  route.style.display = 'none'; resized()
+  await el.updateComplete
+  expect(views(el).length).toBe(0)
+})

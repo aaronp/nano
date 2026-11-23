@@ -7,10 +7,16 @@ test('use case 1: import, see, swap live, save', async ({ page }) => {
   const log = page.locator('nano-log')
 
   for (const pod of ['in', 'wait', 'up', 'out']) await expect(page.locator('nano-explorer').getByText(pod, { exact: true }).first()).toBeVisible()
-  // the Wiring page's circuit: the slice's four on the side (no panel shows them), never the host's own pod `ui`
-  for (const pod of ['in', 'wait', 'up', 'out']) await expect(page.locator(`c-circuit .fp[data-instance="${pod}"]`)).toHaveCount(1)
-  await expect(page.locator('c-circuit .fp[data-instance="ui"]')).toHaveCount(0)
-  await expect(page.locator('c-circuit path[data-cable]')).toHaveCount(3)
+  // Connections: the slice's four (in panels or the rack), never the host's own pod `ui`, and its three cables
+  await page.getByRole('button', { name: 'Connections' }).first().click()
+  const wires = page.locator('c-wires')
+  await expect(wires).toHaveAttribute('flipped', '')
+  const shown = () => page.evaluate(() => { const m = (document.querySelector('c-wires') as any).model; return [...m.chassis.flatMap((c: any) => c.instance ?? []), ...m.rack.map((r: any) => r.id)].sort() })
+  await expect.poll(shown).toEqual(expect.arrayContaining(['in', 'out', 'up', 'wait']))
+  expect(await shown()).not.toContain('ui')
+  await expect(wires.locator('[data-wire]')).toHaveCount(3)
+  await wires.getByRole('button', { name: 'Back to the workspace' }).click()
+  await expect(wires).not.toHaveAttribute('flipped', '')
 
   await open('in')
   await page.getByRole('textbox', { name: 'in', exact: true }).fill('hi')
@@ -35,8 +41,9 @@ test('use case 1: import, see, swap live, save', async ({ page }) => {
 
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'File', exact: true }).click().then(() => page.getByRole('button', { name: 'Save', exact: true }).click())])
   const saved = JSON.parse(readFileSync((await download.path())!, 'utf8'))
-  expect(saved.pods.up.implementation).toBe('example.slice/shout')
-  expect(saved.views.out).toBe('nano-pod-view')
+  // the bundle: the app, its outline, and the host's own (the views chosen)
+  expect(saved.app.pods.up.implementation).toBe('example.slice/shout')
+  expect(saved.host.views.out).toBe('nano-pod-view')
 })
 
 test('the template: import its nano.json, open the timer, see it tick', async ({ page }) => {

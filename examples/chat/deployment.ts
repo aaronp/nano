@@ -16,7 +16,7 @@ export function chatDeployment(registry: Registry): AppDeployment {
   const d = AppDeployment.edit({
     pods: {},
     runtimes: {
-      'example.chat.backend': { pods: [], subscriptions: [], policy: { kind: 'rules', rules: [{ allow: '*', outside: false }, { deny: '*' }] } },
+      'example.chat.backend': { pods: [], subscriptions: [], policy: { kind: 'rules', rules: [{ allow: '*', outside: false }, { allow: 'start', from: 'host', outside: true }, { deny: '*' }] } },
       'example.chat.room': { pods: [], subscriptions: [] },
     },
     modules: { 'example.kv': '../kv/memory.js', 'example.messaging': './messaging/kv.js', 'example.chat': './room/messaging.js' },

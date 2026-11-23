@@ -2,7 +2,7 @@
  * Ops: an action (input → output) or an event (data out, its `output`). An op is a signature, unnamed: the interface
  * names it by key, and its coordinate (hash of name and schemas) is computed there.
  *
- *   const api = Interface.define('acme/db', { get: Op.action(Key, Value) })   // api.ops.get.name: 'get'
+ *   const api = Interface.define('acme.Db', { get: Op.action(Key, Value) })   // api.ops.get.name: 'get'
  *   fits(Op.event(Num), Op.action(Num, Nothing))   // true
  */
 import type { TSchema } from 'typebox'

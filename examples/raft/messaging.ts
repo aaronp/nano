@@ -29,7 +29,7 @@ export const messaging = Implementation.define(ns.implementationId('messaging'),
       const d = inFlight.get(output.id)
       if (!d) return
       inFlight.delete(output.id)
-      const to = ctx.one(Selector.of(RaftNode, { runtime: d.to }))
+      const to = ctx.one(Selector.of(RaftNode, { runtime: Coord.runtime(d.to) }))
       if (to.ok) await to.value.call.receive(d.message as never)   // its failure, if any, is the node's, on the stream
     })
     return [provide(Messaging, {

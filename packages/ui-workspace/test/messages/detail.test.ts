@@ -32,3 +32,9 @@ test('the close button calls onClose and does not bubble', () => {
   d.querySelector<HTMLElement>('[data-close]')!.click()
   expect(n).toBe(1); expect(bubbled).toBe(false)
 })
+
+test('a start has no port: its label names the kind', () => {
+  const m = { at: 0, sent: { id: 's', runtime: 'main', kind: 'start', from: 'host', to: 'c', correlation: 's' } } as Message
+  const t = text(m, []).querySelector('h3')!.textContent!
+  expect(t).toContain('host → c (start)'); expect(t).not.toContain('undefined')
+})

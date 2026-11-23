@@ -1,4 +1,4 @@
-.PHONY: adr agile test test-ui install ui dev serve-template serve-examples link-templates packages smoke publish template-check template-export
+.PHONY: adr agile test test-ui install ui dev dev2 serve-template serve-examples link-templates packages smoke publish template-check template-export
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
@@ -25,6 +25,11 @@ ui:
 dev:
 	@cd packages/ui-workspace && bun ../../scripts/quiet.ts bun run --silent build
 	@(cd packages/ui-workspace && bun ../../scripts/quiet.ts bun run --silent dev) & trap 'kill $$!' EXIT; bun scripts/serve.ts packages/ui-workspace/public $(PORT) --live
+
+# The second host (packages/host-react) with the workspace, same origin and storage: dev, opened at /react/.
+dev2:
+	@echo "second host: http://localhost:$(PORT)/react/   (workspace: http://localhost:$(PORT)/)"
+	@$(MAKE) --no-print-directory dev PORT=$(PORT)
 
 # Build the template package and serve dist/ at http://localhost:5174 (TEMPLATE_PORT) to look at it. `make ui` imports it
 # from its own origin: /examples/template/nano.json (the host build copies the template there).

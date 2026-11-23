@@ -1,7 +1,7 @@
 /** Shared fixtures of the application-* tests: Acme implementations and the helpers that make a live Application. */
 import { test } from 'bun:test'
 import { Type } from 'typebox'
-import { Application, AppDeployment, Registry, Schema, Interface, Implementation, Op, provide, Provider, Selector, success, type AppEvent, type Policy } from '../../src/index.ts'
+import { Application, AppDeployment, Coord, Registry, Schema, Interface, Implementation, Op, provide, Provider, Selector, success, type AppEvent, type Policy } from '../../src/index.ts'
 
 export const Str = Schema.define(Type.String(), 'Str')
 export const Num = Schema.define(Type.Integer(), 'Num')
@@ -55,7 +55,7 @@ export const db = Implementation.define('acme/db', { provides: [DB], make: (_ctx
 } })
 /** Copies rows from config.from to config.to, naming runtimes only through config. */
 export const migrate = Implementation.define('acme/migrate', { provides: [Run], dependencies: { db: DB }, make: (ctx, cfg) => [provide(Run, { run: async () => {
-  const from = ctx.one(Selector.of(DB, { runtime: cfg.from })), to = ctx.one(Selector.of(DB, { runtime: cfg.to }))
+  const from = ctx.one(Selector.of(DB, { runtime: Coord.runtime(cfg.from) })), to = ctx.one(Selector.of(DB, { runtime: Coord.runtime(cfg.to) }))
   if (!to.ok) return to
   if (!from.ok) return from
   const rows = await from.value.call.all(null)

@@ -3,7 +3,7 @@
  *
  *   const r = Registry.create()
  *   r.add(mem)                        // NanoResult<void>; fails `invalid-input` on a clash
- *   r.implementationsOf('acme/db')    // [memDb]
+ *   r.implementationsOf('acme.Db')    // [memDb]
  */
 import type { Interface } from './iface.ts'
 import type { Implementation } from './implementation.ts'
@@ -14,7 +14,8 @@ import type { SelectorData } from './selector.ts'
 
 export type Manifest = {
   providers: { coord: string; implementations: string[] }[]
-  implementations: { coord: string; provides: string[]; dependencies: Record<string, SelectorData> }[]
+  /** Each dependency's selector written out: every coordinate as its string. */
+  implementations: { coord: string; provides: string[]; dependencies: Record<string, { [K in keyof SelectorData]: K extends 'tags' ? string[] : string }> }[]
   interfaces: { coord: string; ops: { name: string; kind: OpKind; coord: string; input?: string; output?: string }[] }[]
 }
 
@@ -67,7 +68,7 @@ function create(): Registry {
       implementations: [...impls.values()].sort(byCoord).map(i => ({
         coord: i.coord,
         provides: i.provides.map(x => x.coord).sort(),
-        dependencies: structuredClone(i.dependencies) as Record<string, SelectorData>,
+        dependencies: JSON.parse(JSON.stringify(i.dependencies)),   // coordinates write as their strings
       })),
       interfaces: [...ifaces.values()].sort(byCoord).map(i => ({
         coord: i.coord,
@@ -86,5 +87,28 @@ function create(): Registry {
   }
 }
 
-/** `Registry.create()`. */
-export const Registry = { create }
+/**
+ * `Registry.load(modules, base)`: import each module (a URL relative to `base`), add its default `Provider` to a new
+ * registry, and return each module's namespace under its key. The first failure is the result, never a throw:
+ * `not-found` (the import failed), `invalid-input` (no default Provider, or the registry refused it).
+ * The modules are code that will run: load only trusted ones.
+ */
+async function load(modules: Record<string, string>, base: string | URL): Promise<NanoResult<{ registry: Registry; exports: Record<string, Record<string, unknown>> }>> {
+  const registry = create()
+  const exports: Record<string, Record<string, unknown>> = {}
+  for (const [ns, path] of Object.entries(modules)) {
+    let mod: Record<string, unknown>
+    try { mod = await import(new URL(path, base).href) }
+    catch (e) { return failure('not-found', `${ns} (${path}): ${e instanceof Error ? e.message : String(e)}`) }
+    const p = mod.default
+    // `add` throws on a default export that isn't shaped like a Provider, so shape-check first.
+    const q = p as Partial<Provider> | null
+    const added = q && typeof q.coord === 'string' && q.implementations instanceof Map ? registry.add(q as Provider) : failure('invalid-input', `${path} has no default Provider`)
+    if (!added.ok) return added
+    exports[ns] = mod
+  }
+  return success({ registry, exports })
+}
+
+/** `Registry.create()`; `Registry.load(modules, base)`. */
+export const Registry = { create, load }

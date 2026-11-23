@@ -39,7 +39,11 @@ workspace-dock .dock-area { position: relative; min-height: 0; overflow: hidden;
 .lm_dropTargetIndicator .lm_inner { background: transparent; }
 .lm_maximised { z-index: 40; }
 .lm_dragging, .lm_dragging * { cursor: grabbing !important; user-select: none; }
-[data-dock-add] { cursor: grab; }
+/* a header's + (the picker) before maximise and close; an empty dock's one large + */
+.lm_controls > .dock-split { width: auto; height: 11px; padding: 0; font: 16px/11px var(--font); color: var(--muted); background: none; border: 0; cursor: pointer; }
+.lm_controls > .dock-split:hover { color: var(--fg); }
+.dock-empty { position: absolute; inset: 0; z-index: 1; overflow: auto; padding: 12px; box-sizing: border-box; background: var(--bg); }
+.dock-empty[hidden] { display: none; }
 /* Clear: a stack with one panel has no tab bar; its maximise and close float over it on hover.
    Stacked panels keep their tabs. The panel takes the header's room (golden-layout sizes it inline). */
 workspace-dock[chrome="focus"] .lm_stack:not(:has(.lm_tab + .lm_tab)) > .lm_header { position: absolute; top: 0; right: 0; left: auto; width: 0 !important; z-index: 5; opacity: 0; transition: opacity .15s; }

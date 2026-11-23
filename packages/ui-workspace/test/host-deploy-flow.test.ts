@@ -14,7 +14,7 @@ test('given a pod needing HostDeploy imported, then it is connected to deploy an
   const host = r.value
   expect(await host.importUrl(new URL('./fixtures/deploy/app.json', import.meta.url).href)).toMatchObject({ ok: true })
   expect(host.app.deployment().runtimes['main']!.subscriptions).toContainEqual({ kind: 'call', from: 'cluster', to: 'deploy' })
-  expect(host.saved().pods['deploy']).toBeUndefined()
+  expect(host.saved().app.pods['deploy']).toBeUndefined()
 
   const add = { pods: { n1: lazy }, runtimes: { 'node-1': { pods: ['n1'], subscriptions: [] } } }
   const denied = host.app.call('ops', 'cluster').map(add)

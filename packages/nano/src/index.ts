@@ -3,10 +3,10 @@
  * pods, runtimes and deployments (checked values), the context a pod's factory gets, and the one live `Application`.
  *
  *   const Key = Schema.define(Type.String(), 'Key')
- *   const db = Interface.define('acme/db', { get: Op.action(Key, Key) })
+ *   const db = Interface.define('acme.Db', { get: Op.action(Key, Key) })
  *   AppDeployment.assemble({ pods: {}, runtimes: {} }, Registry.create())   // success({})
  */
-export type { Namespace, InterfaceCoord, ImplCoord, PortCoord, PodCoord } from './coord.ts'
+export type { Namespace, InterfaceCoord, ImplCoord, PortCoord, RuntimeCoord, PodCoord } from './coord.ts'
 export * from './schema.ts'
 export * from './op.ts'
 export * from './iface.ts'

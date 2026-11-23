@@ -8,37 +8,74 @@ a[slot='nav'] svg { width: 20px; height: 20px; flex: none; fill: none; stroke: c
 .drawer-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 14px 4px; color: var(--muted); font-size: 12px; }
 .drawer-foot theme-picker { color: var(--fg); }
 
-/* The Workspaces nav row: its link, and a + to make a new workspace. */
+/* A workspace nav row: its link (and, saved pages, a drag handle for edit mode). */
 .nav-row a { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; color: inherit; text-decoration: none; }
 .nav-row a svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .nav-row button { flex: none; width: 26px; height: 26px; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); font: inherit; font-size: 16px; line-height: 1; cursor: pointer; }
 .nav-row button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 a[slot='nav'][data-sub] svg { width: 16px; height: 16px; }
-/* The components drawer's toggle beside +: pressed while the drawers show. */
-.nav-row [data-toggle-drawer] { display: grid; place-items: center; padding: 0; }
-.nav-row [data-toggle-drawer] svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.nav-row [data-toggle-drawer][aria-pressed='true'] { background: var(--accent-soft); }
+/* + (new page) and ✎ (edit mode) beside the app's title: shown while it is hovered or holds focus (they stay focusable). */
+[slot='title'] button { width: 26px; height: 26px; margin-left: 6px; vertical-align: middle; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); font: 15px/1 var(--font); cursor: pointer; opacity: 0; }
+[slot='title']:is(:hover, :focus-within) button, [slot='title'] [aria-pressed='true'] { opacity: 1; }
+[slot='title'] [aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
+[slot='title'] button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+@media (hover: none) { [slot='title'] button { opacity: 1; } }   /* touch: no hover to reveal them */
+/* Edit mode: a saved row's handle, and the name and icon to click. */
+.nav-row [data-handle] { display: none; border: 0; background: none; color: var(--muted); cursor: grab; }
+app-shell[data-editing] .nav-row [data-handle] { display: block; }
+app-shell[data-editing] .nav-row { gap: 4px; }   /* the buttons sit close, so the name keeps room */
+app-shell[data-editing] .nav-row > a { gap: 8px; margin-inline-start: 4px; }
+app-shell[data-editing] .nav-row [data-handle] { width: 14px; padding: 0; }
+app-shell[data-editing] .nav-row [data-toggle][hidden] { display: none; }
+.nav-row [data-glyph] { display: flex; flex: none; }
+.nav-row [data-name] { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+app-shell[data-editing] .nav-row > a :is([data-name], [data-glyph]) { cursor: pointer; border-radius: 4px; outline: 1px dashed var(--line); outline-offset: 2px; }
+app-shell[data-editing] .nav-row > a :is([data-name], [data-glyph]):focus-visible { outline: 2px solid var(--focus); }
+.nav-row input[data-rename] { flex: 1; min-width: 0; font: inherit; padding: 2px 6px; border: var(--card-border); border-radius: 6px; background: var(--surface-2); color: var(--fg); }
+/* The icon grid a row's icon opens in edit mode. */
+.icon-pop { position: fixed; z-index: 50; display: grid; grid-template-columns: repeat(6, 40px); gap: 6px; max-height: 236px; overflow-y: auto; padding: 8px;
+  background: var(--surface); border: var(--card-border); border-radius: var(--radius); box-shadow: 0 8px 24px rgb(0 0 0 / .18); }
+.icon-pop button { display: grid; place-items: center; aspect-ratio: 1; border-radius: 10px; border: 1px solid transparent; background: var(--surface-2); color: var(--fg); cursor: pointer; }
+.icon-pop button[aria-selected='true'] { border-color: var(--accent); color: var(--accent); }
+.icon-pop button:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: 1px; }
+.icon-pop svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* The tree: a row indented by its level; a leaf's toggle keeps its space; Add child and Remove only in edit mode. */
+.nav-row { padding-inline-start: calc(14px + var(--level, 0) * 16px); }
+.nav-row[hidden] { display: none; }
+.nav-row .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.nav-row [data-toggle] { width: 18px; border: 0; background: none; color: var(--muted); }
+.nav-row [data-toggle][hidden] { display: block; visibility: hidden; }
+app-shell:not([data-editing]) .nav-row :is([data-add-child], [data-new-workspace], [data-remove]) { display: none; }
+/* While a row's name is edited, its input takes the row: the row's buttons and icon step aside. */
+.nav-row:has(input[data-rename]) :is(button, [data-glyph]) { display: none; }
 /* The drawer as an icon rail: only the row's link icon shows. */
 app-shell[collapsed]:not([narrow]) .nav-row button { display: none; }
-html[data-drawers-hidden] component-drawer { display: none; }
+app-shell[collapsed]:not([narrow]) .nav-row { padding-inline-start: 14px; }
 
-/* A workspace page: the components drawer beside the dock. */
+/* A workspace page: the dock. */
 .ws-page { display: flex; height: 100%; min-height: 0; }
 .ws-page > c-wires { flex: 1; min-width: 0; }
-component-drawer { box-sizing: border-box; width: 240px; flex: none; display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow-y: auto;
-  background: var(--surface); border-right: 1px solid var(--line); font-size: 14px; }
-component-drawer .cd-bar { display: flex; align-items: center; gap: 6px; }
-component-drawer .cd-title { flex: 1; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-component-drawer button { font: inherit; font-size: 12px; padding: 4px 8px; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); cursor: pointer; }
-component-drawer button:disabled { opacity: .5; cursor: not-allowed; }
-component-drawer .cd-filter { box-sizing: border-box; width: 100%; font: inherit; padding: 6px 8px; border-radius: 6px; border: var(--card-border); background: var(--bg); color: var(--fg); }
-component-drawer h3 { margin: 6px 0 2px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-component-drawer .cd-section { display: flex; flex-direction: column; gap: 2px; }
-component-drawer .cd-section a { padding: 7px 10px; border-radius: var(--radius); color: var(--fg); text-decoration: none; cursor: grab; }
-component-drawer .cd-section a:hover { background: var(--surface-2); }
-component-drawer h4 { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 0; padding: 0 2px 0 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
-component-drawer h4 button { padding: 1px 6px; font-size: 11px; }
-component-drawer .cd-failed { margin: 4px 0 0; padding: 6px 10px; border-radius: var(--radius); background: var(--surface-2); color: var(--danger, #c33); font-size: 12px; overflow-wrap: anywhere; }
+
+/* <nano-picker>: the popover a + opens, to choose what fills that place (its width is picker.ts's WIDTH). */
+nano-picker { position: fixed; z-index: 50; box-sizing: border-box; width: 280px; max-height: min(420px, 70vh); overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
+  padding: 12px; background: var(--surface); border: var(--card-border); border-radius: var(--radius); box-shadow: 0 8px 24px rgb(0 0 0 / .18); font-size: 14px; }
+nano-picker > .np-body { display: contents; }
+.np-body { display: flex; flex-direction: column; gap: 10px; max-width: 720px; margin: 0 auto; }
+.np-body [hidden] { display: none; }
+.np-body .np-filter { box-sizing: border-box; width: 100%; font: inherit; padding: 6px 8px; border-radius: 6px; border: var(--card-border); background: var(--bg); color: var(--fg); }
+.np-body .np-runtimes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.np-body .np-runtimes button { font: inherit; padding: 2px 10px; border-radius: 999px; border: var(--card-border); background: none; color: var(--fg); cursor: pointer; }
+.np-body .np-runtimes button[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.np-body .np-runtimes button:disabled { opacity: .4; cursor: default; }
+.np-body > div:last-child { display: flex; flex-direction: column; gap: 10px; }
+.np-body .np-section { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 4px; }
+.np-body h3 { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; margin: 6px 0 2px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.np-body h3 button { font: inherit; padding: 1px 6px; font-size: 11px; border-radius: 6px; border: var(--card-border); background: var(--surface-2); color: var(--fg); cursor: pointer; }
+.np-body .np-section [data-widget] { font: inherit; text-align: left; padding: 10px; border: var(--card-border); border-radius: var(--radius); background: var(--surface); color: var(--fg); cursor: pointer; overflow-wrap: anywhere; }
+.np-body .np-section [data-widget]:hover, .np-body .np-section [data-widget]:focus-visible { background: var(--surface-2); }
+.np-body .np-impl { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 4px; }
+.np-body .np-impl > span { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.np-body .np-failed { grid-column: 1 / -1; margin: 4px 0 0; padding: 6px 10px; border-radius: var(--radius); background: var(--surface-2); color: var(--danger, #c33); font-size: 12px; overflow-wrap: anywhere; }
 
 .page-head { margin-bottom: 20px; }
 .page-head h1 { margin: 0 0 4px; font: 600 28px/1.15 var(--display); text-wrap: balance; }
@@ -112,8 +149,9 @@ html[data-theme='retro'] .page-head a { color: #FFFF9E; }
 .import-dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* Dragging a saved workspace: a line where it will land. */
-a[slot='nav'][data-drop='before'] { box-shadow: 0 -2px 0 var(--nano-accent, var(--focus, #36c)); }
-a[slot='nav'][data-drop='after'] { box-shadow: 0 2px 0 var(--nano-accent, var(--focus, #36c)); }
+.nav-row[data-drop='before'] { box-shadow: 0 -2px 0 var(--nano-accent, var(--focus, #36c)); }
+.nav-row[data-drop='after'] { box-shadow: 0 2px 0 var(--nano-accent, var(--focus, #36c)); }
+.nav-row[data-drop='inside'] { outline: 2px solid var(--nano-accent, var(--focus, #36c)); outline-offset: -2px; }
 .wiring-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .wiring-page > c-desk, .wiring-page > c-messages, .wiring-page > nano-ring { flex: 1; min-height: 0; }
 .wiring-page > c-messages { overflow: auto; }

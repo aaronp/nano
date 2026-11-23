@@ -11,7 +11,7 @@ know nothing about each other.
   a component in several systems and a "Shared only" filter; select an action and connect it to
   one that fits. `<c-platform-table>` lists every instance (system, component, instance, name, owner) and every kind
   nothing has been made of, with text and pill filters; it is also the dock's "Instances". Below them, a worked example made by `composable.ts` (range → debounce → log, input → map → log).
-- **Runtime:** the drawer's Workspace entries add panels to the dock; each panel places a new instance and
+- **Runtime:** the nav's Workspace entries add panels to the dock; each panel places a new instance and
   removes it when closed.
 
 `bun run build` (then `bun run serve`) builds `public/main.js` with Bun instead of esbuild. Isolated sandboxes (opaque-origin iframes) fetch modules cross-origin, so the host must send `Access-Control-Allow-Origin` (`serve` runs with `--cors`; GitHub Pages sends it). The rest of this
@@ -36,9 +36,7 @@ npx serve public     # or: bunx serve public
 In `public/index.html`:
 
 ```html
-<!-- drawer: one sub-item per widget, right after the Workspace link -->
 <a slot="nav" href="#/workspace">Workspace</a>
-<a slot="nav" data-sub href="#/workspace" data-dock-add="workspace" data-widget="notes">+ Notes</a>
 
 <!-- page: one <template> per widget -->
 <app-route path="/workspace" bleed>
@@ -50,6 +48,7 @@ In `public/index.html`:
 
 - `open` lists the panels shown at first; `arrangement` is `row`, `column`, `stack` (tabs) or `grid`.
 - Each panel is a fresh copy of its template, and every panel is on the app's event bus.
+- Each panel header's `+` (an empty dock's large `+`, a layout's empty position) opens the picker of components and widgets; the choice fills that place.
 - The workspace's controls sit in the app bar, after File (`<nano-app-bar>`; a focused panel with controls of its own shows those instead): **View** (Tabs | Clear), Connections, Save as workspace…, Save layout, Restore and Reset (under ⋯ on narrow screens).
 - **Save layout** remembers the arrangement in this browser and it opens automatically next time; **Restore** goes back to it and **Reset** to the starting layout. A saved layout that names widgets you have since removed is ignored, with a message.
 - `data-flush` on a template removes the panel padding (for charts and lists that draw their own edges).

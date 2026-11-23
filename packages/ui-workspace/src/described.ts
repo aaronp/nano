@@ -16,8 +16,8 @@ import {
   success,
   type NanoResult,
   type SchemaDef,
-  type SelectorData,
 } from '@pritzlaff/nano-core'
+import { readSelector } from '@pritzlaff/nano-outline'
 import type { ViewMap } from '@pritzlaff/nano-ui'
 import { checkMsg, type Described, type SchemaJson } from './sandbox/protocol.ts'
 import { READY_MS, type Frame } from './sandbox/stand-in.ts'
@@ -28,10 +28,6 @@ export type Probed = { provider: Provider; views: ViewMap; built?: Built }
 const TAG = /^[a-z][a-z0-9._]*-[a-z0-9._-]*$/
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const schema = (s: SchemaJson) => Schema.define(s.schema as never, s.type || undefined) as SchemaDef
-/** Only the selector fields, so an extra key (a `byCoord`) cannot pass for an interface. */
-const selector = ({ implements: i, tags, implementation: m, provider: p, runtime: r }: SelectorData): SelectorData =>
-  ({ ...(i !== undefined && { implements: i }), ...(tags && { tags }), ...(m !== undefined && { implementation: m }),
-    ...(p !== undefined && { provider: p }), ...(r !== undefined && { runtime: r }) })
 
 /** `d` as a Provider, and the view tags of its own implementations. Never throws. */
 export function described(d: Described): NanoResult<Probed> {
@@ -42,7 +38,7 @@ export function described(d: Described): NanoResult<Probed> {
         const made = o.kind === 'event' ? Op.event(schema(o.output!), opts) : Op.action(schema(o.input!), schema(o.output!), opts)
         return [o.name, made]
       })))),
-      dependencies: Object.fromEntries(Object.entries(i.dependencies).map(([role, s]) => [role, selector(s)])),
+      dependencies: Object.fromEntries(Object.entries(i.dependencies).map(([role, s]) => [role, readSelector(s)])),
       ...(i.config && { config: schema(i.config) }), ...(i.description !== undefined && { description: i.description }),
       make: () => { throw new Error(`${i.coord} was only probed`) },
     }))

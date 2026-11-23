@@ -1,7 +1,6 @@
 /**
- * `<nano-explorer>`: the system as a tree (explorer-nodes.ts): by runtime, by operation, by interface, by
- * implementation; the shared filter (`<nano-filter>`: search, kinds, namespaces, pod status). Each pod's status is asked of nano-core (`runtime(r).status(pod)`, on each lifecycle event); the optional `icon` renderer (a node, its `kind` and a pod's `data.status`) goes to `<nano-tree>`. Choosing a node shows its details beside the tree
- * (explorer-details.ts); a pod's "Open view" (or a double-click on a pod) fires `nano-open` with `{ runtime, pod }`.
+ * `<nano-explorer>`: the system as a tree of its runtimes (explorer-nodes.ts); the shared filter (`<nano-filter>`: search, kinds, namespaces, pod status). Each pod's status is asked of nano-core (`runtime(r).status(pod)`, on each lifecycle event); the optional `icon` renderer (a node, its `kind` and a pod's `data.status`) goes to `<nano-tree>`. Choosing a node shows its details beside the tree
+ * (explorer-details.ts); a pod's "Open view" (or a double-click on a pod) fires `nano-open` with `{ runtime, pod }`; a runtime's "Delete runtime" fires `nano-delete` with `{ runtime }`.
  */
 import { LitElement, css, html } from 'lit'
 import type { TreeNode } from '@pritzlaff/nano-elements'
@@ -57,6 +56,7 @@ export class NanoExplorer extends LitElement {
   private stop() { this.off?.(); this.off = undefined; this.watching = undefined }
 
   private open(w: Where) { this.dispatchEvent(new CustomEvent('nano-open', { detail: w, bubbles: true, composed: true })) }
+  private del(runtime: string) { this.dispatchEvent(new CustomEvent('nano-delete', { detail: { runtime }, bubbles: true, composed: true })) }
   /** A double-click on a pod opens its view. */
   private dbl() { const [k, r, ...p] = (this.selected ?? '').split(':'); if (k === 'p') this.open({ runtime: r!, pod: p.join(':') }) }
 
@@ -64,14 +64,14 @@ export class NanoExplorer extends LitElement {
     if (!this.target) return html``
     const t = this.target
     const status = (r: string, pod: string): PodStatus => { const s = t.app.runtime(r).status(pod); return s.ok ? s.value : 'not started' }
-    const c = { d: t.app.deployment(), registry: t.registry, status, calls: t.calls, go: (id: string) => { this.selected = id }, open: (w: Where) => this.open(w) }
+    const c = { d: t.app.deployment(), registry: t.registry, status, calls: t.calls, go: (id: string) => { this.selected = id }, open: (w: Where) => this.open(w), remove: (r: string) => this.del(r) }
     const all = nodes(c.d, t.registry, status)
     const shown = filterTree(all, { ...this.filter, text: '' })
     const groups = { kinds: KINDS, namespaces: namespaces(all), statuses: STATUSES }
     return html`<div class="split"><div class="pane">
         <nano-filter .groups=${groups} .value=${this.filter} @change=${(e: CustomEvent<FilterValue>) => { this.filter = e.detail }}></nano-filter>
       <nano-tree .nodes=${shown} .icon=${this.icon} .query=${this.filter.text} .selected=${this.selected} open-depth="2" @dblclick=${() => this.dbl()}
-        @select=${(e: CustomEvent<{ id: string }>) => { e.preventDefault(); const id = primary(e.detail.id); if (!/^g:|\/(pods|impls|ifaces|ops)$/.test(id)) this.selected = id }}></nano-tree></div>
+        @select=${(e: CustomEvent<{ id: string }>) => { e.preventDefault(); const id = primary(e.detail.id); if (!/\/(pods|impls|ifaces|ops)$/.test(id)) this.selected = id }}></nano-tree></div>
       <section class="details" aria-label="Details">${details(c, this.selected)}</section></div>`
   }
 }

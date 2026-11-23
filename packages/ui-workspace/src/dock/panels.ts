@@ -1,55 +1,18 @@
 /**
- * What each dock panel holds: `explorer` and `wiring` nano-ui's elements, `stream` the app's events, `pod:<name>` the
- * pod's chosen view (`nano-sandboxed` for a non-host pod), made again when its view or runtime changes.
+ * What each dock panel holds: its palette widget's content, and a pod's panel (a `pod` panel, or an implementation's)
+ * the slot its state names, as its page opened it (dock/page-pods.ts; a panel from before panels named their slot: its
+ * pod's name). A panel's state keeps its slot, so Reset and Restore reattach.
  *
- *   const dispose = fill(container.element, 'pod:up', host)
- *   mountPanel(container, state, { doc, defs, bus, host, registry, send })   // golden-layout's factory for a panel
+ *   mountPanel(container, state, { doc, defs, bus, host, registry, send, pods })   // golden-layout's factory for a panel
  */
 import type { ComponentContainer, ComponentItem, ContentItem, JsonValue } from 'golden-layout/dist/esm/index.js'
-import { viewFor, type ViewTarget } from '@pritzlaff/nano-ui'
 import type { Host } from '../host.ts'
-import { connected } from '../auto-connect.ts'
 import { icon as explorerIcon } from '../icons.ts'
 import { provideBus, type Bus } from '../lib/bus.ts'
 import { panelContent, withMode } from '../lib/panel-content.ts'
 import { panelState, readWidgetId, readWidgetMode, readWidgetName, shownInstance } from '../lib/dock-layout.ts'
 import type { Def } from './palette.ts'
-import '../sandbox/sandboxed-view.ts'
-
-const away = (h: Host, pod: string) => (h.data().pods[pod]?.isolation ?? 'host') !== 'host'
-/** A pod's view tag: its selector, else `nano-sandboxed` for a non-host pod, else its implementation's default. */
-export const chosen = (h: Host, pod: string) => (away(h, pod) && !customElements.get(h.data().views?.[pod] ?? '') ? 'nano-sandboxed' : viewFor(pod, h.data(), h.defaults()))
-/** The tags a pod's view can be. */
-export const viewTags = (h: Host, pod: string, impl: string) =>
-  [...new Set([away(h, pod) && 'nano-sandboxed', h.defaults()[impl], 'nano-pod-view'].filter((x): x is string => !!x))]
-
-type Viewing = HTMLElement & { target?: unknown }
-const made = (tag: string, target: unknown) => Object.assign(document.createElement(tag) as Viewing, { target })
-
-/** Fills panel `id`'s element; returns what stops it listening. */
-export function fill(el: HTMLElement, id: string, h: Host): () => void {
-  const target = { app: h.app, registry: h.registry }
-  if (id === 'explorer' || id === 'wiring') { el.append(made(`nano-${id}`, target)); return () => {} }
-  if (id === 'stream') {
-    const pre = el.appendChild(document.createElement('pre')), lines: string[] = []
-    pre.className = 'dock-stream'
-    return h.app.listen(e => { lines.push(JSON.stringify(e)); if (lines.length > 200) lines.shift(); pre.textContent = lines.join('\n') })   // the last 200
-  }
-  const pod = id.slice('pod:'.length)
-  let shown = ''
-  const show = () => {
-    const d = h.data(), runtime = Object.keys(d.runtimes).find(r => d.runtimes[r]!.pods.includes(pod))
-    if (!runtime) return
-    const tag = chosen(h, pod), key = `${tag} ${runtime}`
-    // the target is set once: a new one on every apply would restart the view's listening
-    if (key !== shown) { shown = key; el.replaceChildren(made(tag, { ...target, runtime, pod } satisfies ViewTarget)) }
-  }
-  show()
-  return h.app.listen(e => { if (e.type === 'applied') show() })
-}
-
-/** The config a built-in starts with, where it needs one. */
-const starts: Record<string, unknown> = { 'nano.ui/map': { code: 'return x' } }
+import { podPanel, type PagePods } from './page-pods.ts'
 
 /**
  * A palette template per implementation the host can make (what composable.ts's catalog was): `data-implementation`
@@ -67,22 +30,11 @@ export function implementationTemplates(h: Host, doc: Document): HTMLTemplateEle
   }))
 }
 
-/** Adds a pod of `coord` to runtime main, named `<kind><n>` with the first free n; its name, once applied. */
-export async function addPod(h: Host, coord: string): Promise<string | undefined> {
-  const d = h.data(), kind = coord.slice(coord.indexOf('/') + 1)
-  let n = 1
-  while (`${kind}${n}` in d.pods) n++
-  const name = `${kind}${n}`, pod = { implementation: coord, eager: true, ...(starts[coord] !== undefined && { config: starts[coord] }) }
-  const main = d.runtimes['main'] ?? { pods: [], subscriptions: [] }
-  const r = await h.apply(connected({ ...d, pods: { ...d.pods, [name]: pod }, runtimes: { ...d.runtimes, main: { ...main, pods: [...main.pods, name] } } }, h.registry, [name]))
-  return r.ok ? name : undefined
-}
-
-type Mounting = { doc: Document; defs: ReadonlyMap<string, Def>; bus: Bus; host?: Host; registry?: unknown; send(topic: string, payload: unknown): void }
+type Mounting = { doc: Document; defs: ReadonlyMap<string, Def>; bus: Bus; host?: Host; registry?: unknown; pods?: PagePods; send(topic: string, payload: unknown): void }
 
 /** Fills a dock panel with its palette widget (state names it): the template's content, a pod's view, or a new pod of
  * an implementation; the panel's state then names the instance it shows, so Reset and Restore reattach. */
-export function mountPanel(container: ComponentContainer, state: JsonValue | undefined, { doc, defs, bus, host: h, registry, send }: Mounting) {
+export function mountPanel(container: ComponentContainer, state: JsonValue | undefined, { doc, defs, bus, host: h, registry, pods, send }: Mounting) {
   const id = readWidgetId(state)
   const def = defs.get(id)
   if (!def) throw new Error(`layout refers to unknown workspace widget "${id}"`)
@@ -91,32 +43,33 @@ export function mountPanel(container: ComponentContainer, state: JsonValue | und
   /* golden-layout may build a panel inside its drag proxy (in document.body), so each panel provides the bus itself */
   provideBus(container.element, bus)
   // upgraded at once, with placed elements in the dock's system (if it has one)
-  const name = readWidgetName(state)
+  const name = readWidgetName(state), given = (state as { slot?: unknown })['slot'], slot = typeof given === 'string' && given ? given : undefined
   // the saved mode (BACKLOG(2): an instance's own `nano/deploy` label is gone with the registry)
   const mode = readWidgetMode(state)
   const content = withMode(panelContent(doc, def.template, registry), id, mode, name)
-  const shown = (id === 'pod' ? { name } : content.firstElementChild) as (Element & { model?: unknown }) | null
-  if (name && id !== 'pod') (shown as Element | null)?.setAttribute('name', name)   // before it connects, so it attaches to that instance
+  // a pod's or an implementation's panel shows its pod by name: kept in its state even with no host yet to show it
+  const impl = def.template.dataset['implementation']
+  const shown = (id === 'pod' || impl ? { name } : content.firstElementChild) as (Element & { model?: unknown }) | null
+  if (name && id !== 'pod' && !impl) (shown as Element | null)?.setAttribute('name', name)   // before it connects, so it attaches to that instance
   container.element.append(content)
   if (h) for (const el of container.element.querySelectorAll<HTMLElement & { target?: unknown; icon?: unknown }>('nano-explorer, nano-wiring')) {
     if (el.localName === 'nano-explorer') el.icon = explorerIcon
     el.target = { app: h.app, registry: h.registry, get calls() { return h.calls() } }
   }
-  if (h && id === 'pod' && name) container.on('destroy', fill(container.element, `pod:${name}`, h))
-  // an implementation's panel makes a pod of it (or shows the one it made), as a catalog kind's placed a new instance
-  const impl = def.template.dataset['implementation']
+  if (h && pods && id === 'pod' && (slot ?? name)) container.on('destroy', podPanel(container.element, (slot ?? name)!, h, pods))
+  // an implementation's panel shows the slot it names; unnamed (picks deploy first), it deploys a pod in main (host.deploy) and its slot
   if (h && impl) {
-    let stop = () => {}, gone = false, pod = name
-    const show = (p: string) => { pod = p; if (!gone) stop = fill(container.element, `pod:${p}`, h) }
-    if (name) show(name); else void addPod(h, impl).then((p) => { if (p) show(p) })
-    container.stateRequestEvent = () => ({ widget: id, ...(pod && { name: pod }) })
+    let stop = () => {}, gone = false, pod = name, at = slot ?? name
+    const show = (s: string) => { at = s; if (!gone && pods) stop = podPanel(container.element, s, h, pods) }
+    if (at) show(at)
+    else void h.deploy(impl, 'main').then((r) => { const p = r.ok ? r.value.name : undefined, s = p && pods?.add(h.data(), 'main', p); pod = p; if (s) { show(s); if (!gone) container.emit('stateChanged') } })
+    container.stateRequestEvent = () => ({ widget: id, ...(pod && { name: pod }), ...(at && { slot: at }) })
     container.on('destroy', () => { gone = true; stop() })
-    send('dock:opened', { widget: id })
-    return
+    return send('dock:opened', { widget: id })
   }
   for (const type of ['pointerdown', 'focusin']) container.element.addEventListener(type, () => container.focus())
   // saved layouts name the instance each panel shows, so Reset and Restore reattach instead of making new ones
-  container.stateRequestEvent = () => panelState(id, shown)
+  container.stateRequestEvent = () => ({ ...panelState(id, shown), ...(slot && { slot }) })
   send('dock:opened', { widget: id })
 }
 
@@ -131,3 +84,6 @@ export const shows = (item: ComponentItem, defs: ReadonlyMap<string, Def>) => po
 export const panelOf = (item: ContentItem | undefined, pod: string, defs: ReadonlyMap<string, Def>): ComponentItem | undefined => !item ? undefined
   : item.isComponent ? (podOf(item as ComponentItem, defs) === pod ? item as ComponentItem : undefined)
   : item.contentItems.map(i => panelOf(i, pod, defs)).find(Boolean)
+/** The picker's pods of an implementation in a runtime, each running or not (a runtime that is gone: none). */
+export const podsIn = (h: Host) => (implementation: string, runtime: string) => (h.data().runtimes[runtime]?.pods ?? []).filter((p) => h.data().pods[p]?.implementation === implementation)
+  .map((name) => { const s = h.app.runtime(runtime).status(name); return { name, running: s.ok && s.value === 'running' }; });

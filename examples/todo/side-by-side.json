@@ -76,6 +76,11 @@
             "outside": false
           },
           {
+            "allow": "start",
+            "from": "host",
+            "outside": true
+          },
+          {
             "deny": "*"
           }
         ]

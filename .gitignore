@@ -9,6 +9,7 @@ packages/ui-workspace/public/bundle
 packages/ui-workspace/public/examples
 packages/ui-workspace/public/main-*.js*
 packages/ui-workspace/public/sandbox
+packages/ui-workspace/public/react
 test-results/
 playwright-report/
 

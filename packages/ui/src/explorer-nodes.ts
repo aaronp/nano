@@ -1,7 +1,6 @@
 /**
- * The explorer's tree: each runtime with its pods, implementations, interfaces and operations; then every operation
- * (actions, events) with the interface, implementations and pods it belongs to; then the interfaces and implementations.
- * A node shown again away from its primary place has the id `<where>|<primary id>`: `primary(id)` is what it selects.
+ * The explorer's tree: each runtime with its pods, implementations, interfaces and operations (the runtimes only).
+ * An implementation, interface or operation node has the id `<where>|<primary id>` (`m:`, `i:`, `o:`): `primary(id)` is what it selects.
  * A pod node carries its `PodStatus` as `data.status` (asked of the runtime: `status(runtime, pod)`).
  */
 import { html } from 'lit'
@@ -21,7 +20,6 @@ type Op = { port: string; iface: string; name: string; kind: string }
 export function nodes(d: AppDeployment, registry: Registry, status: (runtime: string, pod: string) => PodStatus): TreeNode[] {
   const m = registry.manifest()
   const ops: Op[] = m.interfaces.flatMap(i => i.ops.map(o => ({ port: `${i.coord}/${o.name}`, iface: i.coord, name: o.name, kind: o.kind })))
-  const implsOf = (iface: string) => registry.implementationsOf(iface).map(x => x.coord)
   const provides = (impl: string) => registry.implementation(impl)?.provides.map(i => i.coord) ?? []
   const where = (pod: string) => Object.keys(d.runtimes).find(r => d.runtimes[r]!.pods.includes(pod)) ?? ''
   const podNode = (pod: string): TreeNode => ({ id: `p:${where(pod)}:${pod}`, label: pod, kind: 'pod', data: { ns: namespaceOf(d.pods[pod]?.implementation ?? ''), status: status(where(pod), pod) } })
@@ -49,22 +47,7 @@ export function nodes(d: AppDeployment, registry: Registry, status: (runtime: st
     ] }
   })
 
-  const opTree = (o: Op): TreeNode => {
-    const at = `o:${o.port}`, impls = implsOf(o.iface)
-    const pods = Object.keys(d.pods).filter(p => impls.includes(d.pods[p]!.implementation))
-    return { ...opNode(o), children: [
-      alias(at, ifaceNode(o.iface)),
-      group(`${at}/impls`, 'Implementations', impls.map(c => alias(at, implNode(c)))),
-      group(`${at}/pods`, 'Pods', pods.map(p => alias(at, podNode(p)))),
-    ] }
-  }
-  return [...runtimes,
-    group('g:ops', 'Operations', [
-      group('g:actions', 'Actions', ops.filter(o => o.kind === 'action').map(opTree)),
-      group('g:events', 'Events', ops.filter(o => o.kind === 'event').map(opTree)),
-    ]),
-    group('g:interfaces', 'Interfaces', m.interfaces.map(i => ifaceNode(i.coord))),
-    group('g:implementations', 'Implementations', m.implementations.map(i => implNode(i.coord)))]
+  return runtimes
 }
 
 /** Every namespace in the tree, sorted. */

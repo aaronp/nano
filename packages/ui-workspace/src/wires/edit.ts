@@ -1,6 +1,5 @@
 // Edits: each applies the app's deployment with a pod or pipe added or removed; a refusal is shown, and returned.
 import { AppDeployment, lookup } from '@pritzlaff/nano-core'
-import { addPod } from '../dock/panels.ts'
 import type { Host } from '../host.ts'
 import { jacksOfImpl, wireId, type Model } from './model'
 import type { Catalog, Result } from './state'
@@ -50,11 +49,11 @@ export function removeComponent(el: Wires, instance: string) {
     return d
   })
 }
-/** Adds a pod of `kind` (an implementation) to runtime main, under a fresh name; returns the name, or null if refused. */
+/** Adds a lazy pod of `kind` (an implementation) to runtime main, under a fresh name; returns the name, or null if refused. */
 export async function create(el: Wires, kind: string) {
-  const name = el.host && await addPod(el.host, kind)
+  const r = el.host && await el.host.deploy(kind, 'main'), name = r && r.ok ? r.value.name : null
   if (!name) el.fail('Could not add a ' + kind)
-  return name ?? null
+  return name
 }
 /** Asks the workspace to open a rack component as a panel again: the dock's panel for that pod. */
 export function openPanel(el: Wires, name: string) {

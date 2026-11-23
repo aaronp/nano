@@ -41,3 +41,11 @@ test('load fails with the first reason and leaves nothing running', async () => 
   const bad = new URL(`data:application/json,${encodeURIComponent(JSON.stringify({ pods: {}, runtimes: {}, modules: { x: './nope.js' } }))}`)
   await expect(Application.load(bad)).rejects.toThrow()
 })
+
+test('the host may start the store (to show its panel), but its rules still keep the host from calling it', async () => {
+  const app = await Application.load(new URL('./nano.json', import.meta.url))
+  const backend = app.runtime('example.todo.backend')
+  expect(await backend.start('todoStore')).toMatchObject({ ok: true })
+  expect(backend.status('todoStore')).toMatchObject({ ok: true, value: 'running' })
+  expect(backend.resolve(KeyValueStoreDef.api)).toMatchObject({ ok: false, reason: 'denied' })
+})

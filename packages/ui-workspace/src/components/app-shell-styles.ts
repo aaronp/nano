@@ -2,9 +2,13 @@
 import { css } from 'lit';
 
 export const appShellStyles = css`
-    :host { --drawer-w: 248px; display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100vh; height: 100dvh; background: var(--bg); color: var(--fg);
+    /* one column, never wider than the window: an auto column grew to the bar's content (a focused pod's controls) and
+       widened the whole page. A focused pod's controls give way first (boot-app-bar.ts); past that the bar clips,
+       sideways only (clip, not hidden: its menus still drop below it), and keeps one row, so its height never moves
+       the page when a pod's controls come and go */
+    :host { --drawer-w: 248px; display: grid; grid-template-rows: auto minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); height: 100vh; height: 100dvh; background: var(--bg); color: var(--fg);
       font: 15px/1.5 var(--font); }
-    .bar { position: relative; z-index: 1001; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 12px 0 0; background: var(--appbar-bg); color: var(--appbar-fg);
+    .bar { position: relative; z-index: 1001; display: flex; align-items: center; overflow-x: clip; gap: 10px; min-height: 56px; padding: 0 12px 0 0; background: var(--appbar-bg); color: var(--appbar-fg);
       border-bottom: 1px solid var(--line); }
     /* the bar's colour reaches what's slotted in it (the File menu, the view's controls): their own :host rules (a
        shared base sets color: --nano-fg) lose to this outer one, so nothing in the bar takes the page's text colour */
@@ -15,7 +19,7 @@ export const appShellStyles = css`
       margin-right: 10px; border-right: 1px solid var(--line); overflow: hidden; transition: width .2s ease; }
     :host([narrow]) .brand { width: auto; padding-right: 14px; }
     :host([collapsed]:not([narrow])) .brand ::slotted([slot='title']) { display: none; }
-    .page { display: flex; align-items: center; gap: 10px; min-width: 0; margin-right: 24px; font: 600 16px/1.2 var(--display); white-space: nowrap; }
+    .page { flex: none; display: flex; align-items: center; gap: 10px; margin-right: 24px; font: 600 16px/1.2 var(--display); white-space: nowrap; }
     .page .tile { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--accent); color: var(--on-accent); }
     .page svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     .spacer { flex: 1; }

@@ -20,7 +20,7 @@ export class NanoPodView extends ViewElement {
   protected started() { this.ports.clear(); this.stats.clear(); this.requestUpdate() }
 
   protected hear(e: AppEvent, tg: ViewTarget) {
-    if (e.type === 'sent' && e.to === tg.pod) {
+    if (e.type === 'sent' && e.kind !== 'start' && e.to === tg.pod) {
       this.ports.set(e.id, e.port)
       const s = this.stats.get(e.port) ?? { calls: 0 }
       this.stats.set(e.port, { ...s, calls: s.calls + 1 })

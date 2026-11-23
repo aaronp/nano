@@ -6,7 +6,8 @@
  *   const store = kv.interfaceId('KeyValueStore')      // example.kv.KeyValueStore
  *   const mem = kv.implementationId('memory')          // example.kv/memory
  *   Coord.port(store, 'get')                           // example.kv.KeyValueStore/get
- *   Coord.pod(mem, 'main', 'store')                    // example.kv/memory@main/store
+ *   const main = Coord.runtime('main')                 // main
+ *   Coord.pod(mem, main, 'store')                      // example.kv/memory@main/store
  */
 export type Namespace = {
   readonly kind: 'namespace'
@@ -17,8 +18,10 @@ export type Namespace = {
 export type InterfaceCoord = { readonly kind: 'interface'; readonly ns: Namespace; readonly name: string }
 export type ImplCoord = { readonly kind: 'implementation'; readonly ns: Namespace; readonly name: string }
 export type PortCoord = { readonly kind: 'port'; readonly interface: InterfaceCoord; readonly op: string }
-export type PodCoord = { readonly kind: 'pod'; readonly implementation: ImplCoord; readonly runtime: string; readonly pod: string }
-type Kinds = { namespace: Namespace; interface: InterfaceCoord; implementation: ImplCoord; port: PortCoord; pod: PodCoord }
+/** A runtime, by its id: the same id `runtimes` keys and events carry as a plain string. */
+export type RuntimeCoord = { readonly kind: 'runtime'; readonly id: string }
+export type PodCoord = { readonly kind: 'pod'; readonly implementation: ImplCoord; readonly runtime: RuntimeCoord; readonly pod: string }
+type Kinds = { namespace: Namespace; interface: InterfaceCoord; implementation: ImplCoord; port: PortCoord; runtime: RuntimeCoord; pod: PodCoord }
 
 const NS = /^[a-zA-Z][a-zA-Z0-9-]*([./][a-zA-Z0-9-]+)*$/
 const NAME = /^[a-zA-Z0-9-]+$/
@@ -26,7 +29,8 @@ const ID = /^[^/@\s#\x00-\x1f\x7f]{1,64}$/   // a runtime id (the id rule, and n
 const POD = /^[^/@.\s#\x00-\x1f\x7f]{1,64}$/   // a pod name: also no `.`
 
 const check = (ok: boolean, what: string, v: string) => { if (!ok) throw new Error(`bad ${what} ${JSON.stringify(v)}`) }
-const value = <T extends object>(v: T, text: string): T => Object.freeze(Object.assign(v, { toString: () => text }))
+/** A frozen coordinate: its string (and its JSON) is the saved form. */
+const value = <T extends object>(v: T, text: string): T => Object.freeze(Object.assign(v, { toString: () => text, toJSON: () => text }))
 
 function namespace(name: string): Namespace {
   check(NS.test(name), 'namespace', name)
@@ -43,8 +47,12 @@ function port(i: InterfaceCoord, op: string): PortCoord {
   return value({ kind: 'port' as const, interface: i, op }, `${i}/${op}`)
 }
 
-function pod(implementation: ImplCoord, runtime: string, name: string): PodCoord {
-  check(ID.test(runtime), 'runtime', runtime)
+function runtime(id: string): RuntimeCoord {
+  check(ID.test(id), 'runtime', id)
+  return value({ kind: 'runtime' as const, id }, id)
+}
+
+function pod(implementation: ImplCoord, runtime: RuntimeCoord, name: string): PodCoord {
   check(POD.test(name), 'pod', name)
   return value({ kind: 'pod' as const, implementation, runtime, pod: name }, `${implementation}@${runtime}/${name}`)
 }
@@ -63,13 +71,14 @@ function read<K extends keyof Kinds>(kind: K, s: string): Kinds[K] {
     case 'interface': { const [ns, n] = cut(s, '.') ?? bad(); return attempt(() => namespace(ns).interfaceId(n)) as Kinds[K] }
     case 'implementation': { const [ns, n] = cut(s, '/') ?? bad(); return attempt(() => namespace(ns).implementationId(n)) as Kinds[K] }
     case 'port': { const [i, op] = cut(s, '/') ?? bad(); return attempt(() => port(read('interface', i), op)) as Kinds[K] }
+    case 'runtime': return attempt(() => runtime(s)) as Kinds[K]
     default: {
       const at = s.indexOf('@'), slash = s.indexOf('/', at)
       if (at < 0 || slash < 0) bad()
-      return attempt(() => pod(read('implementation', s.slice(0, at)), s.slice(at + 1, slash), s.slice(slash + 1))) as Kinds[K]
+      return attempt(() => pod(read('implementation', s.slice(0, at)), runtime(s.slice(at + 1, slash)), s.slice(slash + 1))) as Kinds[K]
     }
   }
 }
 
-/** Layer 1's coordinates (the package's `Coord` adds a namespace's building methods, in provider.ts): `Coord.namespace(ns)`, `Coord.port(interface, op)`, `Coord.pod(implementation, runtime, pod)`, `Coord.parse(kind, s)`. */
-export const Coord = { namespace, port, pod, parse: read }
+/** Layer 1's coordinates (the package's `Coord` adds a namespace's building methods, in provider.ts): `Coord.namespace(ns)`, `Coord.port(interface, op)`, `Coord.runtime(id)`, `Coord.pod(implementation, runtime, pod)`, `Coord.parse(kind, s)`. */
+export const Coord = { namespace, port, runtime, pod, parse: read }

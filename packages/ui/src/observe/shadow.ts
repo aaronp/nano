@@ -12,10 +12,10 @@ import type { Entry, MessageStore } from './entry.ts'
 import { memoryStore } from './memory-store.ts'
 import { cleanStart, replay } from './replay.ts'
 
-/** `d` without the pod `host`: not placed, not wired, no tags or view. */
+/** `d` without the pod `host`: not placed, not wired, no tags. */
 function without(d: AppDeployment, host: string): AppDeployment {
   const out = structuredClone(d)
-  delete out.pods[host]; delete out.tags?.[host]; delete out.views?.[host]
+  delete out.pods[host]; delete out.tags?.[host]
   for (const r of Object.values(out.runtimes)) {
     r.pods = r.pods.filter(p => p !== host)
     r.subscriptions = r.subscriptions.filter(s => s.from !== host && s.to !== host)

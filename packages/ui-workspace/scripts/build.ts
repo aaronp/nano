@@ -31,12 +31,13 @@ async function all() {
   copyFileSync(join(repo, 'templates/nano-template/nano.json'), join(pub, 'examples/template/nano.json'))
   if (Bun.spawnSync(['bun', 'scripts/build.ts'], { cwd: join(repo, 'examples'), stdout: 'inherit', stderr: 'inherit' }).exitCode) throw new Error('examples build failed')
   for (const name of readdirSync(join(repo, 'examples/dist'))) cpSync(join(repo, 'examples/dist', name), join(pub, 'examples', name), { recursive: true })
+  if (Bun.spawnSync(['bun', 'scripts/build.ts'], { cwd: join(repo, 'packages/host-react'), stdout: 'inherit', stderr: 'inherit' }).exitCode) throw new Error('host-react build failed')   // the second host, at /react/
 }
 
 await all()
 if (watching) {
   let timer: ReturnType<typeof setTimeout> | undefined
   const again = () => { clearTimeout(timer); timer = setTimeout(() => void all().catch(e => console.error(e)), 100) }
-  for (const d of ['packages/ui-workspace/src', 'packages/ui/src', 'packages/nano/src', 'packages/elements/src', 'examples/slice', 'examples/todo', 'examples/chat', 'examples/auth', 'examples/originkey', 'examples/drift', 'examples/kv', 'templates/nano-template/src'])
+  for (const d of ['packages/ui-workspace/src', 'packages/host-react/src', 'packages/host/src', 'packages/outline/src', 'packages/ui/src', 'packages/nano/src', 'packages/elements/src', 'examples/slice', 'examples/todo', 'examples/chat', 'examples/auth', 'examples/originkey', 'examples/drift', 'examples/kv', 'templates/nano-template/src'])
     watch(join(repo, d), { recursive: true }, again)
 }

@@ -9,11 +9,11 @@ import { KeyValueStoreDef } from '../examples/kv/contract.ts'
 
 const dock = (page: Page) => page.locator('workspace-dock#workspace')
 /** The participant's window, by its heading (its text would also match a line mentioning the name). */
-const room = (page: Page, who: string) => dock(page).locator('chat-room').filter({ has: page.getByRole('heading', { name: who, exact: true }) })
+const room = (page: Page, who: string, at = dock(page)) => at.locator('chat-room').filter({ has: page.getByRole('heading', { name: who, exact: true }) })
 const runtimes = (page: Page) => page.evaluate(() => Object.keys((document.querySelector('workspace-dock') as any).host.data().runtimes).sort())
 
 async function start(page: Page) {
-  await page.goto('/#/workspace')
+  await page.goto('/#/p/workspace')
   await page.evaluate(() => localStorage.clear())
   await page.reload()
   await expect(dock(page).locator('nano-explorer')).toBeVisible()
@@ -30,6 +30,14 @@ async function open(page: Page, url: string) {
   await d.getByRole('button', { name: 'Import', exact: true }).click()
   await expect(d).toHaveCount(0)
 }
+
+/** Unticks every runtime, once Fetch has listed them. */
+async function uncheckAll(d: ReturnType<Page['locator']>) {
+  await expect(d.locator('input[data-select-runtime]').first()).toBeVisible()
+  for (const box of await d.locator('input[data-select-runtime]').all()) await box.uncheck()
+}
+/** How far the page scrolls sideways: 0 when nothing is wider than the window. */
+const sideways = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
 
 async function say(room: ReturnType<Page['locator']>, text: string) {
   await room.getByRole('textbox', { name: 'Message' }).fill(text)
@@ -64,8 +72,12 @@ test('todo and chat import side by side: no runtime clash', async ({ page }) => 
   await open(page, '/examples/chat/nano.json')
   const names = await runtimes(page)
   expect(names).toEqual(expect.arrayContaining(['example.chat.backend', 'example.chat.room', 'example.todo.backend', 'example.todo.frontend']))
-  // the second file's slots replace the panels (the workspace's own rule); todos is still there, from the explorer
-  await expect(dock(page).locator('chat-room')).toHaveCount(2)
+  // Main shows a pod now (todo's), so the second file's Main is a page beside it, workspace-2 (the workspace's own rule)
+  const chat = page.locator('workspace-dock#ws_workspace-2')
+  await page.goto('/#/p/workspace-2')
+  await expect(chat.locator('chat-room')).toHaveCount(2)
+  // todos is still on Main, from the explorer
+  await page.goto('/#/p/workspace')
   const node = dock(page).locator('nano-explorer').getByText('todos', { exact: true })   // the dock's Systems panel
   await expect(node).toHaveCount(1)
   await node.click()   // selects: its details, with Open view
@@ -75,8 +87,9 @@ test('todo and chat import side by side: no runtime clash', async ({ page }) => 
   await list.getByRole('textbox', { name: 'New todo' }).fill('eggs')
   await list.getByRole('button', { name: 'Add' }).click()
   await expect(list.locator('li')).toHaveText([/eggs/])
-  await say(room(page, 'alice'), 'still here')
-  await expect(room(page, 'bob').locator('li')).toHaveText([/alice.*still here/])
+  await page.goto('/#/p/workspace-2')
+  await say(room(page, 'alice', chat), 'still here')
+  await expect(room(page, 'bob', chat).locator('li')).toHaveText([/alice.*still here/])
 })
 
 test('auth: with a virtual authenticator, Register then Passkey; the log shows ok', async ({ page }) => {
@@ -124,7 +137,7 @@ async function openAllUnticked(page: Page) {
   await d.getByLabel('nano.json URL').fill('/examples/nano.json')
   await d.getByRole('button', { name: 'Fetch' }).click()
   await d.getByRole('radio', { name: /^Trusted/ }).check()
-  for (const box of await d.locator('input[data-select-runtime]').all()) await box.uncheck()
+  await uncheckAll(d)
   await expect(d.getByRole('button', { name: 'Import', exact: true })).toBeDisabled()
   return d
 }
@@ -162,7 +175,7 @@ test('make serve-examples, imported from its own origin: every example is offere
     await expect(d.getByLabel(`Import runtime ${r}`, { exact: true })).toBeVisible()
   await expect(d).toContainText('localhost:4310')   // the foreign-origin notice
   await d.getByRole('radio', { name: /^Trusted/ }).check()
-  for (const box of await d.locator('input[data-select-runtime]').all()) await box.uncheck()
+  await uncheckAll(d)
   for (const r of ['example.chat.backend', 'example.chat.room']) await d.getByLabel(`Import runtime ${r}`, { exact: true }).check()
   await d.getByRole('button', { name: 'Import', exact: true }).click()
   await expect(d).toHaveCount(0)
@@ -180,7 +193,7 @@ test('imported Sandboxed (the default), the pods start at once and their own vie
   const d = page.getByRole('dialog', { name: 'Import components' })
   await d.getByLabel('nano.json URL').fill('http://localhost:4310/nano.json')
   await d.getByRole('button', { name: 'Fetch' }).click()
-  for (const box of await d.locator('input[data-select-runtime]').all()) await box.uncheck()
+  await uncheckAll(d)
   for (const r of ['example.chat.backend', 'example.chat.room']) await d.getByLabel(`Import runtime ${r}`, { exact: true }).check()
   await d.getByRole('button', { name: 'Import', exact: true }).click()
   await expect(d).toHaveCount(0)
@@ -220,8 +233,7 @@ async function openSandboxed(page: Page, want: RegExp) {
   const d = page.getByRole('dialog', { name: 'Import components' })
   await d.getByLabel('nano.json URL').fill('http://localhost:4310/nano.json')
   await d.getByRole('button', { name: 'Fetch' }).click()
-  await expect(d.locator('input[data-select-runtime]').first()).toBeVisible()
-  for (const box of await d.locator('input[data-select-runtime]').all()) await box.uncheck()
+  await uncheckAll(d)
   for (const box of await d.locator('input[data-select-runtime]').all()) if (want.test((await box.getAttribute('data-select-runtime')) ?? '')) await box.check()
   await d.getByRole('button', { name: 'Import', exact: true }).click()
   await expect(d).toHaveCount(0)
@@ -282,10 +294,11 @@ test("focusing a pod's panel adds its View and Implementation to the app bar, be
   await expect(page.getByRole('button', { name: 'Connections' }).first()).toBeVisible()
 })
 
-test('a participant added from the drawer auto-connects to messaging, and talks in the room', async ({ page }) => {
+test('a participant added from the picker auto-connects to messaging, and talks in the room', async ({ page }) => {
   await start(page)
   await open(page, '/examples/chat/nano.json')
-  await page.locator('component-drawer').getByText('participant', { exact: true }).first().click()
+  await dock(page).getByRole('button', { name: 'Add a panel' }).first().click()
+  await page.locator('nano-picker').getByRole('button', { name: 'participant', exact: true }).first().click()
   await expect(page.getByText('connected participant1 → messaging (example.messaging.Messaging)')).toBeVisible()
   await say(room(page, 'participant1'), 'hello')
   await expect(room(page, 'alice').getByText('hello')).toBeVisible()
@@ -352,9 +365,10 @@ test('Settings shows each runtime\'s policy rules in order, the frame permission
   const s = page.locator('nano-settings')
   await expect(s.getByRole('heading', { name: 'example.chat.backend' })).toBeVisible()
   const rows = s.locator('h3:text("example.chat.backend") + p + table tbody tr')
-  await expect(rows).toHaveCount(5)
+  await expect(rows).toHaveCount(6)
   await expect(rows.first()).toContainText('allow')
   await expect(rows.first()).toContainText('bob')
+  await expect(rows.nth(4)).toContainText(/allow\s*start\s*host/)   // the host may start a pod there, to show its panel
   await expect(rows.last()).toContainText('deny')
   await expect(s.getByRole('row', { name: /home-origin/ })).toContainText('publickey-credentials-get')
   await expect(s.getByRole('row', { name: /example\.chat / })).toContainText('this origin')
@@ -362,10 +376,12 @@ test('Settings shows each runtime\'s policy rules in order, the frame permission
 })
 
 test('the chat, a message sent: its declared, observed messaging.post → chatStore.put is drawn op to op in Connections and listed under messaging in Systems', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
   await start(page)
   await open(page, '/examples/chat/nano.json')
   await say(room(page, 'alice'), 'hi bob')
   await expect(room(page, 'bob').locator('li')).toHaveText([/hi bob/])
+  expect(await sideways(page)).toBe(0)   // alice's controls in the app bar don't widen the page
   await page.getByRole('button', { name: 'Connections' }).first().click()
   await expect(page.locator('c-wires')).toHaveAttribute('flipped', '')
   const edge = page.locator('c-wires [data-call="example.chat.backend|messaging|chatStore"] [data-op-call]')
@@ -382,6 +398,7 @@ test('the chat, a message sent: its declared, observed messaging.post → chatSt
   await page.screenshot({ path: test.info().outputPath('op-calls.png') })
   await page.locator('c-wires').getByRole('button', { name: 'Back to the workspace' }).click()
   await expect(page.locator('c-wires')).not.toHaveAttribute('flipped', '')
+  expect(await sideways(page)).toBe(0)
   await dock(page).locator('nano-explorer li[data-id="p:example.chat.backend:messaging"] > .line').click()
   await expect(dock(page).locator('nano-explorer .details')).toContainText('post → chatStore.put')
 })

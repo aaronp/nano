@@ -4,7 +4,7 @@
  *
  *   const defs = readPalette(dock); layout.loadLayout(initial(dock, defs)); split(layout, { widget: 'notes' }, 'Notes')
  */
-import { ResolvedComponentItemConfig, type ContentItem, type GoldenLayout, type JsonValue, type LayoutConfig, type Stack } from 'golden-layout/dist/esm/index.js';
+import { ResolvedComponentItemConfig, type ComponentItem, type ContentItem, type GoldenLayout, type JsonValue, type LayoutConfig, type Stack } from 'golden-layout/dist/esm/index.js';
 import { ARRANGEMENTS, PALETTE_ID, initialLayout, type Arrangement, type PaletteEntry } from '../lib/dock-layout.ts';
 
 export interface Def extends PaletteEntry { readonly template: HTMLTemplateElement }
@@ -20,6 +20,12 @@ export function readPalette(el: HTMLElement): Map<string, Def> {
   }
   if (defs.size === 0) throw new Error('<workspace-dock> needs at least one <template data-widget="…">');
   return defs;
+}
+
+/** Each palette widget of `el` (its templates now): a pod's (`pod`, or one naming an implementation) or a tool's; undefined, not in its palette. */
+export function widgetKinds(el: HTMLElement): (widget: string) => 'pod' | 'tool' | undefined {
+  const of = new Map([...el.querySelectorAll<HTMLTemplateElement>(':scope > template[data-widget]')].map((t) => [t.dataset['widget']!, t.dataset['implementation'] ? 'pod' as const : 'tool' as const]));
+  return (w) => (w === 'pod' ? 'pod' : of.get(w));
 }
 
 /** The starting layout: the widgets `open` names (else the first), arranged as `arrangement` says (else a row). */
@@ -47,15 +53,16 @@ const largestStack = (root: ContentItem | undefined): Stack | undefined => {
   return best;
 };
 
-/** Adds a `widget` panel of `state` splitting the focused panel (else the largest): beside it as a new column when that
- * panel is wider than tall, else below it as a new row; into an empty dock, alone. */
-export function split(layout: GoldenLayout, state: JsonValue, title: string) {
-  const target = layout.focusedComponentItem?.parentItem ?? largestStack(layout.rootItem);
-  if (!target?.isStack) { layout.addComponent('widget', state, title); return; }   // an empty dock
+/** Adds a `widget` panel of `state` splitting `panel` (else the focused one, else the largest): beside it as a new column
+ * when that panel is wider than tall, else below it as a new row; into an empty dock, alone. Returns the new panel. */
+export function split(layout: GoldenLayout, state: JsonValue, title: string, panel?: ComponentItem): ComponentItem {
+  const target = (panel ?? layout.focusedComponentItem)?.parentItem ?? largestStack(layout.rootItem);
+  if (!target?.isStack) return layout.newComponent('widget', state, title);   // an empty dock
   const { width, height } = target.element.getBoundingClientRect();
   // golden-layout's own drop onto a panel's right or bottom edge (internal API: nothing public splits a panel)
   const item = layout.createAndInitContentItem(ResolvedComponentItemConfig.createDefault('widget', state, title), target);
   const drop = target as unknown as { _dropSegment: string; onDrop(item: ContentItem, area: null): void };
   drop._dropSegment = width > height ? 'right' : 'bottom';
   drop.onDrop(item, null);
+  return item as ComponentItem;
 }

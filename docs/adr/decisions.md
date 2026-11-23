@@ -827,3 +827,789 @@ Cons:
 - The view is wrong after every Reset or reload
 
 ## Decision
+
+---
+id: ADR-0031
+title: Start pods explicitly, per runtime, with start and getOrCreate
+status: accepted
+date: 2026-11-20
+revisit: 
+tags: core, lifecycle, pods
+decision: explicit
+---
+
+## Goal
+Opening a page must start the lazy pods it shows and reuse those already running, never making duplicates. Today a
+lazy pod is built only by its first call (D70: "there is no `start()`"), and a subscription never builds its source,
+so a view that only listens waits forever. The impact is on core's lifecycle model: how, and by whom, a pod is
+started. Spec: `docs/superpowers/specs/2026-11-20-pages-as-deployment-design.md`.
+
+## Hypothesis
+- We believe: two explicit operations on a runtime's live view, `start(pod)` and `getOrCreate(pod)`
+- Will result in: data-driven page opening with no surprising side effects, and no duplicate pods
+- Measured by: opening a second page naming a running pod starts nothing (`started: false`); subscribing never builds a pod
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| explicit | No hidden side effects | 5 | Starting a pod is something someone asked for, visible in code and on the stream. |
+| model | Fits the model | 4 | Few new concepts; policed and traced like other messages. |
+| reuse | Reuse, not duplicates | 4 | A running pod is found and reused; one build however many callers. |
+| simplicity | Simplicity | 3 | Little new core surface. |
+
+## Solution: explicit — start and getOrCreate on RuntimeView
+`start(pod): NanoResult<void>` builds a placed pod that isn't running (refusing one that is); `getOrCreate(pod)`
+returns `{ started, pod }` (`pod` is exactly `call(pod)`'s client) or the `Fail`. `start` is a message of a new kind
+`start`, from `host`, asked of the runtime's policy.
+
+| criterion | score |
+| --- | --- |
+| explicit | 5 |
+| model | 4 |
+| reuse | 5 |
+| simplicity | 3 |
+
+Pros:
+- Starting is always asked for, traced and policed
+- `started` tells the caller whether it started the pod
+
+Cons:
+- Reverses D70; a new message kind in `AppEvent` and `Ask`
+- A call still builds a lazy pod on the way, so a policy refusing `start` doesn't block that path
+
+## Solution: subscribe-builds — A subscription builds its lazy source
+Connecting an `on` to a lazy, unbuilt pod builds it, as a call does.
+
+| criterion | score |
+| --- | --- |
+| explicit | 1 |
+| model | 3 |
+| reuse | 4 |
+| simplicity | 5 |
+
+Pros:
+- One rule in `connect`; no new API
+
+Cons:
+- Wiring a subscription starts a pod as a side effect
+
+## Solution: ping — The host calls something on each lazy pod
+Opening a page calls an op on each pod to build it.
+
+| criterion | score |
+| --- | --- |
+| explicit | 2 |
+| model | 1 |
+| reuse | 3 |
+| simplicity | 3 |
+
+Pros:
+- No core change
+
+Cons:
+- There is no op every pod has; the host would invent one
+
+## Decision
+Explicit `start` and `getOrCreate` on `app.runtime(id)` (not `Application`, which is at its 10-member cap). `start`
+is a traced, policed message of kind `start`; `lifecycle` keeps its meaning. Supersedes D70 and the "no `start()`"
+lines in D90, D98, the model spec and the design.md FAQ: the old rule was about the application; this is per pod.
+
+---
+id: ADR-0032
+title: Keep pages in AppDeployment.layout
+status: accepted
+date: 2026-11-20
+revisit: 
+tags: presentation, layout, deployment
+decision: in-layout
+---
+
+## Goal
+Pages, their layouts and which pods sit where should be deployment data, not the workspace's private storage, so a
+different front-end (say React, with its own look) can load and show them. The impact is the shape of the saved
+document and how the system and its presentation relate.
+
+## Hypothesis
+- We believe: pages (containers of slots, each with a fixed id as its coordinate) in `AppDeployment.layout.pages`
+- Will result in: one portable document holding the system and its pages, saved and loaded together
+- Measured by: a reload reopens the same pages and pods; a document's pages open in another host with no workspace state
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| portable | Portable | 5 | Another front-end can read pages without the workspace's engine state. |
+| one-truth | One source of truth | 5 | No second copy of pods or pages to keep in step. |
+| core | Core untouched | 4 | Core keeps ignoring presentation. |
+| multi | Several front-ends | 2 | Different front-ends can keep different pages over one system. |
+
+## Solution: in-layout — layout.pages in the deployment
+`layout.pages: Page[]`, each `{ id, title, icon?, slots, geometry?, <engine>? }`; core only shape-checks `layout`.
+
+| criterion | score |
+| --- | --- |
+| portable | 5 |
+| one-truth | 5 |
+| core | 5 |
+| multi | 2 |
+
+Pros:
+- One document to persist, export and load
+- Builds on the existing `LayoutSlot` and `LayoutBox`
+
+Cons:
+- `layout` changes from "the page" to "the pages" (the old shape reads as page `workspace`)
+
+## Solution: separate — A presentation document pointing into a deployment
+Pages live in their own document that names pods by runtime and pod.
+
+| criterion | score |
+| --- | --- |
+| portable | 4 |
+| one-truth | 2 |
+| core | 5 |
+| multi | 5 |
+
+Pros:
+- Several front-ends can each own pages over one system
+
+Cons:
+- Two documents to keep in step; slots can name pods that no longer exist
+
+## Decision
+`layout.pages` in the deployment. Slots are the truth; an engine's state (the page's `workspace` key) is a hint keyed
+by slot id. A slot is a pod's (`{ id, runtime, pod }`) or a host view's (`{ id, view }`). Page ids are fixed when the
+page is made; titles change freely.
+
+---
+id: ADR-0033
+title: Change pages through a HostPages capability, apart from HostDeploy
+status: accepted
+date: 2026-11-20
+revisit: 
+tags: presentation, host, capabilities
+decision: host-pages
+---
+
+## Goal
+Pages need a capability to read and change them, which the workspace UI and pods can use and the host persists. The
+impact is whether rearranging presentation and changing the system share one path and one approval.
+
+## Hypothesis
+- We believe: a separate `HostPages` interface (`pages`, `setPage`, `removePage`, `open`)
+- Will result in: presentation changes that never change the system, and a system that never depends on pages
+- Measured by: no page operation applies a deployment; pruning slots of removed pods is the only system → page effect
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| decoupled | Presentation decoupled | 5 | Page changes and system changes have separate owners and paths. |
+| approval | Sensible approval | 3 | A pod changing pages is asked; a drag in the UI isn't a "deployment". |
+| surface | Small surface | 3 | Few new names. |
+
+## Solution: host-pages — A new HostPages interface
+A nano-ui interface the workspace implements as host pod `pages`; a pod's changes ask `HostUI.approve`.
+
+| criterion | score |
+| --- | --- |
+| decoupled | 5 |
+| approval | 5 |
+| surface | 3 |
+
+Pros:
+- Each fact has one owner and one path
+
+Cons:
+- A new interface, a third host pod and a second approval path
+
+## Solution: extend-deploy — HostDeploy.deploy accepts layout
+`deploy` takes `layout` beside pods and runtimes.
+
+| criterion | score |
+| --- | --- |
+| decoupled | 1 |
+| approval | 2 |
+| surface | 5 |
+
+Pros:
+- One capability, one approval path
+
+Cons:
+- Dragging a panel becomes a deployment; presentation and system blur
+
+## Decision
+`HostPages`. A pick is two separate steps: deploy the pod (system), then add a slot (presentation). Pages never
+start, stop, count or remove pods; when the system removes a pod, pages drop its slots on `applied`.
+
+---
+id: ADR-0034
+title: Trust the app's own stored document at boot
+status: accepted
+date: 2026-11-20
+revisit: 
+tags: security, persistence, host
+decision: trust-own
+---
+
+## Goal
+The host now persists the whole document (system, modules, views, pages) and boots from it. The document names code
+to load (`modules`), and `Application.load` is for trusted documents. The impact is a trust boundary: does a reload
+run stored code without asking?
+
+## Hypothesis
+- We believe: the stored document is the app's own (same origin, written by it) and loads without asking
+- Will result in: a reload that simply reopens what you had
+- Measured by: a reload asks nothing for nano.ui or same-origin providers; a foreign provider still asks once per session
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| safety | Safety | 5 | Stored data can't run code a person never agreed to. |
+| flow | Smooth reload | 4 | A reload reopens your work without prompts. |
+| simplicity | Simplicity | 2 | No new consent store. |
+
+## Solution: trust-own — Trust storage, keep per-session consent for foreign code
+Same-origin storage is trusted like the app's code; foreign providers ask once per session as now; `?src=` imports
+into the stored document.
+
+| criterion | score |
+| --- | --- |
+| safety | 4 |
+| flow | 4 |
+| simplicity | 5 |
+
+Pros:
+- No prompts for your own work; foreign code still asks
+
+Cons:
+- Poisoned storage (already requiring same-origin script) is trusted
+
+## Solution: ask-always — Ask before loading any stored module
+Every reload asks for each provider in the stored document.
+
+| criterion | score |
+| --- | --- |
+| safety | 5 |
+| flow | 1 |
+| simplicity | 4 |
+
+Pros:
+- Nothing runs unasked
+
+Cons:
+- Every reload is a consent prompt
+
+## Decision
+Trust the app's own stored document; foreign providers keep their once-per-session consent; `?src=` imports into the
+stored document, never replacing it.
+
+---
+id: ADR-0035
+title: Picks deploy lazy pods
+status: accepted
+date: 2026-11-20
+revisit: 
+tags: presentation, lifecycle, picker
+decision: lazy
+---
+
+## Goal
+A pick from the picker deploys a pod. Today every pick is eager (built at once). The impact is what starts pods: the
+deployment, or the pages that show them.
+
+## Hypothesis
+- We believe: picks deploy lazy pods, started by the page that shows them (`getOrCreate`)
+- Will result in: nothing running only because some other page lists it
+- Measured by: a pod on a never-opened page stays `not started`
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| intent | Runs what you look at | 4 | Pods start when shown, not just because they exist. |
+| behaviour | Pods that need to run | 3 | A timer or socket pod that must always run still can. |
+| simplicity | Simplicity | 2 | One rule. |
+
+## Solution: lazy — Picks are lazy
+| criterion | score |
+| --- | --- |
+| intent | 5 |
+| behaviour | 3 |
+| simplicity | 5 |
+
+Pros:
+- Page opening is what starts things, explicitly
+
+Cons:
+- A pod that must run unseen needs `eager` set by other means (import or deploy)
+
+## Solution: eager — Picks are eager, as now
+| criterion | score |
+| --- | --- |
+| intent | 2 |
+| behaviour | 5 |
+| simplicity | 5 |
+
+Pros:
+- Unchanged behaviour
+
+Cons:
+- Every picked pod runs from the moment it is deployed, shown or not
+
+## Decision
+Picks deploy lazy pods; the page that shows one starts it.
+
+---
+id: ADR-0036
+title: Pages save every change; Save layout keeps a restore point
+status: accepted
+date: 2026-11-20
+revisit: 
+tags: presentation, persistence, workspace
+parent: ADR-0032
+decision: checkpoint
+---
+
+## Goal
+Pages are deployment data, and the spec says every arrangement change (split, close, drag, template switch, swap,
+park) rewrites the page, so a reload never loses work. The workspace dock already has Save layout, Restore and Reset,
+which assumed the live arrangement was *not* kept. The impact is what those three commands mean once it is.
+
+## Hypothesis
+- We believe: the page always holds the live arrangement; Save layout stores a restore point beside it on the page
+- Will result in: no lost work on reload, and the commands people already know keep a useful meaning
+- Measured by: move a panel, reload, the move is there; Save, move, Restore returns to the saved arrangement
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| no-loss | No lost work | 5 | A reload shows what you last had. |
+| familiar | Commands keep meaning | 3 | Save, Restore and Reset still do something people expect. |
+| simple | Simplicity | 3 | Few states per page. |
+
+## Solution: checkpoint — Live arrangement always saved; Save layout is a restore point
+The page's engine key holds the live arrangement (written on every change) and, after Save layout, a saved one.
+Restore returns to the saved one; Reset returns to the dock's starting layout, as now.
+
+| criterion | score |
+| --- | --- |
+| no-loss | 5 |
+| familiar | 4 |
+| simple | 3 |
+
+Pros:
+- Nothing is lost on reload; Save/Restore become an undo point
+
+Cons:
+- Two arrangements per page in the engine key
+
+## Solution: drop-save — Live arrangement always saved; Save layout and Restore removed
+| criterion | score |
+| --- | --- |
+| no-loss | 5 |
+| familiar | 2 |
+| simple | 5 |
+
+Pros:
+- One state per page
+
+Cons:
+- Removes two commands people use, with no way back to a known arrangement
+
+## Solution: save-only — Keep writing the arrangement only on Save
+| criterion | score |
+| --- | --- |
+| no-loss | 1 |
+| familiar | 5 |
+| simple | 4 |
+
+Pros:
+- Unchanged behaviour
+
+Cons:
+- A reload loses unsaved moves, and slots and engine state drift apart (against the spec)
+
+## Decision
+Checkpoint: every change writes the live arrangement to the page; Save layout keeps a restore point on the page;
+Restore returns to it; Reset to the starting layout.
+
+---
+id: ADR-0037
+title: Runtime coordinates, and selectors built from coordinates
+status: accepted
+date: 2026-11-21
+revisit: 
+tags: core, coordinates, selectors
+decision: typed
+---
+
+## Goal
+Coordinates are nano's identifiers, layered: a namespace, then interfaces and implementations in it, then ports and
+pods. `PodCoord` composes an `ImplCoord` but holds its runtime as a string, and `SelectorData` (implements,
+implementation, provider, runtime) is all strings. The Platform (pages over the Application) will identify pods by
+coordinate and by selector, so the impact is whether those references are type-checked composition or strings.
+
+## Hypothesis
+- We believe: a `RuntimeCoord`, used by `PodCoord` and by `SelectorData` alongside the existing coordinate types
+- Will result in: references that can't confuse a pod name with a runtime, built on what exists
+- Measured by: tsc rejects a string where a runtime coordinate belongs; saved documents and recordings load unchanged
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| safety | Type-checked references | 5 | Mixing up runtime, pod and implementation is a compile error. |
+| compose | Built on existing coordinates | 4 | No restated string forms; coordinates compose. |
+| churn | Little churn | 2 | Few call sites change; saved data unchanged. |
+
+## Solution: typed — RuntimeCoord; selectors take coordinates
+| criterion | score |
+| --- | --- |
+| safety | 5 |
+| compose | 5 |
+| churn | 2 |
+
+Pros:
+- One composed, checked form for every reference the Platform makes
+
+Cons:
+- About 60 call sites move; selectors are a little more verbose to write
+
+## Solution: strings — Keep strings; the Platform validates
+| criterion | score |
+| --- | --- |
+| safety | 2 |
+| compose | 2 |
+| churn | 5 |
+
+Pros:
+- No core change
+
+Cons:
+- Every client re-checks strings; a pod name can stand where a runtime belongs
+
+## Decision
+Typed. Ids used as keys and names in data and APIs, and the `runtime` field of events and policy asks, stay strings
+(identifiers, not coordinates). `Interface.define` accepts only interface coordinates (`ns.Name`); the slash form
+(`acme/db`) is refused. A sandbox module built with an older nano-core that declares a slash-form interface now fails
+`described()` with `invalid-input`.
+
+---
+id: ADR-0038
+title: Pages are a separate Platform layer with its own deployment
+status: accepted
+date: 2026-11-21
+revisit: 
+tags: platform, presentation, pages
+decision: platform
+---
+
+## Goal
+Pages (groupings of slots, each slot naming a pod) need a home that other clients (a CLI, an API, another UI) can
+share. The first attempts put them in the Application's document (`layout.pages`) with page-specific operations, or
+proposed adding them to core's `AppDeployment`. The impact is whether core's single-responsibility concepts grow a
+presentation concept, and how many operations clients learn.
+
+## Hypothesis
+- We believe: a separate layer (the Platform) owning its own document (the UIDeployment), changed by one `apply`,
+  reading the Application to resolve slots (by pod coordinate, selector, or a pod-less view)
+- Will result in: core untouched, one write verb, any client sharing pages while keeping its own layout and meta
+- Measured by: no core change for pages; the workspace's page edits are all `platform.apply`; a slot resolves across
+  runtimes by coordinate or selector
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| core | Core stays single-purpose | 5 | Application, Runtime and their deployment learn nothing of pages. |
+| simple | Few operations | 4 | One document, one apply; no per-operation API. |
+| portable | Shared by other clients | 4 | A CLI or another UI reads the same pages and slots. |
+| cheap | Arrangement is cheap | 3 | A drag doesn't produce Application events or history. |
+
+## Solution: platform — A separate layer and document
+| criterion | score |
+| --- | --- |
+| core | 5 |
+| simple | 5 |
+| portable | 5 |
+| cheap | 5 |
+
+Pros:
+- Like Argo CD over Kubernetes: built on the system, owns its own model
+- Dangling references are shown, not refused, so the system and pages stay decoupled
+
+Cons:
+- Two documents to persist (a bundle file for Save/Open); the Platform needs the registry to resolve selectors
+
+## Solution: in-app — Pages in AppDeployment, changed by app.apply
+| criterion | score |
+| --- | --- |
+| core | 1 |
+| simple | 4 |
+| portable | 4 |
+| cheap | 2 |
+
+Pros:
+- One document and one apply for everything
+
+Cons:
+- Core grows a presentation concept; every drag is an Application event unless filtered
+
+## Solution: convention — Pages as an opaque convention in layout, with page operations
+| criterion | score |
+| --- | --- |
+| core | 4 |
+| simple | 1 |
+| portable | 2 |
+| cheap | 4 |
+
+Pros:
+- What was built first; core untouched
+
+Cons:
+- setPage, removePage, merge, prune, open…: operations multiply; every client re-implements validation
+
+## Decision
+Platform. Supersedes ADR-0032 and ADR-0033. Slots: `{ kind: 'pod', pod: PodCoord } | { kind: 'select', select:
+SelectorData } | { kind: 'view', view }`; dangling references resolve `missing`; several selector matches show the first;
+Save/Open use a bundle `{ app, platform }`; pods change pages through `HostPlatform { document, apply }` with a
+version check.
+
+---
+id: ADR-0039
+title: A page's layout is keyed by client; its title is shared data
+status: accepted
+date: 2026-11-21
+revisit: 
+tags: platform, pages, clients
+parent: ADR-0038
+decision: keyed
+---
+
+## Goal
+A second host (React) on the same UIDeployment showed that `layout` and `meta` had no rule for who owns what: the
+workspace read every `layout` key as its dock's state (dropping the other host's, and breaking on a page holding only
+it), and both hosts used `meta.title` by habit. The impact is whether several clients can share pages safely.
+
+## Hypothesis
+- We believe: each client reads and writes only its own `layout` key; a page's title is a field of `Page`
+- Will result in: clients sharing pages without knowing each other's internals; every client can show a title
+- Measured by: the React host keeps its columns across a workspace visit; a page titled in one host shows in the other
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| isolation | Clients don't break each other | 5 | One client's data never breaks or vanishes in another. |
+| shared | Shared meaning where every client needs it | 3 | What every client shows is named in the data. |
+| small | Small data model | 3 | Few named fields; the rest opaque. |
+
+## Solution: keyed — layout keyed by client; title on Page
+| criterion | score |
+| --- | --- |
+| isolation | 5 |
+| shared | 5 |
+| small | 4 |
+
+Pros:
+- No client needs another's internals; titles portable
+
+Cons:
+- One more Page field; a one-time move of the workspace's layout under its key
+
+## Solution: free — layout free-form; title stays in meta
+| criterion | score |
+| --- | --- |
+| isolation | 1 |
+| shared | 2 |
+| small | 5 |
+
+Pros:
+- No change
+
+Cons:
+- Each client must guard against every other's data; titles shared only by habit
+
+## Decision
+Keyed. `Page` is `{ title?, slots, layout?, meta? }`; `layout` and `meta` are keyed by client (the workspace's under
+`workspace`, the React host's under `react`). The workspace's page rules (Main present and first, reserved ids) stay
+the workspace's: it remaps a reserved id to another route at boot rather than clashing, and recreates a missing Main.
+
+---
+id: ADR-0040
+title: The Outline: pages as a tree with stable ids, named for what it is
+status: accepted
+date: 2026-11-21
+revisit: 
+tags: outline, pages, platform
+parent: ADR-0038
+decision: tree
+---
+
+## Goal
+A user's pages form a menu hierarchy (trading, chat, support, a dashboard) whose structure and contents are a logical
+model any front-end (web, CLI) could present. The Platform held flat pages, named for a word the user uses for the
+rendering technology. The impact is the shared data model's shape and name.
+
+## Hypothesis
+- We believe: a tree of pages with stable ids and shared order (`{ roots, pages }`, each page's `children`), in a
+  layer named the Outline
+- Will result in: every front-end showing the same hierarchy; moving a page never breaks references to it
+- Measured by: both hosts show the same tree; a moved page keeps its id and route
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| shared | Hierarchy shared by front-ends | 5 | Grouping and order are data, not one UI's meta. |
+| stable | Stable references | 4 | Moving a page keeps its id, routes and `open({ id })`. |
+| simple | Simple document | 3 | Easy to read, validate and write. |
+
+## Solution: tree — Flat map with child lists
+| criterion | score |
+| --- | --- |
+| shared | 5 |
+| stable | 5 |
+| simple | 4 |
+
+Pros:
+- Stable ids; order is structure; a move edits two lists
+
+Cons:
+- Validation (no orphans, cycles or duplicates); parents' lists to keep in step
+
+## Solution: nested — Pages hold their children
+| criterion | score |
+| --- | --- |
+| shared | 5 |
+| stable | 1 |
+| simple | 5 |
+
+Pros:
+- Reads as the hierarchy
+
+Cons:
+- An id is a path: moving a page changes it
+
+## Solution: flat — Flat pages, grouping in a client's meta
+| criterion | score |
+| --- | --- |
+| shared | 1 |
+| stable | 5 |
+| simple | 5 |
+
+Pros:
+- No change
+
+Cons:
+- Each front-end invents its own grouping
+
+## Decision
+Tree, named the Outline (`@pritzlaff/nano-outline`, document `Outline`, nodes pages). The change report gains `moved`;
+`HostOutline` declares a `changed` event so components follow the tree through nano. Flat documents still parse
+(every page a root). Supersedes ADR-0038's name and flat pages; ADR-0039 stands. Known limit: the host pod is renamed `platform` → `outline`, so an app's own pod named `outline` now clashes
+with it (a stored document or file holding one is refused on load, kept as it was, until that pod is renamed).
+
+---
+id: ADR-0041
+title: A shared host core, and presentation out of core's document
+status: accepted
+date: 2026-11-21
+revisit: 
+tags: host, outline, core, presentation
+parent: ADR-0040
+decision: host-core
+---
+
+## Goal
+A second host showed ~205 of its ~310 lines restating the workspace, and review found the model still mixed layers:
+core's document carried presentation (`views`, `layout`), the Outline held the live app, pages shared a route
+namespace with the app's screens, and imports merged trees by special rules. The impact is whether layers own one
+kind of data each and whether hosts share their mechanics.
+
+## Hypothesis
+- We believe: a framework-free host core owning one host document `{ app, outline, host }` and the live mechanics
+  (boot, save, pick, page edits, open); core keeping only the system and where its code comes from; a pure Outline
+- Will result in: core and the Outline as stable data plus functions, and hosts that only draw
+- Measured by: the React host shrinks to its drawing; the workspace loses its reserved-id and merge rules
+
+## People
+- Product Owner — decider
+- Claude — author
+
+## Criteria
+| id | criterion | weight | description |
+| --- | --- | --- | --- |
+| layers | One kind of data per layer | 5 | Core: system and code location; Outline: structure; hosts: presentation. |
+| shared | Shared mechanics | 4 | What every host does is written once. |
+| simple | Fewer special rules | 4 | Rules that exist only from collisions or merges go. |
+| change | Migration cost | 2 | Breaking changes are staged and old data still opens. |
+
+## Solution: host-core — Host core; presentation out of core; pure Outline
+| criterion | score |
+| --- | --- |
+| layers | 5 |
+| shared | 5 |
+| simple | 4 |
+| change | 2 |
+
+Pros:
+- Each layer is data plus functions; hosts share boot, storage, picks, edits, opening
+
+Cons:
+- A breaking core change (0.5.0), a new package, eight staged plans, legacy readers for a release
+
+## Solution: in-host — Keep mechanics in each host; core and Outline as they are
+| criterion | score |
+| --- | --- |
+| layers | 2 |
+| shared | 1 |
+| simple | 2 |
+| change | 5 |
+
+Pros:
+- No change
+
+Cons:
+- Every host restates ~200 lines; presentation stays in core's document
+
+## Decision
+Host core (`@pritzlaff/nano-host`, `HostDocument`, `Host.boot`), with the host's own loader and trust hooks; core
+exports `Registry.load(modules, base)` and later refuses `views`/`layout` (0.5.0); the Outline keeps data, `parse` and
+a pure `resolve`, slots `pod | select | tool`; every page at `#/p/<id>`; File › Open replaces (store and reload, after
+asking); Import, Examples and `?src=` add a file as a new root page; examples are `nano.json` + `outline.json`;
+legacy readers removed a release later. Supersedes ADR-0039's reserved-id remap and ADR-0038's view slots.

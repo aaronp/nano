@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nano (React host)</title>
+  <!-- The workspace's shared module copies (its import map, by hand): one nano-core, one nano-ui (the module the stored
+       document names as /bundle/nano-ui.js), so providers loaded from the document share them with this page. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "@pritzlaff/nano-core": "../shared/nano-core.js",
+      "@pritzlaff/nano-elements": "../shared/nano-elements.js",
+      "@pritzlaff/nano-ui": "../bundle/nano-ui.js",
+      "lit": "../shared/lit.js",
+      "lit/decorators.js": "../shared/lit-decorators.js",
+      "lit/directive.js": "../shared/lit-directive.js",
+      "lit/directives/class-map.js": "../shared/lit-class-map.js",
+      "lit/directives/style-map.js": "../shared/lit-style-map.js",
+      "lit/directives/repeat.js": "../shared/lit-repeat.js",
+      "lit/directives/ref.js": "../shared/lit-ref.js",
+      "lit/directives/if-defined.js": "../shared/lit-if-defined.js",
+      "typebox": "../shared/typebox.js",
+      "typebox/value": "../shared/typebox-value.js"
+    }
+  }
+  </script>
+  <script type="module" src="./main.js"></script>
+  <style>
+    :root { color-scheme: light dark; font: 14px/1.4 system-ui, sans-serif; --line: #8884; --bad: #c33; }
+    body { margin: 0; }
+    nav { display: flex; gap: 2px; padding: 8px 16px 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+    nav button { border: 1px solid var(--line); border-bottom: none; background: none; padding: 6px 12px; border-radius: 6px 6px 0 0; cursor: pointer; font: inherit; color: inherit; }
+    nav button[aria-selected="true"] { background: #8882; font-weight: 600; }
+    main { padding: 12px 16px; }
+    .bar, .picker { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 12px; }
+    .bar .picker { margin: 0; }
+    .grid { display: grid; gap: 12px; }
+    .slot { border: 1px solid var(--line); border-radius: 8px; min-width: 0; overflow: auto; }
+    .slot header { display: flex; justify-content: space-between; padding: 4px 8px; border-bottom: 1px solid var(--line); font-size: 12px; opacity: .8; }
+    .slot header button { background: none; border: none; cursor: pointer; color: inherit; }
+    .slot .view, .slot .note { padding: 8px; margin: 0; }
+    .note { opacity: .75; }
+    .bad { color: var(--bad); opacity: 1; }
+    .status { padding: 0 16px; min-height: 1.4em; }
+    @media (max-width: 640px) { .grid { grid-template-columns: 1fr !important; } }
+  </style>
+</head>
+<body><div id="root"></div></body>
+</html>

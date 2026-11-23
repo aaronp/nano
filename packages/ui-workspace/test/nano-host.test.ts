@@ -58,14 +58,14 @@ async function mount() {
   return { host: r.value, el }
 }
 
-test('given a fresh host, then the built-ins input, debounce, map, log, the clocks and the randoms are listed and main holds only ui and deploy', async () => {
+test('given a fresh host, then the built-ins input, debounce, map, log, the clocks and the randoms are listed and main holds only ui, deploy and outline', async () => {
   const { host, el } = await mount()
   const builtins = [...el.querySelectorAll<HTMLTemplateElement>(':scope > template[data-implementation]')]
   expect(builtins.map(t => t.dataset['title']).sort()).toEqual(['clock', 'debounce', 'input', 'log', 'map', 'random', 'seeded-random', 'sim-clock'])
-  expect(host.app.deployment().runtimes).toEqual({ main: { pods: ['ui', 'deploy'], subscriptions: [] } })
+  expect(host.app.deployment().runtimes).toEqual({ main: { pods: ['ui', 'deploy', 'outline'], subscriptions: [] } })
   el.addWidget('nano-ui-map')
   await tick(10)
-  expect(host.app.deployment().runtimes.main!.pods).toEqual(['ui', 'deploy', 'map1'])
+  expect(host.app.deployment().runtimes.main!.pods).toEqual(['ui', 'deploy', 'outline', 'map1'])
 })
 
 test('given the slice imported, then the explorer lists in, wait, up, out and Save round-trips modules and views', async () => {
@@ -75,16 +75,15 @@ test('given the slice imported, then the explorer lists in, wait, up, out and Sa
   await tree.updateComplete
   for (const pod of ['in', 'wait', 'up', 'out']) expect(tree.shadowRoot!.textContent).toContain(pod)
 
-  const layout = { dock: { root: { type: 'component', componentType: 'panel', componentState: { id: 'pod:up' } } } }
-  expect(await host.apply({ ...host.data(), views: { up: 'nano-pod-view' }, layout })).toMatchObject({ ok: true })
+  const layout = { workspace: { dock: { root: { type: 'component', componentType: 'panel', componentState: { id: 'pod:up' } } } } }
+  host.setHost({ views: { up: 'nano-pod-view' }, layout })
   const saved = host.saved()
-  expect(saved.layout).toEqual(layout)   // kept by the host, so it round-trips below
+  expect(saved.host).toEqual({ views: { up: 'nano-pod-view' }, layout })   // kept by the host, so it round-trips below
   const file: AppDeployment = await Bun.file(new URL(slice)).json()
   // stored resolved, so a saved nano.json loads from anywhere on the origin
-  expect(saved.modules).toEqual({ 'nano.ui': new URL('./bundle/nano-ui.js', page).href, 'example.slice': new URL('./shout.js', slice).href })
-  expect(saved.views).toEqual({ up: 'nano-pod-view' })
-  expect(saved.pods).toEqual(file.pods)
-  expect(saved.runtimes).toEqual(file.runtimes)
+  expect(saved.app.modules).toEqual({ 'example.slice': new URL('./shout.js', slice).href })
+  expect(saved.app.pods).toEqual(file.pods)
+  expect(saved.app.runtimes).toEqual(file.runtimes)
   expect(host.saved(true)).toEqual(saved)   // Reconcile and save: no call seen, nothing to add
 
   const again = new URL('./saves/nano.json', import.meta.url).href   // another directory than the slice's

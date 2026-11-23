@@ -47,7 +47,7 @@ export class Messages extends LitElement {
         @input=${(e: Event) => { this.query = (e.target as HTMLInputElement).value }}>
       <table><thead><tr><th>At</th><th>From</th><th>To</th><th>Port</th><th>Input</th><th>Result</th></tr></thead>
         <tbody>${rows.map(m => html`<tr ?data-at=${m === at} ?data-picked=${m === this.picked} @click=${() => void this.#pick(m)}>
-          <td>${m.at}</td><td>${m.sent.from}</td><td>${m.sent.to}</td><td>${m.sent.port}</td><td>${m.sent.input ?? ''}</td>
+          <td>${m.at}</td><td>${m.sent.from}</td><td>${m.sent.to}</td><td>${m.sent.port ?? m.sent.kind}</td><td>${m.sent.input ?? ''}</td>
           <td>${!m.outcome ? '' : m.outcome.type === 'denied' ? `denied: ${m.outcome.reason}` : m.outcome.result}</td></tr>`)}</tbody></table>
       ${this.picked ? renderDetail(this.picked, this.chain, c => this.tm?.seek(c.at)) : ''}`
   }

@@ -4,7 +4,7 @@ import { lookup } from '@pritzlaff/nano-core'
 import { LitElement, css, html } from 'lit'
 import type { Frame, Message, MessageStore, TimeMachine } from '@pritzlaff/nano-ui'
 import { renderDetail } from '../messages/detail.ts'
-import type { Host } from '../host.ts'
+import { workspaceLayout, type Host } from '../host.ts'
 import { empty as emptyWires } from '../wires/state'
 import { toggle, type ViewSettings } from '../wires/filter'
 import { align, arrange, GRID, prune, push, readLayout, setSnap, type DeskLayout, type XY } from './arrange'
@@ -82,7 +82,7 @@ export class Desk extends LitElement {
     const h = this.host
     if (!h || !this.#off.length) return
     const d = h.data()
-    if (!this.#read) { this.#read = true; this.#l = readLayout((d as any).layout?.desk) }
+    if (!this.#read) { this.#read = true; this.#l = readLayout(workspaceLayout(h)['desk']) }
     this.#l = prune(this.#l, lookup(d).placed)
     this.#m = deskModel(d, h.registry, h.calls?.() ?? [], this.view, this.application)
     this.#fit()

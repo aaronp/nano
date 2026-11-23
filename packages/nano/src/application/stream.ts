@@ -1,6 +1,6 @@
 /**
  * The application's one stream: builds, closes, restarts, changes, messages (`sent`, then `delivered` or `denied`) and problems,
- * in order, synchronously. A `sent` names its kind and its chain: `correlation` is the first message's id, `cause` the
+ * in order, synchronously. A `sent` names its kind and its chain (a `start` has no port, ADR-0031): `correlation` is the first message's id, `cause` the
  * message that led to it. A throwing listener is swallowed.
  *
  *   const s = stream()
@@ -18,6 +18,7 @@ export type AppEvent =
   | { type: 'restarted'; pod: string }
   | { type: 'applied'; caller: string; added: string[]; removed: string[]; changed: string[]; rewired: string[] }
   | { type: 'sent'; id: string; runtime: string; kind: 'call' | 'pipe' | 'on' | 'subscribe' | 'unsubscribe'; from: string; to: string; port: string; correlation: string; cause?: string; input?: unknown }
+  | { type: 'sent'; id: string; runtime: string; kind: 'start'; from: 'host'; to: string; correlation: string; port?: never; cause?: never; input?: never }
   | { type: 'delivered'; id: string; result: NanoResult<unknown>; ms: number }
   | { type: 'denied'; id: string; reason: string }
   | { type: 'failure'; pod?: string; reason: string }

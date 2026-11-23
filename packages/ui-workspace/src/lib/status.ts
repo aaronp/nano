@@ -1,3 +1,7 @@
+import type { AppDeployment, Registry } from '@pritzlaff/nano-core'
+import { toast } from '@pritzlaff/nano-elements'
+import { connect, type Host } from '@pritzlaff/nano-host'
+
 /** A small dismissible message for the person (`role="status"`), one at a time: what start-up or autosave could not do. */
 export function showStatus(doc: Document, text: string) {
   let el = doc.querySelector<HTMLElement>('[data-nano-status]')
@@ -11,4 +15,22 @@ export function showStatus(doc: Document, text: string) {
   // the region exists empty first, so a screen reader announces the text set on the next frame
   const msg = el.firstElementChild!, set = () => { msg.textContent = text }
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(set); else setTimeout(set, 16)
+}
+
+// "no pod yet" is no fault (a pod made later meets it): plain, not a warning
+const toasts = (notes: readonly string[]) => { for (const n of notes) void toast(n, { variant: n.startsWith('connected') ? 'good' : n.includes(': no pod yet (') ? undefined : 'warn' }) }
+
+/** The host core's `connect`, each note a toast: what was connected, and (a warning) what could not be. */
+export function connected(d: AppDeployment, registry: Registry, pods: readonly string[]): AppDeployment {
+  const r = connect(d, registry, pods)
+  toasts(r.notes)
+  return r.deployment
+}
+
+/** The host core's `deploy`, shown: a refusal a toast, and each of its notes (what was connected; a warning, what could not be). */
+export async function deployed(h: Host, implementation: string, runtime: string): ReturnType<Host['deploy']> {
+  const r = await h.deploy(implementation, runtime)
+  toasts(r.ok ? r.value.notes : [])
+  if (!r.ok) void toast(r.fail.reason, { variant: 'bad' })
+  return r
 }

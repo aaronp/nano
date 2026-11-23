@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 // SHOTS=<dir> also screenshots each step there.
 const shot = (page: Page, name: string) => process.env['SHOTS'] ? page.screenshot({ path: `${process.env['SHOTS']}/${name}.png` }) : Promise.resolve()
 const dock = (page: Page) => page.locator('workspace-dock#workspace')
-const pods = (page: Page) => page.evaluate(() => Object.keys((document.querySelector('workspace-dock') as any).host.data().pods).filter(p => p !== 'ui').sort())
+const pods = (page: Page) => page.evaluate(() => Object.keys((document.querySelector('workspace-dock') as any).host.data().pods).filter(p => !['ui', 'deploy', 'outline'].includes(p)).sort())   // the host's own pods (HOST_PODS)
 const pipes = (page: Page) => page.evaluate(() => (document.querySelector('workspace-dock') as any).host.data().runtimes.main.subscriptions.map((s: any) => `${s.from}>${s.to}`).sort())
 
 /** Drags a cord in <c-wires>'s edit mode from one jack to another, with the mouse, where the jacks are drawn. */
@@ -21,14 +21,16 @@ async function patch(page: Page, from: string, to: string) {
 }
 
 test('drop four controls, wire them in Connections, save, New, import the file: the same app, working', async ({ page }) => {
-  await page.goto('/#/workspace')
+  await page.goto('/#/p/workspace')
   await page.evaluate(() => localStorage.clear())
   await page.reload()
   await expect(dock(page).locator('nano-explorer')).toBeVisible()
 
-  // 1. the drawer's built-ins, each a pod in a panel of its own
-  const drawer = page.locator('component-drawer')
-  for (const c of ['input', 'debounce', 'map', 'log']) await drawer.getByText(c, { exact: true }).first().click()
+  // 1. the picker's built-ins (a panel header's +), each a pod in a panel of its own
+  for (const c of ['input', 'debounce', 'map', 'log']) {
+    await dock(page).getByRole('button', { name: 'Add a panel' }).first().click()
+    await page.locator('nano-picker').getByRole('button', { name: c, exact: true }).first().click()
+  }
   await expect.poll(() => pods(page)).toEqual(['debounce1', 'input1', 'log1', 'map1'])
   await expect(dock(page).locator('nano-log')).toHaveCount(1)
   await shot(page, '1-controls')
@@ -60,17 +62,19 @@ test('drop four controls, wire them in Connections, save, New, import the file: 
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('dialog').getByRole('button', { name: /Save|OK/ }).click()])
   expect(download.suggestedFilename()).toBe('demo.json')
   const file = (await download.path())!, saved = JSON.parse(readFileSync(file, 'utf8'))
-  expect(Object.keys(saved.pods).sort()).toEqual(['debounce1', 'input1', 'log1', 'map1'])
-  expect(saved.runtimes.main.subscriptions).toHaveLength(3)
-  expect(JSON.stringify(saved.layout.workspace)).toContain('log1')
-  // beside the dock's own state, the neutral layout: a slot and a box per pod
-  expect(saved.layout.slots.map((s: { pod: string }) => s.pod).sort()).toEqual(['debounce1', 'input1', 'log1', 'map1'])
-  for (const s of saved.layout.slots) expect(saved.layout.geometry[s.id]).toMatchObject({ w: expect.any(Number), h: expect.any(Number) })
+  // the bundle { app, outline }: the app's pods and pipes, and Main's page (its dock's layout, a pod slot per pod)
+  expect(Object.keys(saved.app.pods).sort()).toEqual(['debounce1', 'input1', 'log1', 'map1'])
+  expect(saved.app.runtimes.main.subscriptions).toHaveLength(3)
+  const main = saved.outline.pages.workspace
+  expect(JSON.stringify(main.layout)).toContain('log1')
+  const podSlots = Object.values(main.slots as Record<string, { kind: string; pod?: string }>).filter(s => s.kind === 'pod')
+  expect(podSlots.map(s => s.pod!.split('/').pop()).sort()).toEqual(['debounce1', 'input1', 'log1', 'map1'])
   await shot(page, '3-saved')
 
-  // 4. File › New: nothing but the starting dock
+  // 4. File › New, asked: the page reloads with nothing but the starting dock
   await page.getByRole('button', { name: 'File', exact: true }).click()
   await page.getByRole('button', { name: 'New', exact: true }).click()
+  await Promise.all([page.waitForEvent('load'), page.getByRole('dialog', { name: 'New workspace' }).getByRole('button', { name: 'Start new', exact: true }).click()])
   await expect.poll(() => pods(page)).toEqual([])
   await expect(dock(page).locator('nano-log')).toHaveCount(0)
   await shot(page, '4-new')
@@ -88,14 +92,14 @@ test('drop four controls, wire them in Connections, save, New, import the file: 
   await expect(dock(page).locator('nano-log')).toContainText('two', { timeout: 3000 })
   await shot(page, '5-imported')
 
-  await page.goto('/#/wiring')
-  await expect(page.locator('c-circuit').locator('path[data-cable]')).toHaveCount(3)
+  await page.getByRole('button', { name: 'Connections' }).first().click()
+  await expect(page.locator('c-wires [data-wire]')).toHaveCount(3)
   await page.waitForTimeout(800)
-  await shot(page, '6-wiring-page')
+  await shot(page, '6-connections')
 })
 
 test('opens a file with slots but no workspace state: a panel per slot', async ({ page }) => {
-  await page.goto('/#/workspace')
+  await page.goto('/#/p/workspace')
   await page.evaluate(() => localStorage.clear())
   await page.reload()
   const file = { pods: { in1: { implementation: 'nano.ui/input', eager: false }, out1: { implementation: 'nano.ui/log', eager: false } },

@@ -1,0 +1,59 @@
+// An old stored document (its pages in `layout.pages`, no stored pages) migrates once: the Outline holds the pages and
+// the host document is saved without them, the old key removed. An import's pages (a plain nano.json's `layout.pages`) are applied to the
+// Outline by the workspace's rules, never kept in the app's layout, so a page deleted since does not come back.
+import { expect, test } from 'bun:test'
+import { flat } from './flat.ts'
+import { Pod } from '@pritzlaff/nano-core'
+import './host-deploy-setup.ts'
+
+const { log } = await import('@pritzlaff/nano-ui')
+const KEY = 'nano-workspace.document'
+const strs = (v: unknown) => JSON.parse(JSON.stringify(v))
+
+test('an old stored document migrates once: pages into the Outline (pod slots by coordinate), the document saved without them', async () => {
+  const at = URL.parse('./bundle/nano-ui.js', location.href)!.href
+  const pages = [{ id: 'workspace', title: 'Workspace', slots: [{ id: 'a', runtime: 'main', pod: 'log1' }] }, { id: 'trading', title: 'Trading', icon: 'chart', slots: [{ id: 'n', view: 'nano-explorer' }] }]
+  const doc = { pods: { log1: Pod.lazy(log) }, runtimes: { main: { pods: ['log1'], subscriptions: [] } }, modules: { 'nano.ui': at }, views: {}, layout: { pages, ring: { show: [] } } }
+  localStorage.setItem(KEY, JSON.stringify(doc))
+  // happy-dom fetches no blob: URL (a browser does)
+  const blobs = new Map<string, Blob>(), make = URL.createObjectURL.bind(URL), domFetch = globalThis.fetch
+  URL.createObjectURL = (b: Blob) => { const u = make(b); blobs.set(u, b); return u }
+  globalThis.fetch = (async (u: string, ...rest: unknown[]) => blobs.has(u) ? new Response(blobs.get(u)) : (domFetch as Function)(u, ...rest)) as never
+  const { host, outline } = await import('../src/boot-host.ts')
+  if (!host || !outline) throw new Error('the host did not start')
+  const migrated = { roots: ['workspace', 'trading'], pages: {
+    workspace: { title: 'Workspace', slots: { a: { kind: 'pod', pod: 'nano.ui/log@main/log1' } } },
+    trading: { title: 'Trading', slots: { n: { kind: 'tool', tool: 'systems' } }, meta: { workspace: { icon: 'chart' } } },
+  } }
+  expect(strs(outline.document().doc)).toEqual(migrated)
+  expect(host.document().host?.layout).toEqual({ workspace: { ring: { show: [] } } })   // other keys kept, the workspace's; no pages
+  const stored = JSON.parse(localStorage.getItem('nano-host.document')!)
+  expect(stored.host.layout).toEqual({ workspace: { ring: { show: [] } } })
+  expect(stored.outline).toEqual(migrated)
+  expect(localStorage.getItem(KEY)).toBeNull()
+  // deleted, then a file with no layout imported: it stays gone
+  const { trading: _, ...rest } = outline.document().doc.pages
+  expect(outline.apply(flat(rest))).toMatchObject({ ok: true })
+  const none = URL.createObjectURL(new Blob([JSON.stringify({ pods: {}, runtimes: {}, modules: { 'nano.ui': at }, views: {} })]))
+  expect(await host.importUrl(none)).toMatchObject({ ok: true })
+  expect(Object.keys(outline.document().doc.pages)).toEqual(['workspace'])
+})
+
+test('an import with pages applies them to the Outline and keeps none in the layout: delete one, import a file with no layout, it stays gone', async () => {
+  const at = URL.parse('./bundle/nano-ui.js', location.href)!.href, file = (layout?: object) => URL.createObjectURL(new Blob([JSON.stringify({ pods: {}, runtimes: {}, modules: { 'nano.ui': at }, views: {}, ...(layout && { layout }) })]))
+  const { host, outline } = await import('../src/boot-host.ts')
+  if (!host || !outline) throw new Error('the host did not start')
+  const notes = { id: 'notes', title: 'Notes', slots: [{ id: 'n', view: 'nano-explorer' }] }, mine = { id: 'mine', title: 'Mine', slots: [] }
+  const ids = () => Object.keys(outline.document().doc.pages)
+  expect(await host.importUrl(file({ pages: [notes, mine] }))).toMatchObject({ ok: true })
+  expect(ids()).toEqual(['workspace', 'notes', 'mine'])
+  expect((host.document().host?.layout as { pages?: unknown } | undefined)?.pages).toBeUndefined()
+  const { notes: _, ...rest } = outline.document().doc.pages
+  outline.apply(flat(rest))
+  expect(await host.importUrl(file())).toMatchObject({ ok: true })
+  expect(ids()).toEqual(['workspace', 'mine'])
+  expect(await host.importUrl(file({ pages: [notes] }))).toMatchObject({ ok: true })   // the same file again: its page is added back
+  expect(ids()).toEqual(['workspace', 'mine', 'notes'])
+  expect(await host.importUrl(file({ pages: [notes] }))).toMatchObject({ ok: true })   // and once more: identical, skipped
+  expect(ids()).toEqual(['workspace', 'mine', 'notes'])
+})

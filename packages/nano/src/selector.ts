@@ -2,13 +2,16 @@
  * Selectors: which call subscriptions a call may use — an interface, or data narrowing by tags, implementation,
  * provider, or the runtime the subscription is in.
  *
- *   selectorData(DB)                                    // { implements: 'acme/db' }
- *   matches({ implements: 'acme/db', tags: ['primary'] }, target)
- *   Selector.of(DB, { runtime: 'v2' })                          // still DB (typed clients survive), plus implements and runtime
+ *   selectorData(DB)                                    // its `implements` is DB's InterfaceCoord, acme.DB
+ *   matches({ implements: acme.interfaceId('DB'), tags: ['primary'] }, target)
+ *   Selector.of(DB, { runtime: Coord.runtime('v2') })   // still DB (typed clients survive), plus implements and runtime
+ *
+ * The fields are coordinates; written out (JSON, the registry manifest) each is its string.
  */
+import { Coord, type ImplCoord, type InterfaceCoord, type Namespace, type RuntimeCoord } from './coord.ts'
 import type { Interface } from './iface.ts'
 
-export type SelectorData = { implements?: string; tags?: string[]; implementation?: string; provider?: string; runtime?: string }
+export type SelectorData = { implements?: InterfaceCoord; tags?: string[]; implementation?: ImplCoord; provider?: Namespace; runtime?: RuntimeCoord }
 export type Selector = Interface | SelectorData
 
 /** A pod as reached over one call subscription: its name, the runtime of that subscription, and what it is. */
@@ -28,21 +31,21 @@ export function selectorData(s: Selector): SelectorData {
   if (!isInterface(s)) return s
   const { tags, implementation, provider, runtime } = s as SelectorData
   return {
-    implements: s.coord, ...(tags && { tags }), ...(implementation !== undefined && { implementation }),
+    implements: Coord.parse('interface', s.coord), ...(tags && { tags }), ...(implementation !== undefined && { implementation }),
     ...(provider !== undefined && { provider }), ...(runtime !== undefined && { runtime }),
   }
 }
 
 /** An interface narrowed by tags, implementation, provider or runtime; still the interface, so a call's client stays typed. */
-const of = <I extends Interface>(i: I, s: Omit<SelectorData, 'implements'> = {}): I & SelectorData => ({ ...i, ...s, implements: i.coord })
+const of = <I extends Interface>(i: I, s: Omit<SelectorData, 'implements'> = {}): I & SelectorData => ({ ...i, ...s, implements: Coord.parse('interface', i.coord) })
 
 /** Every given field holds; all tags must be present on the target. */
 export const matches = (s: SelectorData, t: Target): boolean =>
-  (s.implements === undefined || t.provides.has(s.implements)) &&
+  (s.implements === undefined || t.provides.has(String(s.implements))) &&
   (s.tags ?? []).every(tag => t.tags.has(tag)) &&
-  (s.implementation === undefined || s.implementation === t.implementation) &&
-  (s.provider === undefined || s.provider === t.provider) &&
-  (s.runtime === undefined || s.runtime === t.runtime)
+  (s.implementation === undefined || String(s.implementation) === t.implementation) &&
+  (s.provider === undefined || String(s.provider) === t.provider) &&
+  (s.runtime === undefined || String(s.runtime) === t.runtime)
 
 /** `Selector.of(interface, narrowing?)`. */
 export const Selector = { of }

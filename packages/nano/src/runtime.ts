@@ -50,7 +50,7 @@ export const opAt = (impl: Implementation, p: string): Op | undefined => {
 /** Why subscription `s` (both ends known) does not hold, or undefined. */
 function unfit(s: Subscription, from: Implementation, to: Implementation): string | undefined {
   if (s.kind === 'call') {
-    const deps = Object.values(from.dependencies).flatMap(d => (d.implements === undefined ? [] : [d.implements]))
+    const deps = Object.values(from.dependencies).flatMap(d => (d.implements === undefined ? [] : [String(d.implements)]))
     if (deps.length && !to.provides.some(i => deps.includes(i.coord))) return `${s.to} provides none of ${s.from}'s dependencies`
     const pairs = new Set<string>()
     for (const o of s.ops ?? []) {

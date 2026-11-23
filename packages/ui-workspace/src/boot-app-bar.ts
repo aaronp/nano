@@ -4,14 +4,15 @@
  * implementation. A page change drops the pod's.
  *
  * On nano-core 0.4 (BACKLOG(5)): the app gateway is gone, so this hands the bar its element; a pod's controls are the
- * host's (the View and Change implementation pickers), each change an `apply` through the host.
+ * host's (the View and Change implementation pickers): a view is the pod's override in `host.views` (then the system
+ * applied again, unchanged, so what shows the pod hears `applied`), an implementation an `apply` through the host.
  */
 import { html, render } from 'lit'
 import type { Host } from './host.ts'
-import { connected } from './auto-connect.ts'
+import { connected } from './lib/status.ts'
 import { defineAppBar, type AppBarEl } from './components/app-bar.ts'
 import { defineWorkspaceControls } from './components/workspace-controls.ts'
-import { chosen, viewTags } from './dock/panels.ts'
+import { chosen, viewTags } from './dock/page-pods.ts'
 import { requestBus } from './lib/bus.ts'
 
 const value = (e: Event) => (e.target as HTMLElement & { value: string }).value
@@ -29,7 +30,9 @@ function pageControls(route: Element | null): Element | null {
 function podControls(h: Host, pod: string): Element {
   const el = document.createElement('span')
   el.className = 'pod-controls'
-  el.style.cssText = 'display:flex;align-items:center;gap:8px;padding-left:12px;border-left:1px solid color-mix(in srgb, currentColor 25%, transparent)'
+  // the part of the bar that gives way: it shrinks and scrolls sideways when the bar is full (its pickers open as
+  // popovers, so scrolling clips nothing), and the page never grows wider than the window
+  el.style.cssText = 'display:flex;align-items:center;gap:8px;padding-left:12px;border-left:1px solid color-mix(in srgb, currentColor 25%, transparent);min-width:0;overflow-x:auto;scrollbar-width:thin'
   const swap = (coord: string) => {
     const d = h.data(), p = d.pods[pod]!, keeps = h.registry.implementation(coord)?.config?.check(p.config)
     return h.apply(connected({ ...d, pods: { ...d.pods, [pod]: { implementation: coord, eager: p.eager, ...(keeps && { config: p.config }) } } }, h.registry, [pod]))
@@ -42,7 +45,7 @@ function podControls(h: Host, pod: string): Element {
     const impls = h.registry.manifest().implementations.filter(i => same(i.provides) === mine).map(i => i.coord)
     render(html`<b>${pod}</b>
       <small>View</small><nano-select label="View" .options=${viewTags(h, pod, p.implementation)} .value=${chosen(h, pod)}
-        @change=${(e: Event) => h.apply({ ...d, views: { ...d.views, [pod]: value(e) } })}></nano-select>
+        @change=${(e: Event) => { h.setHost({ views: { ...h.document().host?.views, [pod]: value(e) } }); void h.apply(h.data()) }}></nano-select>
       <small>Implementation</small><nano-select label="Change implementation" .options=${impls} .value=${p.implementation}
         @change=${(e: Event) => swap(value(e))}></nano-select>`, el)
   }

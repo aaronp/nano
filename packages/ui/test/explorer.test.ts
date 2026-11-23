@@ -46,16 +46,22 @@ describe('the explorer', () => {
     expect(opened).toEqual([{ runtime: 'r', pod: 'db' }])
   })
 
-  test('interfaces and implementations are listed; choosing one shows its ops or what it provides and needs, with links', async () => {
+  test('an implementation and an interface selected (links, or a runtime\'s own aliases) show their details', async () => {
     const el = await mount(await open(edge))
     await settle(el)
-    await choose(el, 'acme.Store')
-    expect(pane(el).textContent!.replace(/\s+/g, ' ')).toContain('save action Str → Str')
-    expect(pane(el).textContent).toContain('acme/db')
-    await choose(el, 'acme/api')
+    await choose(el, 'api')
+    ;([...pane(el).querySelectorAll('a')].find(a => a.textContent === 'acme/api') as HTMLElement).click()
+    await settle(el)
     expect(pane(el).textContent).toContain('implementation acme/api')
     ;([...pane(el).querySelectorAll('a')].find(a => a.textContent === 'acme.Store') as HTMLElement).click()   // a link selects
     await settle(el)
+    expect(pane(el).textContent!.replace(/\s+/g, ' ')).toContain('save action Str → Str')
+    const t = tree(el) as unknown as { reveal(id: string): void }
+    t.reveal('r:r|m:acme/db'); await settle(el)
+    ;(tree(el).shadowRoot.querySelector('li[data-id="r:r|m:acme/db"] > .line') as HTMLElement).click(); await settle(el)
+    expect(pane(el).textContent).toContain('implementation acme/db')
+    t.reveal('r:r|i:acme.Store'); await settle(el)
+    ;(tree(el).shadowRoot.querySelector('li[data-id="r:r|i:acme.Store"] > .line') as HTMLElement).click(); await settle(el)
     expect(pane(el).textContent).toContain('interface acme.Store')
   })
 
@@ -71,17 +77,26 @@ describe('the explorer', () => {
     expect(pane(el).textContent).toContain('interface nano.ui.Debounce')
   })
 
-  test('a runtime lists its implementations, interfaces and operations; an operation lists its interface, implementations and pods; each links to its primary place', async () => {
+  test('the tree lists runtimes only; a runtime lists its pods, implementations, interfaces and operations, each selecting its primary details', async () => {
     const el = await mount(await open(edge))
     await settle(el)
     const ids = () => [...tree(el).shadowRoot.querySelectorAll('li[data-id]')].map(l => l.getAttribute('data-id'))
-    expect(ids()).toEqual(expect.arrayContaining(['r:r/pods', 'r:r/impls', 'r:r/ifaces', 'r:r/ops', 'g:actions', 'g:events', 'i:acme.Store', 'm:acme/db']))
-    ;(tree(el) as unknown as { reveal(id: string): void }).reveal('o:acme.Store/save|p:r:db'); await settle(el)
-    ;(tree(el).shadowRoot.querySelector('li[data-id="o:acme.Store/save|p:r:db"] > .line') as HTMLElement).click(); await settle(el)
-    expect(pane(el).textContent).toContain('pod db')
-    ;(tree(el).shadowRoot.querySelector('li[data-id="o:acme.Store/save"] > .line') as HTMLElement).click(); await settle(el)
+    expect(ids()).toEqual(expect.arrayContaining(['r:r', 'r:r/pods', 'r:r/impls', 'r:r/ifaces', 'r:r/ops']))
+    expect(ids().filter(i => i!.startsWith('g:') || /^[imo]:/.test(i!))).toEqual([])
+    ;(tree(el) as unknown as { reveal(id: string): void }).reveal('r:r|o:acme.Store/save'); await settle(el)
+    ;(tree(el).shadowRoot.querySelector('li[data-id="r:r|o:acme.Store/save"] > .line') as HTMLElement).click(); await settle(el)
     const t = pane(el).textContent!.replace(/\s+/g, ' ')
     for (const x of ['action save', 'interfaceacme.Store', 'takesStr', 'returnsStr', 'podsdb']) expect(t).toContain(x)
+  })
+
+  test('a runtime\'s details have "Delete runtime", which fires nano-delete with { runtime }, bubbling and composed', async () => {
+    const el = await mount(await open(edge))
+    await settle(el)
+    await choose(el, 'r')
+    const got: CustomEvent[] = []
+    document.addEventListener('nano-delete', e => got.push(e as CustomEvent), { once: true })
+    ;([...pane(el).querySelectorAll('button')].find(b => b.textContent === 'Delete runtime') as HTMLElement).click()
+    expect(got.map(e => [e.detail, e.bubbles, e.composed])).toEqual([[{ runtime: 'r' }, true, true]])
   })
 
   test('given calls, a pod lists what it calls and is called by, op to op, and an operation its callers; a call not declared is flagged', async () => {
@@ -95,8 +110,8 @@ describe('the explorer', () => {
     expect(pane(el).querySelector('.warn')?.textContent).toBe('not declared')
     ;(tree(el).shadowRoot.querySelector('li[data-id="p:r:db"] > .line') as HTMLElement).click(); await settle(el)
     expect(pane(el).textContent!.replace(/\s+/g, ' ')).toContain('api.save → save')
-    ;(tree(el) as unknown as { reveal(id: string): void }).reveal('o:acme.Store/save'); await settle(el)
-    ;(tree(el).shadowRoot.querySelector('li[data-id="o:acme.Store/save"] > .line') as HTMLElement).click(); await settle(el)
+    ;(tree(el) as unknown as { reveal(id: string): void }).reveal('r:r|o:acme.Store/save'); await settle(el)
+    ;(tree(el).shadowRoot.querySelector('li[data-id="r:r|o:acme.Store/save"] > .line') as HTMLElement).click(); await settle(el)
     expect(pane(el).textContent!.replace(/\s+/g, ' ')).toContain('called byapi.save → db.save')
   })
 
