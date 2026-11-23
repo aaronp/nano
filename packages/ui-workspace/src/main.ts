@@ -34,6 +34,7 @@ import { icon } from './icons.ts';
 import { showStatus } from './lib/status.ts';
 import { applyPages, MAIN } from './lib/pages.ts';
 import { workspaceLayout as mine } from './host.ts';
+import { devFile, onRebuild, restoreModules, saveTo } from './dev-file.ts';   // under the nano-app CLI: Save PUTs to its file
 import { Coord } from '@pritzlaff/nano-core';
 import { removeFrom } from './host-deploy.ts';
 import type { Page } from '@pritzlaff/nano-outline';
@@ -65,18 +66,26 @@ if (host && outline) {
   // The File menu: Save and Download (Reconcile and save: with the calls seen, host.saved(true)) write the host document
   // (without the host's own pods), the Desk's arrangement in its `host.layout.workspace.desk`; Open and Import import one; New, asked first, clears it.
   const menu = document.querySelector<FileMenuEl>('nano-file-menu');
-  const download = (name: string, reconcile = false) => {
-    const a = document.createElement('a');
+  const doc = (reconcile = false) => {
     const saved = h.saved(reconcile), desk = document.querySelector<Desk>('c-desk')?.layout(), layout = saved.host?.layout;
-    const file = desk ? { ...saved, host: { ...saved.host, layout: { ...layout, workspace: { ...mine(h), desk } } } } : saved;
+    return desk ? { ...saved, host: { ...saved.host, layout: { ...layout, workspace: { ...mine(h), desk } } } } : saved;
+  };
+  const download = (name: string, reconcile = false) => {
+    const a = document.createElement('a'), file = doc(reconcile);
     a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2) + '\n'], { type: 'application/json' }));
     a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     if (menu) menu.dirty = false;
   };
   host.app.listen(e => { if (e.type === 'applied' && menu) menu.dirty = true; });
+  const file = devFile(document); let original = {};   // under the CLI: Save and Reconcile PUT to the opened file
+  const put = async (reconcile = false) => {
+    if (!file) return download('nano.json', reconcile);
+    const r = await saveTo(file, restoreModules(doc(reconcile), original));
+    if (!r.ok) toast(r.fail.reason, { variant: 'bad' }); else if (menu) menu.dirty = false;
+  };
   const commands: Record<string, () => unknown> = {
-    save: () => download('nano.json'), reconcile: () => download('nano.json', true), download: () => download('nano.json'),
+    save: () => put(), reconcile: () => put(true), download: () => download('nano.json'),
     'save-as': async () => { const name = await askName(document, 'nano'); if (name) download(`${name}.json`); },
     open: () => openImportDialog(document), import: () => openImportDialog(document),
     // New: asked first (a download offered), then the stored document is cleared at the next boot (boot-host.ts `WIPE`) and
@@ -131,6 +140,7 @@ if (host && outline) {
     hand();
   })().finally(() => { resetting = undefined; }));
 
+  if (file) { original = await (await fetch(file)).json(); await h.importUrl(new URL(file, location.href).href); onRebuild(document, () => !!menu?.dirty); }
   const src = new URL(location.href).searchParams.get('src');
   // A URL on this page's origin imports at once; any other opens the Import dialog on it (a crafted link must not import unasked).
   const to = src && new URL(src, location.href);

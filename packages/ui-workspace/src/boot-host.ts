@@ -20,6 +20,7 @@ import { oldForms, settled } from './boot-pages.ts';
 import { importing } from './import-pages.ts';
 import { HOST_PODS } from './host-deploy.ts';
 import { forgetOld } from './migrate.ts';
+import { devFile } from './dev-file.ts';
 
 const storage = (() => { try { return localStorage; } catch (e) { const no = () => { throw e; }; return { getItem: no, setItem: no, removeItem: no, key: no, get length() { return no(); } } as unknown as Storage; } })();
 /** Why saving stopped, as the page says it. */
@@ -31,10 +32,11 @@ const tell = (why: string | undefined) => why && showStatus(document, why.starts
  * so nothing written while the old page unloads survives. The theme is kept: it is the browser's, not the workspace's. */
 export const WIPE = 'nano-host.wipe';
 // ponytail: the host core's key and old keys, spelled here; export them from @pritzlaff/nano-host if a second host needs a wipe
-try { if (sessionStorage.getItem(WIPE)) { sessionStorage.removeItem(WIPE); for (const k of ['nano-host.document', 'nano-workspace.document', 'nano-workspace.outline', 'nano-workspace.platform']) storage.removeItem(k); forgetOld(storage); } } catch { /* storage refused: boot reads what is there */ }
+const dev = devFile(document);   // served by the nano-app CLI: no stored document, the file is the document
+try { if (!dev && sessionStorage.getItem(WIPE)) { sessionStorage.removeItem(WIPE); for (const k of ['nano-host.document', 'nano-workspace.document', 'nano-workspace.outline', 'nano-workspace.platform']) storage.removeItem(k); forgetOld(storage); } } catch { /* storage refused: boot reads what is there */ }
 defineViews();
 let booted: Host | undefined;
-const stored = await start(storage, { migrate: oldForms, onStop: () => tell(booted?.stopped()) });
+const stored = dev ? await start() : await start(storage, { migrate: oldForms, onStop: () => tell(booted?.stopped()) });
 const started = stored.ok ? stored : await start();   // in memory
 if (!stored.ok) showStatus(document, `Your saved workspace did not load (${stored.fail.reason}); changes are not saved this session, so it is kept as it was.`);
 if (!started.ok) toast(started.fail.reason, { variant: 'bad', duration: 0 });
@@ -45,7 +47,7 @@ export const outline = host?.outline;
 
 if (host && outline) {
   outline.apply(settled(outline.document().doc));
-  if (stored.ok) { if (host.stopped()) tell(host.stopped()); else forgetOld(storage); }   // the old dock keys, once the one key holds them
+  if (stored.ok && !dev) { if (host.stopped()) tell(host.stopped()); else forgetOld(storage); }   // the old dock keys, once the one key holds them
   host.importUrl = importing(host.importUrl.bind(host), outline);
   // the lazy pod `outline` built now (ADR-0031), and again after each restart (Reset), so its `changed` reaches subscribers before anything calls it
   const [, , OUTLINE] = HOST_PODS, build = () => void host.app.runtime('main').getOrCreate(OUTLINE);
