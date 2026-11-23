@@ -78,12 +78,49 @@ The Systems tree uses the shared filter; the Ring's own filters should use `<nan
 
 ## To-Do
 
+### Roadmap
+- id: t-09
+- tags: roadmap
+- history:
+  - To-Do @ 2026-11-23T11:38:59.802Z
+
+```md
+We want to be able to:
+
+1. easily demonstrate 'nano' in a simple way like Elysia does -- each concept
+2. have a tool/means to easily package up and deploy a nano component
+3. be able to share (via a URL) a nano app
+
+And use the above to prove some good case-studies:
+
+a. a Privy wallet
+b. a Cloudflare wallet
+c. Kerits.id wallet, messaging, db
+```
+
+### Have a 'Docs' page / tutorial / playground
+- id: t-10
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T11:41:24.968Z
+
+```md
+This is item 1 in our roadmap.
+
+https://elysiajs.com/at-glance.html is an amazing example of simple/slick
+```
+
+## Doing
+
+## Done
+
 ### Support multiple Nav Items
 - id: t-07
 - tags: ui
 - history:
   - To Do @ 2026-11-19T17:11:13.164Z
   - Doing @ 2026-11-19T17:11:15.369Z
+  - Done @ 2026-11-23T09:25:50.760Z
 
 ```md
 we want to be able to 'clone' the workspace, adding our own nav items
@@ -94,13 +131,10 @@ we want to be able to 'clone' the workspace, adding our own nav items
 - tags: ui
 - history:
   - Doing @ 2026-11-19T17:11:55.067Z
+  - Done @ 2026-11-23T09:25:52.184Z
 
 ```md
 We want to be able to turn our GridLayout into a choice of best-fit responsive layouts.
 
 Ideally those are then used in the same/similar way in other ui-hosts
 ```
-
-## Doing
-
-## Done

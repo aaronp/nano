@@ -3,11 +3,11 @@
   "title": "Nano",
   "subtitle": "Kanban board",
   "status": {
-    "label": "8 open",
+    "label": "6 open",
     "tone": "neutral"
   },
   "heading": {
-    "primary": "0/8",
+    "primary": "2/8",
     "label": "tasks done"
   },
   "legend": [
@@ -34,13 +34,13 @@
   ],
   "report": {
     "Backlog": 6,
-    "To-Do": 2,
+    "To-Do": 0,
     "Doing": 0,
-    "Done": 0
+    "Done": 2
   },
   "source": {
     "label": "docs/board/board.md",
     "url": "https://aaronp.github.io/agile/?src=https://aaronp.github.io/nano/docs/board/board.md"
   },
-  "updated": "2026-11-19"
+  "updated": "2026-11-23"
 }

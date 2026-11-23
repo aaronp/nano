@@ -31,7 +31,7 @@ const server = Bun.serve({
   async fetch(req) {
     const path = normalize(decodeURIComponent(new URL(req.url).pathname)).replace(/^(\.\.[/\\])+/, '')
     if (live && path === '/__live') return stream()
-    const found = Bun.file(join(dir, path === '/' ? 'index.html' : path))
+    const found = Bun.file(join(dir, path.endsWith('/') ? path + 'index.html' : path))   // a folder's own index.html (/react/)
     const file = (await found.exists()) ? found : Bun.file(join(dir, 'index.html'))
     // any origin may fetch: an isolated-sandbox iframe (an opaque origin) loads boot.js and the shared modules from here
     const cors = { 'access-control-allow-origin': '*' }

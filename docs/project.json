@@ -26,7 +26,7 @@
       "id": "risks",
       "aliases": [],
       "name": "Risks",
-      "tool": "Risk register",
+      "tool": "Risk Register",
       "package": "@pritzlaff/risk-register",
       "bin": "risk-register",
       "file": "docs/risks/risks.md",
@@ -40,7 +40,7 @@
         "noLead": "Log each risk, score it and give it an owner and a mitigation."
       },
       "starter": "---\nregister: Project\n---\n",
-      "order": 4
+      "order": 5
     },
     {
       "id": "work",
@@ -62,7 +62,7 @@
         "noLead": "Put the work on the board and limit what is in progress."
       },
       "starter": "# Board\n\n## To Do\n\n## Doing\n\n## Done\n",
-      "order": 6
+      "order": 7
     }
   ]
 }
