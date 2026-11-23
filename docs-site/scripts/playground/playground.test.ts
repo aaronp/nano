@@ -31,6 +31,14 @@ test('frameDoc has the import map, the run id, and survives </script> in code', 
   expect(doc.match(/<\/script>/g)?.length).toBe(3) // guard, import map, module: none from the reader's code
 })
 
+test('frameDoc: the runner is immune to reader names and the escape is exact', () => {
+  const doc = frameDoc('const msg = 1; const a = "</SCRIPT>"; const t = `<!--`; if (a<!--b) {}', 's/', 'r')
+  expect(doc).toContain('<\\/SCRIPT>')
+  expect(doc).toContain('`<!--`')
+  expect(doc).not.toContain('<\\!--')
+  expect(doc).toContain('(globalThis.__nano)')
+})
+
 test('accept passes only the frame, the run, and a good shape', () => {
   const frame = {}
   const good = { run: 'r', kind: 'line', text: 'hi' }

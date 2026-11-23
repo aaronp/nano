@@ -12,14 +12,16 @@ const safe = (v: unknown) => JSON.stringify(v).replace(/</g, '\\u003c')
  */
 export const frameDoc = (js: string, shared: string, run: string) => {
   const map = { imports: { '@pritzlaff/nano-core': `${shared}nano-core.js`, typebox: `${shared}typebox.js`, 'typebox/value': `${shared}typebox-value.js` } }
-  const code = js.replace(/<(\/script|!--)/gi, '<\\$1')
+  // ponytail: only `</script` is escaped; exact in strings, templates and regexes, but it alters the text in a comment.
+  const code = js.replace(/<(\/script)/gi, '<\\$1')
   return `<!doctype html><meta charset="utf-8"><script>
-const run = ${safe(run)}, __post = (kind, text) => parent.postMessage({ run, kind, text }, '*')
-const msg = e => String(e && e.message || e)
-addEventListener('error', e => e.target && e.target !== window ? __post('error', 'import failed: ' + (e.target.src || 'module')) : __post('error', msg(e.error || e.message)), true)
-addEventListener('unhandledrejection', e => __post('error', msg(e.reason)))
+const run = ${safe(run)}
+globalThis.__nano = { post: (kind, text) => parent.postMessage({ run, kind, text }, '*'), msg: e => String(e && e.message || e) }
+const { post, msg } = globalThis.__nano
+addEventListener('error', e => e.target && e.target !== window ? post('error', 'import failed: ' + (e.target.src || 'module')) : post('error', msg(e.error || e.message)), true)
+addEventListener('unhandledrejection', e => post('error', msg(e.reason)))
 </script><script type="importmap">${safe(map)}</script><script type="module">
 ${code}
-;(async () => { try { await main(line => __post('line', String(line))); __post('done') } catch (e) { __post('error', msg(e)) } })()
+;(async (n) => { try { await main(line => n.post('line', String(line))); n.post('done') } catch (e) { n.post('error', n.msg(e)) } })(globalThis.__nano)
 </script>`
 }
