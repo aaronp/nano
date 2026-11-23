@@ -6,7 +6,7 @@ The contract says what; an **implementation** says how. You start from the inter
 
 - `Calculator.impl(ns.implementationId('calculator'))` names it `acme.calc/calculator`, under your namespace.
 - `make` returns a plain object with a method per action. It runs once each time the component is built; anything it closes over is that build's state.
-- A method's return value is its result; a throw becomes a failure (more on results in a later step).
+- A method's return value is its result; a throw becomes a failure (more in [results](/learn/06-results)).
 
 The implementation is a value: nothing runs yet.
 

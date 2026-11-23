@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
 
-const learn = [['01-plain', 'Plain TypeScript'], ['02-contract', 'The contract'], ['03-builder', 'The builder'], ['04-registry', 'The Registry'], ['05-runtime', 'A Runtime']]
+const learn = [['01-plain', 'Plain TypeScript'], ['02-contract', 'The contract'], ['03-builder', 'The builder'], ['04-registry', 'The Registry'], ['05-runtime', 'A Runtime'],
+  ['06-results', 'Results'], ['07-events', 'Events'], ['08-history', 'A history, by message'], ['09-pipe', 'A pipe']]
 const recipes = ['pipeline', 'host-pods', 'deploying-pods']
 const title = (s: string) => (s[0].toUpperCase() + s.slice(1)).replace(/-/g, ' ')
 
