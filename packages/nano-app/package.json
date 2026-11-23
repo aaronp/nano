@@ -4,5 +4,5 @@
   "type": "module",
   "description": "test-nano: serve the nano app and a project on loopback, save the project's nano.json, rebuild on change.",
   "bin": { "nano-app": "bin/nano-app.ts" },
-  "files": ["bin", "src", "app"]
+  "files": ["bin", "src", "app", "AGENTS.md"]
 }

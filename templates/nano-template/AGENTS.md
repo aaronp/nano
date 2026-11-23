@@ -31,6 +31,7 @@ bun install
 bun test          # must pass before you're done
 bun run build     # dist/: index.js, nano.json
 bun run serve     # build and serve dist/ at http://localhost:4000, to import into a host
+bun run test-nano # try it in the nano app, File › Save writes nano.json (node_modules/@pritzlaff/nano-app/AGENTS.md)
 ```
 
 ## Adding a pod

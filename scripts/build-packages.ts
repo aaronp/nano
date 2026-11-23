@@ -79,6 +79,7 @@ for (const dir of APPS) {
   }
   await Bun.write(join(out, 'package.json'), JSON.stringify(pkg, null, 2) + '\n')
   await Bun.write(join(out, 'README.md'), Bun.file(join(at, 'README.md')))
+  await Bun.write(join(out, 'AGENTS.md'), Bun.file(join(at, 'AGENTS.md')))
   await Bun.write(join(out, 'LICENSE'), Bun.file(join(root, 'LICENSE')))
   console.log(`built ${src.name}@${pkg.version} → packages/${dir}/dist`)
 }

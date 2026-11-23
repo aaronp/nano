@@ -15,6 +15,8 @@ Import adds them; the dialog is the consent.
 
 <OpenInNano src="examples/template/nano.json"/>
 
+**In your own project.** `bun run test-nano` (the template's script, from `@pritzlaff/nano-app`) serves the app and your project on loopback and opens your `nano.json` in it; File › Save writes the file back, and the page reloads when you rebuild.
+
 **Place a pod.** The imported pods are listed in the explorer; double-click `calculator` to open its panel, in `<nano-calculator>`. A panel header's + (Add a panel) opens the picker: a `Runtime:` choice and each provider's implementations. Choosing `calculator` adds a new pod of it to that runtime. It works, but it has no pipe, so nothing saves its results, and with no history in its runtime its list stays empty.
 
 ## What happens when it runs

@@ -50,6 +50,11 @@ or serve the host and `dist/` from one origin. The host fetches the `nano.json`,
 `nano.json`) and shows the pods. Importing alongside another app whose runtime is also `main` is refused: the names
 clash (namespacing comes later).
 
+## Try it in nano
+
+`bun run test-nano` serves the nano app and this project on loopback, opens `nano.json` in it, writes File › Save back to
+the file, and rebuilds when `src/` changes. Its guide is `node_modules/@pritzlaff/nano-app/AGENTS.md`.
+
 ## What a host gets
 
 - **`dist/nano.json`**: the pods, runtimes and pipes, and `modules`: `{ "acme.template": "./index.js" }`.
