@@ -22,6 +22,7 @@ export const timingFor = (heartbeatMs?: number, fallback?: Node['timing']): Node
 
 export const nodeIds = (name: string, size: number) => Array.from({ length: size }, (_, i) => `${name}-${i + 1}`)
 
+// #region cluster-deployment
 export function clusterDeployment(name: string, size: 3 | 5, seed: number, timing?: Node['timing']): { pods: AppDeployment['pods']; runtimes: AppDeployment['runtimes'] } {
   const ids = nodeIds(name, size), pods: AppDeployment['pods'] = {}, runtimes: AppDeployment['runtimes'] = {}
   ids.forEach((id, i) => {
@@ -39,3 +40,4 @@ export function clusterDeployment(name: string, size: 3 | 5, seed: number, timin
   })
   return { pods, runtimes }
 }
+// #endregion cluster-deployment

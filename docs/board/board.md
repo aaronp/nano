@@ -261,6 +261,33 @@ sleeps, and they are timing-dependent. `app.listen` can see each `delivered`, bu
 whether tests should wait on the stream rather than the clock.
 ```
 
+### A pod's need for a host pod can't be written in its nano.json
+- id: t-21
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T15:00:00.000Z
+
+```md
+Found writing the Using the host from a pod recipe. Raft's cluster depends on `HostDeploy`, but its `nano.json` has
+no call edge for it: it can't know the host's pod names. The nano app wires it on import (the one placed pod
+providing it); run headless, or in a host that doesn't, `create` fails `not-found`. The page has to explain that the
+wiring comes from the host's import, not from the deployment. Is "connect me to whatever the host provides" something
+a deployment should be able to say? A question, not a proposal.
+```
+
+### A pod that deploys pods forgets what it deployed on reload
+- id: t-22
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T15:00:00.000Z
+
+```md
+Found writing the Pods that deploy pods recipe. Raft's cluster keeps the clusters it made in memory; after a reload
+the runtimes are still there but `remove` must guess a cluster's size (tries 5 nodes, then 3). The recipe has to
+explain the guess. A pod has no way to read back what its own `deploy` calls added (HostDeploy has `deploy` and
+`undeploy` only), nor storage of its own here. Worth deciding which existing concept should carry this.
+```
+
 ## Doing
 
 ## Done
