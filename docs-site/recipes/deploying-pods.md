@@ -2,13 +2,13 @@
 
 A pod can add and remove other pods while the app runs. Raft's cluster pod creates a cluster as a set of runtimes, one per node, and removes them again. It goes through the host's `deploy` pod ([Using the host from a pod](/recipes/host-pods)).
 
-A cluster is plain data, built by a pure function ([Pods and deployments](/concepts/pods)):
+A cluster is plain data, built by a pure function:
 
 <<< @/../examples/raft/deployment.ts#cluster-deployment
 
 - Each node gets a runtime named `<name>-<i>`, with its own `node`, `ledger` and seeded `random` pods.
 - Each runtime also places the `raft-messaging` and `raft-clock` pods that the cluster's `nano.json` already defines, so every node shares them; they are placed, not defined again.
-- Call edges connect each node to its pods, and the messaging back to the node ([Wiring](/concepts/wiring)).
+- Call edges connect each node to its pods, and the messaging back to the node.
 
 `create` hands that data to `deploy`:
 

@@ -151,7 +151,7 @@ test('all the examples in one file, only the chat ticked: only its pods land, an
   expect((await runtimes(page)).filter(r => r.includes('.'))).toEqual(['example.chat.backend', 'example.chat.room'])   // and the workspace's own main
   const pods = await page.evaluate(() => Object.keys((document.querySelector('workspace-dock') as any).host.data().pods))
   expect(pods).toEqual(expect.arrayContaining(['alice', 'bob', 'chatStore', 'messaging']))
-  for (const p of ['todos', 'todoStore', 'auth', 'timer', 'store']) expect(pods).not.toContain(p)
+  for (const p of ['todos', 'todoStore', 'auth', 'calculator', 'history']) expect(pods).not.toContain(p)
   await say(room(page, 'alice'), 'hi bob')
   await expect(room(page, 'bob').locator('li')).toHaveText([/alice.*hi bob/])
 })

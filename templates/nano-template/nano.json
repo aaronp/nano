@@ -1,15 +1,13 @@
 {
   "pods": {
-    "timer": { "implementation": "acme.template/timer", "eager": false },
-    "picker": { "implementation": "acme.template/picker", "eager": false },
-    "store": { "implementation": "acme.template/store", "eager": false }
+    "calculator": { "implementation": "acme.template/calculator", "eager": false },
+    "history": { "implementation": "acme.template/history", "eager": false }
   },
   "runtimes": {
     "main": {
-      "pods": ["timer", "picker", "store"],
+      "pods": ["calculator", "history"],
       "subscriptions": [
-        { "kind": "pipe", "from": "picker", "source": "acme.template.Picker/changed", "to": "store", "target": "acme.template.Store/set" },
-        { "kind": "pipe", "from": "timer", "source": "acme.template.Timer/tick", "to": "store", "target": "acme.template.Store/set" }
+        { "kind": "pipe", "from": "calculator", "source": "acme.template.Calculator/calculated", "to": "history", "target": "acme.template.History/save" }
       ]
     }
   },

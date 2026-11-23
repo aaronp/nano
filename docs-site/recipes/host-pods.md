@@ -1,6 +1,6 @@
 # Using the host from a pod
 
-A host offers pods of its own to the pods it runs ([In the host](/concepts/host)). In the nano app they are placed in the `main` runtime, among them `ui` (`HostUI`: alert, approve, the app bar) and `deploy` (`HostDeploy`: add and remove pods and runtimes). A pod uses one by depending on its interface, like any other pod.
+A host offers pods of its own to the pods it runs. In the nano app they are placed in the `main` runtime, among them `ui` (`HostUI`: alert, approve, the app bar) and `deploy` (`HostDeploy`: add and remove pods and runtimes). A pod uses one by depending on its interface, like any other pod.
 
 Raft's cluster pod creates whole clusters, so it needs `HostDeploy`:
 

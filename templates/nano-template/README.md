@@ -4,19 +4,19 @@ A starting point for components of a nano app, built on the published
 [`@pritzlaff/nano-core`](https://www.npmjs.com/package/@pritzlaff/nano-core), `nano-elements` and `nano-ui`.
 The build is a provider module (`dist/index.js`) and a `dist/nano.json`; a host imports the app by the `nano.json`'s URL.
 
-It ships three pods in one provider, `acme.template`, to start from:
+It ships a calculator with a history, two pods in one provider, `acme.template`, to start from:
 
-- **timer** (`src/timer.ts`): `start`, `stop`, and the event `tick` (each count, as `{ key: 'tick', value }`);
-  its view `<nano-timer>` (`src/timer-view.ts`) has Start and Stop and labels the count "ticks seen" (the ticks it has seen since it opened);
-- **picker** (`src/picker.ts`): `pick` (a value outside the options fails), `setOptions`, `options`, and the event `changed`
-  (`{ key: 'choice', value }`); its view `<nano-picker>` reads `options` and shows the kit's filterable `<nano-select>`;
-- **store** (`src/store.ts`): `get`, `set`, `remove`, `entries` and the event `changed`, kept in `localStorage` (memory
-  where there is none); its view `<nano-store>` lists the entries.
+- **calculator** (`src/calculator.ts`): `calculate` (`{ a, op, b }`, `op` one of `+ - * /`, answered with the same and
+  its `result`) and the event `calculated`, published with each result; division by zero fails `invalid-input`. Config:
+  `{ precision }`, the decimals to round to. Its view `<nano-calculator>` (`src/calculator-view.ts`) has two number
+  inputs, an operator, `=`, the result, and the history list;
+- **history** (`src/history.ts`): `save` and `load`, kept in `localStorage` (memory where there is none).
 
-`nano.json` places all three in runtime `main`, and pipes `picker.changed` and `timer.tick` to `store.set`: an event
-can be piped to an action when its data has the action's input schema (`Entry`, in `src/interfaces.ts`).
-`<nano-timer>` does not rely on that pipe: while connected it subscribes to its own pod's `tick` (through the `Timer`
-interface) and counts what arrives, so a timer added with no pipes counts too.
+The calculator knows nothing of the history: `nano.json` places both in runtime `main` and pipes `calculator.calculated`
+to `history.save`. An event can be piped to an action when its data has the action's input schema (`Calculated`, in
+`src/interfaces.ts`). `<nano-calculator>` listens to its own pod's `calculated` (through the `Calculator` interface) and
+reads the history again on each one, so a calculation made anywhere shows up. (A view in a sandboxed frame reaches
+only its own pod, so there the list stays empty; the history pod still saves each result.)
 
 ## Make it yours
 
@@ -24,9 +24,9 @@ Use this repository as a template (GitHub's "Use this template"), then rename:
 
 1. `package.json`: `name`, `description`, `version`.
 2. The provider `acme.template` (`src/index.ts`, `nano.json`'s `modules` and pod `implementation`s), the
-   implementation coordinates `acme.template/…` and the interfaces `acme.template.Timer`… (`src/interfaces.ts`, and the
-   pipes' `source` and `target`): use your own namespace. A host refuses an import that clashes with a name it has.
-3. The tags (`nano-timer`…) in `src/index.ts`: custom element names need a dash.
+   implementation coordinates `acme.template/…` and the interfaces `acme.template.Calculator`… (`src/interfaces.ts`, and the
+   pipe's `source` and `target`): use your own namespace. A host refuses an import that clashes with a name it has.
+3. The tag (`nano-calculator`) in `src/index.ts`: custom element names need a dash.
 
 ## Develop
 
@@ -45,7 +45,7 @@ clash (namespacing comes later).
 
 ## What a host gets
 
-- **`dist/nano.json`**: the pods, runtimes and pipes, and `providers`: `{ "acme.template": "./index.js" }`.
+- **`dist/nano.json`**: the pods, runtimes and pipes, and `modules`: `{ "acme.template": "./index.js" }`.
 - **`dist/index.js`**: the module. Its default export is the provider; its named export `views` maps each
   implementation to its view's tag, and importing it defines the tags. `@pritzlaff/nano-core`, `nano-elements`,
   `nano-ui`, `lit` and `typebox` are left as bare imports: the host provides them through its import map, so there
@@ -53,9 +53,9 @@ clash (namespacing comes later).
 
 ## Views and looks
 
-A view is a custom element with a `target: { app, registry, runtime, pod }` property. It reaches its pod only through
-`target.app.call(target.runtime, target.pod)` and `target.app.listen`, so it works in any host (`src/view.ts` is the
-small base these use). Style with the `--nano-*` tokens (colours, fonts, radius), with fallbacks, so a view takes on any
+A view is a custom element with a `target: { app, registry, runtime, pod }` property. It reaches pods only through
+`target.app`: `call(target.runtime, target.pod)`, `listen`, or the runtime's typed client
+(`target.app.runtime(target.runtime).get(Iface)`), so it works in any host (`src/view.ts` is the small base it uses). Style with the `--nano-*` tokens (colours, fonts, radius), with fallbacks, so a view takes on any
 host's theme; start from `base` and `kit` (`.btn`, `.badge`, `.input-group`…) and the kit's elements
 (`<nano-select>`, `<nano-date-picker>`, `<nano-data-table>`, `toast()`…) from `@pritzlaff/nano-elements`.
 

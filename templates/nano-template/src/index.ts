@@ -1,18 +1,14 @@
 // The module a host imports: the `acme.template` provider (default export) and its views, by implementation.
 import { Coord } from '@pritzlaff/nano-core'
-import { picker } from './picker.ts'
-import { PickerView } from './picker-view.ts'
-import { store } from './store.ts'
-import { StoreView } from './store-view.ts'
-import { timer } from './timer.ts'
-import { TimerView } from './timer-view.ts'
+import { calculator } from './calculator.ts'
+import { CalculatorView } from './calculator-view.ts'
+import { history } from './history.ts'
 
 const ns = Coord.namespace('acme.template')
 
 // #region provider
-export default ns.provider([timer, picker, store])
+export default ns.provider([calculator, history])
 // #endregion provider
-export const views = { 'acme.template/timer': 'nano-timer', 'acme.template/picker': 'nano-picker', 'acme.template/store': 'nano-store' }
+export const views = { 'acme.template/calculator': 'nano-calculator' }
 
-for (const [tag, el] of [['nano-timer', TimerView], ['nano-picker', PickerView], ['nano-store', StoreView]] as const)
-  if (!customElements.get(tag)) customElements.define(tag, el)
+if (!customElements.get('nano-calculator')) customElements.define('nano-calculator', CalculatorView)

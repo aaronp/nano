@@ -1,37 +1,25 @@
-// What the three pods offer. `Entry` is shared on purpose: an event whose data has the same schema as an action's input can be piped to it.
+// What the two pods offer. `Calculated` is both the calculator's event and the history's `save` input, on purpose: an
+// event whose data has the same schema as an action's input can be piped to it.
 import { Type } from 'typebox'
 import { Coord, Schema, Op } from '@pritzlaff/nano-core'
 
 const ns = Coord.namespace('acme.template')
 
 // #region schemas
-export const Nothing = Schema.define(Type.Null(), 'Nothing')
-const Text = Schema.define(Type.String(), 'Text')
-const Texts = Schema.define(Type.Array(Type.String()), 'Texts')
-const Maybe = Schema.define(Type.Union([Type.String(), Type.Null()]), 'MaybeText')
-export const Entry = Schema.define(Type.Object({ key: Type.String(), value: Type.String() }), 'Entry')
-const Entries = Schema.define(Type.Record(Type.String(), Type.String()), 'Entries')
+const Operator = Type.Union([Type.Literal('+'), Type.Literal('-'), Type.Literal('*'), Type.Literal('/')])
+export const Sum = Schema.define(Type.Object({ a: Type.Number(), op: Operator, b: Type.Number() }), 'Sum')
+export const Calculated = Schema.define(Type.Object({ a: Type.Number(), op: Operator, b: Type.Number(), result: Type.Number() }), 'Calculated')
 // #endregion schemas
 
-// #region timer-interface
-export const Timer = ns.interface('Timer', {
-  start: Op.action(Nothing, Nothing),
-  stop: Op.action(Nothing, Nothing),
-  tick: Op.event(Entry),   // { key: 'tick', value: '<count>' }
+// #region calculator-interface
+export const Calculator = ns.interface('Calculator', {
+  calculate: Op.action(Sum, Calculated),
+  calculated: Op.event(Calculated),
 })
-// #endregion timer-interface
-// #region picker-store-interfaces
-export const Picker = ns.interface('Picker', {
-  pick: Op.action(Text, Nothing),
-  setOptions: Op.action(Texts, Nothing),
-  options: Op.action(Nothing, Texts),
-  changed: Op.event(Entry),   // { key: 'choice', value }
+// #endregion calculator-interface
+// #region history-interface
+export const History = ns.interface('History', {
+  save: Op.action(Calculated, Type.Null()),
+  load: Op.action(Type.Null(), Type.Array(Calculated)),
 })
-export const Store = ns.interface('Store', {
-  get: Op.action(Text, Maybe),
-  set: Op.action(Entry, Nothing),
-  remove: Op.action(Text, Nothing),
-  entries: Op.action(Nothing, Entries),
-  changed: Op.event(Text),   // the key that changed
-})
-// #endregion picker-store-interfaces
+// #endregion history-interface

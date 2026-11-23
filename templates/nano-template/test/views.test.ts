@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { ViewTarget } from '@pritzlaff/nano-ui'
-import { must, open, sleep } from './app.ts'
+import { must, open } from './app.ts'
 
 type El = HTMLElement & { target: ViewTarget; updateComplete: Promise<unknown> }
 const mount = async (tag: string, t: ViewTarget) => {
@@ -10,60 +10,34 @@ const mount = async (tag: string, t: ViewTarget) => {
   await el.updateComplete
   return el
 }
-const click = (el: El, label: string) => [...el.shadowRoot!.querySelectorAll('button')].find(b => b.textContent === label)!.click()
+const settle = async (el: El) => { for (let i = 0; i < 5; i++) { await Bun.sleep(5); await el.updateComplete } }
+const type = (el: El, label: string, value: string) => {
+  const input = el.shadowRoot!.querySelector<HTMLInputElement | HTMLSelectElement>(`[aria-label="${label}"]`)!
+  input.value = value
+  input.dispatchEvent(new Event('input'))
+  input.dispatchEvent(new Event('change'))
+}
 
-describe('the views', () => {
-  test('<nano-timer> counts ticks after Start, and stops after Stop', async () => {
+describe('<nano-calculator>', () => {
+  test('type 2 and 3, choose +, click =: the result is 5, and the history lists it', async () => {
     const { app, registry } = await open()
-    const el = await mount('nano-timer', { app, registry, runtime: 'main', pod: 'timer' })
-    click(el, 'Start')
-    await sleep(60)
-    await el.updateComplete
-    const n = Number(el.shadowRoot!.querySelector('.badge')!.textContent)
-    expect(n).toBeGreaterThan(1)
-    click(el, 'Stop')
-    await sleep(40)
-    await el.updateComplete
-    const stopped = Number(el.shadowRoot!.querySelector('.badge')!.textContent)
-    await sleep(40)
-    await el.updateComplete
-    expect(Number(el.shadowRoot!.querySelector('.badge')!.textContent)).toBe(stopped)
+    const el = await mount('nano-calculator', { app, registry, runtime: 'main', pod: 'calculator' })
+    type(el, 'a', '2'); type(el, 'operator', '+'); type(el, 'b', '3')
+    el.shadowRoot!.querySelector<HTMLButtonElement>('button[aria-label="equals"]')!.click()
+    await settle(el)
+    expect(el.shadowRoot!.querySelector('output')!.textContent).toBe('5')
+    expect([...el.shadowRoot!.querySelectorAll('li')].map(li => li.textContent)).toEqual(['2 + 3 = 5'])
   })
 
-  test('<nano-timer> counts its own ticks with no pipe from its pod, and ends its subscription when removed', async () => {
-    const { app, registry } = await open(true)
-    const el = await mount('nano-timer', { app, registry, runtime: 'main', pod: 'timer' })
-    click(el, 'Start')
-    await sleep(60)
-    await el.updateComplete
-    expect(Number(el.shadowRoot!.querySelector('.badge')!.textContent)).toBeGreaterThan(1)
-    const it = (el as unknown as { iter?: AsyncIterator<unknown> }).iter!
-    el.remove()
-    expect(await it.next()).toEqual({ done: true, value: undefined })
-  })
-
-  test('<nano-picker> renders the kit select, whose change picks', async () => {
+  test('a division by zero shows its reason; the history lists what is saved elsewhere too', async () => {
     const { app, registry } = await open()
-    const el = await mount('nano-picker', { app, registry, runtime: 'main', pod: 'picker' })
-    await sleep(10)
-    await el.updateComplete
-    const select = el.shadowRoot!.querySelector('nano-select') as HTMLElement & { value: string }
-    select.value = 'blue'
-    select.dispatchEvent(new Event('change'))
-    await sleep(20)
-    expect(must(await app.call('main', 'store').get('choice'))).toBe('blue')
-  })
-
-  test('<nano-store> lists entries as they are set, and removes one', async () => {
-    const { app, registry } = await open()
-    const el = await mount('nano-store', { app, registry, runtime: 'main', pod: 'store' })
-    must(await app.call('main', 'store').set({ key: 'a', value: '1' }))
-    await sleep(20)
-    await el.updateComplete
-    expect(el.shadowRoot!.textContent).toContain('a')
-    el.shadowRoot!.querySelector<HTMLButtonElement>('button[aria-label="Remove a"]')!.click()
-    await sleep(20)
-    await el.updateComplete
-    expect(el.shadowRoot!.querySelector('tr')).toBeNull()
+    const el = await mount('nano-calculator', { app, registry, runtime: 'main', pod: 'calculator' })
+    type(el, 'a', '1'); type(el, 'operator', '/'); type(el, 'b', '0')
+    el.shadowRoot!.querySelector<HTMLButtonElement>('button[aria-label="equals"]')!.click()
+    await settle(el)
+    expect(el.shadowRoot!.querySelector('[role="alert"]')!.textContent).toContain('division by zero')
+    must(await app.call('main', 'calculator').calculate({ a: 4, op: '*', b: 2 }))   // not from the view: heard as calculated
+    await settle(el)
+    expect([...el.shadowRoot!.querySelectorAll('li')].map(li => li.textContent)).toEqual(['4 * 2 = 8'])
   })
 })

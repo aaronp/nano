@@ -288,6 +288,21 @@ explain the guess. A pod has no way to read back what its own `deploy` calls add
 `undeploy` only), nor storage of its own here. Worth deciding which existing concept should carry this.
 ```
 
+### The builder can't return a chosen failure
+- id: t-23
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T18:00:00.000Z
+
+```md
+Found making the template's calculator (builder form). A builder method's value is its success and a throw is `threw`;
+returning `failure('invalid-input', …)` is taken as a success value (and fails the output check). The only way to a
+chosen Fail is to throw an Error carrying `fail` (`Object.assign(new Error(r), { fail: { type: 'invalid-input', reason: r } })`),
+which `handlers` passes through but nano documents only for its own plain clients (`thrown` is not exported). The
+calculator does that for division by zero; step 6 of the docs will show it. Worth deciding whether that convention is
+public, or whether a method may return a `NanoResult`. A question, not a proposal.
+```
+
 ## Doing
 
 ## Done

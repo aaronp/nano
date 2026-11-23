@@ -1,7 +1,6 @@
 import { defineConfig } from 'vitepress'
 
-const concepts = ['interfaces', 'implementations', 'pods', 'wiring', 'headless', 'views', 'host', 'isolation', 'packaging']
-const recipes = ['timer', 'pipeline', 'host-pods', 'deploying-pods']
+const recipes = ['pipeline', 'host-pods', 'deploying-pods']
 const title = (s: string) => (s[0].toUpperCase() + s.slice(1)).replace(/-/g, ' ')
 
 export default defineConfig({
@@ -11,7 +10,7 @@ export default defineConfig({
   themeConfig: {
     search: { provider: 'local' },
     sidebar: [
-      { text: 'Concepts', items: [{ text: 'At a glance', link: '/' }, ...concepts.map(c => ({ text: title(c), link: `/concepts/${c}` }))] },
+      { text: 'Learn', items: [] },
       { text: 'Recipes', items: recipes.map(r => ({ text: title(r), link: `/recipes/${r}` })) },
     ],
   },
