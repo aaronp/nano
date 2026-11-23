@@ -80,3 +80,11 @@ test('given an import that fails, then its reason shows inside the dialog and Im
   expect(d.querySelector('[role="alert"]')!.textContent).toContain('a malformed message: nope')
   expect(d.querySelector<HTMLButtonElement>('[data-import]')!.disabled).toBe(false)
 })
+
+test('given a URL to open on, then the field is filled and the file fetched and previewed with no Fetch press', async () => {
+  const t = open('', () => false, template, 'https://other.test/t/nano.json')
+  for (let i = 0; i < 5; i++) await Promise.resolve()
+  expect(t.q<HTMLInputElement>('input[name="url"]').value).toBe('https://other.test/t/nano.json')
+  expect(t.q<HTMLInputElement>('input[data-runtime="main"]').value).toBe('acme.template.main')
+  expect(t.q<HTMLInputElement>('input[name="trust"][value="sandboxed"]').checked).toBe(true)
+})

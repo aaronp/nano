@@ -30,8 +30,8 @@ export const pageDeps: ImportDeps = {
   known: (coord) => ownProvider(!!host?.registry.provider(coord), host?.data().modules?.[coord]),
 };
 
-/** Opens the dialog. */
-export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
+/** Opens the dialog; with `at`, its URL field is filled and fetched as if Fetch were pressed. */
+export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps, at?: string) {
   const d = doc.createElement('dialog');
   d.setAttribute('aria-label', 'Import components');
   d.className = 'import-dialog';
@@ -130,5 +130,6 @@ export function openImportDialog(doc: Document, deps: ImportDeps = pageDeps) {
   d.addEventListener('close', () => d.remove());
   doc.body.append(d);
   d.showModal();
+  if (at) { $<HTMLInputElement>('input[name="url"]').value = at; $('[data-fetch]').click(); }
   return d;
 }

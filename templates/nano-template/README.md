@@ -31,8 +31,8 @@ Use this repository as a template (GitHub's "Use this template"), then rename:
    implementation coordinates `acme.template/…` and the interfaces `acme.template.Calculator`… (`src/interfaces.ts`, and the
    pipe's `source` and `target`): use your own namespace. A host refuses an import that clashes with a name it has.
 3. The tag (`nano-calculator`) in `src/index.ts`: custom element names need a dash.
-4. The **Open it in nano** link above: nano imports a `?src=` only from its own origin (`aaronp.github.io`), so from
-   your own Pages site open nano and use File › Open… with your `nano.json`'s URL, or drop the link.
+4. The **Open it in nano** link above: point its `?src=` at your own Pages URL (your `nano.json`). From another origin
+   than nano's own, nano opens the Import dialog on it, after which Import is your approval (Cancel imports nothing).
 
 ## Develop
 

@@ -132,9 +132,9 @@ if (host && outline) {
   })().finally(() => { resetting = undefined; }));
 
   const src = new URL(location.href).searchParams.get('src');
-  // Only a URL on this page's origin: a crafted link must not open the import prompt on load.
-  if (src && new URL(src, location.href).origin !== location.origin) toast(`${src} is not on this origin`, { variant: 'bad' });
-  else if (src && (await host.importUrl(new URL(src, location.href).href)).ok) {   // a failure is shown as a toast
-    const at = new URL(location.href); at.searchParams.delete('src'); history.replaceState(history.state, '', at);   // imported into the stored document: a reload must not import it again
-  }
+  // A URL on this page's origin imports at once; any other opens the Import dialog on it (a crafted link must not import unasked).
+  const to = src && new URL(src, location.href);
+  const clear = () => { const at = new URL(location.href); at.searchParams.delete('src'); history.replaceState(history.state, '', at); };   // a reload must not import it again
+  if (to && to.origin !== location.origin) { openImportDialog(document, undefined, to.href); clear(); }
+  else if (to && (await host.importUrl(to.href)).ok) clear();   // a failure is shown as a toast
 }
