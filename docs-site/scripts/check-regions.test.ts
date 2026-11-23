@@ -40,3 +40,7 @@ test('Open in nano needs its nano.json in the public dir', () => {
   const [root2, pub2] = site({ 'p.md': md }, { 'examples/x/nano.json': '{}' })
   expect(checkRegions(root2, pub2)).toEqual([])
 })
+test('a region whose name only starts with the wanted one is not it', () => {
+  const [root, pub] = site({ 'p.md': embed, '../a.ts': '// #region pod-extra\nx\n// #endregion\n' })
+  expect(checkRegions(root, pub)).toHaveLength(1)
+})

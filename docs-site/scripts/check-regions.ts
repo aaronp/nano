@@ -15,7 +15,7 @@ export function checkRegions(root: string, publicDir: string): string[] {
     for (const [, path, region] of text.matchAll(/<<<\s+@\/(\S+?)(?:#([\w-]+))?(?=[\s{[]|$)/gm)) {
       const file = resolve(root, path)
       if (!existsSync(file)) { problems.push(`${at}: ${path} not found`); continue }
-      if (region && !new RegExp(`^\\s*(//|#|<!--)\\s*#region ${region}\\b`, 'm').test(readFileSync(file, 'utf8')))
+      if (region && !new RegExp(`^\\s*//\\s*#region ${region}(?![\\w-])`, 'm').test(readFileSync(file, 'utf8')))
         problems.push(`${at}: ${path} has no region ${region}`)
     }
     for (const [, src] of text.matchAll(/<OpenInNano\s+src="([^"]+)"/g))

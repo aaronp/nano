@@ -24,9 +24,11 @@ export class TimerView extends View {
     const r = await (on ? this.pod(t).start(null) : this.pod(t).stop(null))
     if (r.ok) this.running = on
   }
+  // #region timer-view
   protected face(t: ViewTarget) {
     return html`<div class="row"><span class="badge accent" aria-label="ticks seen">${this.count}</span>
       <button class="btn" ?disabled=${this.running} @click=${() => this.run(t, true)}>Start</button>
       <button class="btn" ?disabled=${!this.running} @click=${() => this.run(t, false)}>Stop</button></div>`
   }
+  // #endregion
 }

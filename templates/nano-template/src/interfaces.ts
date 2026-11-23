@@ -11,11 +11,13 @@ const Maybe = Schema.define(Type.Union([Type.String(), Type.Null()]), 'MaybeText
 export const Entry = Schema.define(Type.Object({ key: Type.String(), value: Type.String() }), 'Entry')
 const Entries = Schema.define(Type.Record(Type.String(), Type.String()), 'Entries')
 
+// #region timer-interface
 export const Timer = ns.interface('Timer', {
   start: Op.action(Nothing, Nothing),
   stop: Op.action(Nothing, Nothing),
   tick: Op.event(Entry),   // { key: 'tick', value: '<count>' }
 })
+// #endregion
 export const Picker = ns.interface('Picker', {
   pick: Op.action(Text, Nothing),
   setOptions: Op.action(Texts, Nothing),

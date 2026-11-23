@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 const concepts = ['interfaces', 'implementations', 'pods', 'wiring', 'headless', 'views', 'host', 'isolation', 'packaging']
 const recipes = ['timer', 'pipeline', 'host-pods', 'deploying-pods']
-const title = (s: string) => s.replace(/(^|-)(\w)/g, (_, d, c) => (d ? ' ' : '') + c.toUpperCase())
+const title = (s: string) => (s[0].toUpperCase() + s.slice(1)).replace(/-/g, ' ')
 
 export default defineConfig({
   title: 'nano',

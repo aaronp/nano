@@ -5,6 +5,7 @@ import { Timer } from './interfaces.ts'
 const ns = Coord.namespace('acme.template')
 
 /** Counts while started and publishes each count as `tick`. Config: `{ intervalMs }` (default 1000). */
+// #region timer-implementation
 export const timer = Implementation.define(ns.implementationId('timer'), {
   provides: [Timer],
   config: Schema.define(Type.Union([Type.Object({ intervalMs: Type.Integer({ minimum: 5, maximum: 60000 }) }), Type.Undefined()]), 'TimerConfig'),
@@ -21,3 +22,4 @@ export const timer = Implementation.define(ns.implementationId('timer'), {
     })]
   },
 })
+// #endregion
