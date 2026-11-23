@@ -1,0 +1,7 @@
+/* nano-elements' accent (--nano-accent, packages/elements/src/tokens.ts): one value for light and dark. */
+:root {
+  --vp-c-brand-1: #6FA8FF;
+  --vp-c-brand-2: #6FA8FF;
+  --vp-c-brand-3: #6FA8FF;
+  --vp-c-brand-soft: #1C2A4433;
+}

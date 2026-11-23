@@ -1,0 +1,13 @@
+{
+  "name": "nano-docs-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "bun scripts/check-regions.ts && vitepress build",
+    "test": "bun test scripts"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.3"
+  }
+}

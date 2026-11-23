@@ -44,6 +44,11 @@ jobs:
         env:
           PUBLIC_URL: ${{ steps.pages.outputs.base_url && format('{0}/', steps.pages.outputs.base_url) || '' }}   # examples/<name>/nano.json names ${PUBLIC_URL}examples/<name>/<key>.js
         run: bun run build
+      - name: Docs
+        working-directory: docs-site
+        env:
+          DOCS_BASE: ${{ steps.pages.outputs.base_path && format('{0}/docs/', steps.pages.outputs.base_path) || '/docs/' }}
+        run: bun install --frozen-lockfile && bun test scripts && bun run build
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
