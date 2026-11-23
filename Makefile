@@ -1,4 +1,4 @@
-.PHONY: docs docs-build adr agile test test-ui install ui dev dev2 serve-template serve-examples link-templates packages smoke publish template-check template-export
+.PHONY: bump-patch bump-minor bump-major docs docs-build adr agile test test-ui install ui dev dev2 serve-template serve-examples link-templates packages smoke publish template-check template-export
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
@@ -53,6 +53,15 @@ packages:
 # Install the built packages into a scratch folder as a stranger would, type-check and run a consumer.
 smoke: packages
 	bun scripts/smoke-packages.ts
+
+# Bumps nano-core, nano-elements and nano-ui together (scripts/version.ts), refreshes bun.lock, commits and tags
+# v<version> (needs a clean tree). Then push the tag (git push --follow-tags) for CI to publish, or: make publish
+bump-patch bump-minor bump-major:
+	@git diff --quiet && git diff --cached --quiet || { echo "Commit or stash first: the tree isn't clean."; exit 1; }
+	@v=$$(node -p "const [a,b,c]=require('./packages/nano/package.json').version.split('-')[0].split('.').map(Number); \
+	  ({patch:[a,b,c+1],minor:[a,b+1,0],major:[a+1,0,0]})['$(@:bump-%=%)'].join('.')") && \
+	  bun scripts/version.ts $$v && bun install --silent && \
+	  git commit -q -am "release $$v" && git tag "v$$v" && echo "v$$v committed and tagged; push with: git push --follow-tags"
 
 # Publish the built packages to npm from this machine (after `npm login`; with 2FA, npm asks for a code, or pass
 # OTP=123456). Builds and smoke-tests first; a version
