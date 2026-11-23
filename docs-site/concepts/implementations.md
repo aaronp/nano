@@ -9,7 +9,7 @@ Reading it from the top:
 - `ns.implementationId('timer')` is its name, `acme.template/timer`, which a `nano.json` uses to say which code a pod runs.
 - `config` is the schema of the settings a pod may pass it (here an optional `intervalMs`).
 - `make(ctx, config)` runs once per pod, when the pod is first needed. What it closes over (`clock`, `count`) is that pod's state. `ctx` is the pod's link to the rest of the app: `ctx.publish` sends an event, `ctx.addOnCloseListener` cleans up when the pod is closed.
-- `provide(Timer, { … })` pairs the interface with its handlers. A handler returns `success(value)` or `failure(code, message)`; nothing throws.
+- `provide(Timer, { … })` pairs the interface with its handlers. A handler returns `success(value)` or `failure(code, message)` rather than throwing; if one does throw, the call ends as a failure.
 
 **When it runs:** `start` begins counting and publishes each count as `tick`; a second `start` doesn't start a second clock; `stop` ends it, and no ticks follow.
 

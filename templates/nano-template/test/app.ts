@@ -6,6 +6,7 @@ export const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw new Error(r.f
 export const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 /** `bare`: no subscriptions, so no event is on the stream unless someone subscribes. */
+// #region open
 export async function open(bare = false) {
   globalThis.localStorage?.clear()
   const registry = Registry.create()
@@ -15,3 +16,4 @@ export async function open(bare = false) {
   if (bare) d.runtimes.main!.subscriptions = []
   return { app: must(await Application.create(must(AppDeployment.assemble(d, registry)), {})), registry }
 }
+// #endregion open

@@ -19,6 +19,7 @@ for (const src of srcs) test(`Open in nano: ${src} imports and adds pods`, async
     const pods = await page.evaluate(() => Object.keys((document.querySelector('workspace-dock') as any).host.data().pods))
     return want.filter(n => !pods.includes(n))
   }, { timeout: 30_000 }).toEqual([])
-  expect(new URL(page.url()).searchParams.has('src')).toBe(false)   // main.ts drops it once the import succeeded
+  // main.ts drops it once the import succeeded: after any eager pod is built (originkey's frame loads first), so wait for it
+  await expect.poll(() => new URL(page.url()).searchParams.has('src'), { timeout: 15_000 }).toBe(false)
   await expect(page.locator('.toast.bad')).toHaveCount(0)
 })

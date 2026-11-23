@@ -18,7 +18,7 @@ Neither knows the other. The `nano.json` connects them:
 { "kind": "pipe", "from": "picker", "source": "acme.template.Picker/changed", "to": "store", "target": "acme.template.Store/set" }
 ```
 
-A pipe is allowed only when the source's data fits the target's input. Here both are `Entry`, the schema the interfaces share on purpose:
+A pipe is allowed only when the source's data and the target's input are the same schema (or the target takes anything). Here both are `Entry`, the schema the interfaces share on purpose:
 
 <<< @/../templates/nano-template/src/interfaces.ts#picker-store-interfaces
 

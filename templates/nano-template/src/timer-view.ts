@@ -15,11 +15,13 @@ export class TimerView extends View {
 
   disconnectedCallback() { super.disconnectedCallback(); this.end() }
   private end() { void this.iter?.return?.(); this.iter = undefined }
+  // #region timer-tick
   protected async started(t: ViewTarget) {
     this.end()
     const it = this.iter = t.app.runtime(t.runtime).get(Timer, { pod: t.pod }).tick()[Symbol.asyncIterator]()
     try { while (!(await it.next()).done && this.iter === it) this.count += 1 } catch { /* the pod is gone: the count stays */ }
   }
+  // #endregion timer-tick
   private async run(t: ViewTarget, on: boolean) {
     const r = await (on ? this.pod(t).start(null) : this.pod(t).stop(null))
     if (r.ok) this.running = on

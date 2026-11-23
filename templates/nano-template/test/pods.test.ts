@@ -3,6 +3,7 @@ import { success } from '@pritzlaff/nano-core'
 import { must, open, sleep } from './app.ts'
 
 describe('the template, headless', () => {
+  // #region headless
   test('the timer ticks into the store, then stops', async () => {
     const { app } = await open()
     const timer = app.call('main', 'timer'), store = app.call('main', 'store')
@@ -15,6 +16,7 @@ describe('the template, headless', () => {
     await sleep(40)
     expect(await store.get('tick')).toEqual(success(at))
   })
+  // #endregion headless
 
   test('a pick reaches the store through the picker.changed pipe', async () => {
     const { app } = await open()

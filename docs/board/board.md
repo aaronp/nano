@@ -205,6 +205,62 @@ callers write `timer.start(null)`. It needs explaining on first sight; worth dec
 reading or whether a no-input action could be called as `start()`.
 ```
 
+### The template says a host imports from its own origin only
+- id: t-17
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T13:06:38.000Z
+
+```md
+Found writing the In the host page. The template's README ("Develop": "A host imports an app from its own origin
+only (cross-origin comes later)") and `scripts/serve.ts`'s header say so, yet File › Open… in the nano app imports
+from another origin (the dialog's Sandboxed/Trusted choice; `e2e/cross-origin.e2e.ts`), and `serve.ts` already
+allows any origin. Only `?src=` is limited to the app's own origin. A reader following the README won't try
+`bun run serve` plus File › Open, which works.
+```
+
+### What each isolation value means lives only in the nano app's code
+- id: t-18
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T13:06:38.000Z
+
+```md
+Found writing the Isolation page. nano only shape-checks `isolation`; what `sandbox`, `isolated-sandbox` and
+`home-origin` do is the workspace's (`sandbox/frames.ts`'s `FRAME_POLICY`, `import-plan.ts`), with one line in
+`design.md`. `sandbox` is a frame on the page's own origin with `allow-same-origin`, so it has the page's full
+access (the Import dialog flags it so, and the browser warns it "can escape its sandboxing"): the name promises
+more than it gives. Worth a host-neutral description of the four values, and a look at whether `sandbox` earns its
+name.
+```
+
+### Running a nano.json headless takes five steps and a helper of one's own
+- id: t-19
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T13:06:38.000Z
+
+```md
+Found writing the Running it headless page. To run the template's `nano.json` in a test, `test/app.ts` creates a
+registry, adds the provider, reads the file, assembles it and creates the application, unwrapping each result with
+its own `must`. Every component repo will copy that helper. `Application.load` does it in one call but only from a
+URL whose `modules` it imports. Is there (or should there be) a one-call way from a deployment and providers in hand?
+A question, not a proposal: it would be a new public API.
+```
+
+### Headless tests sleep to wait for a pipe
+- id: t-20
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T13:06:38.000Z
+
+```md
+Found writing the Running it headless page. The template's tests `sleep(20)`/`sleep(60)` after a call before
+reading what a pipe delivered, because a pipe's delivery happens after the call returns. The page has to explain the
+sleeps, and they are timing-dependent. `app.listen` can see each `delivered`, but no helper awaits one; worth deciding
+whether tests should wait on the stream rather than the clock.
+```
+
 ## Doing
 
 ## Done
