@@ -1,4 +1,4 @@
-.PHONY: adr agile test test-ui install ui dev dev2 serve-template serve-examples link-templates packages smoke publish template-check template-export
+.PHONY: docs docs-build adr agile test test-ui install ui dev dev2 serve-template serve-examples link-templates packages smoke publish template-check template-export
 ifdef TMPDIR
 export BUN_TMPDIR := $(TMPDIR)
 export BUN_INSTALL_CACHE_DIR := $(TMPDIR)/bun-cache
@@ -74,6 +74,14 @@ template-check:
 # Mirror templates/nano-template to github.com/aaronp/nano-template (main) as one commit, with your git credentials.
 template-export:
 	scripts/template-export.sh https://github.com/aaronp/nano-template.git
+
+# The docs site (docs-site/, VitePress) in dev mode.
+docs:
+	cd docs-site && bun install && bunx vitepress dev
+
+# Build the docs site into packages/ui-workspace/public/docs. Build the host first (`make ui`'s build): the Open in nano check looks under its public/.
+docs-build:
+	cd docs-site && bun install --frozen-lockfile && bun run build
 
 # The decision ledger (docs/adr/decisions.md) and the task board (docs/board/board.md), each served in the browser.
 # Edits made in the viewer are not written back: download and save over the file, then commit it.

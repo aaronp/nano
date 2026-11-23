@@ -46,11 +46,14 @@ test('use case 1: import, see, swap live, save', async ({ page }) => {
   expect(saved.host.views.out).toBe('nano-pod-view')
 })
 
-test('the template: import its nano.json, open the timer, see it tick', async ({ page }) => {
+test('the template: import its nano.json, open the calculator, 2 + 3 = 5 in its history', async ({ page }) => {
   await page.goto('/?src=/examples/template/nano.json')
-  await page.locator('nano-explorer').getByText('timer', { exact: true }).first().dblclick()
-  const timer = page.locator('nano-timer')
-  await expect(timer).toBeVisible()
-  await timer.getByRole('button', { name: 'Start' }).click()
-  await expect(timer.locator('.badge')).not.toHaveText('0', { timeout: 4000 })
+  await page.locator('nano-explorer').getByText('calculator', { exact: true }).first().dblclick()
+  const calc = page.locator('nano-calculator')
+  await expect(calc).toBeVisible()
+  await calc.getByLabel('a', { exact: true }).fill('2')
+  await calc.getByLabel('b', { exact: true }).fill('3')
+  await calc.getByRole('button', { name: 'equals' }).click()
+  await expect(calc.getByLabel('result')).toHaveText('5', { timeout: 4000 })
+  await expect(calc.getByLabel('history').locator('li')).toContainText(['2 + 3 = 5'])
 })

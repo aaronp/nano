@@ -12,16 +12,17 @@ this file is what to do, and what not to.
   `.create({ needs, config, make })`, `.satisfies(Other, make)`); `Implementation.define(coord, { provides, make })` is the explicit form.
 - **A host** loads it all with `await Application.load(new URL('./nano.json', import.meta.url))`, then `app.get(Iface)`
   (`app.resolve(Iface)` says which pod it found, or why not).
-  `make(ctx, config)` runs once per build, closes over its state and returns `[provide(Iface, { action: async input => success(…) })]`.
-  Events are published with `ctx.publish(Iface.ops.event, data)`; clean up in `ctx.addOnCloseListener`. Nothing throws:
-  return `failure(...)` or `success(...)`.
-- **A view** (`src/<thing>-view.ts`): a custom element extending `View` (`src/view.ts`) with `target`. It reaches its pod only by
-  `this.pod(t).action(input)` and `listen` (`hear`); no logic the pod could hold.
+  `make` runs once per build, closes over its state and returns a plain object, one method per op: an action's value is
+  its success, a throw its failure (`threw`; an Error carrying `fail`, as `src/calculator.ts` does, is that failure).
+  An event's method may be `async *event() {}` with the event published by `ctx.publish(Iface.ops.event, data)`; clean
+  up in `ctx.addOnCloseListener`.
+- **A view** (`src/<thing>-view.ts`): a custom element extending `View` (`src/view.ts`) with `target`. It reaches pods only by
+  `this.pod(t).action(input)`, `listen` (`hear`) and the runtime's typed client; no logic the pod could hold.
 - **The provider** (`src/index.ts`): `export default ns.provider([...])`, `export const views = { '<impl coord>': '<tag>' }`,
   and `customElements.define` for each tag.
 - **`nano.json`**: pods, runtimes, pipes (`source`/`target` are `<iface coord>/<op>`), and `modules`.
 
-`src/timer.ts`, `picker.ts` and `store.ts` with their views are the worked examples. Copy their shape.
+`src/calculator.ts`, `history.ts` and `calculator-view.ts` are the worked examples. Copy their shape.
 
 ## Commands
 
@@ -48,7 +49,7 @@ Removing the examples: delete their files, tests, provider entries and `nano.jso
 
 - **Imports.** The host provides `@pritzlaff/nano-core`, `nano-elements`, `nano-ui`, `lit` and `typebox` (and their
   subpaths). Anything else gets bundled into `dist/index.js`; keep that small, and don't add a second copy of lit or typebox.
-- **A view depends on no host.** Only `target.app.call` and `target.app.listen`.
+- **A view depends on no host.** Only `target.app` (`call`, `listen`, `runtime(…).get`).
 - **Styles.** Use `--nano-*` tokens, always with a fallback, never hard-coded colours or fonts alone. Start from `base` and `kit`
   and the kit's elements before writing CSS or widgets of your own.
 - **No `<form>` submit.** A host may run a view in a sandboxed iframe, where forms are blocked: act on a button's click and on Enter.

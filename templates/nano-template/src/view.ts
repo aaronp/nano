@@ -5,6 +5,7 @@ import type { AppEvent } from '@pritzlaff/nano-core'
 import { base, kit } from '@pritzlaff/nano-elements'
 import type { ViewTarget } from '@pritzlaff/nano-ui'
 
+// #region view
 export class View extends LitElement {
   static properties = { target: { attribute: false } }
   static styles = [base, kit]
@@ -31,3 +32,4 @@ export class View extends LitElement {
   protected face(_t: ViewTarget): unknown { return html`` }
   render() { return this.target ? this.face(this.target) : html`` }
 }
+// #endregion view

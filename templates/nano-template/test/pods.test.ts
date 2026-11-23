@@ -1,54 +1,44 @@
 import { describe, expect, test } from 'bun:test'
 import { success } from '@pritzlaff/nano-core'
-import { must, open, sleep } from './app.ts'
+import { Calculator, History } from '../src/interfaces.ts'
+import { must, open } from './app.ts'
 
 describe('the template, headless', () => {
-  test('the timer ticks into the store, then stops', async () => {
+  // #region headless
+  test('2 + 3 is 5, and the pipe saves it to the history', async () => {
     const { app } = await open()
-    const timer = app.call('main', 'timer'), store = app.call('main', 'store')
-    must(await timer.start(null))
-    await sleep(60)
-    must(await timer.stop(null))
-    await sleep(20)
-    const at = must(await store.get('tick')) as string
-    expect(Number(at)).toBeGreaterThan(1)
-    await sleep(40)
-    expect(await store.get('tick')).toEqual(success(at))
+    const main = app.runtime('main')
+    expect(await main.get(Calculator).calculate({ a: 2, op: '+', b: 3 })).toEqual({ a: 2, op: '+', b: 3, result: 5 })
+    expect(await main.get(History).load()).toEqual([{ a: 2, op: '+', b: 3, result: 5 }])
+  })
+  // #endregion headless
+
+  test('1 / 0 fails invalid-input, and nothing is saved', async () => {
+    const { app } = await open()
+    const r = await app.call('main', 'calculator').calculate({ a: 1, op: '/', b: 0 })
+    expect(r).toMatchObject({ ok: false, fail: { type: 'invalid-input' } })
+    expect(await app.call('main', 'history').load(null)).toEqual(success([]))
   })
 
-  test('a pick reaches the store through the picker.changed pipe', async () => {
-    const { app } = await open()
-    must(await app.call('main', 'picker').pick('green'))
-    await sleep(20)
-    expect(await app.call('main', 'store').get('choice')).toEqual(success('green'))
+  test('each op; with { precision: 2 }, 1 / 3 is 0.33', async () => {
+    const calc = (await open()).app.call('main', 'calculator')
+    for (const [op, result] of [['+', 7], ['-', 3], ['*', 10], ['/', 2.5]] as const)
+      expect(must(await calc.calculate({ a: 5, op, b: 2 }))).toMatchObject({ result })
+    const rounded = (await open({ precision: 2 })).app.call('main', 'calculator')
+    expect(must(await rounded.calculate({ a: 1, op: '/', b: 3 }))).toMatchObject({ result: 0.33 })
   })
 
-  test('a pick outside the options fails, and setOptions changes what is accepted', async () => {
-    const { app } = await open()
-    const picker = app.call('main', 'picker')
-    expect((await picker.pick('purple')).ok).toBe(false)
-    must(await picker.setOptions(['purple']))
-    expect(await picker.options(null)).toEqual(success(['purple']))
-    must(await picker.pick('purple'))
-    expect((await picker.pick('red')).ok).toBe(false)
+  test('a config that is not { precision: integer } is refused', async () => {
+    await expect(open({ precision: 1.5 })).rejects.toThrow()
   })
 
-  test('the store sets, lists and removes', async () => {
-    const { app } = await open()
-    const store = app.call('main', 'store')
-    must(await store.set({ key: 'a', value: '1' }))
-    expect(await store.entries(null)).toEqual(success({ a: '1' }))
-    must(await store.remove('a'))
-    expect(await store.get('a')).toEqual(success(null))
-  })
-
-  test('without localStorage the store keeps its entries in memory', async () => {
+  test('without localStorage the history is kept in memory', async () => {
     const saved = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')!
     Object.defineProperty(globalThis, 'localStorage', { value: undefined, configurable: true })
     try {
-      const store = (await open()).app.call('main', 'store')
-      must(await store.set({ key: 'k', value: 'v' }))
-      expect(await store.get('k')).toEqual(success('v'))
+      const history = (await open()).app.call('main', 'history')
+      must(await history.save({ a: 1, op: '*', b: 1, result: 1 }))
+      expect(await history.load(null)).toEqual(success([{ a: 1, op: '*', b: 1, result: 1 }]))
     } finally { Object.defineProperty(globalThis, 'localStorage', saved) }
   })
 })

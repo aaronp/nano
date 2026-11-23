@@ -7,7 +7,7 @@
       "devDependencies": {
         "@playwright/test": "^1.65.0",
         "@pritzlaff/adr": "^1.2.0",
-        "@pritzlaff/agile": "^1.1.0",
+        "@pritzlaff/agile": "^1.2.1",
         "@pritzlaff/project": "^0.1.1",
         "@pritzlaff/risk-register": "^0.2.0",
         "@types/bun": "^1.4.4",
@@ -133,7 +133,7 @@
 
     "@pritzlaff/adr": ["@pritzlaff/adr@1.2.0", "", { "bin": { "adr": "bin/adr.mjs" } }, "sha512-nuwLQQ2blU7EJvPHEwtSOiDmtaVP/+DJGhrL8MAAIsv3NLJEf/5KosSW1WO92ke7arG9L2QWITULlGk/zh92IQ=="],
 
-    "@pritzlaff/agile": ["@pritzlaff/agile@1.1.0", "", { "bin": { "agile": "bin/agile.mjs" } }, "sha512-Id8IfkILi6Q+0CE37IA/FWB4mpCCMADiFqND2xFgz7CdZdjE/LpONnEAkUzT+usFdVThq9h/F/j03LflJjlmWQ=="],
+    "@pritzlaff/agile": ["@pritzlaff/agile@1.2.1", "", { "bin": { "agile": "bin/agile.mjs" } }, "sha512-XEtX+fjhcP3sa1Aq0eyy9OG/yc7AOspuyq7wPpX+TdP56bWWKG7S1W6qWdDqZGlpbBqhPSOZp05+drztk9Qx9Q=="],
 
     "@pritzlaff/nano-core": ["@pritzlaff/nano-core@workspace:packages/nano"],
 

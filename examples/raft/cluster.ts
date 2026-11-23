@@ -14,22 +14,27 @@ import { clusterDeployment, nodeIds, timingFor } from './deployment.ts'
 
 const ns = Coord.namespace('example.raft')
 
+// #region cluster-needs
 export const cluster = Implementation.define(ns.implementationId('cluster'), {
   provides: [Cluster],
   config: Schema.define(Type.Union([Type.Object({ timing: Type.Optional(Timing) }), Type.Undefined()]), 'ClusterConfig'),
   dependencies: { deploy: HostDeploy },
+  // #endregion cluster-needs
   make: (ctx, config?: { timing?: Node['timing'] }) => {
     const sizes = new Map<string, number>()
     return [provide(Cluster, {
       create: async ({ name, size, seed, heartbeatMs }) => {
         // in code, not a schema `pattern`: the sandbox refuses a pattern in a frame's schema (ADR-0034)
         if (!/^[a-z][a-z0-9-]*$/.test(name)) return failure('invalid-input', `cluster name ${JSON.stringify(name)}: lowercase letters, digits and hyphens, starting with a letter`)
+        // #region cluster-deploy
         const host = ctx.one(HostDeploy)
         if (!host.ok) return host
         const r = await host.value.call.deploy(clusterDeployment(name, size, seed, timingFor(heartbeatMs, config?.timing)))
         if (r.ok) sizes.set(name, size)
         return r
+        // #endregion cluster-deploy
       },
+      // #region cluster-remove
       remove: async ({ name }) => {
         const host = ctx.one(HostDeploy)
         if (!host.ok) return host
@@ -41,6 +46,7 @@ export const cluster = Implementation.define(ns.implementationId('cluster'), {
         if (r.ok) sizes.delete(name)
         return r
       },
+      // #endregion cluster-remove
       list: async () => success([...sizes.keys()]),
     })]
   },

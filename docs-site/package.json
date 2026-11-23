@@ -1,0 +1,19 @@
+{
+  "name": "nano-docs-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "bun scripts/check-regions.ts && vitepress build",
+    "test": "bun test scripts"
+  },
+  "dependencies": {
+    "@codemirror/lang-javascript": "6.2.2",
+    "@codemirror/theme-one-dark": "6.1.2",
+    "codemirror": "6.0.1",
+    "sucrase": "3.35.0"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.3"
+  }
+}
