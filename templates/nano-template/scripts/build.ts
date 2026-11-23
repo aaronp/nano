@@ -18,7 +18,7 @@ const built = await Bun.build({
   external: ['@pritzlaff/nano-core', '@pritzlaff/nano-elements', '@pritzlaff/nano-ui', 'lit', 'lit/*', 'typebox', 'typebox/*'],
 })
 if (!built.success) throw new AggregateError(built.logs, 'build failed')
-const app = read('nano.json')
-if (PUBLIC_URL) for (const k in app.modules) app.modules[k] = new URL(app.modules[k], PUBLIC_URL).href
-writeFileSync(join(dist, 'nano.json'), JSON.stringify(app, null, 2) + '\n')
+const doc = read('nano.json')   // a bare deployment, or a saved host document whose modules are under `app`
+if (PUBLIC_URL) for (const modules of [doc.modules, doc.app?.modules]) for (const k in modules) modules[k] = new URL(modules[k], PUBLIC_URL).href
+writeFileSync(join(dist, 'nano.json'), JSON.stringify(doc, null, 2) + '\n')
 console.log('built dist/ (index.js, nano.json)')

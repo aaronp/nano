@@ -20,3 +20,19 @@ test('with PUBLIC_URL, dist/nano.json names the module by its URL under it; the 
   expect(await Bun.file(join(root, 'dist/index.js')).text()).toContain(`export const built = {"@pritzlaff/nano-core":"${version}"}`)
   await $`bun scripts/build.ts`.cwd(root).quiet()   // back to relative
 }, 30000)
+
+test('with PUBLIC_URL, a saved host document has its app.modules rewritten; the rest is copied', async () => {
+  const nanoPath = join(root, 'nano.json'), original = await Bun.file(nanoPath).text()
+  const host = { app: { ...JSON.parse(original), modules: { 'acme.template': './index.js' } }, outline: { title: 'x' }, host: { name: 'y' } }
+  try {
+    await Bun.write(nanoPath, JSON.stringify(host))
+    await $`bun scripts/build.ts`.cwd(root).env({ ...process.env, PUBLIC_URL: 'https://owner.github.io/repo/' }).quiet()
+    const out = await Bun.file(join(root, 'dist/nano.json')).json()
+    expect(out.app.modules).toEqual({ 'acme.template': 'https://owner.github.io/repo/index.js' })
+    expect(out.outline).toEqual(host.outline)
+    expect(out.host).toEqual(host.host)
+  } finally {
+    await Bun.write(nanoPath, original)
+    await $`bun scripts/build.ts`.cwd(root).quiet()
+  }
+}, 30000)
