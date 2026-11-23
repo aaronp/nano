@@ -21,7 +21,7 @@ nano itself only checks the value; the host decides what it means. In the nano a
 | `isolated-sandbox` | in a frame with no origin of its own: no access to the page's storage or session |
 | `home-origin` | in a frame loaded from its provider's own page (`frames`), as that site: its storage and passkeys |
 
-Importing with **Sandboxed** (File › Open…, [In the host](/concepts/host)) makes a new provider's pods `isolated-sandbox`; **Trusted** keeps what the file says. A `home-origin` pod stays one either way.
+Importing with **Sandboxed** (File › Open…, [In the host](/concepts/host)) makes a new provider's pods `isolated-sandbox`; **Trusted** keeps what the file says, and a pod with no value runs in the page (`host`). A `home-origin` pod stays one either way.
 
 ## What changes, and what does not
 

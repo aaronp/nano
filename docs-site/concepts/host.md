@@ -12,7 +12,7 @@ It lets any origin fetch the files, so the nano app can import `http://localhost
 
 **Import it by URL.** In the nano app, File › Open…, paste the `nano.json` URL and Fetch. The dialog shows what will be added: the runtime's name (the template's `main` lands as `acme.template.main`, so it doesn't clash with yours), where code from another site comes from, and a choice of **Sandboxed** (each pod runs in a frame apart from the page, the default) or **Trusted** (the pods run in the page itself). Import adds them.
 
-**Or with a link.** `?src=<url>` imports a `nano.json` as the app opens. It takes only a URL on the app's own origin, so a link can't bring in code from elsewhere, and it is removed from the address bar once the import succeeds, so a reload doesn't import twice. "Open in nano" on these pages is such a link:
+**Or with a link.** `?src=<url>` imports a `nano.json` as the app opens. The `nano.json` must be on the app's own origin; code it names from other sites still asks for your approval before it is loaded. The parameter is removed from the address bar once the import succeeds, so a reload doesn't import twice. "Open in nano" on these pages is such a link:
 
 <OpenInNano src="examples/template/nano.json"/>
 
