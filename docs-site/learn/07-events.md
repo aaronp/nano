@@ -12,7 +12,7 @@ The calculator publishes `calculated` after each calculation, through the contex
 - The plain object has a method for each op of the contract, events too. This one yields nothing: `calculate` publishes.
 - A failed calculation throws before publishing, so it publishes nothing.
 
-From outside, the typed client's `calculated()` listens. It hears every event from the line it is called on; `break` stops listening:
+From outside, the typed client's `calculated()` listens. It hears every event from the moment it is called; `break` stops listening:
 
 <<< @/../examples/tutorial/07-events.ts#listen
 

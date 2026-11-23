@@ -1,6 +1,6 @@
 // Step 12: a pod runs on the host or in a sandbox; the Application asks the host for a sandboxed pod's stand-in.
 import { Type } from 'typebox'
-import { AppDeployment, Application, Coord, Op, Pod, Registry, Schema, type Implementation, type NanoResult } from '@pritzlaff/nano-core'
+import { AppDeployment, Application, Coord, Op, Pod, Registry, Schema, type Implementation, type Fail, type NanoResult } from '@pritzlaff/nano-core'
 
 const ns = Coord.namespace('acme.calc')
 const Operator = Type.Union([Type.Literal('+'), Type.Literal('-'), Type.Literal('*'), Type.Literal('/')])
@@ -8,9 +8,11 @@ const Sum = Schema.define(Type.Object({ a: Type.Number(), op: Operator, b: Type.
 const Calculated = Schema.define(Type.Object({ a: Type.Number(), op: Operator, b: Type.Number(), result: Type.Number() }), 'Calculated')
 const Calculator = ns.interface('Calculator', { calculate: Op.action(Sum, Calculated) })
 
+const invalid = (reason: string) => Object.assign(new Error(reason), { fail: { type: 'invalid-input', reason } satisfies Fail })
 const calculator = Calculator.impl(ns.implementationId('calculator'))
   .make(() => ({
     async calculate({ a, op, b }) {
+      if (op === '/' && b === 0) throw invalid('division by zero')
       const result = op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : a / b
       return { a, op, b, result }
     },

@@ -37,9 +37,10 @@ bun run build      # dist/: index.js, nano.json
 bun run serve      # build, then serve dist/ at http://localhost:4000
 ```
 
-A host imports an app from its own origin only (cross-origin comes later): put the build in the host's public dir (the
-nano workspace's build already copies it to `/examples/template/`, so import `/examples/template/nano.json`), or serve
-the host and `dist/` from one origin. The host fetches the `nano.json`, loads each `modules` entry (relative to the
+The host's File › Open… imports a `nano.json` from any URL (code from another origin asks for approval before it runs;
+`bun run serve` sets CORS `*` for that); only a `?src=` link must be same-origin: put the build in the host's public
+dir (the nano workspace's build already copies it to `/examples/template/`, so link `?src=/examples/template/nano.json`),
+or serve the host and `dist/` from one origin. The host fetches the `nano.json`, loads each `modules` entry (relative to the
 `nano.json`) and shows the pods. Importing alongside another app whose runtime is also `main` is refused: the names
 clash (namespacing comes later).
 

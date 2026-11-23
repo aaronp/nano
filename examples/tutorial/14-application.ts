@@ -1,6 +1,6 @@
 // Step 14: the Application applies a new deployment while it runs, if its deployment policy says yes.
 import { Type, type Static } from 'typebox'
-import { AppDeployment, Application, Coord, Op, Pod, Registry, Schema, port, type DeploymentPolicy, type NanoResult } from '@pritzlaff/nano-core'
+import { AppDeployment, Application, Coord, Op, Pod, Registry, Schema, port, type DeploymentPolicy, type Fail, type NanoResult } from '@pritzlaff/nano-core'
 
 const ns = Coord.namespace('acme.calc')
 const Operator = Type.Union([Type.Literal('+'), Type.Literal('-'), Type.Literal('*'), Type.Literal('/')])
@@ -12,9 +12,11 @@ const History = ns.interface('History', {
   load: Op.action(Type.Null(), Type.Array(Calculated)),
 })
 
+const invalid = (reason: string) => Object.assign(new Error(reason), { fail: { type: 'invalid-input', reason } satisfies Fail })
 const calculator = Calculator.impl(ns.implementationId('calculator'))
   .make(ctx => ({
     async calculate({ a, op, b }) {
+      if (op === '/' && b === 0) throw invalid('division by zero')
       const result = op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : a / b
       await ctx.publish(Calculator.ops.calculated, { a, op, b, result })
       return { a, op, b, result }

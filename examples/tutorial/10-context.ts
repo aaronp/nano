@@ -1,6 +1,6 @@
 // Step 10: what `make` is given: the NanoContext, to call, publish to and listen to other pods, and to clean up.
 import { Type, type Static } from 'typebox'
-import { AppDeployment, Application, Coord, Op, Pod, Registry, Schema, type NanoResult } from '@pritzlaff/nano-core'
+import { AppDeployment, Application, Coord, Op, Pod, Registry, Schema, type Fail, type NanoResult } from '@pritzlaff/nano-core'
 
 const ns = Coord.namespace('acme.calc')
 const Operator = Type.Union([Type.Literal('+'), Type.Literal('-'), Type.Literal('*'), Type.Literal('/')])
@@ -12,8 +12,12 @@ const History = ns.interface('History', {
   load: Op.action(Type.Null(), Type.Array(Calculated)),
 })
 
-const compute = ({ a, op, b }: Static<typeof Sum>) => op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : a / b
+const compute = ({ a, op, b }: Static<typeof Sum>) => {
+  if (op === '/' && b === 0) throw invalid('division by zero')
+  return op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : a / b
+}
 const text = (c: Static<typeof Calculated>) => `${c.a} ${c.op} ${c.b} = ${c.result}`
+const invalid = (reason: string) => Object.assign(new Error(reason), { fail: { type: 'invalid-input', reason } satisfies Fail })
 /** The value, or an Error carrying the failure (so a handler's result carries it too). */
 const must = <T>(r: NanoResult<T>): T => { if (!r.ok) throw Object.assign(new Error(r.fail.reason), { fail: r.fail }); return r.value }
 

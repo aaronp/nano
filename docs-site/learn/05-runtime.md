@@ -1,6 +1,6 @@
 # A Runtime
 
-To run the calculator, place it. A **pod** is one component described as data: an implementation and how to build it; `Pod.lazy` builds it on its first call. A **Runtime** is pods placed together, with the call edges and pipes between them (none yet). An **Application** is the one live thing: it builds each pod when it is needed (a lazy one on its first call) and delivers every message.
+To run the calculator, place it. A **pod** is one component described as data: an implementation and how to build it; `Pod.lazy` builds it on its first need (the first time anything needs it). A **Runtime** is pods placed together, with the call edges and pipes between them (none yet). An **Application** is the one live thing: it builds each pod when it is needed (a lazy one on its first need) and delivers every message.
 
 <<< @/../examples/tutorial/05-runtime.ts#deployment
 

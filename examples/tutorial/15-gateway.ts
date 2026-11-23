@@ -1,6 +1,6 @@
 // Step 15: two runtimes share one pod, the history, placed in both: their app gateway, and the only thing they share.
 import { Type, type Static } from 'typebox'
-import { AppDeployment, Application, Coord, Op, Pod, Registry, Schema, port, type NanoResult } from '@pritzlaff/nano-core'
+import { AppDeployment, Application, Coord, Op, Pod, Registry, Schema, port, type Fail, type NanoResult } from '@pritzlaff/nano-core'
 
 const ns = Coord.namespace('acme.calc')
 const Operator = Type.Union([Type.Literal('+'), Type.Literal('-'), Type.Literal('*'), Type.Literal('/')])
@@ -24,9 +24,11 @@ const report = Report.impl(ns.implementationId('report'))
   }))
 // #endregion report
 
+const invalid = (reason: string) => Object.assign(new Error(reason), { fail: { type: 'invalid-input', reason } satisfies Fail })
 const calculator = Calculator.impl(ns.implementationId('calculator'))
   .make(ctx => ({
     async calculate({ a, op, b }) {
+      if (op === '/' && b === 0) throw invalid('division by zero')
       const result = op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : a / b
       await ctx.publish(Calculator.ops.calculated, { a, op, b, result })
       return { a, op, b, result }

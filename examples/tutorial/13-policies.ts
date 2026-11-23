@@ -1,6 +1,6 @@
 // Step 13: a runtime's policy says yes or no to each message; here only the calculator may save to the history.
 import { Type, type Static } from 'typebox'
-import { AppDeployment, Application, Coord, Op, Pod, PolicyRules, Registry, Schema, port, type NanoResult, type Rule } from '@pritzlaff/nano-core'
+import { AppDeployment, Application, Coord, Op, Pod, PolicyRules, Registry, Schema, port, type Fail, type NanoResult, type Rule } from '@pritzlaff/nano-core'
 
 const ns = Coord.namespace('acme.calc')
 const Operator = Type.Union([Type.Literal('+'), Type.Literal('-'), Type.Literal('*'), Type.Literal('/')])
@@ -12,10 +12,12 @@ const History = ns.interface('History', {
   load: Op.action(Type.Null(), Type.Array(Calculated)),
 })
 
+const invalid = (reason: string) => Object.assign(new Error(reason), { fail: { type: 'invalid-input', reason } satisfies Fail })
 const calculator = Calculator.impl(ns.implementationId('calculator'))
   .needs({ history: History })
   .make(({ deps }) => ({
     async calculate({ a, op, b }) {
+      if (op === '/' && b === 0) throw invalid('division by zero')
       const result = op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : a / b
       await deps.history.save({ a, op, b, result })
       return { a, op, b, result }

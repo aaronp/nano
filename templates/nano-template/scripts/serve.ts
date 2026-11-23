@@ -1,5 +1,5 @@
-/** Serves dist/: `bun scripts/serve.ts [port]` (default 4000), to look at the build on its own. A host imports an
- * app from its own origin only: build into the host's public dir (the nano host copies it to /examples/template/). */
+/** Serves dist/: `bun scripts/serve.ts [port]` (default 4000), to look at the build on its own. A host's File › Open…
+ * imports from any URL (CORS is open here); only a `?src=` link must be same-origin (the nano host copies the build to /examples/template/). */
 import { join, normalize } from 'node:path'
 
 const dist = join(import.meta.dir, '..', 'dist'), port = Number(process.argv[2] ?? 4000)

@@ -6,7 +6,7 @@ A pod reaches the rest of the application only through what its `make` is given:
 
 - `ctx.self` is the pod's name; `ctx.runtimes`, the runtimes it is placed in.
 - `ctx.one(History)` is the one History a call edge from this pod names, as a result value: a failure (`not-found`, `not-unique`) unless exactly one is wired. `ctx.all(History)` gives every one.
-- That selection's `on(op, fn)` hears each successful `save` to that pod in that runtime, from whoever sends it, with its `{ input, output }` (an event's has no `input`). It stops when this build closes.
+- `ctx.one(History)`'s `on(op, fn)` hears each successful `save` to that pod in that runtime, from whoever sends it, with its `{ input, output }` (an event's has no `input`). It stops when this build closes.
 - `ctx.publish(op, data)` sends an event ([events](/learn/07-events)).
 - `ctx.addOnCloseListener(fn)` runs when this build closes, with why: `restarted`, `removed`, `changed` or `closed`.
 - `ctx.deps.history` is the sugar: the `needs` role as a plain object.

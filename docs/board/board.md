@@ -205,20 +205,6 @@ callers write `timer.start(null)`. It needs explaining on first sight; worth dec
 reading or whether a no-input action could be called as `start()`.
 ```
 
-### The template says a host imports from its own origin only
-- id: t-17
-- parent: t-09
-- history:
-  - To-Do @ 2026-11-23T13:06:38.000Z
-
-```md
-Found writing the In the host page. The template's README ("Develop": "A host imports an app from its own origin
-only (cross-origin comes later)") and `scripts/serve.ts`'s header say so, yet File › Open… in the nano app imports
-from another origin (the dialog's Sandboxed/Trusted choice; `e2e/cross-origin.e2e.ts`), and `serve.ts` already
-allows any origin. Only `?src=` is limited to the app's own origin. A reader following the README won't try
-`bun run serve` plus File › Open, which works.
-```
-
 ### What each isolation value means lives only in the nano app's code
 - id: t-18
 - parent: t-09
@@ -344,4 +330,19 @@ we want to be able to 'clone' the workspace, adding our own nav items
 We want to be able to turn our GridLayout into a choice of best-fit responsive layouts.
 
 Ideally those are then used in the same/similar way in other ui-hosts
+```
+
+### The template says a host imports from its own origin only
+- id: t-17
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T13:06:38.000Z
+  - Done @ 2026-11-23T14:52:46.000Z
+
+```md
+Found writing the In the host page. The template's README ("Develop": "A host imports an app from its own origin
+only (cross-origin comes later)") and `scripts/serve.ts`'s header say so, yet File › Open… in the nano app imports
+from another origin (the dialog's Sandboxed/Trusted choice; `e2e/cross-origin.e2e.ts`), and `serve.ts` already
+allows any origin. Only `?src=` is limited to the app's own origin. A reader following the README won't try
+`bun run serve` plus File › Open, which works.
 ```
