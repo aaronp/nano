@@ -15,7 +15,7 @@ It ships a calculator with a history, two pods in one provider, `acme.template`,
 The calculator knows nothing of the history: `nano.json` places both in runtime `main` and pipes `calculator.calculated`
 to `history.save`. An event can be piped to an action when its data has the action's input schema (`Calculated`, in
 `src/interfaces.ts`). `<nano-calculator>` listens to its own pod's `calculated` (through the `Calculator` interface) and
-reads the history again on each one, so a calculation made anywhere shows up. (A view in a sandboxed frame reaches
+reads the history again on each one, so each calculation its pod makes (from this view or any other caller) shows up. (A view in a sandboxed frame reaches
 only its own pod, so there the list stays empty; the history pod still saves each result.)
 
 ## Make it yours
