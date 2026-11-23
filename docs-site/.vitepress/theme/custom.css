@@ -18,9 +18,11 @@
 /* Playground: text left, editor right (sticky, full height); stacked below 1440px (sidebar + half-width pane need the room). */
 .playground { display: flex; flex-direction: column; margin-top: 32px; border: 1px solid var(--vp-c-divider); border-radius: 8px; overflow: hidden; height: 520px; max-width: 100%; }
 @media (min-width: 1440px) {
-  .pg-on .VPContent { padding-right: 50vw; }
-  .pg-on .VPDocAside { display: none; }
-  .pg-on .playground { position: fixed; top: var(--vp-nav-height); right: 0; bottom: 0; width: 50vw; height: auto; margin: 0; border-radius: 0; border-width: 0 0 0 1px; z-index: 5; background: var(--vp-c-bg); }
+  .pg-on { --pg-w: min(50vw, 600px); }
+  .pg-on .VPContent.has-sidebar { padding-right: var(--pg-w); }
+  .pg-on .VPDoc .content { min-width: 0; }
+  .pg-on .VPDoc .aside { display: none; }
+  .pg-on .playground { position: fixed; top: var(--vp-nav-height); right: 0; bottom: 0; width: var(--pg-w); height: auto; margin: 0; border-radius: 0; border-width: 0 0 0 1px; z-index: 5; background: var(--vp-c-bg); }
 }
 .playground .pg-bar { display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid var(--vp-c-divider); }
 .playground .pg-bar button { padding: 2px 14px; border: 1px solid var(--vp-c-divider); border-radius: 4px; background: var(--vp-c-bg-soft); color: var(--vp-c-text-1); cursor: pointer; }
