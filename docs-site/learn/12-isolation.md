@@ -8,7 +8,7 @@ nano has no frames of its own. The **host** (the page or process running the App
 
 <<< @/../examples/tutorial/12-isolation.ts#isolate
 
-Without `isolate`, there is nowhere to run it: its first need fails, and so does each call.
+Without `isolate`, there is nowhere to run it: a call fails `invalid-input`, `no host for isolation sandbox` (the last line printed).
 
 <<< @/../examples/tutorial/12-isolation.ts#no-host
 

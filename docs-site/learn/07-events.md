@@ -25,7 +25,7 @@ heard 6 * 7 = 42
 ```
 
 ::: details Raw
-`runtime.subscribe(op)` listens to an op by its constant and gives each emission as `{ input, output }` (an event has no `input`) (pass a callback as a second argument to get an unsubscribe instead). It prints the third line:
+`runtime.subscribe(op)` listens to an op by its constant and gives each emission as `{ input, output }` (an event has no `input`; pass a callback as a second argument to get an unsubscribe instead). It prints the third line:
 
 <<< @/../examples/tutorial/07-events.ts#raw
 :::

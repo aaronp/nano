@@ -9,6 +9,8 @@ const ns = Coord.namespace('acme.template')
 // #region provider
 export default ns.provider([calculator, history])
 // #endregion provider
+// #region views
 export const views = { 'acme.template/calculator': 'nano-calculator' }
 
 if (!customElements.get('nano-calculator')) customElements.define('nano-calculator', CalculatorView)
+// #endregion views

@@ -30,3 +30,5 @@ runtime back: report->calculator: calculator is not placed here
 ```
 
 Each message to the history travels in one runtime, the one its call edge or pipe is in, and that runtime's [policy](/learn/13-policies) decides it: the gateway answers both runtimes, each on its own terms.
+
+Next, [a view](/learn/16-view): the calculator on a page.
