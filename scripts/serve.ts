@@ -32,6 +32,7 @@ const server = Bun.serve({
     const path = normalize(decodeURIComponent(new URL(req.url).pathname)).replace(/^(\.\.[/\\])+/, '')
     if (live && path === '/__live') return stream()
     const found = Bun.file(join(dir, path.endsWith('/') ? path + 'index.html' : path))   // a folder's own index.html (/react/)
+    if (!(await found.exists()) && !path.endsWith('/') && (await Bun.file(join(dir, path, 'index.html')).exists())) return Response.redirect(path + '/', 301)   // /react → /react/: its relative URLs need the slash
     const file = (await found.exists()) ? found : Bun.file(join(dir, 'index.html'))
     // any origin may fetch: an isolated-sandbox iframe (an opaque origin) loads boot.js and the shared modules from here
     const cors = { 'access-control-allow-origin': '*' }

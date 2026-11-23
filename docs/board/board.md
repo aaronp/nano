@@ -108,6 +108,37 @@ c. Kerits.id wallet, messaging, db
 This is item 1 in our roadmap.
 
 https://elysiajs.com/at-glance.html is an amazing example of simple/slick
+
+We'll want to consider if this is a nano component itself, or something different (TSDog, or a JSFiddle-like site, etc)
+
+We want to gentle work up concepts, and also notice any areas for improvement or gaps we may have left as we build out those docs, step by step:
+
+
+1. defining the interface, implementation, deployments
+2. creating a web-component which uses that API: with the nano-elements (themes/styles) or not
+2. running via nano (locally, in tests/headless, and also serving the UI (IDE) host app) to 'import' from file or URL
+3. defining the 'sandbox' deployment, etc
+4. packaging/publishing the nano web-component / json / etc
+```
+
+### Create a 'package' tool
+- id: t-11
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T11:45:53.763Z
+
+```md
+We want a simple way to create a nano project, or add nano to an existing project.
+
+Like how https://elysiajs.com/ shows:
+
+> bun create elysia app
+
+We should have the equivalent:
+
+> bun create nano app
+
+and an 'install' to add to an existing app.
 ```
 
 ## Doing
