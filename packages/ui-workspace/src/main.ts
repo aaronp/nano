@@ -34,7 +34,7 @@ import { icon } from './icons.ts';
 import { showStatus } from './lib/status.ts';
 import { applyPages, MAIN } from './lib/pages.ts';
 import { workspaceLayout as mine } from './host.ts';
-import { devFile, onRebuild, restoreModules, saveTo } from './dev-file.ts';   // under the nano-app CLI: Save PUTs to its file
+import { devFile, openDevFile } from './dev-file.ts';   // under the nano-app CLI: Save PUTs to its file
 import { Coord } from '@pritzlaff/nano-core';
 import { removeFrom } from './host-deploy.ts';
 import type { Page } from '@pritzlaff/nano-outline';
@@ -78,12 +78,7 @@ if (host && outline) {
     if (menu) menu.dirty = false;
   };
   host.app.listen(e => { if (e.type === 'applied' && menu) menu.dirty = true; });
-  const file = devFile(document); let original = {};   // under the CLI: Save and Reconcile PUT to the opened file
-  const put = async (reconcile = false) => {
-    if (!file) return download('nano.json', reconcile);
-    const r = await saveTo(file, restoreModules(doc(reconcile), original));
-    if (!r.ok) toast(r.fail.reason, { variant: 'bad' }); else if (menu) menu.dirty = false;
-  };
+  const file = devFile(document); let put: (reconcile?: boolean) => unknown = (r) => download('nano.json', r);   // under the CLI: Save and Reconcile PUT to the opened file (dev-file.ts)
   const commands: Record<string, () => unknown> = {
     save: () => put(), reconcile: () => put(true), download: () => download('nano.json'),
     'save-as': async () => { const name = await askName(document, 'nano'); if (name) download(`${name}.json`); },
@@ -140,7 +135,7 @@ if (host && outline) {
     hand();
   })().finally(() => { resetting = undefined; }));
 
-  if (file) { original = await (await fetch(file)).json(); await h.importUrl(new URL(file, location.href).href); onRebuild(document, () => !!menu?.dirty); }
+  if (file) put = await openDevFile(file, h, doc, menu ?? undefined);
   const src = new URL(location.href).searchParams.get('src');
   // A URL on this page's origin imports at once; any other opens the Import dialog on it (a crafted link must not import unasked).
   const to = src && new URL(src, location.href);

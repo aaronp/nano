@@ -1,6 +1,6 @@
 import './wires/dom.ts'
 import { expect, test } from 'bun:test'
-import { devFile, onRebuild, restoreModules, saveTo } from '../src/dev-file.ts'
+import { devFile, onRebuild, openDevFile, restoreModules, saveTo } from '../src/dev-file.ts'
 
 test('devFile reads the meta', () => {
   expect(devFile(document)).toBeUndefined()
@@ -35,4 +35,32 @@ test('onRebuild: reloads when clean; the notice when dirty (Reload reloads, Late
   const [reload, later] = [...note.querySelectorAll('button')]
   reload!.click(); expect(reloads).toBe(2)
   later!.click(); expect(document.querySelector('[role="status"]')).toBeNull()
+})
+
+test('openDevFile: dirty is "Save would write something else than after the import"; the import and a Save leave it clean', async () => {
+  ;(window as unknown as { happyDOM: { setURL(u: string): void } }).happyDOM.setURL('http://localhost/')
+  const real = globalThis.fetch, puts: string[] = []
+  globalThis.fetch = (async (_u: unknown, i?: RequestInit) => { if (i?.method === 'PUT') { puts.push(String(i.body)); return new Response('') } return new Response('{"modules":{"a":"./index.js"}}') }) as unknown as typeof fetch
+  try {
+    let layout = 1, fire = (_: string) => {}, reloads = 0
+    const menu = { dirty: true }, imported = { n: 0 }
+    const save = await openDevFile('/nano.json', { importUrl: async () => { layout = 2; imported.n++; return { ok: true, value: undefined } } },
+      () => ({ layout, modules: { a: 'http://h/index.js' } }), menu, () => { reloads++ }, { addEventListener: (_t, fn) => { fire = data => fn({ data }) } })
+    expect(imported.n).toBe(1); expect(menu.dirty).toBe(false)
+    fire('rebuilt'); expect(reloads).toBe(1)
+    layout = 3; fire('rebuilt'); expect(reloads).toBe(1); expect(document.querySelector('[role="status"]')).not.toBeNull()
+    document.querySelector('[role="status"]')!.remove()
+    await save(); expect(puts[0]).toContain('"./index.js"'); expect(puts[0]).toContain('"layout": 3')
+    fire('rebuilt'); expect(reloads).toBe(2)
+  } finally { globalThis.fetch = real }
+})
+
+test('openDevFile: a missing file is a toast, not a throw, and rebuilds are still watched', async () => {
+  const real = globalThis.fetch
+  globalThis.fetch = (async () => new Response('nope', { status: 404, statusText: 'Not Found' })) as unknown as typeof fetch
+  try {
+    let fire = (_: string) => {}, reloads = 0, imported = false
+    await openDevFile('/nano.json', { importUrl: async () => { imported = true; return { ok: true, value: undefined } } }, () => ({}), undefined, () => { reloads++ }, { addEventListener: (_t, fn) => { fire = data => fn({ data }) } })
+    expect(imported).toBe(false); fire('rebuilt'); expect(reloads).toBe(1)
+  } finally { globalThis.fetch = real }
 })

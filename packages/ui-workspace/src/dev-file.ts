@@ -47,3 +47,27 @@ export function onRebuild(doc: Document, dirty: () => boolean, reload: () => voi
     doc.body.append(note);
   });
 }
+
+/**
+ * Under the meta: fetch the file (kept as the original for `restoreModules`), import it, and watch for rebuilds. "Dirty" is
+ * whether the document Save would PUT differs from the one right after the import (refreshed by each Save), so layout,
+ * pages and Desk edits count and the import itself does not. Returns Save (`reconcile`: with the calls seen).
+ */
+export async function openDevFile(file: string, h: { importUrl(url: string): Promise<NanoResult<void>> }, doc: (reconcile?: boolean) => object, menu?: { dirty: boolean },
+  reload?: () => void, source?: Source): Promise<(reconcile?: boolean) => Promise<void>> {
+  let original = {}, snap = '';
+  const body = (reconcile = false) => JSON.stringify(restoreModules(doc(reconcile), original));
+  try {
+    const res = await fetch(file);
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`.trim());
+    original = await res.json();
+    await h.importUrl(new URL(file, location.href).href);   // a failure is shown as a toast
+  } catch (e) { toast(`${file}: ${e instanceof Error ? e.message : String(e)}`, { variant: 'bad' }); }
+  snap = body(); if (menu) menu.dirty = false;
+  onRebuild(document, () => body() !== snap, reload, source);
+  return async reconcile => {
+    const r = await saveTo(file, JSON.parse(body(reconcile)));
+    if (!r.ok) return void toast(r.fail.reason, { variant: 'bad' });
+    snap = body(); if (menu) menu.dirty = false;
+  };
+}
