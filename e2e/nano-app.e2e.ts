@@ -26,13 +26,16 @@ test.beforeAll(async () => {   // as scripts/template-check.ts: packed libraries
   rmSync(join(at, 'bun.lock'), { force: true })
   sh('bun install', at)
   writeFileSync(join(at, 'package.json'), original)
-  server = spawn('bun', ['node_modules/@pritzlaff/nano-app/bin/nano-app.ts', 'nano.json'], { cwd: at, env: { ...process.env, PORT: String(PORT), NO_OPEN: '1' }, stdio: 'ignore' })
+  server = spawn('bun', ['node_modules/@pritzlaff/nano-app/bin/nano-app.ts', 'nano.json'], { cwd: at, env: { ...process.env, PORT: String(PORT), NO_OPEN: '1' }, stdio: ['ignore', 'ignore', 'inherit'] })
   for (let i = 0; i < 300; i++) { if (await fetch(url).then(r => r.ok, () => false)) break; await new Promise(r => setTimeout(r, 500)) }   // the build at startup comes first
+  if (!await fetch(url).then(r => r.ok, () => false)) throw new Error('nano-app did not answer')
 })
 test.afterAll(() => { server?.kill(); if (at) rmSync(at, { recursive: true, force: true }) })
 
 const data = (page: Page) => page.evaluate(() => (document.querySelector('workspace-dock') as any).host.data())
-const ready = async (page: Page) => { await page.goto(url); await expect(page.locator('workspace-dock#workspace')).toBeVisible(); await expect.poll(() => data(page).catch(() => null)).not.toBeNull() }
+// ready: imported from the file (the calculator is in main) and the SSE connection for rebuilds is open
+const ready = async (page: Page, go: () => Promise<unknown> = () => page.goto(url)) => {
+  const sse = page.waitForRequest(r => r.url().endsWith('/__nano-app/events')); await go(); await expect(page.locator('workspace-dock#workspace')).toBeVisible(); await expect.poll(() => data(page).then(d => d.runtimes.main?.pods ?? [], () => [])).toContain('calculator'); await sse }
 const edit = () => appendFileSync(join(at, 'src/calculator.ts'), `\n// edit ${Date.now()}\n`)
 const save = async (page: Page) => { await page.getByRole('button', { name: 'File', exact: true }).click(); await page.getByRole('button', { name: /^Save$/ }).click() }
 
@@ -58,10 +61,15 @@ test('opens the calculator, saves to the file, reloads from it, and rebuilds rel
   await expect.poll(() => JSON.parse(readFileSync(join(at, 'nano.json'), 'utf8')).app?.runtimes?.main?.pods ?? []).toContain('extra')
   const saved = JSON.parse(readFileSync(join(at, 'nano.json'), 'utf8'))
   expect(Object.keys(saved.app.pods)).toEqual(expect.arrayContaining(['calculator', 'history', 'extra']))
-  expect({ ...saved.modules, ...saved.app.modules }['acme.template']).toBe('./index.js')
+  expect(saved.app.modules['acme.template']).toBe('./index.js')
+  expect(JSON.stringify(saved)).not.toMatch(/http:\/\/127\.0\.0\.1|file:/)
 
   // reload: the saved state shows, from the file
-  await page.reload(); await ready(page)
+  await page.evaluate(async () => {   // nothing from storage: only the file can bring it back
+    localStorage.clear(); sessionStorage.clear()
+    for (const { name } of await indexedDB.databases()) if (name) indexedDB.deleteDatabase(name)
+  })
+  await ready(page, () => page.reload())
   expect((await data(page)).runtimes.main.pods).toContain('extra')
 
   // clean + a source edit: the page reloads by itself (a marker on window goes away)
