@@ -1,7 +1,16 @@
-/* nano-elements' accent (--nano-accent, packages/elements/src/tokens.ts): one value for light and dark. */
+/* Accent: nano-elements' #6FA8FF on dark (--nano-accent, packages/elements/src/tokens.ts); a darker blue on light, where #6FA8FF is under 3:1 on white. */
 :root {
+  --vp-c-brand-1: #2F6FD6;
+  --vp-c-brand-2: #2F6FD6;
+  --vp-c-brand-3: #2F6FD6;
+  --vp-c-brand-soft: #2F6FD61F;
+}
+.dark {
   --vp-c-brand-1: #6FA8FF;
   --vp-c-brand-2: #6FA8FF;
   --vp-c-brand-3: #6FA8FF;
   --vp-c-brand-soft: #1C2A4433;
+  --vp-button-brand-text: #0B1220;
+  --vp-button-brand-hover-text: #0B1220;
+  --vp-button-brand-active-text: #0B1220;
 }

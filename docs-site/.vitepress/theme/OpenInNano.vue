@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useData } from 'vitepress'
-import { appUrl } from './app-url'
+import { appUrl } from '../../scripts/app-url'
 defineProps<{ src: string }>()
 const { site } = useData()
 </script>

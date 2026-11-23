@@ -4,7 +4,7 @@ Pods don't reach for each other in their code. The deployment wires them, so the
 
 ## Pipes
 
-A **pipe** sends one pod's event into another pod's action. The picker publishes `changed` when you pick:
+A **pipe** sends one pod's event (or an action's results) into another pod's action. The picker publishes `changed` when you pick:
 
 <<< @/../templates/nano-template/src/picker.ts#picker-pick
 
