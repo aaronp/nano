@@ -57,5 +57,5 @@ test('a symlink out of the project is 404, and not writable', async () => {
 });
 test('watch without src/ does not throw', () => {
   const dir = mkdtempSync(join(tmpdir(), 'nano-app-w-'));
-  watch(dir, ['true'], () => {})();
+  watch(dir, ['true'], () => {}).stop();
 });
