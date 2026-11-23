@@ -37,7 +37,7 @@ jobs:
       - name: Type check
         run: node_modules/.bin/tsc -p .
       - name: Test
-        run: for p in nano elements ui; do (cd packages/$p && bun test --isolate) || exit 1; done
+        run: for p in nano elements ui nano-app; do (cd packages/$p && bun test --isolate) || exit 1; done
       - name: Build the app that nano-app ships
         run: cd packages/ui-workspace && bun run build
       - name: Build

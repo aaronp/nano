@@ -3,12 +3,12 @@ import { join } from 'node:path';
 
 /**
  * Run `build` now, then again after each change under `<project>/src` (recursive, 200 ms of quiet; one build at a time, one more if a
- * change landed meanwhile), telling `rebuilt` or `build-failed <first stderr line>` (the latter also logged). Without a `src/` it only builds once.
+ * change landed meanwhile; `first` settles when the first build has), telling `rebuilt` or `build-failed <first stderr line>` (the latter also logged). Without a `src/` it only builds once.
  */
-export function watch(project: string, build: string[], notify: (event: string) => void): () => void {
+export function watch(project: string, build: string[], notify: (event: string) => void): { stop: () => void; first: Promise<void> } {
   const tell = (e: string) => { if (e.startsWith('build-failed')) console.error(`nano-app: ${e}`); notify(e) }
   let timer: ReturnType<typeof setTimeout> | undefined, running = false, again = false;
-  const run = async () => {
+  const run = async (): Promise<void> => {
     if (running) { again = true; return; }
     running = true;
     try {
@@ -19,9 +19,9 @@ export function watch(project: string, build: string[], notify: (event: string) 
     running = false;
     if (again) { again = false; void run(); }
   };
-  void run();
+  const first = run();
   const src = join(project, 'src');
-  if (!existsSync(src)) { console.log(`nano-app: no ${src}, not watching for changes`); return () => {}; }
+  if (!existsSync(src)) { console.log(`nano-app: no ${src}, not watching for changes`); return { stop: () => {}, first }; }
   const w = fsWatch(src, { recursive: true }, () => { clearTimeout(timer); timer = setTimeout(run, 200); });
-  return () => { clearTimeout(timer); w.close(); };
+  return { stop: () => { clearTimeout(timer); w.close(); }, first };
 }

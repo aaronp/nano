@@ -31,7 +31,8 @@ build leaves the page as it was; the first line of the error is a toast in the p
 
 File › Save writes the whole host document back to the `nano.json` you started with: pods, runtimes, pipes and the
 Desk (panels and layout), as a download would. The module paths the file had (`modules`) are put back exactly as they
-were, so a saved file still loads from where it did. Download and Save as still download a copy and leave the file alone.
+were, so a saved file still loads from where it did. Download and Save as still download a copy and leave the file alone. A module added in a session is saved with the local server's URL (`http://127.0.0.1:<port>/…`), which
+won't load elsewhere: give it a relative path in `nano.json` (or edit it after saving).
 
 The file is the truth: what the app shows is what the file says, and a change you want to keep is a change in the file.
 Edit it by hand if that is easier; the app picks it up on the next reload (a hand edit does not trigger a

@@ -25,9 +25,10 @@ const server: { port?: number } = Bun.serve({
   hostname: '127.0.0.1', port: Number(process.env['PORT'] ?? 0), idleTimeout: 0,
   fetch: handler({ app, project, out: resolve(project, values.out), file: '/' + basename(abs), port: () => server.port!, events: ev }),
 });
-watch(project, values.build.split(/\s+/).filter(Boolean), ev.tell);
+const { first } = watch(project, values.build.split(/\s+/).filter(Boolean), ev.tell);
 const url = `http://127.0.0.1:${server.port}/`;
 console.log(`Serving ${abs} at ${url}  (Ctrl-C to stop)`);
 if (process.env['NO_OPEN'] !== '1') {
+  await first;   // the page needs ./index.js and the `rebuilt` event: open it after the first build, pass or fail
   try { Bun.spawn([process.platform === 'darwin' ? 'open' : 'xdg-open', url], { stdio: ['ignore', 'ignore', 'ignore'] }).exited.catch(() => {}); } catch { /* no opener */ }
 }
