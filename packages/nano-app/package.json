@@ -4,6 +4,5 @@
   "type": "module",
   "description": "test-nano: serve the nano app and a project on loopback, save the project's nano.json, rebuild on change.",
   "bin": { "nano-app": "bin/nano-app.ts" },
-  "files": ["bin", "src", "app"],
-  "scripts": { "prepack": "rm -rf app && cp -R ../ui-workspace/public app" }
+  "files": ["bin", "src", "app"]
 }

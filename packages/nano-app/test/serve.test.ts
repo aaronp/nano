@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { handler } from '../src/serve.ts';
+import { watch } from '../src/watch.ts';
 
 let root: string, h: (r: Request) => Promise<Response>;
 const req = (path: string, init: RequestInit & { host?: string } = {}) =>
@@ -47,3 +48,14 @@ test('OPTIONS is 405 with no CORS headers', async () => {
   expect([...r.headers.keys()].some(k => k.startsWith('access-control'))).toBe(false);
 });
 test('events are a stream', async () => expect((await req('/__nano-app/events')).headers.get('content-type')).toBe('text/event-stream'));
+test('/index.html carries the meta too', async () => expect(await (await req('/index.html')).text()).toContain('nano-app-file'));
+test('a symlink out of the project is 404, and not writable', async () => {
+  symlinkSync(join(root, 'secret'), join(root, 'project/link.json'));
+  expect((await req('/link.json')).status).toBe(404);
+  expect((await h(new Request('http://127.0.0.1:9/link.json', { method: 'PUT', body: 'x', headers: { host: '127.0.0.1:9' } }))).status).toBe(403);
+  expect(readFileSync(join(root, 'secret'), 'utf8')).toBe('no');
+});
+test('watch without src/ does not throw', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'nano-app-w-'));
+  watch(dir, ['true'], () => {})();
+});
