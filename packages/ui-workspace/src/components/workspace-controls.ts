@@ -1,5 +1,5 @@
 // <nano-workspace-controls dock="<id>">: the controls of one workspace dock (a Layout menu, window style, connections, the Desk page,
-// save, restore, reset), the element the app bar shows while that dock's page is shown. It drives the dock by id; nothing here is persisted.
+// save, restore, reset, close all), the element the app bar shows while that dock's page is shown. It drives the dock by id; nothing here is persisted.
 // BACKLOG(5): it was also a nano-runes component (WorkspaceControls) in the host registry; now only the element.
 import { LitElement, css, html, svg } from 'lit'
 import { base } from '@pritzlaff/nano-elements'
@@ -8,8 +8,8 @@ import { TEMPLATES, type TemplateId } from '../lib/layout-templates.ts'
 import { requestBus, type Unsubscribe } from '../lib/bus.ts'
 
 
-type Dock = HTMLElement & { template: TemplateId; setTemplate(id: TemplateId): boolean; windowStyle: WindowStyle; setWindowStyle(s: WindowStyle): void; connections(): void; saveAs(): void; save(): void; restore(): void; reset(): void }
-type Command = 'connections' | 'desk' | 'saveAs' | 'save' | 'restore' | 'reset'
+type Dock = HTMLElement & { template: TemplateId; setTemplate(id: TemplateId): boolean; windowStyle: WindowStyle; setWindowStyle(s: WindowStyle): void; connections(): void; saveAs(): void; save(): void; restore(): void; reset(): void; closeAll(): void }
+type Command = 'connections' | 'desk' | 'saveAs' | 'save' | 'restore' | 'reset' | 'closeAll'
 
 // 24×24 stroke paths, the File menu's icon style
 const ICONS: Record<Command | 'more', ReturnType<typeof svg>> = {
@@ -19,9 +19,10 @@ const ICONS: Record<Command | 'more', ReturnType<typeof svg>> = {
   save: svg`<path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8M7 21v-7h10v7"/>`,
   restore: svg`<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>`,
   reset: svg`<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>`,
+  closeAll: svg`<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9l6 6M15 9l-6 6"/>`,
   more: svg`<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`,
 }
-const COMMANDS: [Command, string][] = [['connections', 'Connections'], ['desk', 'Desk'], ['saveAs', 'Save as workspace…'], ['save', 'Save layout'], ['restore', 'Restore'], ['reset', 'Reset']]
+const COMMANDS: [Command, string][] = [['connections', 'Connections'], ['desk', 'Desk'], ['saveAs', 'Save as workspace…'], ['save', 'Save layout'], ['restore', 'Restore'], ['reset', 'Reset'], ['closeAll', 'Close all']]
 // one rect [x, y, w, h] per position on a 24x16 canvas, in the template's areas order (Dynamic, golden-layout: a tab strip over a panel)
 const R: Record<TemplateId, number[][]> = {
   dock: [[1, 1, 7, 3], [9, 1, 7, 3], [1, 5, 22, 10]], one: [[1, 1, 22, 14]],

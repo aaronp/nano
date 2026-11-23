@@ -251,3 +251,15 @@ test('a Hidden tile another position has taken is not filled twice: the place st
   expect(dock.arrangement().template!.parked).toEqual([])
   expect(positions(dock)[1]!.classList.contains('empty')).toBe(true)
 })
+
+test('Close all: every panel goes, the template too, and the empty dock shows its one picker', async () => {
+  for (const tpl of ['dock', 'two-cols'] as const) {
+    const { dock } = await n(3)
+    dock.setTemplate(tpl)
+    dock.closeAll(); await tick()
+    expect(dock.openIds()).toEqual([])
+    expect(dock.template).toBe('dock')
+    expect(dock.querySelector('.dock-template')).toBeNull()
+    expect(dock.querySelector<HTMLElement>('.dock-empty')!.hidden).toBe(false)
+  }
+})

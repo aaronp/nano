@@ -11,7 +11,7 @@
  * Bus topics (the app bus): dock:opened {widget} · dock:layout {panels} · dock:saved · dock:error {message} ·
  * dock:status {message} (what the last command did). It has no toolbar: its commands are public, for the app bar to call.
  *   windowStyle / setWindowStyle(s): tabs or clear (remembered per dock).
- *   save() / restore() / reset(): keep a restore point, return to it, start again. saveAs() fires a bubbling `dock:save-as` event, for the
+ *   save() / restore() / reset() / closeAll(): keep a restore point, return to it, start again, close every panel. saveAs() fires a bubbling `dock:save-as` event, for the
  *   page to save it as a workspace of its own (workspace-pages.ts). connections() fires a bubbling
  *   `dock:connections` DOM event; whatever wraps the dock (the wiring view) decides what it means.
  * template / setTemplate(id): panels in a fixed layout (layout-templates.ts; dock/template-mode.ts), what does not fit
@@ -147,8 +147,7 @@ export class WorkspaceDock extends HTMLElement {
 
   private get storageKey(): string { const k = this.getAttribute('storage-key'); if (!k) throw new Error('<workspace-dock> needs a storage-key attribute to save layouts'); return k; }
   private get system(): string { return this.getAttribute('system') ?? 'host'; }
-  private send(topic: string, payload: unknown) { this.requireBus().publish(topic, payload, 'workspace-dock'); }
-  private say(message: string) { this.send('dock:status', { message }); }
+  private send(topic: string, payload: unknown) { this.requireBus().publish(topic, payload, 'workspace-dock'); } private say(message: string) { this.send('dock:status', { message }); }
   /** Panels or template changed: kept (golden-layout's config: the template keeps itself), the controls re-read; the empty dock's picker shows when nothing else does. */
   private changed() { writeSaved(this.storage, this.storageKey, this.kept); const panels = this.openIds().length; this.empty!.hidden = !!this.tpl || panels > 0; this.send('dock:layout', { panels }); }
   /** Sends `dock:focus` when the focused panel has changed: its instance, or null if it shows none or none is focused. */
@@ -197,8 +196,7 @@ export class WorkspaceDock extends HTMLElement {
       remember: (st) => { templateState(this.storage, this.storageKey).set(st); if (this.tpl) this.changed(); } });
     this.changed();
   }
-  private requireLayout(): GoldenLayout { if (!this.layout) throw new Error('bug: workspace used before it was connected'); return this.layout; }
-  private requireBus(): Bus { if (!this.bus) throw new Error('bug: workspace used before it was connected'); return this.bus; }
+  private requireLayout(): GoldenLayout { if (!this.layout) throw new Error('bug: workspace used before it was connected'); return this.layout; } private requireBus(): Bus { if (!this.bus) throw new Error('bug: workspace used before it was connected'); return this.bus; }
   /** Loads `config`, sized for the dock's tab bar. */
   private load(config: LayoutConfig) {
     const left = this.tpl; if (left) { left.dispose(true); this.tpl = null; templateState(this.storage, this.storageKey).set(null); this.reportFocus(); }
@@ -221,6 +219,8 @@ export class WorkspaceDock extends HTMLElement {
   restore() { const key = `${this.storageKey}.saved`, saved = this.readSaved(key), t = templateState(this.storage, key).get(); if (!saved) return this.say('No saved layout yet.');
     this.load(saved); this.say('Layout restored.'); if (t && this.known(t)) this.show({ ...t, dock: this.kept }); else this.changed(); }
   reset() { this.load(initial(this, this.defs)); this.say('Back to the starting layout.'); }
+  /** Closes every panel, a template's too (back to the dock): its slots leave the page, its pods keep running, the empty dock's picker shows. */
+  closeAll() { this.load(LayoutConfig.fromResolved({ ...this.kept, root: undefined })); this.changed(); this.say('Closed all windows.'); }
 }
 
 customElements.define('workspace-dock', WorkspaceDock);
