@@ -15,8 +15,10 @@ export function checkRegions(root: string, publicDir: string): string[] {
     for (const [, path, region] of text.matchAll(/<<<\s+@\/(\S+?)(?:#([\w-]+))?(?=[\s{[]|$)/gm)) {
       const file = resolve(root, path)
       if (!existsSync(file)) { problems.push(`${at}: ${path} not found`); continue }
-      if (region && !new RegExp(`^\\s*//\\s*#region ${region}(?![\\w-])`, 'm').test(readFileSync(file, 'utf8')))
-        problems.push(`${at}: ${path} has no region ${region}`)
+      // VitePress closes a region only at `// #endregion <name>`; a bare `#endregion` embeds the whole file.
+      const marker = (tag: string) => new RegExp(`^\\s*//\\s*#${tag} ${region}\\s*$`, 'm').test(readFileSync(file, 'utf8'))
+      if (region && !(marker('region') && marker('endregion')))
+        problems.push(`${at}: ${path} has no region ${region} (// #region ${region} … // #endregion ${region})`)
     }
     for (const [, src] of text.matchAll(/<OpenInNano\s+src="([^"]+)"/g))
       if (!existsSync(join(publicDir, src))) problems.push(`${at}: ${src} not in ${publicDir}`)

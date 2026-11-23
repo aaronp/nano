@@ -13,11 +13,13 @@ export const picker = Implementation.define(ns.implementationId('picker'), {
   make: (ctx, config?: { options: string[] }) => {
     let options = config?.options ?? OPTIONS
     return [provide(Picker, {
+      // #region picker-pick
       pick: async value => {
         if (!options.includes(value)) return failure('invalid-input', `${value} is not one of ${options.join(', ')}`)
         await ctx.publish(Picker.ops.changed, { key: 'choice', value })
         return success(null)
       },
+      // #endregion picker-pick
       setOptions: async list => { options = [...list]; return success(null) },
       options: async () => success([...options]),
     })]

@@ -15,7 +15,7 @@ const site = (files: Record<string, string>, pub: Record<string, string> = {}) =
 const embed = '<<< @/../a.ts#pod\n'
 
 test('a region present is fine', () => {
-  const [root, pub] = site({ 'p.md': embed, '../a.ts': '// #region pod\nx\n// #endregion\n' })
+  const [root, pub] = site({ 'p.md': embed, '../a.ts': '// #region pod\nx\n// #endregion pod\n' })
   expect(checkRegions(root, pub)).toEqual([])
 })
 test('a missing region names file and region', () => {
@@ -41,6 +41,10 @@ test('Open in nano needs its nano.json in the public dir', () => {
   expect(checkRegions(root2, pub2)).toEqual([])
 })
 test('a region whose name only starts with the wanted one is not it', () => {
-  const [root, pub] = site({ 'p.md': embed, '../a.ts': '// #region pod-extra\nx\n// #endregion\n' })
+  const [root, pub] = site({ 'p.md': embed, '../a.ts': '// #region pod-extra\nx\n// #endregion pod-extra\n' })
+  expect(checkRegions(root, pub)).toHaveLength(1)
+})
+test('a region closed by a bare #endregion is not one (VitePress would embed the whole file)', () => {
+  const [root, pub] = site({ 'p.md': embed, '../a.ts': '// #region pod\nx\n// #endregion\n' })
   expect(checkRegions(root, pub)).toHaveLength(1)
 })

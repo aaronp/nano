@@ -22,4 +22,4 @@ export const timer = Implementation.define(ns.implementationId('timer'), {
     })]
   },
 })
-// #endregion
+// #endregion timer-implementation

@@ -30,5 +30,5 @@ export class TimerView extends View {
       <button class="btn" ?disabled=${this.running} @click=${() => this.run(t, true)}>Start</button>
       <button class="btn" ?disabled=${!this.running} @click=${() => this.run(t, false)}>Stop</button></div>`
   }
-  // #endregion
+  // #endregion timer-view
 }

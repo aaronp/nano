@@ -4,12 +4,14 @@ import { Coord, Schema, Op } from '@pritzlaff/nano-core'
 
 const ns = Coord.namespace('acme.template')
 
+// #region schemas
 export const Nothing = Schema.define(Type.Null(), 'Nothing')
 const Text = Schema.define(Type.String(), 'Text')
 const Texts = Schema.define(Type.Array(Type.String()), 'Texts')
 const Maybe = Schema.define(Type.Union([Type.String(), Type.Null()]), 'MaybeText')
 export const Entry = Schema.define(Type.Object({ key: Type.String(), value: Type.String() }), 'Entry')
 const Entries = Schema.define(Type.Record(Type.String(), Type.String()), 'Entries')
+// #endregion schemas
 
 // #region timer-interface
 export const Timer = ns.interface('Timer', {
@@ -17,7 +19,8 @@ export const Timer = ns.interface('Timer', {
   stop: Op.action(Nothing, Nothing),
   tick: Op.event(Entry),   // { key: 'tick', value: '<count>' }
 })
-// #endregion
+// #endregion timer-interface
+// #region picker-store-interfaces
 export const Picker = ns.interface('Picker', {
   pick: Op.action(Text, Nothing),
   setOptions: Op.action(Texts, Nothing),
@@ -31,3 +34,4 @@ export const Store = ns.interface('Store', {
   entries: Op.action(Nothing, Entries),
   changed: Op.event(Text),   // the key that changed
 })
+// #endregion picker-store-interfaces

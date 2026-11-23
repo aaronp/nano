@@ -141,6 +141,70 @@ We should have the equivalent:
 and an 'install' to add to an existing app.
 ```
 
+### The template has no call edge to show
+- id: t-12
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T12:53:40.000Z
+
+```md
+Found writing the Wiring concept page. The template's three pods are wired only by pipes; none declares a
+dependency or calls another, so the page can only describe a call edge (`{ kind: 'call', from, to }`) in prose,
+with no code from the finished template. A small pod that depends on `Store` (say, one that remembers the last
+pick through `ctx.one(Store)`) would let the docs show the second kind of subscription.
+```
+
+### The timer's tick is shaped for the store, not for a timer
+- id: t-13
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T12:53:40.000Z
+
+```md
+Found writing the Interfaces and Wiring pages. `Timer.tick` publishes `{ key: 'tick', value: String(count) }`
+(an `Entry`) only so it can be piped into `Store.set`. A pipe can't adapt data, so the event's shape is bent to fit
+its destination: a count becomes a string under a fixed key. Awkward to explain to a newcomer ("why is a count a
+string?"). Either accept and explain it, or consider how a pipe (or a small mapping pod) carries a differently
+shaped event.
+```
+
+### The spec's AppDeployment says providers; nano.json says modules
+- id: t-14
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T12:53:40.000Z
+
+```md
+Found writing the Pods page. The pods/runtimes spec (`2026-11-14-pods-runtimes-application-design.md`, "Data")
+gives `AppDeployment` a `providers` field; `design.md` and the template's `nano.json` use `modules`. The template's
+README ("What a host gets") also still says `providers`. A reader sent to the spec from the docs meets a different
+name.
+```
+
+### The template shows neither an eager pod nor a pod config
+- id: t-15
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T12:53:40.000Z
+
+```md
+Found writing the Pods page. Every pod in the template's `nano.json` is `"eager": false` with no `config`, though
+the timer has a config schema (`intervalMs`). The page explains eager and config with no example in the finished
+code. One pod with a config (or an eager one) in `nano.json` would show both.
+```
+
+### Actions that take nothing are called with null
+- id: t-16
+- parent: t-09
+- history:
+  - To-Do @ 2026-11-23T12:53:40.000Z
+
+```md
+Found writing the Interfaces page. `start`, `stop`, `options` and `entries` take `Nothing` (`Type.Null()`), so
+callers write `timer.start(null)`. It needs explaining on first sight; worth deciding whether that is the intended
+reading or whether a no-input action could be called as `start()`.
+```
+
 ## Doing
 
 ## Done
