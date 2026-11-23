@@ -1,3 +1,7 @@
+---
+playground: 10-context
+---
+
 # NanoContext
 
 A pod reaches the rest of the application only through what its `make` is given: the **context**. It names the pod, and gives it the pods it may call, a way to publish, and a hook for when it closes. Here the calculator uses each:

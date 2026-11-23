@@ -1,3 +1,7 @@
+---
+playground: 12-isolation
+---
+
 # Isolation
 
 A pod you did not write should not run with your page's full access. Its pod says where it runs: `isolation`, absent (or `'host'`) for the host itself, `'sandbox'`, `'isolated-sandbox'` or `'home-origin'` for a frame of its own. Nothing else about the pod changes:

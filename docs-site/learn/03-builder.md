@@ -1,3 +1,7 @@
+---
+playground: 03-builder
+---
+
 # An implementation, with the builder
 
 The contract says what; an **implementation** says how. You start from the interface, so TypeScript knows each method's input and output from the schemas:

@@ -14,3 +14,19 @@
   --vp-button-brand-hover-text: #0B1220;
   --vp-button-brand-active-text: #0B1220;
 }
+
+/* Playground: text left, editor right (sticky, full height); stacked below 960px. */
+.playground { display: flex; flex-direction: column; margin-top: 32px; border: 1px solid var(--vp-c-divider); border-radius: 8px; overflow: hidden; height: 520px; max-width: 100%; }
+@media (min-width: 960px) {
+  .pg-on .VPContent { padding-right: 50vw; }
+  .pg-on .VPDocAside { display: none; }
+  .pg-on .playground { position: fixed; top: var(--vp-nav-height); right: 0; bottom: 0; width: 50vw; height: auto; margin: 0; border-radius: 0; border-width: 0 0 0 1px; z-index: 5; background: var(--vp-c-bg); }
+}
+.playground .pg-bar { display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid var(--vp-c-divider); }
+.playground .pg-bar button { padding: 2px 14px; border: 1px solid var(--vp-c-divider); border-radius: 4px; background: var(--vp-c-bg-soft); color: var(--vp-c-text-1); cursor: pointer; }
+.playground .pg-bar button:first-child { background: var(--vp-c-brand-1); color: var(--vp-button-brand-text, #fff); border-color: transparent; }
+.playground .pg-editor { flex: 1 1 0; min-height: 0; overflow: auto; }
+.playground .pg-editor .cm-editor { height: 100%; }
+.playground .pg-out { flex: 0 0 35%; margin: 0; padding: 8px 12px; overflow: auto; border-top: 1px solid var(--vp-c-divider); font: 13px/1.5 var(--vp-font-family-mono); white-space: pre-wrap; word-break: break-word; }
+.playground .pg-out .err { color: var(--vp-c-danger-1); }
+.playground iframe { display: none; }

@@ -1,3 +1,7 @@
+---
+playground: 04-registry
+---
+
 # The Registry
 
 Before anything runs, nano needs to know what it *can* make. The **Registry** is that: a pool of providers, each a namespace's list of implementations, looked up by coordinate.

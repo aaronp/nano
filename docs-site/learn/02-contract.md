@@ -1,3 +1,7 @@
+---
+playground: 02-contract
+---
+
 # The contract
 
 In nano the contract comes first: an **interface** names what a component offers, and every op in it carries a TypeBox schema for what goes in and what comes out. The calculator's one op is `calculate`, an action from a `Sum` to a `Calculated`:

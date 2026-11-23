@@ -1,3 +1,7 @@
+---
+playground: 07-events
+---
+
 # Events
 
 A result goes back to the one caller. An **event** goes out to whoever listens, without the calculator knowing who. The contract names it, with its data's schema:

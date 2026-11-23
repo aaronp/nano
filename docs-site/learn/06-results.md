@@ -1,3 +1,7 @@
+---
+playground: 06-results
+---
+
 # Results
 
 Each call to a pod gives a **result value**, so a failure is data you can read, log or pass on. Dividing by zero is not an exception; it is a failure.

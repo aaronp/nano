@@ -1,3 +1,7 @@
+---
+playground: 15-gateway
+---
+
 # An app gateway
 
 An application can hold several runtimes, each its own pods, wiring and policy. Two runtimes meet only where they share a pod: one pod placed in both, an **app gateway**. Here `front` calculates, `back` reports, and the history is the gateway. A report:

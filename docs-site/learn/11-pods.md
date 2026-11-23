@@ -1,3 +1,7 @@
+---
+playground: 11-pods
+---
+
 # Pods
 
 A **pod** is one implementation placed as data: which implementation, when to build it, and its config. One implementation can be placed many times, each pod built and configured on its own. The calculator now takes a config, checked by a schema:

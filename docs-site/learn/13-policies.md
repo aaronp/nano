@@ -1,3 +1,7 @@
+---
+playground: 13-policies
+---
+
 # Policies
 
 A call edge says which pod the calculator reaches; it does not stop anyone else. A runtime's **policy** is its yes or no on each message travelling in it, before it is delivered. Here only the calculator may save to the history:

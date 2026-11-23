@@ -1,3 +1,7 @@
+---
+playground: 09-pipe
+---
+
 # A pipe
 
 In the last step the calculator still knew it had a history. With an event, it need not: it publishes `calculated`, and a **pipe** carries each one into `History`'s `save`. The calculator has no `needs`; it is the one from [events](/learn/07-events).

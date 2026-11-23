@@ -1,3 +1,7 @@
+---
+playground: 01-plain
+---
+
 # A calculator in plain TypeScript
 
 We start from code you already know, so each later step changes one thing. This is the calculator the rest of Learn turns into a nano component:

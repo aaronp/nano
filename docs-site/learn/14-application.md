@@ -1,3 +1,7 @@
+---
+playground: 14-application
+---
+
 # The Application
 
 The Registry is what can be made; a Runtime is pods placed together. The **Application** is the one live thing: it builds the pods, delivers every message, and changes what runs when it is given a new deployment. A runtime's policy is its yes or no on each message; the Application's **deployment policy** is its yes or no on each new deployment:

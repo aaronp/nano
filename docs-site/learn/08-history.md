@@ -1,3 +1,7 @@
+---
+playground: 08-history
+---
+
 # A history, by message
 
 The calculator should remember what it calculated. It is not handed a store: it **needs** a `History` and sends it `save` messages. Which History answers is the deployment's choice, not the calculator's.
