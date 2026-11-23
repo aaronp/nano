@@ -30,16 +30,23 @@ const onMessage = (e: MessageEvent) => {
   const m = frame && accept(e, frame.contentWindow, run)
   if (!m) return
   if (m.kind === 'line') return void say(m.text ?? '')
-  if (m.kind === 'error') say(m.text?.startsWith('import failed') ? 'Build the host first: make ui (or cd packages/ui-workspace && bun run build).' : (m.text ?? 'Error'), true)
   end() // done, or the first error, ends the run
+  if (m.kind !== 'error') return
+  if (!m.text?.startsWith('import failed')) return void say(m.text ?? 'Error', true)
+  // A module failed to load: the host's shared modules (not built) or an import in the reader's code.
+  const mine = n
+  fetch(sharedBase(location.origin, site.value.base) + 'nano-core.js').then(r => r.ok, () => false).then(built => mine === n && say(built
+    ? 'A module failed to load: check the imports in the code.'
+    : 'Build the host first: make ui (or cd packages/ui-workspace && bun run build).', true))
 }
 
 const go = () => {
   end()
+  n++
   lines.value = []
   const t = transpile(view!.state.doc.toString())
   if (!t.ok) return say(t.error, true)
-  run = `r${++n}`
+  run = `r${n}`
   frame = document.createElement('iframe')
   frame.setAttribute('sandbox', 'allow-scripts')
   frame.title = `${props.step} output`

@@ -39,6 +39,8 @@ test('an edit changes the output; Reset restores the original', async ({ page })
 
 const failing: [string, string, RegExp][] = [
   ['a throw', "export async function main() { throw new Error('boom') }", /^boom$/],
+  ['a throw at import', "throw new Error('at import')\nexport async function main() {}", /^at import$/],
+  ['an import that fails to load', "import '/nope.js'\nexport async function main() {}", /^A module failed to load: check the imports in the code\.$/],
   ['a frame that cannot read the page', 'export async function main(log) { log(String(!!window.parent.document)) }', /Blocked a frame with origin "null" from accessing a cross-origin frame/],
 ]
 for (const [name, code, text] of failing) test(`${name} shows an error line`, async ({ page }) => {
@@ -71,4 +73,14 @@ test('the editor follows the dark-mode switch', async ({ page }) => {
   const before = await bg()
   await page.locator('.VPSwitchAppearance:visible').click()
   await expect.poll(bg).not.toBe(before)
+})
+
+// Every Learn step runs in its page: the frame is removed on done or error, then no line is an error.
+const STEPS = ['01-plain', '02-contract', '03-builder', '04-registry', '05-runtime', '06-results', '07-events', '08-history', '09-pipe', '10-context', '11-pods', '12-isolation', '13-policies', '14-application', '15-gateway']
+for (const step of STEPS) test(`${step} runs in the playground without an error`, async ({ page }) => {
+  const { run, out } = await open(page, step)
+  await run.click()
+  await expect(page.locator('iframe[sandbox]')).toHaveCount(0, { timeout: 8000 })
+  await expect(out.locator('div').first()).toBeVisible()
+  await expect(out.locator('div.err')).toHaveCount(0)
 })

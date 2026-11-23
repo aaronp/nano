@@ -18,7 +18,7 @@ export const frameDoc = (js: string, shared: string, run: string) => {
 const run = ${safe(run)}
 globalThis.__nano = { post: (kind, text) => parent.postMessage({ run, kind, text }, '*'), msg: e => String(e && e.message || e) }
 const { post, msg } = globalThis.__nano
-addEventListener('error', e => e.target && e.target !== window ? post('error', 'import failed: ' + (e.target.src || 'module')) : post('error', msg(e.error || e.message)), true)
+addEventListener('error', e => e.target === window ? post('error', msg(e.error || e.message)) : e.target?.tagName === 'SCRIPT' && post('error', 'import failed: ' + (e.target.src || 'module')), true)
 addEventListener('unhandledrejection', e => post('error', msg(e.reason)))
 </script><script type="importmap">${safe(map)}</script><script type="module">
 ${code}
