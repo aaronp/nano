@@ -31,8 +31,8 @@ Use this repository as a template (GitHub's "Use this template"), then rename:
    implementation coordinates `acme.template/…` and the interfaces `acme.template.Calculator`… (`src/interfaces.ts`, and the
    pipe's `source` and `target`): use your own namespace. A host refuses an import that clashes with a name it has.
 3. The tag (`nano-calculator`) in `src/index.ts`: custom element names need a dash.
-4. The **Open it in nano** link above: nano imports a `?src=` only from its own origin (`aaronp.github.io`), so from
-   your own Pages site open nano and use File › Open… with your `nano.json`'s URL, or drop the link.
+4. The **Open it in nano** link above: point its `?src=` at your own Pages URL (your `nano.json`). From another origin
+   than nano's own, nano opens the Import dialog on it, after which Import is your approval (Cancel imports nothing).
 
 ## Develop
 
@@ -49,6 +49,11 @@ dir (the nano workspace's build already copies it to `/examples/template/`, so l
 or serve the host and `dist/` from one origin. The host fetches the `nano.json`, loads each `modules` entry (relative to the
 `nano.json`) and shows the pods. Importing alongside another app whose runtime is also `main` is refused: the names
 clash (namespacing comes later).
+
+## Try it in nano
+
+`bun run test-nano` serves the nano app and this project on loopback, opens `nano.json` in it, writes File › Save back to
+the file, and rebuilds when `src/` changes. Its guide is `node_modules/@pritzlaff/nano-app/AGENTS.md`.
 
 ## What a host gets
 

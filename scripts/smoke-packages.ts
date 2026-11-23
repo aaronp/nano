@@ -7,7 +7,7 @@ import { $ } from 'bun'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { PUBLISHED } from './build-packages-list'
+import { APPS, PUBLISHED } from './build-packages-list'
 
 const root = join(import.meta.dir, '..'), at = mkdtempSync(join(tmpdir(), 'nano-smoke-'))
 const deps: Record<string, string> = { typebox: '^1.4.0', lit: '^3.0.0' }
@@ -16,6 +16,13 @@ for (const dir of PUBLISHED) {
   const { name } = await Bun.file(join(dist, 'package.json')).json()
   const file = (await $`npm pack ${dist} --pack-destination ${at} --silent`.cwd(at).text()).trim()
   deps[name] = `file:./${file}`
+}
+// the apps: packed (not installed), with the CLI and the app in the tarball and no docs/
+for (const dir of APPS) {
+  const dist = join(root, 'packages', dir, 'dist')
+  const files = JSON.parse(await $`npm pack ${dist} --dry-run --json`.cwd(at).text())[0].files.map((f: { path: string }) => f.path)
+  for (const need of ['bin/nano-app.ts', 'app/index.html']) if (!files.includes(need)) throw new Error(`${dir} package lacks ${need}`)
+  if (files.some((f: string) => f.startsWith('app/docs/'))) throw new Error(`${dir} package ships app/docs/`)
 }
 await Bun.write(join(at, 'package.json'), JSON.stringify({ name: 'smoke', private: true, type: 'module', dependencies: deps }))
 await $`npm install --no-audit --no-fund --silent`.cwd(at)

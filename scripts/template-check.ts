@@ -7,7 +7,7 @@ import { $ } from 'bun'
 import { cpSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { PUBLISHED } from './build-packages-list'
+import { APPS, PUBLISHED } from './build-packages-list'
 
 const root = join(import.meta.dir, '..'), template = join(root, 'templates/nano-template')
 await $`bun ${join(import.meta.dir, 'build-packages.ts')}`.quiet()
@@ -20,6 +20,12 @@ for (const dir of PUBLISHED) {
   const { name } = await Bun.file(join(dist, 'package.json')).json()
   const file = (await $`npm pack ${dist} --pack-destination ${at} --silent`.cwd(at).text()).trim()
   pkg.dependencies[name] = `file:./${file}`
+}
+for (const dir of APPS) {   // the dev kit is a devDependency
+  const dist = join(root, 'packages', dir, 'dist')
+  const { name } = await Bun.file(join(dist, 'package.json')).json()
+  const file = (await $`npm pack ${dist} --pack-destination ${at} --silent`.cwd(at).text()).trim()
+  ;(pkg.devDependencies ??= {})[name] = `file:./${file}`
 }
 await Bun.write(join(at, 'package.json'), JSON.stringify(pkg, null, 2))
 await $`rm -f bun.lock`.cwd(at)

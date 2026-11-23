@@ -1,9 +1,23 @@
 import { describe, expect, test } from 'bun:test'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { success } from '@pritzlaff/nano-core'
 import { Calculator, History } from '../src/interfaces.ts'
 import { must, open } from './app.ts'
 
 describe('the template, headless', () => {
+  test('a nano.json saved by nano-app (a host document) opens the same', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'nano-template-saved-'))
+    try {
+      const file = join(dir, 'nano.json')
+      await Bun.write(file, JSON.stringify({ app: await Bun.file(new URL('../nano.json', import.meta.url)).json(), outline: { title: 'x' }, host: {} }))
+      const { app } = await open(undefined, pathToFileURL(file))
+      expect(await app.call('main', 'calculator').calculate({ a: 2, op: '+', b: 3 })).toMatchObject({ ok: true, value: { result: 5 } })
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  })
+
   // #region headless
   test('2 + 3 is 5, and the pipe saves it to the history', async () => {
     const { app } = await open()

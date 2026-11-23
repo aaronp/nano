@@ -68,7 +68,7 @@ bump-patch bump-minor bump-major:
 # already on npm is skipped. CI publishes the same way on a v* tag (publish.yml), with provenance.
 publish: smoke
 	@npm whoami >/dev/null 2>&1 || { echo "Not logged in to npm: run 'npm login' first."; exit 1; }
-	@for p in nano elements ui; do \
+	@for p in nano elements ui nano-app; do \
 	  name=$$(node -p "require('./packages/$$p/dist/package.json').name"); \
 	  version=$$(node -p "require('./packages/$$p/dist/package.json').version"); \
 	  if npm view "$$name@$$version" version >/dev/null 2>&1; then echo "$$name@$$version is already published"; continue; fi; \

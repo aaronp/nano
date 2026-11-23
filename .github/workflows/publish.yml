@@ -1,4 +1,4 @@
-# Publishes @pritzlaff/nano-core, nano-elements and nano-ui to npm when a version tag is pushed.
+# Publishes @pritzlaff/nano-core, nano-elements, nano-ui and nano-app to npm when a version tag is pushed.
 #   bun scripts/version.ts 0.5.0 && git commit -am "release 0.5.0" && git tag v0.5.0 (tag = nano-core's version) && git push --follow-tags
 # Authentication: npm trusted publishing (OIDC). On npmjs.com, each package → Settings → Trusted publishing →
 # GitHub Actions, repository aaronp/nano, workflow publish.yml. Until then (a package must exist before it can trust
@@ -37,7 +37,9 @@ jobs:
       - name: Type check
         run: node_modules/.bin/tsc -p .
       - name: Test
-        run: for p in nano elements ui; do (cd packages/$p && bun test --isolate) || exit 1; done
+        run: for p in nano elements ui nano-app; do (cd packages/$p && bun test --isolate) || exit 1; done
+      - name: Build the app that nano-app ships
+        run: cd packages/ui-workspace && bun run build
       - name: Build
         run: bun scripts/build-packages.ts
       - name: The tag matches nano-core's version
@@ -51,7 +53,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          for p in nano elements ui; do
+          for p in nano elements ui nano-app; do
             name=$(node -p "require('./packages/$p/dist/package.json').name")
             version=$(node -p "require('./packages/$p/dist/package.json').version")
             if npm view "$name@$version" version >/dev/null 2>&1; then echo "$name@$version is already published"; continue; fi

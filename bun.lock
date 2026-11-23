@@ -29,7 +29,7 @@
     },
     "packages/elements": {
       "name": "@pritzlaff/nano-elements",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "lit": "^3.0.0",
         "typebox": "^1.4.0",
@@ -68,11 +68,18 @@
     },
     "packages/nano": {
       "name": "@pritzlaff/nano-core",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@noble/hashes": "^1.8.0",
         "json-canonicalize": "^1.0.6",
         "typebox": "^1.4.0",
+      },
+    },
+    "packages/nano-app": {
+      "name": "@pritzlaff/nano-app",
+      "version": "0.5.0",
+      "bin": {
+        "nano-app": "bin/nano-app.ts",
       },
     },
     "packages/outline": {
@@ -85,7 +92,7 @@
     },
     "packages/ui": {
       "name": "@pritzlaff/nano-ui",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@pritzlaff/nano-core": "workspace:*",
         "@pritzlaff/nano-elements": "workspace:*",
@@ -134,6 +141,8 @@
     "@pritzlaff/adr": ["@pritzlaff/adr@1.2.0", "", { "bin": { "adr": "bin/adr.mjs" } }, "sha512-nuwLQQ2blU7EJvPHEwtSOiDmtaVP/+DJGhrL8MAAIsv3NLJEf/5KosSW1WO92ke7arG9L2QWITULlGk/zh92IQ=="],
 
     "@pritzlaff/agile": ["@pritzlaff/agile@1.2.1", "", { "bin": { "agile": "bin/agile.mjs" } }, "sha512-XEtX+fjhcP3sa1Aq0eyy9OG/yc7AOspuyq7wPpX+TdP56bWWKG7S1W6qWdDqZGlpbBqhPSOZp05+drztk9Qx9Q=="],
+
+    "@pritzlaff/nano-app": ["@pritzlaff/nano-app@workspace:packages/nano-app"],
 
     "@pritzlaff/nano-core": ["@pritzlaff/nano-core@workspace:packages/nano"],
 

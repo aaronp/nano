@@ -7,17 +7,19 @@
   "scripts": {
     "test": "bun test",
     "build": "bun scripts/build.ts",
-    "serve": "bun run build && bun scripts/serve.ts"
+    "serve": "bun run build && bun scripts/serve.ts",
+    "test-nano": "nano-app nano.json"
   },
   "dependencies": {
-    "@pritzlaff/nano-core": "^0.4.0",
-    "@pritzlaff/nano-elements": "^0.4.0",
-    "@pritzlaff/nano-ui": "^0.4.0",
+    "@pritzlaff/nano-core": "^0.5.0",
+    "@pritzlaff/nano-elements": "^0.5.0",
+    "@pritzlaff/nano-ui": "^0.5.0",
     "lit": "^3.0.0",
     "typebox": "^1.4.0"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^21.0.4",
+    "@pritzlaff/nano-app": "^0.5.0",
     "@types/bun": "^1.3.0",
     "typescript": "^7.0.2"
   }

@@ -3,12 +3,13 @@
  * Each `packages/<dir>/dist/` gets the bundled ES module, `.d.ts` types, the README and LICENSE, and a package.json
  * made from the source one: exports point at the build, the version is filled in for sibling packages, and
  * typebox, lit and sibling packages become peer dependencies (other dependencies stay dependencies) so a host and what it imports share one copy.
+ * Each app (APPS) gets `bin/`, `src/` (no tests), the app from packages/ui-workspace/public (without docs/), README, LICENSE and a package.json with `bin`.
  * CI publishes each `dist/` folder (`npm publish packages/<dir>/dist`).
  */
 import { $ } from 'bun'
-import { readdirSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { PUBLISHED } from './build-packages-list'
+import { APPS, PUBLISHED } from './build-packages-list'
 
 const root = join(import.meta.dir, '..')
 const REPO = { type: 'git', url: 'git+https://github.com/aaronp/nano.git' }
@@ -60,4 +61,25 @@ for (const dir of PUBLISHED) {
   await Bun.write(join(out, 'README.md'), Bun.file(join(at, 'README.md')))
   await Bun.write(join(out, 'LICENSE'), Bun.file(join(root, 'LICENSE')))
   console.log(`built ${src.name}@${src.version} → packages/${dir}/dist`)
+}
+
+// the apps: Bun runs the .ts as shipped, so no bundle and no types; the UI is a copy of ui-workspace's built public/
+const publicDir = join(root, 'packages/ui-workspace/public')
+for (const dir of APPS) {
+  if (!existsSync(join(publicDir, 'index.html'))) throw new Error('build the app first: cd packages/ui-workspace && bun run build')
+  const at = join(root, 'packages', dir), out = join(at, 'dist')
+  const src = await Bun.file(join(at, 'package.json')).json()
+  rmSync(out, { recursive: true, force: true })
+  cpSync(join(at, 'bin'), join(out, 'bin'), { recursive: true })
+  cpSync(join(at, 'src'), join(out, 'src'), { recursive: true })
+  cpSync(publicDir, join(out, 'app'), { recursive: true, filter: p => p !== join(publicDir, 'docs') })
+  const pkg = {
+    name: src.name, version: versions.get('@pritzlaff/nano-core'), description: src.description, license: 'MIT', type: 'module',
+    repository: { ...REPO, directory: `packages/${dir}` }, bin: src.bin, files: src.files, publishConfig: { access: 'public' },
+  }
+  await Bun.write(join(out, 'package.json'), JSON.stringify(pkg, null, 2) + '\n')
+  await Bun.write(join(out, 'README.md'), Bun.file(join(at, 'README.md')))
+  await Bun.write(join(out, 'AGENTS.md'), Bun.file(join(at, 'AGENTS.md')))
+  await Bun.write(join(out, 'LICENSE'), Bun.file(join(root, 'LICENSE')))
+  console.log(`built ${src.name}@${pkg.version} → packages/${dir}/dist`)
 }

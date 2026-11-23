@@ -85,3 +85,25 @@ test('the template from another origin, Trusted: host pods, its view once approv
   await twoPlusThree(view, approve)
   await expect(view.getByLabel('history').locator('li')).toHaveCount(0)
 })
+
+test('a ?src= on another origin opens the Import dialog on it: Import (Sandboxed) imports; Cancel imports nothing; the address loses ?src= both times', async ({ page }) => {
+  const src = '/?src=http://localhost:5174/nano.json#/p/workspace'
+  await page.goto('/#/p/workspace')
+  await page.evaluate(() => localStorage.clear())
+  await page.goto(src)
+  const d = page.getByRole('dialog', { name: 'Import components' })
+  await expect(d.getByLabel('nano.json URL')).toHaveValue('http://localhost:5174/nano.json')
+  await expect(d.getByLabel('Import runtime main as')).toHaveValue('acme.template.main')
+  await expect(d.getByRole('radio', { name: /^Sandboxed/ })).toBeChecked()
+  expect(page.url()).not.toContain('src=')
+  await d.getByRole('button', { name: 'Import', exact: true }).click()
+  await expect(d).toHaveCount(0)
+  expect((await data(page)).runtimes['acme.template.main'].pods).toEqual(['calculator', 'history'])
+
+  await page.evaluate(() => localStorage.clear())
+  await page.goto(src)
+  await page.getByRole('dialog', { name: 'Import components' }).getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.locator('dialog[open]')).toHaveCount(0)
+  expect(page.url()).not.toContain('src=')
+  expect(Object.keys((await data(page)).runtimes)).not.toContain('acme.template.main')
+})
