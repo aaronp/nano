@@ -4,6 +4,10 @@ A starting point for components of a nano app, built on the published
 [`@pritzlaff/nano-core`](https://www.npmjs.com/package/@pritzlaff/nano-core), `nano-elements` and `nano-ui`.
 The build is a provider module (`dist/index.js`) and a `dist/nano.json`; a host imports the app by the `nano.json`'s URL.
 
+**[Open it in nano](https://aaronp.github.io/nano/?src=https://aaronp.github.io/nano-template/nano.json)**: the nano app
+imports this repository's published `nano.json` (its GitHub Pages site) and starts the calculator and its history, a
+micro-front-end loaded by URL.
+
 It ships a calculator with a history, two pods in one provider, `acme.template`, to start from:
 
 - **calculator** (`src/calculator.ts`): `calculate` (`{ a, op, b }`, `op` one of `+ - * /`, answered with the same and
@@ -27,6 +31,8 @@ Use this repository as a template (GitHub's "Use this template"), then rename:
    implementation coordinates `acme.template/…` and the interfaces `acme.template.Calculator`… (`src/interfaces.ts`, and the
    pipe's `source` and `target`): use your own namespace. A host refuses an import that clashes with a name it has.
 3. The tag (`nano-calculator`) in `src/index.ts`: custom element names need a dash.
+4. The **Open it in nano** link above: nano imports a `?src=` only from its own origin (`aaronp.github.io`), so from
+   your own Pages site open nano and use File › Open… with your `nano.json`'s URL, or drop the link.
 
 ## Develop
 
