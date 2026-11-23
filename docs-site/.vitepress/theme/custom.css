@@ -15,9 +15,9 @@
   --vp-button-brand-active-text: #0B1220;
 }
 
-/* Playground: text left, editor right (sticky, full height); stacked below 960px. */
+/* Playground: text left, editor right (sticky, full height); stacked below 1440px (sidebar + half-width pane need the room). */
 .playground { display: flex; flex-direction: column; margin-top: 32px; border: 1px solid var(--vp-c-divider); border-radius: 8px; overflow: hidden; height: 520px; max-width: 100%; }
-@media (min-width: 960px) {
+@media (min-width: 1440px) {
   .pg-on .VPContent { padding-right: 50vw; }
   .pg-on .VPDocAside { display: none; }
   .pg-on .playground { position: fixed; top: var(--vp-nav-height); right: 0; bottom: 0; width: 50vw; height: auto; margin: 0; border-radius: 0; border-width: 0 0 0 1px; z-index: 5; background: var(--vp-c-bg); }

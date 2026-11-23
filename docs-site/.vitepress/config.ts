@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitepress'
 import { readFile } from 'node:fs/promises'
-import { join, normalize } from 'node:path'
+import { join, normalize, sep } from 'node:path'
 
 // Dev only: the playground frame imports the host's built shared modules from `<base>../shared/`.
 const shared = join(__dirname, '../../packages/ui-workspace/public/shared')
@@ -10,7 +10,7 @@ const serveShared = {
     server.middlewares.use('/shared', async (req, res, next) => {
       try {
         const file = normalize(join(shared, (req.url ?? '').split('?')[0]))
-        if (!file.startsWith(shared)) throw new Error('outside')
+        if (!file.startsWith(shared + sep)) throw new Error('outside')
         const body = await readFile(file)
         res.setHeader('Access-Control-Allow-Origin', '*')
         res.setHeader('Content-Type', 'text/javascript')

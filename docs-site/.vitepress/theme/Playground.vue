@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useData } from 'vitepress'
 import { EditorView, keymap } from '@codemirror/view'
-import { Compartment } from '@codemirror/state'
+import { Compartment, Prec } from '@codemirror/state'
 import { basicSetup } from 'codemirror'
 import { javascript } from '@codemirror/lang-javascript'
 import { oneDark } from '@codemirror/theme-one-dark'
@@ -13,7 +13,7 @@ import { accept } from '../../scripts/playground/messages'
 
 const props = defineProps<{ step: string }>()
 const { isDark, site } = useData()
-const steps = import.meta.glob('../../../examples/tutorial/[0-9][0-9]-*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+const steps = import.meta.glob(['../../../examples/tutorial/[0-9][0-9]-*.ts', '!../../../examples/tutorial/*.test.ts'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 const original = stripMarkers(Object.entries(steps).find(([p]) => p.endsWith(`/${props.step}.ts`))?.[1] ?? '')
 const key = `nano-docs.playground.${props.step}`
 const host = ref<HTMLElement>(), frameHost = ref<HTMLElement>()
@@ -57,7 +57,7 @@ onMounted(() => {
       basicSetup, javascript({ typescript: true }), theme.of(isDark.value ? oneDark : []),
       EditorView.contentAttributes.of({ 'aria-label': `${props.step} code` }),
       EditorView.updateListener.of(u => u.docChanged && save(u.state.doc.toString())),
-      keymap.of([{ key: 'Mod-Enter', run: () => (go(), true) }]),
+      Prec.highest(keymap.of(['Mod-Enter', 'Ctrl-Enter'].map(key => ({ key, run: () => (go(), true) })))),
     ],
   })
   addEventListener('message', onMessage)
